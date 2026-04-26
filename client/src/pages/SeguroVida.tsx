@@ -878,6 +878,14 @@ export default function SeguroVida() {
     onError: e => toast.error(e.message),
   });
 
+  const resolverIndevido = trpc.seguroVida.resolverIndevido.useMutation({
+    onSuccess: () => {
+      toast.success("Registro marcado como resolvido");
+      utils.seguroVida.listarInconsistencias.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+
   const resumo = resumoQ.data;
   const funcionarios = funcionariosQ.data ?? [];
 
@@ -1464,6 +1472,7 @@ export default function SeguroVida() {
           const semSeguro: any[] = inc?.semSeguro ?? [];
           const pjs: any[] = inc?.pjsComCobertura ?? [];
           const naoId: any[] = inc?.naoIdentificados ?? [];
+          const pagarIndevidos: any[] = inc?.pagarIndevidos ?? [];
 
           if (loading) return (
             <div className="flex items-center justify-center py-20 text-slate-400">
@@ -1664,6 +1673,82 @@ export default function SeguroVida() {
                     </tbody>
                   </table>
                 </div>
+              </SectionCard>
+
+              {/* Seção 5 — Pagamentos Indevidos Registrados (tabela dedicada, persistente) */}
+              <SectionCard
+                title="💸 Pagamentos Indevidos Registrados"
+                count={pagarIndevidos.length}
+                subtitle="Pessoas no PDF da corretora que não são mais funcionários ativos — histórico persistente de todas as importações"
+                colorClass="text-orange-700" bgClass="bg-orange-50" borderClass="border-orange-300">
+                {pagarIndevidos.length > 0 && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-orange-50/80 border-b border-orange-100">
+                        <tr>
+                          <th className="px-4 py-2 text-left font-semibold text-orange-800">Competência</th>
+                          <th className="px-4 py-2 text-left font-semibold text-orange-800">Nome no PDF (Corretor)</th>
+                          <th className="px-4 py-2 text-left font-semibold text-orange-800">Nome no RH</th>
+                          <th className="px-4 py-2 text-left font-semibold text-orange-800">Situação</th>
+                          <th className="px-4 py-2 text-left font-semibold text-orange-800">Demissão</th>
+                          <th className="px-4 py-2 text-left font-semibold text-orange-800">Item</th>
+                          <th className="px-4 py-2 text-left font-semibold text-orange-800">Importado em</th>
+                          <th className="px-4 py-2 text-center font-semibold text-orange-800">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-orange-50">
+                        {pagarIndevidos.map((r: any) => {
+                          const [ano, mes] = (r.competencia ?? "").split("-");
+                          const situacaoCls =
+                            r.situacao === "Desligado" ? "bg-red-100 text-red-700" :
+                            r.situacao === "Recluso" || r.situacao === "Blacklist" ? "bg-purple-100 text-purple-700" :
+                            r.possivel_pj ? "bg-yellow-100 text-yellow-800" :
+                            "bg-slate-100 text-slate-600";
+                          return (
+                            <tr key={r.id} className="hover:bg-orange-50/60">
+                              <td className="px-4 py-2.5">
+                                <span className="text-xs font-bold text-orange-700 whitespace-nowrap">
+                                  {MESES[Number(mes) - 1]} {ano}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5">
+                                <p className="font-semibold text-slate-800">{r.nome_pdf}</p>
+                              </td>
+                              <td className="px-4 py-2.5 text-slate-600 text-xs">
+                                {r.nome_rh || <span className="italic text-slate-400">não encontrado</span>}
+                              </td>
+                              <td className="px-4 py-2.5">
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${situacaoCls}`}>
+                                  {r.situacao || "—"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5 text-sm font-medium text-red-700">
+                                {r.data_demissao ? fmtDate(r.data_demissao) : <span className="text-slate-400 font-normal italic text-xs">sem data</span>}
+                              </td>
+                              <td className="px-4 py-2.5 font-mono text-xs text-slate-400">{r.item_segurador || "—"}</td>
+                              <td className="px-4 py-2.5 text-xs text-slate-400 whitespace-nowrap">
+                                {r.importado_em ? fmtDate(String(r.importado_em).split("T")[0]) : "—"}
+                              </td>
+                              <td className="px-4 py-2.5 text-center">
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Marcar "${r.nome_pdf}" como resolvido?`)) {
+                                      resolverIndevido.mutate({ companyId, id: r.id });
+                                    }
+                                  }}
+                                  disabled={resolverIndevido.isPending}
+                                  className="text-xs px-2.5 py-1 rounded-md bg-green-100 text-green-700 hover:bg-green-200 font-medium transition-colors disabled:opacity-50 whitespace-nowrap"
+                                >
+                                  ✓ Resolver
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </SectionCard>
 
             </div>

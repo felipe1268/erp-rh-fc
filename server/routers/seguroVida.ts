@@ -550,6 +550,32 @@ async function executarCruzamento(
        ${importadoPor}, ${pdfBase64 ?? null})
   `);
 
+  // Persistir entradas pagar_indevido na tabela dedicada para análise histórica
+  const indevidos = resultado.filter(r => r.status === "pagar_indevido");
+  for (const r of indevidos) {
+    const situacao = r.possivelDesligado?.status
+      ?? (r.possivelPJ ? `PJ/Sócio (${r.possivelPJ.tipo})` : "Não identificado");
+    const nomeRH = r.possivelDesligado?.nome ?? r.possivelPJ?.nome ?? null;
+    const dataDemissao = r.possivelDesligado?.dataDemissao ?? null;
+    const possivelPJ = !!r.possivelPJ;
+    try {
+      await db.execute(sql`
+        INSERT INTO seguro_vida_indevidos
+          (company_id, competencia, nome_pdf, item_segurador, nome_rh, situacao, data_demissao, possivel_pj, importado_em)
+        VALUES
+          (${companyId}, ${competencia}, ${r.nome}, ${r.item ?? null}, ${nomeRH}, ${situacao}, ${dataDemissao}, ${possivelPJ}, NOW())
+        ON CONFLICT (company_id, competencia, nome_pdf) DO UPDATE SET
+          situacao     = EXCLUDED.situacao,
+          nome_rh      = EXCLUDED.nome_rh,
+          data_demissao = EXCLUDED.data_demissao,
+          possivel_pj  = EXCLUDED.possivel_pj,
+          importado_em = NOW()
+      `);
+    } catch (err: any) {
+      console.warn("[SeguroVida] falha ao salvar indevido:", err?.message ?? err);
+    }
+  }
+
   return {
     competencia,
     totalSeguradosCorretora: seguradosCorretora.length,
@@ -1378,6 +1404,20 @@ export const seguroVidaRouter = router({
 
       const demitidos = [...demitidosCobertura, ...demitidosPDF];
 
+      // 4. Lê pagamentos indevidos persistidos na tabela dedicada (todos os não resolvidos)
+      let pagarIndevidos: any[] = [];
+      try {
+        pagarIndevidos = rows(await db.execute(sql`
+          SELECT id, competencia, nome_pdf, item_segurador, nome_rh, situacao,
+                 data_demissao, possivel_pj, resolvido, resolvido_por, resolvido_em,
+                 observacao, importado_em
+          FROM seguro_vida_indevidos
+          WHERE company_id ${inIds(ids)}
+            AND (resolvido IS NULL OR resolvido = false)
+          ORDER BY competencia DESC, nome_pdf ASC
+        `));
+      } catch { /* tabela ainda não existe — ignora */ }
+
       return {
         demitidos,
         demitidosCobertura,
@@ -1386,7 +1426,27 @@ export const seguroVidaRouter = router({
         semSeguroCompetencia,
         pjsComCobertura,
         naoIdentificados,
-        totalInconsistencias: demitidos.length + pjsComCobertura.length + semSeguro.length + naoIdentificados.length,
+        pagarIndevidos,
+        totalInconsistencias: demitidos.length + pjsComCobertura.length + semSeguro.length + naoIdentificados.length + pagarIndevidos.length,
       };
+    }),
+
+  resolverIndevido: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      id: z.number(),
+      observacao: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      await db.execute(sql`
+        UPDATE seguro_vida_indevidos
+        SET resolvido = true,
+            resolvido_por = ${ctx.user.name ?? "Sistema"},
+            resolvido_em = NOW(),
+            observacao = COALESCE(${input.observacao ?? null}, observacao)
+        WHERE id = ${input.id} AND company_id = ${input.companyId}
+      `);
+      return { ok: true };
     }),
 });

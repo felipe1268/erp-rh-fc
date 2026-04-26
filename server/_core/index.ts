@@ -537,6 +537,25 @@ async function startServer() {
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_svimport_company ON seguro_vida_importacoes(company_id)`);
         // Rev. 1308: coluna para armazenar PDF original (base64) — permite download posterior
         await db.execute(sql`ALTER TABLE seguro_vida_importacoes ADD COLUMN IF NOT EXISTS pdf_dados TEXT`);
+        // Tabela de pagamentos indevidos persistentes (pessoas no PDF mas não mais na empresa)
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS seguro_vida_indevidos (
+          id SERIAL PRIMARY KEY,
+          company_id INTEGER NOT NULL,
+          competencia VARCHAR(7) NOT NULL,
+          nome_pdf TEXT NOT NULL,
+          item_segurador TEXT,
+          nome_rh TEXT,
+          situacao TEXT,
+          data_demissao TEXT,
+          possivel_pj BOOLEAN DEFAULT FALSE,
+          resolvido BOOLEAN DEFAULT FALSE,
+          resolvido_por TEXT,
+          resolvido_em TIMESTAMPTZ,
+          observacao TEXT,
+          importado_em TIMESTAMPTZ DEFAULT NOW()
+        )`);
+        await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_svindevido_unique ON seguro_vida_indevidos(company_id, competencia, nome_pdf)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_svindevido_company ON seguro_vida_indevidos(company_id)`);
         // Rev. 1311: novas colunas seguro de vida
         await db.execute(sql`ALTER TABLE seguro_vida_coberturas ADD COLUMN IF NOT EXISTS cancelado_por TEXT`);
         await db.execute(sql`ALTER TABLE seguro_vida_coberturas ADD COLUMN IF NOT EXISTS data_vencimento_apolice TEXT`);
