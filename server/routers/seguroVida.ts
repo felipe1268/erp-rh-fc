@@ -671,10 +671,30 @@ export const seguroVidaRouter = router({
           console.log(`[SeguroVida] ${arq.filename}: competência ${autoDetectado ? "detectada" : "fallback"} = ${competenciaFinal}`);
 
           const linhas = texto.split("\n").map((l: string) => l.trim()).filter(Boolean);
-          const { segurados, padrao } = parsarLinhasSegurados(linhas);
+          const { segurados: seguradosBrutos, padrao } = parsarLinhasSegurados(linhas);
           // Diagnóstico — sempre loga as primeiras 15 linhas para rastrear formato
           const primeiraLinhas = linhas.slice(0, 15).join(" | ").slice(0, 600);
-          console.log(`[SeguroVida] ${arq.filename}: ${segurados.length} segurado(s) | padrão=${padrao} | linhas[0..15]="${primeiraLinhas}"`);
+          console.log(`[SeguroVida] ${arq.filename}: ${seguradosBrutos.length} segurado(s) | padrão=${padrao} | linhas[0..15]="${primeiraLinhas}"`);
+
+          // P6 pré-filtro: quando o fallback por nome é usado, valida cada candidato
+          // contra a lista real de funcionários — elimina cabeçalhos, rodapés e textos
+          // que coincidentemente passaram pelo padrão de nome em MAIÚSCULAS.
+          let segurados = seguradosBrutos;
+          if (padrao === "P6" && seguradosBrutos.length > 0) {
+            const empsNomes = rows(await db.execute(sql`
+              SELECT "nomeCompleto" FROM employees
+              WHERE "companyId" ${inIds(ids)}
+                AND status IN ('Ativo','Ferias')
+                AND COALESCE("tipoContrato",'CLT') NOT IN ('PJ','Socio')
+                AND "deletedAt" IS NULL
+            `));
+            const empNormList = empsNomes.map((e: any) => normalizeName(e.nomeCompleto));
+            segurados = seguradosBrutos.filter(s => {
+              const sNorm = normalizeName(s.nome);
+              return empNormList.some(en => nameSimilarity(sNorm, en) >= 0.28);
+            });
+            console.log(`[SeguroVida] P6 pré-filtro: ${seguradosBrutos.length} candidatos → ${segurados.length} com similaridade ≥ 0.28 vs funcionários`);
+          }
 
           if (segurados.length < 2) {
             const trecho = linhas.slice(0, 10).join("\n");
@@ -682,7 +702,7 @@ export const seguroVidaRouter = router({
               competencia: competenciaFinal,
               competenciaFallback: !autoDetectado,
               filename: arq.filename,
-              erro: `Nenhum segurado encontrado no PDF (padrões testados: P1-P5).\n\nPrimeiras linhas extraídas:\n${trecho}\n\nVerifique se o PDF contém a relação de segurados (não apenas sumário ou capa).`,
+              erro: `Nenhum segurado encontrado no PDF (padrões testados: P1-P6).\n\nPrimeiras linhas extraídas:\n${trecho}\n\nVerifique se o PDF contém a relação de segurados (não apenas sumário ou capa).`,
             });
             continue;
           }
@@ -704,6 +724,62 @@ export const seguroVidaRouter = router({
 
       console.log(`[SeguroVida] processarPdfLote concluído — ${resultados.length} resultado(s)`);
       return { resultados };
+    }),
+
+  // Confirma o cruzamento: cria registros de cobertura para funcionários
+  // que foram encontrados no PDF e ainda não têm cobertura ativa.
+  confirmarCruzamento: protectedProcedure
+    .input(z.object({
+      companyId:  z.number(),
+      companyIds: z.array(z.number()).optional(),
+      apoliceVG:  z.string().optional(),
+      apoliceAPC: z.string().optional(),
+      resultado: z.array(z.object({
+        status:      z.string(),
+        employeeId:  z.number().optional(),
+        item:        z.string().optional(),
+        nome:        z.string(),
+        coberturaId: z.number().optional(),
+        dataAdmissao: z.string().optional(),
+      })),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      let criadas = 0;
+      let mantidas = 0;
+
+      for (const r of input.resultado) {
+        if ((r.status === "ok" || r.status === "novo") && r.employeeId) {
+          if (r.coberturaId) {
+            mantidas++;
+          } else {
+            // Verifica se já existe registro ativo para não duplicar
+            const existe = rows(await db.execute(sql`
+              SELECT id FROM seguro_vida_coberturas
+              WHERE company_id = ${input.companyId}
+                AND employee_id = ${r.employeeId}
+                AND status IN ('ativo','pendente_inclusao')
+            `))[0];
+            if (!existe) {
+              await db.execute(sql`
+                INSERT INTO seguro_vida_coberturas
+                  (company_id, employee_id, nome_completo, item_segurador,
+                   apolice_vg, apolice_apc, status, data_adesao, criado_por)
+                VALUES
+                  (${input.companyId}, ${r.employeeId}, ${r.nome}, ${r.item || null},
+                   ${input.apoliceVG ?? null}, ${input.apoliceAPC ?? null},
+                   'ativo', CURRENT_DATE, ${ctx.user.name ?? "Sistema"})
+              `);
+              criadas++;
+            } else {
+              mantidas++;
+            }
+          }
+        }
+      }
+
+      console.log(`[SeguroVida] confirmarCruzamento: ${criadas} criadas, ${mantidas} já existentes`);
+      return { criadas, mantidas };
     }),
 
   listarImportacoes: protectedProcedure

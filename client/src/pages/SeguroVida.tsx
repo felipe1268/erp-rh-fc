@@ -223,11 +223,11 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
   // Results
   const [resultados, setResultados] = useState<any[] | null>(null);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [confirmed, setConfirmed] = useState(false);
 
   const processarLote = trpc.seguroVida.processarPdfLote.useMutation({
     onSuccess: (data) => {
       setResultados(data.resultados);
-      onSuccess();
       const ok = data.resultados.filter((r: any) => !r.erro && r.totalSemSeguro === 0).length;
       const erros = data.resultados.filter((r: any) => r.erro).length;
       toast.success(`${data.resultados.length} mês(es) processado(s). ${ok} sem divergências.${erros ? ` ${erros} erro(s) ao ler PDF.` : ""}`);
@@ -238,11 +238,28 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
   const importarTexto = trpc.seguroVida.importarRelatorio.useMutation({
     onSuccess: (data) => {
       setResultados([data]);
-      onSuccess();
       toast.success(`Cruzamento concluído: ${data.totalOk} OK, ${data.totalSemSeguro} sem seguro`);
     },
     onError: e => toast.error(e.message),
   });
+
+  const confirmarMutation = trpc.seguroVida.confirmarCruzamento.useMutation({
+    onSuccess: (data) => {
+      setConfirmed(true);
+      onSuccess();
+      toast.success(`Importação confirmada! ${data.criadas} cobertura(s) criada(s)${data.mantidas > 0 ? `, ${data.mantidas} já ativas.` : "."}`);
+    },
+    onError: e => toast.error(e.message),
+  });
+
+  const handleConfirmar = () => {
+    if (!resultados) return;
+    const resultadoTotal: any[] = [];
+    for (const r of resultados) {
+      if (!r.erro && r.resultado) resultadoTotal.push(...r.resultado);
+    }
+    confirmarMutation.mutate({ companyId, companyIds, apoliceVG, apoliceAPC, resultado: resultadoTotal });
+  };
 
   const handleFiles = useCallback((files: FileList | null) => {
     if (!files) return;
@@ -276,6 +293,7 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
     setResultados(null);
     setActiveIdx(0);
     setModo("pdf");
+    setConfirmed(false);
   };
 
   return (
@@ -489,10 +507,26 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
                 </Button>
               )}
             </>
+          ) : confirmed ? (
+            <div className="flex items-center gap-3 flex-1">
+              <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+              <span className="text-sm text-green-700 font-semibold">Importação confirmada — coberturas atualizadas na tabela principal.</span>
+              <Button variant="outline" onClick={() => { onClose(); reset(); }} className="ml-auto">Fechar</Button>
+            </div>
           ) : (
-            <Button variant="outline" onClick={() => { onClose(); reset(); }}>
-              <X className="h-4 w-4 mr-2" />Fechar
-            </Button>
+            <>
+              <Button variant="outline" onClick={() => { onClose(); reset(); }}>
+                <X className="h-4 w-4 mr-2" />Fechar sem confirmar
+              </Button>
+              <Button
+                onClick={handleConfirmar}
+                disabled={confirmarMutation.isPending || !resultados?.some((r: any) => !r.erro && r.resultado?.some((x: any) => x.status === "ok" || x.status === "novo"))}
+                className="bg-green-600 hover:bg-green-700 text-white">
+                {confirmarMutation.isPending
+                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Confirmando...</>
+                  : <><CheckCircle2 className="h-4 w-4 mr-2" />Confirmar Importação</>}
+              </Button>
+            </>
           )}
         </DialogFooter>
       </DialogContent>
@@ -846,6 +880,7 @@ export default function SeguroVida() {
                     const temValores = !!(f.morte_natural || f.morte_acidental || f.invalidez_acidente);
                     return (
                       <tr key={f.id} className={cn("hover:bg-slate-50/60 transition-colors",
+                        f.statusSeguro === "ativo" ? "bg-green-50/50" :
                         f.statusSeguro === "sem_cobertura" ? "bg-red-50/30" :
                         f.statusSeguro === "pendente_cancelamento" ? "bg-orange-50/30" :
                         f.statusSeguro === "pendente_inclusao" ? "bg-blue-50/30" : "")}>
