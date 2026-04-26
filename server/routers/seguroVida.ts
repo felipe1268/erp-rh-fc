@@ -493,9 +493,8 @@ export const seguroVidaRouter = router({
         LEFT JOIN seguro_vida_coberturas s ON s.employee_id = e.id AND s.status IN ('ativo','pendente_inclusao','pendente_cancelamento')
         WHERE e."companyId" ${inIds(ids)}
           AND e.status IN ('Ativo','Ferias')
-          AND COALESCE(e."tipoContrato",'CLT') NOT IN ('PJ','Socio')
           AND e."deletedAt" IS NULL
-        ORDER BY e."nomeCompleto"
+        ORDER BY COALESCE(e."tipoContrato",'CLT'), e."nomeCompleto"
       `));
 
       return funcionarios;
