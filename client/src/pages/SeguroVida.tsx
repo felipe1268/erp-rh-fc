@@ -289,7 +289,9 @@ function SeedModal({ open, onClose, companyId, companyIds, onSuccess }: {
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function SeguroVida() {
-  const { companyId, companyIds } = useCompany();
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
+  const companyId = Number(selectedCompanyId) || 0;
+  const companyIds = getCompanyIdsForQuery();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin_master";
 
