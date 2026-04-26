@@ -643,7 +643,7 @@ export default function SeguroVida() {
       const b = removeAccents(busca.toLowerCase());
       lista = lista.filter((f: any) =>
         removeAccents((f.nomeCompleto ?? "").toLowerCase()).includes(b) ||
-        (f.cargo ?? "").toLowerCase().includes(b) ||
+        removeAccents((f.funcao ?? f.cargo ?? "").toLowerCase()).includes(b) ||
         (f.item_segurador ?? "").includes(b)
       );
     }
@@ -662,7 +662,7 @@ export default function SeguroVida() {
       const s = STATUS_LABELS[f.statusSeguro]?.label ?? f.statusSeguro;
       return `<tr>
         <td>${f.nomeCompleto ?? "—"}</td>
-        <td>${f.cargo ?? "—"}</td>
+        <td>${f.funcao ?? f.cargo ?? "—"}</td>
         <td>${s}</td>
         <td>${f.seguradora ?? "—"}</td>
         <td style="text-align:right">${f.morte_natural ?? "—"}</td>
@@ -856,7 +856,7 @@ export default function SeguroVida() {
                             <div className="text-[10px] text-slate-400 mt-0.5">{f.seguradora}</div>
                           )}
                         </td>
-                        <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{f.cargo || "—"}</td>
+                        <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{f.funcao || f.cargo || "—"}</td>
                         <td className="px-3 py-2.5">
                           <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">{f.tipoContrato ?? "CLT"}</span>
                         </td>

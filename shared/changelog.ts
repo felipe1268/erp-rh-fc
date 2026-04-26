@@ -8950,4 +8950,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-26 12:00:00",
   },
+  {
+    version: 1302,
+    titulo: "Seguro de Vida: coluna Cargo exibe Função do funcionário",
+    descricao: "Corrigido exibição da coluna 'Cargo' na tabela Coberturas Ativas: agora usa o campo 'funcao' com fallback para 'cargo', alinhando com o padrão do módulo de Colaboradores (onde a função é o campo primário de exibição). Busca por texto também passa a pesquisar no campo 'funcao'. Export HTML igualmente atualizado.",
+    tipo: "fix",
+    modulos: "Seguro de Vida",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-26 13:00:00",
+  },
 ];
