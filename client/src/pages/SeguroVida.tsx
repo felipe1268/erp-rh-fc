@@ -206,6 +206,17 @@ function ResultadoMesDetalhe({ res }: { res: any }) {
                     {r.nome
                       ? <span className={r.nome !== r.nomeHR && r.nomeHR ? "text-indigo-700 font-medium" : ""}>{r.nome}</span>
                       : <span className="text-slate-300 italic">—</span>}
+                    {r.possivelPJ && r.status === "pagar_indevido" && (
+                      <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 rounded px-1.5 py-0.5 mt-0.5 inline-flex items-center gap-1">
+                        ⚠️ Possível {r.possivelPJ.tipo}: <strong>{r.possivelPJ.nome}</strong>
+                      </div>
+                    )}
+                    {r.possivelDesligado && r.status === "pagar_indevido" && (
+                      <div className="text-[10px] text-red-700 bg-red-50 border border-red-100 rounded px-1.5 py-0.5 mt-0.5 inline-flex items-center gap-1">
+                        🔴 Desligado: <strong>{r.possivelDesligado.nome}</strong>
+                        {r.possivelDesligado.dataDemissao && <span className="text-red-500"> — saiu em {fmtDate(r.possivelDesligado.dataDemissao)}</span>}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 font-mono text-slate-400 text-xs">{r.item || "—"}</td>
                   <td className="px-4 py-2.5 text-slate-400 text-xs text-center">
@@ -259,6 +270,7 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
   const [modo, setModo] = useState<"pdf" | "texto">("pdf");
   const [apoliceVG, setApoliceVG] = useState("117.398-5");
   const [apoliceAPC, setApoliceAPC] = useState("121.268-3");
+  const [incluirPJ, setIncluirPJ] = useState(false);
 
   // PDF state
   const [arquivos, setArquivos] = useState<Array<{ file: File; competencia: string; fileBase64: string }>>([]);
@@ -378,15 +390,29 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
               </div>
 
               {/* Apólices (sempre visíveis) */}
-              <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 border rounded-xl">
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Apólice VG</label>
-                  <Input value={apoliceVG} onChange={e => setApoliceVG(e.target.value)} placeholder="117.398-5" className="font-mono" />
+              <div className="p-4 bg-slate-50 border rounded-xl space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Apólice VG</label>
+                    <Input value={apoliceVG} onChange={e => setApoliceVG(e.target.value)} placeholder="117.398-5" className="font-mono" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Apólice APC</label>
+                    <Input value={apoliceAPC} onChange={e => setApoliceAPC(e.target.value)} placeholder="121.268-3" className="font-mono" />
+                  </div>
                 </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Apólice APC</label>
-                  <Input value={apoliceAPC} onChange={e => setApoliceAPC(e.target.value)} placeholder="121.268-3" className="font-mono" />
-                </div>
+                <label className="flex items-center gap-2.5 cursor-pointer select-none group">
+                  <input
+                    type="checkbox"
+                    checked={incluirPJ}
+                    onChange={e => setIncluirPJ(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 accent-indigo-600 cursor-pointer"
+                  />
+                  <span className="text-sm text-slate-700">
+                    <span className="font-semibold">Incluir PJ / Sócios no cruzamento</span>
+                    <span className="text-slate-400 text-xs ml-1">(obrigatório apenas para CLT — PJ/Sócio é opcional)</span>
+                  </span>
+                </label>
               </div>
 
               {/* ── Modo PDF ── */}
@@ -539,7 +565,7 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
                 <Button
                   disabled={arquivos.length === 0 || processarLote.isPending}
                   onClick={() => processarLote.mutate({
-                    companyId, companyIds, apoliceVG, apoliceAPC,
+                    companyId, companyIds, apoliceVG, apoliceAPC, incluirPJ,
                     arquivos: arquivos.map(a => ({ competencia: a.competencia, filename: a.file.name, fileBase64: a.fileBase64 })),
                   })}>
                   {processarLote.isPending
@@ -549,7 +575,7 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
               ) : (
                 <Button
                   disabled={!nomes.trim() || importarTexto.isPending}
-                  onClick={() => importarTexto.mutate({ companyId, companyIds, competencia: competenciaTexto, nomesBrutos: nomes, apoliceVG, apoliceAPC })}>
+                  onClick={() => importarTexto.mutate({ companyId, companyIds, competencia: competenciaTexto, nomesBrutos: nomes, apoliceVG, apoliceAPC, incluirPJ })}>
                   {importarTexto.isPending
                     ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Cruzando...</>
                     : <><ArrowRightLeft className="h-4 w-4 mr-2" />Cruzar com Funcionários</>}
@@ -779,6 +805,15 @@ export default function SeguroVida() {
     onError: e => toast.error(e.message),
   });
 
+  const confirmarStatus = trpc.seguroVida.confirmarStatusCobertura.useMutation({
+    onSuccess: (_, vars) => {
+      toast.success(vars.novoStatus === "ativo" ? "Cobertura ativada com sucesso!" : "Cobertura cancelada com sucesso!");
+      utils.seguroVida.listarFuncionariosComStatus.invalidate();
+      utils.seguroVida.getResumo.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
+
   const cancelarMultiplas = trpc.seguroVida.cancelarMultiplasCoberturas.useMutation({
     onSuccess: (d) => {
       toast.success(`${d.canceladas} cobertura${d.canceladas === 1 ? "" : "s"} cancelada${d.canceladas === 1 ? "" : "s"} com sucesso.`);
@@ -836,16 +871,30 @@ export default function SeguroVida() {
 
   const totais = useMemo(() => {
     const soma = (key: string) => filtradas.reduce((acc: number, f: any) => acc + parseBrMoney(f[key]), 0);
+    const vg  = soma("premio_vg");
+    const apc = soma("premio_apc");
     return {
       morte_natural:     soma("morte_natural"),
       morte_acidental:   soma("morte_acidental"),
       invalidez_acidente:soma("invalidez_acidente"),
       invalidez_doenca:  soma("invalidez_doenca"),
-      premio_vg:         soma("premio_vg"),
-      premio_apc:        soma("premio_apc"),
+      premio_vg:         vg,
+      premio_apc:        apc,
+      custo_mensal:      vg + apc,
       comValores:        filtradas.filter((f: any) => f.morte_natural || f.premio_vg).length,
     };
   }, [filtradas]);
+
+  // Alertas de vencimento de apólice (próximos 60 dias)
+  const alertasVencimento = useMemo(() => {
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const limite = new Date(hoje); limite.setDate(limite.getDate() + 60);
+    return funcionariosNorm.filter((f: any) => {
+      if (!f.data_vencimento_apolice) return false;
+      const dt = new Date(f.data_vencimento_apolice);
+      return dt >= hoje && dt <= limite;
+    }).sort((a: any, b: any) => new Date(a.data_vencimento_apolice).getTime() - new Date(b.data_vencimento_apolice).getTime());
+  }, [funcionariosNorm]);
 
   const invalidate = () => {
     utils.seguroVida.listarFuncionariosComStatus.invalidate();
@@ -857,6 +906,7 @@ export default function SeguroVida() {
   const handlePrint = () => {
     const linhas = filtradas.map((f: any) => {
       const s = STATUS_LABELS[f.statusSeguro]?.label ?? f.statusSeguro;
+      const custo = parseBrMoney(f.premio_vg) + parseBrMoney(f.premio_apc);
       return `<tr>
         <td>${f.nomeCompleto ?? "—"}</td>
         <td>${f.funcao ?? f.cargo ?? "—"}</td>
@@ -868,6 +918,7 @@ export default function SeguroVida() {
         <td style="text-align:right">${f.invalidez_doenca ?? "—"}</td>
         <td style="text-align:right">${f.premio_vg ?? "—"}</td>
         <td style="text-align:right">${f.premio_apc ?? "—"}</td>
+        <td style="text-align:right;font-weight:600">${custo > 0 ? fmtBrMoney(custo) : "—"}</td>
       </tr>`;
     }).join("");
     const w = window.open("", "_blank");
@@ -878,6 +929,7 @@ export default function SeguroVida() {
       th,td{border:1px solid #ccc;padding:3px 5px;}
       th{background:#eee;font-weight:bold;text-align:left;}
       .group{background:#dde6f0;font-weight:bold;text-align:center;}
+      .custo-col{background:#d1fae5;font-weight:bold;}
       h2{margin-bottom:4px;}
     </style></head><body>
       <h2>Seguro de Vida — Relação de Segurados</h2>
@@ -888,6 +940,7 @@ export default function SeguroVida() {
             <th rowspan="2">Nome</th><th rowspan="2">Cargo</th><th rowspan="2">Status</th><th rowspan="2">Seguradora</th>
             <th colspan="4" class="group">Importâncias Seguradas (R$)</th>
             <th colspan="2" class="group">Prêmios Mensais (R$)</th>
+            <th rowspan="2" class="custo-col" style="text-align:center">Custo/Mês (R$)</th>
           </tr>
           <tr>
             <th>Morte Natural</th><th>Morte Acidental</th><th>Inv. Acidente</th><th>Inv. Doença</th>
@@ -901,7 +954,40 @@ export default function SeguroVida() {
     w.print();
   };
 
+  // ── CSV Export ──
+  const exportarCSV = () => {
+    const header = ["Nome","Cargo","Tipo","Status","Item Apólice","Morte Natural","Morte Acidental","Inv. Acidente","Inv. Doença","Prêmio VG","Prêmio APC","Custo Mensal"];
+    const linhas = filtradas.map((f: any) => {
+      const custo = parseBrMoney(f.premio_vg) + parseBrMoney(f.premio_apc);
+      return [
+        `"${(f.nomeCompleto ?? "").replace(/"/g, '""')}"`,
+        `"${(f.funcao ?? f.cargo ?? "").replace(/"/g, '""')}"`,
+        f.tipoContrato ?? "CLT",
+        f.seguro_status ?? "sem_cobertura",
+        f.item_segurador ?? "",
+        f.morte_natural ?? "",
+        f.morte_acidental ?? "",
+        f.invalidez_acidente ?? "",
+        f.invalidez_doenca ?? "",
+        f.premio_vg ?? "",
+        f.premio_apc ?? "",
+        custo > 0 ? fmtBrMoney(custo) : "",
+      ].join(",");
+    });
+    const csv = [header.join(","), ...linhas].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url;
+    a.download = `seguro-vida-coberturas-${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`${filtradas.length} registros exportados`);
+  };
+
   // ── Cards ──
+  const custoBR = resumo?.totalPremioMensal
+    ? `R$ ${(resumo.totalPremioMensal as number).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : "—";
   const cards = [
     { label: "Segurados Ativos",       val: resumo?.totalSeguradosAtivos ?? 0,      icon: ShieldCheck,  color: "text-green-700",  bg: "bg-green-50 border-green-200" },
     { label: "Pend. Inclusão",         val: resumo?.totalPendenteInclusao ?? 0,     icon: Clock,        color: "text-blue-700",   bg: "bg-blue-50 border-blue-200" },
@@ -922,8 +1008,29 @@ export default function SeguroVida() {
           </div>
         </div>
 
+        {/* Alertas de vencimento de apólice */}
+        {alertasVencimento.length > 0 && (
+          <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-300 rounded-lg">
+            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-900">
+                {alertasVencimento.length === 1
+                  ? "1 apólice vencendo em até 60 dias"
+                  : `${alertasVencimento.length} apólices vencendo em até 60 dias`}
+              </p>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {alertasVencimento.map((f: any, i: number) => (
+                  <span key={i} className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200">
+                    {f.nomeCompleto} — {fmtDate(f.data_vencimento_apolice)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {cards.map((c) => (
             <div key={c.label} className={cn("p-4 rounded-lg border flex flex-col gap-1", c.bg)}>
               <div className="flex items-center gap-2">
@@ -933,6 +1040,15 @@ export default function SeguroVida() {
               <p className={cn("text-3xl font-bold", c.color)}>{c.val}</p>
             </div>
           ))}
+          {/* Card especial: Custo Mensal Total */}
+          <div className="p-4 rounded-lg border bg-emerald-50 border-emerald-200 flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5 text-emerald-700" />
+              <span className="text-xs font-semibold text-slate-500">Custo Mensal Total</span>
+            </div>
+            <p className="text-xl font-bold text-emerald-800 tabular-nums">{custoBR}</p>
+            <p className="text-[10px] text-emerald-600">VG + APC (ativos + pend. inclusão)</p>
+          </div>
         </div>
 
         {/* Informação da última importação */}
@@ -981,6 +1097,9 @@ export default function SeguroVida() {
             )}
             <Button size="sm" variant="outline" onClick={handlePrint}>
               <Printer className="h-4 w-4 mr-1.5" />Imprimir
+            </Button>
+            <Button size="sm" variant="outline" onClick={exportarCSV} title="Exportar tabela filtrada como CSV">
+              <Download className="h-4 w-4 mr-1.5" />Exportar CSV
             </Button>
             <Button size="sm" onClick={() => setShowImport(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
               <ArrowRightLeft className="h-4 w-4 mr-1.5" />Importar Relatório do Corretor
@@ -1098,7 +1217,7 @@ export default function SeguroVida() {
                     <th colSpan={4} className="px-3 py-2 text-center font-bold text-blue-700 bg-blue-50 border-r text-[11px] uppercase tracking-wide">
                       Importâncias Seguradas
                     </th>
-                    <th colSpan={2} className="px-3 py-2 text-center font-bold text-emerald-700 bg-emerald-50 border-r text-[11px] uppercase tracking-wide">
+                    <th colSpan={3} className="px-3 py-2 text-center font-bold text-emerald-700 bg-emerald-50 border-r text-[11px] uppercase tracking-wide">
                       Prêmios Mensais
                     </th>
                     <th className="bg-slate-50"></th>
@@ -1125,15 +1244,16 @@ export default function SeguroVida() {
                     <th className="px-3 py-2 text-right font-semibold text-blue-600 whitespace-nowrap">Inv. Acidente</th>
                     <th className="px-3 py-2 text-right font-semibold text-blue-600 whitespace-nowrap border-r">Inv. Doença</th>
                     <th className="px-3 py-2 text-right font-semibold text-emerald-600 whitespace-nowrap">V.G.</th>
-                    <th className="px-3 py-2 text-right font-semibold text-emerald-600 whitespace-nowrap border-r">A.P.C.</th>
+                    <th className="px-3 py-2 text-right font-semibold text-emerald-600 whitespace-nowrap">A.P.C.</th>
+                    <th className="px-3 py-2 text-right font-semibold text-emerald-800 whitespace-nowrap border-r bg-emerald-50/60">Custo/Mês</th>
                     <th className="px-3 py-2 text-left font-semibold text-slate-400 whitespace-nowrap">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {funcionariosQ.isLoading ? (
-                    <tr><td colSpan={isAdmin ? 12 : 11} className="text-center py-12 text-muted-foreground">Carregando...</td></tr>
+                    <tr><td colSpan={isAdmin ? 13 : 12} className="text-center py-12 text-muted-foreground">Carregando...</td></tr>
                   ) : filtradas.length === 0 ? (
-                    <tr><td colSpan={isAdmin ? 12 : 11} className="text-center py-12 text-muted-foreground">
+                    <tr><td colSpan={isAdmin ? 13 : 12} className="text-center py-12 text-muted-foreground">
                       {funcionariosNorm.length === 0
                         ? "Nenhum funcionário CLT ativo encontrado. Cadastre funcionários no módulo de Colaboradores."
                         : "Nenhum resultado para os filtros aplicados."}
@@ -1200,17 +1320,40 @@ export default function SeguroVida() {
                         <td className={cn("px-3 py-2.5 text-right tabular-nums font-medium", f.premio_vg ? "text-emerald-700" : "text-slate-300")}>
                           {f.premio_vg ?? "—"}
                         </td>
-                        <td className={cn("px-3 py-2.5 text-right tabular-nums font-medium border-r", f.premio_apc ? "text-emerald-700" : "text-slate-300")}>
+                        <td className={cn("px-3 py-2.5 text-right tabular-nums font-medium", f.premio_apc ? "text-emerald-700" : "text-slate-300")}>
                           {f.premio_apc ?? "—"}
                         </td>
+                        {/* Custo Mensal = VG + APC */}
+                        {(() => {
+                          const custo = parseBrMoney(f.premio_vg) + parseBrMoney(f.premio_apc);
+                          return (
+                            <td className={cn("px-3 py-2.5 text-right tabular-nums font-bold border-r", custo > 0 ? "text-emerald-800 bg-emerald-50/40" : "text-slate-200")}>
+                              {custo > 0 ? fmtBrMoney(custo) : "—"}
+                            </td>
+                          );
+                        })()}
                         {/* Ações */}
                         <td className="px-3 py-2.5">
-                          {cancelavel && (
-                            <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => { if (confirm(`Cancelar cobertura de ${f.nomeCompleto}?`)) cancelar.mutate({ companyId, coberturaId: f.cobertura_id }); }}>
-                              <Ban className="h-3.5 w-3.5 mr-1" />Cancelar
-                            </Button>
-                          )}
+                          <div className="flex items-center gap-1 flex-nowrap">
+                            {f.statusSeguro === "pendente_inclusao" && isAdmin && f.cobertura_id && (
+                              <Button size="sm" variant="ghost" className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 whitespace-nowrap"
+                                onClick={() => { if (confirm(`Confirmar inclusão de ${f.nomeCompleto} como Ativo?`)) confirmarStatus.mutate({ companyId, coberturaId: f.cobertura_id, novoStatus: "ativo" }); }}>
+                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Incluir
+                              </Button>
+                            )}
+                            {f.statusSeguro === "pendente_cancelamento" && isAdmin && f.cobertura_id && (
+                              <Button size="sm" variant="ghost" className="h-7 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 whitespace-nowrap"
+                                onClick={() => { if (confirm(`Confirmar cancelamento de ${f.nomeCompleto}?`)) confirmarStatus.mutate({ companyId, coberturaId: f.cobertura_id, novoStatus: "cancelado" }); }}>
+                                <Ban className="h-3.5 w-3.5 mr-1" />Cancelar
+                              </Button>
+                            )}
+                            {cancelavel && f.statusSeguro === "ativo" && (
+                              <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => { if (confirm(`Cancelar cobertura de ${f.nomeCompleto}?`)) cancelar.mutate({ companyId, coberturaId: f.cobertura_id }); }}>
+                                <Ban className="h-3.5 w-3.5 mr-1" />Cancelar
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1240,8 +1383,11 @@ export default function SeguroVida() {
                       <td className="px-3 py-2.5 text-right tabular-nums font-bold text-emerald-700 text-xs">
                         {fmtBrMoney(totais.premio_vg)}
                       </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums font-bold text-emerald-700 text-xs border-r">
+                      <td className="px-3 py-2.5 text-right tabular-nums font-bold text-emerald-700 text-xs">
                         {fmtBrMoney(totais.premio_apc)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-extrabold text-emerald-900 text-xs border-r bg-emerald-100/60">
+                        {fmtBrMoney(totais.custo_mensal)}
                       </td>
                       <td className="px-3 py-2.5" />
                     </tr>
@@ -1395,7 +1541,20 @@ export default function SeguroVida() {
                             <td className="px-4 py-2.5">
                               <span className="text-xs font-semibold text-slate-700">{MESES[Number(mes) - 1]} {ano}</span>
                             </td>
-                            <td className="px-4 py-2.5 font-medium text-slate-800">{n.nome}</td>
+                            <td className="px-4 py-2.5">
+                              <span className="font-medium text-slate-800">{n.nome}</span>
+                              {n.possivelDesligado && (
+                                <div className="text-[10px] text-red-700 bg-red-50 border border-red-100 rounded px-1.5 py-0.5 mt-0.5 inline-flex items-center gap-1">
+                                  🔴 Desligado: <strong>{n.possivelDesligado.nome}</strong>
+                                  {n.possivelDesligado.dataDemissao && <span> — {fmtDate(n.possivelDesligado.dataDemissao)}</span>}
+                                </div>
+                              )}
+                              {n.possivelPJ && (
+                                <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 rounded px-1.5 py-0.5 mt-0.5 inline-flex items-center gap-1">
+                                  ⚠️ Possível {n.possivelPJ.tipo}: <strong>{n.possivelPJ.nome}</strong>
+                                </div>
+                              )}
+                            </td>
                             <td className="px-4 py-2.5 font-mono text-xs text-slate-400">{n.item || "—"}</td>
                             <td className="px-4 py-2.5 text-xs text-slate-400">{fmtDate(n.dataImportacao?.split?.("T")?.[0])}</td>
                           </tr>
