@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { removeAccents } from "@/lib/searchUtils";
 import {
@@ -1149,7 +1148,7 @@ export default function SeguroVida() {
 
         {tabAtiva === "cobertura" && (
           <>
-            {/* Filtros */}
+            {/* Filtros — linha 1: busca + tipo de contrato */}
             <div className="flex items-center gap-3 flex-wrap">
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -1180,20 +1179,30 @@ export default function SeguroVida() {
                   </button>
                 ))}
               </div>
-              <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-                <SelectTrigger className="w-56">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos ({funcionariosNorm.length})</SelectItem>
-                  <SelectItem value="sem_cobertura">🔴 Sem Cobertura ({funcionariosNorm.filter((f:any)=>f.statusSeguro==="sem_cobertura").length})</SelectItem>
-                  <SelectItem value="ativo">✅ Segurado Ativo ({funcionariosNorm.filter((f:any)=>f.statusSeguro==="ativo").length})</SelectItem>
-                  <SelectItem value="pendente_inclusao">🔵 Pendente Inclusão ({funcionariosNorm.filter((f:any)=>f.statusSeguro==="pendente_inclusao").length})</SelectItem>
-                  <SelectItem value="pendente_cancelamento">🟡 Pend. Cancelamento ({funcionariosNorm.filter((f:any)=>f.statusSeguro==="pendente_cancelamento").length})</SelectItem>
-                  <SelectItem value="cancelado">⚫ Cancelado ({funcionariosNorm.filter((f:any)=>f.statusSeguro==="cancelado").length})</SelectItem>
-                </SelectContent>
-              </Select>
-              <span className="text-xs text-muted-foreground">{filtradas.length} de {funcionariosNorm.length} funcionários</span>
+              <span className="text-xs text-muted-foreground ml-auto">{filtradas.length} de {funcionariosNorm.length} funcionários</span>
+            </div>
+            {/* Filtros — linha 2: status de cobertura */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {([
+                { key: "todos",                label: "Todos",               activeClass: "bg-slate-600 text-white border-slate-600" },
+                { key: "ativo",                label: "✅ Segurado Ativo",    activeClass: "bg-green-600 text-white border-green-600" },
+                { key: "sem_cobertura",        label: "🔴 Sem Cobertura",     activeClass: "bg-red-600 text-white border-red-600" },
+                { key: "pendente_inclusao",    label: "🔵 Pend. Inclusão",    activeClass: "bg-blue-600 text-white border-blue-600" },
+                { key: "pendente_cancelamento",label: "🟡 Pend. Cancelamento",activeClass: "bg-orange-500 text-white border-orange-500" },
+                { key: "cancelado",            label: "⚫ Cancelado",          activeClass: "bg-slate-800 text-white border-slate-800" },
+              ] as const).map(op => {
+                const count = op.key === "todos"
+                  ? funcionariosNorm.length
+                  : funcionariosNorm.filter((f: any) => f.statusSeguro === op.key).length;
+                if (op.key !== "todos" && count === 0) return null;
+                return (
+                  <button key={op.key} onClick={() => setFiltroStatus(op.key)}
+                    className={cn("text-[11px] px-3 py-1 rounded-full border font-medium transition-colors",
+                      filtroStatus === op.key ? op.activeClass : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50")}>
+                    {op.label} ({count})
+                  </button>
+                );
+              })}
             </div>
 
             {/* Barra de ação em lote */}
@@ -1327,8 +1336,8 @@ export default function SeguroVida() {
                           </td>
                         )}
                         {/* Funcionário */}
-                        <td className="px-3 py-2.5 font-medium text-slate-800 whitespace-nowrap max-w-[200px] truncate border-r">
-                          <div className="truncate">{f.nomeCompleto}</div>
+                        <td className="px-3 py-2.5 font-medium text-slate-800 whitespace-nowrap border-r">
+                          <div>{f.nomeCompleto}</div>
                           {f.emp_status && !["Ativo", "Ferias"].includes(f.emp_status) && (
                             <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-semibold mt-0.5 inline-block",
                               f.emp_status === "Afastado" ? "bg-orange-100 text-orange-700" :
