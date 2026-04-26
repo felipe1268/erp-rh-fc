@@ -722,8 +722,24 @@ export default function FechamentoPonto() {
   ];
 
   // ===== QUERIES =====
+  // consolidacaoStatus precisa vir ANTES de summary para extrair o ciclo real (ex: 16/03–15/04)
+  // e passar dataInicio/dataFim corretos para o getSummary evitar erro de 48% presença.
+  const consolidacaoStatus = trpc.fechamentoPonto.getConsolidacaoStatus.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
+  const consolidacaoData = consolidacaoStatus.data;
+  const isParcial = consolidacaoData?.parcial === true;
+  // "isConsolidado" no contexto da UI = mês inteiro travado (não apenas o ciclo).
+  // Quando há consolidação parcial, dias escuros ainda devem ser editáveis.
+  const isConsolidado = consolidacaoData?.consolidado === true && !isParcial;
+  const cicloInicio: string | null = consolidacaoData?.dataInicioCiclo ?? null;
+  const cicloFim: string | null = consolidacaoData?.dataFimCiclo ?? null;
+
   const stats = trpc.fechamentoPonto.getStats.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
-  const summary = trpc.fechamentoPonto.getSummary.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
+  // Quando o ciclo não coincide com o mês calendário (ex: 16/03–15/04), passar o range real
+  // para que o backend busque registros de AMBOS os meses e os dias trabalhados fiquem corretos.
+  const summary = trpc.fechamentoPonto.getSummary.useQuery(
+    { companyId, companyIds, mesReferencia: mesAno, dataInicio: cicloInicio ?? undefined, dataFim: cicloFim ?? undefined },
+    { enabled: companyId > 0 || companyIds.length > 0 }
+  );
   const inconsistencies = trpc.fechamentoPonto.listInconsistencies.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const employeeDetail = trpc.fechamentoPonto.getEmployeeDetail.useQuery(
     { companyId, employeeId: selectedEmployeeId!, mesReferencia: mesAno },
@@ -732,7 +748,6 @@ export default function FechamentoPonto() {
   const obrasList = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: companyId > 0 || companyIds.length > 0 });
   const employeesList = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true, includeTerminatedInMonth: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const monthStatuses = trpc.fechamentoPonto.getMonthStatuses.useQuery({ companyId, companyIds, ano: anoSelecionado }, { enabled: companyId > 0 || companyIds.length > 0 });
-  const consolidacaoStatus = trpc.fechamentoPonto.getConsolidacaoStatus.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const conflitos = trpc.fechamentoPonto.getConflitosObraDia.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const atestadosMes = trpc.pontoDescontos.atestadosMes.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 });
   const heSolicitacoesMes = trpc.heSolicitacoes.list.useQuery(
@@ -752,14 +767,6 @@ export default function FechamentoPonto() {
     { companyId, diasUteis: simDiasUteis, horasPorDia: simHorasDia },
     { enabled: (companyId > 0 || companyIds.length > 0) && viewMode === "simulador_horistas" }
   );
-
-  const consolidacaoData = consolidacaoStatus.data;
-  const isParcial = consolidacaoData?.parcial === true;
-  // "isConsolidado" no contexto da UI = mês inteiro travado (não apenas o ciclo).
-  // Quando há consolidação parcial, dias escuros ainda devem ser editáveis.
-  const isConsolidado = consolidacaoData?.consolidado === true && !isParcial;
-  const cicloInicio: string | null = consolidacaoData?.dataInicioCiclo ?? null;
-  const cicloFim: string | null = consolidacaoData?.dataFimCiclo ?? null;
   // True quando uma data específica está dentro do ciclo consolidado (e portanto bloqueada).
   const isDateLocked = (data?: string | null): boolean => {
     if (consolidacaoData?.consolidado !== true) return false;

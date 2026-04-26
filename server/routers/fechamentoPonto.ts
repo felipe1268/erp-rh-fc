@@ -1354,13 +1354,21 @@ export const fechamentoPontoRouter = router({
   getSummary: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string(),
       obraId: z.number().optional(),
+      dataInicio: z.string().optional(),
+      dataFim: z.string().optional(),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const conditions: any[] = [
         companyFilter(timeRecords.companyId, input),
-        eq(timeRecords.mesReferencia, input.mesReferencia),
       ];
+      // Quando o ciclo não coincide com o mês calendário (ex: 16/03–15/04),
+      // usar range de datas para pegar registros dos dois meses envolvidos.
+      if (input.dataInicio && input.dataFim) {
+        conditions.push(sql`${timeRecords.data} >= ${input.dataInicio} AND ${timeRecords.data} <= ${input.dataFim}`);
+      } else {
+        conditions.push(eq(timeRecords.mesReferencia, input.mesReferencia));
+      }
       if (input.obraId) conditions.push(eq(timeRecords.obraId, input.obraId));
 
       const recs = await db.select({
