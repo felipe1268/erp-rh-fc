@@ -8915,6 +8915,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-04-26 23:00:00",
   },
   {
+    version: 1299,
+    titulo: "Seguro de Vida: algoritmo de comparação de nomes totalmente reescrito",
+    descricao: "Parser de PDF corrigido: removido fallback genérico que capturava cabeçalhos/rodapés como nomes (ex: 'RELACAO ATUALIZADA DE SEGURADOS', 'VIDAS VG' etc.), agora só aceita linhas com número de item. Algoritmo de similaridade reescrito: (1) filtra stopwords DE/DA/DO/DOS/DAS/E; (2) distância de Levenshtein por token para tolerar variações ortográficas (FELIPPE×FELIPE, CORREIA×CORREA); (3) score de cobertura — se todos os tokens da lista menor estão na maior, similaridade = 1.0; threshold ajustado para 0.55. Logs de diagnóstico adicionados: mostra ids, cltAtivos, exemplos de match e primeiros sem-seguro.",
+    tipo: "correcao",
+    modulos: "Seguro de Vida",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-27 00:00:00",
+  },
+  {
     version: 1298,
     titulo: "Seguro de Vida: correção crítica — tabelas criadas e helper rows() para db.execute()",
     descricao: "Dois bugs bloqueantes resolvidos: (1) Tabelas seguro_vida_coberturas e seguro_vida_importacoes criadas diretamente no banco (CREATE TABLE IF NOT EXISTS no startup não estava sendo executado em determinadas reinicializações). (2) Adicionado helper rows() que extrai corretamente o array de linhas do resultado de db.execute(), que pode retornar QueryResult{rows:[]} ou array direto dependendo da versão do driver — eliminando o erro 'not iterable' em getResumo e o cruzamento retornando 0 funcionários CLT.",

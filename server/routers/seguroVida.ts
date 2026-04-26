@@ -20,7 +20,10 @@ function rows(result: any): any[] {
   return [];
 }
 
-// Normaliza nome para comparação: maiúsculo, sem acento, sem espaços extras
+// Stopwords ignoradas na comparação de nomes (conectores e artigos)
+const NAME_STOPWORDS = new Set(["DE", "DA", "DO", "DOS", "DAS", "E", "A", "O", "EM", "NO", "NA"]);
+
+// Normaliza nome: maiúsculo, sem acento, sem caracteres especiais, sem espaços duplos
 function normalizeName(name: string): string {
   return name
     .toUpperCase()
@@ -31,12 +34,60 @@ function normalizeName(name: string): string {
     .trim();
 }
 
-// Similaridade simples por tokens (palavras em comum / total)
+// Distância de Levenshtein entre dois tokens — permite detectar variações ortográficas
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  const dp: number[] = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const temp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = temp;
+    }
+  }
+  return dp[n];
+}
+
+// Verifica se dois tokens de nome são equivalentes (inclui tolerância a erros ortográficos)
+function tokenMatch(ta: string, tb: string): boolean {
+  if (ta === tb) return true;
+  const maxLen = Math.max(ta.length, tb.length);
+  if (maxLen <= 3) return false; // palavras curtas exigem match exato
+  const dist = levenshtein(ta, tb);
+  return dist <= Math.floor(maxLen * 0.25); // até 25% de diferença
+}
+
+// Similaridade de nomes com filtragem de stopwords e tolerância ortográfica.
+// Retorna valor entre 0 e 1.
 function nameSimilarity(a: string, b: string): number {
-  const na = normalizeName(a).split(" ");
-  const nb = normalizeName(b).split(" ");
-  const common = na.filter(w => nb.includes(w)).length;
-  return common / Math.max(na.length, nb.length);
+  const tokensA = normalizeName(a).split(" ").filter(w => w.length >= 3 && !NAME_STOPWORDS.has(w));
+  const tokensB = normalizeName(b).split(" ").filter(w => w.length >= 3 && !NAME_STOPWORDS.has(w));
+  if (!tokensA.length || !tokensB.length) return 0;
+
+  let matched = 0;
+  const usedB = new Set<number>();
+  for (const ta of tokensA) {
+    for (let j = 0; j < tokensB.length; j++) {
+      if (!usedB.has(j) && tokenMatch(ta, tokensB[j])) {
+        matched++;
+        usedB.add(j);
+        break;
+      }
+    }
+  }
+
+  // Score estrito: intersecção / maior lista (evita falsos positivos)
+  const scoreStrict = matched / Math.max(tokensA.length, tokensB.length);
+  // Score de cobertura: intersecção / menor lista (detecta nomes que são subconjunto)
+  const scoreCoverage = matched / Math.min(tokensA.length, tokensB.length);
+
+  // Se a menor lista está totalmente contida na maior → match forte
+  if (scoreCoverage >= 1.0) return 1.0;
+  // Média ponderada favorecendo o score estrito
+  return scoreStrict * 0.6 + scoreCoverage * 0.4;
 }
 
 // Detecta competência (YYYY-MM) a partir do texto extraído do PDF
@@ -95,18 +146,38 @@ function detectarCompetenciaDoPdf(texto: string): string | null {
   return null;
 }
 
-// Extrai lista de segurados de texto bruto (formato do PDF do corretor)
+// Extrai lista de segurados do texto extraído de PDF do corretor.
+// O formato esperado é: <número-item> <espaços> <NOME COMPLETO> [valores monetários]
+// Exemplo: "00000000784       ACACIO LESCURA DE CAMARGO    28.290,38 ..."
+//
+// Apenas linhas com número de item (5-12 dígitos seguido de 2+ espaços e nome maiúsculo)
+// são aceitas. O fallback de "linha em maiúsculas" foi removido pois capturava headers,
+// rodapés e textos de tabela como "RELACAO ATUALIZADA DE SEGURADOS", "VIDAS VG", etc.
 function parseNomesBrutos(texto: string): Array<{ item: string; nome: string }> {
   const linhas = texto.split("\n").map(l => l.trim()).filter(Boolean);
   const segurados: Array<{ item: string; nome: string }> = [];
+
   for (const linha of linhas) {
+    // Pattern principal: número de item (com ou sem zeros à esquerda) + 2+ espaços + nome
     const match = linha.match(/^(\d{5,12})\s{2,}([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-Za-záàãâéêíóôõúüçñ\s]+)/);
-    if (match) {
-      segurados.push({ item: match[1].replace(/^0+/, ""), nome: match[2].trim() });
-    } else if (/^[A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ]/.test(linha) && linha.length > 5) {
-      segurados.push({ item: "", nome: linha });
-    }
+    if (!match) continue;
+
+    // Extrai só o nome: remove tudo após a primeira sequência de dígitos/valores monetários
+    // Exemplo: "ACACIO LESCURA DE CAMARGO    28.290,38" → "ACACIO LESCURA DE CAMARGO"
+    const nomeRaw = match[2]
+      .replace(/\s+\d[\d.,\s]*$/, "") // remove valores monetários ao final
+      .trim();
+
+    // Valida: nome deve ter pelo menos 2 palavras e ser só letras+espaços
+    const palavras = nomeRaw.split(/\s+/).filter(Boolean);
+    if (palavras.length < 2 || /\d/.test(nomeRaw)) continue;
+
+    segurados.push({
+      item: match[1].replace(/^0+/, "") || "0",
+      nome: nomeRaw,
+    });
   }
+
   return segurados;
 }
 
@@ -138,7 +209,7 @@ async function executarCruzamento(
     WHERE company_id ${inIds(ids)} AND status IN ('ativo','pendente_inclusao')
   `));
 
-  const THRESHOLD = 0.60;
+  const THRESHOLD = 0.55; // algoritmo melhorado (stopwords + Levenshtein) permite threshold menor
   const nomesSeguradosNorm = seguradosCorretora.map(s => normalizeName(s.nome));
 
   const resultado: {
@@ -186,6 +257,17 @@ async function executarCruzamento(
   const totalSemSeguro = resultado.filter(r => r.status === "sem_seguro").length;
   const totalPagarIndevido = resultado.filter(r => r.status === "pagar_indevido").length;
   const totalNovos = resultado.filter(r => r.status === "novo").length;
+  // Log das 3 maiores similaridades para diagnóstico
+  const matchesDebug = resultado
+    .filter(r => r.status === "ok" && r.similaridade)
+    .sort((a, b) => (b.similaridade ?? 0) - (a.similaridade ?? 0))
+    .slice(0, 3)
+    .map(r => `${r.nomeHR}(${(r.similaridade! * 100).toFixed(0)}%)`);
+  console.log(`[SeguroVida] cruzamento ${competencia}: ok=${totalOk}, semSeguro=${totalSemSeguro}, pagar=${totalPagarIndevido}, novo=${totalNovos}, exemplos=${matchesDebug.join(", ") || "nenhum"}`);
+  if (totalSemSeguro > 0) {
+    const semSeguroNomes = resultado.filter(r => r.status === "sem_seguro").slice(0, 5).map(r => r.nome);
+    console.log(`[SeguroVida] sem seguro (primeiros): ${semSeguroNomes.join(", ")}`);
+  }
 
   await db.execute(sql`
     INSERT INTO seguro_vida_importacoes
