@@ -366,7 +366,7 @@ export const seguroVidaRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const ids = resolveCompanyIds(input);
-      const pdfParse = require("pdf-parse");
+      const { default: pdfParse } = await import("pdf-parse");
 
       const resultados = [];
 
