@@ -51,18 +51,17 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ─── Componente de resultado por mês (accordion) ──────────────────────────────
-function ResultadoMes({ res, defaultOpen = false }: { res: any; defaultOpen?: boolean }) {
-  const [aberto, setAberto] = useState(defaultOpen);
+// ─── Painel de detalhe de um mês (usado no layout dois painéis) ───────────────
+function ResultadoMesDetalhe({ res }: { res: any }) {
   const [filtro, setFiltro] = useState("divergencias");
 
   if (res.erro) {
     return (
-      <div className="border border-red-200 bg-red-50 rounded-xl p-4 flex items-start gap-3">
-        <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-        <div>
-          <p className="font-semibold text-sm text-red-800">{res.filename ?? res.competencia}</p>
-          <p className="text-xs text-red-600 mt-0.5">{res.erro}</p>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center max-w-md p-8">
+          <AlertTriangle className="h-12 w-12 text-red-400 mx-auto mb-3" />
+          <p className="font-semibold text-red-800 mb-1">{res.filename ?? res.competencia}</p>
+          <p className="text-sm text-red-600">{res.erro}</p>
         </div>
       </div>
     );
@@ -70,113 +69,104 @@ function ResultadoMes({ res, defaultOpen = false }: { res: any; defaultOpen?: bo
 
   const [ano, mesNum] = (res.competencia ?? "").split("-");
   const mesLabel = MESES[Number(mesNum) - 1] ?? mesNum;
-  const temDiverg = res.totalSemSeguro > 0 || res.totalPagarIndevido > 0;
 
   const linhasFiltradas = (res.resultado ?? []).filter((r: any) =>
     filtro === "todos" ? true : filtro === "divergencias" ? r.status !== "ok" : r.status === filtro
   );
 
+  const countOf = (key: string) => key === "divergencias"
+    ? (res.resultado ?? []).filter((r: any) => r.status !== "ok").length
+    : key === "todos"
+    ? (res.resultado ?? []).length
+    : (res.resultado ?? []).filter((r: any) => r.status === key).length;
+
   return (
-    <div className={cn("border rounded-xl overflow-hidden", temDiverg ? "border-red-200" : "border-green-200")}>
-      <button className={cn("w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
-        temDiverg ? "bg-red-50 hover:bg-red-100" : "bg-green-50 hover:bg-green-100")}
-        onClick={() => setAberto(v => !v)}>
-        <FileText className={cn("h-5 w-5 shrink-0", temDiverg ? "text-red-500" : "text-green-600")} />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="font-semibold text-sm">{mesLabel} {ano}</p>
-            {res.autoDetectado
-              ? <span className="text-[10px] px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded font-semibold">📅 detectado do PDF</span>
-              : <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded font-medium">seleção manual</span>
-            }
-          </div>
-          {res.filename && <p className="text-[11px] text-slate-500 truncate">{res.filename}</p>}
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Cabeçalho do detalhe */}
+      <div className="px-6 pt-4 pb-3 border-b shrink-0">
+        <div className="flex items-center gap-2 mb-3">
+          <FileText className="h-4 w-4 text-indigo-600" />
+          <p className="font-bold text-slate-800">{mesLabel} {ano}</p>
+          {res.autoDetectado
+            ? <span className="text-[10px] px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded font-semibold">📅 detectado do PDF</span>
+            : <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded font-medium">seleção manual</span>
+          }
+          {res.filename && <p className="text-[11px] text-slate-400 truncate max-w-xs">{res.filename}</p>}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs px-2 py-0.5 bg-white/70 rounded font-mono border">{res.totalSeguradosCorretora} na lista</span>
-          <span className={cn("text-xs px-2 py-0.5 rounded font-semibold border",
-            res.totalSemSeguro > 0 ? "bg-red-100 text-red-700 border-red-200" : "bg-green-100 text-green-700 border-green-200")}>
-            {res.totalSemSeguro > 0 ? `⚠️ ${res.totalSemSeguro} sem seguro` : "✅ OK"}
-          </span>
-          {res.totalPagarIndevido > 0 && (
-            <span className="text-xs px-2 py-0.5 rounded font-semibold bg-orange-100 text-orange-700 border border-orange-200">
-              {res.totalPagarIndevido} indevido
-            </span>
-          )}
-          {aberto ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+        {/* Estatísticas */}
+        <div className="grid grid-cols-5 gap-3">
+          {[
+            { label: "Na lista", val: res.totalSeguradosCorretora, cls: "text-slate-700", bg: "bg-slate-50 border-slate-200" },
+            { label: "Funcionários CLT", val: res.totalAtivosHR, cls: "text-blue-700", bg: "bg-blue-50 border-blue-100" },
+            { label: "✅ OK", val: res.totalOk, cls: "text-green-700", bg: "bg-green-50 border-green-100" },
+            { label: "🔴 Sem seguro", val: res.totalSemSeguro, cls: "text-red-700", bg: "bg-red-50 border-red-100" },
+            { label: "🟡 Indevido", val: res.totalPagarIndevido, cls: "text-orange-700", bg: "bg-orange-50 border-orange-100" },
+          ].map((c, i) => (
+            <div key={i} className={cn("text-center p-3 rounded-xl border", c.bg)}>
+              <p className={cn("text-2xl font-bold", c.cls)}>{c.val ?? "—"}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{c.label}</p>
+            </div>
+          ))}
         </div>
-      </button>
+      </div>
 
-      {aberto && (
-        <div className="px-4 py-3 space-y-3 bg-white border-t">
-          <div className="grid grid-cols-4 gap-2">
-            {[
-              { label: "Na lista", val: res.totalSeguradosCorretora, cls: "text-slate-700" },
-              { label: "✅ OK", val: res.totalOk, cls: "text-green-700" },
-              { label: "🔴 Sem seguro", val: res.totalSemSeguro, cls: "text-red-700" },
-              { label: "🟡 Indevido", val: res.totalPagarIndevido, cls: "text-orange-700" },
-            ].map((c, i) => (
-              <div key={i} className="text-center p-2 bg-slate-50 rounded-lg border">
-                <p className={cn("text-xl font-bold", c.cls)}>{c.val}</p>
-                <p className="text-[10px] text-muted-foreground">{c.label}</p>
-              </div>
-            ))}
-          </div>
+      {/* Filtros */}
+      <div className="px-6 py-2.5 border-b shrink-0 flex gap-1.5 flex-wrap bg-slate-50">
+        {[
+          { key: "divergencias", label: "Só divergências" },
+          { key: "todos", label: "Todos" },
+          { key: "sem_seguro", label: "Sem seguro" },
+          { key: "pagar_indevido", label: "Indevido" },
+          { key: "ok", label: "OK" },
+          { key: "novo", label: "Recém-admitido" },
+        ].map(op => (
+          <button key={op.key} onClick={() => setFiltro(op.key)}
+            className={cn("text-[11px] px-3 py-1 rounded-full border font-medium transition-colors",
+              filtro === op.key ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 hover:bg-slate-100")}>
+            {op.label} ({countOf(op.key)})
+          </button>
+        ))}
+      </div>
 
-          <div className="flex gap-1.5 flex-wrap">
-            {[
-              { key: "divergencias", label: "Só divergências" },
-              { key: "todos", label: "Todos" },
-              { key: "sem_seguro", label: "Sem seguro" },
-              { key: "pagar_indevido", label: "Indevido" },
-              { key: "ok", label: "OK" },
-              { key: "novo", label: "Recém-admitido" },
-            ].map(op => (
-              <button key={op.key} onClick={() => setFiltro(op.key)}
-                className={cn("text-[11px] px-2.5 py-1 rounded-full border font-medium transition-colors",
-                  filtro === op.key ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 hover:bg-slate-50")}>
-                {op.label} ({op.key === "divergencias"
-                  ? (res.resultado ?? []).filter((r: any) => r.status !== "ok").length
-                  : op.key === "todos"
-                  ? (res.resultado ?? []).length
-                  : (res.resultado ?? []).filter((r: any) => r.status === op.key).length})
-              </button>
-            ))}
-          </div>
-
-          <div className="border rounded-lg overflow-auto max-h-[280px]">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50 sticky top-0">
-                <tr>
-                  <th className="px-3 py-2 text-left font-semibold text-slate-600">Status</th>
-                  <th className="px-3 py-2 text-left font-semibold text-slate-600">Nome no Sistema</th>
-                  <th className="px-3 py-2 text-left font-semibold text-slate-600">Nome na Lista</th>
-                  <th className="px-3 py-2 text-left font-semibold text-slate-600">Item</th>
+      {/* Tabela — ocupa todo o espaço restante */}
+      <div className="flex-1 overflow-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
+            <tr>
+              <th className="px-4 py-2.5 text-left font-semibold text-slate-600 w-36">Status</th>
+              <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Nome no Sistema (HR)</th>
+              <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Nome na Lista (Corretor)</th>
+              <th className="px-4 py-2.5 text-left font-semibold text-slate-600 w-28">Item</th>
+              <th className="px-4 py-2.5 text-left font-semibold text-slate-600 w-24">Similaridade</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {linhasFiltradas.length === 0 ? (
+              <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-400">Nenhum resultado para este filtro.</td></tr>
+            ) : linhasFiltradas.map((r: any, i: number) => {
+              const st = RESULT_STATUS[r.status] ?? RESULT_STATUS.ok;
+              return (
+                <tr key={i} className={cn("hover:bg-slate-50 transition-colors",
+                  r.status === "sem_seguro" ? "bg-red-50/50" :
+                  r.status === "pagar_indevido" ? "bg-orange-50/50" :
+                  r.status === "novo" ? "bg-blue-50/50" : "")}>
+                  <td className="px-4 py-2.5">
+                    <span className={cn("inline-flex items-center gap-1.5 font-semibold text-xs", st.color)}>
+                      <st.Icon className="h-3.5 w-3.5" />{st.label}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 font-medium text-slate-800">{r.nomeHR ?? <span className="text-slate-300 italic">—</span>}</td>
+                  <td className="px-4 py-2.5 text-slate-600">{r.nome}</td>
+                  <td className="px-4 py-2.5 font-mono text-slate-400 text-xs">{r.item || "—"}</td>
+                  <td className="px-4 py-2.5 text-slate-400 text-xs">
+                    {r.similaridade != null ? `${Math.round(r.similaridade * 100)}%` : "—"}
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y">
-                {linhasFiltradas.length === 0 ? (
-                  <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-400">Nenhum resultado para este filtro.</td></tr>
-                ) : linhasFiltradas.map((r: any, i: number) => {
-                  const st = RESULT_STATUS[r.status] ?? RESULT_STATUS.ok;
-                  return (
-                    <tr key={i} className={cn(r.status === "sem_seguro" ? "bg-red-50" : r.status === "pagar_indevido" ? "bg-orange-50" : r.status === "novo" ? "bg-blue-50" : "")}>
-                      <td className="px-3 py-2">
-                        <span className={cn("inline-flex items-center gap-1 font-semibold", st.color)}>
-                          <st.Icon className="h-3 w-3" />{st.label}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 font-medium">{r.nomeHR ?? "—"}</td>
-                      <td className="px-3 py-2 text-slate-500">{r.nome}</td>
-                      <td className="px-3 py-2 font-mono text-slate-400">{r.item || "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -216,6 +206,7 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
 
   // Results
   const [resultados, setResultados] = useState<any[] | null>(null);
+  const [activeIdx, setActiveIdx] = useState(0);
 
   const processarLote = trpc.seguroVida.processarPdfLote.useMutation({
     onSuccess: (data) => {
@@ -267,6 +258,7 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
     setArquivos([]);
     setNomes("");
     setResultados(null);
+    setActiveIdx(0);
     setModo("pdf");
   };
 
@@ -274,7 +266,7 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) { onClose(); reset(); } }}>
-      <DialogContent className="flex flex-col p-0 gap-0 w-[860px] max-w-[95vw] max-h-[90vh]">
+      <DialogContent className="flex flex-col p-0 gap-0 w-[1280px] max-w-[96vw] h-[90vh]">
 
         {/* Header */}
         <DialogHeader className="px-6 py-4 border-b shrink-0 bg-gradient-to-r from-indigo-50 to-slate-50">
@@ -287,7 +279,7 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
           </p>
         </DialogHeader>
 
-        <div className="flex-1 overflow-auto px-6 py-5 space-y-5">
+        <div className={cn("flex-1 overflow-hidden", !resultados ? "overflow-auto px-6 py-5 space-y-5" : "flex")}>
           {!resultados ? (
             <>
               {/* Modo tabs */}
@@ -441,18 +433,65 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
               )}
             </>
           ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold text-slate-700">{resultados.length} competência(s) processada(s)</p>
-                <button onClick={reset}
-                  className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 font-medium">
-                  <RefreshCw className="h-3.5 w-3.5" />Nova importação
-                </button>
+            /* ── Layout dois painéis: lista de meses + detalhe ── */
+            <>
+              {/* Painel esquerdo: lista de meses */}
+              <div className="w-[220px] shrink-0 border-r flex flex-col bg-slate-50">
+                <div className="px-3 py-3 border-b bg-white flex items-center justify-between">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{resultados.length} mês(es)</p>
+                  <button onClick={reset}
+                    className="flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-700 font-medium">
+                    <RefreshCw className="h-3 w-3" />Nova
+                  </button>
+                </div>
+                <div className="flex-1 overflow-auto p-2 space-y-1.5">
+                  {resultados.map((res, i) => {
+                    const [ano, mesNum] = (res.competencia ?? "").split("-");
+                    const mesLabel = MESES[Number(mesNum) - 1] ?? mesNum;
+                    const temDiverg = !res.erro && (res.totalSemSeguro > 0 || res.totalPagarIndevido > 0);
+                    const isActive = i === activeIdx;
+                    return (
+                      <button key={i} onClick={() => setActiveIdx(i)}
+                        className={cn("w-full text-left p-3 rounded-xl border transition-all",
+                          isActive
+                            ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
+                            : temDiverg
+                            ? "bg-red-50 border-red-200 hover:border-red-300"
+                            : res.erro
+                            ? "bg-orange-50 border-orange-200 hover:border-orange-300"
+                            : "bg-green-50 border-green-200 hover:border-green-300")}>
+                        <p className={cn("font-bold text-sm", isActive ? "text-white" : "text-slate-800")}>
+                          {mesLabel} {ano}
+                        </p>
+                        {res.erro ? (
+                          <p className={cn("text-[11px] mt-0.5", isActive ? "text-white/70" : "text-orange-600")}>Erro ao ler PDF</p>
+                        ) : (
+                          <div className="flex gap-2 mt-1 flex-wrap">
+                            <span className={cn("text-[11px] font-medium", isActive ? "text-white/80" : "text-slate-500")}>
+                              {res.totalSeguradosCorretora} na lista
+                            </span>
+                            {res.totalOk > 0 && (
+                              <span className={cn("text-[11px] font-semibold", isActive ? "text-green-200" : "text-green-600")}>✓ {res.totalOk}</span>
+                            )}
+                            {res.totalSemSeguro > 0 && (
+                              <span className={cn("text-[11px] font-semibold", isActive ? "text-red-200" : "text-red-600")}>⚠ {res.totalSemSeguro}</span>
+                            )}
+                            {res.totalPagarIndevido > 0 && (
+                              <span className={cn("text-[11px] font-semibold", isActive ? "text-yellow-200" : "text-orange-600")}>{res.totalPagarIndevido} inv.</span>
+                            )}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              {resultados.map((res, i) => (
-                <ResultadoMes key={i} res={res} defaultOpen={res.totalSemSeguro > 0 || !!res.erro} />
-              ))}
-            </div>
+
+              {/* Painel direito: detalhe do mês selecionado */}
+              <div className="flex-1 overflow-hidden flex flex-col">
+                <ResultadoMesDetalhe res={resultados[activeIdx] ?? resultados[0]} />
+              </div>
+            </>
           )}
         </div>
 

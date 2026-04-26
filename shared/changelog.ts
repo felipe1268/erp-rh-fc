@@ -8887,4 +8887,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-26 21:00:00",
   },
+  {
+    version: 1295,
+    titulo: "Seguro de Vida: modal ampliado para 1280px × 90vh com layout dois painéis na tela de resultados",
+    descricao: "Modal de importação ampliado de 860px para 1280px de largura e altura fixa de 90vh. A tela de resultados foi redesenhada: agora usa um layout de dois painéis lado a lado — painel esquerdo (220px) com lista clicável de competências (meses), destacando divergências em vermelho/laranja e mês selecionado em azul; painel direito com detalhe completo do mês selecionado: 5 cards de estatísticas (na lista / CLT ativos / OK / sem seguro / indevido), filtros por status e tabela de altura total aproveitando todo o espaço disponível. Adicionada coluna 'Similaridade' na tabela de resultados. O componente ResultadoMes (accordion) foi substituído por ResultadoMesDetalhe (painel de altura total sem accordion).",
+    tipo: "melhoria",
+    modulos: "Seguro de Vida",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-26 22:00:00",
+  },
 ];
