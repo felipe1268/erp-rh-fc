@@ -57,6 +57,7 @@ export const EMPLOYEE_STATUS = [
   { value: "Ferias", label: "Férias", color: "#3b82f6" },
   { value: "Afastado", label: "Afastado", color: "#f59e0b" },
   { value: "Licenca", label: "Licença", color: "#8b5cf6" },
+  { value: "Aviso", label: "Aviso Prévio", color: "#ca8a04" },
   { value: "Desligado", label: "Desligado", color: "#ef4444" },
   { value: "Recluso", label: "Recluso", color: "#6b7280" },
 ] as const;

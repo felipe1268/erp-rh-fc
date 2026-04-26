@@ -32,6 +32,7 @@ const statusColors: Record<string, string> = {
   Ferias: "bg-blue-400/10 text-blue-400",
   Afastado: "bg-yellow-400/10 text-yellow-400",
   Licenca: "bg-purple-400/10 text-purple-400",
+  Aviso: "bg-yellow-500/15 text-yellow-700",
   Desligado: "bg-red-400/10 text-red-400",
   Recluso: "bg-gray-400/10 text-gray-400",
   ListaNegra: "bg-red-600/20 text-red-600",
@@ -39,7 +40,7 @@ const statusColors: Record<string, string> = {
 
 const statusLabels: Record<string, string> = {
   Ativo: "Ativo", Ferias: "Férias", Afastado: "Afastado",
-  Licenca: "Licença", Desligado: "Desligado", Recluso: "Recluso",
+  Licenca: "Licença", Aviso: "Aviso Prévio", Desligado: "Desligado", Recluso: "Recluso",
   ListaNegra: "Blacklist",
 };
 
@@ -741,6 +742,7 @@ export default function Colaboradores() {
                 { label: "Férias", value: statsQ.data.ferias, icon: Palmtree, color: "text-blue-700", bg: "bg-blue-50 border-blue-200", filter: "Ferias" },
                 { label: "Afastados", value: statsQ.data.afastados, icon: HeartPulse, color: "text-amber-700", bg: "bg-amber-50 border-amber-200", filter: "Afastado" },
                 { label: "Licença", value: statsQ.data.licenca, icon: Clock, color: "text-purple-700", bg: "bg-purple-50 border-purple-200", filter: "Licenca" },
+                { label: "Aviso", value: (statsQ.data as any).aviso ?? 0, icon: AlertTriangle, color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-300", filter: "Aviso" },
                 { label: "Desligados", value: statsQ.data.desligados, icon: UserX, color: "text-red-700", bg: "bg-red-50 border-red-200", filter: "Desligado" },
                 ...(isAdminMaster ? [{ label: "Blacklist", value: statsQ.data.blacklist || 0, icon: ShieldX, color: "text-red-800", bg: "bg-red-100 border-red-300", filter: "ListaNegra" }] : []),
                 { label: "Reclusos", value: statsQ.data.reclusos, icon: Ban, color: "text-gray-700", bg: "bg-gray-50 border-gray-200", filter: "Recluso" },
