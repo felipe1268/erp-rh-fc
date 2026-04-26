@@ -2297,35 +2297,37 @@ export default function FechamentoPonto() {
                         )}
                         {diasEmployeeQuery.data && (() => {
                           const { dias, totalTrabalhados } = diasEmployeeQuery.data;
-                          const totalFaltas = dias.filter(d => d.dow !== 0 && !d.trabalhado).length;
-                          const totalDomingos = dias.filter(d => d.dow === 0).length;
                           const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+                          // Apenas dias úteis (Seg-Sex) sem batida = falta provável
+                          const totalFaltas = dias.filter(d => d.dow >= 1 && d.dow <= 5 && !d.trabalhado).length;
+                          const totalFDS = dias.filter(d => (d.dow === 0 || d.dow === 6) && !d.trabalhado).length;
                           return (
                             <>
                               {/* Resumo */}
                               <div className="flex items-center gap-4 mb-4 p-3 bg-slate-50 rounded-lg border text-sm">
                                 <span className="flex items-center gap-1.5 text-green-700 font-semibold"><CheckCircle className="h-4 w-4" /> {totalTrabalhados} dias trabalhados</span>
                                 <span className="flex items-center gap-1.5 text-red-600 font-semibold"><XCircle className="h-4 w-4" /> {totalFaltas} faltas prováveis</span>
-                                <span className="flex items-center gap-1.5 text-slate-400"><span className="text-base">—</span> {totalDomingos} domingos</span>
+                                <span className="flex items-center gap-1.5 text-slate-400"><span className="text-base">—</span> {totalFDS} fins de semana</span>
                                 {diasUteisNoPeriodo && <span className="ml-auto text-indigo-700 font-semibold">{Math.min(100, Math.round((totalTrabalhados / diasUteisNoPeriodo) * 100))}% de presença</span>}
                               </div>
 
                               {/* Lista de dias */}
                               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                                 {dias.map((d) => {
-                                  const [ano, mes, dia] = d.data.split("-");
+                                  const [, mes, dia] = d.data.split("-");
                                   const label = `${dia}/${mes} (${DIAS_SEMANA[d.dow]})`;
-                                  const isDom = d.dow === 0;
+                                  // Fim de semana sem batida = folga (cinza); com batida = verde (trabalhou)
+                                  const isWeekendFolga = (d.dow === 0 || d.dow === 6) && !d.trabalhado;
                                   return (
-                                    <div key={d.data} className={`flex items-center justify-between py-1.5 px-2 rounded ${isDom ? "text-slate-400 bg-slate-50" : d.trabalhado ? "text-green-800 bg-green-50" : "text-red-700 bg-red-50"}`}>
+                                    <div key={d.data} className={`flex items-center justify-between py-1.5 px-2 rounded ${isWeekendFolga ? "text-slate-400 bg-slate-50" : d.trabalhado ? "text-green-800 bg-green-50" : "text-red-700 bg-red-50"}`}>
                                       <span className="font-medium">{label}</span>
                                       <span className="flex items-center gap-1">
-                                        {isDom && <span>— Domingo</span>}
-                                        {!isDom && d.trabalhado && <>
+                                        {isWeekendFolga && <span>— {d.dow === 0 ? "Domingo" : "Sábado"}</span>}
+                                        {!isWeekendFolga && d.trabalhado && <>
                                           <CheckCircle className="h-3 w-3 text-green-600" />
                                           <span className="font-mono">{d.horasTrabalhadas ?? ""}</span>
                                         </>}
-                                        {!isDom && !d.trabalhado && <>
+                                        {!isWeekendFolga && !d.trabalhado && <>
                                           <XCircle className="h-3 w-3 text-red-500" />
                                           <span>Falta provável</span>
                                         </>}
