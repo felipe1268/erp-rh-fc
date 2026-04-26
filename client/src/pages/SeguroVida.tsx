@@ -266,7 +266,10 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) { onClose(); reset(); } }}>
-      <DialogContent className="flex flex-col p-0 gap-0 w-screen h-screen max-w-none rounded-none border-0">
+      <DialogContent
+        resizable={false}
+        className="flex flex-col p-0 gap-0 top-0 left-0 translate-x-0 translate-y-0 w-screen h-screen max-w-none rounded-none border-0"
+      >
 
         {/* Header */}
         <DialogHeader className="px-6 py-4 border-b shrink-0 bg-gradient-to-r from-indigo-50 to-slate-50">
