@@ -368,16 +368,15 @@ async function executarCruzamento(
   `));
   const pjNormados = pjAtivos.map((p: any) => ({ ...p, _norm: normalizeName(p.nomeCompleto) }));
 
-  // Busca APENAS funcionários realmente desligados (status Desligado ou Blacklist com data de demissão)
+  // Busca todos os funcionários desligados/blacklist — inclui mesmo sem dataDemissao registrada
   const desligados = rows(await db.execute(sql`
     SELECT id, "nomeCompleto", "tipoContrato", "dataDemissao", status
     FROM employees
     WHERE "companyId" ${inIds(ids)}
-      AND status IN ('Desligado','Blacklist')
-      AND "dataDemissao" IS NOT NULL
+      AND status IN ('Desligado','Blacklist','Recluso')
       AND "deletedAt" IS NULL
     ORDER BY "dataDemissao" DESC NULLS LAST
-    LIMIT 300
+    LIMIT 500
   `));
   const desligadosNorm = desligados.map((d: any) => ({ ...d, _norm: normalizeName(d.nomeCompleto) }));
 
@@ -466,19 +465,25 @@ async function executarCruzamento(
     }
     if (melhorSimAtivo >= THRESHOLD && melhorEmpAtivo) {
       // Funcionário ativo corresponde a esta entrada do PDF
-      // Se ele já foi associado a outro item (empParaPdfIdx), esta é uma duplicata → ignorar silenciosamente
-      if (empParaPdfIdx.has(melhorEmpAtivo.id)) {
-        console.log(`[SeguroVida] PDF entrada duplicada ignorada: "${s.nome}" (item ${s.item}) → já associado a ${melhorEmpAtivo.nomeCompleto} via item ${seguradosCorretora[empParaPdfIdx.get(melhorEmpAtivo.id)!]?.item}`);
+      // Se ele já foi associado a outro item (empParaPdfIdx), pode ser duplicata:
+      // exigimos similaridade muito alta (≥ 0.82) para descartar silenciosamente —
+      // evita falsos positivos como "ERITON ANDRE SEVERINO DA SILVA" vs "ANDREI DA SILVA"
+      if (empParaPdfIdx.has(melhorEmpAtivo.id) && melhorSimAtivo >= 0.82) {
+        console.log(`[SeguroVida] PDF entrada duplicada ignorada: "${s.nome}" (item ${s.item}) → já associado a ${melhorEmpAtivo.nomeCompleto} (${(melhorSimAtivo*100).toFixed(0)}%) via item ${seguradosCorretora[empParaPdfIdx.get(melhorEmpAtivo.id)!]?.item}`);
         return; // não adiciona ao resultado
       }
-      // Funcionário ativo ainda não associado → reclassificar como "ok"
-      const cobAtual = coberturasAtivas.find((c: any) => c.employee_id === melhorEmpAtivo.id);
-      const dataAdmissao = melhorEmpAtivo.dataAdmissao ? String(melhorEmpAtivo.dataAdmissao) : undefined;
-      idxUsados.add(i);
-      empParaPdfIdx.set(melhorEmpAtivo.id, i);
-      console.log(`[SeguroVida] Fallback bidirecional: "${s.nome}" (item ${s.item}) → ${melhorEmpAtivo.nomeCompleto} (${(melhorSimAtivo*100).toFixed(0)}%)`);
-      resultado.push({ status: "ok", nome: s.nome, item: s.item, employeeId: melhorEmpAtivo.id, nomeHR: melhorEmpAtivo.nomeCompleto, tipoContrato: melhorEmpAtivo.tipoContrato, similaridade: melhorSimAtivo, dataAdmissao, coberturaId: cobAtual?.id, valores: s.valores, seguradora: seguradora ?? null });
-      return;
+      if (empParaPdfIdx.has(melhorEmpAtivo.id)) {
+        // Similaridade insuficiente para ser duplicata confirmada — cai no fluxo normal de pagar_indevido
+      } else {
+        // Funcionário ativo ainda não associado → reclassificar como "ok"
+        const cobAtual = coberturasAtivas.find((c: any) => c.employee_id === melhorEmpAtivo.id);
+        const dataAdmissao = melhorEmpAtivo.dataAdmissao ? String(melhorEmpAtivo.dataAdmissao) : undefined;
+        idxUsados.add(i);
+        empParaPdfIdx.set(melhorEmpAtivo.id, i);
+        console.log(`[SeguroVida] Fallback bidirecional: "${s.nome}" (item ${s.item}) → ${melhorEmpAtivo.nomeCompleto} (${(melhorSimAtivo*100).toFixed(0)}%)`);
+        resultado.push({ status: "ok", nome: s.nome, item: s.item, employeeId: melhorEmpAtivo.id, nomeHR: melhorEmpAtivo.nomeCompleto, tipoContrato: melhorEmpAtivo.tipoContrato, similaridade: melhorSimAtivo, dataAdmissao, coberturaId: cobAtual?.id, valores: s.valores, seguradora: seguradora ?? null });
+        return;
+      }
     }
     // ---
 
@@ -492,14 +497,14 @@ async function executarCruzamento(
       }
     }
 
-    // Verifica se é um funcionário desligado (demitido)
+    // Verifica se é um funcionário desligado/recluso
     let possivelDesligado: { nome: string; dataDemissao: string | null; status: string } | undefined;
     let melhorSimDesligado = 0;
     for (const d of desligadosNorm) {
       const sim = nameSimilarity(sNorm, d._norm);
       if (sim > melhorSimDesligado) {
         melhorSimDesligado = sim;
-        if (sim >= 0.65) {
+        if (sim >= THRESHOLD) {
           possivelDesligado = {
             nome: d.nomeCompleto,
             dataDemissao: d.dataDemissao ? String(d.dataDemissao).split("T")[0] : null,
