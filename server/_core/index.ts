@@ -56,6 +56,44 @@ async function startServer() {
   app.use("/api/oauth", authRateLimit);
   // Rate limiting para API (200 req/min por IP+path)
   app.use("/api/trpc", apiRateLimit);
+  // Diagnóstico: loga requests para processarPdfLote
+  app.use("/api/trpc", (req: any, _res: any, next: any) => {
+    if (req.url && req.url.includes("processarPdfLote")) {
+      const bodySize = req.body ? JSON.stringify(req.body).length : 0;
+      console.log(`[tRPC-diag] ${req.method} ${req.url} body=${bodySize}B`);
+    }
+    next();
+  });
+  // Endpoint de diagnóstico: POST com base64 de PDF — simula processarPdfLote sem autenticação
+  app.post("/api/diag/pdf-parse", async (req: any, res: any) => {
+    try {
+      const { base64 } = req.body;
+      const mod = await import("pdf-parse");
+      const pdfParse = mod.default || mod;
+      const buf = base64 ? Buffer.from(base64, "base64") : (() => {
+        const fs = require("fs"), path = require("path");
+        return fs.readFileSync(path.join(process.cwd(), "node_modules/pdf-parse/test/data/01-valid.pdf"));
+      })();
+      const parsed = await pdfParse(buf);
+      res.json({ ok: true, chars: parsed.text.length, pages: parsed.numpages, preview: parsed.text.substring(0, 200) });
+    } catch (e: any) {
+      res.status(500).json({ ok: false, error: e.message });
+    }
+  });
+  app.get("/api/diag/pdf-parse", async (_req: any, res: any) => {
+    try {
+      const mod = await import("pdf-parse");
+      const pdfParse = mod.default || mod;
+      const fs = await import("fs");
+      const path = await import("path");
+      const samplePdf = path.join(process.cwd(), "node_modules/pdf-parse/test/data/01-valid.pdf");
+      const buf = fs.readFileSync(samplePdf);
+      const parsed = await pdfParse(buf);
+      res.json({ ok: true, type: typeof pdfParse, chars: parsed.text.length, pages: parsed.numpages });
+    } catch (e: any) {
+      res.status(500).json({ ok: false, error: e.message, stack: e.stack?.substring(0, 500) });
+    }
+  });
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // Download de arquivos SST em ZIP

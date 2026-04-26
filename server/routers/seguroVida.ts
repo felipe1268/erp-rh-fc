@@ -420,31 +420,59 @@ export const seguroVidaRouter = router({
       })).min(1).max(24),
     }))
     .mutation(async ({ input, ctx }) => {
+      console.log(`[SeguroVida] processarPdfLote — ${input.arquivos.length} arquivo(s)`);
       const db = (await getDb())!;
       const ids = resolveCompanyIds(input);
-      const { default: pdfParse } = await import("pdf-parse");
 
-      const resultados = [];
+      // Carrega pdf-parse de forma compatível com ESM
+      let pdfParse: any;
+      try {
+        const mod = await import("pdf-parse");
+        pdfParse = mod.default || mod;
+      } catch (e: any) {
+        console.error("[SeguroVida] pdf-parse não disponível:", e.message);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Módulo de leitura de PDF não disponível. Contate o suporte." });
+      }
+
+      const resultados: any[] = [];
 
       for (const arq of input.arquivos) {
+        console.log(`[SeguroVida] Processando ${arq.filename} (${Math.round(arq.fileBase64.length * 0.75 / 1024)} KB)`);
         try {
           const buffer = Buffer.from(arq.fileBase64, "base64");
-          const parsed = await pdfParse(buffer);
-          const texto = parsed.text as string;
+          if (buffer.length < 100) {
+            resultados.push({ competencia: arq.competencia, filename: arq.filename, erro: "Arquivo inválido ou muito pequeno." });
+            continue;
+          }
+
+          let pdfData: any;
+          try {
+            pdfData = await pdfParse(buffer);
+          } catch (pdfErr: any) {
+            console.error(`[SeguroVida] Erro ao ler ${arq.filename}:`, pdfErr.message);
+            resultados.push({ competencia: arq.competencia, filename: arq.filename, erro: `Erro ao ler PDF: ${pdfErr.message}` });
+            continue;
+          }
+
+          const texto = (pdfData?.text as string) ?? "";
+          console.log(`[SeguroVida] ${arq.filename}: ${texto.length} chars extraídos`);
+
+          if (!texto || texto.length < 20) {
+            resultados.push({ competencia: arq.competencia, filename: arq.filename, erro: "PDF não contém texto legível. Pode ser escaneado/imagem." });
+            continue;
+          }
 
           // Detecta competência do próprio conteúdo do PDF
           const detectedComp = detectarCompetenciaDoPdf(texto);
           const competenciaFinal = detectedComp ?? arq.competencia;
           const autoDetectado = !!detectedComp;
+          console.log(`[SeguroVida] ${arq.filename}: competência ${autoDetectado ? "detectada" : "fallback"} = ${competenciaFinal}`);
 
           const segurados = parseNomesBrutos(texto);
+          console.log(`[SeguroVida] ${arq.filename}: ${segurados.length} segurado(s) encontrado(s)`);
+
           if (segurados.length < 2) {
-            resultados.push({
-              competencia: competenciaFinal,
-              competenciaFallback: !autoDetectado,
-              filename: arq.filename,
-              erro: "Não foram encontrados segurados no PDF. Verifique se o arquivo é o relatório correto.",
-            });
+            resultados.push({ competencia: competenciaFinal, competenciaFallback: !autoDetectado, filename: arq.filename, erro: "Não foram encontrados segurados no PDF. Verifique o formato do arquivo." });
             continue;
           }
 
@@ -453,22 +481,14 @@ export const seguroVidaRouter = router({
             texto, input.apoliceVG, input.apoliceAPC, ctx.user.name ?? ""
           );
 
-          resultados.push({
-            filename: arq.filename,
-            autoDetectado,
-            competenciaFallback: !autoDetectado,
-            ...resultado,
-          });
+          resultados.push({ filename: arq.filename, autoDetectado, competenciaFallback: !autoDetectado, ...resultado });
         } catch (err: any) {
-          resultados.push({
-            competencia: arq.competencia,
-            competenciaFallback: true,
-            filename: arq.filename,
-            erro: `Erro ao ler PDF: ${err.message}`,
-          });
+          console.error(`[SeguroVida] Erro inesperado em ${arq.filename}:`, err.message);
+          resultados.push({ competencia: arq.competencia, competenciaFallback: true, filename: arq.filename, erro: `Erro: ${err.message}` });
         }
       }
 
+      console.log(`[SeguroVida] processarPdfLote concluído — ${resultados.length} resultado(s)`);
       return { resultados };
     }),
 
