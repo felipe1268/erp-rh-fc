@@ -62,6 +62,20 @@ function fmtBrMoney(n: number): string {
   if (n === 0) return "—";
   return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+function fmtCapital(s: string | null | undefined): string {
+  const n = parseBrMoney(s);
+  if (n === 0) return "—";
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtPremio(s: string | null | undefined): string {
+  const n = parseBrMoney(s);
+  if (n === 0) return "—";
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 5, maximumFractionDigits: 5 });
+}
+function fmtCustoMensal(n: number): string {
+  if (n === 0) return "—";
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 5, maximumFractionDigits: 5 });
+}
 
 // ─── Painel de detalhe de um mês (usado no layout dois painéis) ───────────────
 function ResultadoMesDetalhe({ res }: { res: any }) {
@@ -1331,30 +1345,30 @@ export default function SeguroVida() {
                         </td>
                         {/* Importâncias Seguradas */}
                         <td className={cn("px-3 py-2.5 text-right tabular-nums", temValores ? "text-slate-700" : "text-slate-300")}>
-                          {f.morte_natural ?? "—"}
+                          {fmtCapital(f.morte_natural)}
                         </td>
                         <td className={cn("px-3 py-2.5 text-right tabular-nums", temValores ? "text-slate-700" : "text-slate-300")}>
-                          {f.morte_acidental ?? "—"}
+                          {fmtCapital(f.morte_acidental)}
                         </td>
                         <td className={cn("px-3 py-2.5 text-right tabular-nums", temValores ? "text-slate-700" : "text-slate-300")}>
-                          {f.invalidez_acidente ?? "—"}
+                          {fmtCapital(f.invalidez_acidente)}
                         </td>
                         <td className={cn("px-3 py-2.5 text-right tabular-nums border-r", f.invalidez_doenca ? "text-slate-700" : "text-slate-300")}>
-                          {f.invalidez_doenca ?? "—"}
+                          {fmtCapital(f.invalidez_doenca)}
                         </td>
                         {/* Prêmios */}
                         <td className={cn("px-3 py-2.5 text-right tabular-nums font-medium", f.premio_vg ? "text-emerald-700" : "text-slate-300")}>
-                          {f.premio_vg ?? "—"}
+                          {fmtPremio(f.premio_vg)}
                         </td>
                         <td className={cn("px-3 py-2.5 text-right tabular-nums font-medium", f.premio_apc ? "text-emerald-700" : "text-slate-300")}>
-                          {f.premio_apc ?? "—"}
+                          {fmtPremio(f.premio_apc)}
                         </td>
                         {/* Custo Mensal = VG + APC */}
                         {(() => {
                           const custo = parseBrMoney(f.premio_vg) + parseBrMoney(f.premio_apc);
                           return (
                             <td className={cn("px-3 py-2.5 text-right tabular-nums font-bold border-r", custo > 0 ? "text-emerald-800 bg-emerald-50/40" : "text-slate-200")}>
-                              {custo > 0 ? fmtBrMoney(custo) : "—"}
+                              {fmtCustoMensal(custo)}
                             </td>
                           );
                         })()}
