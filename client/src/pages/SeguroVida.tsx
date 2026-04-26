@@ -270,7 +270,7 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
   const [modo, setModo] = useState<"pdf" | "texto">("pdf");
   const [apoliceVG, setApoliceVG] = useState("117.398-5");
   const [apoliceAPC, setApoliceAPC] = useState("121.268-3");
-  const [incluirPJ, setIncluirPJ] = useState(false);
+  const [incluirPJ, setIncluirPJ] = useState(true);
 
   // PDF state
   const [arquivos, setArquivos] = useState<Array<{ file: File; competencia: string; fileBase64: string }>>([]);
