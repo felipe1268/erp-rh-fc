@@ -623,6 +623,7 @@ export default function SeguroVida() {
 
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
+  const [filtroTipo, setFiltroTipo] = useState("todos");
   const [showImport, setShowImport] = useState(false);
   const [showSeed, setShowSeed] = useState(false);
   const [tabAtiva, setTabAtiva] = useState<"cobertura" | "inconsistencias" | "historico">("cobertura");
@@ -698,6 +699,13 @@ export default function SeguroVida() {
   const filtradas = useMemo(() => {
     let lista = funcionariosNorm;
     if (filtroStatus !== "todos") lista = lista.filter((f: any) => f.statusSeguro === filtroStatus);
+    if (filtroTipo !== "todos") {
+      if (filtroTipo === "PJ") {
+        lista = lista.filter((f: any) => ["PJ", "Socio"].includes(f.tipoContrato ?? ""));
+      } else {
+        lista = lista.filter((f: any) => !["PJ", "Socio"].includes(f.tipoContrato ?? ""));
+      }
+    }
     if (busca.trim()) {
       const b = removeAccents(busca.toLowerCase());
       lista = lista.filter((f: any) =>
@@ -707,7 +715,7 @@ export default function SeguroVida() {
       );
     }
     return lista;
-  }, [funcionariosNorm, filtroStatus, busca]);
+  }, [funcionariosNorm, filtroStatus, filtroTipo, busca]);
 
   const invalidate = () => {
     utils.seguroVida.listarFuncionariosComStatus.invalidate();
@@ -857,6 +865,31 @@ export default function SeguroVida() {
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input className="pl-8 w-64" placeholder="Buscar por nome, cargo ou item..." value={busca} onChange={e => setBusca(e.target.value)} />
+              </div>
+              {/* Filtro por tipo de contrato */}
+              <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+                {([
+                  { key: "todos", label: "Todos" },
+                  { key: "CLT",   label: "CLT" },
+                  { key: "PJ",    label: "PJ / Sócio" },
+                ] as const).map(op => (
+                  <button key={op.key} onClick={() => setFiltroTipo(op.key)}
+                    className={cn("text-xs px-3 py-1 rounded-md font-semibold transition-colors",
+                      filtroTipo === op.key
+                        ? op.key === "PJ" ? "bg-yellow-500 text-white shadow-sm"
+                          : op.key === "CLT" ? "bg-indigo-600 text-white shadow-sm"
+                          : "bg-white text-slate-700 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700")}>
+                    {op.label}
+                    {op.key !== "todos" && (
+                      <span className="ml-1 opacity-70">
+                        ({op.key === "PJ"
+                          ? funcionariosNorm.filter((f: any) => ["PJ", "Socio"].includes(f.tipoContrato ?? "")).length
+                          : funcionariosNorm.filter((f: any) => !["PJ", "Socio"].includes(f.tipoContrato ?? "")).length})
+                      </span>
+                    )}
+                  </button>
+                ))}
               </div>
               <Select value={filtroStatus} onValueChange={setFiltroStatus}>
                 <SelectTrigger className="w-56">
