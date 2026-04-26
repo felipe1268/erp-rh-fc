@@ -270,6 +270,7 @@ async function executarCruzamento(
   apoliceAPC: string | undefined,
   importadoPor: string,
   seguradora?: string,
+  pdfBase64?: string,
 ) {
   const cltAtivos = rows(await db.execute(sql`
     SELECT id, "nomeCompleto", "cargo", "funcao", "dataAdmissao"
@@ -373,13 +374,13 @@ async function executarCruzamento(
     INSERT INTO seguro_vida_importacoes
       (company_id, competencia, total_segurados, total_ativos, total_ok,
        total_sem_seguro, total_pagar_indevido, total_novos,
-       json_resultado, relatorio_nomes, importado_por)
+       json_resultado, relatorio_nomes, importado_por, pdf_dados)
     VALUES
       (${companyId}, ${competencia},
        ${seguradosCorretora.length}, ${(Array.isArray(cltAtivos) ? cltAtivos : []).length},
        ${totalOk}, ${totalSemSeguro}, ${totalPagarIndevido}, ${totalNovos},
        ${JSON.stringify(resultado)}, ${nomesBrutos.substring(0, 5000)},
-       ${importadoPor})
+       ${importadoPor}, ${pdfBase64 ?? null})
   `);
 
   return {
@@ -745,7 +746,7 @@ export const seguroVidaRouter = router({
           const resultado = await executarCruzamento(
             db, ids, input.companyId, competenciaFinal, segurados,
             texto, input.apoliceVG, input.apoliceAPC, ctx.user.name ?? "",
-            seguradoraDetectada ?? undefined
+            seguradoraDetectada ?? undefined, arq.fileBase64
           );
 
           resultados.push({ filename: arq.filename, autoDetectado, competenciaFallback: !autoDetectado, ...resultado });
@@ -824,7 +825,8 @@ export const seguroVidaRouter = router({
       const importacoes = rows(await db.execute(sql`
         SELECT id, competencia, data_importacao, total_segurados, total_ativos,
                total_ok, total_sem_seguro, total_pagar_indevido, total_novos,
-               importado_por, criado_em
+               importado_por, criado_em,
+               (pdf_dados IS NOT NULL AND pdf_dados <> '') AS tem_pdf
         FROM seguro_vida_importacoes
         WHERE company_id ${inIds(ids)}
         ORDER BY criado_em DESC
@@ -845,6 +847,19 @@ export const seguroVidaRouter = router({
       `))[0];
 
       return row || null;
+    }),
+
+  // Rev. 1308: retorna apenas o pdf_dados (base64) de uma importação — para download no cliente
+  baixarPdf: protectedProcedure
+    .input(z.object({ companyId: z.number(), importacaoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const row = rows(await db.execute(sql`
+        SELECT pdf_dados, competencia FROM seguro_vida_importacoes
+        WHERE id = ${input.importacaoId} AND company_id = ${input.companyId}
+      `))[0] as any;
+      if (!row?.pdf_dados) return null;
+      return { pdfBase64: row.pdf_dados as string, competencia: row.competencia as string };
     }),
 
   deletarImportacao: protectedProcedure

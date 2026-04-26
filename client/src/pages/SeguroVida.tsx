@@ -13,9 +13,9 @@ import {
   ShieldCheck, ShieldAlert, Shield, AlertTriangle, CheckCircle2,
   Clock, Search, Upload, FileText, ChevronDown,
   ChevronUp, ChevronLeft, ChevronRight, RefreshCw, Printer, Ban, X, Loader2,
-  ArrowRightLeft, Info, FilePlus2, Trash2, FileUp,
+  ArrowRightLeft, Info, FilePlus2, Trash2, FileUp, Download,
 } from "lucide-react";
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -614,6 +614,82 @@ function SeedModal({ open, onClose, companyId, companyIds, onSuccess }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── Detalhe lazy de uma importação histórica ─────────────────────────────────
+function ImportacaoDetalheExpand({ importacaoId, companyId }: { importacaoId: number; companyId: number }) {
+  const q = trpc.seguroVida.getImportacao.useQuery(
+    { companyId, importacaoId },
+    { enabled: true, staleTime: 5 * 60 * 1000 }
+  );
+
+  if (q.isLoading) {
+    return (
+      <div className="flex items-center justify-center py-10 text-slate-400 gap-2">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span className="text-sm">Carregando resultado...</span>
+      </div>
+    );
+  }
+  if (!q.data) {
+    return <p className="py-6 text-center text-sm text-slate-400">Resultado não disponível.</p>;
+  }
+
+  const imp: any = q.data;
+  const jsonRes = imp.json_resultado
+    ? (typeof imp.json_resultado === "string" ? JSON.parse(imp.json_resultado) : imp.json_resultado)
+    : [];
+
+  const res = {
+    competencia:              imp.competencia,
+    totalSeguradosCorretora:  imp.total_segurados,
+    totalAtivosHR:            imp.total_ativos,
+    totalOk:                  imp.total_ok,
+    totalSemSeguro:           imp.total_sem_seguro,
+    totalPagarIndevido:       imp.total_pagar_indevido,
+    totalNovos:               imp.total_novos,
+    resultado:                jsonRes,
+    filename:                 `Importado em ${fmtDate(imp.data_importacao?.split?.("T")?.[0])} por ${imp.importado_por || "—"}`,
+    autoDetectado:            false,
+  };
+
+  return <ResultadoMesDetalhe res={res} />;
+}
+
+// ─── Botão de download de PDF ─────────────────────────────────────────────────
+function DownloadPdfBtn({ importacaoId, companyId, competencia }: { importacaoId: number; companyId: number; competencia: string }) {
+  const [enabled, setEnabled] = useState(false);
+  const q = trpc.seguroVida.baixarPdf.useQuery(
+    { companyId, importacaoId },
+    { enabled, staleTime: Infinity, retry: false }
+  );
+
+  useEffect(() => {
+    if (!q.data) return;
+    const byteChars = atob(q.data.pdfBase64);
+    const bytes = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+    const blob = new Blob([bytes], { type: "application/pdf" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `seguro-vida-${competencia}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setEnabled(false);
+  }, [q.data]);
+
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); setEnabled(true); }}
+      disabled={q.isLoading}
+      className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-indigo-50 text-slate-300 hover:text-indigo-600 transition-colors disabled:opacity-50"
+      title="Baixar PDF original">
+      {q.isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+    </button>
   );
 }
 
@@ -1433,6 +1509,9 @@ export default function SeguroVida() {
                           {imp.total_pagar_indevido > 0 && (
                             <span className="px-2 py-0.5 rounded font-semibold bg-orange-100 text-orange-700">{imp.total_pagar_indevido} indevido</span>
                           )}
+                          {imp.tem_pdf && (
+                            <DownloadPdfBtn importacaoId={imp.id} companyId={companyId} competencia={imp.competencia} />
+                          )}
                           <button
                             onClick={e => {
                               e.stopPropagation();
@@ -1448,33 +1527,9 @@ export default function SeguroVida() {
                         </div>
                       </div>
 
-                      {detailImport?.id === imp.id && imp.json_resultado && (
-                        <div className="mt-4 border rounded overflow-auto max-h-[300px]">
-                          <table className="w-full text-xs">
-                            <thead className="bg-slate-50 sticky top-0">
-                              <tr>
-                                <th className="px-3 py-2 text-left font-semibold text-slate-600">Status</th>
-                                <th className="px-3 py-2 text-left font-semibold text-slate-600">Nome HR</th>
-                                <th className="px-3 py-2 text-left font-semibold text-slate-600">Nome Corretor</th>
-                                <th className="px-3 py-2 text-left font-semibold text-slate-600">Item</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y">
-                              {(typeof imp.json_resultado === "string" ? JSON.parse(imp.json_resultado) : imp.json_resultado)
-                                .filter((r: any) => r.status !== "ok")
-                                .map((r: any, i: number) => {
-                                  const st = RESULT_STATUS[r.status] ?? RESULT_STATUS.ok;
-                                  return (
-                                    <tr key={i} className={cn(r.status === "sem_seguro" ? "bg-red-50" : r.status === "pagar_indevido" ? "bg-orange-50" : "")}>
-                                      <td className="px-3 py-1.5"><span className={cn("font-semibold", st.color)}>{st.label}</span></td>
-                                      <td className="px-3 py-1.5">{r.nomeHR ?? "—"}</td>
-                                      <td className="px-3 py-1.5 text-slate-500">{r.nome}</td>
-                                      <td className="px-3 py-1.5 font-mono text-slate-400">{r.item || "—"}</td>
-                                    </tr>
-                                  );
-                                })}
-                            </tbody>
-                          </table>
+                      {detailImport?.id === imp.id && (
+                        <div className="border-t border-slate-100 bg-white rounded-b-xl overflow-hidden">
+                          <ImportacaoDetalheExpand importacaoId={imp.id} companyId={companyId} />
                         </div>
                       )}
                     </div>

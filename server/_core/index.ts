@@ -289,6 +289,7 @@ async function startServer() {
             ALTER TABLE seguro_vida_coberturas ADD COLUMN IF NOT EXISTS premio_vg TEXT;
             ALTER TABLE seguro_vida_coberturas ADD COLUMN IF NOT EXISTS premio_apc TEXT;
             ALTER TABLE seguro_vida_coberturas ADD COLUMN IF NOT EXISTS seguradora TEXT;
+            ALTER TABLE seguro_vida_importacoes ADD COLUMN IF NOT EXISTS pdf_dados TEXT;
           EXCEPTION WHEN OTHERS THEN NULL;
           END $$
         `);
@@ -532,6 +533,8 @@ async function startServer() {
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_seguro_vida_company ON seguro_vida_coberturas(company_id)`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_seguro_vida_employee ON seguro_vida_coberturas(employee_id)`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_svimport_company ON seguro_vida_importacoes(company_id)`);
+        // Rev. 1308: coluna para armazenar PDF original (base64) — permite download posterior
+        await db.execute(sql`ALTER TABLE seguro_vida_importacoes ADD COLUMN IF NOT EXISTS pdf_dados TEXT`);
         console.log("[ColFix] CREATE TABLEs OK");
         const hoje = new Date().toISOString().split('T')[0];
         const vencResult = await db.execute(sql`
