@@ -58,12 +58,26 @@ function ResultadoMesDetalhe({ res }: { res: any }) {
   const [filtro, setFiltro] = useState("divergencias");
 
   if (res.erro) {
+    const [erroMsg, ...trechoPartes] = (res.erro as string).split("\n\nPrimeiras linhas extraídas:\n");
+    const trecho = trechoPartes.join("").split("\n\nVerifique")[0];
+    const dica = res.erro.includes("Verifique") ? res.erro.split("Verifique").pop() : null;
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center max-w-md p-8">
-          <AlertTriangle className="h-12 w-12 text-red-400 mx-auto mb-3" />
-          <p className="font-semibold text-red-800 mb-1">{res.filename ?? res.competencia}</p>
-          <p className="text-sm text-red-600">{res.erro}</p>
+      <div className="flex-1 flex flex-col items-center justify-center p-6">
+        <div className="max-w-lg w-full">
+          <div className="flex flex-col items-center mb-4">
+            <AlertTriangle className="h-10 w-10 text-red-400 mb-2" />
+            <p className="font-semibold text-red-800 text-center">{res.filename ?? res.competencia}</p>
+            <p className="text-sm text-red-600 text-center mt-1">{erroMsg}</p>
+          </div>
+          {trecho && (
+            <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3">
+              <p className="text-[10px] font-bold text-red-400 uppercase tracking-wide mb-1.5">Conteúdo extraído do PDF:</p>
+              <pre className="text-xs text-slate-700 whitespace-pre-wrap font-mono leading-relaxed overflow-auto max-h-40">{trecho}</pre>
+            </div>
+          )}
+          {dica && (
+            <p className="mt-3 text-xs text-slate-500 text-center">Verifique{dica}</p>
+          )}
         </div>
       </div>
     );
