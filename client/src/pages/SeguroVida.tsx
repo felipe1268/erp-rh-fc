@@ -654,8 +654,20 @@ export default function SeguroVida() {
     { enabled: (companyId > 0 || companyIds.length > 0) && tabAtiva === "inconsistencias" }
   );
 
+  const [selectedCoverageIds, setSelectedCoverageIds] = useState<Set<number>>(new Set());
+
   const cancelar = trpc.seguroVida.cancelarCobertura.useMutation({
     onSuccess: () => { toast.success("Cobertura cancelada"); utils.seguroVida.listarFuncionariosComStatus.invalidate(); utils.seguroVida.getResumo.invalidate(); },
+    onError: e => toast.error(e.message),
+  });
+
+  const cancelarMultiplas = trpc.seguroVida.cancelarMultiplasCoberturas.useMutation({
+    onSuccess: (d) => {
+      toast.success(`${d.canceladas} cobertura${d.canceladas === 1 ? "" : "s"} cancelada${d.canceladas === 1 ? "" : "s"} com sucesso.`);
+      setSelectedCoverageIds(new Set());
+      utils.seguroVida.listarFuncionariosComStatus.invalidate();
+      utils.seguroVida.getResumo.invalidate();
+    },
     onError: e => toast.error(e.message),
   });
 
@@ -862,13 +874,62 @@ export default function SeguroVida() {
               <span className="text-xs text-muted-foreground">{filtradas.length} de {funcionariosNorm.length} funcionários</span>
             </div>
 
+            {/* Barra de ação em lote */}
+            {isAdmin && selectedCoverageIds.size > 0 && (
+              <div className="flex items-center gap-3 px-4 py-2.5 bg-red-50 border border-red-200 rounded-xl">
+                <span className="text-sm font-semibold text-red-700">
+                  {selectedCoverageIds.size} cobertura{selectedCoverageIds.size > 1 ? "s" : ""} selecionada{selectedCoverageIds.size > 1 ? "s" : ""}
+                </span>
+                <Button
+                  size="sm"
+                  className="bg-red-600 hover:bg-red-700 text-white h-7 text-xs ml-2"
+                  disabled={cancelarMultiplas.isPending}
+                  onClick={() => {
+                    const nomes = filtradas
+                      .filter((f: any) => selectedCoverageIds.has(f.cobertura_id))
+                      .map((f: any) => f.nomeCompleto).join(", ");
+                    if (confirm(`Cancelar ${selectedCoverageIds.size} cobertura${selectedCoverageIds.size > 1 ? "s" : ""}?\n\n${nomes}\n\nEsta ação não pode ser desfeita.`)) {
+                      cancelarMultiplas.mutate({ companyId, coberturaIds: [...selectedCoverageIds] });
+                    }
+                  }}>
+                  {cancelarMultiplas.isPending
+                    ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Cancelando...</>
+                    : <><Ban className="h-3.5 w-3.5 mr-1" />Cancelar selecionados</>}
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs text-slate-500 ml-auto"
+                  onClick={() => setSelectedCoverageIds(new Set())}>
+                  <X className="h-3.5 w-3.5 mr-1" />Limpar seleção
+                </Button>
+              </div>
+            )}
+
             {/* Tabela de TODOS os funcionários com status de seguro */}
+            {(() => {
+              const cancelaveis = filtradas.filter((f: any) => isAdmin && f.cobertura_id && f.seguro_status !== "cancelado");
+              const todosSelecionados = cancelaveis.length > 0 && cancelaveis.every((f: any) => selectedCoverageIds.has(f.cobertura_id));
+              const algumSelecionado = cancelaveis.some((f: any) => selectedCoverageIds.has(f.cobertura_id));
+              const toggleAll = () => {
+                if (todosSelecionados) {
+                  setSelectedCoverageIds(prev => {
+                    const next = new Set(prev);
+                    cancelaveis.forEach((f: any) => next.delete(f.cobertura_id));
+                    return next;
+                  });
+                } else {
+                  setSelectedCoverageIds(prev => {
+                    const next = new Set(prev);
+                    cancelaveis.forEach((f: any) => next.add(f.cobertura_id));
+                    return next;
+                  });
+                }
+              };
+              return (
             <div className="border rounded-xl overflow-auto shadow-sm">
               <table className="w-full text-xs min-w-[1100px]">
                 <thead className="sticky top-0 z-10">
                   {/* Linha 1 — grupos */}
                   <tr className="border-b">
-                    <th colSpan={4} className="px-3 py-2 text-left font-bold text-slate-600 bg-slate-100 border-r text-[11px] uppercase tracking-wide">
+                    <th colSpan={isAdmin ? 5 : 4} className="px-3 py-2 text-left font-bold text-slate-600 bg-slate-100 border-r text-[11px] uppercase tracking-wide">
                       Funcionário
                     </th>
                     <th colSpan={4} className="px-3 py-2 text-center font-bold text-blue-700 bg-blue-50 border-r text-[11px] uppercase tracking-wide">
@@ -881,6 +942,17 @@ export default function SeguroVida() {
                   </tr>
                   {/* Linha 2 — colunas individuais */}
                   <tr className="border-b bg-slate-50">
+                    {isAdmin && (
+                      <th className="px-3 py-2 w-8 text-center">
+                        <input
+                          type="checkbox"
+                          checked={todosSelecionados}
+                          ref={el => { if (el) el.indeterminate = algumSelecionado && !todosSelecionados; }}
+                          onChange={toggleAll}
+                          className="h-3.5 w-3.5 rounded border-slate-300 cursor-pointer accent-red-600"
+                        />
+                      </th>
+                    )}
                     <th className="px-3 py-2 text-left font-semibold text-slate-600 whitespace-nowrap border-r">Nome</th>
                     <th className="px-3 py-2 text-left font-semibold text-slate-500 whitespace-nowrap">Cargo</th>
                     <th className="px-3 py-2 text-left font-semibold text-slate-500 whitespace-nowrap">Tipo</th>
@@ -896,21 +968,41 @@ export default function SeguroVida() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {funcionariosQ.isLoading ? (
-                    <tr><td colSpan={11} className="text-center py-12 text-muted-foreground">Carregando...</td></tr>
+                    <tr><td colSpan={isAdmin ? 12 : 11} className="text-center py-12 text-muted-foreground">Carregando...</td></tr>
                   ) : filtradas.length === 0 ? (
-                    <tr><td colSpan={11} className="text-center py-12 text-muted-foreground">
+                    <tr><td colSpan={isAdmin ? 12 : 11} className="text-center py-12 text-muted-foreground">
                       {funcionariosNorm.length === 0
                         ? "Nenhum funcionário CLT ativo encontrado. Cadastre funcionários no módulo de Colaboradores."
                         : "Nenhum resultado para os filtros aplicados."}
                     </td></tr>
                   ) : filtradas.map((f: any) => {
                     const temValores = !!(f.morte_natural || f.morte_acidental || f.invalidez_acidente);
+                    const cancelavel = isAdmin && f.cobertura_id && f.seguro_status !== "cancelado";
+                    const selecionado = selectedCoverageIds.has(f.cobertura_id);
                     return (
                       <tr key={f.id} className={cn("hover:bg-slate-50/60 transition-colors",
+                        selecionado ? "bg-red-50/60 outline outline-1 outline-red-200" :
                         f.statusSeguro === "ativo" ? "bg-green-50/50" :
                         f.statusSeguro === "sem_cobertura" ? "bg-red-50/30" :
                         f.statusSeguro === "pendente_cancelamento" ? "bg-orange-50/30" :
                         f.statusSeguro === "pendente_inclusao" ? "bg-blue-50/30" : "")}>
+                        {/* Checkbox */}
+                        {isAdmin && (
+                          <td className="px-3 py-2.5 w-8 text-center">
+                            {cancelavel && (
+                              <input
+                                type="checkbox"
+                                checked={selecionado}
+                                onChange={() => setSelectedCoverageIds(prev => {
+                                  const next = new Set(prev);
+                                  selecionado ? next.delete(f.cobertura_id) : next.add(f.cobertura_id);
+                                  return next;
+                                })}
+                                className="h-3.5 w-3.5 rounded border-slate-300 cursor-pointer accent-red-600"
+                              />
+                            )}
+                          </td>
+                        )}
                         {/* Funcionário */}
                         <td className="px-3 py-2.5 font-medium text-slate-800 whitespace-nowrap max-w-[200px] truncate border-r">
                           <div className="truncate">{f.nomeCompleto}</div>
@@ -950,7 +1042,7 @@ export default function SeguroVida() {
                         </td>
                         {/* Ações */}
                         <td className="px-3 py-2.5">
-                          {isAdmin && f.cobertura_id && f.seguro_status !== "cancelado" && (
+                          {cancelavel && (
                             <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
                               onClick={() => { if (confirm(`Cancelar cobertura de ${f.nomeCompleto}?`)) cancelar.mutate({ companyId, coberturaId: f.cobertura_id }); }}>
                               <Ban className="h-3.5 w-3.5 mr-1" />Cancelar
@@ -963,6 +1055,8 @@ export default function SeguroVida() {
                 </tbody>
               </table>
             </div>
+              );
+            })()}
           </>
         )}
 

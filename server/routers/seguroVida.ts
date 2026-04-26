@@ -587,6 +587,37 @@ export const seguroVidaRouter = router({
       return { success: true };
     }),
 
+  cancelarMultiplasCoberturas: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      coberturaIds: z.array(z.number()).min(1),
+      motivo: z.string().optional(),
+      dataCancelamento: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const hoje = new Date().toISOString().split("T")[0];
+      const agora = new Date().toISOString();
+      const canceladoPor = ctx.user.name ?? "";
+      const dataCanc = input.dataCancelamento ?? hoje;
+      const motivo = input.motivo ?? null;
+      let canceladas = 0;
+      for (const id of input.coberturaIds) {
+        await db.execute(sql`
+          UPDATE seguro_vida_coberturas SET
+            status = 'cancelado',
+            data_cancelamento = ${dataCanc},
+            motivo_cancelamento = ${motivo},
+            cancelado_por = ${canceladoPor},
+            atualizado_em = ${agora}
+          WHERE id = ${id} AND company_id = ${input.companyId}
+            AND status NOT IN ('cancelado')
+        `);
+        canceladas++;
+      }
+      return { canceladas };
+    }),
+
   importarRelatorio: protectedProcedure
     .input(z.object({
       companyId:     z.number(),
