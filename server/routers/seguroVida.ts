@@ -24,6 +24,62 @@ function nameSimilarity(a: string, b: string): number {
   return common / Math.max(na.length, nb.length);
 }
 
+// Detecta competência (YYYY-MM) a partir do texto extraído do PDF
+function detectarCompetenciaDoPdf(texto: string): string | null {
+  const t = texto.toUpperCase();
+
+  const MESES: Record<string, string> = {
+    JANEIRO: "01", FEVEREIRO: "02", MARCO: "03", MARCO_ACC: "03",
+    ABRIL: "04", MAIO: "05", JUNHO: "06",
+    JULHO: "07", AGOSTO: "08", SETEMBRO: "09",
+    OUTUBRO: "10", NOVEMBRO: "11", DEZEMBRO: "12",
+  };
+
+  // Remove acentos do texto para facilitar busca de meses
+  const tSemAcento = t.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  // 1) "COMPETENCIA MM/YYYY" ou "REFERENCIA MM/YYYY" — ex: "Competência: 04/2026"
+  {
+    const m = tSemAcento.match(/(?:COMPETENCIA|REFERENCIA|PERIODO|VIGENCIA)[^0-9]{0,20}(\d{2})[\/\-](\d{4})/);
+    if (m) {
+      const mes = m[1].padStart(2, "0");
+      const ano = m[2];
+      if (Number(mes) >= 1 && Number(mes) <= 12 && Number(ano) >= 2020) return `${ano}-${mes}`;
+    }
+  }
+
+  // 2) Nome do mês + ano — ex: "ABRIL/2026" ou "ABRIL DE 2026" ou "ABRIL 2026"
+  {
+    const nomesStr = Object.keys(MESES).join("|");
+    const rx = new RegExp(`(${nomesStr})\\s*(?:DE\\s*)?(20\\d{2})`, "g");
+    const rx2 = new RegExp(`(20\\d{2})\\s*[-/]?\\s*(${nomesStr})`, "g");
+    let m: RegExpExecArray | null;
+    while ((m = rx.exec(tSemAcento)) !== null) {
+      const mesNome = m[1].replace("MARCO", "MARÇO");
+      const mes = MESES[m[1]] ?? MESES[mesNome];
+      const ano = m[2];
+      if (mes && Number(ano) >= 2020) return `${ano}-${mes}`;
+    }
+    while ((m = rx2.exec(tSemAcento)) !== null) {
+      const mes = MESES[m[2]];
+      const ano = m[1];
+      if (mes && Number(ano) >= 2020) return `${ano}-${mes}`;
+    }
+  }
+
+  // 3) "MM/YYYY" isolado (sem prefixo) — ex: "04/2026"
+  {
+    const matches = [...tSemAcento.matchAll(/\b(\d{2})\/(20\d{2})\b/g)];
+    for (const m of matches) {
+      const mes = m[1];
+      const ano = m[2];
+      if (Number(mes) >= 1 && Number(mes) <= 12 && Number(ano) >= 2020) return `${ano}-${mes}`;
+    }
+  }
+
+  return null;
+}
+
 // Extrai lista de segurados de texto bruto (formato do PDF do corretor)
 function parseNomesBrutos(texto: string): Array<{ item: string; nome: string }> {
   const linhas = texto.split("\n").map(l => l.trim()).filter(Boolean);
@@ -376,10 +432,16 @@ export const seguroVidaRouter = router({
           const parsed = await pdfParse(buffer);
           const texto = parsed.text as string;
 
+          // Detecta competência do próprio conteúdo do PDF
+          const detectedComp = detectarCompetenciaDoPdf(texto);
+          const competenciaFinal = detectedComp ?? arq.competencia;
+          const autoDetectado = !!detectedComp;
+
           const segurados = parseNomesBrutos(texto);
           if (segurados.length < 2) {
             resultados.push({
-              competencia: arq.competencia,
+              competencia: competenciaFinal,
+              competenciaFallback: !autoDetectado,
               filename: arq.filename,
               erro: "Não foram encontrados segurados no PDF. Verifique se o arquivo é o relatório correto.",
             });
@@ -387,14 +449,20 @@ export const seguroVidaRouter = router({
           }
 
           const resultado = await executarCruzamento(
-            db, ids, input.companyId, arq.competencia, segurados,
+            db, ids, input.companyId, competenciaFinal, segurados,
             texto, input.apoliceVG, input.apoliceAPC, ctx.user.name ?? ""
           );
 
-          resultados.push({ filename: arq.filename, ...resultado });
+          resultados.push({
+            filename: arq.filename,
+            autoDetectado,
+            competenciaFallback: !autoDetectado,
+            ...resultado,
+          });
         } catch (err: any) {
           resultados.push({
             competencia: arq.competencia,
+            competenciaFallback: true,
             filename: arq.filename,
             erro: `Erro ao ler PDF: ${err.message}`,
           });

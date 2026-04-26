@@ -83,7 +83,13 @@ function ResultadoMes({ res, defaultOpen = false }: { res: any; defaultOpen?: bo
         onClick={() => setAberto(v => !v)}>
         <FileText className={cn("h-5 w-5 shrink-0", temDiverg ? "text-red-500" : "text-green-600")} />
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm">{mesLabel} {ano}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-sm">{mesLabel} {ano}</p>
+            {res.autoDetectado
+              ? <span className="text-[10px] px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded font-semibold">📅 detectado do PDF</span>
+              : <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded font-medium">seleção manual</span>
+            }
+          </div>
           {res.filename && <p className="text-[11px] text-slate-500 truncate">{res.filename}</p>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -328,6 +334,12 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
                   {/* Lista de arquivos */}
                   {arquivos.length > 0 && (
                     <div className="space-y-2">
+                      <div className="flex items-start gap-2 p-2.5 bg-indigo-50 border border-indigo-100 rounded-lg">
+                        <Info className="h-3.5 w-3.5 text-indigo-500 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-indigo-700">
+                          O sistema detecta automaticamente o mês de cada PDF pelo conteúdo. Os seletores abaixo são usados apenas como fallback caso a data não seja encontrada.
+                        </p>
+                      </div>
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
                         {arquivos.length} arquivo(s) selecionado(s)
                       </p>
