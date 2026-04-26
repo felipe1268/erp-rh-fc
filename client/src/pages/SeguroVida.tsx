@@ -213,7 +213,7 @@ function ResultadoMesDetalhe({ res }: { res: any }) {
                     )}
                     {r.possivelDesligado && r.status === "pagar_indevido" && (
                       <div className="text-[10px] text-red-700 bg-red-50 border border-red-100 rounded px-1.5 py-0.5 mt-0.5 inline-flex items-center gap-1">
-                        🔴 Desligado: <strong>{r.possivelDesligado.nome}</strong>
+                        🔴 {r.possivelDesligado.status ?? "Desligado"}: <strong>{r.possivelDesligado.nome}</strong>
                         {r.possivelDesligado.dataDemissao && <span className="text-red-500"> — saiu em {fmtDate(r.possivelDesligado.dataDemissao)}</span>}
                       </div>
                     )}
@@ -1289,6 +1289,13 @@ export default function SeguroVida() {
                         {/* Funcionário */}
                         <td className="px-3 py-2.5 font-medium text-slate-800 whitespace-nowrap max-w-[200px] truncate border-r">
                           <div className="truncate">{f.nomeCompleto}</div>
+                          {f.emp_status && !["Ativo", "Ferias"].includes(f.emp_status) && (
+                            <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-semibold mt-0.5 inline-block",
+                              f.emp_status === "Afastado" ? "bg-orange-100 text-orange-700" :
+                              f.emp_status === "Aviso"    ? "bg-yellow-100 text-yellow-800" :
+                              "bg-slate-100 text-slate-600"
+                            )}>{f.emp_status}</span>
+                          )}
                           {f.seguradora && (
                             <div className="text-[10px] text-slate-400 mt-0.5">{f.seguradora}</div>
                           )}
@@ -1545,7 +1552,7 @@ export default function SeguroVida() {
                               <span className="font-medium text-slate-800">{n.nome}</span>
                               {n.possivelDesligado && (
                                 <div className="text-[10px] text-red-700 bg-red-50 border border-red-100 rounded px-1.5 py-0.5 mt-0.5 inline-flex items-center gap-1">
-                                  🔴 Desligado: <strong>{n.possivelDesligado.nome}</strong>
+                                  🔴 {n.possivelDesligado.status ?? "Desligado"}: <strong>{n.possivelDesligado.nome}</strong>
                                   {n.possivelDesligado.dataDemissao && <span> — {fmtDate(n.possivelDesligado.dataDemissao)}</span>}
                                 </div>
                               )}

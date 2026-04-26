@@ -273,31 +273,35 @@ async function executarCruzamento(
   pdfBase64?: string,
   incluirPJ?: boolean,
 ) {
+  // Statuses considerados "ainda empregado" — Aviso, Afastado e Licença continuam pagando seguro
+  const STATUS_AINDA_ATIVO = `'Ativo','Ferias','Afastado','Aviso','Licenca','Licença'`;
+
   const cltAtivos = rows(await db.execute(sql`
-    SELECT id, "nomeCompleto", "cargo", "funcao", "dataAdmissao"
+    SELECT id, "nomeCompleto", "cargo", "funcao", "dataAdmissao", status
     FROM employees
     WHERE "companyId" ${inIds(ids)}
-      AND status IN ('Ativo','Ferias')
+      AND status IN ('Ativo','Ferias','Afastado','Aviso','Licenca','Licença')
       AND COALESCE("tipoContrato",'CLT') NOT IN ('PJ','Socio')
       AND "deletedAt" IS NULL
   `));
 
   const pjAtivos = rows(await db.execute(sql`
-    SELECT id, "nomeCompleto", "tipoContrato"
+    SELECT id, "nomeCompleto", "tipoContrato", status
     FROM employees
     WHERE "companyId" ${inIds(ids)}
-      AND status IN ('Ativo','Ferias')
+      AND status IN ('Ativo','Ferias','Afastado','Aviso','Licenca','Licença')
       AND "tipoContrato" IN ('PJ','Socio')
       AND "deletedAt" IS NULL
   `));
   const pjNormados = pjAtivos.map((p: any) => ({ ...p, _norm: normalizeName(p.nomeCompleto) }));
 
-  // Busca funcionários desligados para cruzamento com lista do corretor
+  // Busca APENAS funcionários realmente desligados (status Desligado ou Blacklist com data de demissão)
   const desligados = rows(await db.execute(sql`
     SELECT id, "nomeCompleto", "tipoContrato", "dataDemissao", status
     FROM employees
     WHERE "companyId" ${inIds(ids)}
-      AND (status NOT IN ('Ativo','Ferias') OR "dataDemissao" IS NOT NULL)
+      AND status IN ('Desligado','Blacklist')
+      AND "dataDemissao" IS NOT NULL
       AND "deletedAt" IS NULL
     ORDER BY "dataDemissao" DESC NULLS LAST
     LIMIT 300
@@ -490,7 +494,7 @@ export const seguroVidaRouter = router({
         SELECT e.id, e."nomeCompleto"
         FROM employees e
         WHERE e."companyId" ${inIds(ids)}
-          AND e.status IN ('Ativo','Ferias')
+          AND e.status IN ('Ativo','Ferias','Afastado','Aviso','Licenca','Licença')
           AND COALESCE(e."tipoContrato",'CLT') NOT IN ('PJ','Socio')
           AND e."deletedAt" IS NULL
           AND NOT EXISTS (
@@ -574,7 +578,7 @@ export const seguroVidaRouter = router({
         FROM employees e
         LEFT JOIN seguro_vida_coberturas s ON s.employee_id = e.id AND s.status IN ('ativo','pendente_inclusao','pendente_cancelamento')
         WHERE e."companyId" ${inIds(ids)}
-          AND e.status IN ('Ativo','Ferias')
+          AND e.status IN ('Ativo','Ferias','Afastado','Aviso','Licenca','Licença')
           AND e."deletedAt" IS NULL
         ORDER BY COALESCE(e."tipoContrato",'CLT'), e."nomeCompleto"
       `));
@@ -1122,7 +1126,8 @@ export const seguroVidaRouter = router({
         JOIN employees e ON e.id = s.employee_id
         WHERE s.company_id ${inIds(ids)}
           AND s.status IN ('ativo','pendente_inclusao')
-          AND (e.status NOT IN ('Ativo','Ferias') OR e."dataDemissao" IS NOT NULL)
+          AND e.status IN ('Desligado','Blacklist')
+          AND e."dataDemissao" IS NOT NULL
           AND e."deletedAt" IS NULL
         ORDER BY e."dataDemissao" DESC NULLS LAST, s.nome_completo
       `));
