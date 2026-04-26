@@ -91,6 +91,7 @@ const Lixeira = lazy(() => import("./pages/Lixeira"));
 const AvisoPrevio = lazy(() => import("./pages/AvisoPrevio"));
 const PedidoDemissao = lazy(() => import("./pages/PedidoDemissao"));
 const Ferias = lazy(() => import("./pages/Ferias"));
+const SeguroVida = lazy(() => import("./pages/SeguroVida"));
 const CipaCompleta = lazy(() => import("./pages/CipaCompleta"));
 const ModuloPJ = lazy(() => import("./pages/ModuloPJ"));
 const ContratoPJView = lazy(() => import("./pages/ContratoPJView"));
@@ -340,6 +341,7 @@ function Router() {
         <Route path={"/aviso-previo"} component={() => <RouteGuard component={AvisoPrevio} route="/aviso-previo" />} />
         <Route path={"/pedido-demissao"} component={() => <RouteGuard component={PedidoDemissao} route="/pedido-demissao" />} />
         <Route path={"/ferias"} component={() => <RouteGuard component={Ferias} route="/ferias" />} />
+        <Route path={"/seguro-vida"} component={() => <RouteGuard component={SeguroVida} route="/seguro-vida" />} />
         <Route path={"/cipa"} component={() => <RouteGuard component={CipaCompleta} route="/cipa" />} />
         <Route path={"/modulo-pj"} component={() => <RouteGuard component={ModuloPJ} route="/modulo-pj" />} />
         <Route path={"/contrato-pj/:id"} component={() => <RouteGuard component={ContratoPJView} route="/modulo-pj" />} />

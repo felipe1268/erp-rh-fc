@@ -7378,6 +7378,52 @@ export const disciplinaCorrecoes = pgTable("disciplina_correcoes", {
   index("idx_disc_corr_company").on(t.companyId),
 ]);
 
+// ============================================================
+// SEGURO DE VIDA — Cobertura por funcionário
+// ============================================================
+export const seguroVidaCoberturas = pgTable("seguro_vida_coberturas", {
+  id:                   serial().primaryKey(),
+  companyId:            integer("company_id").notNull(),
+  employeeId:           integer("employee_id"),
+  nomeCompleto:         varchar("nome_completo", { length: 300 }).notNull(),
+  itemSegurador:        varchar("item_segurador", { length: 20 }),
+  apoliceVG:            varchar("apolice_vg", { length: 30 }),
+  apoliceAPC:           varchar("apolice_apc", { length: 30 }),
+  status:               varchar("status", { length: 30 }).notNull().default("ativo"),
+  dataAdesao:           date("data_adesao"),
+  dataCancelamento:     date("data_cancelamento"),
+  motivoCancelamento:   text("motivo_cancelamento"),
+  observacoes:          text("observacoes"),
+  criadoEm:             timestamp("criado_em", { mode: "string" }).defaultNow(),
+  atualizadoEm:         timestamp("atualizado_em", { mode: "string" }).defaultNow(),
+  criadoPor:            varchar("criado_por", { length: 255 }),
+  canceladoPor:         varchar("cancelado_por", { length: 255 }),
+}, (t) => [
+  index("idx_seguro_vida_company").on(t.companyId),
+  index("idx_seguro_vida_employee").on(t.employeeId),
+  index("idx_seguro_vida_status").on(t.status),
+]);
+
+export const seguroVidaImportacoes = pgTable("seguro_vida_importacoes", {
+  id:                   serial().primaryKey(),
+  companyId:            integer("company_id").notNull(),
+  competencia:          varchar("competencia", { length: 7 }).notNull(),
+  dataImportacao:       timestamp("data_importacao", { mode: "string" }).defaultNow(),
+  totalSegurados:       integer("total_segurados").default(0),
+  totalAtivos:          integer("total_ativos").default(0),
+  totalOk:              integer("total_ok").default(0),
+  totalSemSeguro:       integer("total_sem_seguro").default(0),
+  totalPagarIndevido:   integer("total_pagar_indevido").default(0),
+  totalNovos:           integer("total_novos").default(0),
+  jsonResultado:        json("json_resultado"),
+  relatorioNomes:       text("relatorio_nomes"),
+  importadoPor:         varchar("importado_por", { length: 255 }),
+  criadoEm:             timestamp("criado_em", { mode: "string" }).defaultNow(),
+}, (t) => [
+  index("idx_svimport_company").on(t.companyId),
+  index("idx_svimport_competencia").on(t.competencia),
+]);
+
 export const recycleBin = pgTable("recycle_bin", {
   id:               serial().primaryKey(),
   entityType:       varchar("entity_type", { length: 80 }).notNull(),

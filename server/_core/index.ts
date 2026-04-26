@@ -449,6 +449,44 @@ async function startServer() {
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_recycle_entity ON recycle_bin(entity_type, entity_id)`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_recycle_deleted_at ON recycle_bin(deleted_at)`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_recycle_restored ON recycle_bin(restored_at)`);
+        // Seguro de Vida
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS seguro_vida_coberturas (
+          id SERIAL PRIMARY KEY,
+          company_id INTEGER NOT NULL,
+          employee_id INTEGER,
+          nome_completo VARCHAR(300) NOT NULL,
+          item_segurador VARCHAR(20),
+          apolice_vg VARCHAR(30),
+          apolice_apc VARCHAR(30),
+          status VARCHAR(30) NOT NULL DEFAULT 'ativo',
+          data_adesao DATE,
+          data_cancelamento DATE,
+          motivo_cancelamento TEXT,
+          observacoes TEXT,
+          criado_em TIMESTAMP DEFAULT NOW(),
+          atualizado_em TIMESTAMP DEFAULT NOW(),
+          criado_por VARCHAR(255),
+          cancelado_por VARCHAR(255)
+        )`);
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS seguro_vida_importacoes (
+          id SERIAL PRIMARY KEY,
+          company_id INTEGER NOT NULL,
+          competencia VARCHAR(7) NOT NULL,
+          data_importacao TIMESTAMP DEFAULT NOW(),
+          total_segurados INTEGER DEFAULT 0,
+          total_ativos INTEGER DEFAULT 0,
+          total_ok INTEGER DEFAULT 0,
+          total_sem_seguro INTEGER DEFAULT 0,
+          total_pagar_indevido INTEGER DEFAULT 0,
+          total_novos INTEGER DEFAULT 0,
+          json_resultado JSON,
+          relatorio_nomes TEXT,
+          importado_por VARCHAR(255),
+          criado_em TIMESTAMP DEFAULT NOW()
+        )`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_seguro_vida_company ON seguro_vida_coberturas(company_id)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_seguro_vida_employee ON seguro_vida_coberturas(employee_id)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_svimport_company ON seguro_vida_importacoes(company_id)`);
         console.log("[ColFix] CREATE TABLEs OK");
         const hoje = new Date().toISOString().split('T')[0];
         const vencResult = await db.execute(sql`

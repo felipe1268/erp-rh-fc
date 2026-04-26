@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1292,
+    titulo: "Novo módulo: Seguro de Vida",
+    descricao: "Aba 'Seguro de Vida' criada no menu Gestão de Pessoas. Permite controlar coberturas de todos os CLT ativos com status: Ativo, Pendente Inclusão, Pendente Cancelamento, Cancelado. Cards de resumo: total segurados, pendentes, sem cobertura. Importação mensal do relatório do corretor via texto colado (PDF): cruzamento automático por similaridade de nomes com funcionários CLT ativos, detectando 4 cenários — ✅ OK (em ambos), 🔴 Sem Seguro (urgente!), 🟡 Pagamento Indevido (desligado ainda segurado), 🆕 Recém-admitido em carência. Histórico de todas as importações com detalhe das divergências. Carga inicial via seed (admin_master) para popular com a lista atual do corretor. Aviso fixo no topo da tela: 'Trabalhar sem Seguro de Vida é estritamente proibido'. Banco de dados: duas novas tabelas — seguro_vida_coberturas e seguro_vida_importacoes.",
+    tipo: "feature",
+    modulos: "RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-04-25 16:00:00",
+  },
+  {
     version: 1291,
     titulo: "Fechamento de Ponto: clique em Dias Trabalhados e % Presença abre calendário do colaborador",
     descricao: "Nos modais de ranking, as colunas 'Dias Trabalhados' e '% Presença' agora são clicáveis. Ao clicar, abre um sub-modal com o calendário completo do período de fechamento para aquele colaborador: cada dia é classificado como ✅ Trabalhado (com horas registradas), ❌ Falta provável (dia útil sem batida), ou — Domingo. Resumo no topo mostra total trabalhado, faltas prováveis, domingos e % presença. Nota de rodapé explica que 'Falta provável' pode ser falta real, home office sem lançamento ou dado não importado. Novo endpoint backend fechamentoPonto.getDiasEmployee retorna todos os dias do período agrupados por data única (evita duplicatas de múltiplas obras). Também corrigido: % Presença usa dias corridos do período como denominador (não apenas Seg-Sáb), eliminando valores acima de 100% para quem não trabalha domingo. Alerta âmbar quando período ainda não encerrou.",

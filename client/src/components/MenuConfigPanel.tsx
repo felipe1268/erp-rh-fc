@@ -70,7 +70,7 @@ const PATH_ICON_MAP: Record<string, any> = {
   "/solicitacao-he": Clock, "/crachas": CreditCard,
   "/controle-documentos?tab=atestados": ClipboardPlus,
   "/controle-documentos?tab=advertencias": ShieldAlert,
-  "/aviso-previo": AlertTriangle, "/ferias": Palmtree,
+  "/aviso-previo": AlertTriangle, "/ferias": Palmtree, "/seguro-vida": ShieldCheck,
   "/modulo-pj": FileSignature, "/pj-medicoes": FileSpreadsheet,
   "/relatorios/raio-x": UserSearch,
   "/dashboards": BarChart3, "/dashboards/funcionarios": Users,
@@ -114,6 +114,7 @@ const DEFAULT_MENU = [
   { title: "Gestão de Pessoas", items: [
     { label: "Aviso Prévio", path: "/aviso-previo", visible: true },
     { label: "Férias", path: "/ferias", visible: true },
+    { label: "Seguro de Vida", path: "/seguro-vida", visible: true },
     { label: "Contratos PJ", path: "/modulo-pj", visible: true },
     { label: "PJ Medições", path: "/pj-medicoes", visible: true },
   ]},
