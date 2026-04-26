@@ -8968,4 +8968,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-26 13:30:00",
   },
+  {
+    version: 1304,
+    titulo: "Seguro de Vida: extração de nomes por conteúdo como fallback universal (P6)",
+    descricao: "Implementado fallback P6: quando P1-P5 falham (nenhum número de item reconhecido), o sistema varre o PDF procurando qualquer linha em MAIÚSCULAS que pareça um nome de pessoa (2-7 palavras, sem dígitos, sem palavras de cabeçalho como SEGURO/RELAÇÃO/CAPITAL/etc., com ao menos uma palavra de 4+ chars). Os nomes extraídos são cruzados contra os funcionários CLT pelo algoritmo de similaridade já existente, tornando o parser resistente a qualquer variação de layout de PDF.",
+    tipo: "feature",
+    modulos: "Seguro de Vida",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-26 14:00:00",
+  },
 ];

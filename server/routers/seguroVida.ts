@@ -146,19 +146,17 @@ function detectarCompetenciaDoPdf(texto: string): string | null {
   return null;
 }
 
-// Extrai lista de segurados do texto extraído de PDF do corretor.
-// O formato esperado é: <número-item> <espaços> <NOME COMPLETO> [valores monetários]
-// Exemplo: "00000000784       ACACIO LESCURA DE CAMARGO    28.290,38 ..."
-//
-// Linhas com número de item seguido do nome do segurado.
-// Padrões em cascata — tenta do mais estrito ao mais permissivo.
+// Extrai lista de segurados do PDF do corretor.
+// Estratégia em cascata: P1-P5 buscam linhas com número de item + nome.
+// P6 é o fallback universal: identifica qualquer linha em MAIÚSCULAS que
+// pareça nome de pessoa e deixa o cruzamento ser feito pelo nome (já existente).
 type SeguradoParsed = { item: string; nome: string; valores: string[] };
 
 // P1: formato clássico   — item (5-12 dígitos) + 2+ espaços + nome MAIÚSCULO
 // P2: item CPF/longo     — 13-15 dígitos + 1+ espaço + nome
 // P3: separador tab      — qualquer nº de dígitos + \t + nome
-// P4: 1 espaço só        — item (3-12 dígitos) + 1 espaço + nome (arquivos _ATL Bradesco)
-// P5: colunas fundidas   — item (3-12 dígitos) imediatamente seguido de nome sem espaço
+// P4: 1 espaço só        — item (3-12 dígitos) + 1 espaço + nome
+// P5: colunas fundidas   — item (3-12 dígitos) colado ao nome sem espaço
 const PARSE_PATTERNS: { id: string; re: RegExp }[] = [
   { id: "P1", re: /^(\d{5,12})[ \t]{2,}([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-Za-záàãâéêíóôõúüçñ\s]+)/ },
   { id: "P2", re: /^(\d{13,15})[ \t]+([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-Za-záàãâéêíóôõúüçñ\s]+)/ },
@@ -167,7 +165,49 @@ const PARSE_PATTERNS: { id: string; re: RegExp }[] = [
   { id: "P5", re: /^(\d{3,12})([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-Za-záàãâéêíóôõúüçñ\s]{3,})/ },
 ];
 
+// Palavras que indicam linha de cabeçalho/rodapé — descartadas no P6
+const P6_BLACKLIST = new Set([
+  "SEGURO","VIDA","GRUPO","ACID","PESSOAIS","RELACAO","RELAÇÃO","ATUALIZADA",
+  "SEGURADOS","SEGURADO","ESTIPULANTE","SUBESTIPULANTE","COMPETENCIA","COMPETÊNCIA",
+  "COBRANCA","COBRANÇA","PREMIO","PRÊMIO","CAPITAL","SALARIO","SALÁRIO",
+  "PROCESSAMENTO","ADESAO","ADESÃO","CANCELAMENTO","INCLUSAO","INCLUSÃO",
+  "EXCLUSAO","EXCLUSÃO","MORTE","INVALIDEZ","ACIDENTE","VIDAS","PME","MAIS",
+  "APOLICE","APÓLICE","PROPOSTA","CERTIFICADO","VIGENCIA","VIGÊNCIA","PERIODO",
+  "PERÍODO","REFERENCIA","REFERÊNCIA","DATA","TIPO","CODIGO","CÓDIGO","ITEM",
+  "NUMERO","NÚMERO","TOTAL","PAGINA","PÁGINA","FOLHA","BENEFICIARIO","BENEFICIÁRIO",
+  "COBERTURA","RAMO","LINHA","SUB","NOME","INSCRICAO","INSCRIÇÃO","COBERTURAS",
+  "VENCIMENTO","EMISSAO","EMISSÃO","CONTRATO","APOLICES","APÓLICES","RAZAO","RAZÃO",
+  "SOCIAL","CNPJ","CPF","FONE","EMAIL","ENDERECO","ENDEREÇO","BAIRRO","CIDADE",
+  "ESTADO","CEP","TITULAR","DEPENDENTE","PLANO","MODALIDADE","VIGENTE",
+]);
+
+// P6: extrai nomes em MAIÚSCULAS sem exigir número de item na frente.
+// Cada linha é analisada; se parece nome de pessoa (2-7 palavras, sem dígitos,
+// sem palavras de cabeçalho, ao menos uma palavra com 4+ chars), é aceita.
+function extrairNomesP6(linhas: string[]): SeguradoParsed[] {
+  const reNome = /^([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ]{1,}(?:\s+[A-Za-záàãâéêíóôõúüçñA-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ]{2,}){1,})/;
+  const resultado: SeguradoParsed[] = [];
+  let idx = 1;
+  for (const linha of linhas) {
+    const match = linha.match(reNome);
+    if (!match) continue;
+    const nomeRaw = match[1].trim();
+    const palavras = nomeRaw.split(/\s+/).filter(Boolean);
+    if (palavras.length < 2 || palavras.length > 7) continue;
+    if (/\d/.test(nomeRaw)) continue;
+    // Normaliza para comparação com blacklist (remove acentos, maiúscula)
+    const norma = (s: string) => s.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (palavras.some(w => P6_BLACKLIST.has(norma(w)))) continue;
+    // Exige ao menos uma palavra com 4+ chars (descarta "DE E A" isolados)
+    if (!palavras.some(w => w.length >= 4)) continue;
+    const valores = [...linha.matchAll(/\d[\d.]*,\d+/g)].map(m => m[0]).slice(0, 7);
+    resultado.push({ item: String(idx++), nome: nomeRaw, valores });
+  }
+  return resultado;
+}
+
 function parsarLinhasSegurados(linhas: string[]): { segurados: SeguradoParsed[]; padrao: string } {
+  // Tenta P1-P5: padrões que exigem número de item na frente
   for (const { id, re } of PARSE_PATTERNS) {
     const resultado: SeguradoParsed[] = [];
     for (const linha of linhas) {
@@ -181,6 +221,9 @@ function parsarLinhasSegurados(linhas: string[]): { segurados: SeguradoParsed[];
     }
     if (resultado.length >= 2) return { segurados: resultado, padrao: id };
   }
+  // P6: fallback universal — identifica nomes em MAIÚSCULAS e cruza pelo nome
+  const p6 = extrairNomesP6(linhas);
+  if (p6.length >= 2) return { segurados: p6, padrao: "P6" };
   return { segurados: [], padrao: "nenhum" };
 }
 
