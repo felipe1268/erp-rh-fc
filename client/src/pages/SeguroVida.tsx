@@ -2,23 +2,23 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { removeAccents } from "@/lib/searchUtils";
 import {
-  ShieldCheck, ShieldAlert, Shield, AlertTriangle, CheckCircle2, XCircle,
-  Clock, Plus, Search, Upload, Users, DollarSign, FileText, ChevronDown,
-  ChevronUp, RefreshCw, Pencil, Printer, Download, Eye, Ban, X, Loader2,
-  ArrowRightLeft, Info,
+  ShieldCheck, ShieldAlert, Shield, AlertTriangle, CheckCircle2,
+  Clock, Search, Upload, FileText, ChevronDown,
+  ChevronUp, RefreshCw, Printer, Ban, X, Loader2,
+  ArrowRightLeft, Info, FilePlus2, Trash2, FileUp,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
+
+const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const STATUS_LABELS: Record<string, { label: string; color: string; Icon: any }> = {
@@ -51,169 +51,428 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ─── MODAL: Importar Relatório do Corretor ─────────────────────────────────────
+// ─── Componente de resultado por mês (accordion) ──────────────────────────────
+function ResultadoMes({ res, defaultOpen = false }: { res: any; defaultOpen?: boolean }) {
+  const [aberto, setAberto] = useState(defaultOpen);
+  const [filtro, setFiltro] = useState("divergencias");
+
+  if (res.erro) {
+    return (
+      <div className="border border-red-200 bg-red-50 rounded-xl p-4 flex items-start gap-3">
+        <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-semibold text-sm text-red-800">{res.filename ?? res.competencia}</p>
+          <p className="text-xs text-red-600 mt-0.5">{res.erro}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const [ano, mesNum] = (res.competencia ?? "").split("-");
+  const mesLabel = MESES[Number(mesNum) - 1] ?? mesNum;
+  const temDiverg = res.totalSemSeguro > 0 || res.totalPagarIndevido > 0;
+
+  const linhasFiltradas = (res.resultado ?? []).filter((r: any) =>
+    filtro === "todos" ? true : filtro === "divergencias" ? r.status !== "ok" : r.status === filtro
+  );
+
+  return (
+    <div className={cn("border rounded-xl overflow-hidden", temDiverg ? "border-red-200" : "border-green-200")}>
+      <button className={cn("w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
+        temDiverg ? "bg-red-50 hover:bg-red-100" : "bg-green-50 hover:bg-green-100")}
+        onClick={() => setAberto(v => !v)}>
+        <FileText className={cn("h-5 w-5 shrink-0", temDiverg ? "text-red-500" : "text-green-600")} />
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-sm">{mesLabel} {ano}</p>
+          {res.filename && <p className="text-[11px] text-slate-500 truncate">{res.filename}</p>}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-xs px-2 py-0.5 bg-white/70 rounded font-mono border">{res.totalSeguradosCorretora} na lista</span>
+          <span className={cn("text-xs px-2 py-0.5 rounded font-semibold border",
+            res.totalSemSeguro > 0 ? "bg-red-100 text-red-700 border-red-200" : "bg-green-100 text-green-700 border-green-200")}>
+            {res.totalSemSeguro > 0 ? `⚠️ ${res.totalSemSeguro} sem seguro` : "✅ OK"}
+          </span>
+          {res.totalPagarIndevido > 0 && (
+            <span className="text-xs px-2 py-0.5 rounded font-semibold bg-orange-100 text-orange-700 border border-orange-200">
+              {res.totalPagarIndevido} indevido
+            </span>
+          )}
+          {aberto ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+        </div>
+      </button>
+
+      {aberto && (
+        <div className="px-4 py-3 space-y-3 bg-white border-t">
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { label: "Na lista", val: res.totalSeguradosCorretora, cls: "text-slate-700" },
+              { label: "✅ OK", val: res.totalOk, cls: "text-green-700" },
+              { label: "🔴 Sem seguro", val: res.totalSemSeguro, cls: "text-red-700" },
+              { label: "🟡 Indevido", val: res.totalPagarIndevido, cls: "text-orange-700" },
+            ].map((c, i) => (
+              <div key={i} className="text-center p-2 bg-slate-50 rounded-lg border">
+                <p className={cn("text-xl font-bold", c.cls)}>{c.val}</p>
+                <p className="text-[10px] text-muted-foreground">{c.label}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-1.5 flex-wrap">
+            {[
+              { key: "divergencias", label: "Só divergências" },
+              { key: "todos", label: "Todos" },
+              { key: "sem_seguro", label: "Sem seguro" },
+              { key: "pagar_indevido", label: "Indevido" },
+              { key: "ok", label: "OK" },
+              { key: "novo", label: "Recém-admitido" },
+            ].map(op => (
+              <button key={op.key} onClick={() => setFiltro(op.key)}
+                className={cn("text-[11px] px-2.5 py-1 rounded-full border font-medium transition-colors",
+                  filtro === op.key ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 hover:bg-slate-50")}>
+                {op.label} ({op.key === "divergencias"
+                  ? (res.resultado ?? []).filter((r: any) => r.status !== "ok").length
+                  : op.key === "todos"
+                  ? (res.resultado ?? []).length
+                  : (res.resultado ?? []).filter((r: any) => r.status === op.key).length})
+              </button>
+            ))}
+          </div>
+
+          <div className="border rounded-lg overflow-auto max-h-[280px]">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50 sticky top-0">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-600">Status</th>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-600">Nome no Sistema</th>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-600">Nome na Lista</th>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-600">Item</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {linhasFiltradas.length === 0 ? (
+                  <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-400">Nenhum resultado para este filtro.</td></tr>
+                ) : linhasFiltradas.map((r: any, i: number) => {
+                  const st = RESULT_STATUS[r.status] ?? RESULT_STATUS.ok;
+                  return (
+                    <tr key={i} className={cn(r.status === "sem_seguro" ? "bg-red-50" : r.status === "pagar_indevido" ? "bg-orange-50" : r.status === "novo" ? "bg-blue-50" : "")}>
+                      <td className="px-3 py-2">
+                        <span className={cn("inline-flex items-center gap-1 font-semibold", st.color)}>
+                          <st.Icon className="h-3 w-3" />{st.label}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 font-medium">{r.nomeHR ?? "—"}</td>
+                      <td className="px-3 py-2 text-slate-500">{r.nome}</td>
+                      <td className="px-3 py-2 font-mono text-slate-400">{r.item || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── helpers de competência ────────────────────────────────────────────────────
+function getDefaultComp(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+function detectCompFromFilename(name: string): string {
+  const d = getDefaultComp();
+  const m1 = name.match(/(\d{4})[-_]?(\d{2})/);
+  if (m1) return `${m1[1]}-${m1[2].padStart(2, "0")}`;
+  const m2 = name.match(/(\d{2})[-_]?(\d{4})/);
+  if (m2) return `${m2[2]}-${m2[1].padStart(2, "0")}`;
+  return d;
+}
+
+// ─── MODAL: Importar Relatório do Corretor (PDF em lote + texto) ───────────────
 function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
   open: boolean; onClose: () => void;
   companyId: number; companyIds: number[];
   onSuccess: () => void;
 }) {
-  const [competencia, setCompetencia] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  });
-  const [nomes, setNomes] = useState("");
+  const [modo, setModo] = useState<"pdf" | "texto">("pdf");
   const [apoliceVG, setApoliceVG] = useState("117.398-5");
   const [apoliceAPC, setApoliceAPC] = useState("121.268-3");
-  const [resultado, setResultado] = useState<any>(null);
-  const [filtroStatus, setFiltroStatus] = useState<string>("todos");
 
-  const importar = trpc.seguroVida.importarRelatorio.useMutation({
+  // PDF state
+  const [arquivos, setArquivos] = useState<Array<{ file: File; competencia: string; fileBase64: string }>>([]);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Texto state
+  const [competenciaTexto, setCompetenciaTexto] = useState(getDefaultComp);
+  const [nomes, setNomes] = useState("");
+
+  // Results
+  const [resultados, setResultados] = useState<any[] | null>(null);
+
+  const processarLote = trpc.seguroVida.processarPdfLote.useMutation({
     onSuccess: (data) => {
-      setResultado(data);
+      setResultados(data.resultados);
       onSuccess();
-      toast.success(`Cruzamento concluído: ${data.totalOk} OK, ${data.totalSemSeguro} sem seguro, ${data.totalPagarIndevido} indevido`);
+      const ok = data.resultados.filter((r: any) => !r.erro && r.totalSemSeguro === 0).length;
+      const erros = data.resultados.filter((r: any) => r.erro).length;
+      toast.success(`${data.resultados.length} mês(es) processado(s). ${ok} sem divergências.${erros ? ` ${erros} erro(s) ao ler PDF.` : ""}`);
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
 
-  const linhasFiltradas = useMemo(() => {
-    if (!resultado?.resultado) return [];
-    if (filtroStatus === "todos") return resultado.resultado;
-    return resultado.resultado.filter((r: any) => r.status === filtroStatus);
-  }, [resultado, filtroStatus]);
+  const importarTexto = trpc.seguroVida.importarRelatorio.useMutation({
+    onSuccess: (data) => {
+      setResultados([data]);
+      onSuccess();
+      toast.success(`Cruzamento concluído: ${data.totalOk} OK, ${data.totalSemSeguro} sem seguro`);
+    },
+    onError: e => toast.error(e.message),
+  });
+
+  const handleFiles = useCallback((files: FileList | null) => {
+    if (!files) return;
+    Array.from(files).forEach(file => {
+      if (!file.name.toLowerCase().endsWith(".pdf")) {
+        toast.error(`${file.name} não é um arquivo PDF`);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const b64 = (reader.result as string).split(",")[1];
+        setArquivos(prev => [...prev, {
+          file,
+          competencia: detectCompFromFilename(file.name),
+          fileBase64: b64,
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  const updateComp = (idx: number, val: string) =>
+    setArquivos(prev => prev.map((a, i) => i === idx ? { ...a, competencia: val } : a));
+
+  const removeArq = (idx: number) =>
+    setArquivos(prev => prev.filter((_, i) => i !== idx));
+
+  const reset = () => {
+    setArquivos([]);
+    setNomes("");
+    setResultados(null);
+    setModo("pdf");
+  };
+
+  const anos = [2024, 2025, 2026, 2027];
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) { onClose(); setResultado(null); }}}>
-      <DialogContent className="flex flex-col p-0 gap-0 w-[900px] max-w-[95vw] max-h-[90vh]">
-        <DialogHeader className="px-6 py-4 border-b shrink-0">
-          <DialogTitle className="flex items-center gap-2 text-base font-bold">
+    <Dialog open={open} onOpenChange={o => { if (!o) { onClose(); reset(); } }}>
+      <DialogContent className="flex flex-col p-0 gap-0 w-[860px] max-w-[95vw] max-h-[90vh]">
+
+        {/* Header */}
+        <DialogHeader className="px-6 py-4 border-b shrink-0 bg-gradient-to-r from-indigo-50 to-slate-50">
+          <DialogTitle className="flex items-center gap-2.5 text-base font-bold text-indigo-900">
             <ArrowRightLeft className="h-5 w-5 text-indigo-600" />
-            Importar Relatório do Corretor — Cruzamento Automático
+            Cruzamento com Relatório do Corretor
           </DialogTitle>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Envie os PDFs do corretor mês a mês. O sistema compara automaticamente com os funcionários CLT ativos.
+          </p>
         </DialogHeader>
 
-        <div className="flex-1 overflow-auto px-6 py-4 space-y-4">
-          {!resultado ? (
+        <div className="flex-1 overflow-auto px-6 py-5 space-y-5">
+          {!resultados ? (
             <>
-              <p className="text-sm text-muted-foreground">
-                Cole abaixo o texto extraído do PDF do corretor. O sistema vai cruzar automaticamente os nomes com os funcionários CLT ativos.
-              </p>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 mb-1 block">Competência</label>
-                  <Input type="month" value={competencia} onChange={e => setCompetencia(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 mb-1 block">Apólice VG</label>
-                  <Input value={apoliceVG} onChange={e => setApoliceVG(e.target.value)} placeholder="117.398-5" />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 mb-1 block">Apólice APC</label>
-                  <Input value={apoliceAPC} onChange={e => setApoliceAPC(e.target.value)} placeholder="121.268-3" />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1 block">
-                  Lista de Segurados (copie e cole o conteúdo do PDF)
-                </label>
-                <Textarea
-                  value={nomes}
-                  onChange={e => setNomes(e.target.value)}
-                  placeholder={"00000000784       ACACIO LESCURA DE CAMARGO\n00000000971       ADRIANO PAZ FERREIRA\n..."}
-                  className="font-mono text-xs min-h-[200px]"
-                />
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Cole o conteúdo do PDF — o sistema extrai automaticamente o número de item e o nome completo de cada linha.
-                </p>
-              </div>
-            </>
-          ) : (
-            <>
-              {/* Cards de resumo */}
-              <div className="grid grid-cols-4 gap-3">
-                {[
-                  { label: "Na lista do corretor", val: resultado.totalSeguradosCorretora, color: "text-slate-700" },
-                  { label: "✅ OK (presentes em ambos)", val: resultado.totalOk, color: "text-green-700" },
-                  { label: "🔴 Sem Seguro (urgente!)", val: resultado.totalSemSeguro, color: "text-red-700" },
-                  { label: "🟡 Pagamento indevido", val: resultado.totalPagarIndevido, color: "text-orange-700" },
-                ].map((c, i) => (
-                  <div key={i} className="p-3 bg-slate-50 border rounded-lg text-center">
-                    <p className={`text-2xl font-bold ${c.color}`}>{c.val}</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">{c.label}</p>
-                  </div>
-                ))}
-              </div>
-
-              {(resultado.totalSemSeguro > 0 || resultado.totalPagarIndevido > 0) && (
-                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
-                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>
-                    {resultado.totalSemSeguro > 0 && <><strong>{resultado.totalSemSeguro} funcionário(s) SEM SEGURO</strong> — contate o corretor imediatamente para inclusão. </>}
-                    {resultado.totalPagarIndevido > 0 && <><strong>{resultado.totalPagarIndevido} segurado(s) com pagamento INDEVIDO</strong> — verifique se foram demitidos e solicite exclusão.</>}
-                  </span>
-                </div>
-              )}
-
-              {/* Filtro */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-600">Mostrar:</span>
-                {["todos", "sem_seguro", "pagar_indevido", "ok", "novo"].map(s => (
-                  <button key={s} onClick={() => setFiltroStatus(s)}
-                    className={cn("text-xs px-3 py-1 rounded-full border font-medium transition-colors",
-                      filtroStatus === s ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 hover:bg-slate-50")}>
-                    {s === "todos" ? `Todos (${resultado.resultado.length})` : `${RESULT_STATUS[s]?.label} (${resultado.resultado.filter((r: any) => r.status === s).length})`}
+              {/* Modo tabs */}
+              <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
+                {([["pdf", FileUp, "Upload de PDF"], ["texto", FileText, "Colar texto"]] as const).map(([key, Icon, label]) => (
+                  <button key={key} onClick={() => setModo(key)}
+                    className={cn("flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium rounded-md transition-all",
+                      modo === key ? "bg-white shadow text-indigo-700" : "text-slate-500 hover:text-slate-700")}>
+                    <Icon className="h-4 w-4" />{label}
                   </button>
                 ))}
               </div>
 
-              {/* Tabela de resultado */}
-              <div className="border rounded-lg overflow-auto max-h-[350px]">
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-50 sticky top-0">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Status</th>
-                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Nome no HR</th>
-                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Nome na Lista</th>
-                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Item</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {linhasFiltradas.map((r: any, i: number) => {
-                      const st = RESULT_STATUS[r.status] ?? RESULT_STATUS.ok;
-                      return (
-                        <tr key={i} className={cn("transition-colors", r.status === "sem_seguro" ? "bg-red-50" : r.status === "pagar_indevido" ? "bg-orange-50" : r.status === "novo" ? "bg-blue-50" : "")}>
-                          <td className="px-3 py-2">
-                            <span className={cn("flex items-center gap-1 font-semibold", st.color)}>
-                              <st.Icon className="h-3 w-3" />{st.label}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 font-medium">{r.nomeHR ?? "—"}</td>
-                          <td className="px-3 py-2 text-slate-500">{r.nome}</td>
-                          <td className="px-3 py-2 font-mono text-slate-500">{r.item || "—"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              {/* Apólices (sempre visíveis) */}
+              <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 border rounded-xl">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Apólice VG</label>
+                  <Input value={apoliceVG} onChange={e => setApoliceVG(e.target.value)} placeholder="117.398-5" className="font-mono" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Apólice APC</label>
+                  <Input value={apoliceAPC} onChange={e => setApoliceAPC(e.target.value)} placeholder="121.268-3" className="font-mono" />
+                </div>
               </div>
+
+              {/* ── Modo PDF ── */}
+              {modo === "pdf" && (
+                <div className="space-y-4">
+                  {/* Zona de drop */}
+                  <div
+                    className={cn("border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer select-none",
+                      dragOver ? "border-indigo-400 bg-indigo-50" : "border-slate-200 hover:border-indigo-300 hover:bg-slate-50")}
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}>
+                    <input ref={fileInputRef} type="file" accept=".pdf" multiple className="hidden"
+                      onChange={e => handleFiles(e.target.files)} />
+                    <FileUp className={cn("h-10 w-10 mx-auto mb-3", dragOver ? "text-indigo-500" : "text-slate-300")} />
+                    <p className="font-semibold text-slate-600 text-sm">Arraste os PDFs aqui ou clique para selecionar</p>
+                    <p className="text-xs text-slate-400 mt-1">Selecione quantos meses quiser de uma vez — cada arquivo = uma competência</p>
+                  </div>
+
+                  {/* Lista de arquivos */}
+                  {arquivos.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        {arquivos.length} arquivo(s) selecionado(s)
+                      </p>
+                      {arquivos.map((arq, idx) => {
+                        const [ano, mesIdx] = arq.competencia.split("-");
+                        return (
+                          <div key={idx} className="flex items-center gap-3 p-3 bg-white border rounded-xl shadow-sm">
+                            <FileText className="h-8 w-8 text-indigo-400 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{arq.file.name}</p>
+                              <p className="text-[11px] text-slate-400">{(arq.file.size / 1024).toFixed(0)} KB</p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Select
+                                value={mesIdx}
+                                onValueChange={v => updateComp(idx, `${ano}-${v}`)}>
+                                <SelectTrigger className="w-36 h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {MESES.map((m, i) => (
+                                    <SelectItem key={i} value={String(i + 1).padStart(2, "0")} className="text-xs">{m}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Select
+                                value={ano}
+                                onValueChange={v => updateComp(idx, `${v}-${mesIdx}`)}>
+                                <SelectTrigger className="w-24 h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {anos.map(a => (
+                                    <SelectItem key={a} value={String(a)} className="text-xs">{a}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <button onClick={() => removeArq(idx)}
+                                className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <button onClick={() => fileInputRef.current?.click()}
+                        className="w-full flex items-center justify-center gap-1.5 py-2 border border-dashed rounded-xl text-xs text-indigo-600 hover:bg-indigo-50 transition-colors">
+                        <FilePlus2 className="h-4 w-4" />Adicionar mais arquivos
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Modo texto ── */}
+              {modo === "texto" && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Competência</label>
+                    <div className="flex gap-2">
+                      <Select
+                        value={competenciaTexto.split("-")[1]}
+                        onValueChange={v => setCompetenciaTexto(`${competenciaTexto.split("-")[0]}-${v}`)}>
+                        <SelectTrigger className="w-40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MESES.map((m, i) => (
+                            <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{m}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={competenciaTexto.split("-")[0]}
+                        onValueChange={v => setCompetenciaTexto(`${v}-${competenciaTexto.split("-")[1]}`)}>
+                        <SelectTrigger className="w-28">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {anos.map(a => (
+                            <SelectItem key={a} value={String(a)}>{a}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">
+                      Lista de Segurados — cole o conteúdo copiado do PDF
+                    </label>
+                    <Textarea value={nomes} onChange={e => setNomes(e.target.value)}
+                      placeholder={"00000000784       ACACIO LESCURA DE CAMARGO\n00000000971       ADRIANO PAZ FERREIRA\n..."}
+                      className="font-mono text-xs min-h-[200px] bg-slate-50" />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      O sistema extrai automaticamente o número de item e o nome de cada linha.
+                    </p>
+                  </div>
+                </div>
+              )}
             </>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-slate-700">{resultados.length} competência(s) processada(s)</p>
+                <button onClick={reset}
+                  className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 font-medium">
+                  <RefreshCw className="h-3.5 w-3.5" />Nova importação
+                </button>
+              </div>
+              {resultados.map((res, i) => (
+                <ResultadoMes key={i} res={res} defaultOpen={res.totalSemSeguro > 0 || !!res.erro} />
+              ))}
+            </div>
           )}
         </div>
 
+        {/* Footer */}
         <DialogFooter className="px-6 py-3 border-t bg-slate-50 shrink-0">
-          {!resultado ? (
+          {!resultados ? (
             <>
-              <Button variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button onClick={() => importar.mutate({ companyId, companyIds, competencia, nomesBrutos: nomes, apoliceVG, apoliceAPC })}
-                disabled={importar.isPending || !nomes.trim() || !competencia}>
-                {importar.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processando...</> : <><ArrowRightLeft className="h-4 w-4 mr-2" />Cruzar com Funcionários</>}
-              </Button>
+              <Button variant="outline" onClick={() => { onClose(); reset(); }}>Cancelar</Button>
+              {modo === "pdf" ? (
+                <Button
+                  disabled={arquivos.length === 0 || processarLote.isPending}
+                  onClick={() => processarLote.mutate({
+                    companyId, companyIds, apoliceVG, apoliceAPC,
+                    arquivos: arquivos.map(a => ({ competencia: a.competencia, filename: a.file.name, fileBase64: a.fileBase64 })),
+                  })}>
+                  {processarLote.isPending
+                    ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processando {arquivos.length} arquivo(s)...</>
+                    : <><ArrowRightLeft className="h-4 w-4 mr-2" />Processar {arquivos.length} arquivo(s)</>}
+                </Button>
+              ) : (
+                <Button
+                  disabled={!nomes.trim() || importarTexto.isPending}
+                  onClick={() => importarTexto.mutate({ companyId, companyIds, competencia: competenciaTexto, nomesBrutos: nomes, apoliceVG, apoliceAPC })}>
+                  {importarTexto.isPending
+                    ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Cruzando...</>
+                    : <><ArrowRightLeft className="h-4 w-4 mr-2" />Cruzar com Funcionários</>}
+                </Button>
+              )}
             </>
           ) : (
-            <Button variant="outline" onClick={() => { setResultado(null); setNomes(""); }}>
-              <RefreshCw className="h-4 w-4 mr-2" />Nova Importação
+            <Button variant="outline" onClick={() => { onClose(); reset(); }}>
+              <X className="h-4 w-4 mr-2" />Fechar
             </Button>
           )}
         </DialogFooter>
@@ -231,7 +490,7 @@ function SeedModal({ open, onClose, companyId, companyIds, onSuccess }: {
   const [nomes, setNomes] = useState("");
   const [apoliceVG, setApoliceVG] = useState("117.398-5");
   const [apoliceAPC, setApoliceAPC] = useState("121.268-3");
-  const [dataAdesao, setDataAdesao] = useState("2026-04-01");
+  const [dataAdesao, setDataAdesao] = useState(() => new Date().toISOString().split("T")[0]);
 
   const seed = trpc.seguroVida.seedFromRelatorio.useMutation({
     onSuccess: (d) => {
@@ -243,43 +502,49 @@ function SeedModal({ open, onClose, companyId, companyIds, onSuccess }: {
   });
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="w-[600px] max-w-[95vw]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5 text-indigo-600" />
+    <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent className="flex flex-col p-0 gap-0 w-[620px] max-w-[95vw] max-h-[90vh]">
+        <DialogHeader className="px-6 py-4 border-b shrink-0 bg-gradient-to-r from-amber-50 to-slate-50">
+          <DialogTitle className="flex items-center gap-2.5 text-base font-bold text-amber-900">
+            <Upload className="h-5 w-5 text-amber-600" />
             Carga Inicial — Lista do Corretor
           </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <p className="text-sm text-muted-foreground">
-            Faça a carga inicial colando a lista do corretor. Todos os nomes serão cadastrados como coberturas ativas. Use apenas uma vez para popular o sistema.
+          <p className="text-xs text-slate-500 mt-0.5">
+            Use <strong>apenas uma vez</strong> para popular o sistema com os segurados já ativos. Cole a lista do corretor abaixo.
           </p>
-          <div className="grid grid-cols-3 gap-3">
+        </DialogHeader>
+        <div className="flex-1 overflow-auto px-6 py-5 space-y-4">
+          <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 border rounded-xl">
             <div>
-              <label className="text-xs font-semibold mb-1 block">Data de Adesão</label>
+              <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Data de Adesão</label>
               <Input type="date" value={dataAdesao} onChange={e => setDataAdesao(e.target.value)} />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block">Apólice VG</label>
-              <Input value={apoliceVG} onChange={e => setApoliceVG(e.target.value)} />
+              <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Apólice VG</label>
+              <Input value={apoliceVG} onChange={e => setApoliceVG(e.target.value)} className="font-mono" />
             </div>
             <div>
-              <label className="text-xs font-semibold mb-1 block">Apólice APC</label>
-              <Input value={apoliceAPC} onChange={e => setApoliceAPC(e.target.value)} />
+              <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Apólice APC</label>
+              <Input value={apoliceAPC} onChange={e => setApoliceAPC(e.target.value)} className="font-mono" />
             </div>
           </div>
           <div>
-            <label className="text-xs font-semibold mb-1 block">Lista de Segurados (cole o PDF)</label>
-            <Textarea value={nomes} onChange={e => setNomes(e.target.value)} className="font-mono text-xs min-h-[180px]"
+            <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">
+              Lista de Segurados (cole o conteúdo do PDF)
+            </label>
+            <Textarea value={nomes} onChange={e => setNomes(e.target.value)}
+              className="font-mono text-xs min-h-[200px] bg-slate-50"
               placeholder={"00000000784       ACACIO LESCURA DE CAMARGO\n00000000971       ADRIANO PAZ FERREIRA\n..."} />
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="px-6 py-3 border-t bg-slate-50 shrink-0">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={() => seed.mutate({ companyId, companyIds, nomesBrutos: nomes, apoliceVG, apoliceAPC, dataAdesao })}
-            disabled={seed.isPending || !nomes.trim()}>
-            {seed.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Importando...</> : <><Upload className="h-4 w-4 mr-2" />Importar como Ativos</>}
+            disabled={seed.isPending || !nomes.trim()}
+            className="bg-amber-600 hover:bg-amber-700">
+            {seed.isPending
+              ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Importando...</>
+              : <><Upload className="h-4 w-4 mr-2" />Importar como Ativos</>}
           </Button>
         </DialogFooter>
       </DialogContent>

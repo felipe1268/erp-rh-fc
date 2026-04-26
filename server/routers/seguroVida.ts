@@ -2,9 +2,8 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { seguroVidaCoberturas, seguroVidaImportacoes, employees } from "../../drizzle/schema";
-import { eq, and, sql, desc, inArray, isNull, or } from "drizzle-orm";
-import { resolveCompanyIds, companyFilter } from "../companyHelper";
+import { sql } from "drizzle-orm";
+import { resolveCompanyIds } from "../companyHelper";
 
 // Normaliza nome para comparação: maiúsculo, sem acento, sem espaços extras
 function normalizeName(name: string): string {
@@ -25,18 +24,129 @@ function nameSimilarity(a: string, b: string): number {
   return common / Math.max(na.length, nb.length);
 }
 
+// Extrai lista de segurados de texto bruto (formato do PDF do corretor)
+function parseNomesBrutos(texto: string): Array<{ item: string; nome: string }> {
+  const linhas = texto.split("\n").map(l => l.trim()).filter(Boolean);
+  const segurados: Array<{ item: string; nome: string }> = [];
+  for (const linha of linhas) {
+    const match = linha.match(/^(\d{5,12})\s{2,}([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-Za-záàãâéêíóôõúüçñ\s]+)/);
+    if (match) {
+      segurados.push({ item: match[1].replace(/^0+/, ""), nome: match[2].trim() });
+    } else if (/^[A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ]/.test(linha) && linha.length > 5) {
+      segurados.push({ item: "", nome: linha });
+    }
+  }
+  return segurados;
+}
+
+// Lógica central de cruzamento — reutilizada em importarRelatorio e processarPdfLote
+async function executarCruzamento(
+  db: any,
+  ids: number[],
+  companyId: number,
+  competencia: string,
+  seguradosCorretora: Array<{ item: string; nome: string }>,
+  nomesBrutos: string,
+  apoliceVG: string | undefined,
+  apoliceAPC: string | undefined,
+  importadoPor: string,
+) {
+  const cltAtivos = await db.execute(sql`
+    SELECT id, "nomeCompleto", "cargo", "funcao", "dataAdmissao"
+    FROM employees
+    WHERE "companyId" = ANY(${ids}) AND status = 'Ativo'
+      AND (LOWER("tipoContrato") = 'clt' OR "tipoContrato" IS NULL)
+      AND "deletedAt" IS NULL
+  `) as any[];
+
+  const coberturasAtivas = await db.execute(sql`
+    SELECT id, employee_id, nome_completo, item_segurador, status
+    FROM seguro_vida_coberturas
+    WHERE company_id = ANY(${ids}) AND status IN ('ativo','pendente_inclusao')
+  `) as any[];
+
+  const THRESHOLD = 0.60;
+  const nomesSeguradosNorm = seguradosCorretora.map(s => normalizeName(s.nome));
+
+  const resultado: {
+    status: "ok" | "sem_seguro" | "pagar_indevido" | "novo" | "na_lista_sem_cadastro";
+    nome: string;
+    item: string;
+    employeeId?: number;
+    nomeHR?: string;
+    similaridade?: number;
+    dataAdmissao?: string;
+    coberturaId?: number;
+  }[] = [];
+
+  const idxUsados = new Set<number>();
+
+  for (const emp of (Array.isArray(cltAtivos) ? cltAtivos : []) as any[]) {
+    const nNorm = normalizeName(emp.nomeCompleto);
+    let melhorIdx = -1;
+    let melhorSim = 0;
+    nomesSeguradosNorm.forEach((sn, i) => {
+      const sim = nameSimilarity(nNorm, sn);
+      if (sim > melhorSim) { melhorSim = sim; melhorIdx = i; }
+    });
+
+    const cobAtual = (Array.isArray(coberturasAtivas) ? coberturasAtivas : []).find((c: any) => c.employee_id === emp.id);
+    const dataAdmissao = emp.dataAdmissao ? String(emp.dataAdmissao) : undefined;
+    const isNovo = dataAdmissao && (new Date().getTime() - new Date(dataAdmissao).getTime()) < 45 * 86400000;
+
+    if (melhorSim >= THRESHOLD && melhorIdx >= 0) {
+      idxUsados.add(melhorIdx);
+      resultado.push({ status: "ok", nome: emp.nomeCompleto, item: seguradosCorretora[melhorIdx].item, employeeId: emp.id, nomeHR: emp.nomeCompleto, similaridade: melhorSim, dataAdmissao, coberturaId: cobAtual?.id });
+    } else if (isNovo) {
+      resultado.push({ status: "novo", nome: emp.nomeCompleto, item: "", employeeId: emp.id, nomeHR: emp.nomeCompleto, dataAdmissao, coberturaId: cobAtual?.id });
+    } else {
+      resultado.push({ status: "sem_seguro", nome: emp.nomeCompleto, item: "", employeeId: emp.id, nomeHR: emp.nomeCompleto, dataAdmissao, coberturaId: cobAtual?.id });
+    }
+  }
+
+  seguradosCorretora.forEach((s, i) => {
+    if (idxUsados.has(i)) return;
+    resultado.push({ status: "pagar_indevido", nome: s.nome, item: s.item });
+  });
+
+  const totalOk = resultado.filter(r => r.status === "ok").length;
+  const totalSemSeguro = resultado.filter(r => r.status === "sem_seguro").length;
+  const totalPagarIndevido = resultado.filter(r => r.status === "pagar_indevido").length;
+  const totalNovos = resultado.filter(r => r.status === "novo").length;
+
+  await db.execute(sql`
+    INSERT INTO seguro_vida_importacoes
+      (company_id, competencia, total_segurados, total_ativos, total_ok,
+       total_sem_seguro, total_pagar_indevido, total_novos,
+       json_resultado, relatorio_nomes, importado_por)
+    VALUES
+      (${companyId}, ${competencia},
+       ${seguradosCorretora.length}, ${(Array.isArray(cltAtivos) ? cltAtivos : []).length},
+       ${totalOk}, ${totalSemSeguro}, ${totalPagarIndevido}, ${totalNovos},
+       ${JSON.stringify(resultado)}, ${nomesBrutos.substring(0, 5000)},
+       ${importadoPor})
+  `);
+
+  return {
+    competencia,
+    totalSeguradosCorretora: seguradosCorretora.length,
+    totalAtivosHR: (Array.isArray(cltAtivos) ? cltAtivos : []).length,
+    totalOk,
+    totalSemSeguro,
+    totalPagarIndevido,
+    totalNovos,
+    resultado,
+  };
+}
+
 export const seguroVidaRouter = router({
 
-  // ────────────────────────────────────────────────────────────────
-  // RESUMO — cards do dashboard
-  // ────────────────────────────────────────────────────────────────
   getResumo: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const ids = resolveCompanyIds(input);
 
-      // Coberturas ativas
       const [{ totalAtivos }] = await db.execute(sql`
         SELECT COUNT(*) as "totalAtivos"
         FROM seguro_vida_coberturas
@@ -55,7 +165,6 @@ export const seguroVidaRouter = router({
         WHERE company_id = ANY(${ids}) AND status = 'pendente_cancelamento'
       `) as any;
 
-      // Funcionários CLT ativos sem cobertura
       const cltAtivos = await db.execute(sql`
         SELECT e.id, e."nomeCompleto"
         FROM employees e
@@ -71,7 +180,6 @@ export const seguroVidaRouter = router({
 
       const semSeguro = Array.isArray(cltAtivos) ? cltAtivos.length : 0;
 
-      // Última importação
       const [ultimaImportacao] = await db.execute(sql`
         SELECT competencia, data_importacao, total_segurados, total_sem_seguro, total_pagar_indevido
         FROM seguro_vida_importacoes
@@ -89,9 +197,6 @@ export const seguroVidaRouter = router({
       };
     }),
 
-  // ────────────────────────────────────────────────────────────────
-  // LISTAR todas as coberturas com dados do funcionário
-  // ────────────────────────────────────────────────────────────────
   listarCoberturas: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), status: z.string().optional() }))
     .query(async ({ input }) => {
@@ -114,16 +219,12 @@ export const seguroVidaRouter = router({
       return Array.isArray(coberturas) ? coberturas : [];
     }),
 
-  // ────────────────────────────────────────────────────────────────
-  // LISTAR funcionários CLT ativos + status seguro (visão completa)
-  // ────────────────────────────────────────────────────────────────
   listarFuncionariosComStatus: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
       const ids = resolveCompanyIds(input);
 
-      // Funcionários CLT ativos
       const funcionarios = await db.execute(sql`
         SELECT
           e.id, e."nomeCompleto", e."cargo", e."funcao", e."dataAdmissao",
@@ -142,9 +243,6 @@ export const seguroVidaRouter = router({
       return Array.isArray(funcionarios) ? funcionarios : [];
     }),
 
-  // ────────────────────────────────────────────────────────────────
-  // COBERTURA por funcionário específico (para o Raio-X)
-  // ────────────────────────────────────────────────────────────────
   getCoberturaByEmployee: protectedProcedure
     .input(z.object({ companyId: z.number(), employeeId: z.number() }))
     .query(async ({ input }) => {
@@ -160,9 +258,6 @@ export const seguroVidaRouter = router({
       return cobertura || null;
     }),
 
-  // ────────────────────────────────────────────────────────────────
-  // CADASTRAR / ATUALIZAR cobertura manual
-  // ────────────────────────────────────────────────────────────────
   upsertCobertura: protectedProcedure
     .input(z.object({
       companyId:   z.number(),
@@ -213,9 +308,6 @@ export const seguroVidaRouter = router({
       return { success: true };
     }),
 
-  // ────────────────────────────────────────────────────────────────
-  // CANCELAR cobertura
-  // ────────────────────────────────────────────────────────────────
   cancelarCobertura: protectedProcedure
     .input(z.object({
       companyId: z.number(), coberturaId: z.number(),
@@ -237,9 +329,6 @@ export const seguroVidaRouter = router({
       return { success: true };
     }),
 
-  // ────────────────────────────────────────────────────────────────
-  // IMPORTAR RELATÓRIO DO CORRETOR — cruza nomes e detecta divergências
-  // ────────────────────────────────────────────────────────────────
   importarRelatorio: protectedProcedure
     .input(z.object({
       companyId:     z.number(),
@@ -253,163 +342,68 @@ export const seguroVidaRouter = router({
       const db = (await getDb())!;
       const ids = resolveCompanyIds(input);
 
-      // Parse: extrai nomes do texto colado (linhas com padrão "00000XXXXX  NOME DO FUNCIONARIO")
-      const linhas = input.nomesBrutos.split("\n").map(l => l.trim()).filter(Boolean);
-      const seguradosCorretora: Array<{ item: string; nome: string }> = [];
-
-      for (const linha of linhas) {
-        // Tenta extrair número de item (8-12 dígitos) seguido de nome
-        const match = linha.match(/^(\d{5,12})\s{2,}([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-Za-záàãâéêíóôõúüçñ\s]+)/);
-        if (match) {
-          seguradosCorretora.push({ item: match[1].replace(/^0+/, ""), nome: match[2].trim() });
-        } else if (/^[A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ]/.test(linha) && linha.length > 5) {
-          // Linha só com nome (sem item)
-          seguradosCorretora.push({ item: "", nome: linha });
-        }
-      }
-
+      const seguradosCorretora = parseNomesBrutos(input.nomesBrutos);
       if (seguradosCorretora.length < 5) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Não foram encontrados segurados no texto colado. Verifique o formato e cole novamente.",
-        });
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Não foram encontrados segurados no texto. Verifique o formato e cole novamente." });
       }
 
-      // Busca funcionários CLT ativos
-      const cltAtivos = await db.execute(sql`
-        SELECT id, "nomeCompleto", "cargo", "funcao", "dataAdmissao"
-        FROM employees
-        WHERE "companyId" = ANY(${ids}) AND status = 'Ativo'
-          AND (LOWER("tipoContrato") = 'clt' OR "tipoContrato" IS NULL)
-          AND "deletedAt" IS NULL
-      `) as any[];
-
-      // Busca coberturas atuais ativas no sistema
-      const coberturasAtivas = await db.execute(sql`
-        SELECT id, employee_id, nome_completo, item_segurador, status
-        FROM seguro_vida_coberturas
-        WHERE company_id = ANY(${ids}) AND status IN ('ativo','pendente_inclusao')
-      `) as any[];
-
-      // Cruzamento: nomes do corretor × funcionários ativos
-      const THRESHOLD = 0.60;
-
-      const resultado: {
-        status: "ok" | "sem_seguro" | "pagar_indevido" | "novo" | "na_lista_sem_cadastro";
-        nome: string;
-        item: string;
-        employeeId?: number;
-        nomeHR?: string;
-        similaridade?: number;
-        dataAdmissao?: string;
-        coberturaId?: number;
-      }[] = [];
-
-      const nomesSeguradosNorm = seguradosCorretora.map(s => normalizeName(s.nome));
-      const nomesHRNorm = (Array.isArray(cltAtivos) ? cltAtivos : []).map((e: any) => normalizeName(e.nomeCompleto));
-
-      // 1) Funcionários ativos no HR — procura na lista do corretor
-      for (const emp of (Array.isArray(cltAtivos) ? cltAtivos : []) as any[]) {
-        const nNorm = normalizeName(emp.nomeCompleto);
-        let melhorIdx = -1;
-        let melhorSim = 0;
-        nomesSeguradosNorm.forEach((sn, i) => {
-          const sim = nameSimilarity(nNorm, sn);
-          if (sim > melhorSim) { melhorSim = sim; melhorIdx = i; }
-        });
-
-        const cobAtual = coberturasAtivas.find((c: any) => c.employee_id === emp.id);
-        const dataAdmissao = emp.dataAdmissao ? String(emp.dataAdmissao) : undefined;
-        // Admitido há menos de 45 dias → "novo" (em carência de inclusão)
-        const isNovo = dataAdmissao && (new Date().getTime() - new Date(dataAdmissao).getTime()) < 45 * 86400000;
-
-        if (melhorSim >= THRESHOLD && melhorIdx >= 0) {
-          resultado.push({
-            status: "ok",
-            nome: emp.nomeCompleto,
-            item: seguradosCorretora[melhorIdx].item,
-            employeeId: emp.id,
-            nomeHR: emp.nomeCompleto,
-            similaridade: melhorSim,
-            dataAdmissao,
-            coberturaId: cobAtual?.id,
-          });
-        } else if (isNovo) {
-          resultado.push({
-            status: "novo",
-            nome: emp.nomeCompleto,
-            item: "",
-            employeeId: emp.id,
-            nomeHR: emp.nomeCompleto,
-            dataAdmissao,
-            coberturaId: cobAtual?.id,
-          });
-        } else {
-          resultado.push({
-            status: "sem_seguro",
-            nome: emp.nomeCompleto,
-            item: "",
-            employeeId: emp.id,
-            nomeHR: emp.nomeCompleto,
-            dataAdmissao,
-            coberturaId: cobAtual?.id,
-          });
-        }
-      }
-
-      // 2) Segurados no corretor que NÃO foram vinculados a nenhum funcionário ativo
-      const idxUsados = new Set<number>();
-      resultado.forEach(r => {
-        if (r.status === "ok" && r.item) {
-          const idx = seguradosCorretora.findIndex(s => s.item === r.item);
-          if (idx >= 0) idxUsados.add(idx);
-        }
-      });
-
-      seguradosCorretora.forEach((s, i) => {
-        if (idxUsados.has(i)) return;
-        // Verifica se há funcionário demitido (aparece na lista mas já saiu)
-        resultado.push({
-          status: "pagar_indevido",
-          nome: s.nome,
-          item: s.item,
-        });
-      });
-
-      // Totais
-      const totalOk = resultado.filter(r => r.status === "ok").length;
-      const totalSemSeguro = resultado.filter(r => r.status === "sem_seguro").length;
-      const totalPagarIndevido = resultado.filter(r => r.status === "pagar_indevido").length;
-      const totalNovos = resultado.filter(r => r.status === "novo").length;
-
-      // Salva importação
-      await db.execute(sql`
-        INSERT INTO seguro_vida_importacoes
-          (company_id, competencia, total_segurados, total_ativos, total_ok,
-           total_sem_seguro, total_pagar_indevido, total_novos,
-           json_resultado, relatorio_nomes, importado_por)
-        VALUES
-          (${input.companyId}, ${input.competencia},
-           ${seguradosCorretora.length}, ${(Array.isArray(cltAtivos) ? cltAtivos : []).length},
-           ${totalOk}, ${totalSemSeguro}, ${totalPagarIndevido}, ${totalNovos},
-           ${JSON.stringify(resultado)}, ${input.nomesBrutos.substring(0, 5000)},
-           ${ctx.user.name ?? ""})
-      `);
-
-      return {
-        totalSeguradosCorretora: seguradosCorretora.length,
-        totalAtivosHR: (Array.isArray(cltAtivos) ? cltAtivos : []).length,
-        totalOk,
-        totalSemSeguro,
-        totalPagarIndevido,
-        totalNovos,
-        resultado,
-      };
+      return executarCruzamento(db, ids, input.companyId, input.competencia, seguradosCorretora, input.nomesBrutos, input.apoliceVG, input.apoliceAPC, ctx.user.name ?? "");
     }),
 
-  // ────────────────────────────────────────────────────────────────
-  // HISTÓRICO de importações
-  // ────────────────────────────────────────────────────────────────
+  // ─── NOVO: Processar PDFs em lote (base64) ──────────────────────
+  processarPdfLote: protectedProcedure
+    .input(z.object({
+      companyId:  z.number(),
+      companyIds: z.array(z.number()).optional(),
+      apoliceVG:  z.string().optional(),
+      apoliceAPC: z.string().optional(),
+      arquivos: z.array(z.object({
+        competencia: z.string().regex(/^\d{4}-\d{2}$/),
+        filename:    z.string(),
+        fileBase64:  z.string(),
+      })).min(1).max(24),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const ids = resolveCompanyIds(input);
+      const pdfParse = require("pdf-parse");
+
+      const resultados = [];
+
+      for (const arq of input.arquivos) {
+        try {
+          const buffer = Buffer.from(arq.fileBase64, "base64");
+          const parsed = await pdfParse(buffer);
+          const texto = parsed.text as string;
+
+          const segurados = parseNomesBrutos(texto);
+          if (segurados.length < 2) {
+            resultados.push({
+              competencia: arq.competencia,
+              filename: arq.filename,
+              erro: "Não foram encontrados segurados no PDF. Verifique se o arquivo é o relatório correto.",
+            });
+            continue;
+          }
+
+          const resultado = await executarCruzamento(
+            db, ids, input.companyId, arq.competencia, segurados,
+            texto, input.apoliceVG, input.apoliceAPC, ctx.user.name ?? ""
+          );
+
+          resultados.push({ filename: arq.filename, ...resultado });
+        } catch (err: any) {
+          resultados.push({
+            competencia: arq.competencia,
+            filename: arq.filename,
+            erro: `Erro ao ler PDF: ${err.message}`,
+          });
+        }
+      }
+
+      return { resultados };
+    }),
+
   listarImportacoes: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
@@ -429,9 +423,6 @@ export const seguroVidaRouter = router({
       return Array.isArray(rows) ? rows : [];
     }),
 
-  // ────────────────────────────────────────────────────────────────
-  // DETALHES de uma importação específica
-  // ────────────────────────────────────────────────────────────────
   getImportacao: protectedProcedure
     .input(z.object({ companyId: z.number(), importacaoId: z.number() }))
     .query(async ({ input }) => {
@@ -445,9 +436,6 @@ export const seguroVidaRouter = router({
       return row || null;
     }),
 
-  // ────────────────────────────────────────────────────────────────
-  // SEED INICIAL — carrega lista do corretor como coberturas ativas
-  // ────────────────────────────────────────────────────────────────
   seedFromRelatorio: protectedProcedure
     .input(z.object({
       companyId:   z.number(),
@@ -462,21 +450,9 @@ export const seguroVidaRouter = router({
       const db = (await getDb())!;
       const ids = resolveCompanyIds(input);
 
-      // Parse nomes
-      const linhas = input.nomesBrutos.split("\n").map(l => l.trim()).filter(Boolean);
-      const segurados: Array<{ item: string; nome: string }> = [];
-      for (const linha of linhas) {
-        const match = linha.match(/^(\d{5,12})\s{2,}([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-Za-záàãâéêíóôõúüçñ\s]+)/);
-        if (match) {
-          segurados.push({ item: match[1].replace(/^0+/, ""), nome: match[2].trim() });
-        } else if (/^[A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ]/.test(linha) && linha.length > 5) {
-          segurados.push({ item: "", nome: linha });
-        }
-      }
-
+      const segurados = parseNomesBrutos(input.nomesBrutos);
       if (segurados.length < 2) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum segurado encontrado no texto" });
 
-      // Busca funcionários para tentar fazer match
       const cltAtivos = await db.execute(sql`
         SELECT id, "nomeCompleto" FROM employees
         WHERE "companyId" = ANY(${ids}) AND status = 'Ativo' AND "deletedAt" IS NULL
@@ -484,7 +460,6 @@ export const seguroVidaRouter = router({
 
       let inseridos = 0;
       for (const s of segurados) {
-        // Tenta vincular a funcionário
         let empId: number | null = null;
         let melhorSim = 0;
         for (const emp of (Array.isArray(cltAtivos) ? cltAtivos : []) as any[]) {
@@ -492,7 +467,6 @@ export const seguroVidaRouter = router({
           if (sim > melhorSim) { melhorSim = sim; if (sim >= 0.65) empId = emp.id; }
         }
 
-        // Verifica se já existe
         const [existe] = await db.execute(sql`
           SELECT id FROM seguro_vida_coberturas
           WHERE company_id = ${input.companyId} AND nome_completo = ${s.nome} AND status = 'ativo'
