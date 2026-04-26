@@ -1020,15 +1020,48 @@ export const seguroVidaRouter = router({
       for (const r of resultadoFinal) {
         if ((r.status === "ok" || r.status === "novo") && r.employeeId) {
           const v = r.valores ?? [];
-          const hasInvalidezDoenca = v.length >= 7;
-          const covOffset = hasInvalidezDoenca ? 1 : 0;
-          const morteNatural    = v[0] ?? null;
-          const morteAcidental  = v[1] ?? null;
-          const invAcidente     = v[2] ?? null;
-          const invDoenca       = hasInvalidezDoenca ? (v[3] ?? null) : null;
-          const premioVG        = v[3 + covOffset] ?? null;
-          const premioAPC       = v[4 + covOffset] ?? null;
-          const seguradora      = r.seguradora ?? null;
+
+          // ---------------------------------------------------------------
+          // Mapeamento por heurística de magnitude — independente da ordem
+          // em que o pdf-parse extrai as colunas de cada PDF.
+          //
+          // Problema: diferentes geradores de PDF entregam as colunas em
+          // ordens diferentes:
+          //   JF.pdf → MN | IA | VG | APC | VG+APC | MA  (MA por último)
+          //   FC.pdf → MN | MA | VG | APC | VG+APC | IA  (IA por último)
+          //
+          // Regra: capitais segurados são sempre >> prêmios mensais.
+          // Limiar R$ 500 separa com segurança capitais de prêmios para
+          // todos os planos PME praticados no Brasil.
+          // ---------------------------------------------------------------
+          const parseBR = (s: string) => parseFloat(s.replace(/\./g, '').replace(',', '.'));
+          const CAPITAL_MIN = 500;
+
+          const nums = v.map(s => ({ raw: s, val: parseBR(s) }));
+          const capitals = nums.filter(n => n.val >= CAPITAL_MIN).sort((a, b) => a.val - b.val);
+          const premiums  = nums.filter(n => n.val < CAPITAL_MIN);
+
+          // Remove VG+APC (= soma dos outros prêmios) para não confundir com VG ou APC
+          let premsFiltrados = [...premiums];
+          if (premiums.length >= 3) {
+            const idxSoma = premiums.findIndex((p, i) => {
+              const soma = premiums.filter((_, j) => j !== i).reduce((acc, o) => acc + o.val, 0);
+              return Math.abs(p.val - soma) < 0.02;
+            });
+            if (idxSoma >= 0) premsFiltrados = premiums.filter((_, i) => i !== idxSoma);
+          }
+
+          // Capitais: menor = MN, maior = MA, meio = IA, 4º = IFD
+          const morteNatural   = capitals[0]?.raw ?? null;
+          const morteAcidental = capitals.length >= 2 ? capitals[capitals.length - 1].raw : null;
+          const invAcidente    = capitals.length >= 3 ? capitals[1].raw : null;
+          const invDoenca      = capitals.length >= 4 ? capitals[2].raw : null;
+          // Prêmios: VG = primeiro, APC = segundo
+          const premioVG  = premsFiltrados[0]?.raw ?? null;
+          const premioAPC = premsFiltrados[1]?.raw ?? null;
+          const seguradora = r.seguradora ?? null;
+
+          console.log(`[SeguroVida] confirmar ${r.nome}: v=${JSON.stringify(v)} → MN=${morteNatural} MA=${morteAcidental} IA=${invAcidente} IFD=${invDoenca} VG=${premioVG} APC=${premioAPC}`);
 
           if (r.coberturaId) {
             // Já tem cobertura — atualiza valores se vieram do PDF
