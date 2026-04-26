@@ -188,7 +188,8 @@ function extrairNomesP6(linhas: string[]): SeguradoParsed[] {
   const reNome = /^([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ]{1,}(?:\s+[A-Za-záàãâéêíóôõúüçñA-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ]{2,}){1,})/;
   const resultado: SeguradoParsed[] = [];
   let idx = 1;
-  for (const linha of linhas) {
+  for (let i = 0; i < linhas.length; i++) {
+    const linha = linhas[i];
     const match = linha.match(reNome);
     if (!match) continue;
     const nomeRaw = match[1].trim();
@@ -200,23 +201,47 @@ function extrairNomesP6(linhas: string[]): SeguradoParsed[] {
     if (palavras.some(w => P6_BLACKLIST.has(norma(w)))) continue;
     // Exige ao menos uma palavra com 4+ chars (descarta "DE E A" isolados)
     if (!palavras.some(w => w.length >= 4)) continue;
-    const valores = [...linha.matchAll(/\d[\d.]*,\d+/g)].map(m => m[0]).slice(0, 7);
+    const valores = coletarValoresAdjacentes(linhas, i, linha);
     resultado.push({ item: String(idx++), nome: nomeRaw, valores });
   }
   return resultado;
+}
+
+// Extrai números monetários BR (1.234,56) de um texto — pode ser linha única ou concatenação de linhas
+function extrairValores(texto: string): string[] {
+  return [...texto.matchAll(/\d[\d.]*,\d+/g)].map(m => m[0]);
+}
+
+// Coleta até 7 valores monetários começando na linha do nome e, se insuficientes,
+// continua nas próximas linhas até encontrar >= 4 valores ou esgotar 3 linhas extras.
+function coletarValoresAdjacentes(linhas: string[], idxLinha: number, textoNomeLinha: string): string[] {
+  let valores = extrairValores(textoNomeLinha);
+  // Se já temos >= 4 valores na mesma linha, está bom
+  if (valores.length >= 4) return valores.slice(0, 7);
+  // Caso contrário, funde com até 3 linhas seguintes que contenham números mas não nomes
+  for (let d = 1; d <= 3 && idxLinha + d < linhas.length; d++) {
+    const proxLinha = linhas[idxLinha + d];
+    // Para se a próxima linha parece um novo nome de pessoa
+    if (/^[A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-Za-záàãâéêíóôõúüçñ\s]{10,}$/.test(proxLinha.trim())) break;
+    const extras = extrairValores(proxLinha);
+    if (extras.length > 0) valores = [...valores, ...extras];
+    if (valores.length >= 4) break;
+  }
+  return valores.slice(0, 7);
 }
 
 function parsarLinhasSegurados(linhas: string[]): { segurados: SeguradoParsed[]; padrao: string } {
   // Tenta P1-P5: padrões que exigem número de item na frente
   for (const { id, re } of PARSE_PATTERNS) {
     const resultado: SeguradoParsed[] = [];
-    for (const linha of linhas) {
+    for (let i = 0; i < linhas.length; i++) {
+      const linha = linhas[i];
       const match = linha.match(re);
       if (!match) continue;
       const nomeRaw = match[2].replace(/\s+\d[\d.,\s]*$/, "").trim();
       const palavras = nomeRaw.split(/\s+/).filter(Boolean);
       if (palavras.length < 2 || /\d/.test(nomeRaw)) continue;
-      const valores = [...linha.matchAll(/\d[\d.]*,\d+/g)].map(m => m[0]).slice(0, 7);
+      const valores = coletarValoresAdjacentes(linhas, i, linha);
       resultado.push({ item: match[1].replace(/^0+/, "") || "0", nome: nomeRaw, valores });
     }
     if (resultado.length >= 2) return { segurados: resultado, padrao: id };
@@ -229,7 +254,9 @@ function parsarLinhasSegurados(linhas: string[]): { segurados: SeguradoParsed[];
 
 function parseNomesBrutos(texto: string): SeguradoParsed[] {
   const linhas = texto.split("\n").map(l => l.trim()).filter(Boolean);
-  const { segurados } = parsarLinhasSegurados(linhas);
+  const { segurados, padrao } = parsarLinhasSegurados(linhas);
+  const comValores = segurados.filter(s => s.valores.length > 0).length;
+  console.log(`[SeguroVida] parseNomesBrutos: ${segurados.length} segurado(s), padrão=${padrao}, com valores=${comValores}/${segurados.length}`);
   return segurados;
 }
 
