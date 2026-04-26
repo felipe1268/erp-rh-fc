@@ -22,10 +22,11 @@ const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Ag
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const STATUS_LABELS: Record<string, { label: string; color: string; Icon: any }> = {
-  ativo:                  { label: "Ativo",               color: "bg-green-100 text-green-800",  Icon: CheckCircle2 },
-  pendente_inclusao:      { label: "Pendente Inclusão",   color: "bg-blue-100 text-blue-800",    Icon: Clock },
-  pendente_cancelamento:  { label: "Pend. Cancelamento",  color: "bg-orange-100 text-orange-800",Icon: AlertTriangle },
-  cancelado:              { label: "Cancelado",            color: "bg-slate-100 text-slate-600",  Icon: Ban },
+  ativo:                  { label: "Ativo",               color: "bg-green-100 text-green-800",   Icon: CheckCircle2 },
+  pendente_inclusao:      { label: "Pendente Inclusão",   color: "bg-blue-100 text-blue-800",     Icon: Clock },
+  pendente_cancelamento:  { label: "Pend. Cancelamento",  color: "bg-orange-100 text-orange-800", Icon: AlertTriangle },
+  cancelado:              { label: "Cancelado",            color: "bg-slate-100 text-slate-600",   Icon: Ban },
+  sem_cobertura:          { label: "Sem Cobertura",        color: "bg-red-100 text-red-800",       Icon: ShieldAlert },
 };
 
 const RESULT_STATUS: Record<string, { label: string; color: string; bg: string; Icon: any; desc: string }> = {
@@ -628,7 +629,7 @@ export default function SeguroVida() {
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
 
-  const coberturasQ = trpc.seguroVida.listarCoberturas.useQuery(
+  const funcionariosQ = trpc.seguroVida.listarFuncionariosComStatus.useQuery(
     { companyId, companyIds },
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
@@ -639,38 +640,44 @@ export default function SeguroVida() {
   );
 
   const cancelar = trpc.seguroVida.cancelarCobertura.useMutation({
-    onSuccess: () => { toast.success("Cobertura cancelada"); utils.seguroVida.listarCoberturas.invalidate(); utils.seguroVida.getResumo.invalidate(); },
+    onSuccess: () => { toast.success("Cobertura cancelada"); utils.seguroVida.listarFuncionariosComStatus.invalidate(); utils.seguroVida.getResumo.invalidate(); },
     onError: e => toast.error(e.message),
   });
 
   const resumo = resumoQ.data;
-  const coberturas = coberturasQ.data ?? [];
+  const funcionarios = funcionariosQ.data ?? [];
+
+  // Mapeia cada funcionário para um status de seguro unificado
+  const funcionariosNorm = useMemo(() => funcionarios.map((f: any) => ({
+    ...f,
+    statusSeguro: f.seguro_status ?? "sem_cobertura",
+  })), [funcionarios]);
 
   const filtradas = useMemo(() => {
-    let lista = coberturas;
-    if (filtroStatus !== "todos") lista = lista.filter((c: any) => c.status === filtroStatus);
+    let lista = funcionariosNorm;
+    if (filtroStatus !== "todos") lista = lista.filter((f: any) => f.statusSeguro === filtroStatus);
     if (busca.trim()) {
       const b = removeAccents(busca.toLowerCase());
-      lista = lista.filter((c: any) =>
-        removeAccents((c.nome_completo ?? "").toLowerCase()).includes(b) ||
-        (c.cargo ?? "").toLowerCase().includes(b) ||
-        (c.item_segurador ?? "").includes(b)
+      lista = lista.filter((f: any) =>
+        removeAccents((f.nomeCompleto ?? "").toLowerCase()).includes(b) ||
+        (f.cargo ?? "").toLowerCase().includes(b) ||
+        (f.item_segurador ?? "").includes(b)
       );
     }
     return lista;
-  }, [coberturas, filtroStatus, busca]);
+  }, [funcionariosNorm, filtroStatus, busca]);
 
   const invalidate = () => {
-    utils.seguroVida.listarCoberturas.invalidate();
+    utils.seguroVida.listarFuncionariosComStatus.invalidate();
     utils.seguroVida.getResumo.invalidate();
     utils.seguroVida.listarImportacoes.invalidate();
   };
 
   // ── Impressão ──
   const handlePrint = () => {
-    const linhas = filtradas.map((c: any) => {
-      const s = STATUS_LABELS[c.status]?.label ?? c.status;
-      return `<tr><td>${c.nome_completo ?? "—"}</td><td>${c.cargo ?? "—"}</td><td>${s}</td><td>${c.item_segurador ?? "—"}</td><td>${fmtDate(c.data_adesao)}</td><td>${c.apolice_vg ?? "—"}</td></tr>`;
+    const linhas = filtradas.map((f: any) => {
+      const s = STATUS_LABELS[f.statusSeguro]?.label ?? f.statusSeguro;
+      return `<tr><td>${f.nomeCompleto ?? "—"}</td><td>${f.cargo ?? "—"}</td><td>${s}</td><td>${f.item_segurador ?? "—"}</td><td>${fmtDate(f.data_adesao)}</td><td>${f.apolice_vg ?? "—"}</td></tr>`;
     }).join("");
     const w = window.open("", "_blank");
     if (!w) return;
@@ -765,58 +772,63 @@ export default function SeguroVida() {
                 <Input className="pl-8 w-64" placeholder="Buscar por nome, cargo ou item..." value={busca} onChange={e => setBusca(e.target.value)} />
               </div>
               <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-                <SelectTrigger className="w-52">
+                <SelectTrigger className="w-56">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todos">Todos os status ({coberturas.length})</SelectItem>
-                  <SelectItem value="ativo">✅ Ativos</SelectItem>
-                  <SelectItem value="pendente_inclusao">🔵 Pendente Inclusão</SelectItem>
-                  <SelectItem value="pendente_cancelamento">🟡 Pendente Cancelamento</SelectItem>
-                  <SelectItem value="cancelado">⚫ Cancelados</SelectItem>
+                  <SelectItem value="todos">Todos ({funcionariosNorm.length})</SelectItem>
+                  <SelectItem value="sem_cobertura">🔴 Sem Cobertura ({funcionariosNorm.filter((f:any)=>f.statusSeguro==="sem_cobertura").length})</SelectItem>
+                  <SelectItem value="ativo">✅ Segurado Ativo ({funcionariosNorm.filter((f:any)=>f.statusSeguro==="ativo").length})</SelectItem>
+                  <SelectItem value="pendente_inclusao">🔵 Pendente Inclusão ({funcionariosNorm.filter((f:any)=>f.statusSeguro==="pendente_inclusao").length})</SelectItem>
+                  <SelectItem value="pendente_cancelamento">🟡 Pend. Cancelamento ({funcionariosNorm.filter((f:any)=>f.statusSeguro==="pendente_cancelamento").length})</SelectItem>
+                  <SelectItem value="cancelado">⚫ Cancelado ({funcionariosNorm.filter((f:any)=>f.statusSeguro==="cancelado").length})</SelectItem>
                 </SelectContent>
               </Select>
-              <span className="text-xs text-muted-foreground">{filtradas.length} de {coberturas.length} registros</span>
+              <span className="text-xs text-muted-foreground">{filtradas.length} de {funcionariosNorm.length} funcionários</span>
             </div>
 
-            {/* Tabela */}
+            {/* Tabela de TODOS os funcionários com status de seguro */}
             <div className="border rounded-lg overflow-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 sticky top-0 z-10">
                   <tr>
                     <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Nome</th>
                     <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Cargo</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Status</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Item Segurador</th>
+                    <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Tipo</th>
+                    <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Status Seguro</th>
+                    <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Item</th>
                     <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Apólice VG</th>
                     <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Data Adesão</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Data Cancel.</th>
                     <th className="px-3 py-2.5 text-xs"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {coberturasQ.isLoading ? (
+                  {funcionariosQ.isLoading ? (
                     <tr><td colSpan={8} className="text-center py-10 text-muted-foreground text-sm">Carregando...</td></tr>
                   ) : filtradas.length === 0 ? (
                     <tr><td colSpan={8} className="text-center py-10 text-muted-foreground text-sm">
-                      {coberturas.length === 0
-                        ? "Nenhuma cobertura cadastrada. Use o botão 'Carga Inicial' para importar a lista do corretor."
+                      {funcionariosNorm.length === 0
+                        ? "Nenhum funcionário CLT ativo encontrado. Cadastre funcionários no módulo de Colaboradores."
                         : "Nenhum resultado para os filtros aplicados."}
                     </td></tr>
-                  ) : filtradas.map((c: any) => (
-                    <tr key={c.id} className={cn("hover:bg-slate-50 transition-colors",
-                      c.status === "pendente_cancelamento" ? "bg-orange-50/50" : c.status === "pendente_inclusao" ? "bg-blue-50/50" : "")}>
-                      <td className="px-3 py-2.5 font-medium">{c.nome_completo}</td>
-                      <td className="px-3 py-2.5 text-slate-500 text-xs">{c.cargo || "—"}</td>
-                      <td className="px-3 py-2.5"><StatusBadge status={c.status} /></td>
-                      <td className="px-3 py-2.5 font-mono text-xs text-slate-500">{c.item_segurador || "—"}</td>
-                      <td className="px-3 py-2.5 text-xs text-slate-500">{c.apolice_vg || "—"}</td>
-                      <td className="px-3 py-2.5 text-xs text-slate-500">{fmtDate(c.data_adesao)}</td>
-                      <td className="px-3 py-2.5 text-xs text-slate-500">{fmtDate(c.data_cancelamento)}</td>
+                  ) : filtradas.map((f: any) => (
+                    <tr key={f.id} className={cn("hover:bg-slate-50/80 transition-colors",
+                      f.statusSeguro === "sem_cobertura" ? "bg-red-50/40" :
+                      f.statusSeguro === "pendente_cancelamento" ? "bg-orange-50/40" :
+                      f.statusSeguro === "pendente_inclusao" ? "bg-blue-50/40" : "")}>
+                      <td className="px-3 py-2.5 font-medium">{f.nomeCompleto}</td>
+                      <td className="px-3 py-2.5 text-slate-500 text-xs">{f.cargo || "—"}</td>
+                      <td className="px-3 py-2.5 text-xs">
+                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">{f.tipoContrato ?? "CLT"}</span>
+                      </td>
+                      <td className="px-3 py-2.5"><StatusBadge status={f.statusSeguro} /></td>
+                      <td className="px-3 py-2.5 font-mono text-xs text-slate-500">{f.item_segurador || "—"}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500">{f.apolice_vg || "—"}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500">{fmtDate(f.data_adesao)}</td>
                       <td className="px-3 py-2.5">
-                        {isAdmin && c.status !== "cancelado" && (
+                        {isAdmin && f.cobertura_id && f.seguro_status !== "cancelado" && (
                           <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => { if (confirm(`Cancelar cobertura de ${c.nome_completo}?`)) cancelar.mutate({ companyId, coberturaId: c.id }); }}>
+                            onClick={() => { if (confirm(`Cancelar cobertura de ${f.nomeCompleto}?`)) cancelar.mutate({ companyId, coberturaId: f.cobertura_id }); }}>
                             <Ban className="h-3.5 w-3.5 mr-1" />Cancelar
                           </Button>
                         )}

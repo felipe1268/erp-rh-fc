@@ -8905,4 +8905,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-26 22:30:00",
   },
+  {
+    version: 1297,
+    titulo: "Seguro de Vida: cruzamento real com TODOS os funcionários ativos + correção do filtro CLT",
+    descricao: "Corrigidos dois problemas críticos: (1) O filtro de funcionários CLT nas queries de cruzamento usava 'tipoContrato IS NULL' e 'status = Ativo' — atualizado para COALESCE(tipoContrato, CLT) NOT IN ('PJ','Socio') e status IN ('Ativo','Ferias'), seguindo o padrão do motor de folha. (2) A aba 'Coberturas Ativas' agora exibe TODOS os funcionários ativos (não CLT) com seu status de seguro individual, em vez de mostrar apenas quem já tem cobertura cadastrada. Novo status 'Sem Cobertura' (vermelho) para funcionários sem registro de seguro. Filtro dropdown atualizado com contadores por status. Campo 'Tipo' adicionado na tabela mostrando o tipo de contrato de cada funcionário.",
+    tipo: "correcao",
+    modulos: "Seguro de Vida, RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-26 23:00:00",
+  },
 ];

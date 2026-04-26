@@ -117,8 +117,9 @@ async function executarCruzamento(
   const cltAtivos = await db.execute(sql`
     SELECT id, "nomeCompleto", "cargo", "funcao", "dataAdmissao"
     FROM employees
-    WHERE "companyId" ${inIds(ids)} AND status = 'Ativo'
-      AND (LOWER("tipoContrato") = 'clt' OR "tipoContrato" IS NULL)
+    WHERE "companyId" ${inIds(ids)}
+      AND status IN ('Ativo','Ferias')
+      AND COALESCE("tipoContrato",'CLT') NOT IN ('PJ','Socio')
       AND "deletedAt" IS NULL
   `) as any[];
 
@@ -232,8 +233,8 @@ export const seguroVidaRouter = router({
         SELECT e.id, e."nomeCompleto"
         FROM employees e
         WHERE e."companyId" ${inIds(ids)}
-          AND e.status = 'Ativo'
-          AND (e."tipoContrato" = 'CLT' OR e."tipoContrato" IS NULL)
+          AND e.status IN ('Ativo','Ferias')
+          AND COALESCE(e."tipoContrato",'CLT') NOT IN ('PJ','Socio')
           AND e."deletedAt" IS NULL
           AND NOT EXISTS (
             SELECT 1 FROM seguro_vida_coberturas s
@@ -297,8 +298,8 @@ export const seguroVidaRouter = router({
         FROM employees e
         LEFT JOIN seguro_vida_coberturas s ON s.employee_id = e.id AND s.status IN ('ativo','pendente_inclusao','pendente_cancelamento')
         WHERE e."companyId" ${inIds(ids)}
-          AND e.status = 'Ativo'
-          AND (e."tipoContrato" = 'CLT' OR e."tipoContrato" IS NULL)
+          AND e.status IN ('Ativo','Ferias')
+          AND COALESCE(e."tipoContrato",'CLT') NOT IN ('PJ','Socio')
           AND e."deletedAt" IS NULL
         ORDER BY e."nomeCompleto"
       `) as any;
