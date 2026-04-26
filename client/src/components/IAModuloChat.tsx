@@ -113,6 +113,7 @@ export default function IAModuloChat({
   projetoId?: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [pendingImages, setPendingImages] = useState<ImageData[]>([]);
@@ -271,16 +272,27 @@ export default function IAModuloChat({
     setShowQuick(true);
   };
 
+  if (dismissed) return null;
+
   if (!open) {
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className={`fixed bottom-6 right-6 z-50 ${config.bg} text-white rounded-full p-3.5 shadow-lg hover:shadow-xl transition-all hover:scale-105 group`}
-        title={`Consultar ${config.label}`}
-      >
-        <Sparkles className="h-5 w-5" />
-        <span className="absolute -top-1 -right-1 h-3 w-3 bg-green-400 rounded-full border-2 border-white animate-pulse" />
-      </button>
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-1.5">
+        <button
+          onClick={() => setOpen(true)}
+          className={`relative ${config.bg} text-white rounded-full p-3.5 shadow-lg hover:shadow-xl transition-all hover:scale-105`}
+          title={`Consultar ${config.label}`}
+        >
+          <Sparkles className="h-5 w-5" />
+          <span className="absolute -top-1 -right-1 h-3 w-3 bg-green-400 rounded-full border-2 border-white animate-pulse" />
+        </button>
+        <button
+          onClick={() => setDismissed(true)}
+          className="h-6 w-6 flex items-center justify-center rounded-full bg-slate-500/80 hover:bg-slate-700 text-white shadow transition-all"
+          title="Ocultar assistente"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      </div>
     );
   }
 
