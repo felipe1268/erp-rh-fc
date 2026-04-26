@@ -53,6 +53,16 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ─── helpers de valor monetário (formato BR "10.000,00") ─────────────────────
+function parseBrMoney(s: string | null | undefined): number {
+  if (!s) return 0;
+  return parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+}
+function fmtBrMoney(n: number): string {
+  if (n === 0) return "—";
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 // ─── Painel de detalhe de um mês (usado no layout dois painéis) ───────────────
 function ResultadoMesDetalhe({ res }: { res: any }) {
   const [filtro, setFiltro] = useState("divergencias");
@@ -824,6 +834,19 @@ export default function SeguroVida() {
     return lista;
   }, [funcionariosNorm, filtroStatus, filtroTipo, busca]);
 
+  const totais = useMemo(() => {
+    const soma = (key: string) => filtradas.reduce((acc: number, f: any) => acc + parseBrMoney(f[key]), 0);
+    return {
+      morte_natural:     soma("morte_natural"),
+      morte_acidental:   soma("morte_acidental"),
+      invalidez_acidente:soma("invalidez_acidente"),
+      invalidez_doenca:  soma("invalidez_doenca"),
+      premio_vg:         soma("premio_vg"),
+      premio_apc:        soma("premio_apc"),
+      comValores:        filtradas.filter((f: any) => f.morte_natural || f.premio_vg).length,
+    };
+  }, [filtradas]);
+
   const invalidate = () => {
     utils.seguroVida.listarFuncionariosComStatus.invalidate();
     utils.seguroVida.getResumo.invalidate();
@@ -1193,6 +1216,37 @@ export default function SeguroVida() {
                     );
                   })}
                 </tbody>
+                {totais.comValores > 0 && (
+                  <tfoot className="sticky bottom-0 z-10">
+                    <tr className="border-t-2 border-slate-300 bg-gradient-to-r from-slate-100 to-slate-50">
+                      {isAdmin && <td className="px-3 py-2.5" />}
+                      <td colSpan={4} className="px-3 py-2.5 border-r">
+                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                          TOTAL ({totais.comValores} com valores)
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-bold text-blue-700 text-xs">
+                        {fmtBrMoney(totais.morte_natural)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-bold text-blue-700 text-xs">
+                        {fmtBrMoney(totais.morte_acidental)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-bold text-blue-700 text-xs">
+                        {fmtBrMoney(totais.invalidez_acidente)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-bold text-blue-600 text-xs border-r">
+                        {fmtBrMoney(totais.invalidez_doenca)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-bold text-emerald-700 text-xs">
+                        {fmtBrMoney(totais.premio_vg)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-bold text-emerald-700 text-xs border-r">
+                        {fmtBrMoney(totais.premio_apc)}
+                      </td>
+                      <td className="px-3 py-2.5" />
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
               );
