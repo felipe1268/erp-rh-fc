@@ -109,16 +109,24 @@ function ResultadoMesDetalhe({ res }: { res: any }) {
           }
           {res.filename && <p className="text-[11px] text-slate-400 truncate max-w-xs">{res.filename}</p>}
         </div>
-        {/* Estatísticas */}
+        {/* Estatísticas — clicáveis como filtros */}
         <div className="grid grid-cols-5 gap-3">
           {[
-            { label: "Na lista", val: res.totalSeguradosCorretora, cls: "text-slate-700", bg: "bg-slate-50 border-slate-200" },
-            { label: "Funcionários CLT", val: res.totalAtivosHR, cls: "text-blue-700", bg: "bg-blue-50 border-blue-100" },
-            { label: "✅ OK", val: res.totalOk, cls: "text-green-700", bg: "bg-green-50 border-green-100" },
-            { label: "🔴 Sem seguro", val: res.totalSemSeguro, cls: "text-red-700", bg: "bg-red-50 border-red-100" },
-            { label: "🟡 Indevido", val: res.totalPagarIndevido, cls: "text-orange-700", bg: "bg-orange-50 border-orange-100" },
+            { label: "Na lista",          val: res.totalSeguradosCorretora, filtroKey: "todos",         cls: "text-slate-700", bg: "bg-slate-50 border-slate-200",   ring: "ring-slate-400" },
+            { label: "Funcionários CLT",  val: res.totalAtivosHR,           filtroKey: null,            cls: "text-blue-700",  bg: "bg-blue-50 border-blue-100",     ring: "" },
+            { label: "✅ OK",             val: res.totalOk,                 filtroKey: "ok",            cls: "text-green-700", bg: "bg-green-50 border-green-100",   ring: "ring-green-500" },
+            { label: "🔴 Sem seguro",     val: res.totalSemSeguro,          filtroKey: "sem_seguro",    cls: "text-red-700",   bg: "bg-red-50 border-red-100",       ring: "ring-red-500" },
+            { label: "🟡 Indevido",       val: res.totalPagarIndevido,      filtroKey: "pagar_indevido",cls: "text-orange-700",bg: "bg-orange-50 border-orange-100", ring: "ring-orange-400" },
           ].map((c, i) => (
-            <div key={i} className={cn("text-center p-3 rounded-xl border", c.bg)}>
+            <div
+              key={i}
+              onClick={() => c.filtroKey && setFiltro(c.filtroKey)}
+              className={cn(
+                "text-center p-3 rounded-xl border transition-all",
+                c.bg,
+                c.filtroKey ? "cursor-pointer hover:shadow-md hover:scale-[1.03]" : "cursor-default",
+                c.filtroKey && filtro === c.filtroKey ? `ring-2 ${c.ring} shadow-sm` : "",
+              )}>
               <p className={cn("text-2xl font-bold", c.cls)}>{c.val ?? "—"}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">{c.label}</p>
             </div>
@@ -129,16 +137,16 @@ function ResultadoMesDetalhe({ res }: { res: any }) {
       {/* Filtros */}
       <div className="px-6 py-2.5 border-b shrink-0 flex gap-1.5 flex-wrap bg-slate-50">
         {[
-          { key: "divergencias", label: "Só divergências" },
-          { key: "todos", label: "Todos" },
-          { key: "sem_seguro", label: "Sem seguro" },
-          { key: "pagar_indevido", label: "Indevido" },
-          { key: "ok", label: "OK" },
-          { key: "novo", label: "Recém-admitido" },
+          { key: "divergencias",   label: "Só divergências", activeClass: "bg-slate-700 text-white border-slate-700" },
+          { key: "todos",          label: "Todos",            activeClass: "bg-slate-500 text-white border-slate-500" },
+          { key: "sem_seguro",     label: "Sem seguro",       activeClass: "bg-red-600 text-white border-red-600" },
+          { key: "pagar_indevido", label: "Indevido",         activeClass: "bg-orange-500 text-white border-orange-500" },
+          { key: "ok",             label: "OK",               activeClass: "bg-green-600 text-white border-green-600" },
+          { key: "novo",           label: "Recém-admitido",   activeClass: "bg-blue-600 text-white border-blue-600" },
         ].map(op => (
           <button key={op.key} onClick={() => setFiltro(op.key)}
             className={cn("text-[11px] px-3 py-1 rounded-full border font-medium transition-colors",
-              filtro === op.key ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 hover:bg-slate-100")}>
+              filtro === op.key ? op.activeClass : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100")}>
             {op.label} ({countOf(op.key)})
           </button>
         ))}
