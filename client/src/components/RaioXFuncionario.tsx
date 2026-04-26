@@ -179,6 +179,11 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
     onSuccess: () => terminationChecklistQ.refetch(),
   });
 
+  const coberturaSeguroQ = trpc.seguroVida.getCoberturaByEmployee.useQuery(
+    { companyId: selectedCompany?.id || 0, employeeId: employeeId! },
+    { enabled: !!employeeId && open && !!selectedCompany?.id }
+  );
+
   // Estado do lightbox da foto do colaborador (declarado antes do useEffect
   // de ESC para evitar TDZ ao avaliar o array de dependências).
   const [fotoAmpliada, setFotoAmpliada] = useState(false);
@@ -261,6 +266,27 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const emprestimosAlmox = (raioX as any)?.emprestimosAlmox || [];
   const descontosAlmox = (raioX as any)?.descontosAlmox || [];
   const insumosAlmox = (raioX as any)?.insumosAlmox || [];
+  const coberturaSeguro = coberturaSeguroQ.data as any | null;
+
+  const fmtCapitalSV = (v: string | null | undefined): string => {
+    if (!v) return "-";
+    const n = parseBRNumber(v);
+    if (!n) return "-";
+    return `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+  const fmtPremioSV = (v: string | null | undefined): string => {
+    if (!v) return "-";
+    const n = parseBRNumber(v);
+    if (!n) return "-";
+    return `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 5, maximumFractionDigits: 5 })}`;
+  };
+  const svStatusLabel = (status: string | undefined | null) => {
+    if (status === "ativo") return { label: "Segurado Ativo", cls: "bg-green-100 text-green-800" };
+    if (status === "pendente_inclusao") return { label: "Pend. Inclusão", cls: "bg-yellow-100 text-yellow-800" };
+    if (status === "pendente_cancelamento") return { label: "Pend. Cancelamento", cls: "bg-orange-100 text-orange-800" };
+    if (status === "cancelado") return { label: "Sem Cobertura", cls: "bg-red-100 text-red-800" };
+    return { label: "Sem Registro", cls: "bg-gray-100 text-gray-600" };
+  };
 
   const asosVencidos = asos.filter((a: any) => a.status === "VENCIDO").length;
   const asosAVencer = asos.filter((a: any) => a.status?.includes("DIAS PARA VENCER")).length;
@@ -506,6 +532,42 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
         html += `<tr><td>${formatDate(ev.data)}</td><td><span class="badge badge-blue">${ev.tipo}</span></td><td>${ev.descricao}</td></tr>`;
       });
       html += `</tbody></table></div>`;
+    }
+
+    // SEGURO DE VIDA
+    {
+      const sv = coberturaSeguro as any;
+      const svLabelPrint = (s: string | undefined | null) => s === "ativo" ? "Segurado Ativo" : s === "pendente_inclusao" ? "Pend. Inclusão" : s === "pendente_cancelamento" ? "Pend. Cancelamento" : s === "cancelado" ? "Sem Cobertura" : "Sem Registro";
+      const svBadgePrint = (s: string | undefined | null) => s === "ativo" ? "badge-green" : s === "pendente_inclusao" ? "badge-yellow" : s === "pendente_cancelamento" ? "badge-orange" : "badge-red";
+      const fmtCapPrint = (v: string | null | undefined) => { if (!v) return "-"; const n = parseBRNumber(v); if (!n) return "-"; return `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
+      const fmtPremPrint = (v: string | null | undefined) => { if (!v) return "-"; const n = parseBRNumber(v); if (!n) return "-"; return `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 5, maximumFractionDigits: 5 })}`; };
+      html += `<div class="section"><div class="section-title">\u{1F6E1} Seguro de Vida</div>`;
+      if (!sv) {
+        html += `<p style="color:#6b7280;font-size:9px">Nenhum registro de seguro de vida encontrado.</p>`;
+      } else {
+        html += `<div class="info-grid">`;
+        html += `<div class="info-item"><strong>Status:</strong> <span class="badge ${svBadgePrint(sv.status)}">${svLabelPrint(sv.status)}</span></div>`;
+        html += `<div class="info-item"><strong>Seguradora:</strong> ${sv.seguradora || "-"}</div>`;
+        html += `<div class="info-item"><strong>Item:</strong> ${sv.item_segurador || "-"}</div>`;
+        html += `<div class="info-item"><strong>Apólice VG:</strong> ${sv.apolice_vg || "-"}</div>`;
+        html += `<div class="info-item"><strong>Apólice APC:</strong> ${sv.apolice_apc || "-"}</div>`;
+        html += `<div class="info-item"><strong>Adesão:</strong> ${formatDate(sv.data_adesao)}</div>`;
+        if (sv.data_vencimento_apolice) html += `<div class="info-item"><strong>Venc. Apólice:</strong> ${formatDate(sv.data_vencimento_apolice)}</div>`;
+        if (sv.data_cancelamento) html += `<div class="info-item"><strong>Cancelamento:</strong> ${formatDate(sv.data_cancelamento)}</div>`;
+        html += `</div>`;
+        html += `<table><thead><tr><th>Cobertura</th><th style="text-align:right">Capital Segurado</th></tr></thead><tbody>`;
+        if (sv.morte_natural) html += `<tr><td>Morte Natural</td><td style="text-align:right;font-weight:600">${fmtCapPrint(sv.morte_natural)}</td></tr>`;
+        if (sv.morte_acidental) html += `<tr><td>Morte Acidental</td><td style="text-align:right;font-weight:600">${fmtCapPrint(sv.morte_acidental)}</td></tr>`;
+        if (sv.invalidez_acidente) html += `<tr><td>Invalidez por Acidente</td><td style="text-align:right;font-weight:600">${fmtCapPrint(sv.invalidez_acidente)}</td></tr>`;
+        if (sv.invalidez_doenca) html += `<tr><td>Invalidez por Doença</td><td style="text-align:right;font-weight:600">${fmtCapPrint(sv.invalidez_doenca)}</td></tr>`;
+        html += `</tbody></table>`;
+        html += `<table style="margin-top:4px"><thead><tr><th>Prêmio</th><th style="text-align:right">Valor</th></tr></thead><tbody>`;
+        if (sv.premio_vg) html += `<tr><td>Prêmio VG</td><td style="text-align:right">${fmtPremPrint(sv.premio_vg)}</td></tr>`;
+        if (sv.premio_apc) html += `<tr><td>Prêmio APC</td><td style="text-align:right">${fmtPremPrint(sv.premio_apc)}</td></tr>`;
+        html += `</tbody></table>`;
+        if (sv.observacoes) html += `<div class="info-item" style="margin-top:4px"><strong>Obs.:</strong> ${sv.observacoes}</div>`;
+      }
+      html += `</div>`;
     }
 
     // FOOTER
@@ -1004,6 +1066,13 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       { value: "insumos_alm", label: "Insumos", icon: ShoppingCart, count: insumosAlmox.length },
                     ],
                   },
+                  {
+                    label: "Benefícios",
+                    color: "teal",
+                    tabs: [
+                      { value: "seguro_vida", label: "Seguro de Vida", icon: Shield, count: coberturaSeguro ? 1 : 0 },
+                    ],
+                  },
                 ];
 
                 const activeColorMap: Record<string, string> = {
@@ -1015,6 +1084,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   cyan: "bg-cyan-600 text-white shadow-sm",
                   purple: "bg-purple-600 text-white shadow-sm",
                   orange: "bg-orange-600 text-white shadow-sm",
+                  teal: "bg-teal-600 text-white shadow-sm",
                 };
                 const labelColorMap: Record<string, string> = {
                   indigo: "text-indigo-700 border-indigo-300",
@@ -1025,6 +1095,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   cyan: "text-cyan-700 border-cyan-300",
                   purple: "text-purple-700 border-purple-300",
                   orange: "text-orange-700 border-orange-300",
+                  teal: "text-teal-700 border-teal-300",
                 };
 
                 return (
@@ -2474,6 +2545,146 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   )}
                 </div>
               </TabsContent>
+
+              {/* ============ SEGURO DE VIDA ============ */}
+              <TabsContent value="seguro_vida" className="mt-4">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-teal-600" />
+                      Seguro de Vida
+                    </h3>
+                    {coberturaSeguro && (() => {
+                      const sv = svStatusLabel(coberturaSeguro.status);
+                      return (
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${sv.cls}`}>
+                          {sv.label}
+                        </span>
+                      );
+                    })()}
+                  </div>
+
+                  {coberturaSeguroQ.isLoading ? (
+                    <div className="text-center py-8 text-gray-400 text-sm">Carregando...</div>
+                  ) : !coberturaSeguro ? (
+                    <div className="text-center py-10 text-gray-400">
+                      <Shield className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                      <p className="text-sm font-medium">Nenhum registro de seguro de vida encontrado</p>
+                      <p className="text-xs mt-1 text-gray-400">Este colaborador não possui cobertura cadastrada no sistema.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Dados Principais */}
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {[
+                          { label: "Seguradora", value: coberturaSeguro.seguradora || "-" },
+                          { label: "Item", value: coberturaSeguro.item_segurador || "-" },
+                          { label: "Apólice VG", value: coberturaSeguro.apolice_vg || "-" },
+                          { label: "Apólice APC", value: coberturaSeguro.apolice_apc || "-" },
+                          { label: "Adesão", value: formatDate(coberturaSeguro.data_adesao) },
+                          coberturaSeguro.data_vencimento_apolice
+                            ? { label: "Venc. Apólice", value: formatDate(coberturaSeguro.data_vencimento_apolice) }
+                            : null,
+                          coberturaSeguro.data_cancelamento
+                            ? { label: "Cancelamento", value: formatDate(coberturaSeguro.data_cancelamento) }
+                            : null,
+                          coberturaSeguro.motivo_cancelamento
+                            ? { label: "Motivo Cancel.", value: coberturaSeguro.motivo_cancelamento }
+                            : null,
+                        ].filter(Boolean).map((item: any, idx: number) => (
+                          <div key={idx} className="bg-teal-50 border border-teal-100 rounded-lg p-3">
+                            <p className="text-[10px] font-bold text-teal-600 uppercase tracking-wide mb-0.5">{item.label}</p>
+                            <p className="text-sm font-semibold text-gray-800">{item.value}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Coberturas */}
+                      {(coberturaSeguro.morte_natural || coberturaSeguro.morte_acidental || coberturaSeguro.invalidez_acidente || coberturaSeguro.invalidez_doenca) && (
+                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                          <div className="bg-teal-50 px-4 py-2 border-b border-teal-100">
+                            <p className="text-xs font-bold text-teal-800 uppercase tracking-wide">Coberturas — Capital Segurado</p>
+                          </div>
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-gray-50 border-b">
+                                <th className="text-left px-4 py-2 font-semibold text-gray-700">Cobertura</th>
+                                <th className="text-right px-4 py-2 font-semibold text-gray-700">Capital Segurado</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {coberturaSeguro.morte_natural && (
+                                <tr className="border-b last:border-0 hover:bg-gray-50">
+                                  <td className="px-4 py-2 text-gray-700">Morte Natural</td>
+                                  <td className="px-4 py-2 text-right font-semibold text-gray-900">{fmtCapitalSV(coberturaSeguro.morte_natural)}</td>
+                                </tr>
+                              )}
+                              {coberturaSeguro.morte_acidental && (
+                                <tr className="border-b last:border-0 hover:bg-gray-50">
+                                  <td className="px-4 py-2 text-gray-700">Morte Acidental</td>
+                                  <td className="px-4 py-2 text-right font-semibold text-gray-900">{fmtCapitalSV(coberturaSeguro.morte_acidental)}</td>
+                                </tr>
+                              )}
+                              {coberturaSeguro.invalidez_acidente && (
+                                <tr className="border-b last:border-0 hover:bg-gray-50">
+                                  <td className="px-4 py-2 text-gray-700">Invalidez por Acidente</td>
+                                  <td className="px-4 py-2 text-right font-semibold text-gray-900">{fmtCapitalSV(coberturaSeguro.invalidez_acidente)}</td>
+                                </tr>
+                              )}
+                              {coberturaSeguro.invalidez_doenca && (
+                                <tr className="border-b last:border-0 hover:bg-gray-50">
+                                  <td className="px-4 py-2 text-gray-700">Invalidez por Doença</td>
+                                  <td className="px-4 py-2 text-right font-semibold text-gray-900">{fmtCapitalSV(coberturaSeguro.invalidez_doenca)}</td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Prêmios */}
+                      {(coberturaSeguro.premio_vg || coberturaSeguro.premio_apc) && (
+                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                          <div className="bg-teal-50 px-4 py-2 border-b border-teal-100">
+                            <p className="text-xs font-bold text-teal-800 uppercase tracking-wide">Prêmios</p>
+                          </div>
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-gray-50 border-b">
+                                <th className="text-left px-4 py-2 font-semibold text-gray-700">Prêmio</th>
+                                <th className="text-right px-4 py-2 font-semibold text-gray-700">Valor</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {coberturaSeguro.premio_vg && (
+                                <tr className="border-b last:border-0 hover:bg-gray-50">
+                                  <td className="px-4 py-2 text-gray-700">Prêmio VG</td>
+                                  <td className="px-4 py-2 text-right font-mono text-gray-800">{fmtPremioSV(coberturaSeguro.premio_vg)}</td>
+                                </tr>
+                              )}
+                              {coberturaSeguro.premio_apc && (
+                                <tr className="border-b last:border-0 hover:bg-gray-50">
+                                  <td className="px-4 py-2 text-gray-700">Prêmio APC</td>
+                                  <td className="px-4 py-2 text-right font-mono text-gray-800">{fmtPremioSV(coberturaSeguro.premio_apc)}</td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Observações */}
+                      {coberturaSeguro.observacoes && (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                          <p className="text-xs font-bold text-gray-600 uppercase mb-1">Observações</p>
+                          <p className="text-sm text-gray-700">{coberturaSeguro.observacoes}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
             </Tabs>
           </div>
         )}
