@@ -8870,6 +8870,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-04-23 17:30:00",
   },
   {
+    version: 1294,
+    titulo: "Seguro de Vida: correção crítica no cruzamento com funcionários CLT",
+    descricao: "Corrigido bug que impedia o cruzamento dos PDFs com os funcionários. O Drizzle ORM não converte arrays JavaScript para arrays PostgreSQL ao usar ANY($1) em raw SQL — resultando em 'malformed array literal'. Solução: criada função auxiliar inIds() que usa IN ($1, $2, ...) parametrizado para múltiplos IDs e = $1 para ID único, compatível com o padrão sql.join() já utilizado em outros routers (compras, avisoPrevioFerias). Aplicada a correção em todas as 11 queries do módulo (executarCruzamento, getResumo, listarCoberturas, listarFuncionariosComStatus, listarImportacoes, seedFromRelatorio). Também adicionados logs de diagnóstico no endpoint processarPdfLote e endpoint REST /api/diag/pdf-parse para monitoramento.",
+    tipo: "bugfix",
+    modulos: "Seguro de Vida",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-26 22:15:00",
+  },
+  {
     version: 1293,
     titulo: "Seguro de Vida: upload de PDF em lote + layout do modal completamente redesenhado",
     descricao: "O modal de importação do corretor foi completamente reformulado. Agora suporta upload real de arquivos PDF (arrastando ou selecionando múltiplos arquivos de uma vez). Cada PDF corresponde a uma competência (mês/ano), detectada automaticamente do nome do arquivo e editável via selects de mês e ano — sem o input nativo 'type=month' que ficava feio. O processamento é feito em lote no servidor: cada PDF é extraído com pdf-parse, os nomes são identificados e cruzados com os funcionários CLT ativos, e o resultado é salvo como uma importação separada por mês. Os resultados são apresentados em um accordion expansível por mês, com mini-dashboard de totais (na lista / OK / sem seguro / indevido) e tabela filtrável por status. Mantido o modo alternativo 'Colar texto' como fallback. A lógica de cruzamento foi refatorada no backend em uma função reutilizável 'executarCruzamento', compartilhada pelos dois endpoints (importarRelatorio e processarPdfLote). O modal da Carga Inicial (seedFromRelatorio) também foi modernizado visualmente. Corrigido bug em que 'useCompany' era desestruturado incorretamente (companyId/companyIds direto em vez de selectedCompanyId + getCompanyIdsForQuery). Adicionado 'seguro-vida' no mapeamento de rotas para o assistente IA e 'Seguro de Vida' no mapa de ícones do DashboardLayout.",

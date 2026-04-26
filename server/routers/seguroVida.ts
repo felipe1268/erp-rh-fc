@@ -2,8 +2,15 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { sql } from "drizzle-orm";
+import { sql, SQL } from "drizzle-orm";
 import { resolveCompanyIds } from "../companyHelper";
+
+// Helper: gera cláusula SQL de filtro por IDs de empresa compatível com Drizzle
+// Drizzle não converte arrays JS para arrays PostgreSQL em ANY() — usa IN() parametrizado
+function inIds(ids: number[]): SQL {
+  if (ids.length === 1) return sql`= ${ids[0]}`;
+  return sql`IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`;
+}
 
 // Normaliza nome para comparação: maiúsculo, sem acento, sem espaços extras
 function normalizeName(name: string): string {
@@ -110,7 +117,7 @@ async function executarCruzamento(
   const cltAtivos = await db.execute(sql`
     SELECT id, "nomeCompleto", "cargo", "funcao", "dataAdmissao"
     FROM employees
-    WHERE "companyId" = ANY(${ids}) AND status = 'Ativo'
+    WHERE "companyId" ${inIds(ids)} AND status = 'Ativo'
       AND (LOWER("tipoContrato") = 'clt' OR "tipoContrato" IS NULL)
       AND "deletedAt" IS NULL
   `) as any[];
@@ -118,7 +125,7 @@ async function executarCruzamento(
   const coberturasAtivas = await db.execute(sql`
     SELECT id, employee_id, nome_completo, item_segurador, status
     FROM seguro_vida_coberturas
-    WHERE company_id = ANY(${ids}) AND status IN ('ativo','pendente_inclusao')
+    WHERE company_id ${inIds(ids)} AND status IN ('ativo','pendente_inclusao')
   `) as any[];
 
   const THRESHOLD = 0.60;
@@ -206,25 +213,25 @@ export const seguroVidaRouter = router({
       const [{ totalAtivos }] = await db.execute(sql`
         SELECT COUNT(*) as "totalAtivos"
         FROM seguro_vida_coberturas
-        WHERE company_id = ANY(${ids}) AND status = 'ativo'
+        WHERE company_id ${inIds(ids)} AND status = 'ativo'
       `) as any;
 
       const [{ totalPendInclusao }] = await db.execute(sql`
         SELECT COUNT(*) as "totalPendInclusao"
         FROM seguro_vida_coberturas
-        WHERE company_id = ANY(${ids}) AND status = 'pendente_inclusao'
+        WHERE company_id ${inIds(ids)} AND status = 'pendente_inclusao'
       `) as any;
 
       const [{ totalPendCancel }] = await db.execute(sql`
         SELECT COUNT(*) as "totalPendCancel"
         FROM seguro_vida_coberturas
-        WHERE company_id = ANY(${ids}) AND status = 'pendente_cancelamento'
+        WHERE company_id ${inIds(ids)} AND status = 'pendente_cancelamento'
       `) as any;
 
       const cltAtivos = await db.execute(sql`
         SELECT e.id, e."nomeCompleto"
         FROM employees e
-        WHERE e."companyId" = ANY(${ids})
+        WHERE e."companyId" ${inIds(ids)}
           AND e.status = 'Ativo'
           AND (e."tipoContrato" = 'CLT' OR e."tipoContrato" IS NULL)
           AND e."deletedAt" IS NULL
@@ -239,7 +246,7 @@ export const seguroVidaRouter = router({
       const [ultimaImportacao] = await db.execute(sql`
         SELECT competencia, data_importacao, total_segurados, total_sem_seguro, total_pagar_indevido
         FROM seguro_vida_importacoes
-        WHERE company_id = ANY(${ids})
+        WHERE company_id ${inIds(ids)}
         ORDER BY criado_em DESC
         LIMIT 1
       `) as any;
@@ -267,7 +274,7 @@ export const seguroVidaRouter = router({
           e."cargo", e."funcao", e."dataAdmissao", e."dataDemissao"
         FROM seguro_vida_coberturas s
         LEFT JOIN employees e ON e.id = s.employee_id
-        WHERE s.company_id = ANY(${ids})
+        WHERE s.company_id ${inIds(ids)}
           ${input.status ? sql`AND s.status = ${input.status}` : sql``}
         ORDER BY s.nome_completo
       `) as any;
@@ -289,7 +296,7 @@ export const seguroVidaRouter = router({
           s.apolice_vg, s.data_adesao, s.data_cancelamento, s.observacoes
         FROM employees e
         LEFT JOIN seguro_vida_coberturas s ON s.employee_id = e.id AND s.status IN ('ativo','pendente_inclusao','pendente_cancelamento')
-        WHERE e."companyId" = ANY(${ids})
+        WHERE e."companyId" ${inIds(ids)}
           AND e.status = 'Ativo'
           AND (e."tipoContrato" = 'CLT' OR e."tipoContrato" IS NULL)
           AND e."deletedAt" IS NULL
@@ -503,7 +510,7 @@ export const seguroVidaRouter = router({
                total_ok, total_sem_seguro, total_pagar_indevido, total_novos,
                importado_por, criado_em
         FROM seguro_vida_importacoes
-        WHERE company_id = ANY(${ids})
+        WHERE company_id ${inIds(ids)}
         ORDER BY criado_em DESC
         LIMIT 24
       `) as any;
@@ -543,7 +550,7 @@ export const seguroVidaRouter = router({
 
       const cltAtivos = await db.execute(sql`
         SELECT id, "nomeCompleto" FROM employees
-        WHERE "companyId" = ANY(${ids}) AND status = 'Ativo' AND "deletedAt" IS NULL
+        WHERE "companyId" ${inIds(ids)} AND status = 'Ativo' AND "deletedAt" IS NULL
       `) as any[];
 
       let inseridos = 0;
