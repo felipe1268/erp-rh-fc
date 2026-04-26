@@ -8941,4 +8941,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-26 10:30:00",
   },
+  {
+    version: 1301,
+    titulo: "Seguro de Vida: tabela de Coberturas com Importâncias Seguradas e Prêmios",
+    descricao: "Aba 'Coberturas Ativas' reformulada com tabela de 2 níveis de cabeçalho: (1) grupo 'Importâncias Seguradas' (Morte Natural, Morte Acidental, Invalidez por Acidente, Invalidez por Doença) em azul; (2) grupo 'Prêmios Mensais' (V.G., A.P.C.) em verde. Os valores são extraídos automaticamente do PDF do corretor na importação e persistidos por funcionário (colunas morte_natural, morte_acidental, invalidez_acidente, invalidez_doenca, premio_vg, premio_apc, seguradora adicionadas à tabela seguro_vida_coberturas). Parser atualizado para capturar todos os valores monetários em formato brasileiro (28.290,38) após o nome. Detecção automática de seguradora pelo cabeçalho do PDF (Bradesco, MetLife, Porto Seguro, SulAmérica, etc.). Função de impressão/export atualizada com o mesmo formato de cabeçalhos agrupados.",
+    tipo: "feature",
+    modulos: "Seguro de Vida",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-26 12:00:00",
+  },
 ];

@@ -153,32 +153,59 @@ function detectarCompetenciaDoPdf(texto: string): string | null {
 // Apenas linhas com número de item (5-12 dígitos seguido de 2+ espaços e nome maiúsculo)
 // são aceitas. O fallback de "linha em maiúsculas" foi removido pois capturava headers,
 // rodapés e textos de tabela como "RELACAO ATUALIZADA DE SEGURADOS", "VIDAS VG", etc.
-function parseNomesBrutos(texto: string): Array<{ item: string; nome: string }> {
+type SeguradoParsed = { item: string; nome: string; valores: string[] };
+
+function parseNomesBrutos(texto: string): SeguradoParsed[] {
   const linhas = texto.split("\n").map(l => l.trim()).filter(Boolean);
-  const segurados: Array<{ item: string; nome: string }> = [];
+  const segurados: SeguradoParsed[] = [];
 
   for (const linha of linhas) {
-    // Pattern principal: número de item (com ou sem zeros à esquerda) + 2+ espaços + nome
     const match = linha.match(/^(\d{5,12})\s{2,}([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-Za-záàãâéêíóôõúüçñ\s]+)/);
     if (!match) continue;
 
-    // Extrai só o nome: remove tudo após a primeira sequência de dígitos/valores monetários
-    // Exemplo: "ACACIO LESCURA DE CAMARGO    28.290,38" → "ACACIO LESCURA DE CAMARGO"
     const nomeRaw = match[2]
-      .replace(/\s+\d[\d.,\s]*$/, "") // remove valores monetários ao final
+      .replace(/\s+\d[\d.,\s]*$/, "")
       .trim();
 
-    // Valida: nome deve ter pelo menos 2 palavras e ser só letras+espaços
     const palavras = nomeRaw.split(/\s+/).filter(Boolean);
     if (palavras.length < 2 || /\d/.test(nomeRaw)) continue;
+
+    // Extrai valores monetários no formato brasileiro (ex: 28.290,38 ou 12,37176)
+    const valores = [...linha.matchAll(/\d[\d.]*,\d+/g)].map(m => m[0]).slice(0, 7);
 
     segurados.push({
       item: match[1].replace(/^0+/, "") || "0",
       nome: nomeRaw,
+      valores,
     });
   }
 
   return segurados;
+}
+
+function parseSeguradora(texto: string): string | null {
+  const upper = texto.slice(0, 3000).toUpperCase();
+  const mapa: [string, string][] = [
+    ["BRADESCO", "Bradesco Seguros"],
+    ["METLIFE", "MetLife"],
+    ["PORTO SEGURO", "Porto Seguro"],
+    ["SULAMERICA", "SulAmérica"],
+    ["SUL AMERICA", "SulAmérica"],
+    ["ITAU SEGUROS", "Itaú Seguros"],
+    ["ZURICH", "Zurich"],
+    ["ALLIANZ", "Allianz"],
+    ["GENERALI", "Generali"],
+    ["ICATU", "Icatu Seguros"],
+    ["MONGERAL", "Mongeral Aegon"],
+    ["TOKIO MARINE", "Tokio Marine"],
+    ["CHUBB", "Chubb"],
+    ["AXA", "AXA Seguros"],
+    ["PRUDENTIAL", "Prudential"],
+  ];
+  for (const [pattern, name] of mapa) {
+    if (upper.includes(pattern)) return name;
+  }
+  return null;
 }
 
 // Lógica central de cruzamento — reutilizada em importarRelatorio e processarPdfLote
@@ -187,11 +214,12 @@ async function executarCruzamento(
   ids: number[],
   companyId: number,
   competencia: string,
-  seguradosCorretora: Array<{ item: string; nome: string }>,
+  seguradosCorretora: SeguradoParsed[],
   nomesBrutos: string,
   apoliceVG: string | undefined,
   apoliceAPC: string | undefined,
   importadoPor: string,
+  seguradora?: string,
 ) {
   const cltAtivos = rows(await db.execute(sql`
     SELECT id, "nomeCompleto", "cargo", "funcao", "dataAdmissao"
@@ -240,7 +268,26 @@ async function executarCruzamento(
 
     if (melhorSim >= THRESHOLD && melhorIdx >= 0) {
       idxUsados.add(melhorIdx);
-      resultado.push({ status: "ok", nome: emp.nomeCompleto, item: seguradosCorretora[melhorIdx].item, employeeId: emp.id, nomeHR: emp.nomeCompleto, similaridade: melhorSim, dataAdmissao, coberturaId: cobAtual?.id });
+      const matchedSeg = seguradosCorretora[melhorIdx];
+      resultado.push({ status: "ok", nome: emp.nomeCompleto, item: matchedSeg.item, employeeId: emp.id, nomeHR: emp.nomeCompleto, similaridade: melhorSim, dataAdmissao, coberturaId: cobAtual?.id });
+      // Persiste valores do PDF na cobertura já existente
+      if (cobAtual?.id && matchedSeg.valores.length > 0) {
+        const v = matchedSeg.valores;
+        const hasInvalidezDoenca = v.length >= 7;
+        const covOffset = hasInvalidezDoenca ? 1 : 0;
+        await db.execute(sql`
+          UPDATE seguro_vida_coberturas SET
+            morte_natural       = ${v[0] ?? null},
+            morte_acidental     = ${v[1] ?? null},
+            invalidez_acidente  = ${v[2] ?? null},
+            invalidez_doenca    = ${hasInvalidezDoenca ? (v[3] ?? null) : null},
+            premio_vg           = ${v[3 + covOffset] ?? null},
+            premio_apc          = ${v[4 + covOffset] ?? null},
+            seguradora          = COALESCE(seguradora, ${seguradora ?? null}),
+            atualizado_em       = NOW()
+          WHERE id = ${cobAtual.id}
+        `);
+      }
     } else if (isNovo) {
       resultado.push({ status: "novo", nome: emp.nomeCompleto, item: "", employeeId: emp.id, nomeHR: emp.nomeCompleto, dataAdmissao, coberturaId: cobAtual?.id });
     } else {
@@ -389,7 +436,9 @@ export const seguroVidaRouter = router({
           e.id, e."nomeCompleto", e."cargo", e."funcao", e."dataAdmissao",
           e."tipoContrato", e.status as emp_status,
           s.id as cobertura_id, s.status as seguro_status, s.item_segurador,
-          s.apolice_vg, s.data_adesao, s.data_cancelamento, s.observacoes
+          s.apolice_vg, s.apolice_apc, s.data_adesao, s.data_cancelamento, s.observacoes,
+          s.morte_natural, s.morte_acidental, s.invalidez_acidente, s.invalidez_doenca,
+          s.premio_vg, s.premio_apc, s.seguradora
         FROM employees e
         LEFT JOIN seguro_vida_coberturas s ON s.employee_id = e.id AND s.status IN ('ativo','pendente_inclusao','pendente_cancelamento')
         WHERE e."companyId" ${inIds(ids)}
@@ -579,9 +628,12 @@ export const seguroVidaRouter = router({
             continue;
           }
 
+          const seguradoraDetectada = parseSeguradora(texto);
+
           const resultado = await executarCruzamento(
             db, ids, input.companyId, competenciaFinal, segurados,
-            texto, input.apoliceVG, input.apoliceAPC, ctx.user.name ?? ""
+            texto, input.apoliceVG, input.apoliceAPC, ctx.user.name ?? "",
+            seguradoraDetectada ?? undefined
           );
 
           resultados.push({ filename: arq.filename, autoDetectado, competenciaFallback: !autoDetectado, ...resultado });
@@ -675,13 +727,20 @@ export const seguroVidaRouter = router({
         `))[0];
         if (existe) continue;
 
+        const v = s.valores;
+        const hasInvalidezDoenca = v.length >= 7;
+        const covOffset = hasInvalidezDoenca ? 1 : 0;
         await db.execute(sql`
           INSERT INTO seguro_vida_coberturas
-            (company_id, employee_id, nome_completo, item_segurador, apolice_vg, apolice_apc, status, data_adesao, criado_por)
+            (company_id, employee_id, nome_completo, item_segurador, apolice_vg, apolice_apc, status, data_adesao, criado_por,
+             morte_natural, morte_acidental, invalidez_acidente, invalidez_doenca, premio_vg, premio_apc)
           VALUES
             (${input.companyId}, ${empId}, ${s.nome}, ${s.item || null},
              ${input.apoliceVG ?? null}, ${input.apoliceAPC ?? null},
-             'ativo', ${input.dataAdesao ?? null}, ${ctx.user.name ?? ""})
+             'ativo', ${input.dataAdesao ?? null}, ${ctx.user.name ?? ""},
+             ${v[0] ?? null}, ${v[1] ?? null}, ${v[2] ?? null},
+             ${hasInvalidezDoenca ? (v[3] ?? null) : null},
+             ${v[3 + covOffset] ?? null}, ${v[4 + covOffset] ?? null})
         `);
         inseridos++;
       }

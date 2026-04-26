@@ -282,6 +282,13 @@ async function startServer() {
             ALTER TABLE ponto_consolidacao ADD COLUMN IF NOT EXISTS data_inicio_ciclo DATE;
             ALTER TABLE ponto_consolidacao ADD COLUMN IF NOT EXISTS data_fim_ciclo DATE;
             ALTER TABLE time_records ADD COLUMN IF NOT EXISTS "tipoDia" VARCHAR(20) DEFAULT 'normal';
+            ALTER TABLE seguro_vida_coberturas ADD COLUMN IF NOT EXISTS morte_natural TEXT;
+            ALTER TABLE seguro_vida_coberturas ADD COLUMN IF NOT EXISTS morte_acidental TEXT;
+            ALTER TABLE seguro_vida_coberturas ADD COLUMN IF NOT EXISTS invalidez_acidente TEXT;
+            ALTER TABLE seguro_vida_coberturas ADD COLUMN IF NOT EXISTS invalidez_doenca TEXT;
+            ALTER TABLE seguro_vida_coberturas ADD COLUMN IF NOT EXISTS premio_vg TEXT;
+            ALTER TABLE seguro_vida_coberturas ADD COLUMN IF NOT EXISTS premio_apc TEXT;
+            ALTER TABLE seguro_vida_coberturas ADD COLUMN IF NOT EXISTS seguradora TEXT;
           EXCEPTION WHEN OTHERS THEN NULL;
           END $$
         `);

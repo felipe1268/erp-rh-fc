@@ -635,15 +635,46 @@ export default function SeguroVida() {
   const handlePrint = () => {
     const linhas = filtradas.map((f: any) => {
       const s = STATUS_LABELS[f.statusSeguro]?.label ?? f.statusSeguro;
-      return `<tr><td>${f.nomeCompleto ?? "—"}</td><td>${f.cargo ?? "—"}</td><td>${s}</td><td>${f.item_segurador ?? "—"}</td><td>${fmtDate(f.data_adesao)}</td><td>${f.apolice_vg ?? "—"}</td></tr>`;
+      return `<tr>
+        <td>${f.nomeCompleto ?? "—"}</td>
+        <td>${f.cargo ?? "—"}</td>
+        <td>${s}</td>
+        <td>${f.seguradora ?? "—"}</td>
+        <td style="text-align:right">${f.morte_natural ?? "—"}</td>
+        <td style="text-align:right">${f.morte_acidental ?? "—"}</td>
+        <td style="text-align:right">${f.invalidez_acidente ?? "—"}</td>
+        <td style="text-align:right">${f.invalidez_doenca ?? "—"}</td>
+        <td style="text-align:right">${f.premio_vg ?? "—"}</td>
+        <td style="text-align:right">${f.premio_apc ?? "—"}</td>
+      </tr>`;
     }).join("");
     const w = window.open("", "_blank");
     if (!w) return;
-    w.document.write(`<html><head><title>Seguro de Vida</title><style>body{font-family:Arial,sans-serif;font-size:11px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:4px 6px;}th{background:#eee;font-weight:bold;}h2{margin-bottom:4px;}</style></head><body>
+    w.document.write(`<html><head><title>Seguro de Vida</title><style>
+      body{font-family:Arial,sans-serif;font-size:10px;}
+      table{width:100%;border-collapse:collapse;}
+      th,td{border:1px solid #ccc;padding:3px 5px;}
+      th{background:#eee;font-weight:bold;text-align:left;}
+      .group{background:#dde6f0;font-weight:bold;text-align:center;}
+      h2{margin-bottom:4px;}
+    </style></head><body>
       <h2>Seguro de Vida — Relação de Segurados</h2>
       <p>Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")} | Total: ${filtradas.length} registros</p>
-      <table><thead><tr><th>Nome</th><th>Cargo</th><th>Status</th><th>Item</th><th>Adesão</th><th>Apólice VG</th></tr></thead><tbody>${linhas}</tbody></table>
-      </body></html>`);
+      <table>
+        <thead>
+          <tr>
+            <th rowspan="2">Nome</th><th rowspan="2">Cargo</th><th rowspan="2">Status</th><th rowspan="2">Seguradora</th>
+            <th colspan="4" class="group">Importâncias Seguradas (R$)</th>
+            <th colspan="2" class="group">Prêmios Mensais (R$)</th>
+          </tr>
+          <tr>
+            <th>Morte Natural</th><th>Morte Acidental</th><th>Inv. Acidente</th><th>Inv. Doença</th>
+            <th>V.G.</th><th>A.P.C.</th>
+          </tr>
+        </thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    </body></html>`);
     w.document.close();
     w.print();
   };
@@ -746,53 +777,102 @@ export default function SeguroVida() {
             </div>
 
             {/* Tabela de TODOS os funcionários com status de seguro */}
-            <div className="border rounded-lg overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 sticky top-0 z-10">
-                  <tr>
-                    <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Nome</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Cargo</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Tipo</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Status Seguro</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Item</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Apólice VG</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-slate-600 text-xs">Data Adesão</th>
-                    <th className="px-3 py-2.5 text-xs"></th>
+            <div className="border rounded-xl overflow-auto shadow-sm">
+              <table className="w-full text-xs min-w-[1100px]">
+                <thead className="sticky top-0 z-10">
+                  {/* Linha 1 — grupos */}
+                  <tr className="border-b">
+                    <th colSpan={4} className="px-3 py-2 text-left font-bold text-slate-600 bg-slate-100 border-r text-[11px] uppercase tracking-wide">
+                      Funcionário
+                    </th>
+                    <th colSpan={4} className="px-3 py-2 text-center font-bold text-blue-700 bg-blue-50 border-r text-[11px] uppercase tracking-wide">
+                      Importâncias Seguradas
+                    </th>
+                    <th colSpan={2} className="px-3 py-2 text-center font-bold text-emerald-700 bg-emerald-50 border-r text-[11px] uppercase tracking-wide">
+                      Prêmios Mensais
+                    </th>
+                    <th className="bg-slate-50"></th>
+                  </tr>
+                  {/* Linha 2 — colunas individuais */}
+                  <tr className="border-b bg-slate-50">
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 whitespace-nowrap border-r">Nome</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 whitespace-nowrap">Cargo</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 whitespace-nowrap">Tipo</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 whitespace-nowrap border-r">Status</th>
+                    <th className="px-3 py-2 text-right font-semibold text-blue-600 whitespace-nowrap">Morte Natural</th>
+                    <th className="px-3 py-2 text-right font-semibold text-blue-600 whitespace-nowrap">Morte Acidental</th>
+                    <th className="px-3 py-2 text-right font-semibold text-blue-600 whitespace-nowrap">Inv. Acidente</th>
+                    <th className="px-3 py-2 text-right font-semibold text-blue-600 whitespace-nowrap border-r">Inv. Doença</th>
+                    <th className="px-3 py-2 text-right font-semibold text-emerald-600 whitespace-nowrap">V.G.</th>
+                    <th className="px-3 py-2 text-right font-semibold text-emerald-600 whitespace-nowrap border-r">A.P.C.</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-400 whitespace-nowrap">Ações</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-slate-100">
                   {funcionariosQ.isLoading ? (
-                    <tr><td colSpan={8} className="text-center py-10 text-muted-foreground text-sm">Carregando...</td></tr>
+                    <tr><td colSpan={11} className="text-center py-12 text-muted-foreground">Carregando...</td></tr>
                   ) : filtradas.length === 0 ? (
-                    <tr><td colSpan={8} className="text-center py-10 text-muted-foreground text-sm">
+                    <tr><td colSpan={11} className="text-center py-12 text-muted-foreground">
                       {funcionariosNorm.length === 0
                         ? "Nenhum funcionário CLT ativo encontrado. Cadastre funcionários no módulo de Colaboradores."
                         : "Nenhum resultado para os filtros aplicados."}
                     </td></tr>
-                  ) : filtradas.map((f: any) => (
-                    <tr key={f.id} className={cn("hover:bg-slate-50/80 transition-colors",
-                      f.statusSeguro === "sem_cobertura" ? "bg-red-50/40" :
-                      f.statusSeguro === "pendente_cancelamento" ? "bg-orange-50/40" :
-                      f.statusSeguro === "pendente_inclusao" ? "bg-blue-50/40" : "")}>
-                      <td className="px-3 py-2.5 font-medium">{f.nomeCompleto}</td>
-                      <td className="px-3 py-2.5 text-slate-500 text-xs">{f.cargo || "—"}</td>
-                      <td className="px-3 py-2.5 text-xs">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">{f.tipoContrato ?? "CLT"}</span>
-                      </td>
-                      <td className="px-3 py-2.5"><StatusBadge status={f.statusSeguro} /></td>
-                      <td className="px-3 py-2.5 font-mono text-xs text-slate-500">{f.item_segurador || "—"}</td>
-                      <td className="px-3 py-2.5 text-xs text-slate-500">{f.apolice_vg || "—"}</td>
-                      <td className="px-3 py-2.5 text-xs text-slate-500">{fmtDate(f.data_adesao)}</td>
-                      <td className="px-3 py-2.5">
-                        {isAdmin && f.cobertura_id && f.seguro_status !== "cancelado" && (
-                          <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => { if (confirm(`Cancelar cobertura de ${f.nomeCompleto}?`)) cancelar.mutate({ companyId, coberturaId: f.cobertura_id }); }}>
-                            <Ban className="h-3.5 w-3.5 mr-1" />Cancelar
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  ) : filtradas.map((f: any) => {
+                    const temValores = !!(f.morte_natural || f.morte_acidental || f.invalidez_acidente);
+                    return (
+                      <tr key={f.id} className={cn("hover:bg-slate-50/60 transition-colors",
+                        f.statusSeguro === "sem_cobertura" ? "bg-red-50/30" :
+                        f.statusSeguro === "pendente_cancelamento" ? "bg-orange-50/30" :
+                        f.statusSeguro === "pendente_inclusao" ? "bg-blue-50/30" : "")}>
+                        {/* Funcionário */}
+                        <td className="px-3 py-2.5 font-medium text-slate-800 whitespace-nowrap max-w-[200px] truncate border-r">
+                          <div className="truncate">{f.nomeCompleto}</div>
+                          {f.seguradora && (
+                            <div className="text-[10px] text-slate-400 mt-0.5">{f.seguradora}</div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">{f.cargo || "—"}</td>
+                        <td className="px-3 py-2.5">
+                          <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">{f.tipoContrato ?? "CLT"}</span>
+                        </td>
+                        <td className="px-3 py-2.5 border-r">
+                          <StatusBadge status={f.statusSeguro} />
+                          {f.item_segurador && (
+                            <div className="font-mono text-[10px] text-slate-400 mt-0.5">#{f.item_segurador}</div>
+                          )}
+                        </td>
+                        {/* Importâncias Seguradas */}
+                        <td className={cn("px-3 py-2.5 text-right tabular-nums", temValores ? "text-slate-700" : "text-slate-300")}>
+                          {f.morte_natural ?? "—"}
+                        </td>
+                        <td className={cn("px-3 py-2.5 text-right tabular-nums", temValores ? "text-slate-700" : "text-slate-300")}>
+                          {f.morte_acidental ?? "—"}
+                        </td>
+                        <td className={cn("px-3 py-2.5 text-right tabular-nums", temValores ? "text-slate-700" : "text-slate-300")}>
+                          {f.invalidez_acidente ?? "—"}
+                        </td>
+                        <td className={cn("px-3 py-2.5 text-right tabular-nums border-r", f.invalidez_doenca ? "text-slate-700" : "text-slate-300")}>
+                          {f.invalidez_doenca ?? "—"}
+                        </td>
+                        {/* Prêmios */}
+                        <td className={cn("px-3 py-2.5 text-right tabular-nums font-medium", f.premio_vg ? "text-emerald-700" : "text-slate-300")}>
+                          {f.premio_vg ?? "—"}
+                        </td>
+                        <td className={cn("px-3 py-2.5 text-right tabular-nums font-medium border-r", f.premio_apc ? "text-emerald-700" : "text-slate-300")}>
+                          {f.premio_apc ?? "—"}
+                        </td>
+                        {/* Ações */}
+                        <td className="px-3 py-2.5">
+                          {isAdmin && f.cobertura_id && f.seguro_status !== "cancelado" && (
+                            <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => { if (confirm(`Cancelar cobertura de ${f.nomeCompleto}?`)) cancelar.mutate({ companyId, coberturaId: f.cobertura_id }); }}>
+                              <Ban className="h-3.5 w-3.5 mr-1" />Cancelar
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
