@@ -12,13 +12,14 @@ import { removeAccents } from "@/lib/searchUtils";
 import {
   ShieldCheck, ShieldAlert, Shield, AlertTriangle, CheckCircle2,
   Clock, Search, Upload, FileText, ChevronDown,
-  ChevronUp, RefreshCw, Printer, Ban, X, Loader2,
+  ChevronUp, ChevronLeft, ChevronRight, RefreshCw, Printer, Ban, X, Loader2,
   ArrowRightLeft, Info, FilePlus2, Trash2, FileUp,
 } from "lucide-react";
 import { useState, useMemo, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const MESES_CURTOS = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const STATUS_LABELS: Record<string, { label: string; color: string; Icon: any }> = {
@@ -263,8 +264,6 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
     setModo("pdf");
   };
 
-  const anos = [2024, 2025, 2026, 2027];
-
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) { onClose(); reset(); } }}>
       <DialogContent
@@ -341,6 +340,7 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
                       </p>
                       {arquivos.map((arq, idx) => {
                         const [ano, mesIdx] = arq.competencia.split("-");
+                        const mesLabel = MESES[Number(mesIdx) - 1] ?? mesIdx;
                         return (
                           <div key={idx} className="flex items-center gap-3 p-3 bg-white border rounded-xl shadow-sm">
                             <FileText className="h-8 w-8 text-indigo-400 shrink-0" />
@@ -349,30 +349,9 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
                               <p className="text-[11px] text-slate-400">{(arq.file.size / 1024).toFixed(0)} KB</p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
-                              <Select
-                                value={mesIdx}
-                                onValueChange={v => updateComp(idx, `${ano}-${v}`)}>
-                                <SelectTrigger className="w-36 h-8 text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {MESES.map((m, i) => (
-                                    <SelectItem key={i} value={String(i + 1).padStart(2, "0")} className="text-xs">{m}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <Select
-                                value={ano}
-                                onValueChange={v => updateComp(idx, `${v}-${mesIdx}`)}>
-                                <SelectTrigger className="w-24 h-8 text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {anos.map(a => (
-                                    <SelectItem key={a} value={String(a)} className="text-xs">{a}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <span className="text-[11px] px-2.5 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-full font-medium">
+                                📅 {mesLabel} {ano}
+                              </span>
                               <button onClick={() => removeArq(idx)}
                                 className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors">
                                 <Trash2 className="h-4 w-4" />
@@ -394,35 +373,6 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
               {modo === "texto" && (
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">Competência</label>
-                    <div className="flex gap-2">
-                      <Select
-                        value={competenciaTexto.split("-")[1]}
-                        onValueChange={v => setCompetenciaTexto(`${competenciaTexto.split("-")[0]}-${v}`)}>
-                        <SelectTrigger className="w-40">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {MESES.map((m, i) => (
-                            <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{m}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select
-                        value={competenciaTexto.split("-")[0]}
-                        onValueChange={v => setCompetenciaTexto(`${v}-${competenciaTexto.split("-")[1]}`)}>
-                        <SelectTrigger className="w-28">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {anos.map(a => (
-                            <SelectItem key={a} value={String(a)}>{a}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div>
                     <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 block">
                       Lista de Segurados — cole o conteúdo copiado do PDF
                     </label>
@@ -430,7 +380,7 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
                       placeholder={"00000000784       ACACIO LESCURA DE CAMARGO\n00000000971       ADRIANO PAZ FERREIRA\n..."}
                       className="font-mono text-xs min-h-[200px] bg-slate-50" />
                     <p className="text-[11px] text-slate-400 mt-1">
-                      O sistema extrai automaticamente o número de item e o nome de cada linha.
+                      O sistema detecta automaticamente a competência e extrai o número de item e o nome de cada linha.
                     </p>
                   </div>
                 </div>
@@ -621,6 +571,9 @@ export default function SeguroVida() {
   const [showSeed, setShowSeed] = useState(false);
   const [tabAtiva, setTabAtiva] = useState<"cobertura" | "historico">("cobertura");
   const [detailImport, setDetailImport] = useState<any>(null);
+  const now = new Date();
+  const [anoTimeline, setAnoTimeline] = useState(now.getFullYear());
+  const [mesFiltro, setMesFiltro] = useState<number | null>(null);
 
   const utils = trpc.useUtils();
 
@@ -641,6 +594,11 @@ export default function SeguroVida() {
 
   const cancelar = trpc.seguroVida.cancelarCobertura.useMutation({
     onSuccess: () => { toast.success("Cobertura cancelada"); utils.seguroVida.listarFuncionariosComStatus.invalidate(); utils.seguroVida.getResumo.invalidate(); },
+    onError: e => toast.error(e.message),
+  });
+
+  const deletarImportacao = trpc.seguroVida.deletarImportacao.useMutation({
+    onSuccess: () => { toast.success("Importação removida"); utils.seguroVida.listarImportacoes.invalidate(); utils.seguroVida.getResumo.invalidate(); },
     onError: e => toast.error(e.message),
   });
 
@@ -842,69 +800,163 @@ export default function SeguroVida() {
         )}
 
         {tabAtiva === "historico" && (
-          <div className="space-y-3">
+          <div className="space-y-4">
+            {/* ── Timeline calendário ── */}
+            <div className="bg-white border rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setAnoTimeline(a => a - 1)}
+                    className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors">
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="font-bold text-base min-w-[52px] text-center">{anoTimeline}</span>
+                  <button
+                    onClick={() => setAnoTimeline(a => a + 1)}
+                    className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-slate-100 transition-colors">
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-slate-500">
+                  <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-green-400" /> Sem divergências</div>
+                  <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-red-400" /> Com divergências</div>
+                  <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-gray-200" /> Sem dados</div>
+                  {mesFiltro !== null && (
+                    <button onClick={() => setMesFiltro(null)}
+                      className="text-indigo-600 hover:text-indigo-800 font-medium underline underline-offset-2">
+                      Ver todos
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+                {MESES_CURTOS.map((nome, i) => {
+                  const mes = i + 1;
+                  const mesRef = `${anoTimeline}-${String(mes).padStart(2, "0")}`;
+                  const impsDoMes = (importacoesQ.data ?? []).filter((imp: any) => imp.competencia === mesRef);
+                  const status = impsDoMes.length === 0
+                    ? "vazio"
+                    : impsDoMes.some((imp: any) => imp.total_sem_seguro > 0 || imp.total_pagar_indevido > 0)
+                    ? "divergencia"
+                    : "ok";
+                  const isSelected = mesFiltro === mes;
+                  return (
+                    <button key={mes}
+                      onClick={() => setMesFiltro(prev => prev === mes ? null : mes)}
+                      className={cn(
+                        "rounded-lg p-2 text-center text-xs font-medium transition-all border-2",
+                        isSelected
+                          ? "border-[#1B2A4A] ring-2 ring-[#1B2A4A]/30 shadow-md bg-slate-100"
+                          : status === "ok"
+                          ? "bg-green-100 border-green-300 text-green-800 hover:bg-green-200"
+                          : status === "divergencia"
+                          ? "bg-red-100 border-red-300 text-red-800 hover:bg-red-200"
+                          : "bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200"
+                      )}>
+                      {nome}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── Lista de importações ── */}
             {importacoesQ.isLoading ? (
               <div className="text-center py-10 text-muted-foreground text-sm">Carregando histórico...</div>
-            ) : (importacoesQ.data ?? []).length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground text-sm">
-                Nenhuma importação realizada ainda. Use o botão "Importar Relatório do Corretor" para iniciar.
-              </div>
-            ) : (importacoesQ.data ?? []).map((imp: any) => (
-              <div key={imp.id} className="border rounded-lg p-4 hover:bg-slate-50 transition-colors cursor-pointer"
-                onClick={() => setDetailImport(detailImport?.id === imp.id ? null : imp)}>
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-3">
-                    <FileText className="h-5 w-5 text-indigo-500" />
-                    <div>
-                      <p className="font-semibold text-sm">Competência {imp.competencia}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Importado em {fmtDate(imp.data_importacao?.split("T")[0])} por {imp.importado_por || "—"}
-                      </p>
-                    </div>
+            ) : (() => {
+              const todas = importacoesQ.data ?? [];
+              const filtradas = mesFiltro !== null
+                ? todas.filter((imp: any) => imp.competencia === `${anoTimeline}-${String(mesFiltro).padStart(2, "0")}`)
+                : todas;
+              if (todas.length === 0) {
+                return (
+                  <div className="text-center py-10 text-muted-foreground text-sm">
+                    Nenhuma importação realizada ainda. Use o botão "Importar Relatório do Corretor" para iniciar.
                   </div>
-                  <div className="flex items-center gap-3 text-xs">
-                    <span className="px-2 py-0.5 bg-slate-100 rounded font-mono">{imp.total_segurados} na lista</span>
-                    <span className={cn("px-2 py-0.5 rounded font-semibold", imp.total_sem_seguro > 0 ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700")}>
-                      {imp.total_sem_seguro > 0 ? `${imp.total_sem_seguro} sem seguro` : "✅ Sem divergências"}
-                    </span>
-                    {imp.total_pagar_indevido > 0 && (
-                      <span className="px-2 py-0.5 rounded font-semibold bg-orange-100 text-orange-700">{imp.total_pagar_indevido} indevido</span>
-                    )}
-                    {detailImport?.id === imp.id ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                );
+              }
+              if (filtradas.length === 0) {
+                const mesLabel = MESES[(mesFiltro ?? 1) - 1];
+                return (
+                  <div className="text-center py-10 text-muted-foreground text-sm">
+                    Nenhuma importação para {mesLabel} {anoTimeline}.
+                    <button onClick={() => setMesFiltro(null)} className="ml-2 text-indigo-600 hover:underline text-sm">Ver todas</button>
                   </div>
-                </div>
+                );
+              }
+              return (
+                <div className="space-y-3">
+                  {filtradas.map((imp: any) => (
+                    <div key={imp.id} className="border rounded-lg p-4 hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center justify-between flex-wrap gap-2"
+                        onClick={() => setDetailImport(detailImport?.id === imp.id ? null : imp)}
+                        style={{ cursor: "pointer" }}>
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-5 w-5 text-indigo-500" />
+                          <div>
+                            <p className="font-semibold text-sm">Competência {imp.competencia}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Importado em {fmtDate(imp.data_importacao?.split("T")[0])} por {imp.importado_por || "—"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="px-2 py-0.5 bg-slate-100 rounded font-mono">{imp.total_segurados} na lista</span>
+                          <span className={cn("px-2 py-0.5 rounded font-semibold", imp.total_sem_seguro > 0 ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700")}>
+                            {imp.total_sem_seguro > 0 ? `${imp.total_sem_seguro} sem seguro` : "✅ Sem divergências"}
+                          </span>
+                          {imp.total_pagar_indevido > 0 && (
+                            <span className="px-2 py-0.5 rounded font-semibold bg-orange-100 text-orange-700">{imp.total_pagar_indevido} indevido</span>
+                          )}
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              if (confirm(`Remover importação da competência ${imp.competencia}? Esta ação não pode ser desfeita.`)) {
+                                deletarImportacao.mutate({ companyId, importacaoId: imp.id });
+                              }
+                            }}
+                            className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors ml-1"
+                            title="Limpar importação">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                          {detailImport?.id === imp.id ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                        </div>
+                      </div>
 
-                {detailImport?.id === imp.id && imp.json_resultado && (
-                  <div className="mt-4 border rounded overflow-auto max-h-[300px]">
-                    <table className="w-full text-xs">
-                      <thead className="bg-slate-50 sticky top-0">
-                        <tr>
-                          <th className="px-3 py-2 text-left font-semibold text-slate-600">Status</th>
-                          <th className="px-3 py-2 text-left font-semibold text-slate-600">Nome HR</th>
-                          <th className="px-3 py-2 text-left font-semibold text-slate-600">Nome Corretor</th>
-                          <th className="px-3 py-2 text-left font-semibold text-slate-600">Item</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {(typeof imp.json_resultado === "string" ? JSON.parse(imp.json_resultado) : imp.json_resultado)
-                          .filter((r: any) => r.status !== "ok")
-                          .map((r: any, i: number) => {
-                            const st = RESULT_STATUS[r.status] ?? RESULT_STATUS.ok;
-                            return (
-                              <tr key={i} className={cn(r.status === "sem_seguro" ? "bg-red-50" : r.status === "pagar_indevido" ? "bg-orange-50" : "")}>
-                                <td className="px-3 py-1.5"><span className={cn("font-semibold", st.color)}>{st.label}</span></td>
-                                <td className="px-3 py-1.5">{r.nomeHR ?? "—"}</td>
-                                <td className="px-3 py-1.5 text-slate-500">{r.nome}</td>
-                                <td className="px-3 py-1.5 font-mono text-slate-400">{r.item || "—"}</td>
+                      {detailImport?.id === imp.id && imp.json_resultado && (
+                        <div className="mt-4 border rounded overflow-auto max-h-[300px]">
+                          <table className="w-full text-xs">
+                            <thead className="bg-slate-50 sticky top-0">
+                              <tr>
+                                <th className="px-3 py-2 text-left font-semibold text-slate-600">Status</th>
+                                <th className="px-3 py-2 text-left font-semibold text-slate-600">Nome HR</th>
+                                <th className="px-3 py-2 text-left font-semibold text-slate-600">Nome Corretor</th>
+                                <th className="px-3 py-2 text-left font-semibold text-slate-600">Item</th>
                               </tr>
-                            );
-                          })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            ))}
+                            </thead>
+                            <tbody className="divide-y">
+                              {(typeof imp.json_resultado === "string" ? JSON.parse(imp.json_resultado) : imp.json_resultado)
+                                .filter((r: any) => r.status !== "ok")
+                                .map((r: any, i: number) => {
+                                  const st = RESULT_STATUS[r.status] ?? RESULT_STATUS.ok;
+                                  return (
+                                    <tr key={i} className={cn(r.status === "sem_seguro" ? "bg-red-50" : r.status === "pagar_indevido" ? "bg-orange-50" : "")}>
+                                      <td className="px-3 py-1.5"><span className={cn("font-semibold", st.color)}>{st.label}</span></td>
+                                      <td className="px-3 py-1.5">{r.nomeHR ?? "—"}</td>
+                                      <td className="px-3 py-1.5 text-slate-500">{r.nome}</td>
+                                      <td className="px-3 py-1.5 font-mono text-slate-400">{r.item || "—"}</td>
+                                    </tr>
+                                  );
+                                })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

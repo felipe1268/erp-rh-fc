@@ -8932,4 +8932,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-26 23:30:00",
   },
+  {
+    version: 1300,
+    titulo: "Seguro de Vida: timeline mensal + botão limpar + remoção de seletores manuais",
+    descricao: "Três melhorias de UX: (1) Timeline calendário (Jan-Dez com navegação por ano) adicionada na aba 'Histórico de Importações', seguindo o padrão dos demais módulos — verde=sem divergências, vermelho=com divergências, cinza=sem dados; clicar no mês filtra a lista de importações. (2) Botão 'Limpar Importação' (ícone lixeira) por registro, com confirmação, remove o registro do banco via mutation deletarImportacao. (3) Seletores manuais de mês/ano removidos do modal de importação (modo PDF e modo texto) — a competência é detectada automaticamente do conteúdo do PDF; fallback exibe badge com data detectada.",
+    tipo: "melhoria",
+    modulos: "Seguro de Vida",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-26 10:30:00",
+  },
 ];
