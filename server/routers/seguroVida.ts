@@ -184,7 +184,7 @@ const P6_BLACKLIST = new Set([
 // P6: extrai nomes em MAIÚSCULAS sem exigir número de item na frente.
 // Cada linha é analisada; se parece nome de pessoa (2-7 palavras, sem dígitos,
 // sem palavras de cabeçalho, ao menos uma palavra com 4+ chars), é aceita.
-function extrairNomesP6(linhas: string[]): SeguradoParsed[] {
+function extrairNomesP6(linhas: string[], enableDiag = false): SeguradoParsed[] {
   const reNome = /^([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ]{1,}(?:\s+[A-Za-záàãâéêíóôõúüçñA-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ]{2,}){1,})/;
   const resultado: SeguradoParsed[] = [];
   let idx = 1;
@@ -202,6 +202,12 @@ function extrairNomesP6(linhas: string[]): SeguradoParsed[] {
     // Exige ao menos uma palavra com 4+ chars (descarta "DE E A" isolados)
     if (!palavras.some(w => w.length >= 4)) continue;
     const valores = coletarValoresAdjacentes(linhas, i, linha);
+    // Log diagnóstico para os primeiros 5 segurados
+    if (enableDiag && resultado.length < 5) {
+      const ctxLinhas = linhas.slice(Math.max(0, i - 1), i + 12);
+      const ctx = ctxLinhas.map((l, d) => `  [${Math.max(0, i-1)+d}]${d === 1 ? ">>>" : "   "} "${l}"`).join("\n");
+      console.log(`[SeguroVida] P6 seg#${resultado.length+1}: "${nomeRaw}"\n  valores(${valores.length})=[${valores.join(" | ")}]\n${ctx}`);
+    }
     resultado.push({ item: String(idx++), nome: nomeRaw, valores });
   }
   return resultado;
@@ -254,7 +260,9 @@ function parsarLinhasSegurados(linhas: string[]): { segurados: SeguradoParsed[];
     if (resultado.length >= 2) return { segurados: resultado, padrao: id };
   }
   // P6: fallback universal — identifica nomes em MAIÚSCULAS e cruza pelo nome
-  const p6 = extrairNomesP6(linhas);
+  // Log as primeiras 60 linhas do texto bruto para diagnóstico
+  console.log(`[SeguroVida] P6 texto bruto (primeiras 60 linhas):\n${linhas.slice(0, 60).map((l, i) => `  [${i}] "${l}"`).join("\n")}`);
+  const p6 = extrairNomesP6(linhas, true);
   if (p6.length >= 2) return { segurados: p6, padrao: "P6" };
   return { segurados: [], padrao: "nenhum" };
 }
