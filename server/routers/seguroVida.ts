@@ -213,19 +213,20 @@ function extrairValores(texto: string): string[] {
 }
 
 // Coleta até 7 valores monetários começando na linha do nome e, se insuficientes,
-// continua nas próximas linhas até encontrar >= 4 valores ou esgotar 3 linhas extras.
+// continua nas próximas linhas até encontrar >= 6 valores ou esgotar 7 linhas extras.
 function coletarValoresAdjacentes(linhas: string[], idxLinha: number, textoNomeLinha: string): string[] {
   let valores = extrairValores(textoNomeLinha);
-  // Se já temos >= 4 valores na mesma linha, está bom
-  if (valores.length >= 4) return valores.slice(0, 7);
-  // Caso contrário, funde com até 3 linhas seguintes que contenham números mas não nomes
-  for (let d = 1; d <= 3 && idxLinha + d < linhas.length; d++) {
+  // Se já temos >= 6 valores na mesma linha, está bom
+  if (valores.length >= 6) return valores.slice(0, 7);
+  // Caso contrário, funde com até 7 linhas seguintes que contenham números mas não nomes
+  for (let d = 1; d <= 7 && idxLinha + d < linhas.length; d++) {
     const proxLinha = linhas[idxLinha + d];
-    // Para se a próxima linha parece um novo nome de pessoa
-    if (/^[A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-Za-záàãâéêíóôõúüçñ\s]{10,}$/.test(proxLinha.trim())) break;
+    // Para se a próxima linha parece um novo nome de pessoa (com item na frente) ou outro segurado
+    if (/^\d{3,15}[\s\t]+[A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ]/.test(proxLinha.trim())) break;
+    if (/^[A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ\s]{10,}$/.test(proxLinha.trim())) break;
     const extras = extrairValores(proxLinha);
     if (extras.length > 0) valores = [...valores, ...extras];
-    if (valores.length >= 4) break;
+    if (valores.length >= 6) break;
   }
   return valores.slice(0, 7);
 }
@@ -242,6 +243,12 @@ function parsarLinhasSegurados(linhas: string[]): { segurados: SeguradoParsed[];
       const palavras = nomeRaw.split(/\s+/).filter(Boolean);
       if (palavras.length < 2 || /\d/.test(nomeRaw)) continue;
       const valores = coletarValoresAdjacentes(linhas, i, linha);
+      // Log diagnóstico para os primeiros 3 segurados
+      if (resultado.length < 3) {
+        const ctxLinhas = linhas.slice(Math.max(0, i-1), i+10);
+        const ctx = ctxLinhas.map((l, d) => `  [${i-1+d}]${d === 1 ? ">>>" : "   "} "${l}"`).join("\n");
+        console.log(`[SeguroVida] ${id} segurado#${resultado.length+1}: "${nomeRaw}"\n  valores(${valores.length})=[${valores.join(" | ")}]\n${ctx}`);
+      }
       resultado.push({ item: match[1].replace(/^0+/, "") || "0", nome: nomeRaw, valores });
     }
     if (resultado.length >= 2) return { segurados: resultado, padrao: id };
