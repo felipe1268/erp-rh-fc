@@ -895,4 +895,82 @@ export const seguroVidaRouter = router({
 
       return { inseridos, total: segurados.length };
     }),
+
+  listarInconsistencias: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const ids = resolveCompanyIds(input);
+
+      // 1. Demitidos/inativos que ainda têm cobertura ativa
+      const demitidos = rows(await db.execute(sql`
+        SELECT
+          s.id as cobertura_id, s.nome_completo, s.item_segurador,
+          s.status as cobertura_status, s.data_adesao,
+          s.apolice_vg, s.apolice_apc, s.premio_vg, s.premio_apc,
+          e.id as employee_id, e."nomeCompleto" as nome_rh,
+          e."cargo", e."funcao", e."tipoContrato",
+          e."dataDemissao", e.status as emp_status
+        FROM seguro_vida_coberturas s
+        JOIN employees e ON e.id = s.employee_id
+        WHERE s.company_id ${inIds(ids)}
+          AND s.status IN ('ativo','pendente_inclusao')
+          AND (e.status NOT IN ('Ativo','Ferias') OR e."dataDemissao" IS NOT NULL)
+          AND e."deletedAt" IS NULL
+        ORDER BY e."dataDemissao" DESC NULLS LAST, s.nome_completo
+      `));
+
+      // 2. PJs / Sócios com cobertura ativa
+      const pjsComCobertura = rows(await db.execute(sql`
+        SELECT
+          s.id as cobertura_id, s.nome_completo, s.item_segurador,
+          s.status as cobertura_status, s.data_adesao,
+          s.apolice_vg, s.apolice_apc, s.premio_vg, s.premio_apc,
+          e.id as employee_id, e."nomeCompleto" as nome_rh,
+          e."cargo", e."funcao", e."tipoContrato"
+        FROM seguro_vida_coberturas s
+        JOIN employees e ON e.id = s.employee_id
+        WHERE s.company_id ${inIds(ids)}
+          AND s.status IN ('ativo','pendente_inclusao')
+          AND e."tipoContrato" IN ('PJ','Socio')
+          AND e.status IN ('Ativo','Ferias')
+          AND e."deletedAt" IS NULL
+        ORDER BY s.nome_completo
+      `));
+
+      // 3. Não identificados — nomes do PDF que não bateram com nenhum funcionário
+      //    (status pagar_indevido nas últimas importações distintas por competência)
+      const importacoesRecentes = rows(await db.execute(sql`
+        SELECT DISTINCT ON (competencia)
+          id, competencia, json_resultado, data_importacao, total_pagar_indevido
+        FROM seguro_vida_importacoes
+        WHERE company_id ${inIds(ids)}
+          AND total_pagar_indevido > 0
+        ORDER BY competencia DESC, criado_em DESC
+        LIMIT 6
+      `));
+
+      const naoIdentificados: { competencia: string; nome: string; item: string; dataImportacao: string }[] = [];
+      for (const imp of importacoesRecentes) {
+        let resultado: any[] = [];
+        try { resultado = JSON.parse(imp.json_resultado ?? "[]"); } catch { /* skip */ }
+        for (const r of resultado) {
+          if (r.status === "pagar_indevido") {
+            naoIdentificados.push({
+              competencia: imp.competencia as string,
+              nome: r.nome as string,
+              item: (r.item ?? "") as string,
+              dataImportacao: (imp.data_importacao ?? "") as string,
+            });
+          }
+        }
+      }
+
+      return {
+        demitidos,
+        pjsComCobertura,
+        naoIdentificados,
+        totalInconsistencias: demitidos.length + pjsComCobertura.length + naoIdentificados.length,
+      };
+    }),
 });

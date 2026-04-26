@@ -8978,6 +8978,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-04-26 14:00:00",
   },
   {
+    version: 1306,
+    titulo: "Seguro de Vida: Aba Inconsistências",
+    descricao: "Nova aba 'Inconsistências' no módulo Seguro de Vida com três seções: (1) Demitidos/inativos que ainda constam com cobertura ativa na apólice — detectados via JOIN com a tabela de funcionários por status e dataDemissao; (2) PJs/Sócios que têm cobertura ativa registrada, já que eles normalmente não deveriam constar na apólice CLT; (3) Nomes presentes nos PDFs do corretor das últimas 6 competências com divergência que não foram cruzados com nenhum funcionário do sistema (status pagar_indevido no json_resultado). A aba exibe badge com o total de inconsistências e mostra seção em verde quando não há ocorrências.",
+    tipo: "feature",
+    modulos: "Seguro de Vida",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-26 15:00:00",
+  },
+  {
     version: 1305,
     titulo: "Seguro de Vida: P6 com pré-filtro, confirmação de importação e status visual",
     descricao: "Três melhorias: (1) P6 agora pré-filtra candidatos por similaridade de nome ≥ 0.28 contra os funcionários CLT reais, eliminando falsos positivos (cabeçalhos, textos de tabela). (2) Após o processamento do PDF, aparece botão 'Confirmar Importação' (verde) que cria os registros de cobertura (status ativo) para os funcionários reconhecidos — nenhuma alteração é salva antes da confirmação explícita do usuário. (3) Linhas da tabela Coberturas Ativas agora têm fundo verde (ativo), vermelho (sem cobertura), laranja (pend. cancelamento) e azul (pend. inclusão) para facilitar leitura visual.",
