@@ -800,6 +800,15 @@ export default function SeguroVida() {
 
   const [selectedCoverageIds, setSelectedCoverageIds] = useState<Set<number>>(new Set());
 
+  // ── Dialog de confirmação customizado (substitui confirm() nativo) ──
+  const [confirmDlg, setConfirmDlg] = useState<{
+    open: boolean; title: string; body: string; names?: string[]; onOk: () => void;
+  }>({ open: false, title: "", body: "", onOk: () => {} });
+
+  const showConfirm = (title: string, body: string, onOk: () => void, names?: string[]) => {
+    setConfirmDlg({ open: true, title, body, names, onOk });
+  };
+
   const cancelar = trpc.seguroVida.cancelarCobertura.useMutation({
     onSuccess: () => { toast.success("Cobertura cancelada"); utils.seguroVida.listarFuncionariosComStatus.invalidate(); utils.seguroVida.getResumo.invalidate(); },
     onError: e => toast.error(e.message),
@@ -1167,12 +1176,12 @@ export default function SeguroVida() {
                   className="bg-red-600 hover:bg-red-700 text-white h-7 text-xs ml-2"
                   disabled={cancelarMultiplas.isPending}
                   onClick={() => {
-                    const nomes = filtradas
-                      .filter((f: any) => selectedCoverageIds.has(f.cobertura_id))
-                      .map((f: any) => f.nomeCompleto).join(", ");
-                    if (confirm(`Cancelar ${selectedCoverageIds.size} cobertura${selectedCoverageIds.size > 1 ? "s" : ""}?\n\n${nomes}\n\nEsta ação não pode ser desfeita.`)) {
-                      cancelarMultiplas.mutate({ companyId, coberturaIds: [...selectedCoverageIds] });
-                    }
+                    showConfirm(
+                      `Cancelar ${selectedCoverageIds.size} cobertura${selectedCoverageIds.size > 1 ? "s" : ""}`,
+                      "Esta ação não pode ser desfeita.",
+                      () => cancelarMultiplas.mutate({ companyId, coberturaIds: [...selectedCoverageIds] }),
+                      filtradas.filter((f: any) => selectedCoverageIds.has(f.cobertura_id)).map((f: any) => f.nomeCompleto)
+                    );
                   }}>
                   {cancelarMultiplas.isPending
                     ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Cancelando...</>
@@ -1344,19 +1353,19 @@ export default function SeguroVida() {
                           <div className="flex items-center gap-1 flex-nowrap">
                             {f.statusSeguro === "pendente_inclusao" && isAdmin && f.cobertura_id && (
                               <Button size="sm" variant="ghost" className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 whitespace-nowrap"
-                                onClick={() => { if (confirm(`Confirmar inclusão de ${f.nomeCompleto} como Ativo?`)) confirmarStatus.mutate({ companyId, coberturaId: f.cobertura_id, novoStatus: "ativo" }); }}>
+                                onClick={() => showConfirm("Confirmar inclusão", `Confirmar inclusão de ${f.nomeCompleto} como Ativo?`, () => confirmarStatus.mutate({ companyId, coberturaId: f.cobertura_id, novoStatus: "ativo" }))}>
                                 <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Incluir
                               </Button>
                             )}
                             {f.statusSeguro === "pendente_cancelamento" && isAdmin && f.cobertura_id && (
                               <Button size="sm" variant="ghost" className="h-7 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 whitespace-nowrap"
-                                onClick={() => { if (confirm(`Confirmar cancelamento de ${f.nomeCompleto}?`)) confirmarStatus.mutate({ companyId, coberturaId: f.cobertura_id, novoStatus: "cancelado" }); }}>
+                                onClick={() => showConfirm("Confirmar cancelamento", `Cancelar cobertura de ${f.nomeCompleto}?`, () => confirmarStatus.mutate({ companyId, coberturaId: f.cobertura_id, novoStatus: "cancelado" }))}>
                                 <Ban className="h-3.5 w-3.5 mr-1" />Cancelar
                               </Button>
                             )}
                             {cancelavel && f.statusSeguro === "ativo" && (
                               <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                                onClick={() => { if (confirm(`Cancelar cobertura de ${f.nomeCompleto}?`)) cancelar.mutate({ companyId, coberturaId: f.cobertura_id }); }}>
+                                onClick={() => showConfirm("Cancelar cobertura", `Cancelar cobertura de ${f.nomeCompleto}?`, () => cancelar.mutate({ companyId, coberturaId: f.cobertura_id }))}>
                                 <Ban className="h-3.5 w-3.5 mr-1" />Cancelar
                               </Button>
                             )}
@@ -1713,9 +1722,11 @@ export default function SeguroVida() {
                         disabled={deletarImportacoes.isPending}
                         onClick={() => {
                           const idsParaDeletar = [...selectedIds].filter(id => todosIds.includes(id));
-                          if (confirm(`Remover ${idsParaDeletar.length} importaç${idsParaDeletar.length === 1 ? "ão" : "ões"}? Esta ação não pode ser desfeita.`)) {
-                            deletarImportacoes.mutate({ companyId, importacaoIds: idsParaDeletar });
-                          }
+                          showConfirm(
+                            `Remover ${idsParaDeletar.length} importaç${idsParaDeletar.length === 1 ? "ão" : "ões"}`,
+                            "Esta ação não pode ser desfeita.",
+                            () => deletarImportacoes.mutate({ companyId, importacaoIds: idsParaDeletar })
+                          );
                         }}>
                         {deletarImportacoes.isPending
                           ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Removendo...</>
@@ -1762,9 +1773,11 @@ export default function SeguroVida() {
                           <button
                             onClick={e => {
                               e.stopPropagation();
-                              if (confirm(`Remover importação da competência ${imp.competencia}? Esta ação não pode ser desfeita.`)) {
-                                deletarImportacao.mutate({ companyId, importacaoId: imp.id });
-                              }
+                              showConfirm(
+                                "Remover importação",
+                                `Remover competência ${imp.competencia}? Esta ação não pode ser desfeita.`,
+                                () => deletarImportacao.mutate({ companyId, importacaoId: imp.id })
+                              );
                             }}
                             className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors ml-1"
                             title="Limpar importação">
@@ -1791,6 +1804,36 @@ export default function SeguroVida() {
       {/* Modais */}
       <ImportModal open={showImport} onClose={() => setShowImport(false)} companyId={companyId} companyIds={companyIds} onSuccess={invalidate} />
       {isAdmin && <SeedModal open={showSeed} onClose={() => setShowSeed(false)} companyId={companyId} companyIds={companyIds} onSuccess={invalidate} />}
+
+      {/* Dialog de confirmação customizado */}
+      <Dialog open={confirmDlg.open} onOpenChange={open => { if (!open) setConfirmDlg(p => ({ ...p, open: false })); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+              {confirmDlg.title}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-1 space-y-3">
+            <p className="text-sm text-slate-600">{confirmDlg.body}</p>
+            {confirmDlg.names && confirmDlg.names.length > 0 && (
+              <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 leading-relaxed">
+                {confirmDlg.names.map((n, i) => (
+                  <div key={i} className="py-0.5 border-b last:border-0 border-slate-100">{n}</div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setConfirmDlg(p => ({ ...p, open: false }))}>
+              Cancelar
+            </Button>
+            <Button size="sm" variant="destructive" onClick={() => { confirmDlg.onOk(); setConfirmDlg(p => ({ ...p, open: false })); }}>
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
