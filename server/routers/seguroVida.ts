@@ -690,6 +690,19 @@ export const seguroVidaRouter = router({
       return { ok: true };
     }),
 
+  deletarImportacoes: protectedProcedure
+    .input(z.object({ companyId: z.number(), importacaoIds: z.array(z.number()).min(1).max(200) }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      for (const id of input.importacaoIds) {
+        await db.execute(sql`
+          DELETE FROM seguro_vida_importacoes
+          WHERE id = ${id} AND company_id = ${input.companyId}
+        `);
+      }
+      return { removidos: input.importacaoIds.length };
+    }),
+
   seedFromRelatorio: protectedProcedure
     .input(z.object({
       companyId:   z.number(),

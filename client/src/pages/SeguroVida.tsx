@@ -574,6 +574,7 @@ export default function SeguroVida() {
   const now = new Date();
   const [anoTimeline, setAnoTimeline] = useState(now.getFullYear());
   const [mesFiltro, setMesFiltro] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const utils = trpc.useUtils();
 
@@ -599,6 +600,16 @@ export default function SeguroVida() {
 
   const deletarImportacao = trpc.seguroVida.deletarImportacao.useMutation({
     onSuccess: () => { toast.success("Importação removida"); utils.seguroVida.listarImportacoes.invalidate(); utils.seguroVida.getResumo.invalidate(); },
+    onError: e => toast.error(e.message),
+  });
+
+  const deletarImportacoes = trpc.seguroVida.deletarImportacoes.useMutation({
+    onSuccess: (d) => {
+      toast.success(`${d.removidos} importaç${d.removidos === 1 ? "ão removida" : "ões removidas"} com sucesso`);
+      setSelectedIds(new Set());
+      utils.seguroVida.listarImportacoes.invalidate();
+      utils.seguroVida.getResumo.invalidate();
+    },
     onError: e => toast.error(e.message),
   });
 
@@ -964,15 +975,86 @@ export default function SeguroVida() {
                   </div>
                 );
               }
+              const todosIds = filtradas.map((imp: any) => imp.id);
+              const todosSelecionados = todosIds.length > 0 && todosIds.every((id: number) => selectedIds.has(id));
+              const algunsSelecionados = todosIds.some((id: number) => selectedIds.has(id));
+              const qtdSelecionados = todosIds.filter((id: number) => selectedIds.has(id)).length;
+
+              const toggleSelecionar = (id: number) => {
+                setSelectedIds(prev => {
+                  const next = new Set(prev);
+                  next.has(id) ? next.delete(id) : next.add(id);
+                  return next;
+                });
+              };
+              const toggleTodos = () => {
+                if (todosSelecionados) {
+                  setSelectedIds(prev => { const next = new Set(prev); todosIds.forEach((id: number) => next.delete(id)); return next; });
+                } else {
+                  setSelectedIds(prev => { const next = new Set(prev); todosIds.forEach((id: number) => next.add(id)); return next; });
+                }
+              };
+
               return (
-                <div className="space-y-3">
+                <div className="space-y-2">
+                  {/* Barra de ação em lote */}
+                  <div className={cn(
+                    "flex items-center justify-between px-4 py-2.5 rounded-xl border transition-all duration-200",
+                    qtdSelecionados > 0
+                      ? "bg-red-50 border-red-200 shadow-sm"
+                      : "bg-slate-50 border-slate-200"
+                  )}>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={todosSelecionados}
+                        ref={el => { if (el) el.indeterminate = algunsSelecionados && !todosSelecionados; }}
+                        onChange={toggleTodos}
+                        className="h-4 w-4 rounded border-slate-300 cursor-pointer accent-red-600"
+                        title="Selecionar todos"
+                      />
+                      <span className="text-xs font-medium text-slate-600">
+                        {qtdSelecionados > 0
+                          ? `${qtdSelecionados} selecionado${qtdSelecionados > 1 ? "s" : ""} de ${filtradas.length}`
+                          : `${filtradas.length} importaç${filtradas.length === 1 ? "ão" : "ões"}`}
+                      </span>
+                    </div>
+                    {qtdSelecionados > 0 && (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="h-7 text-xs gap-1.5"
+                        disabled={deletarImportacoes.isPending}
+                        onClick={() => {
+                          const idsParaDeletar = [...selectedIds].filter(id => todosIds.includes(id));
+                          if (confirm(`Remover ${idsParaDeletar.length} importaç${idsParaDeletar.length === 1 ? "ão" : "ões"}? Esta ação não pode ser desfeita.`)) {
+                            deletarImportacoes.mutate({ companyId, importacaoIds: idsParaDeletar });
+                          }
+                        }}>
+                        {deletarImportacoes.isPending
+                          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Removendo...</>
+                          : <><Trash2 className="h-3.5 w-3.5" />Excluir {qtdSelecionados} selecionado{qtdSelecionados > 1 ? "s" : ""}</>}
+                      </Button>
+                    )}
+                  </div>
+
                   {filtradas.map((imp: any) => (
-                    <div key={imp.id} className="border rounded-lg p-4 hover:bg-slate-50 transition-colors">
-                      <div className="flex items-center justify-between flex-wrap gap-2"
+                    <div key={imp.id} className={cn(
+                      "border rounded-xl transition-colors",
+                      selectedIds.has(imp.id) ? "border-red-300 bg-red-50/40" : "hover:bg-slate-50/80"
+                    )}>
+                      <div className="flex items-center justify-between flex-wrap gap-2 p-4"
                         onClick={() => setDetailImport(detailImport?.id === imp.id ? null : imp)}
                         style={{ cursor: "pointer" }}>
                         <div className="flex items-center gap-3">
-                          <FileText className="h-5 w-5 text-indigo-500" />
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(imp.id)}
+                            onChange={e => { e.stopPropagation(); toggleSelecionar(imp.id); }}
+                            onClick={e => e.stopPropagation()}
+                            className="h-4 w-4 rounded border-slate-300 cursor-pointer accent-red-600 shrink-0"
+                          />
+                          <FileText className="h-5 w-5 text-indigo-500 shrink-0" />
                           <div>
                             <p className="font-semibold text-sm">Competência {imp.competencia}</p>
                             <p className="text-xs text-muted-foreground">
