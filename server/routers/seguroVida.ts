@@ -1356,6 +1356,7 @@ export const seguroVidaRouter = router({
         competencia: string; nome: string; item: string; dataImportacao: string;
       }[] = [];
 
+      // Apenas semSeguro é extraído do json_resultado (não tem tabela própria ainda)
       for (const imp of importacoesRecentes) {
         let resultado: any[] = [];
         try { resultado = JSON.parse(imp.json_resultado ?? "[]"); } catch { /* skip */ }
@@ -1363,25 +1364,7 @@ export const seguroVidaRouter = router({
         const dataImp = (imp.data_importacao ?? "") as string;
 
         for (const r of resultado) {
-          if (r.status === "pagar_indevido") {
-            if (r.possivelDesligado) {
-              demitidosPDF.push({
-                competencia: comp,
-                nome: r.nome as string,
-                item: (r.item ?? "") as string,
-                dataImportacao: dataImp,
-                possivelDesligado: r.possivelDesligado,
-              });
-            } else if (!r.possivelPJ) {
-              naoIdentificados.push({
-                competencia: comp,
-                nome: r.nome as string,
-                item: (r.item ?? "") as string,
-                dataImportacao: dataImp,
-              });
-            }
-          } else if (r.status === "sem_seguro" && !semSeguroCompetencia) {
-            // usa apenas a competência mais recente para sem_seguro
+          if (r.status === "sem_seguro" && !semSeguroCompetencia) {
             semSeguroCompetencia = comp;
             semSeguro.push({
               competencia: comp,
@@ -1402,8 +1385,6 @@ export const seguroVidaRouter = router({
         }
       }
 
-      const demitidos = [...demitidosCobertura, ...demitidosPDF];
-
       // 4. Lê pagamentos indevidos persistidos na tabela dedicada (todos os não resolvidos)
       let pagarIndevidos: any[] = [];
       try {
@@ -1417,6 +1398,34 @@ export const seguroVidaRouter = router({
           ORDER BY competencia DESC, nome_pdf ASC
         `));
       } catch { /* tabela ainda não existe — ignora */ }
+
+      // demitidosPDF = indevidos cujo situacao indica desligamento/inatividade
+      const STATUS_DESLIGADO = new Set(["desligado", "recluso", "blacklist"]);
+      for (const r of pagarIndevidos) {
+        const sit = String(r.situacao ?? "").toLowerCase();
+        if (STATUS_DESLIGADO.has(sit)) {
+          demitidosPDF.push({
+            competencia: String(r.competencia),
+            nome: String(r.nome_pdf),
+            item: String(r.item_segurador ?? ""),
+            dataImportacao: r.importado_em ? String(r.importado_em) : "",
+            possivelDesligado: {
+              nome: String(r.nome_rh ?? ""),
+              dataDemissao: r.data_demissao ? String(r.data_demissao).split("T")[0] : null,
+              status: String(r.situacao ?? "Desligado"),
+            },
+          });
+        } else if (!r.possivel_pj && sit === "não identificado") {
+          naoIdentificados.push({
+            competencia: String(r.competencia),
+            nome: String(r.nome_pdf),
+            item: String(r.item_segurador ?? ""),
+            dataImportacao: r.importado_em ? String(r.importado_em) : "",
+          });
+        }
+      }
+
+      const demitidos = [...demitidosCobertura, ...demitidosPDF];
 
       return {
         demitidos,
