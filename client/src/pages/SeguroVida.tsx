@@ -226,9 +226,16 @@ function ResultadoMesDetalhe({ res }: { res: any }) {
                       </div>
                     )}
                     {r.possivelDesligado && r.status === "pagar_indevido" && (
-                      <div className="text-[10px] text-red-700 bg-red-50 border border-red-100 rounded px-1.5 py-0.5 mt-0.5 inline-flex items-center gap-1">
+                      <div className="text-[10px] text-red-700 bg-red-50 border border-red-100 rounded px-1.5 py-0.5 mt-0.5 inline-flex items-center gap-1 flex-wrap">
                         🔴 {r.possivelDesligado.status ?? "Desligado"}: <strong>{r.possivelDesligado.nome}</strong>
-                        {r.possivelDesligado.dataDemissao && <span className="text-red-500"> — saiu em {fmtDate(r.possivelDesligado.dataDemissao)}</span>}
+                        {r.possivelDesligado.dataDemissao
+                          ? <span className="text-red-500"> — saiu em {fmtDate(r.possivelDesligado.dataDemissao)}</span>
+                          : <span className="text-red-400 italic"> — sem data de saída registrada</span>}
+                      </div>
+                    )}
+                    {r.status === "pagar_indevido" && !r.possivelDesligado && !r.possivelPJ && (
+                      <div className="text-[10px] text-slate-500 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 mt-0.5 inline-flex items-center gap-1">
+                        ❓ Não encontrado no cadastro do ERP
                       </div>
                     )}
                   </td>
