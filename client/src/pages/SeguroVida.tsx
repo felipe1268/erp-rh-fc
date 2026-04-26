@@ -161,14 +161,26 @@ function ResultadoMesDetalhe({ res }: { res: any }) {
               <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Nome no Sistema (HR)</th>
               <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Nome na Lista (Corretor)</th>
               <th className="px-4 py-2.5 text-left font-semibold text-slate-600 w-28">Item</th>
-              <th className="px-4 py-2.5 text-left font-semibold text-slate-600 w-24">Similaridade</th>
+              <th className="px-4 py-2.5 text-left font-semibold text-slate-600 w-20 text-center">%</th>
+              <th className="px-4 py-2.5 text-left font-semibold text-slate-600">Importâncias Extraídas do PDF</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {linhasFiltradas.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-400">Nenhum resultado para este filtro.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-400">Nenhum resultado para este filtro.</td></tr>
             ) : linhasFiltradas.map((r: any, i: number) => {
               const st = RESULT_STATUS[r.status] ?? RESULT_STATUS.ok;
+              const vals: string[] = r.valores ?? [];
+              const hasInvDoenca = vals.length >= 7;
+              const covOff = hasInvDoenca ? 1 : 0;
+              const vLabels = vals.length > 0 ? [
+                { label: "MN",  val: vals[0] },
+                { label: "MA",  val: vals[1] },
+                { label: "IA",  val: vals[2] },
+                ...(hasInvDoenca ? [{ label: "ID", val: vals[3] }] : []),
+                { label: "VG",  val: vals[3 + covOff] },
+                { label: "APC", val: vals[4 + covOff] },
+              ].filter(v => v.val) : [];
               return (
                 <tr key={i} className={cn("hover:bg-slate-50 transition-colors",
                   r.status === "sem_seguro" ? "bg-red-50/50" :
@@ -186,8 +198,23 @@ function ResultadoMesDetalhe({ res }: { res: any }) {
                       : <span className="text-slate-300 italic">—</span>}
                   </td>
                   <td className="px-4 py-2.5 font-mono text-slate-400 text-xs">{r.item || "—"}</td>
-                  <td className="px-4 py-2.5 text-slate-400 text-xs">
+                  <td className="px-4 py-2.5 text-slate-400 text-xs text-center">
                     {r.similaridade != null ? `${Math.round(r.similaridade * 100)}%` : "—"}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    {vLabels.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {vLabels.map((v, vi) => (
+                          <span key={vi} className="inline-flex items-center gap-1 text-[10px] bg-emerald-50 border border-emerald-100 text-emerald-700 rounded px-1.5 py-0.5 font-mono whitespace-nowrap">
+                            <span className="font-bold text-emerald-500">{v.label}</span> {v.val}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-slate-300 italic">
+                        {r.status === "ok" ? "sem valores no PDF" : "—"}
+                      </span>
+                    )}
                   </td>
                 </tr>
               );

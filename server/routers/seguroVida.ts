@@ -300,6 +300,7 @@ async function executarCruzamento(
     similaridade?: number;
     dataAdmissao?: string;
     coberturaId?: number;
+    valores?: string[];
   }[] = [];
 
   const idxUsados = new Set<number>();
@@ -320,8 +321,8 @@ async function executarCruzamento(
     if (melhorSim >= THRESHOLD && melhorIdx >= 0) {
       idxUsados.add(melhorIdx);
       const matchedSeg = seguradosCorretora[melhorIdx];
-      // nome = nome exato do PDF (corretor); nomeHR = nome do sistema RH
-      resultado.push({ status: "ok", nome: matchedSeg.nome, item: matchedSeg.item, employeeId: emp.id, nomeHR: emp.nomeCompleto, similaridade: melhorSim, dataAdmissao, coberturaId: cobAtual?.id });
+      // nome = nome exato do PDF (corretor); nomeHR = nome do sistema RH; valores = importâncias do PDF
+      resultado.push({ status: "ok", nome: matchedSeg.nome, item: matchedSeg.item, employeeId: emp.id, nomeHR: emp.nomeCompleto, similaridade: melhorSim, dataAdmissao, coberturaId: cobAtual?.id, valores: matchedSeg.valores });
       // Persiste valores do PDF na cobertura já existente
       if (cobAtual?.id && matchedSeg.valores.length > 0) {
         const v = matchedSeg.valores;
@@ -775,6 +776,7 @@ export const seguroVidaRouter = router({
         nome:        z.string(),
         coberturaId: z.number().optional(),
         dataAdmissao: z.string().optional(),
+        valores:     z.array(z.string()).optional(),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -784,7 +786,32 @@ export const seguroVidaRouter = router({
 
       for (const r of input.resultado) {
         if ((r.status === "ok" || r.status === "novo") && r.employeeId) {
+          const v = r.valores ?? [];
+          const hasInvalidezDoenca = v.length >= 7;
+          const covOffset = hasInvalidezDoenca ? 1 : 0;
+          const morteNatural    = v[0] ?? null;
+          const morteAcidental  = v[1] ?? null;
+          const invAcidente     = v[2] ?? null;
+          const invDoenca       = hasInvalidezDoenca ? (v[3] ?? null) : null;
+          const premioVG        = v[3 + covOffset] ?? null;
+          const premioAPC       = v[4 + covOffset] ?? null;
+
           if (r.coberturaId) {
+            // Já tem cobertura — atualiza valores se vieram do PDF
+            if (v.length > 0) {
+              await db.execute(sql`
+                UPDATE seguro_vida_coberturas SET
+                  morte_natural      = ${morteNatural},
+                  morte_acidental    = ${morteAcidental},
+                  invalidez_acidente = ${invAcidente},
+                  invalidez_doenca   = ${invDoenca},
+                  premio_vg          = ${premioVG},
+                  premio_apc         = ${premioAPC},
+                  item_segurador     = COALESCE(${r.item || null}, item_segurador),
+                  atualizado_em      = NOW()
+                WHERE id = ${r.coberturaId}
+              `);
+            }
             mantidas++;
           } else {
             // Verifica se já existe registro ativo para não duplicar
@@ -793,19 +820,38 @@ export const seguroVidaRouter = router({
               WHERE company_id = ${input.companyId}
                 AND employee_id = ${r.employeeId}
                 AND status IN ('ativo','pendente_inclusao')
-            `))[0];
+            `))[0] as any;
             if (!existe) {
               await db.execute(sql`
                 INSERT INTO seguro_vida_coberturas
                   (company_id, employee_id, nome_completo, item_segurador,
-                   apolice_vg, apolice_apc, status, data_adesao, criado_por)
+                   apolice_vg, apolice_apc, status, data_adesao, criado_por,
+                   morte_natural, morte_acidental, invalidez_acidente, invalidez_doenca,
+                   premio_vg, premio_apc)
                 VALUES
                   (${input.companyId}, ${r.employeeId}, ${r.nome}, ${r.item || null},
                    ${input.apoliceVG ?? null}, ${input.apoliceAPC ?? null},
-                   'ativo', CURRENT_DATE, ${ctx.user.name ?? "Sistema"})
+                   'ativo', CURRENT_DATE, ${ctx.user.name ?? "Sistema"},
+                   ${morteNatural}, ${morteAcidental}, ${invAcidente}, ${invDoenca},
+                   ${premioVG}, ${premioAPC})
               `);
               criadas++;
             } else {
+              // Registro já existe — atualiza valores se vieram do PDF
+              if (v.length > 0) {
+                await db.execute(sql`
+                  UPDATE seguro_vida_coberturas SET
+                    morte_natural      = ${morteNatural},
+                    morte_acidental    = ${morteAcidental},
+                    invalidez_acidente = ${invAcidente},
+                    invalidez_doenca   = ${invDoenca},
+                    premio_vg          = ${premioVG},
+                    premio_apc         = ${premioAPC},
+                    item_segurador     = COALESCE(${r.item || null}, item_segurador),
+                    atualizado_em      = NOW()
+                  WHERE id = ${existe.id}
+                `);
+              }
               mantidas++;
             }
           }
