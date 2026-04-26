@@ -268,23 +268,46 @@ function parseNomesBrutos(texto: string): SeguradoParsed[] {
 }
 
 function parseSeguradora(texto: string): string | null {
-  const upper = texto.slice(0, 3000).toUpperCase();
+  // Busca em todo o texto (não apenas primeiros 3000 chars)
+  const upper = texto.toUpperCase();
   const mapa: [string, string][] = [
+    // Ordem importa: mais específico primeiro
+    ["TOKIO MARINE", "Tokio Marine"],
+    ["PORTO SEGURO", "Porto Seguro"],
+    ["SUL AMERICA", "SulAmérica"],
+    ["SULAMERICA", "SulAmérica"],
+    ["ITAU SEGUROS", "Itaú Seguros"],
+    ["ITAÚ SEGUROS", "Itaú Seguros"],
+    ["MONGERAL AEGON", "Mongeral Aegon"],
+    ["MONGERAL", "Mongeral Aegon"],
+    ["ICATU HARTFORD", "Icatu Seguros"],
+    ["ICATU SEGUROS", "Icatu Seguros"],
+    ["ICATU", "Icatu Seguros"],
+    ["BRADESCO VIDA", "Bradesco Seguros"],
+    ["BRADESCO SEGUROS", "Bradesco Seguros"],
     ["BRADESCO", "Bradesco Seguros"],
     ["METLIFE", "MetLife"],
-    ["PORTO SEGURO", "Porto Seguro"],
-    ["SULAMERICA", "SulAmérica"],
-    ["SUL AMERICA", "SulAmérica"],
-    ["ITAU SEGUROS", "Itaú Seguros"],
+    ["PRUDENTIAL", "Prudential"],
     ["ZURICH", "Zurich"],
+    ["ZUERICH", "Zurich"],
     ["ALLIANZ", "Allianz"],
     ["GENERALI", "Generali"],
-    ["ICATU", "Icatu Seguros"],
-    ["MONGERAL", "Mongeral Aegon"],
-    ["TOKIO MARINE", "Tokio Marine"],
     ["CHUBB", "Chubb"],
-    ["AXA", "AXA Seguros"],
-    ["PRUDENTIAL", "Prudential"],
+    ["AXA SEGUROS", "AXA Seguros"],
+    ["LIBERTY SEGUROS", "Liberty Seguros"],
+    ["LIBERTY", "Liberty Seguros"],
+    ["MAPFRE", "Mapfre Seguros"],
+    ["SUHAI", "Suhai Seguros"],
+    ["HDI SEGUROS", "HDI Seguros"],
+    ["HDI", "HDI Seguros"],
+    ["SOMPO", "Sompo Seguros"],
+    ["NATIONWIDE", "Nationwide Seguros"],
+    ["BB SEGUROS", "BB Seguros"],
+    ["BANCO DO BRASIL SEGUROS", "BB Seguros"],
+    ["CAIXA SEGUROS", "Caixa Seguros"],
+    ["CAPEMISA", "Capemisa"],
+    ["PREVISUL", "Previsul"],
+    ["SURA", "Sura Seguros"],
   ];
   for (const [pattern, name] of mapa) {
     if (upper.includes(pattern)) return name;
@@ -392,25 +415,9 @@ async function executarCruzamento(
       idxUsados.add(melhorIdx);
       const matchedSeg = seguradosCorretora[melhorIdx];
       // nome = nome exato do PDF (corretor); nomeHR = nome do sistema RH; valores = importâncias do PDF
-      resultado.push({ status: "ok", nome: matchedSeg.nome, item: matchedSeg.item, employeeId: emp.id, nomeHR: emp.nomeCompleto, tipoContrato: emp.tipoContrato, similaridade: melhorSim, dataAdmissao, coberturaId: cobAtual?.id, valores: matchedSeg.valores });
-      // Persiste valores do PDF na cobertura já existente
-      if (cobAtual?.id && matchedSeg.valores.length > 0) {
-        const v = matchedSeg.valores;
-        const hasInvalidezDoenca = v.length >= 7;
-        const covOffset = hasInvalidezDoenca ? 1 : 0;
-        await db.execute(sql`
-          UPDATE seguro_vida_coberturas SET
-            morte_natural       = ${v[0] ?? null},
-            morte_acidental     = ${v[1] ?? null},
-            invalidez_acidente  = ${v[2] ?? null},
-            invalidez_doenca    = ${hasInvalidezDoenca ? (v[3] ?? null) : null},
-            premio_vg           = ${v[3 + covOffset] ?? null},
-            premio_apc          = ${v[4 + covOffset] ?? null},
-            seguradora          = COALESCE(seguradora, ${seguradora ?? null}),
-            atualizado_em       = NOW()
-          WHERE id = ${cobAtual.id}
-        `);
-      }
+      // Nota: não fazemos UPDATE de coberturas aqui — apenas coletamos o resultado para o usuário confirmar.
+      // O UPDATE real acontece em confirmarCruzamento, evitando que múltiplos PDFs sobrescrevam dados entre si.
+      resultado.push({ status: "ok", nome: matchedSeg.nome, item: matchedSeg.item, employeeId: emp.id, nomeHR: emp.nomeCompleto, tipoContrato: emp.tipoContrato, similaridade: melhorSim, dataAdmissao, coberturaId: cobAtual?.id, valores: matchedSeg.valores, seguradora: seguradora ?? null });
     } else if (isNovo) {
       // Recém-admitido: não estava no PDF ainda — sem nome do corretor
       resultado.push({ status: "novo", nome: "", item: "", employeeId: emp.id, nomeHR: emp.nomeCompleto, dataAdmissao, coberturaId: cobAtual?.id });
@@ -901,7 +908,8 @@ export const seguroVidaRouter = router({
             seguradoraDetectada ?? undefined, arq.fileBase64, input.incluirPJ
           );
 
-          resultados.push({ filename: arq.filename, autoDetectado, competenciaFallback: !autoDetectado, ...resultado });
+          if (seguradoraDetectada) console.log(`[SeguroVida] ${arq.filename}: seguradora detectada = "${seguradoraDetectada}"`);
+          resultados.push({ filename: arq.filename, autoDetectado, competenciaFallback: !autoDetectado, seguradoraDetectada, ...resultado });
         } catch (err: any) {
           console.error(`[SeguroVida] Erro inesperado em ${arq.filename}:`, err.message);
           resultados.push({ competencia: arq.competencia, competenciaFallback: true, filename: arq.filename, erro: `Erro: ${err.message}` });
@@ -928,6 +936,7 @@ export const seguroVidaRouter = router({
         coberturaId: z.number().optional(),
         dataAdmissao: z.string().optional(),
         valores:     z.array(z.string()).optional(),
+        seguradora:  z.string().nullable().optional(),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -935,7 +944,20 @@ export const seguroVidaRouter = router({
       let criadas = 0;
       let mantidas = 0;
 
+      // Deduplicar por coberturaId: quando múltiplos PDFs são importados juntos,
+      // o mesmo funcionário pode aparecer em mais de um resultado.
+      // Usamos o resultado com mais valores (maior `valores.length`).
+      const deduplicados = new Map<string, typeof input.resultado[0]>();
       for (const r of input.resultado) {
+        const key = r.coberturaId ? `cob:${r.coberturaId}` : `emp:${r.employeeId}:${r.status}`;
+        const existente = deduplicados.get(key);
+        if (!existente || (r.valores?.length ?? 0) > (existente.valores?.length ?? 0)) {
+          deduplicados.set(key, r);
+        }
+      }
+      const resultadoFinal = [...deduplicados.values()];
+
+      for (const r of resultadoFinal) {
         if ((r.status === "ok" || r.status === "novo") && r.employeeId) {
           const v = r.valores ?? [];
           const hasInvalidezDoenca = v.length >= 7;
@@ -946,6 +968,7 @@ export const seguroVidaRouter = router({
           const invDoenca       = hasInvalidezDoenca ? (v[3] ?? null) : null;
           const premioVG        = v[3 + covOffset] ?? null;
           const premioAPC       = v[4 + covOffset] ?? null;
+          const seguradora      = r.seguradora ?? null;
 
           if (r.coberturaId) {
             // Já tem cobertura — atualiza valores se vieram do PDF
@@ -958,6 +981,7 @@ export const seguroVidaRouter = router({
                   invalidez_doenca   = ${invDoenca},
                   premio_vg          = ${premioVG},
                   premio_apc         = ${premioAPC},
+                  seguradora         = COALESCE(${seguradora}, seguradora),
                   item_segurador     = COALESCE(${r.item || null}, item_segurador),
                   atualizado_em      = NOW()
                 WHERE id = ${r.coberturaId}
@@ -977,12 +1001,14 @@ export const seguroVidaRouter = router({
                 INSERT INTO seguro_vida_coberturas
                   (company_id, employee_id, nome_completo, item_segurador,
                    apolice_vg, apolice_apc, status, data_adesao, criado_por,
+                   seguradora,
                    morte_natural, morte_acidental, invalidez_acidente, invalidez_doenca,
                    premio_vg, premio_apc)
                 VALUES
                   (${input.companyId}, ${r.employeeId}, ${r.nome}, ${r.item || null},
                    ${input.apoliceVG ?? null}, ${input.apoliceAPC ?? null},
                    'ativo', CURRENT_DATE, ${ctx.user.name ?? "Sistema"},
+                   ${seguradora},
                    ${morteNatural}, ${morteAcidental}, ${invAcidente}, ${invDoenca},
                    ${premioVG}, ${premioAPC})
               `);
@@ -998,6 +1024,7 @@ export const seguroVidaRouter = router({
                     invalidez_doenca   = ${invDoenca},
                     premio_vg          = ${premioVG},
                     premio_apc         = ${premioAPC},
+                    seguradora         = COALESCE(${seguradora}, seguradora),
                     item_segurador     = COALESCE(${r.item || null}, item_segurador),
                     atualizado_em      = NOW()
                   WHERE id = ${existe.id}

@@ -524,6 +524,16 @@ function ImportModal({ open, onClose, companyId, companyIds, onSuccess }: {
                         <p className={cn("font-bold text-sm", isActive ? "text-white" : "text-slate-800")}>
                           {mesLabel} {ano}
                         </p>
+                        {res.filename && (
+                          <p className={cn("text-[10px] mt-0.5 truncate max-w-[160px]", isActive ? "text-white/60" : "text-slate-400")}>
+                            {res.filename}
+                          </p>
+                        )}
+                        {res.seguradoraDetectada && (
+                          <p className={cn("text-[10px] font-medium", isActive ? "text-indigo-200" : "text-indigo-600")}>
+                            {res.seguradoraDetectada}
+                          </p>
+                        )}
                         {res.erro ? (
                           <p className={cn("text-[11px] mt-0.5", isActive ? "text-white/70" : "text-orange-600")}>Erro ao ler PDF</p>
                         ) : (
