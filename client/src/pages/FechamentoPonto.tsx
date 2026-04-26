@@ -739,10 +739,6 @@ export default function FechamentoPonto() {
     { companyId, companyIds, mesReferencia: mesAno, status: "todas" },
     { enabled: rankingModal === "extras" && (companyId > 0 || companyIds.length > 0) }
   );
-  const diasEmployeeQuery = trpc.fechamentoPonto.getDiasEmployee.useQuery(
-    { companyId, companyIds, employeeId: diasDetalhe?.employeeId ?? 0, dataInicio: periodoIni ?? "", dataFim: periodoFim ?? "" },
-    { enabled: !!diasDetalhe && !!periodoIni && !!periodoFim && (companyId > 0 || companyIds.length > 0) }
-  );
   const unmatchedData = trpc.fechamentoPonto.getUnmatchedRecords.useQuery(
     { companyId, mesReferencia: mesAno }, { enabled: companyId > 0 || companyIds.length > 0 }
   );
@@ -1029,6 +1025,11 @@ export default function FechamentoPonto() {
     const fim = `${ano}-${String(mes).padStart(2, "0")}-15`;
     return { periodoIni: ini, periodoFim: fim };
   }, [cicloInicio, cicloFim, mesAno]);
+
+  const diasEmployeeQuery = trpc.fechamentoPonto.getDiasEmployee.useQuery(
+    { companyId, companyIds, employeeId: diasDetalhe?.employeeId ?? 0, dataInicio: periodoIni ?? "", dataFim: periodoFim ?? "" },
+    { enabled: !!diasDetalhe && !!periodoIni && !!periodoFim && (companyId > 0 || companyIds.length > 0) }
+  );
 
   // Total de dias corridos no período (numerador = dias com ponto, denominador = dias corridos)
   // Usamos dias corridos (e não só úteis) para evitar >100%: quem trabalha domingo também conta
