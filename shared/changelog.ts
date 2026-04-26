@@ -8914,4 +8914,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-26 23:00:00",
   },
+  {
+    version: 1298,
+    titulo: "Seguro de Vida: correção crítica — tabelas criadas e helper rows() para db.execute()",
+    descricao: "Dois bugs bloqueantes resolvidos: (1) Tabelas seguro_vida_coberturas e seguro_vida_importacoes criadas diretamente no banco (CREATE TABLE IF NOT EXISTS no startup não estava sendo executado em determinadas reinicializações). (2) Adicionado helper rows() que extrai corretamente o array de linhas do resultado de db.execute(), que pode retornar QueryResult{rows:[]} ou array direto dependendo da versão do driver — eliminando o erro 'not iterable' em getResumo e o cruzamento retornando 0 funcionários CLT.",
+    tipo: "correcao",
+    modulos: "Seguro de Vida",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-26 23:30:00",
+  },
 ];

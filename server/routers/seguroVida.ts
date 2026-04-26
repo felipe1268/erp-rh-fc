@@ -12,6 +12,14 @@ function inIds(ids: number[]): SQL {
   return sql`IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`;
 }
 
+// Helper: extrai array de linhas do resultado de db.execute()
+// Drizzle com node-postgres pode retornar QueryResult { rows: [] } ou array direto
+function rows(result: any): any[] {
+  if (Array.isArray(result)) return result;
+  if (result?.rows && Array.isArray(result.rows)) return result.rows;
+  return [];
+}
+
 // Normaliza nome para comparação: maiúsculo, sem acento, sem espaços extras
 function normalizeName(name: string): string {
   return name
@@ -114,20 +122,21 @@ async function executarCruzamento(
   apoliceAPC: string | undefined,
   importadoPor: string,
 ) {
-  const cltAtivos = await db.execute(sql`
+  const cltAtivos = rows(await db.execute(sql`
     SELECT id, "nomeCompleto", "cargo", "funcao", "dataAdmissao"
     FROM employees
     WHERE "companyId" ${inIds(ids)}
       AND status IN ('Ativo','Ferias')
       AND COALESCE("tipoContrato",'CLT') NOT IN ('PJ','Socio')
       AND "deletedAt" IS NULL
-  `) as any[];
+  `));
+  console.log(`[SeguroVida] executarCruzamento — ids=${JSON.stringify(ids)}, cltAtivos=${cltAtivos.length}`);
 
-  const coberturasAtivas = await db.execute(sql`
+  const coberturasAtivas = rows(await db.execute(sql`
     SELECT id, employee_id, nome_completo, item_segurador, status
     FROM seguro_vida_coberturas
     WHERE company_id ${inIds(ids)} AND status IN ('ativo','pendente_inclusao')
-  `) as any[];
+  `));
 
   const THRESHOLD = 0.60;
   const nomesSeguradosNorm = seguradosCorretora.map(s => normalizeName(s.nome));
@@ -145,7 +154,7 @@ async function executarCruzamento(
 
   const idxUsados = new Set<number>();
 
-  for (const emp of (Array.isArray(cltAtivos) ? cltAtivos : []) as any[]) {
+  for (const emp of cltAtivos) {
     const nNorm = normalizeName(emp.nomeCompleto);
     let melhorIdx = -1;
     let melhorSim = 0;
@@ -154,7 +163,7 @@ async function executarCruzamento(
       if (sim > melhorSim) { melhorSim = sim; melhorIdx = i; }
     });
 
-    const cobAtual = (Array.isArray(coberturasAtivas) ? coberturasAtivas : []).find((c: any) => c.employee_id === emp.id);
+    const cobAtual = coberturasAtivas.find((c: any) => c.employee_id === emp.id);
     const dataAdmissao = emp.dataAdmissao ? String(emp.dataAdmissao) : undefined;
     const isNovo = dataAdmissao && (new Date().getTime() - new Date(dataAdmissao).getTime()) < 45 * 86400000;
 
@@ -211,25 +220,28 @@ export const seguroVidaRouter = router({
       const db = (await getDb())!;
       const ids = resolveCompanyIds(input);
 
-      const [{ totalAtivos }] = await db.execute(sql`
+      const resumoAtivos = rows(await db.execute(sql`
         SELECT COUNT(*) as "totalAtivos"
         FROM seguro_vida_coberturas
         WHERE company_id ${inIds(ids)} AND status = 'ativo'
-      `) as any;
+      `));
+      const totalAtivos = resumoAtivos[0]?.totalAtivos ?? 0;
 
-      const [{ totalPendInclusao }] = await db.execute(sql`
+      const resumoPendInclusao = rows(await db.execute(sql`
         SELECT COUNT(*) as "totalPendInclusao"
         FROM seguro_vida_coberturas
         WHERE company_id ${inIds(ids)} AND status = 'pendente_inclusao'
-      `) as any;
+      `));
+      const totalPendInclusao = resumoPendInclusao[0]?.totalPendInclusao ?? 0;
 
-      const [{ totalPendCancel }] = await db.execute(sql`
+      const resumoPendCancel = rows(await db.execute(sql`
         SELECT COUNT(*) as "totalPendCancel"
         FROM seguro_vida_coberturas
         WHERE company_id ${inIds(ids)} AND status = 'pendente_cancelamento'
-      `) as any;
+      `));
+      const totalPendCancel = resumoPendCancel[0]?.totalPendCancel ?? 0;
 
-      const cltAtivos = await db.execute(sql`
+      const cltAtivos = rows(await db.execute(sql`
         SELECT e.id, e."nomeCompleto"
         FROM employees e
         WHERE e."companyId" ${inIds(ids)}
@@ -240,17 +252,18 @@ export const seguroVidaRouter = router({
             SELECT 1 FROM seguro_vida_coberturas s
             WHERE s.employee_id = e.id AND s.status IN ('ativo','pendente_inclusao')
           )
-      `) as any;
+      `));
 
-      const semSeguro = Array.isArray(cltAtivos) ? cltAtivos.length : 0;
+      const semSeguro = cltAtivos.length;
 
-      const [ultimaImportacao] = await db.execute(sql`
+      const ultimaImportacaoRows = rows(await db.execute(sql`
         SELECT competencia, data_importacao, total_segurados, total_sem_seguro, total_pagar_indevido
         FROM seguro_vida_importacoes
         WHERE company_id ${inIds(ids)}
         ORDER BY criado_em DESC
         LIMIT 1
-      `) as any;
+      `));
+      const ultimaImportacao = ultimaImportacaoRows[0] ?? null;
 
       return {
         totalSeguradosAtivos: Number(totalAtivos) || 0,
@@ -267,7 +280,7 @@ export const seguroVidaRouter = router({
       const db = (await getDb())!;
       const ids = resolveCompanyIds(input);
 
-      const coberturas = await db.execute(sql`
+      const coberturas = rows(await db.execute(sql`
         SELECT
           s.id, s.company_id, s.employee_id, s.nome_completo, s.item_segurador,
           s.apolice_vg, s.apolice_apc, s.status, s.data_adesao, s.data_cancelamento,
@@ -278,9 +291,9 @@ export const seguroVidaRouter = router({
         WHERE s.company_id ${inIds(ids)}
           ${input.status ? sql`AND s.status = ${input.status}` : sql``}
         ORDER BY s.nome_completo
-      `) as any;
+      `));
 
-      return Array.isArray(coberturas) ? coberturas : [];
+      return coberturas;
     }),
 
   listarFuncionariosComStatus: protectedProcedure
@@ -289,7 +302,7 @@ export const seguroVidaRouter = router({
       const db = (await getDb())!;
       const ids = resolveCompanyIds(input);
 
-      const funcionarios = await db.execute(sql`
+      const funcionarios = rows(await db.execute(sql`
         SELECT
           e.id, e."nomeCompleto", e."cargo", e."funcao", e."dataAdmissao",
           e."tipoContrato", e.status as emp_status,
@@ -302,9 +315,9 @@ export const seguroVidaRouter = router({
           AND COALESCE(e."tipoContrato",'CLT') NOT IN ('PJ','Socio')
           AND e."deletedAt" IS NULL
         ORDER BY e."nomeCompleto"
-      `) as any;
+      `));
 
-      return Array.isArray(funcionarios) ? funcionarios : [];
+      return funcionarios;
     }),
 
   getCoberturaByEmployee: protectedProcedure
@@ -312,12 +325,12 @@ export const seguroVidaRouter = router({
     .query(async ({ input }) => {
       const db = (await getDb())!;
 
-      const [cobertura] = await db.execute(sql`
+      const cobertura = rows(await db.execute(sql`
         SELECT * FROM seguro_vida_coberturas
         WHERE company_id = ${input.companyId} AND employee_id = ${input.employeeId}
         ORDER BY criado_em DESC
         LIMIT 1
-      `) as any;
+      `))[0];
 
       return cobertura || null;
     }),
@@ -506,7 +519,7 @@ export const seguroVidaRouter = router({
       const db = (await getDb())!;
       const ids = resolveCompanyIds(input);
 
-      const rows = await db.execute(sql`
+      const importacoes = rows(await db.execute(sql`
         SELECT id, competencia, data_importacao, total_segurados, total_ativos,
                total_ok, total_sem_seguro, total_pagar_indevido, total_novos,
                importado_por, criado_em
@@ -514,9 +527,9 @@ export const seguroVidaRouter = router({
         WHERE company_id ${inIds(ids)}
         ORDER BY criado_em DESC
         LIMIT 24
-      `) as any;
+      `));
 
-      return Array.isArray(rows) ? rows : [];
+      return importacoes;
     }),
 
   getImportacao: protectedProcedure
@@ -524,10 +537,10 @@ export const seguroVidaRouter = router({
     .query(async ({ input }) => {
       const db = (await getDb())!;
 
-      const [row] = await db.execute(sql`
+      const row = rows(await db.execute(sql`
         SELECT * FROM seguro_vida_importacoes
         WHERE id = ${input.importacaoId} AND company_id = ${input.companyId}
-      `) as any;
+      `))[0];
 
       return row || null;
     }),
@@ -549,24 +562,24 @@ export const seguroVidaRouter = router({
       const segurados = parseNomesBrutos(input.nomesBrutos);
       if (segurados.length < 2) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum segurado encontrado no texto" });
 
-      const cltAtivos = await db.execute(sql`
+      const cltAtivos = rows(await db.execute(sql`
         SELECT id, "nomeCompleto" FROM employees
         WHERE "companyId" ${inIds(ids)} AND status = 'Ativo' AND "deletedAt" IS NULL
-      `) as any[];
+      `));
 
       let inseridos = 0;
       for (const s of segurados) {
         let empId: number | null = null;
         let melhorSim = 0;
-        for (const emp of (Array.isArray(cltAtivos) ? cltAtivos : []) as any[]) {
+        for (const emp of cltAtivos) {
           const sim = nameSimilarity(s.nome, emp.nomeCompleto);
           if (sim > melhorSim) { melhorSim = sim; if (sim >= 0.65) empId = emp.id; }
         }
 
-        const [existe] = await db.execute(sql`
+        const existe = rows(await db.execute(sql`
           SELECT id FROM seguro_vida_coberturas
           WHERE company_id = ${input.companyId} AND nome_completo = ${s.nome} AND status = 'ativo'
-        `) as any;
+        `))[0];
         if (existe) continue;
 
         await db.execute(sql`
