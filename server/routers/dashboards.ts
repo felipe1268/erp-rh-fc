@@ -286,60 +286,86 @@ async function getDashCartaoPonto(companyId: number, mesRef?: string, companyIds
   // Totais
   let totalHorasTrab = 0, totalHorasExtras = 0, totalFaltas = 0, totalAtrasos = 0;
   let totalFaltasDias = 0, totalAtrasosComTolerancia = 0;
-  const porFuncionario: Record<number, { horasTrab: number; horasExtras: number; faltas: number; faltasDias: number; atrasos: number; atrasosMinutos: number; dias: number }> = {};
+  const porFuncionario: Record<number, {
+    horasTrab: number; horasExtras: number; faltas: number; faltasDias: number;
+    atrasos: number; atrasosMinutos: number; dias: number;
+    faltasDatasSet: Set<string>; // datas (YYYY-MM-DD) com falta real
+  }> = {};
 
   // CLT Art. 58, §1º: Tolerância de 10 minutos diários (não serão descontados atrasos <= 10min/dia)
   const TOLERANCIA_CLT_MINUTOS = 10;
 
-  // Agrupar registros por funcionário+data para calcular tolerância diária
-  const registrosPorEmpDia: Record<string, typeof registros> = {};
+  // Pré-agrupa registros por funcionário+data para detectar se houve trabalho em qualquer obra naquele dia
+  // Um dia só é falta se NÃO houve nenhuma batida com horas trabalhadas naquele dia (em nenhuma obra)
+  const horasPorEmpDia: Record<string, number> = {};
+  const faltasPorEmpDia: Record<string, number> = {};
+  const atrasosPorEmpDia: Record<string, number> = {};
   for (const r of registros) {
     const key = `${r.employeeId}_${r.data}`;
-    if (!registrosPorEmpDia[key]) registrosPorEmpDia[key] = [];
-    registrosPorEmpDia[key].push(r);
+    horasPorEmpDia[key] = (horasPorEmpDia[key] || 0) + parseFloat(r.horasTrabalhadas || "0");
+    faltasPorEmpDia[key] = (faltasPorEmpDia[key] || 0) + parseFloat(r.faltas || "0");
+    atrasosPorEmpDia[key] = (atrasosPorEmpDia[key] || 0) + parseFloat(r.atrasos || "0");
   }
+
+  // Conjunto de chaves emp+data já processadas (para evitar dupla contagem entre obras)
+  const processedEmpDia = new Set<string>();
 
   for (const r of registros) {
+    const key = `${r.employeeId}_${r.data}`;
     const ht = parseFloat(r.horasTrabalhadas || "0");
     const he = parseFloat(r.horasExtras || "0");
-    const ft = parseFloat(r.faltas || "0");
-    const atRaw = parseFloat(r.atrasos || "0");
     totalHorasTrab += ht;
     totalHorasExtras += he;
-    totalFaltas += ft;
-    if (!porFuncionario[r.employeeId]) porFuncionario[r.employeeId] = { horasTrab: 0, horasExtras: 0, faltas: 0, faltasDias: 0, atrasos: 0, atrasosMinutos: 0, dias: 0 };
+    if (!porFuncionario[r.employeeId]) porFuncionario[r.employeeId] = {
+      horasTrab: 0, horasExtras: 0, faltas: 0, faltasDias: 0,
+      atrasos: 0, atrasosMinutos: 0, dias: 0, faltasDatasSet: new Set(),
+    };
     porFuncionario[r.employeeId].horasTrab += ht;
     porFuncionario[r.employeeId].horasExtras += he;
-    porFuncionario[r.employeeId].faltas += ft;
 
-    // Contar dia de falta: se há falta registrada (faltas > 0), conta como 1 dia inteiro
-    // Não existe "meio dia" de falta — ou faltou ou não faltou
-    if (ft > 0) {
-      porFuncionario[r.employeeId].faltasDias += 1;
-      totalFaltasDias += 1;
+    // Lógica por dia única — só processa cada emp+data uma vez
+    if (!processedEmpDia.has(key)) {
+      processedEmpDia.add(key);
+      porFuncionario[r.employeeId].dias++;
+
+      const htDia = horasPorEmpDia[key] || 0;
+      const ftDia = faltasPorEmpDia[key] || 0;
+      const atDia = atrasosPorEmpDia[key] || 0;
+
+      totalFaltas += ftDia;
+      porFuncionario[r.employeeId].faltas += ftDia;
+
+      // Dia de falta: tem registro de falta E não trabalhou nenhuma hora em NENHUMA obra
+      // (evita contar como falta quando o funcionário tinha duas obras e bateu ponto em uma)
+      if (ftDia > 0 && htDia === 0) {
+        porFuncionario[r.employeeId].faltasDias++;
+        porFuncionario[r.employeeId].faltasDatasSet.add(r.data);
+        totalFaltasDias++;
+      }
+
+      // Atrasos: aplicar tolerância CLT Art. 58 §1º
+      const atMinutos = Math.round(atDia * 60);
+      if (atMinutos > TOLERANCIA_CLT_MINUTOS) {
+        porFuncionario[r.employeeId].atrasos += atDia;
+        porFuncionario[r.employeeId].atrasosMinutos += atMinutos;
+        totalAtrasos += atDia;
+        totalAtrasosComTolerancia += atMinutos;
+      }
     }
-
-    // Atrasos: aplicar tolerância CLT Art. 58 §1º
-    // Converter horas para minutos para comparar com tolerância
-    const atMinutos = Math.round(atRaw * 60);
-    if (atMinutos > TOLERANCIA_CLT_MINUTOS) {
-      // Acima da tolerância: conta o total (não só o excedente, conforme jurisprudência)
-      porFuncionario[r.employeeId].atrasos += atRaw;
-      porFuncionario[r.employeeId].atrasosMinutos += atMinutos;
-      totalAtrasos += atRaw;
-      totalAtrasosComTolerancia += atMinutos;
-    }
-    // Até 10min: tolerância legal, não conta
-
-    porFuncionario[r.employeeId].dias++;
   }
 
-  // Ranking de faltas (em DIAS)
+  // Ranking de faltas (em DIAS) — inclui lista de datas para popup
   const rankingFaltas = Object.entries(porFuncionario)
     .filter(([, d]) => d.faltasDias > 0)
     .map(([empId, d]) => {
       const emp = empMap.get(Number(empId));
-      return { employeeId: Number(empId), nome: emp?.nome || `Func. ${empId}`, funcao: emp?.funcao || "-", isDesligado: isDesligadoStatus(emp?.status), faltasDias: d.faltasDias, faltasHoras: d.faltas };
+      const faltasDatas = [...d.faltasDatasSet].sort();
+      return {
+        employeeId: Number(empId), nome: emp?.nome || `Func. ${empId}`,
+        funcao: emp?.funcao || "-", isDesligado: isDesligadoStatus(emp?.status),
+        faltasDias: d.faltasDias, faltasHoras: d.faltas,
+        faltasDatas, // ex: ["2026-04-02","2026-04-07"]
+      };
     }).sort((a, b) => b.faltasDias - a.faltasDias).slice(0, 10);
 
   // Ranking de atrasos (com tolerância CLT Art. 58 §1º - 10min/dia)

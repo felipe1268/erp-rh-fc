@@ -8,11 +8,86 @@ import { EmpNameWithStatus } from "@/components/EmpStatusBadge";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, Users, AlertTriangle, Timer, CalendarOff, TrendingDown, UserX, ExternalLink, Info, ArrowLeft } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Clock, Users, Timer, CalendarOff, TrendingDown, UserX, ExternalLink, Info, ArrowLeft, X, CalendarX2 } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useMemo } from "react";
 
+// ── helpers ────────────────────────────────────────────────────────────────────
+const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const MESES_PT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+function fmtData(d: string) {
+  const [ano, mes, dia] = d.split("-");
+  const dt = new Date(`${d}T12:00:00Z`);
+  const diaSem = DIAS_SEMANA[dt.getDay()];
+  return `${diaSem}, ${dia}/${mes}/${ano}`;
+}
+
+// ── Modal de detalhe de faltas ─────────────────────────────────────────────────
+function FaltasDetalheModal({ entry, onClose }: { entry: any; onClose: () => void }) {
+  if (!entry) return null;
+  const datas: string[] = entry.faltasDatas ?? [];
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="w-[420px] max-w-[95vw]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <CalendarX2 className="h-5 w-5 text-red-500" />
+            Dias de Falta — {entry.nome}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3 py-1">
+          <div className="text-sm text-muted-foreground">
+            Função: <strong className="text-slate-700">{entry.funcao}</strong>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-bold">
+              {entry.faltasDias} {entry.faltasDias === 1 ? "dia" : "dias"} de falta
+            </span>
+            <span className="text-xs text-muted-foreground">registrado(s) no sistema</span>
+          </div>
+
+          {datas.length === 0 ? (
+            <p className="text-sm text-center text-muted-foreground py-4">
+              Nenhuma data disponível — dados do período anterior à atualização.
+            </p>
+          ) : (
+            <div className="border rounded-lg overflow-hidden">
+              <div className="bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 border-b">
+                Datas computadas como falta (sem batida de ponto em nenhuma obra):
+              </div>
+              <ul className="divide-y max-h-[280px] overflow-auto">
+                {datas.map((d, i) => (
+                  <li key={i} className="flex items-center gap-3 px-3 py-2.5 hover:bg-red-50/50 transition-colors">
+                    <CalendarOff className="h-4 w-4 text-red-400 shrink-0" />
+                    <span className="text-sm font-medium">{fmtData(d)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <p className="text-[11px] text-muted-foreground bg-amber-50 border border-amber-200 rounded p-2">
+            ⚠️ "Falta" = dia registrado no sistema como ausência (sem horas trabalhadas em nenhuma obra).
+            Pode ser falta real, home office sem lançamento, ou dado não importado do Dixi.
+          </p>
+        </div>
+
+        <div className="flex justify-end pt-1">
+          <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── MAIN ──────────────────────────────────────────────────────────────────────
 export default function DashCartaoPonto() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
@@ -20,13 +95,16 @@ export default function DashCartaoPonto() {
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const [mesRef] = useState(() => new Date().toISOString().slice(0, 7));
   const [mes, setMes] = useState(mesRef);
-  const { data, isLoading } = trpc.dashboards.cartaoPonto.useQuery({ companyId: queryCompanyId, mesReferencia: mes, ...(isConstrutoras ? { companyIds } : {}) }, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 });
+  const { data, isLoading } = trpc.dashboards.cartaoPonto.useQuery(
+    { companyId: queryCompanyId, mesReferencia: mes, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+  );
   const [, navigate] = useLocation();
+  const [faltasDetalhe, setFaltasDetalhe] = useState<any>(null);
 
   const mesLabel = useMemo(() => {
     const [y, m] = mes.split("-");
-    const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-    return `${meses[parseInt(m) - 1]}/${y}`;
+    return `${MESES_PT[parseInt(m) - 1]}/${y}`;
   }, [mes]);
 
   if (isLoading) return (
@@ -108,10 +186,10 @@ export default function DashCartaoPonto() {
               <DashChart
                 title="Horas Trabalhadas por Dia"
                 type="line"
-                labels={data.evolucaoDiaria.map(d => { const parts = d.data.split("-"); return `${parts[2]}/${parts[1]}`; })}
+                labels={data.evolucaoDiaria.map((d: any) => { const parts = d.data.split("-"); return `${parts[2]}/${parts[1]}`; })}
                 datasets={[{
                   label: "Horas",
-                  data: data.evolucaoDiaria.map(d => d.horas),
+                  data: data.evolucaoDiaria.map((d: any) => d.horas),
                   borderColor: CHART_PALETTE[0],
                   backgroundColor: CHART_FILL.azul,
                   fill: true,
@@ -126,10 +204,10 @@ export default function DashCartaoPonto() {
               <DashChart
                 title="Horas por Dia da Semana"
                 type="bar"
-                labels={data.porDiaSemana.map(d => d.dia)}
+                labels={data.porDiaSemana.map((d: any) => d.dia)}
                 datasets={[{
                   label: "Horas",
-                  data: data.porDiaSemana.map(d => d.horas),
+                  data: data.porDiaSemana.map((d: any) => d.horas),
                   backgroundColor: [SEMANTIC_COLORS.negativo, CHART_PALETTE[0], CHART_PALETTE[0], CHART_PALETTE[0], CHART_PALETTE[0], CHART_PALETTE[0], SEMANTIC_COLORS.alerta],
                 }]}
                 height={260}
@@ -137,10 +215,10 @@ export default function DashCartaoPonto() {
               <DashChart
                 title="Registros por Dia da Semana"
                 type="bar"
-                labels={data.porDiaSemana.map(d => d.dia)}
+                labels={data.porDiaSemana.map((d: any) => d.dia)}
                 datasets={[{
                   label: "Registros",
-                  data: data.porDiaSemana.map(d => d.registros),
+                  data: data.porDiaSemana.map((d: any) => d.registros),
                   backgroundColor: CHART_PALETTE[1],
                 }]}
                 height={260}
@@ -149,13 +227,14 @@ export default function DashCartaoPonto() {
 
             {/* Rankings */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Ranking de Faltas (em DIAS) */}
+
+              {/* Ranking de Faltas (em DIAS) — clicável para ver os dias */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2">
                     <CalendarOff className="h-4 w-4 text-red-500" />
                     Ranking de Faltas — Top 10
-                    <span className="text-[10px] font-normal text-muted-foreground ml-auto">(em dias)</span>
+                    <span className="text-[10px] font-normal text-muted-foreground ml-auto">(clique para ver os dias)</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -167,8 +246,8 @@ export default function DashCartaoPonto() {
                         <div
                           key={i}
                           className="flex items-center justify-between py-2 px-2 border-b border-border/50 last:border-0 rounded hover:bg-red-50 cursor-pointer transition-colors"
-                          onClick={() => r.employeeId && navigate(`/fechamento-ponto?funcionario=${r.employeeId}&mes=${mes}`)}
-                          title="Clique para ver os registros de ponto deste funcionário"
+                          onClick={() => setFaltasDetalhe(r)}
+                          title="Clique para ver os dias de falta deste funcionário"
                         >
                           <div className="flex items-center gap-2.5">
                             <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${i < 3 ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
@@ -181,7 +260,7 @@ export default function DashCartaoPonto() {
                             <span className="text-sm font-bold text-red-600">
                               {r.faltasDias === 1 ? "1 dia" : `${r.faltasDias % 1 === 0 ? r.faltasDias : r.faltasDias.toFixed(1)} dias`}
                             </span>
-                            <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                            <CalendarX2 className="h-3.5 w-3.5 text-red-400" />
                           </div>
                         </div>
                       ))}
@@ -243,7 +322,12 @@ export default function DashCartaoPonto() {
           </>
         )}
       </div>
-          <PrintFooterLGPD />
+      <PrintFooterLGPD />
+
+      {/* Modal de detalhe de faltas */}
+      {faltasDetalhe && (
+        <FaltasDetalheModal entry={faltasDetalhe} onClose={() => setFaltasDetalhe(null)} />
+      )}
     </DashboardLayout>
   );
 }
