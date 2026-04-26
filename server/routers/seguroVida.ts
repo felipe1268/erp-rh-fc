@@ -150,20 +150,21 @@ function detectarCompetenciaDoPdf(texto: string): string | null {
 // O formato esperado é: <número-item> <espaços> <NOME COMPLETO> [valores monetários]
 // Exemplo: "00000000784       ACACIO LESCURA DE CAMARGO    28.290,38 ..."
 //
-// Apenas linhas com número de item (5-12 dígitos seguido de 2+ espaços e nome maiúsculo)
-// são aceitas. O fallback de "linha em maiúsculas" foi removido pois capturava headers,
-// rodapés e textos de tabela como "RELACAO ATUALIZADA DE SEGURADOS", "VIDAS VG", etc.
+// Linhas com número de item seguido do nome do segurado.
+// Padrões em cascata — tenta do mais estrito ao mais permissivo.
 type SeguradoParsed = { item: string; nome: string; valores: string[] };
 
-// Padrões de parsing em ordem de prioridade
-// P1: formato principal  — item (5-12 dígitos) + 2+ espaços + nome MAIÚSCULO
-// P2: item mais longo    — suporta 13-15 dígitos (alguns relatórios usam CPF)
-// P3: separador tab      — PDFs que usam \t entre item e nome
-// P4: nome sem item      — linhas em maiúsculo sem número (menos preciso)
+// P1: formato clássico   — item (5-12 dígitos) + 2+ espaços + nome MAIÚSCULO
+// P2: item CPF/longo     — 13-15 dígitos + 1+ espaço + nome
+// P3: separador tab      — qualquer nº de dígitos + \t + nome
+// P4: 1 espaço só        — item (3-12 dígitos) + 1 espaço + nome (arquivos _ATL Bradesco)
+// P5: colunas fundidas   — item (3-12 dígitos) imediatamente seguido de nome sem espaço
 const PARSE_PATTERNS: { id: string; re: RegExp }[] = [
   { id: "P1", re: /^(\d{5,12})[ \t]{2,}([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-Za-záàãâéêíóôõúüçñ\s]+)/ },
   { id: "P2", re: /^(\d{13,15})[ \t]+([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-Za-záàãâéêíóôõúüçñ\s]+)/ },
   { id: "P3", re: /^(\d{3,15})\t([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-Za-záàãâéêíóôõúüçñ\s]+)/ },
+  { id: "P4", re: /^(\d{3,12}) ([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-Za-záàãâéêíóôõúüçñ\s]+)/ },
+  { id: "P5", re: /^(\d{3,12})([A-ZÁÀÃÂÉÊÍÓÔÕÚÜÇÑ][A-Za-záàãâéêíóôõúüçñ\s]{3,})/ },
 ];
 
 function parsarLinhasSegurados(linhas: string[]): { segurados: SeguradoParsed[]; padrao: string } {
@@ -628,17 +629,17 @@ export const seguroVidaRouter = router({
 
           const linhas = texto.split("\n").map((l: string) => l.trim()).filter(Boolean);
           const { segurados, padrao } = parsarLinhasSegurados(linhas);
-          // Diagnóstico — sempre loga as primeiras linhas para rastrear formato
-          const primeiraLinhas = linhas.slice(0, 8).join(" | ").slice(0, 400);
-          console.log(`[SeguroVida] ${arq.filename}: ${segurados.length} segurado(s) | padrão=${padrao} | linhas[0..8]="${primeiraLinhas}"`);
+          // Diagnóstico — sempre loga as primeiras 15 linhas para rastrear formato
+          const primeiraLinhas = linhas.slice(0, 15).join(" | ").slice(0, 600);
+          console.log(`[SeguroVida] ${arq.filename}: ${segurados.length} segurado(s) | padrão=${padrao} | linhas[0..15]="${primeiraLinhas}"`);
 
           if (segurados.length < 2) {
-            const trecho = linhas.slice(0, 5).join("\n");
+            const trecho = linhas.slice(0, 10).join("\n");
             resultados.push({
               competencia: competenciaFinal,
               competenciaFallback: !autoDetectado,
               filename: arq.filename,
-              erro: `Nenhum segurado encontrado no PDF (padrão testados: P1-P3).\n\nPrimeiras linhas extraídas:\n${trecho}\n\nVerifique se o PDF contém a relação de segurados (não apenas sumário ou capa).`,
+              erro: `Nenhum segurado encontrado no PDF (padrões testados: P1-P5).\n\nPrimeiras linhas extraídas:\n${trecho}\n\nVerifique se o PDF contém a relação de segurados (não apenas sumário ou capa).`,
             });
             continue;
           }

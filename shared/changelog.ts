@@ -8959,4 +8959,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-26 13:00:00",
   },
+  {
+    version: 1303,
+    titulo: "Seguro de Vida: parser PDF ampliado com P4 e P5 para arquivos _ATL",
+    descricao: "Adicionados dois novos padrões de parsing: P4 (item 3-12 dígitos + 1 espaço + nome) e P5 (item imediatamente seguido do nome sem espaço, para PDFs cujo extrator funde colunas). Esses padrões cobrem o formato Bradesco _ATL (Relação Atualizada) que usava espaçamento diferente dos relatórios mensais normais. Log de diagnóstico ampliado de 8 para 15 linhas e trecho de erro de 5 para 10 linhas para facilitar depuração de futuros formatos.",
+    tipo: "fix",
+    modulos: "Seguro de Vida",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-26 13:30:00",
+  },
 ];
