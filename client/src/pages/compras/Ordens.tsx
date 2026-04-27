@@ -18,7 +18,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, Check } from "lucide-react";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
 
@@ -138,6 +139,7 @@ export default function Ordens() {
     condicaoPagamento: "", prazoEntregaDias: "",
   });
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
+  const [fornecedorPopoverOpen, setFornecedorPopoverOpen] = useState(false);
 
   const q = trpc.compras.listarOrdens.useQuery(
     { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus, apenasAtrasadas: filtroAtrasadas || undefined },
@@ -561,17 +563,53 @@ export default function Ordens() {
 
             <div className="space-y-1.5">
               <Label className="text-gray-700 text-sm font-medium">Fornecedor</Label>
-              <Select value={form.fornecedorId} onValueChange={v => setForm(p => ({ ...p, fornecedorId: v }))}>
-                <SelectTrigger className="bg-white border-gray-300 text-gray-900">
-                  <SelectValue placeholder="Selecione..." />
-                </SelectTrigger>
-                <SelectContent className="bg-white border-gray-200">
-                  <SelectItem value="none">Nenhum</SelectItem>
-                  {fornecedores.map(f => (
-                    <SelectItem key={f.id} value={String(f.id)}>{f.nomeFantasia || f.razaoSocial}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={fornecedorPopoverOpen} onOpenChange={setFornecedorPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                  >
+                    <span className={form.fornecedorId && form.fornecedorId !== "none" ? "text-gray-900" : "text-gray-400"}>
+                      {form.fornecedorId && form.fornecedorId !== "none"
+                        ? (() => { const f = fornecedores.find(f => String(f.id) === form.fornecedorId); return f ? (f.nomeFantasia || f.razaoSocial) : "Selecione..."; })()
+                        : "Selecione..."}
+                    </span>
+                    <ChevronsUpDown className="h-4 w-4 text-gray-400 shrink-0 ml-2" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-white border-gray-200 shadow-lg" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar por nome ou razão social..." className="h-9" />
+                    <CommandList>
+                      <CommandEmpty>Nenhum fornecedor encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="none"
+                          onSelect={() => { setForm(p => ({ ...p, fornecedorId: "none" })); setFornecedorPopoverOpen(false); }}
+                          className="cursor-pointer"
+                        >
+                          <Check className={`mr-2 h-4 w-4 ${form.fornecedorId === "none" || !form.fornecedorId ? "opacity-100" : "opacity-0"}`} />
+                          Nenhum
+                        </CommandItem>
+                        {fornecedores.map(f => (
+                          <CommandItem
+                            key={f.id}
+                            value={`${f.nomeFantasia ?? ""} ${f.razaoSocial ?? ""}`}
+                            onSelect={() => { setForm(p => ({ ...p, fornecedorId: String(f.id) })); setFornecedorPopoverOpen(false); }}
+                            className="cursor-pointer"
+                          >
+                            <Check className={`mr-2 h-4 w-4 shrink-0 ${form.fornecedorId === String(f.id) ? "opacity-100" : "opacity-0"}`} />
+                            <div className="flex flex-col">
+                              <span className="font-medium">{f.nomeFantasia || f.razaoSocial}</span>
+                              {f.nomeFantasia && f.razaoSocial && <span className="text-xs text-gray-400">{f.razaoSocial}</span>}
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-1.5">
               <Label className="text-gray-700 text-sm font-medium">
