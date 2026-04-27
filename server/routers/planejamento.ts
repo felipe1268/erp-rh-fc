@@ -196,6 +196,12 @@ export const planejamentoRouter = router({
 
       console.log(`[CriarProjeto] Projeto #${projeto.id} criado para obra #${input.obraId} com orçamento #${orcId}. Cronograma vazio — aguardando importação do MS Project.`);
 
+      // Dispara geração automática das previsões mensais no financeiro
+      try {
+        const { triggerFinancialSync } = await import("../services/financialEventTrigger");
+        triggerFinancialSync(input.companyId, input.dataInicio ?? new Date().toISOString().split("T")[0]);
+      } catch (_) {}
+
       return projeto;
     }),
 
@@ -226,6 +232,19 @@ export const planejamentoRouter = router({
       if (data.status !== undefined)                updates.status = data.status;
       if (data.descricao !== undefined)             updates.descricao = data.descricao;
       await db.update(planejamentoProjetos).set(updates).where(eq(planejamentoProjetos.id, id));
+
+      // Atualiza previsões mensais no financeiro quando datas/valor mudam
+      if (data.dataInicio !== undefined || data.dataTerminoContratual !== undefined || data.valorContrato !== undefined) {
+        try {
+          const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+            .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, id));
+          if (proj) {
+            const { triggerFinancialSync } = await import("../services/financialEventTrigger");
+            triggerFinancialSync(proj.companyId);
+          }
+        } catch (_) {}
+      }
+
       return { success: true };
     }),
 

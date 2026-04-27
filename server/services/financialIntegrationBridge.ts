@@ -1627,6 +1627,110 @@ export async function runAllDespesasImport(companyId: number, mesRef?: string) {
   return total;
 }
 
+// ─────────────────────────────────────────────────────────────
+// PREVISTO — distribui valor_contrato linearmente pelos meses
+// do projeto (data_inicio → data_termino_contratual).
+// origem_modulo = 'planejamento_projeto_previsto'
+// Dedup: (company_id, origem_modulo, origem_id, data_competencia)
+// ─────────────────────────────────────────────────────────────
+export async function importPlanejamentoProjetosPrevistoToFinancial(companyId: number, mesRef?: string): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  let imported = 0;
+  let erros = 0;
+
+  try {
+    const { rows: projetos } = await dbExecute(db,
+      `SELECT pp.id, pp.obra_id, pp.nome, pp.cliente,
+              pp.valor_contrato, pp.data_inicio, pp.data_termino_contratual, pp.status,
+              o.nome AS obra_nome_ref
+       FROM planejamento_projetos pp
+       LEFT JOIN obras o ON o.id = pp.obra_id
+       WHERE pp.company_id = $1
+         AND pp.valor_contrato IS NOT NULL
+         AND pp.valor_contrato::numeric > 0
+         AND pp.data_inicio IS NOT NULL
+         AND pp.data_termino_contratual IS NOT NULL
+         AND pp.status NOT IN ('cancelado', 'encerrado')`,
+      [companyId]
+    );
+
+    for (const proj of projetos) {
+      const valorContrato = parseFloat(proj.valor_contrato ?? "0");
+      if (valorContrato <= 0) continue;
+
+      // Normalise dates — banco retorna string "YYYY-MM-DD" ou Date
+      const inicioStr = String(proj.data_inicio).substring(0, 10);
+      const terminoStr = String(proj.data_termino_contratual).substring(0, 10);
+      const [iniY, iniM] = inicioStr.split("-").map(Number);
+      const [terY, terM] = terminoStr.split("-").map(Number);
+
+      // Constrói lista de meses (YYYY-MM) entre início e término
+      const meses: string[] = [];
+      let y = iniY, m = iniM;
+      while (y < terY || (y === terY && m <= terM)) {
+        meses.push(`${y}-${String(m).padStart(2, "0")}`);
+        m++;
+        if (m > 12) { m = 1; y++; }
+      }
+      if (meses.length === 0) continue;
+
+      const valorMensal = Math.round((valorContrato / meses.length) * 100) / 100;
+      const nomeProjeto = proj.obra_nome_ref ?? proj.nome;
+      const clienteInfo = proj.cliente ? ` — ${proj.cliente}` : "";
+
+      for (const mes of meses) {
+        const dataCompetencia = mes + "-01";
+
+        // Dedup por projeto + mês (origem_id = project id, discriminado por data_competencia)
+        const { rows: existing } = await dbExecute(db,
+          `SELECT id FROM financial_entries
+           WHERE company_id=$1 AND origem_modulo=$2 AND origem_id=$3 AND data_competencia=$4
+           LIMIT 1`,
+          [companyId, "planejamento_projeto_previsto", proj.id, dataCompetencia]
+        );
+        if (existing.length > 0) continue;
+
+        await dbExecute(db,
+          `INSERT INTO financial_entries
+           (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
+            valor_previsto, valor_realizado, data_competencia, data_vencimento, data_pagamento,
+            status, origem_modulo, origem_id, origem_descricao, descricao, forma_pagamento,
+            created_at, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW(),NOW())
+           ON CONFLICT DO NOTHING`,
+          [
+            companyId,
+            proj.obra_id ?? null,
+            nomeProjeto,
+            "Previsão de Faturamento",
+            "receita",
+            "variavel",
+            valorMensal,
+            null,
+            dataCompetencia,
+            mes + "-30",
+            null,
+            "previsto",
+            "planejamento_projeto_previsto",
+            proj.id,
+            `Previsão mensal — ${nomeProjeto}${clienteInfo}`,
+            `Previsão ${mes}: ${nomeProjeto}`,
+            null,
+          ]
+        );
+        imported++;
+      }
+    }
+  } catch (e) {
+    erros++;
+    console.error("[FinancialBridge][planejamento_projeto_previsto]", e);
+  }
+
+  await logImport(db, companyId, "planejamento_projeto_previsto", mesRef ?? mesComp(), imported, erros);
+  return imported;
+}
+
 // MASTER: executar todos os imports de receita
 export async function runAllReceitasImport(companyId: number, mesRef?: string) {
   const mes = mesRef ?? mesComp();
@@ -1635,6 +1739,7 @@ export async function runAllReceitasImport(companyId: number, mesRef?: string) {
     importMedicoesPJToFinancial(companyId, mes),
     importTerceiroCobravelToFinancial(companyId, mes),
     importPlanejamentoMedicoesToFinancial(companyId, mes),
+    importPlanejamentoProjetosPrevistoToFinancial(companyId, mes),
     // Importar receitas cadastradas manualmente em Receitas de Obras → Contas a Receber
     importFinancialRevenueToEntries(companyId, mes),
   ]);
