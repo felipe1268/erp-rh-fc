@@ -1828,14 +1828,14 @@ export const planejamentoRouter = router({
       }
       // Gatilho financeiro — medição de planejamento gera receita imediatamente
       try {
-        const [proj] = await db.execute(
-          `SELECT company_id FROM planejamento_projetos WHERE id = $1 LIMIT 1`,
-          [input.projetoId]
-        ) as any;
-        const projRow = (proj as any)?.rows?.[0] ?? proj?.[0];
-        if (projRow?.company_id) {
+        const [projRow] = await db
+          .select({ companyId: planejamentoProjetos.companyId })
+          .from(planejamentoProjetos)
+          .where(eq(planejamentoProjetos.id, input.projetoId))
+          .limit(1);
+        if (projRow?.companyId) {
           const { triggerFinancialSync } = await import("../services/financialEventTrigger");
-          triggerFinancialSync(projRow.company_id, input.competencia + "-01");
+          triggerFinancialSync(projRow.companyId, input.competencia + "-01");
         }
       } catch {}
       return result;

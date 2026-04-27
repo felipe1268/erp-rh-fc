@@ -1443,30 +1443,76 @@ export async function importPlanejamentoMedicoesToFinancial(companyId: number, m
     // rows extracted by dbExecute
 
     for (const r of rows) {
-      if (await entryExists(db, companyId, "planejamento_medicao", r.id)) continue;
       const valorMedido = parseFloat(r.valor_medido ?? "0");
       const valorPrevisto = parseFloat(r.valor_previsto ?? "0");
       const valor = valorMedido > 0 ? valorMedido : valorPrevisto;
       if (valor <= 0) continue;
+
       const statusFin = r.status === "aprovada" || r.status === "faturada" ? "pendente" : "previsto";
-      await insertEntry(db, {
-        companyId,
-        obraId: r.obra_id ?? null,
-        obraNome: r.obra_nome ?? r.projeto_nome ?? null,
-        contaNome: "Receita de Medições / Contratos",
-        tipo: "receita",
-        natureza: "variavel",
-        valorPrevisto: valor,
-        valorRealizado: r.status === "faturada" ? valor : null,
-        dataCompetencia: targetMes + "-01",
-        dataVencimento: targetMes + "-28",
-        status: statusFin,
-        origemModulo: "planejamento_medicao",
-        origemId: r.id,
-        origemDescricao: `Medição #${r.numero} — ${r.projeto_nome}${r.cliente ? " (" + r.cliente + ")" : ""}`,
-        descricao: `Medição ${r.numero} — ${r.projeto_nome} (${(parseFloat(r.percentual_medido ?? "0") * 100).toFixed(1)}%)`,
-      });
-      imported++;
+      const statusRev = r.status === "faturada" ? "faturado" : "a_faturar";
+      const pct = parseFloat(r.percentual_medido ?? "0");
+      const dataVenc = targetMes + "-28";
+
+      // ── 1. financial_entries (livro geral) ──────────────────────
+      if (!(await entryExists(db, companyId, "planejamento_medicao", r.id))) {
+        await insertEntry(db, {
+          companyId,
+          obraId: r.obra_id ?? null,
+          obraNome: r.obra_nome ?? r.projeto_nome ?? null,
+          contaNome: "Receita de Medições / Contratos",
+          tipo: "receita",
+          natureza: "variavel",
+          valorPrevisto: valor,
+          valorRealizado: r.status === "faturada" ? valor : null,
+          dataCompetencia: targetMes + "-01",
+          dataVencimento: dataVenc,
+          status: statusFin,
+          origemModulo: "planejamento_medicao",
+          origemId: r.id,
+          origemDescricao: `Medição #${r.numero} — ${r.projeto_nome}${r.cliente ? " (" + r.cliente + ")" : ""}`,
+          descricao: `Medição ${r.numero} — ${r.projeto_nome} (${(pct * 100).toFixed(1)}%)`,
+        });
+        imported++;
+      }
+
+      // ── 2. financial_revenue (Contas a Receber) ──────────────────
+      // Verifica se já existe pelo medicao_id para evitar duplicata
+      const { rows: revExists } = await dbExecute(db,
+        `SELECT id FROM financial_revenue WHERE company_id=$1 AND medicao_id=$2 LIMIT 1`,
+        [companyId, r.id]
+      );
+      if (revExists.length === 0) {
+        await dbExecute(db,
+          `INSERT INTO financial_revenue
+           (company_id, obra_id, obra_nome, cliente_nome,
+            valor_contrato, medicao_id, medicao_numero, percentual_medicao,
+            valor_medicao, valor_liquido_receber,
+            data_vencimento, status, created_at, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW())`,
+          [
+            companyId,
+            r.obra_id ?? null,
+            r.obra_nome ?? r.projeto_nome ?? null,
+            r.cliente ?? null,
+            parseFloat(r.valor_contrato ?? "0"),
+            r.id,
+            r.numero ?? null,
+            pct.toFixed(4),
+            valor.toFixed(2),
+            valor.toFixed(2),
+            dataVenc,
+            statusRev,
+          ]
+        );
+      } else {
+        // Atualizar status e valor se mudou
+        await dbExecute(db,
+          `UPDATE financial_revenue
+           SET status=$1, valor_medicao=$2, valor_liquido_receber=$3, updated_at=NOW()
+           WHERE company_id=$4 AND medicao_id=$5`,
+          [statusRev, valor.toFixed(2), valor.toFixed(2), companyId, r.id]
+        );
+      }
     }
   } catch (e) {
     erros++;
