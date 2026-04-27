@@ -5630,6 +5630,9 @@ Retorne APENAS um JSON válido neste formato:
             .where(and(
               eq(almoxarifadoItens.companyId, oc.companyId),
               ilike(almoxarifadoItens.nome, item.descricao),
+              oc.obraId
+                ? eq(almoxarifadoItens.obraId, oc.obraId)
+                : isNull(almoxarifadoItens.obraId),
             )).limit(1);
 
           let almoItemId: number;
@@ -5642,6 +5645,7 @@ Retorne APENAS um JSON válido neste formato:
               unidade: item.unidade ?? "un",
               categoria: "Compras",
               ativo: true,
+              obraId: oc.obraId ?? null,
             }).returning();
             almoItemId = novo.id;
           }
