@@ -1614,6 +1614,62 @@ export const financialRouter = router({
     return rows(res);
   }),
 
+  getRevenueByYear: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    ano: z.number(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    const res = await dbExecute(db,
+      `SELECT id, company_id AS "companyId", obra_id AS "obraId", obra_nome AS "obraNome",
+              cliente_nome AS "clienteNome", cliente_cnpj AS "clienteCnpj",
+              valor_contrato AS "valorContrato", medicao_numero AS "medicaoNumero",
+              percentual_medicao AS "percentualMedicao", valor_medicao AS "valorMedicao",
+              nf_numero AS "nfNumero", nf_emitida_em AS "nfEmitidaEm",
+              data_vencimento AS "dataVencimento", data_recebimento AS "dataRecebimento",
+              valor_recebido AS "valorRecebido", status, forma_pagamento AS "formaPagamento",
+              retencao_iss AS "retencaoISS", retencao_inss AS "retencaoINSS",
+              retencao_ir AS "retencaoIR", retencao_total AS "retencaoTotal",
+              valor_liquido_receber AS "valorLiquidoReceber", observacoes,
+              created_at AS "createdAt"
+       FROM financial_revenue
+       WHERE company_id IN (${inlineIds(ids)})
+         AND EXTRACT(year FROM COALESCE(data_vencimento::date, created_at::date)) = $1
+       ORDER BY data_vencimento ASC NULLS LAST`,
+      [input.ano]
+    );
+    return rows(res);
+  }),
+
+  getContasAPagarByYear: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    ano: z.number(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    const res = await dbExecute(db,
+      `SELECT id, obra_id AS "obraId", obra_nome AS "obraNome", descricao,
+              conta_nome AS "contaNome", valor_previsto AS "valorPrevisto",
+              valor_realizado AS "valorRealizado", status,
+              data_vencimento AS "dataVencimento", data_pagamento AS "dataPagamento",
+              forma_pagamento AS "formaPagamento",
+              origem_modulo AS "origemModulo", origem_descricao AS "origemDescricao",
+              tipo,
+              CASE WHEN data_vencimento < CURRENT_DATE AND status != 'pago' THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
+       FROM financial_entries
+       WHERE company_id IN (${inlineIds(ids)})
+         AND tipo = 'despesa'
+         AND EXTRACT(year FROM COALESCE(data_vencimento::date, created_at::date)) = $1
+       ORDER BY data_vencimento ASC NULLS LAST`,
+      [input.ano]
+    );
+    return rows(res);
+  }),
+
   // ─────────────────── FASE 5: KPIs FINANCEIROS ───────────────────
 
   getKpis: protectedProcedure.input(z.object({

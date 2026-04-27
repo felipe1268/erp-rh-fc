@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, CheckCircle, AlertTriangle, FileText, TrendingUp, Clock } from "lucide-react";
+import { Plus, Search, CheckCircle, AlertTriangle, FileText, TrendingUp, Clock, ChevronLeft, ChevronRight, DollarSign, ReceiptText } from "lucide-react";
+
+const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -47,19 +49,30 @@ const UPDATE_EMPTY = {
   dataRecebimento: "", valorRecebido: "", formaPagamento: "",
 };
 
+function getMesFromDate(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + (dateStr.length === 10 ? "T00:00:00" : ""));
+  return d.getMonth() + 1;
+}
+
+type MesStatus = "sem_dados" | "lancamento" | "consolidado";
+
 export default function FinanceiroContasAReceber() {
   const { companyId } = useCompany();
   const { toast } = useToast();
 
-  const [statusFilter, setStatusFilter] = useState("all");
+  const hoje = new Date();
+  const [ano, setAno] = useState(hoje.getFullYear());
+  const [mesSel, setMesSel] = useState(hoje.getMonth() + 1);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [showNew, setShowNew] = useState(false);
   const [showUpdate, setShowUpdate] = useState<any | null>(null);
   const [form, setForm] = useState(FORM_EMPTY);
   const [updateForm, setUpdateForm] = useState(UPDATE_EMPTY);
 
-  const { data: receitas, isLoading, refetch } = (trpc as any).financial.getRevenue.useQuery(
-    { companyId, status: statusFilter !== "all" ? statusFilter : undefined, limit: 500 },
+  const { data: allReceitas, isLoading, refetch } = (trpc as any).financial.getRevenueByYear.useQuery(
+    { companyId, ano },
     { enabled: !!companyId }
   );
 
@@ -69,7 +82,7 @@ export default function FinanceiroContasAReceber() {
   );
 
   const createMut = (trpc as any).financial.createRevenue.useMutation({
-    onSuccess: () => { toast({ title: "Receita registrada com sucesso!" }); setShowNew(false); setForm(FORM_EMPTY); refetch(); },
+    onSuccess: () => { toast({ title: "Receita registrada!" }); setShowNew(false); setForm(FORM_EMPTY); refetch(); },
     onError: (e: any) => toast({ title: "Erro ao salvar", description: e.message, variant: "destructive" }),
   });
 
@@ -78,19 +91,51 @@ export default function FinanceiroContasAReceber() {
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 
-  const hoje = new Date().toISOString().split("T")[0];
+  const mesesStatus: Record<number, MesStatus> = useMemo(() => {
+    const map: Record<number, MesStatus> = {};
+    for (let m = 1; m <= 12; m++) map[m] = "sem_dados";
+    if (!allReceitas) return map;
+    for (const r of allReceitas) {
+      const m = getMesFromDate(r.dataVencimento ?? r.createdAt);
+      if (!m) continue;
+      const cur = map[m];
+      const isConc = r.status === "recebido_total" || r.status === "cancelado";
+      if (cur === "sem_dados") {
+        map[m] = isConc ? "consolidado" : "lancamento";
+      } else if (cur === "consolidado" && !isConc) {
+        map[m] = "lancamento";
+      }
+    }
+    return map;
+  }, [allReceitas]);
 
-  const filtered = (receitas ?? []).filter((r: any) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (r.obraNome ?? "").toLowerCase().includes(q) || (r.clienteNome ?? "").toLowerCase().includes(q);
-  });
+  const mesData = useMemo(() => {
+    if (!allReceitas) return [];
+    return allReceitas.filter((r: any) => {
+      const m = getMesFromDate(r.dataVencimento ?? r.createdAt);
+      return m === mesSel;
+    });
+  }, [allReceitas, mesSel]);
 
-  const ativas = filtered.filter((r: any) => r.status !== "cancelado" && r.status !== "recebido_total");
-  const vencidas = ativas.filter((r: any) => r.dataVencimento && r.dataVencimento < hoje && r.status !== "recebido_total");
-  const totalGeral = filtered.filter((r: any) => r.status !== "cancelado").reduce((s: number, r: any) => s + Number(r.valorMedicao ?? 0), 0);
-  const totalRecebido = filtered.reduce((s: number, r: any) => s + Number(r.valorRecebido ?? 0), 0);
-  const totalPendente = totalGeral - totalRecebido;
+  const filtered = useMemo(() => {
+    let list = mesData;
+    if (statusFilter !== "all") list = list.filter((r: any) => r.status === statusFilter);
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter((r: any) =>
+        (r.obraNome ?? "").toLowerCase().includes(q) ||
+        (r.clienteNome ?? "").toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [mesData, statusFilter, search]);
+
+  const hojeStr = hoje.toISOString().split("T")[0];
+
+  const totalMes = mesData.filter((r: any) => r.status !== "cancelado").reduce((s: number, r: any) => s + Number(r.valorMedicao ?? 0), 0);
+  const totalRecebido = mesData.reduce((s: number, r: any) => s + Number(r.valorRecebido ?? 0), 0);
+  const totalPendente = mesData.filter((r: any) => !["recebido_total","cancelado"].includes(r.status)).reduce((s: number, r: any) => s + Number(r.valorMedicao ?? 0), 0);
+  const vencidas = mesData.filter((r: any) => r.dataVencimento && r.dataVencimento < hojeStr && r.status !== "recebido_total" && r.status !== "cancelado");
   const totalVencido = vencidas.reduce((s: number, r: any) => s + Number(r.valorMedicao ?? 0), 0);
 
   function handleSave() {
@@ -128,7 +173,7 @@ export default function FinanceiroContasAReceber() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto p-6 space-y-6">
+      <div className="max-w-7xl mx-auto p-6 space-y-5">
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -140,20 +185,67 @@ export default function FinanceiroContasAReceber() {
           </Button>
         </div>
 
-        {/* Totais */}
+        {/* Navegação Ano + Meses */}
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <button onClick={() => setAno(a => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
+                <button onClick={() => setAno(a => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-gray-500">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Consolidado</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+              {MESES.map((m, i) => {
+                const num = i + 1;
+                const status = mesesStatus[num];
+                const isSelected = mesSel === num;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => setMesSel(num)}
+                    className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                      ${isSelected
+                        ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                        : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                      }`}
+                  >
+                    <span>{m}</span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      status === "consolidado" ? "bg-green-500" :
+                      status === "lancamento" ? "bg-blue-500" :
+                      "bg-gray-300"
+                    }`} />
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* KPI Cards do mês */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border-0 shadow-sm border-l-4 border-l-blue-500">
             <CardContent className="p-4">
-              <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" />Total Medições</p>
-              <p className="text-lg font-bold text-blue-700">{formatBRL(totalGeral)}</p>
-              <p className="text-xs text-gray-400">{filtered.filter((r: any) => r.status !== "cancelado").length} registro(s)</p>
+              <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" />Total {MESES[mesSel-1]}</p>
+              <p className="text-lg font-bold text-blue-700">{formatBRL(totalMes)}</p>
+              <p className="text-xs text-gray-400">{mesData.filter((r: any) => r.status !== "cancelado").length} registro(s)</p>
             </CardContent>
           </Card>
           <Card className="border-0 shadow-sm border-l-4 border-l-orange-500">
             <CardContent className="p-4">
               <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><Clock className="w-3 h-3" />A Receber</p>
               <p className="text-lg font-bold text-orange-600">{formatBRL(totalPendente)}</p>
-              <p className="text-xs text-gray-400">{ativas.length} pendente(s)</p>
+              <p className="text-xs text-gray-400">{mesData.filter((r: any) => !["recebido_total","cancelado"].includes(r.status)).length} pendente(s)</p>
             </CardContent>
           </Card>
           <Card className="border-0 shadow-sm border-l-4 border-l-red-500">
@@ -167,7 +259,7 @@ export default function FinanceiroContasAReceber() {
             <CardContent className="p-4">
               <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><CheckCircle className="w-3 h-3 text-green-500" />Recebido</p>
               <p className="text-lg font-bold text-green-700">{formatBRL(totalRecebido)}</p>
-              <p className="text-xs text-gray-400">{filtered.filter((r: any) => r.status === "recebido_total").length} finalizado(s)</p>
+              <p className="text-xs text-gray-400">{mesData.filter((r: any) => r.status === "recebido_total").length} finalizado(s)</p>
             </CardContent>
           </Card>
         </div>
@@ -195,37 +287,41 @@ export default function FinanceiroContasAReceber() {
 
         {/* Tabela */}
         <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-2 px-5 pt-4">
+            <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <ReceiptText className="w-4 h-4 text-blue-500" />
+              {MESES[mesSel-1]} {ano} — {filtered.length} registro(s)
+            </CardTitle>
+          </CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
               <div className="p-8 text-center text-gray-500">Carregando...</div>
             ) : filtered.length === 0 ? (
               <div className="p-10 text-center">
-                <TrendingUp className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500 font-medium">Nenhuma receita encontrada</p>
-                <p className="text-gray-400 text-sm mt-1">Clique em "Nova Receita" para registrar o faturamento de uma obra.</p>
+                <DollarSign className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 font-medium">Nenhuma receita em {MESES[mesSel-1]} {ano}</p>
+                <p className="text-gray-400 text-sm mt-1">Clique em "Nova Receita" para registrar uma medição.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50">
                     <tr>
-                      {["Obra / Cliente", "Med.", "Valor Medição", "NF", "Vencimento", "Recebido", "Status", ""].map(h => (
+                      {["Obra / Cliente","Med.","Valor Medição","NF","Vencimento","Recebido","Status",""].map(h => (
                         <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {filtered.map((r: any) => {
-                      const vencida = r.dataVencimento && r.dataVencimento < hoje && r.status !== "recebido_total" && r.status !== "cancelado";
+                      const vencida = r.dataVencimento && r.dataVencimento < hojeStr && r.status !== "recebido_total" && r.status !== "cancelado";
                       return (
                         <tr key={r.id} className={`hover:bg-gray-50 ${vencida ? "bg-red-50/30" : ""}`}>
                           <td className="px-4 py-3">
                             <p className="font-medium text-gray-800">{r.obraNome ?? "—"}</p>
                             {r.clienteNome && <p className="text-xs text-gray-400">{r.clienteNome}</p>}
                           </td>
-                          <td className="px-4 py-3 text-gray-500 text-xs">
-                            {r.medicaoNumero ? `#${r.medicaoNumero}` : "—"}
-                          </td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">{r.medicaoNumero ? `#${r.medicaoNumero}` : "—"}</td>
                           <td className="px-4 py-3 font-semibold text-green-700">{formatBRL(Number(r.valorMedicao ?? 0))}</td>
                           <td className="px-4 py-3 text-gray-500 text-xs">{r.nfNumero ?? "—"}</td>
                           <td className="px-4 py-3 text-xs">
@@ -264,6 +360,64 @@ export default function FinanceiroContasAReceber() {
             )}
           </CardContent>
         </Card>
+
+        {/* Resumo anual por mês */}
+        {allReceitas && allReceitas.length > 0 && (
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2 px-5 pt-4">
+              <CardTitle className="text-sm font-semibold text-gray-700">Resumo Anual {ano}</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Mês</th>
+                      <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Medições</th>
+                      <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Recebido</th>
+                      <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">A Receber</th>
+                      <th className="px-4 py-2 text-center text-xs font-semibold text-gray-600">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {MESES.map((m, i) => {
+                      const num = i + 1;
+                      const entries = allReceitas.filter((r: any) => getMesFromDate(r.dataVencimento ?? r.createdAt) === num);
+                      if (entries.length === 0) return null;
+                      const totalM = entries.filter((r: any) => r.status !== "cancelado").reduce((s: number, r: any) => s + Number(r.valorMedicao ?? 0), 0);
+                      const recebidoM = entries.reduce((s: number, r: any) => s + Number(r.valorRecebido ?? 0), 0);
+                      const pendenteM = totalM - recebidoM;
+                      const st = mesesStatus[num];
+                      return (
+                        <tr key={m}
+                          className={`hover:bg-gray-50 cursor-pointer ${mesSel === num ? "bg-blue-50/40" : ""}`}
+                          onClick={() => setMesSel(num)}>
+                          <td className="px-4 py-2.5 font-medium text-gray-700">{m}/{ano}</td>
+                          <td className="px-4 py-2.5 text-right font-semibold text-gray-800">{formatBRL(totalM)}</td>
+                          <td className="px-4 py-2.5 text-right text-green-700">{formatBRL(recebidoM)}</td>
+                          <td className="px-4 py-2.5 text-right text-orange-600">{formatBRL(pendenteM)}</td>
+                          <td className="px-4 py-2.5 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                              st === "consolidado" ? "bg-green-100 text-green-700" :
+                              st === "lancamento" ? "bg-blue-100 text-blue-700" :
+                              "bg-gray-100 text-gray-500"
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                st === "consolidado" ? "bg-green-500" :
+                                st === "lancamento" ? "bg-blue-500" : "bg-gray-400"
+                              }`} />
+                              {st === "consolidado" ? "Consolidado" : st === "lancamento" ? "Lançamento" : "Sem dados"}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Modal: nova receita */}
         <Dialog open={showNew} onOpenChange={v => { setShowNew(v); if (!v) setForm(FORM_EMPTY); }}>
@@ -321,18 +475,9 @@ export default function FinanceiroContasAReceber() {
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <Label>ISS (R$)</Label>
-                  <Input type="number" step="0.01" value={form.retencaoISS} onChange={e => setForm(f => ({ ...f, retencaoISS: e.target.value }))} />
-                </div>
-                <div>
-                  <Label>INSS (R$)</Label>
-                  <Input type="number" step="0.01" value={form.retencaoINSS} onChange={e => setForm(f => ({ ...f, retencaoINSS: e.target.value }))} />
-                </div>
-                <div>
-                  <Label>IR (R$)</Label>
-                  <Input type="number" step="0.01" value={form.retencaoIR} onChange={e => setForm(f => ({ ...f, retencaoIR: e.target.value }))} />
-                </div>
+                <div><Label>ISS (R$)</Label><Input type="number" step="0.01" value={form.retencaoISS} onChange={e => setForm(f => ({ ...f, retencaoISS: e.target.value }))} /></div>
+                <div><Label>INSS (R$)</Label><Input type="number" step="0.01" value={form.retencaoINSS} onChange={e => setForm(f => ({ ...f, retencaoINSS: e.target.value }))} /></div>
+                <div><Label>IR (R$)</Label><Input type="number" step="0.01" value={form.retencaoIR} onChange={e => setForm(f => ({ ...f, retencaoIR: e.target.value }))} /></div>
               </div>
               <div>
                 <Label>Observações</Label>
@@ -351,9 +496,7 @@ export default function FinanceiroContasAReceber() {
         {/* Modal: atualizar status */}
         <Dialog open={!!showUpdate} onOpenChange={v => { if (!v) setShowUpdate(null); }}>
           <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Atualizar Receita</DialogTitle>
-            </DialogHeader>
+            <DialogHeader><DialogTitle>Atualizar Receita</DialogTitle></DialogHeader>
             {showUpdate && (
               <div className="space-y-4">
                 <div className="bg-gray-50 rounded-lg p-3">
@@ -373,20 +516,11 @@ export default function FinanceiroContasAReceber() {
                   </Select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Nº da NF</Label>
-                    <Input value={updateForm.nfNumero} onChange={e => setUpdateForm(f => ({ ...f, nfNumero: e.target.value }))} />
-                  </div>
-                  <div>
-                    <Label>Emissão NF</Label>
-                    <Input type="date" value={updateForm.nfEmitidaEm} onChange={e => setUpdateForm(f => ({ ...f, nfEmitidaEm: e.target.value }))} />
-                  </div>
+                  <div><Label>Nº da NF</Label><Input value={updateForm.nfNumero} onChange={e => setUpdateForm(f => ({ ...f, nfNumero: e.target.value }))} /></div>
+                  <div><Label>Emissão NF</Label><Input type="date" value={updateForm.nfEmitidaEm} onChange={e => setUpdateForm(f => ({ ...f, nfEmitidaEm: e.target.value }))} /></div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Data Recebimento</Label>
-                    <Input type="date" value={updateForm.dataRecebimento} onChange={e => setUpdateForm(f => ({ ...f, dataRecebimento: e.target.value }))} />
-                  </div>
+                  <div><Label>Data Recebimento</Label><Input type="date" value={updateForm.dataRecebimento} onChange={e => setUpdateForm(f => ({ ...f, dataRecebimento: e.target.value }))} /></div>
                   <div>
                     <Label>Valor Recebido (R$)</Label>
                     <Input type="number" step="0.01" placeholder={String(showUpdate.valorMedicao ?? "")} value={updateForm.valorRecebido} onChange={e => setUpdateForm(f => ({ ...f, valorRecebido: e.target.value }))} />
@@ -397,7 +531,7 @@ export default function FinanceiroContasAReceber() {
                   <Select value={updateForm.formaPagamento} onValueChange={v => setUpdateForm(f => ({ ...f, formaPagamento: v }))}>
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
-                      {["pix", "ted", "boleto", "cheque", "dinheiro"].map(v => (
+                      {["pix","ted","boleto","cheque","dinheiro"].map(v => (
                         <SelectItem key={v} value={v}>{v.toUpperCase()}</SelectItem>
                       ))}
                     </SelectContent>
