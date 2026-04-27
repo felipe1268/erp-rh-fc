@@ -1,4 +1,5 @@
 import { getDb } from "../db";
+import { sql } from "drizzle-orm";
 
 // ============================================================
 // AUTO-IMPORTAÇÃO FINANCEIRA
@@ -6,8 +7,19 @@ import { getDb } from "../db";
 // e cria lançamentos financeiros correspondentes
 // ============================================================
 
-function fmtDate(d: Date): string {
-  return d.toISOString().split("T")[0];
+// ─── helper: executa queries parametrizadas corretamente no Drizzle ORM ───
+// db.execute(string, array) ignora o array — é preciso usar sql template
+async function dbExecute(db: any, query: string, params: unknown[]): Promise<{ rows: any[] }> {
+  const parts = query.split(/\$\d+/g);
+  let built: any = sql.raw(parts[0] ?? "");
+  for (let i = 1; i < parts.length; i++) {
+    const paramVal = params[i - 1];
+    const tail = parts[i] ?? "";
+    built = tail ? sql`${built}${paramVal}${sql.raw(tail)}` : sql`${built}${paramVal}`;
+  }
+  const res = await db.execute(built);
+  const rows: any[] = (res as any)?.rows ?? (Array.isArray(res) ? res : []);
+  return { rows };
 }
 
 function mesCompetencia(d: Date): string {
@@ -17,11 +29,10 @@ function mesCompetencia(d: Date): string {
 }
 
 async function entryExists(db: any, companyId: number, origemModulo: string, origemId: number): Promise<boolean> {
-  const res = await db.execute(
+  const { rows } = await dbExecute(db,
     `SELECT id FROM financial_entries WHERE company_id=$1 AND origem_modulo=$2 AND origem_id=$3 LIMIT 1`,
     [companyId, origemModulo, origemId]
   );
-  const rows = (res as any)?.rows ?? (res as any) ?? [];
   return rows.length > 0;
 }
 
@@ -33,63 +44,63 @@ export async function importPayrollToFinancial(companyId: number, mesRef?: strin
   const targetMes = mesRef ?? mesCompetencia(new Date());
   const [ano, mes] = targetMes.split("-");
 
-  const payrollRes = await db.execute(
-    `SELECT p.id, p.employee_id, e.nome_completo, p.salario_bruto, p.inss_employee, p.irrf, p.fgts,
-            p.salario_liquido, p.mes_referencia, p.data_pagamento, p.status, p.obra_id
+  const { rows: payrolls } = await dbExecute(db,
+    `SELECT p.id, p."employeeId", e."nomeCompleto" AS nome_completo,
+            p."salarioBruto", p.inss, p.irrf, p.fgts,
+            p."salarioLiquido", p."mesReferencia", p."dataPagamento", p.status
      FROM payroll p
-     LEFT JOIN employees e ON e.id = p.employee_id
-     WHERE p.company_id = $1 AND p.mes_referencia = $2`,
+     LEFT JOIN employees e ON e.id = p."employeeId"
+     WHERE p."companyId" = $1 AND p."mesReferencia" = $2`,
     [companyId, targetMes]
   );
-  const payrolls = (payrollRes as any)?.rows ?? (payrollRes as any) ?? [];
 
   let imported = 0;
   for (const p of payrolls) {
     if (await entryExists(db, companyId, "folha_clt", p.id)) continue;
 
     const dataComp = `${ano}-${mes}-01`;
-    const dataVenc = p.data_pagamento ?? `${ano}-${mes}-05`;
+    const dataVenc = p.dataPagamento ?? `${ano}-${mes}-05`;
+    const salBruto = parseFloat(p.salarioBruto ?? "0");
+    const salLiq = parseFloat(p.salarioLiquido ?? "0");
+    const fgts = parseFloat(p.fgts ?? "0");
 
-    await db.execute(
+    await dbExecute(db,
       `INSERT INTO financial_entries
-       (company_id, obra_id, obra_nome, conta_id, conta_nome, tipo, natureza,
+       (company_id, conta_nome, tipo, natureza,
         valor_previsto, valor_realizado, data_competencia, data_vencimento, data_pagamento,
         status, origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at)
-       VALUES ($1,$2,$3,NULL,'Salários e Horas Extras (CLT)','despesa','fixo',
-               $4,$5,$6,$7,$8,$9,'folha_clt',$10,$11,$12,NOW(),NOW())`,
+       VALUES ($1,'Salários e Horas Extras (CLT)','despesa','fixo',
+               $2,$3,$4,$5,$6,$7,'folha_clt',$8,$9,$10,NOW(),NOW())`,
       [
         companyId,
-        p.obra_id ?? null,
-        null,
-        parseFloat(p.salario_bruto ?? 0),
-        p.status === "pago" ? parseFloat(p.salario_liquido ?? 0) : null,
+        salBruto,
+        p.status === "pago" ? salLiq : null,
         dataComp,
         dataVenc,
-        p.data_pagamento ?? null,
+        p.dataPagamento ?? null,
         p.status === "pago" ? "pago" : "a_pagar",
         p.id,
-        `Folha CLT ${targetMes} - ${p.nome_completo}`,
-        `Salário ${targetMes}: ${p.nome_completo}`,
+        `Folha CLT ${targetMes} - ${p.nome_completo ?? ""}`,
+        `Salário ${targetMes}: ${p.nome_completo ?? ""}`,
       ]
     );
 
     // Encargos FGTS
-    if (parseFloat(p.fgts ?? 0) > 0) {
-      await db.execute(
+    if (fgts > 0) {
+      await dbExecute(db,
         `INSERT INTO financial_entries
-         (company_id, obra_id, conta_nome, tipo, natureza, valor_previsto, data_competencia, data_vencimento,
+         (company_id, conta_nome, tipo, natureza, valor_previsto, data_competencia, data_vencimento,
           status, origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at)
-         VALUES ($1,$2,'Encargos Sociais (FGTS/INSS)','despesa','fixo',$3,$4,$5,$6,'folha_clt_fgts',$7,$8,$9,NOW(),NOW())`,
+         VALUES ($1,'Encargos Sociais (FGTS/INSS)','despesa','fixo',$2,$3,$4,$5,'folha_clt_fgts',$6,$7,$8,NOW(),NOW())`,
         [
           companyId,
-          p.obra_id ?? null,
-          parseFloat(p.fgts),
+          fgts,
           dataComp,
           `${ano}-${mes}-07`,
           p.status === "pago" ? "pago" : "a_pagar",
           p.id,
-          `FGTS ${targetMes} - ${p.nome_completo}`,
-          `FGTS ${targetMes}: ${p.nome_completo}`,
+          `FGTS ${targetMes} - ${p.nome_completo ?? ""}`,
+          `FGTS ${targetMes}: ${p.nome_completo ?? ""}`,
         ]
       );
     }
@@ -107,37 +118,35 @@ export async function importPJToFinancial(companyId: number, mesRef?: string): P
   const targetMes = mesRef ?? mesCompetencia(new Date());
   const [ano, mes] = targetMes.split("-");
 
-  const pjRes = await db.execute(
-    `SELECT pp.id, pp.valor, pp.data_pagamento, pp.descricao, pp.status, pp.obra_id,
-            o.nome AS obra_nome
+  const { rows: pjs } = await dbExecute(db,
+    `SELECT pp.id, pp.valor, pp."dataPagamento", pp.descricao, pp.status, pp."mesReferencia"
      FROM pj_payments pp
-     LEFT JOIN obras o ON o.id = pp.obra_id
-     WHERE pp.company_id = $1
-       AND TO_CHAR(pp.data_pagamento, 'YYYY-MM') = $2`,
+     WHERE pp."companyId" = $1
+       AND pp."mesReferencia" = $2`,
     [companyId, targetMes]
   );
-  const pjs = (pjRes as any)?.rows ?? (pjRes as any) ?? [];
 
   let imported = 0;
   for (const pj of pjs) {
     if (await entryExists(db, companyId, "pagamento_pj", pj.id)) continue;
 
-    await db.execute(
+    const valor = parseFloat(pj.valor ?? "0");
+    if (valor <= 0) continue;
+
+    await dbExecute(db,
       `INSERT INTO financial_entries
-       (company_id, obra_id, obra_nome, conta_nome, tipo, natureza, valor_previsto, valor_realizado,
+       (company_id, conta_nome, tipo, natureza, valor_previsto, valor_realizado,
         data_competencia, data_vencimento, data_pagamento, status, origem_modulo, origem_id,
         origem_descricao, descricao, created_at, updated_at)
-       VALUES ($1,$2,$3,'Serviços PJ / Terceirizados','despesa','variavel',$4,$5,$6,$7,$8,$9,
-               'pagamento_pj',$10,$11,$12,NOW(),NOW())`,
+       VALUES ($1,'Serviços PJ / Terceirizados','despesa','variavel',$2,$3,$4,$5,$6,$7,
+               'pagamento_pj',$8,$9,$10,NOW(),NOW())`,
       [
         companyId,
-        pj.obra_id ?? null,
-        pj.obra_nome ?? null,
-        parseFloat(pj.valor ?? 0),
-        pj.status === "pago" ? parseFloat(pj.valor ?? 0) : null,
+        valor,
+        pj.status === "pago" ? valor : null,
         `${ano}-${mes}-01`,
-        pj.data_pagamento ?? null,
-        pj.data_pagamento ?? null,
+        pj.dataPagamento ?? null,
+        pj.dataPagamento ?? null,
         pj.status === "pago" ? "pago" : "a_pagar",
         pj.id,
         `PJ ${targetMes} - ${pj.descricao ?? "Serviço PJ"}`,
@@ -157,34 +166,33 @@ export async function importParceiroLancamentosToFinancial(companyId: number, me
   const targetMes = mesRef ?? mesCompetencia(new Date());
   const [ano, mes] = targetMes.split("-");
 
-  const lancRes = await db.execute(
-    `SELECT lp.id, lp.valor, lp.data_lancamento, lp.descricao, lp.tipo, lp.status, lp.obra_id,
-            o.nome AS obra_nome
+  const { rows: lancs } = await dbExecute(db,
+    `SELECT lp.id, lp.valor, lp.data_compra AS data_lancamento, lp.descricao_itens AS descricao,
+            lp.status
      FROM lancamentos_parceiros lp
-     LEFT JOIN obras o ON o.id = lp.obra_id
-     WHERE lp.company_id = $1
-       AND TO_CHAR(lp.data_lancamento, 'YYYY-MM') = $2`,
+     WHERE lp."companyId" = $1
+       AND TO_CHAR(lp.data_compra, 'YYYY-MM') = $2`,
     [companyId, targetMes]
   );
-  const lancs = (lancRes as any)?.rows ?? (lancRes as any) ?? [];
 
   let imported = 0;
   for (const l of lancs) {
     if (await entryExists(db, companyId, "parceiro_lancamento", l.id)) continue;
 
-    await db.execute(
+    const valor = parseFloat(l.valor ?? "0");
+    if (valor <= 0) continue;
+
+    await dbExecute(db,
       `INSERT INTO financial_entries
-       (company_id, obra_id, obra_nome, conta_nome, tipo, natureza, valor_previsto, valor_realizado,
+       (company_id, conta_nome, tipo, natureza, valor_previsto, valor_realizado,
         data_competencia, data_vencimento, data_pagamento, status, origem_modulo, origem_id,
         origem_descricao, descricao, created_at, updated_at)
-       VALUES ($1,$2,$3,'Subempreiteiros','despesa','variavel',$4,$5,$6,$7,$8,$9,
-               'parceiro_lancamento',$10,$11,$12,NOW(),NOW())`,
+       VALUES ($1,'Subempreiteiros','despesa','variavel',$2,$3,$4,$5,$6,$7,
+               'parceiro_lancamento',$8,$9,$10,NOW(),NOW())`,
       [
         companyId,
-        l.obra_id ?? null,
-        l.obra_nome ?? null,
-        parseFloat(l.valor ?? 0),
-        l.status === "pago" ? parseFloat(l.valor ?? 0) : null,
+        valor,
+        l.status === "pago" ? valor : null,
         `${ano}-${mes}-01`,
         l.data_lancamento ?? null,
         l.status === "pago" ? l.data_lancamento : null,
