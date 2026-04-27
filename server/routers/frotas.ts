@@ -495,7 +495,10 @@ export const frotasRouter = router({
       if (input.tipo) q = sql`${q} AND v."tipoVeiculo" = ${input.tipo}`;
       if (input.obraId) q = sql`${q} AND v.obra_id = ${input.obraId}`;
       // Filtro centralizado por obras permitidas. Veículos sem obra (obra_id NULL) só para admin.
-      if (allowed !== null) q = sql`${q} AND v.obra_id = ANY(${allowed})`;
+      if (allowed !== null && allowed.length > 0) {
+        const ids = allowed.map((id: number) => sql`${id}`);
+        q = sql`${q} AND v.obra_id IN (${sql.join(ids, sql`, `)})`;
+      }
       q = sql`${q} ORDER BY v."createdAt" DESC`;
       const res = await db.execute(q);
       return (res as any).rows || [];

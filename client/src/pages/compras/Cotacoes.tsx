@@ -1854,11 +1854,20 @@ export default function Cotacoes() {
       if (!condPag) erros.push("Forma de Pagamento");
       if (!isMdoMedicao && (!prazo || Number(prazo) <= 0)) erros.push("Prazo de Entrega");
       if (erros.length > 0) {
-        toast.error(`Preencha ${erros.join(" e ")} nas condições do vencedor antes de aprovar.`);
+        const nomeForn = (fornParaSaldo as any).fornecedor?.nomeFantasia || (fornParaSaldo as any).fornecedor?.razaoSocial || "do fornecedor vencedor";
+        toast.error(`Preencha ${erros.join(" e ")} de ${nomeForn} antes de aprovar. Clique em "Editar" no card do fornecedor no Mapa de Cotação, preencha os campos e clique em "Salvar".`, { duration: 8000 });
         return false;
       }
       return true;
     }
+
+    // Detecta se condições comerciais do vencedor estão faltando (para alerta visual)
+    const condPagVencedor = fornParaSaldo ? ((fornParaSaldo as any).condicaoPagamento || (fornParaSaldo as any).formaPagamento) : true;
+    const prazoVencedor = fornParaSaldo ? (fornParaSaldo as any).prazoEntregaDias : true;
+    const cotTipoVencedor = (mapaQ.data as any)?.tipoEfetivo ?? (mapaQ.data?.cotacao as any)?.tipo;
+    const tipoPagVencedor = fornParaSaldo ? ((fornParaSaldo as any).tipoPagamento ?? "") : "";
+    const isMdoMedicaoVencedor = (cotTipoVencedor === "servico" || cotTipoVencedor === "pacote") && (tipoPagVencedor === "medicao" || (condPagVencedor ?? "").toLowerCase?.().includes("medição"));
+    const condicoesIncompletas = detalheFullscreen?.status === "pendente" && fornParaSaldo && (!condPagVencedor || (!isMdoMedicaoVencedor && (!prazoVencedor || Number(prazoVencedor) <= 0)));
 
     function handleAprovarGerarOC(cotacaoId: number) {
       if (!validarCondicoesVencedor()) return;
@@ -2391,6 +2400,18 @@ export default function Cotacoes() {
                   )}
                 </div>
               </div>
+
+              {/* Alerta: condições comerciais do vencedor incompletas */}
+              {condicoesIncompletas && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 mb-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="text-xs text-amber-800">
+                    <span className="font-semibold">Ação necessária antes de aprovar: </span>
+                    preencha a <strong>Forma de Pagamento</strong> e o <strong>Prazo de Entrega</strong> do fornecedor vencedor.
+                    Na aba <em>Mapa de Cotação</em>, clique em <strong>"Editar"</strong> no card do fornecedor, preencha os campos e clique em <strong>"Salvar"</strong>.
+                  </div>
+                </div>
+              )}
 
               {/* Barra de evolução */}
               {(() => {

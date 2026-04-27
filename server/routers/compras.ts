@@ -5997,7 +5997,8 @@ Retorne APENAS um JSON válido neste formato:
           orcamentoItemId: comprasSolicitacoesItens.orcamentoItemId,
           descricao: comprasSolicitacoesItens.descricao,
         }).from(comprasSolicitacoesItens)
-          .where(inArray(comprasSolicitacoesItens.companyId, ids)),
+          .innerJoin(comprasSolicitacoes, eq(comprasSolicitacoesItens.solicitacaoId, comprasSolicitacoes.id))
+          .where(inArray(comprasSolicitacoes.companyId, ids)),
 
         db.select({ id: obras.id, nome: obras.nome })
           .from(obras)
