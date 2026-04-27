@@ -3,6 +3,7 @@ import { getDb, createAuditLog } from "../db";
 import { resolveCompanyIds } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { sql } from "drizzle-orm";
 import { seedPlanoDeConta, ensureTaxConfig } from "../services/financialSeedAccounts";
 import { runAllAutoImports } from "../services/financialAutoImport";
 import {
@@ -30,6 +31,21 @@ function rows(res: any): any[] {
   return (res as any)?.rows ?? (res as any) ?? [];
 }
 
+// Executa queries parametrizadas corretamente no Drizzle ORM
+// dbExecute(db, string, array) ignora o array — é preciso usar sql template
+async function dbExecute(db: any, query: string, params: unknown[] = []): Promise<{ rows: any[] }> {
+  const parts = query.split(/\$\d+/g);
+  let built: any = sql.raw(parts[0] ?? "");
+  for (let i = 1; i < parts.length; i++) {
+    const paramVal = params[i - 1];
+    const tail = parts[i] ?? "";
+    built = tail ? sql`${built}${paramVal}${sql.raw(tail)}` : sql`${built}${paramVal}`;
+  }
+  const res = await db.execute(built);
+  const rowsArr: any[] = (res as any)?.rows ?? (Array.isArray(res) ? res : []);
+  return { rows: rowsArr };
+}
+
 export const financialRouter = router({
 
   // ─────────────────── PLANO DE CONTAS ───────────────────
@@ -45,7 +61,7 @@ export const financialRouter = router({
     const ids = resolveCompanyIds(input);
     const ativoPart = input.ativo !== undefined ? `AND ativo = ${input.ativo ? 1 : 0}` : "";
     const tipoPart = input.tipo ? `AND tipo = '${input.tipo.replace(/'/g, "''")}'` : "";
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, company_id AS "companyId", codigo, nome, tipo, natureza, nivel,
               conta_pai_id AS "contaPaiId", classificacao_dre AS "classificacaoDRE",
               ativo, ordem
@@ -70,7 +86,7 @@ export const financialRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `INSERT INTO financial_accounts (company_id, codigo, nome, tipo, natureza, nivel, conta_pai_id, classificacao_dre, ativo, ordem)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,1,$9) RETURNING id`,
       [input.companyId, input.codigo, input.nome, input.tipo, input.natureza,
@@ -100,7 +116,7 @@ export const financialRouter = router({
     if (input.ordem !== undefined) { parts.push(`ordem=$${i++}`); vals.push(input.ordem); }
     if (!parts.length) return { ok: true };
     vals.push(input.id, input.companyId);
-    await db.execute(`UPDATE financial_accounts SET ${parts.join(",")} WHERE id=$${i++} AND company_id=$${i}`, vals);
+    await dbExecute(db, `UPDATE financial_accounts SET ${parts.join(",")} WHERE id=$${i++} AND company_id=$${i}`, vals);
     return { ok: true };
   }),
 
@@ -139,7 +155,7 @@ export const financialRouter = router({
     if (input.dataFim) { conds.push(`e.data_competencia<=$${i++}`); vals.push(input.dataFim); }
     if (input.origemModulo) { conds.push(`e.origem_modulo=$${i++}`); vals.push(input.origemModulo); }
     vals.push(input.limit, input.offset);
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT e.id, e.company_id AS "companyId", e.obra_id AS "obraId", e.obra_nome AS "obraNome",
               e.conta_id AS "contaId", e.conta_nome AS "contaNome", e.tipo, e.natureza,
               e.valor_previsto AS "valorPrevisto", e.valor_realizado AS "valorRealizado",
@@ -155,7 +171,7 @@ export const financialRouter = router({
        LIMIT $${i++} OFFSET $${i}`,
       vals
     );
-    const countRes = await db.execute(
+    const countRes = await dbExecute(db, 
       `SELECT COUNT(*) AS total FROM financial_entries e WHERE ${conds.slice(0, -0).join(" AND ")}`,
       vals.slice(0, -2)
     );
@@ -196,7 +212,7 @@ export const financialRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `INSERT INTO financial_entries
        (company_id, obra_id, obra_nome, conta_id, conta_nome, tipo, natureza,
         valor_previsto, valor_realizado, data_competencia, data_vencimento, data_pagamento,
@@ -237,7 +253,7 @@ export const financialRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(
+    await dbExecute(db, 
       `UPDATE financial_entries
        SET status=$1, data_pagamento=COALESCE($2, data_pagamento),
            valor_realizado=COALESCE($3, valor_realizado),
@@ -259,7 +275,7 @@ export const financialRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(
+    await dbExecute(db, 
       `UPDATE financial_entries SET status='cancelado', motivo_cancelamento=$1, updated_at=NOW()
        WHERE id=$2 AND company_id=$3 AND status != 'cancelado'`,
       [input.motivoCancelamento, input.id, input.companyId]
@@ -281,29 +297,29 @@ export const financialRouter = router({
     const mes = input.mesCompetencia ?? new Date().toISOString().slice(0, 7);
 
     const [recRes, despRes, aReceberRes, apagarRes, vencRes] = await Promise.all([
-      db.execute(
+      dbExecute(db, 
         `SELECT COALESCE(SUM(valor_realizado),0) AS total FROM financial_entries
          WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('recebido','pago')
            AND TO_CHAR(data_competencia,'YYYY-MM')=$2`,
         [ids, mes]
       ),
-      db.execute(
+      dbExecute(db, 
         `SELECT COALESCE(SUM(valor_realizado),0) AS total FROM financial_entries
          WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status IN ('pago','recebido')
            AND TO_CHAR(data_competencia,'YYYY-MM')=$2`,
         [ids, mes]
       ),
-      db.execute(
+      dbExecute(db, 
         `SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries
          WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status='a_receber'`,
         [ids]
       ),
-      db.execute(
+      dbExecute(db, 
         `SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries
          WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status='a_pagar'`,
         [ids]
       ),
-      db.execute(
+      dbExecute(db, 
         `SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries
          WHERE company_id=ANY($1::int[]) AND status IN ('a_pagar','a_receber')
            AND data_vencimento < CURRENT_DATE`,
@@ -347,7 +363,7 @@ export const financialRouter = router({
     if (input.obraId) { conds.push(`obra_id=$${i++}`); vals.push(input.obraId); }
     if (input.status) { conds.push(`status=$${i++}`); vals.push(input.status); }
     vals.push(input.limit, input.offset);
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, company_id AS "companyId", obra_id AS "obraId", obra_nome AS "obraNome",
               cliente_nome AS "clienteNome", cliente_cnpj AS "clienteCnpj",
               valor_contrato AS "valorContrato", valor_aditivos AS "valorAditivos",
@@ -389,7 +405,7 @@ export const financialRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const retTotal = input.retencaoISS + input.retencaoINSS + input.retencaoIR;
     const vlq = input.valorMedicao - retTotal;
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `INSERT INTO financial_revenue
        (company_id, obra_id, obra_nome, cliente_nome, cliente_cnpj, valor_contrato,
         valor_medicao, medicao_numero, percentual_medicao, data_vencimento,
@@ -413,7 +429,7 @@ export const financialRouter = router({
       const obraInfo = input.obraNome ?? `Obra ${input.obraId}`;
       const clienteInfo = input.clienteNome ? ` — ${input.clienteNome}` : "";
       const medicaoInfo = input.medicaoNumero ? ` #${input.medicaoNumero}` : "";
-      await db.execute(
+      await dbExecute(db, 
         `INSERT INTO financial_entries
          (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
           valor_previsto, data_competencia, data_vencimento, status,
@@ -449,7 +465,7 @@ export const financialRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(
+    await dbExecute(db, 
       `UPDATE financial_revenue
        SET status=$1, nf_numero=COALESCE($2,nf_numero), nf_emitida_em=COALESCE($3,nf_emitida_em),
            data_recebimento=COALESCE($4,data_recebimento), valor_recebido=COALESCE($5,valor_recebido),
@@ -470,7 +486,7 @@ export const financialRouter = router({
       cancelado: "cancelado",
     };
     const entryStatus = entryStatusMap[input.status] ?? "a_receber";
-    await db.execute(
+    await dbExecute(db, 
       `UPDATE financial_entries
        SET status=$1,
            valor_realizado=CASE WHEN $2::numeric > 0 THEN $2::numeric ELSE valor_realizado END,
@@ -502,7 +518,7 @@ export const financialRouter = router({
     if (input.mesCompetencia) { conds.push(`mes_competencia=$${i++}`); vals.push(input.mesCompetencia); }
     if (input.status) { conds.push(`status=$${i++}`); vals.push(input.status); }
     if (input.tipo) { conds.push(`tipo=$${i++}`); vals.push(input.tipo); }
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, company_id AS "companyId", tipo, mes_competencia AS "mesCompetencia",
               base_calculo AS "baseCalculo", aliquota, valor_principal AS "valorPrincipal",
               valor_multa AS "valorMulta", valor_juros AS "valorJuros", valor_total AS "valorTotal",
@@ -534,7 +550,7 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const valorTotal = input.valorPrincipal + input.valorMulta + input.valorJuros;
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `INSERT INTO financial_tax_obligations
        (company_id, tipo, mes_competencia, base_calculo, aliquota, valor_principal,
         valor_multa, valor_juros, valor_total, data_vencimento, codigo_receita, status, gerada_automaticamente)
@@ -554,7 +570,7 @@ export const financialRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(
+    await dbExecute(db, 
       `UPDATE financial_tax_obligations
        SET status='pago', data_pagamento=$1, guia_url=COALESCE($2,guia_url)
        WHERE id=$3 AND company_id=$4`,
@@ -572,7 +588,7 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await ensureTaxConfig(input.companyId);
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, company_id AS "companyId", regime_tributario AS "regimeTributario",
               anexo_simples AS "anexoSimples", aliquota_simples AS "aliquotaSimples",
               aliquota_iss AS "aliquotaISS", aliquota_pis AS "aliquotaPIS",
@@ -629,7 +645,7 @@ export const financialRouter = router({
     }
     if (!parts.length) return { ok: true };
     vals.push(input.companyId);
-    await db.execute(
+    await dbExecute(db, 
       `UPDATE financial_tax_config SET ${parts.join(",")}, updated_at=NOW() WHERE company_id=$${i}`,
       vals
     );
@@ -664,17 +680,17 @@ export const financialRouter = router({
     }
 
     const obraCond = input.obraId ? `AND obra_id=${input.obraId}` : "";
-    const receitaBruta = await db.execute(
+    const receitaBruta = await dbExecute(db, 
       `SELECT COALESCE(SUM(COALESCE(valor_realizado,valor_previsto)),0) AS total
        FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' ${dataCond} ${obraCond} AND status NOT IN ('cancelado')`,
       [ids]
     );
-    const deducoes = await db.execute(
+    const deducoes = await dbExecute(db, 
       `SELECT COALESCE(SUM(COALESCE(valor_realizado,valor_previsto)),0) AS total
        FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='imposto' ${dataCond} ${obraCond} AND status NOT IN ('cancelado')`,
       [ids]
     );
-    const custoObra = await db.execute(
+    const custoObra = await dbExecute(db, 
       `SELECT fa.classificacao_dre, COALESCE(SUM(COALESCE(fe.valor_realizado,fe.valor_previsto)),0) AS total
        FROM financial_entries fe
        LEFT JOIN financial_accounts fa ON fa.id=fe.conta_id
@@ -682,35 +698,35 @@ export const financialRouter = router({
        GROUP BY fa.classificacao_dre`,
       [ids]
     );
-    const despFixa = await db.execute(
+    const despFixa = await dbExecute(db, 
       `SELECT COALESCE(SUM(COALESCE(fe.valor_realizado,fe.valor_previsto)),0) AS total
        FROM financial_entries fe
        LEFT JOIN financial_accounts fa ON fa.id=fe.conta_id
        WHERE fe.company_id=ANY($1::int[]) AND fe.tipo='despesa' AND fa.tipo='despesa_fixa' ${dataCond} AND fe.status NOT IN ('cancelado')`,
       [ids]
     );
-    const despVar = await db.execute(
+    const despVar = await dbExecute(db, 
       `SELECT COALESCE(SUM(COALESCE(fe.valor_realizado,fe.valor_previsto)),0) AS total
        FROM financial_entries fe
        LEFT JOIN financial_accounts fa ON fa.id=fe.conta_id
        WHERE fe.company_id=ANY($1::int[]) AND fe.tipo='despesa' AND fa.tipo='despesa_variavel' ${dataCond} AND fe.status NOT IN ('cancelado')`,
       [ids]
     );
-    const despFin = await db.execute(
+    const despFin = await dbExecute(db, 
       `SELECT COALESCE(SUM(COALESCE(fe.valor_realizado,fe.valor_previsto)),0) AS total
        FROM financial_entries fe
        LEFT JOIN financial_accounts fa ON fa.id=fe.conta_id
        WHERE fe.company_id=ANY($1::int[]) AND fe.tipo='despesa' AND fa.tipo='despesa_financeira' ${dataCond} AND fe.status NOT IN ('cancelado')`,
       [ids]
     );
-    const recFin = await db.execute(
+    const recFin = await dbExecute(db, 
       `SELECT COALESCE(SUM(COALESCE(fe.valor_realizado,fe.valor_previsto)),0) AS total
        FROM financial_entries fe
        LEFT JOIN financial_accounts fa ON fa.id=fe.conta_id
        WHERE fe.company_id=ANY($1::int[]) AND fe.tipo='receita' AND fa.tipo='receita_financeira' ${dataCond} AND fe.status NOT IN ('cancelado')`,
       [ids]
     );
-    const impostos = await db.execute(
+    const impostos = await dbExecute(db, 
       `SELECT COALESCE(SUM(COALESCE(fe.valor_realizado,fe.valor_previsto)),0) AS total
        FROM financial_entries fe
        LEFT JOIN financial_accounts fa ON fa.id=fe.conta_id
@@ -770,7 +786,7 @@ export const financialRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
     const obraCond = input.obraId ? `AND obra_id=${input.obraId}` : "";
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT TO_CHAR(COALESCE(data_pagamento,data_vencimento,data_competencia),'YYYY-MM-DD') AS data,
               tipo, natureza, status,
               COALESCE(valor_realizado,valor_previsto) AS valor,
@@ -818,7 +834,7 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, company_id AS "companyId", codigo, nome, tipo, obra_id AS "obraId",
               responsavel_nome AS "responsavelNome", orcamento_mensal AS "orcamentoMensal", ativo
        FROM financial_cost_centers WHERE company_id=ANY($1::int[]) AND ativo=1 ORDER BY codigo ASC`,
@@ -838,7 +854,7 @@ export const financialRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `INSERT INTO financial_cost_centers (company_id, codigo, nome, tipo, obra_id, responsavel_nome, orcamento_mensal, ativo)
        VALUES ($1,$2,$3,$4,$5,$6,$7,1) RETURNING id`,
       [input.companyId, input.codigo, input.nome, input.tipo, input.obraId ?? null,
@@ -861,7 +877,7 @@ export const financialRouter = router({
     let i = 2;
     if (input.obraId) { conds.push(`obra_id=$${i++}`); vals.push(input.obraId); }
     if (input.status) { conds.push(`status=$${i++}`); vals.push(input.status); }
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, company_id AS "companyId", obra_id AS "obraId", numero, data_referencia AS "dataReferencia",
               percentual_acumulado AS "percentualAcumulado", percentual_periodo AS "percentualPeriodo",
               valor_contrato AS "valorContrato", valor_medicao AS "valorMedicao",
@@ -887,7 +903,7 @@ export const financialRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `INSERT INTO obra_medicoes (company_id, obra_id, numero, data_referencia, percentual_periodo,
        percentual_acumulado, valor_contrato, valor_medicao, valor_acumulado, status, observacoes, created_at, updated_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'rascunho',$10,NOW(),NOW()) RETURNING id`,
@@ -908,7 +924,7 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, "companyId", banco, "codigoBanco", agencia, conta,
               "tipoConta" AS tipo, apelido AS descricao, ativo
        FROM company_bank_accounts WHERE "companyId"=ANY($1::int[]) ORDER BY banco ASC`,
@@ -924,7 +940,7 @@ export const financialRouter = router({
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, company_id AS "companyId", nome, cpf, cargo,
               percentual_sociedade AS "percentualSociedade",
               valor_pro_labore AS "valorProLabore",
@@ -947,7 +963,7 @@ export const financialRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `INSERT INTO company_partners (company_id, nome, cpf, cargo, percentual_sociedade, valor_pro_labore, dia_vencimento, pix_chave, ativo)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,1) RETURNING id`,
       [input.companyId, input.nome, input.cpf ?? null, input.cargo ?? null,
@@ -985,7 +1001,7 @@ export const financialRouter = router({
     if (input.ativo !== undefined) { parts.push(`ativo=$${i++}`); vals.push(input.ativo ? 1 : 0); }
     if (!parts.length) return { ok: true };
     vals.push(input.id, input.companyId);
-    await db.execute(`UPDATE company_partners SET ${parts.join(",")}, updated_at=NOW() WHERE id=$${i++} AND company_id=$${i}`, vals);
+    await dbExecute(db, `UPDATE company_partners SET ${parts.join(",")}, updated_at=NOW() WHERE id=$${i++} AND company_id=$${i}`, vals);
     return { ok: true };
   }),
 
@@ -1001,7 +1017,7 @@ export const financialRouter = router({
     const conds = [`company_id=$1`, `ano=$2`];
     const vals: any[] = [input.companyId, input.ano];
     if (input.obraId) { conds.push(`obra_id=$3`); vals.push(input.obraId); }
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT b.id, b.ano, b.mes, b.conta_id AS "contaId", b.obra_id AS "obraId",
               b.valor_orcado AS "valorOrcado", b.observacoes,
               fa.nome AS "contaNome", fa.tipo AS "contaTipo"
@@ -1024,18 +1040,18 @@ export const financialRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const existing = await db.execute(
+    const existing = await dbExecute(db, 
       `SELECT id FROM financial_budget WHERE company_id=$1 AND ano=$2 AND mes=$3 AND (conta_id=$4 OR ($4 IS NULL AND conta_id IS NULL)) LIMIT 1`,
       [input.companyId, input.ano, input.mes, input.contaId ?? null]
     );
     if (rows(existing).length > 0) {
-      await db.execute(
+      await dbExecute(db, 
         `UPDATE financial_budget SET valor_orcado=$1, observacoes=COALESCE($2,observacoes), updated_at=NOW()
          WHERE company_id=$3 AND ano=$4 AND mes=$5 AND (conta_id=$6 OR ($6 IS NULL AND conta_id IS NULL))`,
         [input.valorOrcado, input.observacoes ?? null, input.companyId, input.ano, input.mes, input.contaId ?? null]
       );
     } else {
-      await db.execute(
+      await dbExecute(db, 
         `INSERT INTO financial_budget (company_id, ano, mes, conta_id, obra_id, valor_orcado, observacoes, criado_por_id)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
         [input.companyId, input.ano, input.mes, input.contaId ?? null, input.obraId ?? null,
@@ -1072,7 +1088,7 @@ export const financialRouter = router({
     if (input.dataInicio) { conds.push(`data>=$${i++}`); vals.push(input.dataInicio); }
     if (input.dataFim) { conds.push(`data<=$${i++}`); vals.push(input.dataFim); }
     if (input.conciliado !== undefined) { conds.push(`conciliado=$${i++}`); vals.push(input.conciliado ? 1 : 0); }
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, data, descricao, valor, tipo, saldo_apos AS "saldoApos", conciliado, entry_id AS "entryId"
        FROM bank_statement_lines WHERE ${conds.join(" AND ")} ORDER BY data DESC, id DESC`,
       vals
@@ -1087,11 +1103,11 @@ export const financialRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(
+    await dbExecute(db, 
       `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1 WHERE id=$2 AND company_id=$3`,
       [input.entryId, input.statementLineId, input.companyId]
     );
-    await db.execute(
+    await dbExecute(db, 
       `UPDATE financial_entries SET conciliado=1, data_conciliacao=CURRENT_DATE WHERE id=$1 AND company_id=$2`,
       [input.entryId, input.companyId]
     );
@@ -1103,7 +1119,7 @@ export const financialRouter = router({
   getCollectionRules: protectedProcedure.input(z.object({ companyId: z.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, nome, dias_atraso_1 AS "diasAtraso1", mensagem_1 AS "mensagem1",
               dias_atraso_2 AS "diasAtraso2", mensagem_2 AS "mensagem2",
               dias_atraso_3 AS "diasAtraso3", mensagem_3 AS "mensagem3",
@@ -1132,7 +1148,7 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     if (input.id) {
-      await db.execute(
+      await dbExecute(db, 
         `UPDATE collection_rules SET nome=$1,dias_atraso_1=$2,mensagem_1=$3,dias_atraso_2=$4,mensagem_2=$5,
          dias_atraso_3=$6,mensagem_3=$7,dias_atraso_4=$8,mensagem_4=$9,enviar_email=$10
          WHERE id=$11 AND company_id=$12`,
@@ -1141,7 +1157,7 @@ export const financialRouter = router({
          input.diasAtraso4, input.mensagem4 ?? null, input.enviarEmail ? 1 : 0, input.id, input.companyId]
       );
     } else {
-      await db.execute(
+      await dbExecute(db, 
         `INSERT INTO collection_rules (company_id, nome, dias_atraso_1, mensagem_1, dias_atraso_2, mensagem_2,
          dias_atraso_3, mensagem_3, dias_atraso_4, mensagem_4, enviar_email, ativo)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,1)`,
@@ -1179,16 +1195,16 @@ export const financialRouter = router({
       proxVencimentosRes,
       receitaPorObraRes,
     ] = await Promise.all([
-      db.execute(`SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('recebido','pago') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mes]),
-      db.execute(`SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mes]),
-      db.execute(`SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('recebido','pago') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mesAnterior]),
-      db.execute(`SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mesAnterior]),
-      db.execute(`SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('a_receber','recebido_parcial')`, [ids]),
-      db.execute(`SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status='a_pagar'`, [ids]),
-      db.execute(`SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('a_receber','recebido_parcial') AND data_vencimento < $2`, [ids, today]),
-      db.execute(`SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status='a_pagar' AND data_vencimento < $2`, [ids, today]),
-      db.execute(`SELECT id, banco, agencia, conta, "tipoConta" AS tipo, apelido AS descricao FROM company_bank_accounts WHERE "companyId"=ANY($1::int[]) AND ativo=1 ORDER BY banco ASC`, [ids]),
-      db.execute(`
+      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('recebido','pago') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mes]),
+      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mes]),
+      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('recebido','pago') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mesAnterior]),
+      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mesAnterior]),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('a_receber','recebido_parcial')`, [ids]),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status='a_pagar'`, [ids]),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('a_receber','recebido_parcial') AND data_vencimento < $2`, [ids, today]),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status='a_pagar' AND data_vencimento < $2`, [ids, today]),
+      dbExecute(db, `SELECT id, banco, agencia, conta, "tipoConta" AS tipo, apelido AS descricao FROM company_bank_accounts WHERE "companyId"=ANY($1::int[]) AND ativo=1 ORDER BY banco ASC`, [ids]),
+      dbExecute(db, `
         SELECT TO_CHAR(data_competencia, 'YYYY-MM-DD') AS dia,
                SUM(CASE WHEN tipo='receita' AND status IN ('recebido','pago') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS entradas,
                SUM(CASE WHEN tipo='despesa' AND status IN ('pago','recebido') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS saidas
@@ -1196,18 +1212,18 @@ export const financialRouter = router({
         WHERE company_id=ANY($1::int[]) AND data_competencia >= (CURRENT_DATE - INTERVAL '30 days') AND status IN ('pago','recebido')
         GROUP BY TO_CHAR(data_competencia, 'YYYY-MM-DD')
         ORDER BY dia ASC`, [ids]),
-      db.execute(`
+      dbExecute(db, `
         SELECT conta_nome AS "categoria", SUM(COALESCE(valor_realizado, valor_previsto)) AS total
         FROM financial_entries
         WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$2
         GROUP BY conta_nome ORDER BY total DESC LIMIT 8`, [ids, mes]),
-      db.execute(`
+      dbExecute(db, `
         SELECT id, descricao, obra_nome AS "obraNome", valor_previsto AS "valor", data_vencimento AS "vencimento", tipo,
                CASE WHEN data_vencimento < CURRENT_DATE THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
         FROM financial_entries
         WHERE company_id=ANY($1::int[]) AND status IN ('a_pagar','a_receber','recebido_parcial')
         ORDER BY data_vencimento ASC LIMIT 15`, [ids]),
-      db.execute(`
+      dbExecute(db, `
         SELECT obra_nome AS "obraNome", obra_id AS "obraId",
                SUM(CASE WHEN tipo='receita' AND status IN ('recebido','pago') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS receita,
                SUM(CASE WHEN tipo='despesa' AND status IN ('pago','recebido') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS despesa
@@ -1225,7 +1241,7 @@ export const financialRouter = router({
     const vencRec = Number(rows(vencidosRecRes)[0]?.total ?? 0);
     const vencPag = Number(rows(vencidosPagRes)[0]?.total ?? 0);
 
-    const openingRes = await db.execute(
+    const openingRes = await dbExecute(db, 
       `SELECT conta_bancaria_id, COALESCE(SUM(valor),0) AS total
        FROM financial_opening_balances WHERE company_id=ANY($1::int[]) GROUP BY conta_bancaria_id`, [ids]
     );
@@ -1280,7 +1296,7 @@ export const financialRouter = router({
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, descricao, valor, tipo, natureza, conta_nome AS "contaNome",
               obra_nome AS "obraNome", frequencia, dia_vencimento AS "diaVencimento",
               forma_pagamento AS "formaPagamento", fornecedor_nome AS "fornecedorNome",
@@ -1313,7 +1329,7 @@ export const financialRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const now = new Date();
     const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, Math.min(input.diaVencimento, 28));
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `INSERT INTO financial_recurring_entries
         (company_id, descricao, valor, tipo, natureza, conta_id, conta_nome, obra_id, obra_nome,
          frequencia, dia_vencimento, forma_pagamento, fornecedor_nome, observacoes,
@@ -1370,7 +1386,7 @@ export const financialRouter = router({
     if (sets.length === 0) return { ok: true };
     sets.push(`updated_at=NOW()`);
     vals.push(input.id, input.companyId);
-    await db.execute(`UPDATE financial_recurring_entries SET ${sets.join(",")} WHERE id=$${i++} AND company_id=$${i}`, vals);
+    await dbExecute(db, `UPDATE financial_recurring_entries SET ${sets.join(",")} WHERE id=$${i++} AND company_id=$${i}`, vals);
     return { ok: true };
   }),
 
@@ -1381,7 +1397,7 @@ export const financialRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const today = new Date();
     const todayStr = today.toISOString().split("T")[0];
-    const recRes = await db.execute(
+    const recRes = await dbExecute(db, 
       `SELECT * FROM financial_recurring_entries WHERE company_id=$1 AND ativo=1 AND (proximo_vencimento IS NULL OR proximo_vencimento <= $2)`,
       [input.companyId, todayStr]
     );
@@ -1391,12 +1407,12 @@ export const financialRouter = router({
       const venc = rec.proximo_vencimento ? new Date(rec.proximo_vencimento) : today;
       const vencStr = venc.toISOString().split("T")[0];
       const mesComp = vencStr.slice(0, 7);
-      const existing = await db.execute(
+      const existing = await dbExecute(db, 
         `SELECT id FROM financial_entries WHERE company_id=$1 AND origem_modulo='recorrente' AND origem_id=$2 AND TO_CHAR(data_vencimento,'YYYY-MM')=$3 LIMIT 1`,
         [input.companyId, rec.id, mesComp]
       );
       if (rows(existing).length > 0) continue;
-      await db.execute(
+      await dbExecute(db, 
         `INSERT INTO financial_entries
           (company_id, obra_id, obra_nome, conta_id, conta_nome, tipo, natureza,
            valor_previsto, data_competencia, data_vencimento, status,
@@ -1413,7 +1429,7 @@ export const financialRouter = router({
       else if (rec.frequencia === "semanal") nextVenc.setDate(nextVenc.getDate() + 7);
       else if (rec.frequencia === "trimestral") nextVenc.setMonth(nextVenc.getMonth() + 3);
       else if (rec.frequencia === "anual") nextVenc.setFullYear(nextVenc.getFullYear() + 1);
-      await db.execute(
+      await dbExecute(db, 
         `UPDATE financial_recurring_entries SET proximo_vencimento=$1, ultimo_gerado=$2, updated_at=NOW() WHERE id=$3`,
         [nextVenc.toISOString().split("T")[0], todayStr, rec.id]
       );
@@ -1438,7 +1454,7 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-    const ownerCheck = await db.execute(
+    const ownerCheck = await dbExecute(db, 
       `SELECT id FROM company_bank_accounts WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
       [input.contaBancariaId, input.companyId]
     );
@@ -1515,12 +1531,12 @@ export const financialRouter = router({
     let skipped = 0;
     const importadoEm = new Date().toISOString();
     for (const line of lines) {
-      const existing = await db.execute(
+      const existing = await dbExecute(db, 
         `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 LIMIT 1`,
         [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor]
       );
       if (rows(existing).length > 0) { skipped++; continue; }
-      await db.execute(
+      await dbExecute(db, 
         `INSERT INTO bank_statement_lines (company_id, conta_bancaria_id, data, descricao, valor, tipo, saldo_apos, conciliado, importado_em)
          VALUES ($1,$2,$3,$4,$5,$6,$7,0,$8)`,
         [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor,
@@ -1552,7 +1568,7 @@ export const financialRouter = router({
     const vals: any[] = [ids];
     let i = 2;
     if (input.vencimentoAte) { conds.push(`data_vencimento<=$${i++}`); vals.push(input.vencimentoAte); }
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, obra_id AS "obraId", obra_nome AS "obraNome", descricao,
               valor_previsto AS "valorPrevisto", valor_realizado AS "valorRealizado",
               data_vencimento AS "dataVencimento", status,
@@ -1575,7 +1591,7 @@ export const financialRouter = router({
     const vals: any[] = [ids];
     let i = 2;
     if (input.vencimentoAte) { conds.push(`data_vencimento<=$${i++}`); vals.push(input.vencimentoAte); }
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, obra_id AS "obraId", obra_nome AS "obraNome", descricao,
               conta_nome AS "contaNome", valor_previsto AS "valorPrevisto",
               data_vencimento AS "dataVencimento", origem_modulo AS "origemModulo",
@@ -1645,7 +1661,7 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const mes = input.periodo ?? new Date().toISOString().slice(0, 7);
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT tipo,
               COALESCE(SUM(CASE WHEN status NOT IN ('cancelado') THEN valor_previsto ELSE 0 END), 0) AS previsto,
               COALESCE(SUM(CASE WHEN status IN ('pago','recebido') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END), 0) AS realizado,
@@ -1695,7 +1711,7 @@ export const financialRouter = router({
     if (input.resolvido !== undefined) { conds.push(`resolvido=$${i++}`); vals.push(input.resolvido ? 1 : 0); }
     if (input.tipo) { conds.push(`tipo=$${i++}`); vals.push(input.tipo); }
     vals.push(input.limit);
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, company_id AS "companyId", entry_id AS "entryId", revenue_id AS "revenueId",
               tipo, nivel, titulo, descricao, valor_referencia AS "valorReferencia",
               data_referencia AS "dataReferencia", responsavel_nome AS "responsavelNome",
@@ -1717,7 +1733,7 @@ export const financialRouter = router({
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(
+    await dbExecute(db, 
       `UPDATE financial_revision_alerts SET lido=1, lido_em=NOW() WHERE id=$1 AND company_id=$2`,
       [input.id, input.companyId]
     );
@@ -1730,7 +1746,7 @@ export const financialRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(
+    await dbExecute(db, 
       `UPDATE financial_revision_alerts
        SET resolvido=1, resolvido_em=NOW(), resolvido_por_nome=$1 WHERE id=$2 AND company_id=$3`,
       [ctx.user?.name ?? "Sistema", input.id, input.companyId]
@@ -1759,7 +1775,7 @@ export const financialRouter = router({
     if (input.status) { conds.push(`status=$${i++}`); vals.push(input.status); }
     if (input.nivel) { conds.push(`nivel=$${i++}`); vals.push(input.nivel); }
     vals.push(input.limit);
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, entry_id AS "entryId", valor, nivel, status,
               solicitante_nome AS "solicitanteNome", aprovador_nome AS "aprovadorNome",
               motivo_recusa AS "motivoRecusa", created_at AS "createdAt", resolvido_em AS "resolvidoEm"
@@ -1778,7 +1794,7 @@ export const financialRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    await db.execute(
+    await dbExecute(db, 
       `UPDATE financial_payment_approvals
        SET status=$1, aprovador_id=$2, aprovador_nome=$3, motivo_recusa=$4, resolvido_em=NOW()
        WHERE id=$5 AND company_id=$6`,
@@ -1904,7 +1920,7 @@ export const financialRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
     const mes = input.periodo ?? new Date().toISOString().slice(0, 7);
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT origem_modulo AS "origemModulo", tipo,
               COUNT(*) AS qtd,
               COALESCE(SUM(valor_previsto), 0) AS total_previsto,
@@ -1930,7 +1946,7 @@ export const financialRouter = router({
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const res = await db.execute(
+    const res = await dbExecute(db, 
       `SELECT id, origem_modulo AS "origemModulo", mes_referencia AS "mesReferencia",
               total_importados AS "totalImportados", total_erros AS "totalErros",
               detalhes, executado_em AS "executadoEm"
@@ -1955,12 +1971,12 @@ export const financialRouter = router({
     const mes = input.periodo ?? new Date().toISOString().slice(0, 7);
 
     const [recRes, despRes, alertRes, vencRes, tributosRes, aprovRes] = await Promise.all([
-      db.execute(`SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND TO_CHAR(data_competencia,'YYYY-MM')=$2 AND status NOT IN ('cancelado')`, [ids, mes]),
-      db.execute(`SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND TO_CHAR(data_competencia,'YYYY-MM')=$2 AND status NOT IN ('cancelado')`, [ids, mes]),
-      db.execute(`SELECT COUNT(*) AS total FROM financial_revision_alerts WHERE company_id=ANY($1::int[]) AND resolvido=0`, [ids]),
-      db.execute(`SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND status IN ('a_pagar','a_receber') AND data_vencimento < CURRENT_DATE`, [ids]),
-      db.execute(`SELECT COALESCE(SUM(valor_total),0) AS total FROM financial_tax_obligations WHERE company_id=ANY($1::int[]) AND mes_competencia=$2 AND status='a_pagar'`, [ids, mes]),
-      db.execute(`SELECT COUNT(*) AS total FROM financial_payment_approvals WHERE company_id=ANY($1::int[]) AND status='pendente'`, [ids]),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND TO_CHAR(data_competencia,'YYYY-MM')=$2 AND status NOT IN ('cancelado')`, [ids, mes]),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND TO_CHAR(data_competencia,'YYYY-MM')=$2 AND status NOT IN ('cancelado')`, [ids, mes]),
+      dbExecute(db, `SELECT COUNT(*) AS total FROM financial_revision_alerts WHERE company_id=ANY($1::int[]) AND resolvido=0`, [ids]),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND status IN ('a_pagar','a_receber') AND data_vencimento < CURRENT_DATE`, [ids]),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_total),0) AS total FROM financial_tax_obligations WHERE company_id=ANY($1::int[]) AND mes_competencia=$2 AND status='a_pagar'`, [ids, mes]),
+      dbExecute(db, `SELECT COUNT(*) AS total FROM financial_payment_approvals WHERE company_id=ANY($1::int[]) AND status='pendente'`, [ids]),
     ]);
 
     const receita = parseFloat(rows(recRes)[0]?.total ?? "0");

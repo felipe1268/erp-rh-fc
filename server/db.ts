@@ -864,11 +864,11 @@ export async function getEmployeeHistory(employeeId: number, companyId: number) 
 // AUDIT LOGS
 // ============================================================
 
-export async function createAuditLog(data: InsertAuditLog) {
+export async function createAuditLog(data: Omit<InsertAuditLog, "module"> & { module?: string }) {
   const db = await getDb();
   if (!db) return;
   try {
-    await db.insert(auditLogs).values(data);
+    await db.insert(auditLogs).values({ module: "sistema", ...data } as InsertAuditLog);
   } catch (e) {
     console.error("[Audit] Failed to log:", e);
   }
