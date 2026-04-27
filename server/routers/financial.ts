@@ -14,6 +14,8 @@ import {
   rollbackFinanceiroPorOrigem,
   sincronizarStatusPagamento,
   gerarAlertasVencimento,
+  importAllMedicoesPrevistaToFinancial,
+  importAtividadesCronogramaToFinancial,
 } from "../services/financialIntegrationBridge";
 import {
   calcularKpis,
@@ -2006,5 +2008,115 @@ export const financialRouter = router({
       aprovacoespendentes,
       periodo: mes,
     };
+  }),
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Cronograma Financeiro — projeção mensal de receitas e despesas por obra
+  // ─────────────────────────────────────────────────────────────────────────
+  getCronogramaFinanceiro: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    obraId: z.number().optional(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return { meses: [], obras: [], totais: null };
+
+    const { companyId, obraId } = input;
+    const obraClause = obraId ? `AND fe.obra_id = ${Number(obraId)}` : "";
+
+    // Monthly breakdown with receita and custo
+    const { rows: mesesRows } = await dbExecute(db,
+      `SELECT
+         TO_CHAR(fe.data_competencia, 'YYYY-MM') AS mes,
+         SUM(CASE WHEN fe.tipo='receita'
+               THEN COALESCE(fe.valor_previsto::numeric, 0) ELSE 0 END) AS receita_prevista,
+         SUM(CASE WHEN fe.tipo='despesa'
+               THEN COALESCE(fe.valor_previsto::numeric, 0) ELSE 0 END) AS custo_previsto,
+         SUM(CASE WHEN fe.tipo='receita' AND fe.status IN ('pendente','pago','recebido','faturado')
+               THEN COALESCE(fe.valor_realizado::numeric, fe.valor_previsto::numeric, 0) ELSE 0 END) AS receita_realizada,
+         SUM(CASE WHEN fe.tipo='despesa' AND fe.status IN ('pago')
+               THEN COALESCE(fe.valor_realizado::numeric, fe.valor_previsto::numeric, 0) ELSE 0 END) AS custo_realizado
+       FROM financial_entries fe
+       WHERE fe.company_id = $1
+         AND fe.origem_modulo IN ('cronograma_atividade','planejamento_medicao','medicao_obra')
+         AND fe.status != 'cancelado'
+         ${obraClause}
+       GROUP BY mes
+       ORDER BY mes`,
+      [companyId]
+    );
+
+    // Per-obra breakdown (for filter dropdown + by-obra table)
+    const { rows: obrasRows } = await dbExecute(db,
+      `SELECT
+         fe.obra_id,
+         fe.obra_nome,
+         SUM(CASE WHEN fe.tipo='receita'
+               THEN COALESCE(fe.valor_previsto::numeric, 0) ELSE 0 END) AS total_receita,
+         SUM(CASE WHEN fe.tipo='despesa'
+               THEN COALESCE(fe.valor_previsto::numeric, 0) ELSE 0 END) AS total_custo
+       FROM financial_entries fe
+       WHERE fe.company_id = $1
+         AND fe.origem_modulo IN ('cronograma_atividade','planejamento_medicao','medicao_obra')
+         AND fe.obra_id IS NOT NULL
+         AND fe.status != 'cancelado'
+       GROUP BY fe.obra_id, fe.obra_nome
+       ORDER BY total_custo DESC`,
+      [companyId]
+    );
+
+    // Build monthly array with accumulated %
+    let acumReceita = 0;
+    let totalReceita = mesesRows.reduce((s: number, r: any) => s + parseFloat(r.receita_prevista ?? "0"), 0);
+
+    const meses = mesesRows.map((r: any) => {
+      const recPrev = parseFloat(r.receita_prevista ?? "0");
+      const custoPrev = parseFloat(r.custo_previsto ?? "0");
+      const recReal = parseFloat(r.receita_realizada ?? "0");
+      const custoReal = parseFloat(r.custo_realizado ?? "0");
+      acumReceita += recPrev;
+      const resultado = recPrev - custoPrev;
+      const margemPct = recPrev > 0 ? (resultado / recPrev) * 100 : 0;
+      const acumPct = totalReceita > 0 ? (acumReceita / totalReceita) * 100 : 0;
+      return {
+        mes: r.mes,
+        receitaPrevista: recPrev,
+        custoPrevisto: custoPrev,
+        resultadoPrevisto: resultado,
+        margemPct,
+        acumPct,
+        receitaRealizada: recReal,
+        custoRealizado: custoReal,
+        resultadoRealizado: recReal - custoReal,
+      };
+    });
+
+    const totais = {
+      totalReceitaPrevista: totalReceita,
+      totalCustoPrevisto: meses.reduce((s: number, m: any) => s + m.custoPrevisto, 0),
+      resultadoPrevisto: meses.reduce((s: number, m: any) => s + m.resultadoPrevisto, 0),
+      receitaRealizada: meses.reduce((s: number, m: any) => s + m.receitaRealizada, 0),
+      custoRealizado: meses.reduce((s: number, m: any) => s + m.custoRealizado, 0),
+    };
+
+    const obras = obrasRows.map((r: any) => ({
+      obraId: r.obra_id,
+      obraNome: r.obra_nome ?? `Obra ${r.obra_id}`,
+      totalReceita: parseFloat(r.total_receita ?? "0"),
+      totalCusto: parseFloat(r.total_custo ?? "0"),
+    }));
+
+    return { meses, obras, totais };
+  }),
+
+  // Trigger: importa todas as medições previstas para o cronograma financeiro
+  importarCronogramaFinanceiro: protectedProcedure.input(z.object({
+    companyId: z.number(),
+  })).mutation(async ({ input }) => {
+    const { companyId } = input;
+    const [n1, n2] = await Promise.all([
+      importAllMedicoesPrevistaToFinancial(companyId),
+      importAtividadesCronogramaToFinancial(companyId),
+    ]);
+    return { imported: n1 + n2, receitas: n1, despesas: n2 };
   }),
 });

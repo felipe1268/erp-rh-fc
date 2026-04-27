@@ -2158,6 +2158,117 @@ export async function importAtividadesCronogramaToFinancial(companyId: number, m
   return imported;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 3.6 — Import ALL months of planejamento_medicoes as receita prevista
+// Creates financial_entries for EVERY future month in the measurement schedule
+// ─────────────────────────────────────────────────────────────────────────────
+export async function importAllMedicoesPrevistaToFinancial(companyId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  let imported = 0;
+
+  try {
+    const { rows } = await dbExecute(db,
+      `SELECT pm.id, pm.numero, pm.competencia, pm.valor_previsto,
+              pm.percentual_previsto, pm.status,
+              pp.nome AS projeto_nome, pp.cliente, pp.valor_contrato, pp.obra_id,
+              o.nome AS obra_nome
+       FROM planejamento_medicoes pm
+       JOIN planejamento_projetos pp ON pp.id = pm.projeto_id
+       LEFT JOIN obras o ON o.id = pp.obra_id
+       WHERE pp.company_id = $1
+         AND pm.status NOT IN ('cancelada','rejeitada')
+         AND COALESCE(pm.valor_previsto::numeric, 0) > 0
+       ORDER BY pm.competencia`,
+      [companyId]
+    );
+
+    // Pre-fetch existing entries to avoid duplicates
+    const { rows: existRows } = await dbExecute(db,
+      `SELECT origem_id::integer AS orig_id
+       FROM financial_entries
+       WHERE company_id = $1 AND origem_modulo = 'planejamento_medicao'`,
+      [companyId]
+    );
+    const existSet = new Set(existRows.map((r: any) => String(r.orig_id)));
+
+    const toInsert: any[] = [];
+    for (const r of rows) {
+      if (existSet.has(String(r.id))) continue;
+      const valorPrevisto = parseFloat(r.valor_previsto ?? "0");
+      if (valorPrevisto <= 0) continue;
+
+      const mes = r.competencia; // YYYY-MM
+      const dataComp = `${mes}-01`;
+      const dataVenc = `${mes}-28`;
+      const statusFin = (r.status === "aprovada" || r.status === "faturada") ? "pendente" : "previsto";
+      const pct = parseFloat(r.percentual_previsto ?? "0");
+
+      toInsert.push({
+        companyId,
+        obraId: r.obra_id ?? null,
+        obraNome: r.obra_nome ?? r.projeto_nome ?? null,
+        contaNome: "Receita de Medições / Contratos",
+        origemId: r.id,
+        origemDesc: `Medição #${r.numero ?? mes} — ${r.projeto_nome}${r.cliente ? " (" + r.cliente + ")" : ""}`,
+        descricao: `Medição ${r.numero ?? mes} — ${r.projeto_nome} (${(Number(pct) * 100).toFixed(1)}% previsto)`,
+        valorPrevisto,
+        dataComp,
+        dataVenc,
+        statusFin,
+      });
+    }
+
+    const pgPool = (db as any).$client;
+    const BATCH = 200;
+
+    if (pgPool && typeof pgPool.query === "function" && toInsert.length > 0) {
+      for (let i = 0; i < toInsert.length; i += BATCH) {
+        const batch = toInsert.slice(i, i + BATCH);
+        const vals = batch.map((_, idx) => {
+          const b = idx * 15;
+          return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10},$${b+11},$${b+12},$${b+13},$${b+14},$${b+15},NOW(),NOW())`;
+        }).join(",");
+        const params = batch.flatMap(e => [
+          e.companyId, e.obraId, e.obraNome, e.contaNome, "receita", "variavel",
+          e.valorPrevisto, null, e.dataComp, e.dataVenc, e.statusFin,
+          "planejamento_medicao", e.origemId, e.origemDesc, e.descricao
+        ]);
+        await pgPool.query(
+          `INSERT INTO financial_entries
+           (company_id,obra_id,obra_nome,conta_nome,tipo,natureza,
+            valor_previsto,valor_realizado,data_competencia,data_vencimento,
+            status,origem_modulo,origem_id,origem_descricao,descricao,created_at,updated_at)
+           VALUES ${vals} ON CONFLICT DO NOTHING`,
+          params
+        );
+        imported += batch.length;
+      }
+    } else if (toInsert.length > 0) {
+      for (const e of toInsert) {
+        await dbExecute(db,
+          `INSERT INTO financial_entries
+           (company_id,obra_id,obra_nome,conta_nome,tipo,natureza,
+            valor_previsto,valor_realizado,data_competencia,data_vencimento,
+            status,origem_modulo,origem_id,origem_descricao,descricao,created_at,updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW())
+           ON CONFLICT DO NOTHING`,
+          [e.companyId, e.obraId, e.obraNome, e.contaNome, "receita", "variavel",
+           e.valorPrevisto, null, e.dataComp, e.dataVenc, e.statusFin,
+           "planejamento_medicao", e.origemId, e.origemDesc, e.descricao]
+        );
+        imported++;
+      }
+    }
+
+    console.log(`[FinancialBridge][all-medicoes-prevista] company=${companyId} inseridos=${imported}`);
+  } catch (e) {
+    console.error("[FinancialBridge][all-medicoes-prevista]", e);
+  }
+
+  return imported;
+}
+
 // MASTER: executar todos os imports de receita + previsões + cronograma
 export async function runAllReceitasImport(companyId: number, mesRef?: string) {
   const mes = mesRef ?? mesComp();

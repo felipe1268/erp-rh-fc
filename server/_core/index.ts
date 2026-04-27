@@ -173,6 +173,17 @@ async function startServer() {
     }
   });
 
+  app.get("/api/diag/run-medicoes-previstas/:companyId", async (req: any, res: any) => {
+    try {
+      const companyId = Number(req.params.companyId);
+      const { importAllMedicoesPrevistaToFinancial } = await import("../services/financialIntegrationBridge");
+      const count = await importAllMedicoesPrevistaToFinancial(companyId);
+      res.json({ ok: true, companyId, imported: count });
+    } catch (e: any) {
+      res.status(500).json({ ok: false, error: e.message, stack: e.stack?.substring(0, 800) });
+    }
+  });
+
   // Endpoint de diagnóstico: mostra o estado real das atividades de cronograma no Neon
   app.get("/api/diag/cronograma-atividades/:companyId", async (req: any, res: any) => {
     try {
