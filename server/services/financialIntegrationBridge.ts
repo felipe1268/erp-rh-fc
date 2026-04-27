@@ -1856,6 +1856,9 @@ export async function importObrasToFinancialRevenue(companyId: number, mesRef?: 
         ? Math.round((valorContrato / meses.length) * 100) / 100
         : 0;
 
+      // Só criar entradas na Contas a Receber se houver valor real de contrato
+      if (valorMensal <= 0) continue;
+
       for (const mes of meses) {
         const dataCompetencia = mes + "-01";
         const dataVencimento = mes + "-28";
@@ -1877,8 +1880,8 @@ export async function importObrasToFinancialRevenue(companyId: number, mesRef?: 
              VALUES ($1,$2,$3,$4,$5,$6,$7,'a_faturar','obra_previsto',NOW(),NOW())
              ON CONFLICT DO NOTHING`,
             [companyId, obra.id, obra.nome, obra.cliente ?? null,
-             valorContrato > 0 ? valorContrato.toFixed(2) : null,
-             valorMensal > 0 ? valorMensal.toFixed(2) : null, dataVencimento]
+             valorContrato.toFixed(2),
+             valorMensal.toFixed(2), dataVencimento]
           );
           imported++;
         }
@@ -2309,6 +2312,99 @@ export async function importAllMedicoesPrevistaToFinancial(companyId: number): P
   return imported;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 3.7 — Todos os meses de planejamento_medicoes → financial_revenue (Contas a Receber)
+// Garante que cada parcela do cronograma financeiro apareça no Contas a Receber
+// ─────────────────────────────────────────────────────────────────────────────
+export async function importAllMedicoesPrevistaToRevenue(companyId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  let imported = 0;
+
+  try {
+    const { rows } = await dbExecute(db,
+      `SELECT pm.id, pm.numero, pm.competencia,
+              pm.valor_previsto, pm.valor_medido,
+              pm.percentual_previsto, pm.status,
+              pp.nome  AS projeto_nome,
+              pp.cliente,
+              pp.valor_contrato,
+              pp.obra_id,
+              o.nome   AS obra_nome
+       FROM planejamento_medicoes pm
+       JOIN planejamento_projetos pp ON pp.id = pm.projeto_id
+       LEFT JOIN obras o ON o.id = pp.obra_id
+       WHERE pp.company_id = $1
+         AND pm.status NOT IN ('cancelada','rejeitada')
+         AND COALESCE(pm.valor_previsto::numeric, pm.valor_medido::numeric, 0) > 0
+       ORDER BY pm.competencia`,
+      [companyId]
+    );
+
+    for (const r of rows) {
+      const valorMedido   = parseFloat(r.valor_medido   ?? "0");
+      const valorPrevisto = parseFloat(r.valor_previsto ?? "0");
+      const valor = valorMedido > 0 ? valorMedido : valorPrevisto;
+      if (valor <= 0) continue;
+
+      const mes        = String(r.competencia).substring(0, 7);
+      const dataVenc   = mes + "-28";
+      const statusRev  = r.status === "faturada" ? "faturado"
+                       : r.status === "aprovada"  ? "a_receber"
+                       : "a_faturar";
+      const pct        = parseFloat(r.percentual_previsto ?? "0");
+      const obraNome   = r.obra_nome ?? r.projeto_nome ?? null;
+
+      // Checar se já existe pelo medicao_id
+      const { rows: existing } = await dbExecute(db,
+        `SELECT id FROM financial_revenue WHERE company_id=$1 AND medicao_id=$2 LIMIT 1`,
+        [companyId, r.id]
+      );
+
+      if (existing.length === 0) {
+        await dbExecute(db,
+          `INSERT INTO financial_revenue
+           (company_id, obra_id, obra_nome, cliente_nome,
+            valor_contrato, medicao_id, medicao_numero, percentual_medicao,
+            valor_medicao, valor_liquido_receber,
+            data_vencimento, status, observacoes, created_at, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'cronograma_financeiro',NOW(),NOW())`,
+          [
+            companyId,
+            r.obra_id ?? null,
+            obraNome,
+            r.cliente ?? null,
+            parseFloat(r.valor_contrato ?? "0").toFixed(2),
+            r.id,
+            r.numero ?? null,
+            pct.toFixed(4),
+            valor.toFixed(2),
+            valor.toFixed(2),
+            dataVenc,
+            statusRev,
+          ]
+        );
+        imported++;
+      } else {
+        // Atualizar valor e status se mudou
+        await dbExecute(db,
+          `UPDATE financial_revenue
+           SET status=$1, valor_medicao=$2, valor_liquido_receber=$3, updated_at=NOW()
+           WHERE company_id=$4 AND medicao_id=$5
+             AND status NOT IN ('recebido_total','cancelado')`,
+          [statusRev, valor.toFixed(2), valor.toFixed(2), companyId, r.id]
+        );
+      }
+    }
+
+    console.log(`[FinancialBridge][cronograma→receita] company=${companyId} importados=${imported}`);
+  } catch (e) {
+    console.error("[FinancialBridge][cronograma→receita]", e);
+  }
+
+  return imported;
+}
+
 // MASTER: executar todos os imports de receita + previsões + cronograma
 export async function runAllReceitasImport(companyId: number, mesRef?: string) {
   const mes = mesRef ?? mesComp();
@@ -2319,6 +2415,7 @@ export async function runAllReceitasImport(companyId: number, mesRef?: string) {
     importPlanejamentoMedicoesToFinancial(companyId, mes),
     importPlanejamentoProjetosPrevistoToFinancial(companyId, mes),
     importObrasToFinancialRevenue(companyId, mes),
+    importAllMedicoesPrevistaToRevenue(companyId),
     importFinancialRevenueToEntries(companyId, mes),
     importAtividadesCronogramaToFinancial(companyId, mes),
   ]);

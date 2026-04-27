@@ -15,6 +15,7 @@ import {
   sincronizarStatusPagamento,
   gerarAlertasVencimento,
   importAllMedicoesPrevistaToFinancial,
+  importAllMedicoesPrevistaToRevenue,
   importAtividadesCronogramaToFinancial,
 } from "../services/financialIntegrationBridge";
 import {
@@ -2524,10 +2525,19 @@ export const financialRouter = router({
     companyId: z.number(),
   })).mutation(async ({ input }) => {
     const { companyId } = input;
-    const [n1, n2] = await Promise.all([
+    const [n1, n2, n3] = await Promise.all([
       importAllMedicoesPrevistaToFinancial(companyId),
       importAtividadesCronogramaToFinancial(companyId),
+      importAllMedicoesPrevistaToRevenue(companyId),
     ]);
-    return { imported: n1 + n2, receitas: n1, despesas: n2 };
+    return { imported: n1 + n2 + n3, receitas: n1 + n3, despesas: n2 };
+  }),
+
+  // Sincroniza cronograma financeiro → Contas a Receber (financial_revenue)
+  syncCronogramaToReceber: protectedProcedure.input(z.object({
+    companyId: z.number(),
+  })).mutation(async ({ input }) => {
+    const count = await importAllMedicoesPrevistaToRevenue(input.companyId);
+    return { sincronizados: count };
   }),
 });

@@ -14,7 +14,7 @@ import {
   Plus, Search, ChevronLeft, ChevronRight, RefreshCw,
   FileText, AlertCircle, Clock, CheckCircle2, ReceiptText,
   ChevronDown, ChevronUp, Building2, Send, ThumbsUp,
-  TrendingUp, TrendingDown, Settings, Info
+  TrendingUp, TrendingDown, Settings, Info, RefreshCcw
 } from "lucide-react";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -425,13 +425,25 @@ export default function FinanceiroContasAReceber() {
     onSuccess:()=>{ toast({title:"Status atualizado!"}); setShowUpdate(null); refetch(); },
     onError:(e:any)=>toast({title:"Erro",description:e.message,variant:"destructive"}),
   });
+  const syncMut = (trpc as any).financial.syncCronogramaToReceber.useMutation({
+    onSuccess:(r:any)=>{
+      toast({title:`Sincronizado!`, description: r.sincronizados > 0 ? `${r.sincronizados} medição(ões) importada(s) do cronograma.` : "Nenhuma medição nova encontrada."});
+      refetch();
+    },
+    onError:(e:any)=>toast({title:"Erro na sincronização",description:e.message,variant:"destructive"}),
+  });
 
-  // Dados do mês
+  // Dados do mês — exclui entradas auto-geradas sem valor (obra_previsto com valor_medicao = 0/null)
   const mesData = useMemo(()=>{
     if (!allReceitas) return [];
     return allReceitas.filter((r:any)=>{
       const m = getMes(r.dataVencimento ?? r.createdAt);
-      return m === mesSel && r.status !== "cancelado";
+      if (m !== mesSel || r.status === "cancelado") return false;
+      // Ocultar entradas auto-geradas sem valor (observacoes='obra_previsto' sem medicao_id e sem valor)
+      const temValor = Number(r.valorMedicao ?? 0) > 0;
+      const temMedicaoId = !!r.medicaoId;
+      if (!temValor && !temMedicaoId) return false;
+      return true;
     });
   },[allReceitas, mesSel]);
 
@@ -527,9 +539,17 @@ export default function FinanceiroContasAReceber() {
             <h1 className="text-xl font-bold text-gray-900">Contas a Receber</h1>
             <p className="text-xs text-gray-400 mt-0.5">Medições, faturamento e recebimentos das obras</p>
           </div>
-          <Button onClick={()=>setShowNew(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
-            <Plus className="w-4 h-4 mr-2" />Nova Medição
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={()=>syncMut.mutate({companyId})}
+              disabled={syncMut.isPending}
+              className="h-9 text-xs border-blue-200 text-blue-700 hover:bg-blue-50">
+              <RefreshCcw className={`w-3.5 h-3.5 mr-1.5 ${syncMut.isPending?"animate-spin":""}`} />
+              Sincronizar Cronograma
+            </Button>
+            <Button onClick={()=>setShowNew(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Plus className="w-4 h-4 mr-2" />Nova Medição
+            </Button>
+          </div>
         </div>
 
         {/* ── Tabs ── */}
@@ -650,7 +670,18 @@ export default function FinanceiroContasAReceber() {
                 <div className="p-12 text-center">
                   <ReceiptText className="w-9 h-9 text-gray-200 mx-auto mb-3" />
                   <p className="text-gray-500 text-sm font-medium">Nenhuma medição em {MESES[mesSel-1]} {ano}</p>
-                  <p className="text-gray-400 text-xs mt-1">{filtroStatus?"Tente remover o filtro.":'+Nova Medição para registrar.'}</p>
+                  <p className="text-gray-400 text-xs mt-1">
+                    {filtroStatus
+                      ? "Tente remover o filtro."
+                      : "Clique em 'Sincronizar Cronograma' para importar as medições previstas, ou registre manualmente."}
+                  </p>
+                  {!filtroStatus && (
+                    <Button variant="outline" size="sm" className="mt-3 text-xs border-blue-200 text-blue-600"
+                      onClick={()=>syncMut.mutate({companyId})} disabled={syncMut.isPending}>
+                      <RefreshCcw className={`w-3 h-3 mr-1 ${syncMut.isPending?"animate-spin":""}`} />
+                      Sincronizar Cronograma
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
