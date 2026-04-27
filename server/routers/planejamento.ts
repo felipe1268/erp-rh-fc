@@ -1819,12 +1819,26 @@ export const planejamentoRouter = router({
         atualizadoEm:       new Date(),
       };
 
+      let result;
       if (existing.length > 0) {
-        return db.update(planejamentoMedicoes).set(data)
+        result = await db.update(planejamentoMedicoes).set(data)
           .where(eq(planejamentoMedicoes.id, existing[0].id)).returning();
       } else {
-        return db.insert(planejamentoMedicoes).values(data).returning();
+        result = await db.insert(planejamentoMedicoes).values(data).returning();
       }
+      // Gatilho financeiro — medição de planejamento gera receita imediatamente
+      try {
+        const [proj] = await db.execute(
+          `SELECT company_id FROM planejamento_projetos WHERE id = $1 LIMIT 1`,
+          [input.projetoId]
+        ) as any;
+        const projRow = (proj as any)?.rows?.[0] ?? proj?.[0];
+        if (projRow?.company_id) {
+          const { triggerFinancialSync } = await import("../services/financialEventTrigger");
+          triggerFinancialSync(projRow.company_id, input.competencia + "-01");
+        }
+      } catch {}
+      return result;
     }),
 
   excluirMedicao: protectedProcedure

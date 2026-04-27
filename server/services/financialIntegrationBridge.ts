@@ -1250,6 +1250,238 @@ export async function gerarAlertasVencimento(companyId: number): Promise<number>
 }
 
 // ─────────────────────────────────────────────────────────────
+// 2.13 — Compras (Ordens de Compra aprovadas → contas a pagar)
+// Fundamentação: NBC TG 16 — estoques; accrual no recebimento
+// ─────────────────────────────────────────────────────────────
+export async function importComprasOrdensToFinancial(companyId: number, mesRef?: string): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const targetMes = mesRef ?? mesComp();
+  let imported = 0;
+  let erros = 0;
+
+  try {
+    const res = await db.execute(
+      `SELECT co.id, co.numero_oc, co.total, co.subtotal, co.status, co.aprovacao_status,
+              co.obra_id, co.fornecedor_nome, co.data_entrega_prevista, co.data_vencimento,
+              co.forma_pagamento, co.condicao_pagamento, co.created_at,
+              o.nome AS obra_nome
+       FROM compras_ordens co
+       LEFT JOIN obras o ON o.id = co.obra_id
+       WHERE co.company_id = $1
+         AND co.status NOT IN ('cancelada','recusada')
+         AND TO_CHAR(COALESCE(co.data_entrega_prevista::date, co.created_at::date, NOW()), 'YYYY-MM') = $2
+         AND COALESCE(co.total::numeric, 0) > 0`,
+      [companyId, targetMes]
+    );
+    const rows = (res as any)?.rows ?? (res as any) ?? [];
+
+    for (const r of rows) {
+      if (await entryExists(db, companyId, "compra_oc", r.id)) continue;
+      const valor = parseFloat(r.total ?? r.subtotal ?? "0");
+      if (valor <= 0) continue;
+      const dataVenc = r.data_vencimento
+        ? r.data_vencimento.toString().split("T")[0]
+        : (r.data_entrega_prevista ? r.data_entrega_prevista.toString().split("T")[0] : targetMes + "-28");
+      const statusFin = r.aprovacao_status === "aprovado" ? "pendente" : "previsto";
+      await insertEntry(db, {
+        companyId,
+        obraId: r.obra_id,
+        obraNome: r.obra_nome ?? null,
+        contaNome: "Materiais / Compras",
+        tipo: "despesa",
+        natureza: "variavel",
+        valorPrevisto: valor,
+        dataCompetencia: targetMes + "-01",
+        dataVencimento: dataVenc,
+        status: statusFin,
+        origemModulo: "compra_oc",
+        origemId: r.id,
+        origemDescricao: `OC ${r.numero_oc} — ${r.fornecedor_nome ?? "Fornecedor"}`,
+        descricao: `Ordem de Compra ${r.numero_oc}${r.fornecedor_nome ? " — " + r.fornecedor_nome : ""}`,
+        formaPagamento: r.forma_pagamento ?? null,
+      });
+      imported++;
+    }
+  } catch (e) {
+    erros++;
+    console.error("[FinancialBridge][compras_ordens]", e);
+  }
+
+  await logImport(db, companyId, "compra_oc", targetMes, imported, erros);
+  return imported;
+}
+
+// ─────────────────────────────────────────────────────────────
+// 2.14 — RH/DP — Folha de Pagamento (lançamentos consolidados → despesa pessoal)
+// Fundamentação: CLT Arts. 457-462; NBC TG 33 — benefícios a empregados
+// ─────────────────────────────────────────────────────────────
+export async function importFolhaRHToFinancial(companyId: number, mesRef?: string): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const targetMes = mesRef ?? mesComp();
+  let imported = 0;
+  let erros = 0;
+
+  try {
+    // Lançamentos consolidados da folha (summary por período)
+    const res = await db.execute(
+      `SELECT fl.id, fl."mesReferencia", fl."tipoLancamento", fl.status,
+              fl."totalProventos", fl."totalDescontos", fl."totalLiquido", fl."totalFuncionarios"
+       FROM folha_lancamentos fl
+       WHERE fl."companyId" = $1
+         AND fl."mesReferencia" = $2
+         AND fl.status IN ('consolidado','validado','aprovado','importado')
+         AND COALESCE(fl."totalProventos"::numeric, 0) > 0`,
+      [companyId, targetMes]
+    );
+    const rows = (res as any)?.rows ?? (res as any) ?? [];
+
+    for (const r of rows) {
+      if (await entryExists(db, companyId, "folha_rh", r.id)) continue;
+      const valorBruto = parseFloat(r.totalProventos ?? r["totalProventos"] ?? "0");
+      if (valorBruto <= 0) continue;
+      const tipoLanc = r.tipoLancamento ?? r["tipoLancamento"] ?? "";
+      const tipo = tipoLanc === "vale" ? "Adiantamento/Vale Folha" :
+                   tipoLanc === "ferias" ? "Férias — RH" :
+                   tipoLanc === "decimo" ? "13° Salário — RH" : "Folha de Pagamento CLT";
+      const nFunc = r.totalFuncionarios ?? r["totalFuncionarios"] ?? 0;
+      await insertEntry(db, {
+        companyId,
+        contaNome: tipo,
+        tipo: "despesa",
+        natureza: "fixo",
+        valorPrevisto: valorBruto,
+        dataCompetencia: targetMes + "-01",
+        dataVencimento: targetMes + "-05",
+        status: r.status === "consolidado" ? "pendente" : "previsto",
+        origemModulo: "folha_rh",
+        origemId: r.id,
+        origemDescricao: `${tipo} — ${nFunc} funcionário(s)`,
+        descricao: `${tipo} ${targetMes}`,
+      });
+      imported++;
+    }
+
+    // Também importa registros individuais da payroll (funcionários com contracheque completo)
+    const res2 = await db.execute(
+      `SELECT p.id, p."mesReferencia", p."tipoFolha",
+              p."salarioBruto", p."totalProventos", p.inss, p.irrf, p.fgts
+       FROM payroll p
+       WHERE p."companyId" = $1
+         AND p."mesReferencia" = $2
+         AND COALESCE(p."salarioBruto"::numeric, 0) > 0`,
+      [companyId, targetMes]
+    );
+    const rows2 = (res2 as any)?.rows ?? (res2 as any) ?? [];
+
+    // Agrupa payroll por tipo_folha para não gerar um lançamento por funcionário
+    const totaisPorTipo: Record<string, { total: number; fgts: number; inss: number; irrf: number; count: number }> = {};
+    for (const r of rows2) {
+      const tipo = r.tipoFolha ?? r["tipoFolha"] ?? "mensal";
+      if (!totaisPorTipo[tipo]) totaisPorTipo[tipo] = { total: 0, fgts: 0, inss: 0, irrf: 0, count: 0 };
+      totaisPorTipo[tipo].total += parseFloat(r.salarioBruto ?? r["salarioBruto"] ?? r.totalProventos ?? r["totalProventos"] ?? "0");
+      totaisPorTipo[tipo].fgts += parseFloat(r.fgts ?? "0");
+      totaisPorTipo[tipo].inss += parseFloat(r.inss ?? "0");
+      totaisPorTipo[tipo].irrf += parseFloat(r.irrf ?? "0");
+      totaisPorTipo[tipo].count++;
+    }
+
+    for (const [tipo, dados] of Object.entries(totaisPorTipo)) {
+      if (dados.total <= 0) continue;
+      // Usa id sintético = hash de company+mes+tipo para deduplicação
+      const origemId = Math.abs((companyId * 1000) + parseInt(targetMes.replace("-", "")) % 10000 + tipo.length);
+      if (await entryExists(db, companyId, "payroll_agregado", origemId)) continue;
+      await insertEntry(db, {
+        companyId,
+        contaNome: `Folha ${tipo} — RH/DP`,
+        tipo: "despesa",
+        natureza: "fixo",
+        valorPrevisto: dados.total,
+        dataCompetencia: targetMes + "-01",
+        dataVencimento: targetMes + "-05",
+        status: "pendente",
+        origemModulo: "payroll_agregado",
+        origemId,
+        origemDescricao: `Folha ${tipo} — ${dados.count} funcionário(s) — FGTS R$${dados.fgts.toFixed(2)}`,
+        descricao: `Folha ${tipo} ${targetMes} (${dados.count} func.)`,
+      });
+      imported++;
+    }
+  } catch (e) {
+    erros++;
+    console.error("[FinancialBridge][folha_rh]", e);
+  }
+
+  await logImport(db, companyId, "folha_rh", targetMes, imported, erros);
+  return imported;
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3.4 — Planejamento Medições (medições aprovadas → receita de contrato)
+// Fundamentação: IFRS 15 / NBC TG 47 — reconhecimento de receita por avanço físico
+// ─────────────────────────────────────────────────────────────
+export async function importPlanejamentoMedicoesToFinancial(companyId: number, mesRef?: string): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const targetMes = mesRef ?? mesComp();
+  let imported = 0;
+  let erros = 0;
+
+  try {
+    const res = await db.execute(
+      `SELECT pm.id, pm.numero, pm.competencia, pm.valor_previsto, pm.valor_medido,
+              pm.percentual_medido, pm.status,
+              pp.nome AS projeto_nome, pp.cliente, pp.valor_contrato, pp.obra_id,
+              pp.company_id,
+              o.nome AS obra_nome
+       FROM planejamento_medicoes pm
+       JOIN planejamento_projetos pp ON pp.id = pm.projeto_id
+       LEFT JOIN obras o ON o.id = pp.obra_id
+       WHERE pp.company_id = $1
+         AND pm.competencia = $2
+         AND pm.status NOT IN ('cancelada','rejeitada')
+         AND COALESCE(pm.valor_medido::numeric, pm.valor_previsto::numeric, 0) > 0`,
+      [companyId, targetMes]
+    );
+    const rows = (res as any)?.rows ?? (res as any) ?? [];
+
+    for (const r of rows) {
+      if (await entryExists(db, companyId, "planejamento_medicao", r.id)) continue;
+      const valorMedido = parseFloat(r.valor_medido ?? "0");
+      const valorPrevisto = parseFloat(r.valor_previsto ?? "0");
+      const valor = valorMedido > 0 ? valorMedido : valorPrevisto;
+      if (valor <= 0) continue;
+      const statusFin = r.status === "aprovada" || r.status === "faturada" ? "pendente" : "previsto";
+      await insertEntry(db, {
+        companyId,
+        obraId: r.obra_id ?? null,
+        obraNome: r.obra_nome ?? r.projeto_nome ?? null,
+        contaNome: "Receita de Medições / Contratos",
+        tipo: "receita",
+        natureza: "variavel",
+        valorPrevisto: valor,
+        valorRealizado: r.status === "faturada" ? valor : null,
+        dataCompetencia: targetMes + "-01",
+        dataVencimento: targetMes + "-28",
+        status: statusFin,
+        origemModulo: "planejamento_medicao",
+        origemId: r.id,
+        origemDescricao: `Medição #${r.numero} — ${r.projeto_nome}${r.cliente ? " (" + r.cliente + ")" : ""}`,
+        descricao: `Medição ${r.numero} — ${r.projeto_nome} (${(parseFloat(r.percentual_medido ?? "0") * 100).toFixed(1)}%)`,
+      });
+      imported++;
+    }
+  } catch (e) {
+    erros++;
+    console.error("[FinancialBridge][planejamento_medicoes]", e);
+  }
+
+  await logImport(db, companyId, "planejamento_medicao", targetMes, imported, erros);
+  return imported;
+}
+
+// ─────────────────────────────────────────────────────────────
 // MASTER: executar todos os imports de despesa
 // ─────────────────────────────────────────────────────────────
 export async function runAllDespesasImport(companyId: number, mesRef?: string) {
@@ -1266,6 +1498,9 @@ export async function runAllDespesasImport(companyId: number, mesRef?: string) {
     importAlmoxarifadoToFinancial(companyId, mes),
     importProcessosTrabalistasToFinancial(companyId, mes),
     gerarGuiasTributarias(companyId, mes),
+    // NOVOS — Compras e RH/DP
+    importComprasOrdensToFinancial(companyId, mes),
+    importFolhaRHToFinancial(companyId, mes),
   ]);
 
   const totals = results.map(r => r.status === "fulfilled" ? r.value : 0);
@@ -1281,6 +1516,8 @@ export async function runAllReceitasImport(companyId: number, mesRef?: string) {
     importMedicoesObraToFinancial(companyId, mes),
     importMedicoesPJToFinancial(companyId, mes),
     importTerceiroCobravelToFinancial(companyId, mes),
+    // NOVO — Planejamento medições (recebimentos de contratos)
+    importPlanejamentoMedicoesToFinancial(companyId, mes),
   ]);
 
   const totals = results.map(r => r.status === "fulfilled" ? r.value : 0);

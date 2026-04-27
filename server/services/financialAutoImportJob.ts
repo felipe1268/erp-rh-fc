@@ -24,7 +24,7 @@ async function getAllActiveCompanyIds(): Promise<number[]> {
   if (!db) return [];
   try {
     const res = await db.execute(
-      `SELECT id FROM companies WHERE ativo = 1 OR status = 'ativo' OR status = 'active' LIMIT 500`
+      `SELECT id FROM companies WHERE "isActive" = 1 LIMIT 500`
     );
     const rows = (res as any)?.rows ?? (res as any) ?? [];
     const ids = rows.map((r: any) => Number(r.id)).filter(Boolean);

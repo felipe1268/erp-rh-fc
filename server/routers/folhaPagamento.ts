@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
+import { triggerFinancialSync } from "../services/financialEventTrigger";
 import {
   folhaLancamentos, folhaItens, employees, payrollUploads,
   timeRecords, pontoConsolidacao, obras, manualObraAssignments, companyBankAccounts, systemCriteria,
@@ -1516,6 +1517,10 @@ export const folhaPagamentoRouter = router({
           consolidadoEm: new Date().toISOString().replace("T", " ").substring(0, 19),
         })
         .where(eq(folhaLancamentos.id, input.folhaLancamentoId));
+      // Gatilho financeiro — folha consolidada gera despesa de pessoal imediatamente
+      if (lanc.companyId) {
+        triggerFinancialSync(lanc.companyId, lanc.mesReferencia + "-01");
+      }
       return { success: true };
     }),
 

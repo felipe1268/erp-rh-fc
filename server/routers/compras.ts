@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getCompaniesForUser, getEffectiveAllowedObraIds } from "../db";
+import { triggerFinancialSync } from "../services/financialEventTrigger";
 import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
 import { getTipoPagamentoInfo } from "../../shared/paymentConditions";
 import { normalizarTexto } from "../../shared/textNormalization";
@@ -4827,6 +4828,9 @@ Retorne APENAS um JSON válido neste formato:
         } : {}),
       } as any).returning();
 
+      // Gatilho financeiro — OC criada gera despesa imediatamente
+      triggerFinancialSync(input.companyId);
+
       try {
         const scFrotasRes = await db.execute(sql`SELECT vehicle_id, maintenance_id, origem_modulo FROM compras_solicitacoes WHERE id = ${cot.solicitacaoId} AND origem_modulo = 'frotas'`);
         const scFrotas = ((scFrotasRes as any).rows || scFrotasRes)[0];
@@ -5179,6 +5183,8 @@ Retorne APENAS um JSON válido neste formato:
           }))
         );
       }
+      // Gatilho financeiro — OC manual criada gera despesa imediatamente
+      triggerFinancialSync(input.companyId);
       return oc;
     }),
 
