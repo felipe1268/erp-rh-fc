@@ -1068,6 +1068,53 @@ async function startServer() {
         console.log("[ColFix] Data fixes OK");
       } catch (e: any) { console.warn("[ColFix] Data fixes:", e?.message ?? e); }
     });
+    // ─── Bloco financeiro: retenção contratual + status granular + tabelas de previsão ───
+    import("../db").then(async ({ getDb }) => {
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`
+          DO $$ BEGIN
+            ALTER TABLE financial_revenue ADD COLUMN IF NOT EXISTS retencao_contratual DECIMAL(15,2) DEFAULT 0;
+            ALTER TABLE financial_revenue ADD COLUMN IF NOT EXISTS valor_aprovado      DECIMAL(15,2);
+            ALTER TABLE financial_revenue ADD COLUMN IF NOT EXISTS data_aprovacao      DATE;
+            ALTER TABLE financial_revenue ADD COLUMN IF NOT EXISTS medicao_enviada_em  DATE;
+            ALTER TABLE financial_revenue ADD COLUMN IF NOT EXISTS glosa               DECIMAL(15,2) DEFAULT 0;
+          EXCEPTION WHEN OTHERS THEN NULL;
+          END $$
+        `);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS receita_baseline (
+            id               SERIAL PRIMARY KEY,
+            company_id       INTEGER NOT NULL,
+            obra_id          INTEGER NOT NULL,
+            obra_nome        VARCHAR(255),
+            mes              DATE NOT NULL,
+            valor            DECIMAL(15,2) NOT NULL DEFAULT 0,
+            criado_em        TIMESTAMP DEFAULT NOW(),
+            atualizado_em    TIMESTAMP DEFAULT NOW(),
+            UNIQUE (company_id, obra_id, mes)
+          )
+        `);
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS receita_previsto (
+            id               SERIAL PRIMARY KEY,
+            company_id       INTEGER NOT NULL,
+            obra_id          INTEGER NOT NULL,
+            obra_nome        VARCHAR(255),
+            mes              DATE NOT NULL,
+            valor            DECIMAL(15,2) NOT NULL DEFAULT 0,
+            revisao          INTEGER DEFAULT 1,
+            observacoes      TEXT,
+            criado_em        TIMESTAMP DEFAULT NOW(),
+            atualizado_em    TIMESTAMP DEFAULT NOW(),
+            UNIQUE (company_id, obra_id, mes)
+          )
+        `);
+        console.log("[ColFix] Financial: retencao_contratual + status granular + receita_baseline/previsto OK");
+      } catch (e: any) { console.warn("[ColFix] Financial bloco:", e?.message ?? e); }
+    });
     // [REMOVIDO Rev.844] Limpeza empresas de teste (Rev.738) — já completada
     // [REMOVIDO Rev.844] Purga de orfanatos/fantasmas — já completada, limpar via deleteObra cascata
     // Iniciar job de verificação automática do DataJud

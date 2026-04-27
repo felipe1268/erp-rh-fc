@@ -410,25 +410,27 @@ export const financialRouter = router({
     retencaoISS: z.number().default(0),
     retencaoINSS: z.number().default(0),
     retencaoIR: z.number().default(0),
+    retencaoContratual: z.number().default(0),
     observacoes: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-    const retTotal = input.retencaoISS + input.retencaoINSS + input.retencaoIR;
+    const retTrib = input.retencaoISS + input.retencaoINSS + input.retencaoIR;
+    const retTotal = retTrib + input.retencaoContratual;
     const vlq = input.valorMedicao - retTotal;
     const res = await dbExecute(db, 
       `INSERT INTO financial_revenue
        (company_id, obra_id, obra_nome, cliente_nome, cliente_cnpj, valor_contrato,
         valor_medicao, medicao_numero, percentual_medicao, data_vencimento,
-        retencao_iss, retencao_inss, retencao_ir, retencao_total, valor_liquido_receber,
-        status, observacoes, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'a_faturar',$16,NOW(),NOW())
+        retencao_iss, retencao_inss, retencao_ir, retencao_contratual, retencao_total,
+        valor_liquido_receber, status, observacoes, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'a_faturar',$17,NOW(),NOW())
        RETURNING id`,
       [input.companyId, input.obraId, input.obraNome ?? null, input.clienteNome ?? null,
        input.clienteCnpj ?? null, input.valorContrato ?? null, input.valorMedicao,
        input.medicaoNumero ?? null, input.percentualMedicao ?? null, input.dataVencimento ?? null,
-       input.retencaoISS, input.retencaoINSS, input.retencaoIR, retTotal, vlq,
-       input.observacoes ?? null]
+       input.retencaoISS, input.retencaoINSS, input.retencaoIR, input.retencaoContratual,
+       retTotal, vlq, input.observacoes ?? null]
     );
     const id = rows(res)[0]?.id;
 
@@ -473,18 +475,39 @@ export const financialRouter = router({
     dataRecebimento: z.string().optional(),
     valorRecebido: z.number().optional(),
     formaPagamento: z.string().optional(),
+    valorAprovado: z.number().optional(),
+    dataAprovacao: z.string().optional(),
+    medicaoEnviadaEm: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const glosa = input.valorAprovado != null
+      ? (await dbExecute(db, `SELECT valor_medicao FROM financial_revenue WHERE id=$1`, [input.id]))
+          .then((r: any) => {
+            const vm = Number(rows(r)[0]?.valor_medicao ?? 0);
+            return Math.max(0, vm - (input.valorAprovado ?? vm));
+          })
+      : Promise.resolve(0);
+    const glosaVal = await glosa;
     await dbExecute(db, 
       `UPDATE financial_revenue
-       SET status=$1, nf_numero=COALESCE($2,nf_numero), nf_emitida_em=COALESCE($3,nf_emitida_em),
-           data_recebimento=COALESCE($4,data_recebimento), valor_recebido=COALESCE($5,valor_recebido),
-           forma_pagamento=COALESCE($6,forma_pagamento), updated_at=NOW()
+       SET status=$1,
+           nf_numero=COALESCE($2,nf_numero),
+           nf_emitida_em=COALESCE($3,nf_emitida_em),
+           data_recebimento=COALESCE($4,data_recebimento),
+           valor_recebido=COALESCE($5,valor_recebido),
+           forma_pagamento=COALESCE($6,forma_pagamento),
+           valor_aprovado=COALESCE($9,valor_aprovado),
+           data_aprovacao=COALESCE($10,data_aprovacao),
+           medicao_enviada_em=COALESCE($11,medicao_enviada_em),
+           glosa=$12,
+           updated_at=NOW()
        WHERE id=$7 AND company_id=$8`,
       [input.status, input.nfNumero ?? null, input.nfEmitidaEm ?? null,
        input.dataRecebimento ?? null, input.valorRecebido ?? null,
-       input.formaPagamento ?? null, input.id, input.companyId]
+       input.formaPagamento ?? null, input.id, input.companyId,
+       input.valorAprovado ?? null, input.dataAprovacao ?? null,
+       input.medicaoEnviadaEm ?? null, glosaVal]
     );
 
     // Sincronizar status no financial_entry correspondente
@@ -1631,9 +1654,15 @@ export const financialRouter = router({
               data_vencimento AS "dataVencimento", data_recebimento AS "dataRecebimento",
               valor_recebido AS "valorRecebido", status, forma_pagamento AS "formaPagamento",
               retencao_iss AS "retencaoISS", retencao_inss AS "retencaoINSS",
-              retencao_ir AS "retencaoIR", retencao_total AS "retencaoTotal",
-              valor_liquido_receber AS "valorLiquidoReceber", observacoes,
-              created_at AS "createdAt"
+              retencao_ir AS "retencaoIR",
+              COALESCE(retencao_contratual,0) AS "retencaoContratual",
+              retencao_total AS "retencaoTotal",
+              valor_liquido_receber AS "valorLiquidoReceber",
+              COALESCE(valor_aprovado, valor_medicao) AS "valorAprovado",
+              data_aprovacao AS "dataAprovacao",
+              medicao_enviada_em AS "medicaoEnviadaEm",
+              COALESCE(glosa,0) AS "glosa",
+              observacoes, created_at AS "createdAt"
        FROM financial_revenue
        WHERE company_id IN (${inlineIds(ids)})
          AND EXTRACT(year FROM COALESCE(data_vencimento::date, created_at::date)) = $1
@@ -1641,6 +1670,128 @@ export const financialRouter = router({
       [input.ano]
     );
     return rows(res);
+  }),
+
+  // ─── PREVISÃO DE RECEITA: 3 camadas (Baseline / Previsto / Realizado) ───────
+
+  getRevenuePrevisao: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const [baselineRes, previstoRes, realizadoRes] = await Promise.all([
+      dbExecute(db,
+        `SELECT obra_id AS "obraId", obra_nome AS "obraNome",
+                EXTRACT(month FROM mes)::int AS "mes", SUM(valor) AS "valor"
+         FROM receita_baseline
+         WHERE company_id=$1 AND EXTRACT(year FROM mes)=$2
+         GROUP BY obra_id, obra_nome, EXTRACT(month FROM mes)`,
+        [input.companyId, input.ano]
+      ),
+      dbExecute(db,
+        `SELECT obra_id AS "obraId", obra_nome AS "obraNome",
+                EXTRACT(month FROM mes)::int AS "mes", SUM(valor) AS "valor"
+         FROM receita_previsto
+         WHERE company_id=$1 AND EXTRACT(year FROM mes)=$2
+         GROUP BY obra_id, obra_nome, EXTRACT(month FROM mes)`,
+        [input.companyId, input.ano]
+      ),
+      dbExecute(db,
+        `SELECT obra_id AS "obraId", obra_nome AS "obraNome",
+                EXTRACT(month FROM COALESCE(data_vencimento::date, created_at::date))::int AS "mes",
+                SUM(valor_medicao) AS "valor"
+         FROM financial_revenue
+         WHERE company_id=$1
+           AND EXTRACT(year FROM COALESCE(data_vencimento::date, created_at::date))=$2
+           AND status NOT IN ('cancelado')
+         GROUP BY obra_id, obra_nome,
+                  EXTRACT(month FROM COALESCE(data_vencimento::date, created_at::date))`,
+        [input.companyId, input.ano]
+      ),
+    ]);
+
+    const baseline  = rows(baselineRes)  as any[];
+    const previsto  = rows(previstoRes)  as any[];
+    const realizado = rows(realizadoRes) as any[];
+
+    // Collect all obras
+    const obraMap = new Map<number, string>();
+    for (const r of [...baseline, ...previsto, ...realizado]) {
+      if (r.obraId) obraMap.set(Number(r.obraId), r.obraNome ?? `Obra ${r.obraId}`);
+    }
+
+    const meses = [1,2,3,4,5,6,7,8,9,10,11,12];
+
+    const obras = Array.from(obraMap.entries()).map(([obraId, obraNome]) => {
+      const mesData = meses.map(mes => {
+        const b = Number(baseline.find(r => Number(r.obraId) === obraId && Number(r.mes) === mes)?.valor ?? 0);
+        const p = Number(previsto.find(r => Number(r.obraId) === obraId && Number(r.mes) === mes)?.valor ?? 0);
+        const rv = Number(realizado.find(r => Number(r.obraId) === obraId && Number(r.mes) === mes)?.valor ?? 0);
+        return { mes, baseline: b, previsto: p, realizado: rv };
+      });
+      const totB  = mesData.reduce((s, m) => s + m.baseline, 0);
+      const totP  = mesData.reduce((s, m) => s + m.previsto, 0);
+      const totR  = mesData.reduce((s, m) => s + m.realizado, 0);
+      const spi   = totB > 0 ? totR / totB : null;
+      const desvP = totB > 0 ? ((totP - totB) / totB) * 100 : null;
+      return { obraId, obraNome, meses: mesData, totBaseline: totB, totPrevisto: totP, totRealizado: totR, spi, desvP };
+    });
+
+    // Rolling forecast: next 3 months from previsto
+    const hoje = new Date();
+    const rolling = [1,2,3].map(offset => {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() + offset, 1);
+      const mes = d.getMonth() + 1;
+      const anoRoll = d.getFullYear();
+      const valor = anoRoll === input.ano
+        ? previsto.filter(r => Number(r.mes) === mes).reduce((s, r) => s + Number(r.valor), 0)
+        : 0;
+      return { mes, ano: anoRoll, valor };
+    });
+
+    return { obras, rolling };
+  }),
+
+  upsertRevenueBaseline: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    obraId: z.number(),
+    obraNome: z.string().optional(),
+    mes: z.string(), // YYYY-MM-01
+    valor: z.number(),
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await dbExecute(db,
+      `INSERT INTO receita_baseline (company_id, obra_id, obra_nome, mes, valor, atualizado_em)
+       VALUES ($1,$2,$3,$4::date,$5,NOW())
+       ON CONFLICT (company_id, obra_id, mes)
+       DO UPDATE SET valor=$5, obra_nome=COALESCE($3, receita_baseline.obra_nome), atualizado_em=NOW()`,
+      [input.companyId, input.obraId, input.obraNome ?? null, input.mes, input.valor]
+    );
+    return { ok: true };
+  }),
+
+  upsertRevenuePrevisto: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    obraId: z.number(),
+    obraNome: z.string().optional(),
+    mes: z.string(), // YYYY-MM-01
+    valor: z.number(),
+    observacoes: z.string().optional(),
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await dbExecute(db,
+      `INSERT INTO receita_previsto (company_id, obra_id, obra_nome, mes, valor, observacoes, atualizado_em)
+       VALUES ($1,$2,$3,$4::date,$5,$6,NOW())
+       ON CONFLICT (company_id, obra_id, mes)
+       DO UPDATE SET valor=$5, obra_nome=COALESCE($3, receita_previsto.obra_nome),
+                     observacoes=COALESCE($6, receita_previsto.observacoes), atualizado_em=NOW()`,
+      [input.companyId, input.obraId, input.obraNome ?? null, input.mes, input.valor, input.observacoes ?? null]
+    );
+    return { ok: true };
   }),
 
   getContasAPagarByYear: protectedProcedure.input(z.object({
