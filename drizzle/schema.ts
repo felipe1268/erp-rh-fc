@@ -1,4 +1,4 @@
-import { pgTable, pgSchema, AnyPgColumn, integer, serial, date, varchar, text, timestamp, smallint, index, numeric, json, boolean, real, primaryKey } from "drizzle-orm/pg-core"
+import { pgTable, pgSchema, AnyPgColumn, integer, serial, date, varchar, text, timestamp, smallint, index, numeric, json, jsonb, boolean, real, primaryKey } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 export const accidents = pgTable("accidents", {
@@ -5630,6 +5630,7 @@ export const comprasOrdens = pgTable("compras_ordens", {
   tipoPagamento:      varchar("tipo_pagamento", { length: 50 }),
   formaPagamento:     varchar("forma_pagamento", { length: 30 }),
   numeroParcelas:     integer("numero_parcelas").default(1),
+  parcelasJson:       jsonb("parcelas_json"),
   status:             varchar({ length: 30 }).notNull().default("pendente"),
   aprovacaoStatus:    varchar("aprovacao_status", { length: 30 }).default("aguardando"),
   aprovadorId:        integer("aprovador_id"),

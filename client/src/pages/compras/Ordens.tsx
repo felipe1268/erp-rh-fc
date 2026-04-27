@@ -98,6 +98,25 @@ function FornecedorContatoCard({ contato }: { contato: FornecedorContatoData | n
 }
 
 interface ItemForm { descricao: string; unidade: string; quantidade: string; precoUnitario: string; eapCodigo?: string; eapDescricao?: string; }
+interface ParcelaForm { numero: number; vencimento: string; valor: string; }
+
+function gerarParcelas(n: number, total: number, primeiroVenc: string): ParcelaForm[] {
+  const base = Math.floor((total / n) * 100) / 100;
+  const resto = parseFloat((total - base * (n - 1)).toFixed(2));
+  const primeiraDt = primeiroVenc || (() => {
+    const d = new Date(); d.setMonth(d.getMonth() + 1);
+    return d.toISOString().split("T")[0];
+  })();
+  return Array.from({ length: n }, (_, i) => {
+    const dt = new Date(primeiraDt + "T00:00:00");
+    dt.setMonth(dt.getMonth() + i);
+    return {
+      numero: i + 1,
+      vencimento: dt.toISOString().split("T")[0],
+      valor: i === n - 1 ? String(resto) : String(base),
+    };
+  });
+}
 const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1", precoUnitario: "" });
 
 export default function Ordens() {
@@ -139,6 +158,8 @@ export default function Ordens() {
     condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "",
   });
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
+  const [numParc, setNumParc] = useState(1);
+  const [parcelas, setParcelas] = useState<ParcelaForm[]>([]);
   const [fornecedorPopoverOpen, setFornecedorPopoverOpen] = useState(false);
   const [eapPopoverIdx, setEapPopoverIdx] = useState<number | null>(null);
 
@@ -235,6 +256,8 @@ export default function Ordens() {
   function resetForm() {
     setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "", condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "" });
     setItens([newItem()]);
+    setNumParc(1);
+    setParcelas([]);
   }
 
   function handleSalvar() {
@@ -249,6 +272,8 @@ export default function Ordens() {
       fornecedorId: form.fornecedorId && form.fornecedorId !== "none" ? parseInt(form.fornecedorId) : undefined,
       numeroNf: form.numeroNf || undefined,
       condicaoPagamento: form.condicaoPagamento,
+      numeroParcelas: numParc,
+      parcelasJson: parcelas.length > 0 ? parcelas.map(p => ({ numero: p.numero, vencimento: p.vencimento || undefined, valor: parseFloat(p.valor) || 0 })) : undefined,
       prazoEntregaDias: parseInt((form as any).prazoEntregaDias) || undefined,
       dataEntregaPrevista: form.dataEntregaPrevista || undefined,
       dataVencimento: form.dataVencimento || undefined,
@@ -735,6 +760,82 @@ export default function Ordens() {
               <Input className="bg-white border-gray-300 text-gray-900" placeholder="Ex: 30/60/90 dias, à vista, boleto 28 dias..."
                 value={form.condicaoPagamento} onChange={e => setForm(p => ({ ...p, condicaoPagamento: e.target.value }))} />
               <p className="text-xs text-gray-400">Obrigatório — informe a forma/condição de pagamento negociada.</p>
+            </div>
+
+            {/* Parcelamento */}
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <Label className="text-gray-700 text-sm font-semibold">Parcelamento</Label>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-gray-600 whitespace-nowrap">Nº de Parcelas:</Label>
+                  <Input
+                    type="number" min="1" max="60"
+                    className="w-20 bg-white border-gray-300 text-gray-900 h-8 text-sm"
+                    value={numParc}
+                    onChange={e => {
+                      const n = Math.min(60, Math.max(1, parseInt(e.target.value) || 1));
+                      setNumParc(n);
+                      setParcelas(gerarParcelas(n, totalOC, form.dataVencimento));
+                    }}
+                  />
+                  {numParc > 1 && (
+                    <Button type="button" size="sm" variant="outline"
+                      className="border-gray-300 text-gray-600 hover:bg-gray-100 text-xs h-8"
+                      onClick={() => setParcelas(gerarParcelas(numParc, totalOC, form.dataVencimento))}>
+                      Distribuir igualmente
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {numParc > 1 && parcelas.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="grid grid-cols-[32px_1fr_120px] gap-2 px-1">
+                    <span className="text-[10px] text-gray-400 font-medium text-center">#</span>
+                    <span className="text-[10px] text-gray-400 font-medium">Vencimento</span>
+                    <span className="text-[10px] text-gray-400 font-medium text-right">Valor (R$)</span>
+                  </div>
+                  <div className="max-h-72 overflow-y-auto space-y-1 pr-1">
+                    {parcelas.map((p, i) => (
+                      <div key={i} className="grid grid-cols-[32px_1fr_120px] gap-2 items-center">
+                        <span className="text-xs text-gray-500 text-center font-mono">{p.numero}</span>
+                        <Input
+                          type="date"
+                          className="bg-white border-gray-300 text-gray-900 h-8 text-sm"
+                          value={p.vencimento}
+                          onChange={e => setParcelas(prev => prev.map((x, j) => j === i ? { ...x, vencimento: e.target.value } : x))}
+                        />
+                        <Input
+                          type="number" step="0.01" min="0"
+                          className="bg-white border-gray-300 text-gray-900 h-8 text-sm text-right"
+                          value={p.valor}
+                          onChange={e => setParcelas(prev => prev.map((x, j) => j === i ? { ...x, valor: e.target.value } : x))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {(() => {
+                    const totalParc = parcelas.reduce((s, p) => s + (parseFloat(p.valor) || 0), 0);
+                    const diff = Math.abs(totalParc - totalOC);
+                    const ok = diff < 0.02;
+                    return (
+                      <div className={`flex justify-between items-center text-xs pt-2 border-t ${ok ? "border-emerald-200" : "border-red-200"}`}>
+                        <span className="text-gray-500">Total das parcelas</span>
+                        <span className={`font-semibold font-mono ${ok ? "text-emerald-700" : "text-red-600"}`}>
+                          {totalParc.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                          {!ok && (
+                            <span className="ml-2 font-normal text-[10px]">
+                              (difere {diff.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} do total da OC)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+              {numParc === 1 && (
+                <p className="text-xs text-gray-400">Pagamento à vista (1 parcela). Aumente o número de parcelas para configurar o parcelamento.</p>
+              )}
             </div>
 
             <div className="grid grid-cols-3 gap-4">
