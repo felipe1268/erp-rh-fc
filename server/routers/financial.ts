@@ -2793,6 +2793,7 @@ export const financialRouter = router({
         const priDataMes = Object.keys(vendaByMes).sort()[0] ?? null;
         const inicioMes = (cfg.inicio_faturamento as string | null)?.substring(0, 7) ?? priDataMes;
         if (inicioMes) {
+          const [anoIni, mesIni] = inicioMes.split("-").map(Number);
           const saldoParcelar = Math.max(0, totalVenda - entrada);
           const valorParcela = numeroParcelas > 0 ? saldoParcelar / numeroParcelas : 0;
           let totalRetencao = 0;
@@ -2803,18 +2804,23 @@ export const financialRouter = router({
             totalRetencao += ret;
           }
           for (let i = 1; i <= numeroParcelas; i++) {
-            const d = new Date(inicioMes + "-01");
-            d.setMonth(d.getMonth() + i);
-            const pm = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            // Aritmética numérica pura — sem Date objects para evitar bugs de timezone (UTC vs UTC-3)
+            const offset = mesIni - 1 + i; // 0-indexed a partir de Jan do anoIni
+            const pmAno = anoIni + Math.floor(offset / 12);
+            const pmMes = (offset % 12) + 1;
+            const pm = `${pmAno}-${String(pmMes).padStart(2, "0")}`;
             const ret = parseFloat((valorParcela * retencaoPct / 100).toFixed(2));
-            prevByProjeto[pid][pm] = (prevByProjeto[pid][pm] ?? 0) + parseFloat((valorParcela - ret).toFixed(2));
+            const net = parseFloat((valorParcela - ret).toFixed(2));
+            prevByProjeto[pid][pm] = (prevByProjeto[pid][pm] ?? 0) + net;
             totalRetencao += ret;
             if (pm > lastMes) lastMes = pm;
           }
           if (totalRetencao > 0) {
             const [aU, mU] = lastMes.split("-").map(Number);
-            const nd = new Date(aU, mU, 1);
-            const proxMes = `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, "0")}`;
+            const offset = mU - 1 + 1; // add 1 month, 0-indexed
+            const proxAno = aU + Math.floor(offset / 12);
+            const proxMesNum = (offset % 12) + 1;
+            const proxMes = `${proxAno}-${String(proxMesNum).padStart(2, "0")}`;
             prevByProjeto[pid][proxMes] = (prevByProjeto[pid][proxMes] ?? 0) + parseFloat(totalRetencao.toFixed(2));
           }
         }
