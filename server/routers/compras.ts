@@ -5931,7 +5931,7 @@ Retorne APENAS um JSON válido neste formato:
       const hoje = new Date().toISOString().slice(0, 10);
       const em7dias = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
-      const [pagRows, notifRows, ocsRows, scsRows, scItensRows] = await Promise.all([
+      const [pagRows, notifRows, ocsRows, scsRows, scItensRows, obrasAlertas] = await Promise.all([
         db.select({
           id: purchaseAccountsPayable.id,
           ordemId: purchaseAccountsPayable.ordemId,
@@ -5962,14 +5962,10 @@ Retorne APENAS um JSON válido neste formato:
           status: comprasOrdens.status,
           dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
           fornecedorId: comprasOrdens.fornecedorId,
-          fornecedorNome: fornecedores.nomeFantasia,
-          fornecedorRazao: fornecedores.razaoSocial,
+          fornecedorNome: comprasOrdens.fornecedorNome,
           obraId: comprasOrdens.obraId,
-          obraNome: obras.nome,
           total: comprasOrdens.total,
         }).from(comprasOrdens)
-          .leftJoin(fornecedores, eq(fornecedores.id, comprasOrdens.fornecedorId))
-          .leftJoin(obras, eq(obras.id, comprasOrdens.obraId))
           .where(and(
             inArray(comprasOrdens.companyId, ids),
             or(
@@ -5998,7 +5994,14 @@ Retorne APENAS um JSON válido neste formato:
           descricao: comprasSolicitacoesItens.descricao,
         }).from(comprasSolicitacoesItens)
           .where(inArray(comprasSolicitacoesItens.companyId, ids)),
+
+        db.select({ id: obras.id, nome: obras.nome })
+          .from(obras)
+          .where(inArray(obras.companyId, ids)),
       ]);
+
+      const obraMapAlertas: Record<number, string> = {};
+      for (const o of obrasAlertas) { if (o.id && o.nome) obraMapAlertas[o.id] = o.nome; }
 
       const pagVencidas = pagRows.filter(p =>
         p.status === "liberado" && p.dataVencimento && p.dataVencimento < hoje
@@ -6018,18 +6021,30 @@ Retorne APENAS um JSON válido neste formato:
 
       const CLOSED_OC = ["entregue", "cancelada", "recebido"];
       const ocsAtrasadas = ocsRows.filter(oc =>
-        oc.dataEntregaPrevista && oc.dataEntregaPrevista < hoje && !CLOSED_OC.includes(oc.status)
+        oc.dataEntregaPrevista && oc.dataEntregaPrevista < hoje && !CLOSED_OC.includes(oc.status ?? "")
       ).map(oc => ({
-        ...oc,
-        fornecedorNome: oc.fornecedorNome || oc.fornecedorRazao || null,
+        id: oc.id,
+        numeroOc: oc.numeroOc,
+        status: oc.status,
+        dataEntregaPrevista: oc.dataEntregaPrevista,
+        fornecedorId: oc.fornecedorId ?? null,
+        fornecedorNome: oc.fornecedorNome ?? null,
+        obraId: oc.obraId ?? null,
+        obraNome: oc.obraId ? (obraMapAlertas[oc.obraId] ?? null) : null,
         total: oc.total ? parseFloat(String(oc.total)) : 0,
         diasAtraso: Math.floor((Date.now() - new Date(oc.dataEntregaPrevista! + "T00:00:00").getTime()) / 86400000),
       }));
       const ocsProximas = ocsRows.filter(oc =>
-        oc.dataEntregaPrevista && oc.dataEntregaPrevista >= hoje && oc.dataEntregaPrevista <= em7dias && !CLOSED_OC.includes(oc.status)
+        oc.dataEntregaPrevista && oc.dataEntregaPrevista >= hoje && oc.dataEntregaPrevista <= em7dias && !CLOSED_OC.includes(oc.status ?? "")
       ).map(oc => ({
-        ...oc,
-        fornecedorNome: oc.fornecedorNome || oc.fornecedorRazao || null,
+        id: oc.id,
+        numeroOc: oc.numeroOc,
+        status: oc.status,
+        dataEntregaPrevista: oc.dataEntregaPrevista,
+        fornecedorId: oc.fornecedorId ?? null,
+        fornecedorNome: oc.fornecedorNome ?? null,
+        obraId: oc.obraId ?? null,
+        obraNome: oc.obraId ? (obraMapAlertas[oc.obraId] ?? null) : null,
         total: oc.total ? parseFloat(String(oc.total)) : 0,
       }));
 

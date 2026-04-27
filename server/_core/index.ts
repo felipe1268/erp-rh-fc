@@ -437,6 +437,7 @@ async function startServer() {
             ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS criado_por_id INTEGER;
             ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS criado_por_nome TEXT;
             ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS aprovador_nome VARCHAR(255);
+            ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS parcelas_json JSONB;
             ALTER TABLE financial_approvals ADD COLUMN IF NOT EXISTS aprovador_nome VARCHAR(255);
             ALTER TABLE purchase_requests ADD COLUMN IF NOT EXISTS aprovador_nome VARCHAR(255);
             ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS modulo_medicao VARCHAR(30);
