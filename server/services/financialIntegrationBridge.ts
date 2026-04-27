@@ -1,4 +1,23 @@
 import { getDb } from "../db";
+import { sql } from "drizzle-orm";
+
+// ============================================================
+// HELPER: executa queries parametrizadas corretamente no Drizzle ORM
+// db.execute(string, array) ignora o array — é preciso usar sql template
+// ============================================================
+async function dbExecute(db: any, query: string, params: unknown[]): Promise<{ rows: any[] }> {
+  // Divide a query nos placeholders $1, $2, etc. e reconstrói como sql template
+  const parts = query.split(/\$\d+/g);
+  let built: any = sql.raw(parts[0] ?? "");
+  for (let i = 1; i < parts.length; i++) {
+    const paramVal = params[i - 1];
+    const tail = parts[i] ?? "";
+    built = tail ? sql`${built}${paramVal}${sql.raw(tail)}` : sql`${built}${paramVal}`;
+  }
+  const res = await db.execute(built);
+  const rows: any[] = (res as any)?.rows ?? (Array.isArray(res) ? res : []);
+  return { rows };
+}
 
 // ============================================================
 // BRIDGE DE INTEGRAÇÃO FINANCEIRA — FC Engenharia
@@ -22,11 +41,10 @@ function mesComp(d: Date = new Date()): string {
 }
 
 async function entryExists(db: any, companyId: number, origemModulo: string, origemId: number): Promise<boolean> {
-  const res = await db.execute(
+  const { rows } = await dbExecute(db,
     `SELECT id FROM financial_entries WHERE company_id=$1 AND origem_modulo=$2 AND origem_id=$3 LIMIT 1`,
     [companyId, origemModulo, origemId]
   );
-  const rows = (res as any)?.rows ?? (res as any) ?? [];
   return rows.length > 0;
 }
 
@@ -49,7 +67,7 @@ async function insertEntry(db: any, data: {
   descricao?: string;
   formaPagamento?: string | null;
 }): Promise<number | null> {
-  const res = await db.execute(
+  const { rows } = await dbExecute(db,
     `INSERT INTO financial_entries
      (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
       valor_previsto, valor_realizado, data_competencia, data_vencimento, data_pagamento,
@@ -78,16 +96,15 @@ async function insertEntry(db: any, data: {
       data.formaPagamento ?? null,
     ]
   );
-  const id = ((res as any)?.rows ?? (res as any) ?? [])[0]?.id;
-  return id ?? null;
+  return rows[0]?.id ?? null;
 }
 
 async function logImport(db: any, companyId: number, origemModulo: string, mesRef: string, total: number, erros: number, detalhes?: string) {
-  await db.execute(
+  await dbExecute(db,
     `INSERT INTO financial_import_log (company_id, origem_modulo, mes_referencia, total_importados, total_erros, detalhes)
      VALUES ($1,$2,$3,$4,$5,$6)`,
     [companyId, origemModulo, mesRef, total, erros, detalhes ?? null]
-  );
+  ).catch(() => {}); // log errors silently — not critical
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -104,19 +121,20 @@ export async function importTerceirosToFinancial(companyId: number, mesRef?: str
   let erros = 0;
 
   try {
-    const res = await db.execute(
+    const { rows } = await dbExecute(db,
       `SELECT tm.id, tm.valor_medido, tm.data_referencia, tm.status, tm.periodo, tm.obra_id,
-              tc.nome_empresa, tc.tipo_servico, tc.valor_total AS valor_contrato,
+              COALESCE(et.nome_fantasia, et.razao_social) AS nome_empresa,
+              tc.descricao AS tipo_servico, tc.valor_total AS valor_contrato,
               o.nome AS obra_nome
        FROM terceiro_medicoes tm
        JOIN terceiro_contratos tc ON tc.id = tm.contrato_id
+       JOIN empresas_terceiras et ON et.id = tc.empresa_terceira_id
        LEFT JOIN obras o ON o.id = tm.obra_id
        WHERE tm.company_id=$1
          AND tm.status IN ('aprovada','faturada','paga')
          AND tm.periodo=$2`,
       [companyId, targetMes]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
 
     for (const r of rows) {
       if (await entryExists(db, companyId, "terceiro_medicao", r.id)) continue;
@@ -164,18 +182,16 @@ export async function importParceirosToFinancial(companyId: number, mesRef?: str
   let erros = 0;
 
   try {
-    const res = await db.execute(
+    const { rows } = await dbExecute(db,
       `SELECT pp.id, pp.valor_total, pp.status, pp.data_pagamento, pp.competencia_pagamento,
               pp.comprovante_pagamento_url,
-              pc.nome AS parceiro_nome, pc.cnpj, pc.obra_id,
-              o.nome AS obra_nome
+              pc.razao_social AS parceiro_nome, pc.cnpj
        FROM pagamentos_parceiros pp
        JOIN parceiros_conveniados pc ON pc.id = pp."parceiroId"
-       LEFT JOIN obras o ON o.id = pc.obra_id
        WHERE pp."companyId"=$1 AND pp.competencia_pagamento=$2`,
       [companyId, targetMes]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
+    // rows extracted by dbExecute
 
     for (const r of rows) {
       if (await entryExists(db, companyId, "pagamento_parceiro", r.id)) continue;
@@ -184,8 +200,6 @@ export async function importParceirosToFinancial(companyId: number, mesRef?: str
       const dataVenc = targetMes + "-10";
       await insertEntry(db, {
         companyId,
-        obraId: r.obra_id,
-        obraNome: r.obra_nome,
         contaNome: "Subempreiteiros",
         tipo: "despesa",
         natureza: "variavel",
@@ -223,18 +237,18 @@ export async function importFrotasToFinancial(companyId: number, mesRef?: string
 
   // Manutenções
   try {
-    const res = await db.execute(
-      `SELECT fm.id, fm.custo_total, fm.data_manutencao, fm.descricao AS desc_manut,
-              fm.tipo_manutencao, fm.status, fm.vehicle_id,
+    const { rows } = await dbExecute(db,
+      `SELECT fm.id, fm.custo AS custo_total, fm.data_manutencao, fm.descricao AS desc_manut,
+              fm.tipo AS tipo_manutencao, fm.status, fm.vehicle_id,
               v."companyId" AS company_id_v, v.modelo, v.placa
        FROM fleet_maintenances fm
        JOIN vehicles v ON v.id = fm.vehicle_id
        WHERE v."companyId"=$1
          AND TO_CHAR(fm.data_manutencao,'YYYY-MM')=$2
-         AND fm.custo_total > 0`,
+         AND fm.custo > 0`,
       [companyId, targetMes]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
+    // rows extracted by dbExecute
 
     for (const r of rows) {
       if (await entryExists(db, companyId, "frota_manutencao", r.id)) continue;
@@ -266,23 +280,23 @@ export async function importFrotasToFinancial(companyId: number, mesRef?: string
 
   // Abastecimentos
   try {
-    const res = await db.execute(
-      `SELECT ffr.id, ffr.valor_total, ffr.data_abastecimento, ffr.tipo_combustivel,
+    const { rows } = await dbExecute(db,
+      `SELECT ffr.id, ffr.valor_total, ffr.data, ffr.tipo_combustivel,
               ffr.vehicle_id, v.modelo, v.placa
        FROM fleet_fuel_records ffr
        JOIN vehicles v ON v.id = ffr.vehicle_id
        WHERE v."companyId"=$1
-         AND TO_CHAR(ffr.data_abastecimento,'YYYY-MM')=$2
+         AND TO_CHAR(ffr.data,'YYYY-MM')=$2
          AND ffr.valor_total > 0`,
       [companyId, targetMes]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
+    // rows extracted by dbExecute
 
     for (const r of rows) {
       if (await entryExists(db, companyId, "frota_abastecimento", r.id)) continue;
       const valor = parseFloat(r.valor_total ?? "0");
       if (valor <= 0) continue;
-      const dataExec = r.data_abastecimento ? r.data_abastecimento.toString().split("T")[0] : today();
+      const dataExec = (r.data ?? r.data_abastecimento) ? (r.data ?? r.data_abastecimento).toString().split("T")[0] : today();
       await insertEntry(db, {
         companyId,
         contaNome: "Combustíveis e Lubrificantes",
@@ -320,18 +334,16 @@ export async function importBeneficiosToFinancial(companyId: number, mesRef?: st
   let erros = 0;
 
   try {
-    const res = await db.execute(
+    const { rows } = await dbExecute(db,
       `SELECT vb.id, vb."companyId", vb."mesReferencia", vb."valorTotal",
               vb."valorVa", vb.status, vb.operadora,
-              e.nome_completo, e.obra_id,
-              o.nome AS obra_nome
+              e."nomeCompleto" AS nome_completo
        FROM vr_benefits vb
        JOIN employees e ON e.id = vb."employeeId"
-       LEFT JOIN obras o ON o.id = e.obra_id
        WHERE vb."companyId"=$1 AND vb."mesReferencia"=$2`,
       [companyId, targetMes]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
+    // rows extracted by dbExecute
 
     for (const r of rows) {
       const valorVR = parseFloat(r.valorTotal ?? "0");
@@ -343,8 +355,6 @@ export async function importBeneficiosToFinancial(companyId: number, mesRef?: st
         if (!(await entryExists(db, companyId, modulo, r.id))) {
           await insertEntry(db, {
             companyId,
-            obraId: r.obra_id,
-            obraNome: r.obra_nome,
             contaNome: "Vale Refeição / Alimentação",
             tipo: "despesa",
             natureza: "variavel",
@@ -356,8 +366,8 @@ export async function importBeneficiosToFinancial(companyId: number, mesRef?: st
             status: r.status === "processado" ? "pago" : "a_pagar",
             origemModulo: modulo,
             origemId: r.id,
-            origemDescricao: `VR ${targetMes} — ${r.nome_completo} — ${r.operadora}`,
-            descricao: `Vale Refeição ${targetMes}: ${r.nome_completo}`,
+            origemDescricao: `VR ${targetMes} — ${r.nome_completo ?? ""} — ${r.operadora}`,
+            descricao: `Vale Refeição ${targetMes}: ${r.nome_completo ?? ""}`,
           });
           imported++;
         }
@@ -369,8 +379,6 @@ export async function importBeneficiosToFinancial(companyId: number, mesRef?: st
         if (!(await entryExists(db, companyId, modulo, r.id))) {
           await insertEntry(db, {
             companyId,
-            obraId: r.obra_id,
-            obraNome: r.obra_nome,
             contaNome: "Vale Alimentação",
             tipo: "despesa",
             natureza: "variavel",
@@ -382,8 +390,8 @@ export async function importBeneficiosToFinancial(companyId: number, mesRef?: st
             status: r.status === "processado" ? "pago" : "a_pagar",
             origemModulo: modulo,
             origemId: r.id,
-            origemDescricao: `VA ${targetMes} — ${r.nome_completo} — ${r.operadora}`,
-            descricao: `Vale Alimentação ${targetMes}: ${r.nome_completo}`,
+            origemDescricao: `VA ${targetMes} — ${r.nome_completo ?? ""} — ${r.operadora}`,
+            descricao: `Vale Alimentação ${targetMes}: ${r.nome_completo ?? ""}`,
           });
           imported++;
         }
@@ -408,14 +416,14 @@ export async function importSeguroVidaToFinancial(companyId: number, mesRef?: st
   let erros = 0;
 
   try {
-    const res = await db.execute(
+    const { rows } = await dbExecute(db,
       `SELECT id, company_id, competencia, total_ok
        FROM seguro_vida_importacoes
        WHERE company_id=$1 AND competencia=$2
        LIMIT 1`,
       [companyId, targetMes]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
+    // rows extracted by dbExecute
     if (rows.length === 0) return 0;
     const r = rows[0];
 
@@ -460,19 +468,17 @@ export async function importAdiantamentosToFinancial(companyId: number, mesRef?:
   let erros = 0;
 
   try {
-    const res = await db.execute(
+    const { rows } = await dbExecute(db,
       `SELECT a.id, a."valorAdiantamento", a."valorLiquido", a."mesReferencia",
               a."dataPagamento", a.aprovado, a."bancoDestino",
-              e.nome_completo, e.obra_id,
-              o.nome AS obra_nome
+              e."nomeCompleto" AS nome_completo
        FROM advances a
        JOIN employees e ON e.id = a."employeeId"
-       LEFT JOIN obras o ON o.id = e.obra_id
        WHERE a."companyId"=$1 AND a."mesReferencia"=$2
          AND a.aprovado IN ('Aprovado','Pago')`,
       [companyId, targetMes]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
+    // rows extracted by dbExecute
 
     for (const r of rows) {
       if (await entryExists(db, companyId, "adiantamento", r.id)) continue;
@@ -481,8 +487,6 @@ export async function importAdiantamentosToFinancial(companyId: number, mesRef?:
       const dataVenc = targetMes + "-15";
       await insertEntry(db, {
         companyId,
-        obraId: r.obra_id,
-        obraNome: r.obra_nome,
         contaNome: "Adiantamentos Salariais",
         tipo: "despesa",
         natureza: "variavel",
@@ -518,13 +522,13 @@ export async function importProLaboreToFinancial(companyId: number, mesRef?: str
   let erros = 0;
 
   try {
-    const res = await db.execute(
+    const { rows } = await dbExecute(db,
       `SELECT id, nome, valor_pro_labore, dia_vencimento, ativo
        FROM company_partners
        WHERE company_id=$1 AND ativo=1 AND valor_pro_labore > 0`,
       [companyId]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
+    // rows extracted by dbExecute
 
     for (const r of rows) {
       const origemId = parseInt(`${r.id}${targetMes.replace("-", "")}`);
@@ -568,21 +572,23 @@ export async function importPlanejamentoComprasToFinancial(companyId: number, me
   let erros = 0;
 
   try {
-    const res = await db.execute(
-      `SELECT pc.id, pc.descricao, pc.valor_total, pc.data_prevista, pc.status,
-              pc.projeto_id,
+    const { rows } = await dbExecute(db,
+      `SELECT pc.id, pc.item AS descricao,
+              COALESCE(pc.quantidade * pc.custo_unitario, 0) AS valor_total,
+              pc.data_necessaria AS data_prevista, pc.status,
+              pc.projeto_id, pc.fornecedor,
               pp.obra_id, pp.nome AS projeto_nome,
               o.nome AS obra_nome
        FROM planejamento_compras pc
        JOIN planejamento_projetos pp ON pp.id = pc.projeto_id
        LEFT JOIN obras o ON o.id = pp.obra_id
        WHERE pp.company_id=$1
-         AND TO_CHAR(COALESCE(pc.data_prevista, NOW()), 'YYYY-MM')=$2
+         AND TO_CHAR(COALESCE(pc.data_necessaria, NOW()), 'YYYY-MM')=$2
          AND pc.status NOT IN ('cancelada')
-         AND pc.valor_total > 0`,
+         AND COALESCE(pc.quantidade * pc.custo_unitario, 0) > 0`,
       [companyId, targetMes]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
+    // rows extracted by dbExecute
 
     for (const r of rows) {
       if (await entryExists(db, companyId, "planejamento_compra", r.id)) continue;
@@ -627,10 +633,10 @@ export async function importAlmoxarifadoToFinancial(companyId: number, mesRef?: 
   let erros = 0;
 
   try {
-    const res = await db.execute(
+    const { rows } = await dbExecute(db,
       `SELECT asi.id,
               asi.quantidade * COALESCE(ai.valor_unitario, 0) AS valor_total,
-              asi.criado_em, asi.motivo,
+              asi.created_at, asi.motivo,
               asi.obra_id,
               ai.nome AS item_nome,
               o.nome AS obra_nome
@@ -638,11 +644,11 @@ export async function importAlmoxarifadoToFinancial(companyId: number, mesRef?: 
        JOIN almoxarifado_itens ai ON ai.id = asi.item_id
        LEFT JOIN obras o ON o.id = asi.obra_id
        WHERE asi.company_id=$1
-         AND TO_CHAR(asi.criado_em,'YYYY-MM')=$2
+         AND TO_CHAR(asi.created_at,'YYYY-MM')=$2
          AND asi.quantidade > 0`,
       [companyId, targetMes]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
+    // rows extracted by dbExecute
 
     for (const r of rows) {
       if (await entryExists(db, companyId, "almoxarifado_saida", r.id)) continue;
@@ -685,16 +691,16 @@ export async function importProcessosTrabalistasToFinancial(companyId: number, m
   let erros = 0;
 
   try {
-    const res = await db.execute(
+    const { rows } = await dbExecute(db,
       `SELECT id, "valorCondenacao", "valorAcordo", "valorPago",
-              "reclamante", "tipoAcao", "dataDistribuicao", "statusProcesso"
+              "reclamante", "tipoAcao", "dataDistribuicao", status
        FROM processos_trabalhistas
        WHERE "companyId"=$1
          AND ("valorCondenacao" IS NOT NULL OR "valorAcordo" IS NOT NULL)
-         AND "statusProcesso" IN ('condenado','acordo','pago')`,
+         AND status IN ('condenado','acordo','pago')`,
       [companyId]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
+    // rows extracted by dbExecute
 
     for (const r of rows) {
       if (await entryExists(db, companyId, "processo_trabalhista", r.id)) continue;
@@ -710,7 +716,7 @@ export async function importProcessosTrabalistasToFinancial(companyId: number, m
         valorRealizado: valorPago > 0 ? valorPago : null,
         dataCompetencia: targetMes + "-01",
         dataVencimento: targetMes + "-30",
-        status: r.statusProcesso === "pago" ? "pago" : "a_pagar",
+        status: r.status === "pago" ? "pago" : "a_pagar",
         origemModulo: "processo_trabalhista",
         origemId: r.id,
         origemDescricao: `Processo Trabalhista — ${r.reclamante} — ${r.tipoAcao}`,
@@ -738,15 +744,15 @@ export async function gerarGuiasTributarias(companyId: number, mesRef?: string):
 
   try {
     // Buscar configuração tributária
-    const cfgRes = await db.execute(
+    const { rows: cfgRows } = await dbExecute(db,
       `SELECT * FROM financial_tax_config WHERE company_id=$1 AND ativo=1 LIMIT 1`,
       [companyId]
     );
-    const cfg = ((cfgRes as any)?.rows ?? (cfgRes as any) ?? [])[0];
+    const cfg = cfgRows[0];
     if (!cfg) return 0;
 
     // Base de cálculo: receitas realizadas no mês
-    const baseRes = await db.execute(
+    const { rows: baseRows } = await dbExecute(db,
       `SELECT COALESCE(SUM(valor_realizado),0) AS base
        FROM financial_entries
        WHERE company_id=$1
@@ -755,10 +761,10 @@ export async function gerarGuiasTributarias(companyId: number, mesRef?: string):
          AND TO_CHAR(data_competencia,'YYYY-MM')=$2`,
       [companyId, targetMes]
     );
-    const base = parseFloat(((baseRes as any)?.rows ?? (baseRes as any) ?? [])[0]?.base ?? "0");
+    const base = parseFloat(baseRows[0]?.base ?? "0");
 
     // Base folha: despesas com salários do mês
-    const folhaRes = await db.execute(
+    const { rows: folhaRows } = await dbExecute(db,
       `SELECT COALESCE(SUM(valor_previsto),0) AS base
        FROM financial_entries
        WHERE company_id=$1
@@ -766,7 +772,7 @@ export async function gerarGuiasTributarias(companyId: number, mesRef?: string):
          AND TO_CHAR(data_competencia,'YYYY-MM')=$2`,
       [companyId, targetMes]
     );
-    const baseFolha = parseFloat(((folhaRes as any)?.rows ?? (folhaRes as any) ?? [])[0]?.base ?? "0");
+    const baseFolha = parseFloat(folhaRows[0]?.base ?? "0");
 
     const [ano, mes] = targetMes.split("-");
     const guias: { tipo: string; valor: number; vencimento: string; codigoReceita: string }[] = [];
@@ -799,21 +805,20 @@ export async function gerarGuiasTributarias(companyId: number, mesRef?: string):
 
     for (const g of guias) {
       // Verificar se já existe
-      const existsRes = await db.execute(
+      const { rows: existsRows } = await dbExecute(db,
         `SELECT id FROM financial_tax_obligations WHERE company_id=$1 AND tipo=$2 AND mes_competencia=$3 LIMIT 1`,
         [companyId, g.tipo, targetMes]
       );
-      const exists = ((existsRes as any)?.rows ?? (existsRes as any) ?? []).length > 0;
-      if (exists) continue;
+      if (existsRows.length > 0) continue;
 
       // Inserir na tabela de obrigações tributárias
-      const obrigRes = await db.execute(
+      const { rows: obrigRows } = await dbExecute(db,
         `INSERT INTO financial_tax_obligations (company_id, tipo, mes_competencia, valor_principal, valor_total, data_vencimento, codigo_receita, status, gerada_automaticamente)
          VALUES ($1,$2,$3,$4,$5,$6,$7,'a_pagar',1)
          RETURNING id`,
         [companyId, g.tipo, targetMes, g.valor.toFixed(2), g.valor.toFixed(2), g.vencimento, g.codigoReceita]
       );
-      const obrigId = ((obrigRes as any)?.rows ?? (obrigRes as any) ?? [])[0]?.id;
+      const obrigId = obrigRows[0]?.id;
 
       // Criar lançamento financeiro correspondente
       if (obrigId) {
@@ -857,10 +862,10 @@ export async function importMedicoesObraToFinancial(companyId: number, mesRef?: 
   let erros = 0;
 
   try {
-    const res = await db.execute(
+    const { rows } = await dbExecute(db,
       `SELECT pm.id, pm.valor_medido, pm.valor_previsto, pm.competencia, pm.status, pm.numero,
               pp.obra_id, pp.nome AS projeto_nome, pp.company_id,
-              o.nome AS obra_nome, o.cliente_nome
+              o.nome AS obra_nome, o.cliente AS cliente_nome
        FROM planejamento_medicoes pm
        JOIN planejamento_projetos pp ON pp.id = pm.projeto_id
        LEFT JOIN obras o ON o.id = pp.obra_id
@@ -869,7 +874,7 @@ export async function importMedicoesObraToFinancial(companyId: number, mesRef?: 
          AND pm.status IN ('aprovada','faturada')`,
       [companyId, targetMes]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
+    // rows extracted by dbExecute
 
     for (const r of rows) {
       if (await entryExists(db, companyId, "medicao_obra", r.id)) continue;
@@ -877,7 +882,7 @@ export async function importMedicoesObraToFinancial(companyId: number, mesRef?: 
       if (valor <= 0) continue;
 
       // Criar em financial_revenue também
-      const revRes = await db.execute(
+      const { rows: revRows } = await dbExecute(db,
         `INSERT INTO financial_revenue (company_id, obra_id, obra_nome, cliente_nome,
          valor_medicao, medicao_numero, percentual_medicao, status, created_at, updated_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,'a_faturar',NOW(),NOW())
@@ -888,7 +893,7 @@ export async function importMedicoesObraToFinancial(companyId: number, mesRef?: 
           parseFloat(r.percentual_medido ?? "0").toFixed(2),
         ]
       );
-      const revenueId = ((revRes as any)?.rows ?? (revRes as any) ?? [])[0]?.id;
+      const revenueId = revRows[0]?.id;
 
       await insertEntry(db, {
         companyId,
@@ -926,41 +931,35 @@ export async function importMedicoesPJToFinancial(companyId: number, mesRef?: st
   let erros = 0;
 
   try {
-    const res = await db.execute(
-      `SELECT pjm.id, pjm.valor_bruto, pjm.valor_liquido, pjm.data_competencia, pjm.status,
-              pjm.numero, pjm.obra_id,
-              pjc.nome_fantasia AS empresa_nome,
-              o.nome AS obra_nome
+    const { rows } = await dbExecute(db,
+      `SELECT pjm.id, pjm."valorBruto", pjm."valorLiquido", pjm."mesReferencia", pjm.status,
+              pjc."razaoSocialPrestador" AS empresa_nome
        FROM pj_medicoes pjm
-       JOIN pj_contracts pjc ON pjc.id = pjm.contract_id
-       LEFT JOIN obras o ON o.id = pjm.obra_id
-       WHERE pjc.company_id=$1
-         AND TO_CHAR(COALESCE(pjm.data_competencia, NOW()), 'YYYY-MM')=$2
+       JOIN pj_contracts pjc ON pjc.id = pjm."contractId"
+       WHERE pjc."companyId"=$1
+         AND pjm."mesReferencia"=$2
          AND pjm.status IN ('aprovada','faturada','paga')`,
       [companyId, targetMes]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
 
     for (const r of rows) {
       if (await entryExists(db, companyId, "medicao_pj", r.id)) continue;
-      const valor = parseFloat(r.valor_bruto ?? "0");
+      const valor = parseFloat(r.valorBruto ?? r.valor_bruto ?? "0");
       if (valor <= 0) continue;
       await insertEntry(db, {
         companyId,
-        obraId: r.obra_id,
-        obraNome: r.obra_nome,
         contaNome: "Serviços PJ Cobráveis",
         tipo: "receita",
         natureza: "variavel",
         valorPrevisto: valor,
-        valorRealizado: r.status === "paga" ? parseFloat(r.valor_liquido ?? valor) : null,
+        valorRealizado: r.status === "paga" ? parseFloat(r.valorLiquido ?? r.valor_liquido ?? String(valor)) : null,
         dataCompetencia: targetMes + "-01",
         dataVencimento: targetMes + "-30",
         dataPagamento: r.status === "paga" ? targetMes + "-30" : null,
         status: r.status === "paga" ? "recebido" : "a_receber",
         origemModulo: "medicao_pj",
         origemId: r.id,
-        origemDescricao: `Medição PJ #${r.numero} — ${r.empresa_nome}`,
+        origemDescricao: `Medição PJ #${r.id} — ${r.empresa_nome}`,
         descricao: `Cobrança PJ ${r.empresa_nome} — ${targetMes}`,
       });
       imported++;
@@ -983,20 +982,20 @@ export async function importTerceiroCobravelToFinancial(companyId: number, mesRe
   let erros = 0;
 
   try {
-    const res = await db.execute(
+    const { rows } = await dbExecute(db,
       `SELECT tm.id, tm.valor_medido, tm.periodo, tm.status, tm.obra_id,
-              tc.nome_empresa, tc.tipo_servico, tc.cobravel_cliente,
-              o.nome AS obra_nome, o.cliente_nome
+              COALESCE(et.nome_fantasia, et.razao_social) AS nome_empresa,
+              tc.descricao AS tipo_servico,
+              o.nome AS obra_nome, o.cliente
        FROM terceiro_medicoes tm
        JOIN terceiro_contratos tc ON tc.id = tm.contrato_id
+       JOIN empresas_terceiras et ON et.id = tc.empresa_terceira_id
        LEFT JOIN obras o ON o.id = tm.obra_id
        WHERE tm.company_id=$1
          AND tm.periodo=$2
-         AND tc.cobravel_cliente=true
          AND tm.status IN ('aprovada','faturada')`,
       [companyId, targetMes]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
 
     for (const r of rows) {
       const modulo = "terceiro_cobravel";
@@ -1016,7 +1015,7 @@ export async function importTerceiroCobravelToFinancial(companyId: number, mesRe
         status: "a_receber",
         origemModulo: modulo,
         origemId: r.id,
-        origemDescricao: `Repasse cobrável — ${r.nome_empresa} — ${r.tipo_servico} — ${r.cliente_nome}`,
+        origemDescricao: `Repasse cobrável — ${r.nome_empresa} — ${r.tipo_servico ?? "Serviço"} — ${r.cliente ?? "Cliente"}`,
         descricao: `Repasse terceiro cobrável ${r.nome_empresa}`,
       });
       imported++;
@@ -1051,12 +1050,12 @@ export async function verificarImpactoFinanceiro(
   const db = await getDb();
   if (!db) return { temImpacto: false, entryIds: [], valorTotal: 0, status: "ok" };
 
-  const res = await db.execute(
+  const { rows } = await dbExecute(db,
     `SELECT id, valor_previsto, status FROM financial_entries
      WHERE company_id=$1 AND origem_modulo=$2 AND origem_id=$3 AND status NOT IN ('cancelado')`,
     [companyId, origemModulo, origemId]
   );
-  const rows = (res as any)?.rows ?? (res as any) ?? [];
+  // rows extracted by dbExecute
 
   if (rows.length === 0) return { temImpacto: false, entryIds: [], valorTotal: 0, status: "ok" };
 
@@ -1089,17 +1088,17 @@ export async function solicitarAprovacaoPorAlcada(
   // Definir expiração: 48h
   const expiradoEm = new Date(Date.now() + 48 * 3600 * 1000).toISOString();
 
-  const res = await db.execute(
+  const { rows: aprovRows } = await dbExecute(db,
     `INSERT INTO financial_payment_approvals
      (company_id, entry_id, valor, nivel, status, solicitante_id, solicitante_nome, expirado_em)
      VALUES ($1,$2,$3,$4,'pendente',$5,$6,$7)
      RETURNING id`,
     [companyId, entryId, valor.toFixed(2), nivel, solicitanteId, solicitanteNome, expiradoEm]
   );
-  const aprovacaoId = ((res as any)?.rows ?? (res as any) ?? [])[0]?.id;
+  const aprovacaoId = aprovRows[0]?.id ?? null;
 
   // Criar alerta
-  await db.execute(
+  await dbExecute(db,
     `INSERT INTO financial_revision_alerts
      (company_id, entry_id, tipo, nivel, titulo, descricao, valor_referencia, responsavel_nome)
      VALUES ($1,$2,'aprovacao_pendente','warning',$3,$4,$5,$6)`,
@@ -1125,7 +1124,7 @@ export async function rollbackFinanceiroPorOrigem(
   const db = await getDb();
   if (!db) return 0;
 
-  const res = await db.execute(
+  const { rows: cancelRows } = await dbExecute(db,
     `UPDATE financial_entries
      SET status='cancelado', motivo_cancelamento=$1, updated_at=NOW()
      WHERE company_id=$2 AND origem_modulo=$3 AND origem_id=$4
@@ -1133,7 +1132,7 @@ export async function rollbackFinanceiroPorOrigem(
      RETURNING id`,
     [motivo, companyId, origemModulo, origemId]
   );
-  const affected = ((res as any)?.rows ?? (res as any) ?? []).length;
+  const affected = cancelRows.length;
 
   if (affected > 0) {
     console.log(`[FinancialBridge][rollback] ${origemModulo}#${origemId} → ${affected} entries cancelados`);
@@ -1152,7 +1151,7 @@ export async function sincronizarStatusPagamento(
   const db = await getDb();
   if (!db) return;
 
-  await db.execute(
+  await dbExecute(db,
     `UPDATE financial_entries
      SET status=$1,
          data_pagamento=COALESCE($2, data_pagamento),
@@ -1163,7 +1162,7 @@ export async function sincronizarStatusPagamento(
   );
 
   // Atualizar financial_revenue se for receita
-  await db.execute(
+  await dbExecute(db,
     `UPDATE financial_revenue fr
      SET status=$1, data_recebimento=COALESCE($2, fr.data_recebimento), updated_at=NOW()
      FROM financial_entries fe
@@ -1183,7 +1182,7 @@ export async function gerarAlertasVencimento(companyId: number): Promise<number>
 
   try {
     // Vencimentos próximos (até 7 dias)
-    const res = await db.execute(
+    const { rows } = await dbExecute(db,
       `SELECT id, valor_previsto, data_vencimento, status, descricao, tipo
        FROM financial_entries
        WHERE company_id=$1
@@ -1191,16 +1190,15 @@ export async function gerarAlertasVencimento(companyId: number): Promise<number>
          AND data_vencimento BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
          AND id NOT IN (
            SELECT COALESCE(entry_id,0) FROM financial_revision_alerts
-           WHERE company_id=$1 AND tipo='vencimento_proximo' AND resolvido=0
+           WHERE company_id=$2 AND tipo='vencimento_proximo' AND resolvido=0
          )`,
-      [companyId]
+      [companyId, companyId]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
 
     for (const r of rows) {
       const diasRestantes = Math.ceil((new Date(r.data_vencimento).getTime() - Date.now()) / 86400000);
       const nivel = diasRestantes <= 1 ? "critical" : diasRestantes <= 3 ? "warning" : "info";
-      await db.execute(
+      await dbExecute(db,
         `INSERT INTO financial_revision_alerts
          (company_id, entry_id, tipo, nivel, titulo, descricao, valor_referencia, data_referencia)
          VALUES ($1,$2,'vencimento_proximo',$3,$4,$5,$6,$7)`,
@@ -1215,7 +1213,7 @@ export async function gerarAlertasVencimento(companyId: number): Promise<number>
     }
 
     // Vencimentos atrasados
-    const atrasRes = await db.execute(
+    const { rows: atrasRows } = await dbExecute(db,
       `SELECT id, valor_previsto, data_vencimento, status, descricao, tipo
        FROM financial_entries
        WHERE company_id=$1
@@ -1223,13 +1221,12 @@ export async function gerarAlertasVencimento(companyId: number): Promise<number>
          AND data_vencimento < CURRENT_DATE
          AND id NOT IN (
            SELECT COALESCE(entry_id,0) FROM financial_revision_alerts
-           WHERE company_id=$1 AND tipo='vencimento_atrasado' AND resolvido=0
+           WHERE company_id=$2 AND tipo='vencimento_atrasado' AND resolvido=0
          )`,
-      [companyId]
+      [companyId, companyId]
     );
-    const atrasRows = (res as any)?.rows ?? (atrasRes as any) ?? [];
     for (const r of atrasRows) {
-      await db.execute(
+      await dbExecute(db,
         `INSERT INTO financial_revision_alerts
          (company_id, entry_id, tipo, nivel, titulo, descricao, valor_referencia, data_referencia)
          VALUES ($1,$2,'vencimento_atrasado','critical',$3,$4,$5,$6)`,
@@ -1261,7 +1258,7 @@ export async function importComprasOrdensToFinancial(companyId: number, mesRef?:
   let erros = 0;
 
   try {
-    const res = await db.execute(
+    const { rows } = await dbExecute(db,
       `SELECT co.id, co.numero_oc, co.total, co.subtotal, co.status, co.aprovacao_status,
               co.obra_id, co.fornecedor_nome, co.data_entrega_prevista, co.data_vencimento,
               co.forma_pagamento, co.condicao_pagamento, co.created_at,
@@ -1274,7 +1271,7 @@ export async function importComprasOrdensToFinancial(companyId: number, mesRef?:
          AND COALESCE(co.total::numeric, 0) > 0`,
       [companyId, targetMes]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
+    // rows extracted by dbExecute
 
     for (const r of rows) {
       if (await entryExists(db, companyId, "compra_oc", r.id)) continue;
@@ -1325,7 +1322,7 @@ export async function importFolhaRHToFinancial(companyId: number, mesRef?: strin
 
   try {
     // Lançamentos consolidados da folha (summary por período)
-    const res = await db.execute(
+    const { rows } = await dbExecute(db,
       `SELECT fl.id, fl."mesReferencia", fl."tipoLancamento", fl.status,
               fl."totalProventos", fl."totalDescontos", fl."totalLiquido", fl."totalFuncionarios"
        FROM folha_lancamentos fl
@@ -1335,7 +1332,7 @@ export async function importFolhaRHToFinancial(companyId: number, mesRef?: strin
          AND COALESCE(fl."totalProventos"::numeric, 0) > 0`,
       [companyId, targetMes]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
+    // rows extracted by dbExecute
 
     for (const r of rows) {
       if (await entryExists(db, companyId, "folha_rh", r.id)) continue;
@@ -1364,7 +1361,7 @@ export async function importFolhaRHToFinancial(companyId: number, mesRef?: strin
     }
 
     // Também importa registros individuais da payroll (funcionários com contracheque completo)
-    const res2 = await db.execute(
+    const { rows: rows2 } = await dbExecute(db,
       `SELECT p.id, p."mesReferencia", p."tipoFolha",
               p."salarioBruto", p."totalProventos", p.inss, p.irrf, p.fgts
        FROM payroll p
@@ -1373,7 +1370,6 @@ export async function importFolhaRHToFinancial(companyId: number, mesRef?: strin
          AND COALESCE(p."salarioBruto"::numeric, 0) > 0`,
       [companyId, targetMes]
     );
-    const rows2 = (res2 as any)?.rows ?? (res2 as any) ?? [];
 
     // Agrupa payroll por tipo_folha para não gerar um lançamento por funcionário
     const totaisPorTipo: Record<string, { total: number; fgts: number; inss: number; irrf: number; count: number }> = {};
@@ -1429,7 +1425,7 @@ export async function importPlanejamentoMedicoesToFinancial(companyId: number, m
   let erros = 0;
 
   try {
-    const res = await db.execute(
+    const { rows } = await dbExecute(db,
       `SELECT pm.id, pm.numero, pm.competencia, pm.valor_previsto, pm.valor_medido,
               pm.percentual_medido, pm.status,
               pp.nome AS projeto_nome, pp.cliente, pp.valor_contrato, pp.obra_id,
@@ -1444,7 +1440,7 @@ export async function importPlanejamentoMedicoesToFinancial(companyId: number, m
          AND COALESCE(pm.valor_medido::numeric, pm.valor_previsto::numeric, 0) > 0`,
       [companyId, targetMes]
     );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
+    // rows extracted by dbExecute
 
     for (const r of rows) {
       if (await entryExists(db, companyId, "planejamento_medicao", r.id)) continue;
