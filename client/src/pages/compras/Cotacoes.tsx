@@ -613,6 +613,8 @@ export default function Cotacoes() {
   const [confirmExcluirLote, setConfirmExcluirLote] = useState(false);
   const [abaAtiva, setAbaAtiva] = useState<"detalhes" | "mapa">("detalhes");
   const [showCancelarAprovacao, setShowCancelarAprovacao] = useState(false);
+  const [showGerarOCModeDialog, setShowGerarOCModeDialog] = useState(false);
+  const [pendingGerarOCParams, setPendingGerarOCParams] = useState<{ cotacaoId: number; autorizacaoSemVerba?: { adminId: number; adminNome: string; justificativa: string } } | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1882,10 +1884,11 @@ export default function Cotacoes() {
         );
         if (!ok) return;
       }
-      gerarOC.mutate({
-        companyId, cotacaoId, userId: user?.id, userName: user?.name,
+      setPendingGerarOCParams({
+        cotacaoId,
         ...(semVerbaAutorizado ? { autorizacaoSemVerba: semVerbaAutorizado } : {}),
       });
+      setShowGerarOCModeDialog(true);
     }
 
     function handleAutorizarSemVerba() {
@@ -5034,7 +5037,7 @@ export default function Cotacoes() {
                   )}
                   {detalhe.status === "pendente" && (detalhe as any).tipo !== "servico" && (
                     <>
-                      <Button size="sm" onClick={() => { if (!validarCondicoesVencedor()) return; gerarOC.mutate({ companyId, cotacaoId: detalhe.id, userId: user?.id, userName: user?.name }); }} disabled={gerarOC.isPending}
+                      <Button size="sm" onClick={() => { if (!validarCondicoesVencedor()) return; setPendingGerarOCParams({ cotacaoId: detalhe.id }); setShowGerarOCModeDialog(true); }} disabled={gerarOC.isPending}
                         className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs gap-1">
                         <CheckCircle className="h-3 w-3" /> Aprovar e Gerar OC
                       </Button>
@@ -5482,6 +5485,48 @@ export default function Cotacoes() {
         </div>,
         document.body
       )}
+
+    {/* Dialog — como gerar OC: confirmar ou rascunho */}
+    <Dialog open={showGerarOCModeDialog} onOpenChange={v => { if (!v) { setShowGerarOCModeDialog(false); setPendingGerarOCParams(null); } }}>
+      <DialogContent className="border-gray-200 max-w-md" style={{ background: "#fff", color: "#111827" }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-gray-900">
+            <CheckCircle className="h-5 w-5 text-emerald-500" /> Gerar Ordem de Compra
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-gray-600 py-2">
+          Como você quer gerar a OC desta cotação?
+        </p>
+        <div className="grid grid-cols-2 gap-3 pb-2">
+          <button
+            onClick={() => { if (!pendingGerarOCParams) return; gerarOC.mutate({ companyId, userId: user?.id, userName: user?.name, ...pendingGerarOCParams }); setShowGerarOCModeDialog(false); setPendingGerarOCParams(null); }}
+            disabled={gerarOC.isPending}
+            className="flex flex-col items-center gap-2 rounded-lg border-2 border-emerald-300 bg-emerald-50 p-4 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+          >
+            <CheckCircle className="h-7 w-7 text-emerald-600" />
+            <span className="text-sm font-semibold text-emerald-800">Confirmar diretamente</span>
+            <span className="text-xs text-emerald-600 text-center">A OC é criada como <strong>Pendente</strong> e entra no fluxo de aprovação</span>
+          </button>
+          <button
+            onClick={() => { if (!pendingGerarOCParams) return; gerarOC.mutate({ companyId, userId: user?.id, userName: user?.name, ...pendingGerarOCParams, comoRascunho: true }); setShowGerarOCModeDialog(false); setPendingGerarOCParams(null); }}
+            disabled={gerarOC.isPending}
+            className="flex flex-col items-center gap-2 rounded-lg border-2 border-yellow-300 bg-yellow-50 p-4 hover:bg-yellow-100 transition-colors disabled:opacity-50"
+          >
+            <Save className="h-7 w-7 text-yellow-600" />
+            <span className="text-sm font-semibold text-yellow-800">Salvar como Rascunho</span>
+            <span className="text-xs text-yellow-600 text-center">A OC fica como <strong>Rascunho</strong> para você revisar e confirmar depois</span>
+          </button>
+        </div>
+        {gerarOC.isPending && (
+          <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+            <Loader2 className="h-4 w-4 animate-spin" /> Gerando OC...
+          </div>
+        )}
+        <DialogFooter>
+          <button onClick={() => { setShowGerarOCModeDialog(false); setPendingGerarOCParams(null); }} className="text-sm text-gray-500 hover:text-gray-700">Cancelar</button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     </div>
     </DashboardLayout>

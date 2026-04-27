@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -18,18 +18,19 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, Check, Paperclip, Upload, X, FileText } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
-  pendente:         { label: "Pendente",           cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  aprovada:         { label: "Aprovada",            cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  rascunho:         { label: "Rascunho",            cls: "bg-yellow-50 text-yellow-700 border-yellow-200" },
+  pendente:         { label: "Pendente",             cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  aprovada:         { label: "Aprovada",             cls: "bg-blue-50 text-blue-700 border-blue-200" },
   aguardando_aprovacao_extra: { label: "Aguardando Admin", cls: "bg-red-50 text-red-700 border-red-200" },
-  entregue_parcial: { label: "Entrega Parcial",     cls: "bg-orange-50 text-orange-700 border-orange-200" },
-  entregue:         { label: "Entregue",            cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  cancelada:        { label: "Cancelada",           cls: "bg-gray-100 text-gray-500 border-gray-200" },
+  entregue_parcial: { label: "Entrega Parcial",      cls: "bg-orange-50 text-orange-700 border-orange-200" },
+  entregue:         { label: "Entregue",             cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  cancelada:        { label: "Cancelada",            cls: "bg-gray-100 text-gray-500 border-gray-200" },
 };
 
 const UNIDADES = ["un", "m", "m²", "m³", "kg", "L", "cx", "pç", "sc", "gl", "vb"];
@@ -130,6 +131,8 @@ export default function Ordens() {
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroAtrasadas, setFiltroAtrasadas] = useState(false);
   const [showNova, setShowNova] = useState(false);
+  const [rascunhoId, setRascunhoId] = useState<number | null>(null);
+  const [showGuardDialog, setShowGuardDialog] = useState(false);
   const [showDetalhe, setShowDetalhe] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [confirmExcluirLote, setConfirmExcluirLote] = useState(false);
@@ -210,6 +213,25 @@ export default function Ordens() {
 
   const criarManual = trpc.compras.criarOrdemManual.useMutation({
     onSuccess: () => { toast.success("Ordem de Compra criada!"); setShowNova(false); resetForm(); q.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const salvarRascunhoMut = trpc.compras.salvarRascunhoOrdem.useMutation({
+    onSuccess: (res) => {
+      if (!rascunhoId) setRascunhoId(res.id);
+      toast.success("Rascunho salvo!");
+      q.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const confirmarRascunhoMut = trpc.compras.confirmarRascunhoOrdem.useMutation({
+    onSuccess: (res) => {
+      toast.success(`OC ${res.numeroOc} criada com sucesso!`);
+      setShowNova(false);
+      setShowDetalhe(null);
+      resetForm();
+      q.refetch();
+      detalheQ.refetch();
+    },
     onError: (e) => toast.error(e.message),
   });
   const atualizarStatus = trpc.compras.atualizarStatusOrdem.useMutation({
@@ -307,6 +329,109 @@ export default function Ordens() {
     setNumParc(1);
     setParcelas([]);
     setAnexosForm([]);
+    setRascunhoId(null);
+  }
+
+  function formHasData() {
+    const temCampo = Object.values(form).some(v => v !== "");
+    const temItem = itens.some(i => i.descricao.trim() || i.precoUnitario !== "");
+    return temCampo || temItem || rascunhoId !== null;
+  }
+
+  function handleCloseGuard() {
+    if (formHasData()) {
+      setShowGuardDialog(true);
+    } else {
+      setShowNova(false);
+      resetForm();
+    }
+  }
+
+  function buildRascunhoPayload() {
+    const validos = itens.filter(i => i.descricao.trim());
+    return {
+      id: rascunhoId ?? undefined,
+      companyId,
+      obraId: form.obraId && form.obraId !== "none" ? parseInt(form.obraId) : undefined,
+      fornecedorId: form.fornecedorId && form.fornecedorId !== "none" ? parseInt(form.fornecedorId) : undefined,
+      numeroNf: form.numeroNf || undefined,
+      formaPagamento: form.formaPagamento || undefined,
+      contaBancariaId: form.contaBancariaId ? parseInt(form.contaBancariaId) : undefined,
+      condicaoPagamento: form.condicaoPagamento || undefined,
+      numeroParcelas: numParc,
+      parcelasJson: parcelas.length > 0 ? parcelas.map(p => ({ numero: p.numero, vencimento: p.vencimento || undefined, valor: parseFloat(p.valor) || 0 })) : undefined,
+      prazoEntregaDias: parseInt((form as any).prazoEntregaDias) || undefined,
+      dataEntregaPrevista: form.dataEntregaPrevista || undefined,
+      dataVencimento: form.dataVencimento || undefined,
+      observacoes: form.observacoes || undefined,
+      frete: parseFloat(form.frete) || 0,
+      outrasDespesas: parseFloat(form.outrasDespesas) || 0,
+      impostos: parseFloat(form.impostos) || 0,
+      desconto: parseFloat(form.desconto) || 0,
+      userId: user?.id,
+      userName: user?.name,
+      anexos: anexosForm.length > 0 ? anexosForm : undefined,
+      itens: validos.map(i => ({
+        descricao: i.descricao,
+        unidade: i.unidade,
+        quantidade: parseFloat(i.quantidade) || 1,
+        precoUnitario: parseFloat(i.precoUnitario) || 0,
+        insumoCodigo: i.eapCodigo ?? undefined,
+      })),
+    };
+  }
+
+  async function handleSalvarRascunho() {
+    try {
+      const res = await salvarRascunhoMut.mutateAsync(buildRascunhoPayload());
+      if (!rascunhoId) setRascunhoId(res.id);
+    } catch { /* handled by onError */ }
+  }
+
+  async function handleSalvarRascunhoEFechar() {
+    try {
+      const res = await salvarRascunhoMut.mutateAsync(buildRascunhoPayload());
+      if (!rascunhoId) setRascunhoId(res.id);
+      setShowGuardDialog(false);
+      setShowNova(false);
+      resetForm();
+    } catch { /* handled by onError */ }
+  }
+
+  function abrirEditarRascunho(ocDetalhe: any) {
+    setRascunhoId(ocDetalhe.id);
+    setForm({
+      obraId: ocDetalhe.obraId ? String(ocDetalhe.obraId) : "",
+      fornecedorId: ocDetalhe.fornecedorId ? String(ocDetalhe.fornecedorId) : "",
+      dataEntregaPrevista: ocDetalhe.dataEntregaPrevista ?? "",
+      dataVencimento: (ocDetalhe as any).dataVencimento ?? "",
+      observacoes: ocDetalhe.observacoes ?? "",
+      frete: ocDetalhe.frete && ocDetalhe.frete !== "0.00" ? String(parseFloat(ocDetalhe.frete)) : "",
+      outrasDespesas: ocDetalhe.outrasDespesas && ocDetalhe.outrasDespesas !== "0.00" ? String(parseFloat(ocDetalhe.outrasDespesas)) : "",
+      impostos: ocDetalhe.impostos && ocDetalhe.impostos !== "0.00" ? String(parseFloat(ocDetalhe.impostos)) : "",
+      desconto: ocDetalhe.desconto && ocDetalhe.desconto !== "0.00" ? String(parseFloat(ocDetalhe.desconto)) : "",
+      condicaoPagamento: ocDetalhe.condicaoPagamento ?? "",
+      prazoEntregaDias: "",
+      numeroNf: ocDetalhe.numeroNf ?? "",
+      formaPagamento: (ocDetalhe as any).formaPagamento ?? "",
+      contaBancariaId: (ocDetalhe as any).contaBancariaId ? String((ocDetalhe as any).contaBancariaId) : "",
+    });
+    if (ocDetalhe.itens && ocDetalhe.itens.length > 0) {
+      setItens(ocDetalhe.itens.map((it: any) => ({
+        descricao: it.descricao,
+        unidade: it.unidade ?? "un",
+        quantidade: String(it.quantidade),
+        precoUnitario: String(it.precoUnitario),
+        eapCodigo: (it as any).insumoCodigo ?? undefined,
+      })));
+    } else {
+      setItens([newItem()]);
+    }
+    setAnexosForm((ocDetalhe.anexos as AnexoOC[]) ?? []);
+    setNumParc(ocDetalhe.numeroParcelas ?? 1);
+    setParcelas((ocDetalhe as any).parcelasJson ?? []);
+    setShowDetalhe(null);
+    setShowNova(true);
   }
 
   function handleSalvar() {
@@ -315,6 +440,38 @@ export default function Ordens() {
     if (!(form as any).prazoEntregaDias && !form.dataEntregaPrevista) return toast.error("Informe o Prazo de Entrega para gerar a OC.");
     const validos = itens.filter(i => i.descricao.trim());
     if (validos.length === 0) return toast.error("Adicione pelo menos um item.");
+    if (rascunhoId) {
+      confirmarRascunhoMut.mutate({
+        id: rascunhoId,
+        companyId,
+        obraId: parseInt(form.obraId),
+        fornecedorId: form.fornecedorId && form.fornecedorId !== "none" ? parseInt(form.fornecedorId) : undefined,
+        numeroNf: form.numeroNf || undefined,
+        formaPagamento: form.formaPagamento || undefined,
+        contaBancariaId: form.contaBancariaId ? parseInt(form.contaBancariaId) : undefined,
+        condicaoPagamento: form.condicaoPagamento,
+        numeroParcelas: numParc,
+        parcelasJson: parcelas.length > 0 ? parcelas.map(p => ({ numero: p.numero, vencimento: p.vencimento || undefined, valor: parseFloat(p.valor) || 0 })) : undefined,
+        dataEntregaPrevista: form.dataEntregaPrevista || undefined,
+        dataVencimento: form.dataVencimento || undefined,
+        observacoes: form.observacoes || undefined,
+        frete: parseFloat(form.frete) || 0,
+        outrasDespesas: parseFloat(form.outrasDespesas) || 0,
+        impostos: parseFloat(form.impostos) || 0,
+        desconto: parseFloat(form.desconto) || 0,
+        userId: user?.id,
+        userName: user?.name,
+        anexos: anexosForm.length > 0 ? anexosForm : undefined,
+        itens: validos.map(i => ({
+          descricao: i.descricao,
+          unidade: i.unidade,
+          quantidade: parseFloat(i.quantidade) || 1,
+          precoUnitario: parseFloat(i.precoUnitario) || 0,
+          insumoCodigo: i.eapCodigo ?? undefined,
+        })),
+      });
+      return;
+    }
     criarManual.mutate({
       companyId,
       obraId: parseInt(form.obraId),
@@ -459,9 +616,9 @@ export default function Ordens() {
           <Input placeholder="Buscar por número..." className="pl-9 bg-white border-gray-300 text-gray-900" value={busca} onChange={e => setBusca(e.target.value)} />
         </div>
         <div className="flex gap-2 flex-wrap">
-          {["todos", "pendente", "aprovada", "entregue_parcial", "entregue", "cancelada"].map(s => (
+          {["todos", "rascunho", "pendente", "aprovada", "entregue_parcial", "entregue", "cancelada"].map(s => (
             <button key={s} onClick={() => { setFiltroStatus(s); setFiltroAtrasadas(false); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroStatus === s && !filtroAtrasadas ? "bg-emerald-600 border-emerald-500 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-gray-400"}`}>
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroStatus === s && !filtroAtrasadas ? (s === "rascunho" ? "bg-yellow-500 border-yellow-400 text-white" : "bg-emerald-600 border-emerald-500 text-white") : (s === "rascunho" ? "bg-yellow-50 border-yellow-300 text-yellow-700 hover:border-yellow-400" : "bg-white border-gray-300 text-gray-600 hover:border-gray-400")}`}>
               {s === "todos" ? "Todos" : STATUS_LABELS[s]?.label}
             </button>
           ))}
@@ -618,9 +775,9 @@ export default function Ordens() {
       {/* Dialog Nova OC Manual */}
       <FullScreenDialog
         open={showNova}
-        onClose={() => { setShowNova(false); resetForm(); }}
-        title="Nova Ordem de Compra (Manual)"
-        subtitle="Preencha os dados da OC"
+        onClose={handleCloseGuard}
+        title={rascunhoId ? "Editar Rascunho de OC" : "Nova Ordem de Compra (Manual)"}
+        subtitle={rascunhoId ? "Complete as informações do rascunho" : "Preencha os dados da OC"}
         icon={<ShoppingBag className="h-5 w-5 text-white" />}
         headerColor="bg-gradient-to-r from-emerald-700 to-emerald-500"
       >
@@ -1049,13 +1206,41 @@ export default function Ordens() {
             </div>
 
             <div className="flex gap-3 pt-2">
-              <Button variant="outline" onClick={() => { setShowNova(false); resetForm(); }} className="flex-1 border-gray-300 text-gray-600 hover:bg-gray-50">Cancelar</Button>
-              <Button onClick={handleSalvar} disabled={criarManual.isPending} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white">
-                {criarManual.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Criar OC"}
+              <Button variant="outline" onClick={handleCloseGuard} className="border-gray-300 text-gray-600 hover:bg-gray-50">Cancelar</Button>
+              <Button variant="outline" onClick={handleSalvarRascunho} disabled={salvarRascunhoMut.isPending} className="border-yellow-400 text-yellow-700 hover:bg-yellow-50 gap-1.5">
+                {salvarRascunhoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Salvar Rascunho
+              </Button>
+              <Button onClick={handleSalvar} disabled={criarManual.isPending || confirmarRascunhoMut.isPending} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5">
+                {(criarManual.isPending || confirmarRascunhoMut.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
+                {rascunhoId ? "Confirmar OC" : "Criar OC"}
               </Button>
             </div>
           </div>
       </FullScreenDialog>
+
+      {/* Guard dialog — fechar formulário com dados não salvos */}
+      <Dialog open={showGuardDialog} onOpenChange={setShowGuardDialog}>
+        <DialogContent className="border-gray-200 max-w-md" style={{ background: "#fff", color: "#111827" }}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-gray-900">
+              <Save className="h-5 w-5 text-yellow-500" /> Salvar rascunho?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 py-2">
+            Você preencheu alguns dados nesta OC. Deseja salvá-la como rascunho para continuar editando mais tarde, ou descartar tudo?
+          </p>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => { setShowGuardDialog(false); setShowNova(false); resetForm(); }} className="border-red-200 text-red-600 hover:bg-red-50">
+              <Trash2 className="h-4 w-4 mr-1.5" /> Descartar
+            </Button>
+            <Button onClick={handleSalvarRascunhoEFechar} disabled={salvarRascunhoMut.isPending} className="bg-yellow-500 hover:bg-yellow-400 text-white gap-1.5">
+              {salvarRascunhoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar Rascunho
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog Detalhe OC */}
       <Dialog open={showDetalhe !== null} onOpenChange={v => !v && setShowDetalhe(null)}>
@@ -1083,6 +1268,26 @@ export default function Ordens() {
             const semaforoDetalhe = calcularSemaforo(detalhe.dataEntregaPrevista, detalhe.dataEntregaReal, detalhe.status, detalhe.proximaEntregaProgramada);
             return (
               <div className="space-y-5 pt-2">
+                {detalhe.status === "rascunho" && (
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-lg border-2 border-yellow-300 bg-yellow-50 p-4">
+                    <div className="flex items-center gap-2 flex-1">
+                      <Save className="h-5 w-5 text-yellow-600 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-bold text-yellow-800">OC em Rascunho</p>
+                        <p className="text-xs text-yellow-700">Esta OC está salva como rascunho. Edite e confirme quando estiver pronta.</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => abrirEditarRascunho(detalhe)} className="border-yellow-400 text-yellow-700 hover:bg-yellow-100 gap-1.5">
+                        <Edit3 className="h-3.5 w-3.5" /> Editar Rascunho
+                      </Button>
+                      <Button size="sm" onClick={() => confirmarRascunhoMut.mutate({ id: detalhe.id, companyId })} disabled={confirmarRascunhoMut.isPending} className="bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5">
+                        {confirmarRascunhoMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ClipboardCheck className="h-3.5 w-3.5" />}
+                        Confirmar OC
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 {semaforoDetalhe.status === "atrasado" && (() => {
                   const isTerceiro = ["servico", "pacote"].includes((detalhe as any)?.tipo);
                   const termoEntrega = isTerceiro ? "Mobilização" : "Entrega";

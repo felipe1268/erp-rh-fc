@@ -4689,6 +4689,7 @@ Retorne APENAS um JSON válido neste formato:
     .input(z.object({
       companyId: z.number(), cotacaoId: z.number(), userId: z.number().optional(), userName: z.string().optional(),
       autorizacaoSemVerba: z.object({ adminId: z.number(), adminNome: z.string(), justificativa: z.string() }).optional(),
+      comoRascunho: z.boolean().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -4848,8 +4849,8 @@ Retorne APENAS um JSON válido neste formato:
         criadoPorId: input.userId ?? null,
         criadoPorNome: input.userName ?? null,
         tipo: ordemTipo,
-        status: extraAprovacaoRequerida ? "aguardando_aprovacao_extra" : "aprovada",
-        aprovacaoStatus: extraAprovacaoRequerida ? "aguardando_admin" : "aprovado",
+        status: input.comoRascunho ? "rascunho" : (extraAprovacaoRequerida ? "aguardando_aprovacao_extra" : "aprovada"),
+        aprovacaoStatus: input.comoRascunho ? "aguardando" : (extraAprovacaoRequerida ? "aguardando_admin" : "aprovado"),
         aprovacaoExtraRequerida: extraAprovacaoRequerida,
         aprovacaoExtraMotivo: extraAprovacaoRequerida ? extraMotivo : null,
         subtotal: String(subtotal.toFixed(2)),
@@ -4880,6 +4881,11 @@ Retorne APENAS um JSON válido neste formato:
           aprovacaoExtraEm: new Date().toISOString(),
         } : {}),
       } as any).returning();
+
+      // Rascunho: skip financial sync and downstream actions
+      if (input.comoRascunho) {
+        return { id: oc.id, numeroOc, rascunho: true };
+      }
 
       // Gatilho financeiro — OC criada gera despesa imediatamente
       triggerFinancialSync(input.companyId);
@@ -5257,6 +5263,227 @@ Retorne APENAS um JSON válido neste formato:
       // Gatilho financeiro — OC manual criada gera despesa imediatamente
       triggerFinancialSync(input.companyId);
       return oc;
+    }),
+
+  salvarRascunhoOrdem: protectedProcedure
+    .input(z.object({
+      id: z.number().optional(),
+      companyId: z.number(),
+      obraId: z.number().nullable().optional(),
+      fornecedorId: z.number().nullable().optional(),
+      numeroNf: z.string().optional(),
+      formaPagamento: z.string().optional(),
+      contaBancariaId: z.number().nullable().optional(),
+      condicaoPagamento: z.string().optional(),
+      numeroParcelas: z.number().optional(),
+      parcelasJson: z.array(z.object({ numero: z.number(), vencimento: z.string().optional(), valor: z.number() })).optional(),
+      dataEntregaPrevista: z.string().nullable().optional(),
+      dataVencimento: z.string().nullable().optional(),
+      observacoes: z.string().optional(),
+      frete: z.number().optional(),
+      outrasDespesas: z.number().optional(),
+      impostos: z.number().optional(),
+      desconto: z.number().optional(),
+      userId: z.number().optional(),
+      userName: z.string().optional(),
+      anexos: z.array(z.object({ url: z.string(), nome: z.string(), tipo: z.string(), ts: z.number() })).optional(),
+      itens: z.array(z.object({
+        descricao: z.string(),
+        unidade: z.string().optional(),
+        quantidade: z.number(),
+        precoUnitario: z.number(),
+        insumoCodigo: z.string().optional(),
+      })).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const n = (v: any) => parseFloat(String(v ?? "0")) || 0;
+      const subtotal = (input.itens ?? []).reduce((s, it) => s + n(it.quantidade) * n(it.precoUnitario), 0);
+      const frete = n(input.frete);
+      const outrasDespesas = n(input.outrasDespesas);
+      const impostos = n(input.impostos);
+      const desconto = n(input.desconto);
+      const total = subtotal + frete + outrasDespesas + impostos - desconto;
+      let fornecedorNome: string | null = null;
+      if (input.fornecedorId) {
+        const [f] = await db.select({ nomeFantasia: fornecedores.nomeFantasia, razaoSocial: fornecedores.razaoSocial })
+          .from(fornecedores).where(eq(fornecedores.id, input.fornecedorId));
+        fornecedorNome = f?.nomeFantasia || f?.razaoSocial || null;
+      }
+      const dadosUpdate = {
+        obraId: input.obraId ?? null,
+        fornecedorId: input.fornecedorId ?? null,
+        fornecedorNome,
+        numeroNf: input.numeroNf ?? null,
+        formaPagamento: input.formaPagamento ?? null,
+        contaBancariaId: input.contaBancariaId ?? null,
+        condicaoPagamento: input.condicaoPagamento ?? "",
+        numeroParcelas: input.numeroParcelas ?? 1,
+        parcelasJson: input.parcelasJson ? (input.parcelasJson as any) : null,
+        dataEntregaPrevista: input.dataEntregaPrevista ?? null,
+        dataVencimento: input.dataVencimento ?? null,
+        observacoes: input.observacoes ?? null,
+        frete: String(frete.toFixed(2)),
+        outrasDespesas: String(outrasDespesas.toFixed(2)),
+        impostos: String(impostos.toFixed(2)),
+        desconto: String(desconto.toFixed(2)),
+        subtotal: String(subtotal.toFixed(2)),
+        total: String(total.toFixed(2)),
+        anexos: input.anexos ? (input.anexos as any) : null,
+        atualizadoEm: new Date().toISOString(),
+      };
+      if (input.id) {
+        const [existing] = await db.select({ id: comprasOrdens.id, status: comprasOrdens.status })
+          .from(comprasOrdens).where(and(eq(comprasOrdens.id, input.id), eq(comprasOrdens.companyId, input.companyId)));
+        if (!existing || existing.status !== "rascunho") throw new TRPCError({ code: "FORBIDDEN", message: "OC não é um rascunho." });
+        await db.update(comprasOrdens).set(dadosUpdate as any).where(eq(comprasOrdens.id, input.id));
+        if (input.itens !== undefined) {
+          await db.delete(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
+          const validos = input.itens.filter(i => i.descricao?.trim());
+          if (validos.length > 0) {
+            await db.insert(comprasOrdensItens).values(validos.map(it => ({
+              ordemId: input.id!,
+              descricao: normalizarTexto(it.descricao),
+              unidade: it.unidade ?? "un",
+              quantidade: String(it.quantidade),
+              precoUnitario: String(it.precoUnitario),
+              total: String((n(it.quantidade) * n(it.precoUnitario)).toFixed(2)),
+              insumoCodigo: it.insumoCodigo ?? null,
+            })));
+          }
+        }
+        return { id: input.id };
+      } else {
+        const count = await db.select({ c: sql<number>`count(*)` })
+          .from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
+        const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+        const numeroOc = `RASCUNHO-${new Date().getFullYear()}-${seq}`;
+        const [oc] = await db.insert(comprasOrdens).values({
+          companyId: input.companyId,
+          numeroOc,
+          status: "rascunho",
+          aprovacaoStatus: "aguardando",
+          criadoPorId: input.userId ?? null,
+          criadoPorNome: input.userName ?? null,
+          ...dadosUpdate,
+        } as any).returning();
+        const validos = (input.itens ?? []).filter(i => i.descricao?.trim());
+        if (validos.length > 0) {
+          await db.insert(comprasOrdensItens).values(validos.map(it => ({
+            ordemId: oc.id,
+            descricao: normalizarTexto(it.descricao),
+            unidade: it.unidade ?? "un",
+            quantidade: String(it.quantidade),
+            precoUnitario: String(it.precoUnitario),
+            total: String((n(it.quantidade) * n(it.precoUnitario)).toFixed(2)),
+            insumoCodigo: it.insumoCodigo ?? null,
+          })));
+        }
+        return { id: oc.id };
+      }
+    }),
+
+  confirmarRascunhoOrdem: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      obraId: z.number().nullable().optional(),
+      fornecedorId: z.number().nullable().optional(),
+      numeroNf: z.string().optional(),
+      formaPagamento: z.string().optional(),
+      contaBancariaId: z.number().nullable().optional(),
+      condicaoPagamento: z.string().optional(),
+      numeroParcelas: z.number().optional(),
+      parcelasJson: z.array(z.object({ numero: z.number(), vencimento: z.string().optional(), valor: z.number() })).optional(),
+      dataEntregaPrevista: z.string().nullable().optional(),
+      dataVencimento: z.string().nullable().optional(),
+      observacoes: z.string().optional(),
+      frete: z.number().optional(),
+      outrasDespesas: z.number().optional(),
+      impostos: z.number().optional(),
+      desconto: z.number().optional(),
+      userId: z.number().optional(),
+      userName: z.string().optional(),
+      anexos: z.array(z.object({ url: z.string(), nome: z.string(), tipo: z.string(), ts: z.number() })).optional(),
+      itens: z.array(z.object({
+        descricao: z.string(),
+        unidade: z.string().optional(),
+        quantidade: z.number(),
+        precoUnitario: z.number(),
+        insumoCodigo: z.string().optional(),
+      })).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const n = (v: any) => parseFloat(String(v ?? "0")) || 0;
+      const [oc] = await db.select().from(comprasOrdens)
+        .where(and(eq(comprasOrdens.id, input.id), eq(comprasOrdens.companyId, input.companyId)));
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND" });
+      if (oc.status !== "rascunho") throw new TRPCError({ code: "BAD_REQUEST", message: "OC não está em modo rascunho." });
+      const obraIdFinal = input.obraId ?? oc.obraId;
+      const condPagFinal = input.condicaoPagamento ?? oc.condicaoPagamento ?? "";
+      if (!obraIdFinal) throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione a Obra antes de confirmar a OC." });
+      if (!condPagFinal.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe a Condição de Pagamento antes de confirmar a OC." });
+      // Generate proper OC number (excluding rascunho OCs from count)
+      const count = await db.select({ c: sql<number>`count(*)` })
+        .from(comprasOrdens)
+        .where(and(eq(comprasOrdens.companyId, input.companyId), sql`${comprasOrdens.status} != 'rascunho'`));
+      const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+      const numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
+      const subtotal = (input.itens !== undefined ? input.itens : []).reduce((s, it) => s + n(it.quantidade) * n(it.precoUnitario), 0);
+      const frete = n(input.frete ?? oc.frete);
+      const outrasDespesas = n(input.outrasDespesas ?? oc.outrasDespesas);
+      const impostos = n(input.impostos ?? oc.impostos);
+      const desconto = n(input.desconto ?? oc.desconto);
+      const total = (input.itens !== undefined ? subtotal : n(oc.subtotal)) + frete + outrasDespesas + impostos - desconto;
+      let fornecedorNome: string | null = oc.fornecedorNome ?? null;
+      const fornIdFinal = input.fornecedorId ?? oc.fornecedorId;
+      if (input.fornecedorId !== undefined && input.fornecedorId) {
+        const [f] = await db.select({ nomeFantasia: fornecedores.nomeFantasia, razaoSocial: fornecedores.razaoSocial })
+          .from(fornecedores).where(eq(fornecedores.id, input.fornecedorId));
+        fornecedorNome = f?.nomeFantasia || f?.razaoSocial || null;
+      }
+      await db.update(comprasOrdens).set({
+        status: "pendente",
+        numeroOc,
+        obraId: obraIdFinal,
+        fornecedorId: fornIdFinal,
+        fornecedorNome,
+        numeroNf: input.numeroNf ?? oc.numeroNf ?? null,
+        formaPagamento: input.formaPagamento ?? (oc as any).formaPagamento ?? null,
+        contaBancariaId: input.contaBancariaId ?? (oc as any).contaBancariaId ?? null,
+        condicaoPagamento: condPagFinal,
+        numeroParcelas: input.numeroParcelas ?? oc.numeroParcelas ?? 1,
+        parcelasJson: input.parcelasJson ? (input.parcelasJson as any) : (oc as any).parcelasJson,
+        dataEntregaPrevista: input.dataEntregaPrevista ?? oc.dataEntregaPrevista ?? null,
+        dataVencimento: input.dataVencimento ?? (oc as any).dataVencimento ?? null,
+        observacoes: input.observacoes ?? oc.observacoes ?? null,
+        frete: String(frete.toFixed(2)),
+        outrasDespesas: String(outrasDespesas.toFixed(2)),
+        impostos: String(impostos.toFixed(2)),
+        desconto: String(desconto.toFixed(2)),
+        subtotal: String((input.itens !== undefined ? subtotal : n(oc.subtotal)).toFixed(2)),
+        total: String(total.toFixed(2)),
+        anexos: input.anexos ? (input.anexos as any) : (oc as any).anexos,
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(eq(comprasOrdens.id, input.id));
+      if (input.itens !== undefined) {
+        await db.delete(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
+        const validos = input.itens.filter(i => i.descricao?.trim());
+        if (validos.length > 0) {
+          await db.insert(comprasOrdensItens).values(validos.map(it => ({
+            ordemId: input.id,
+            descricao: normalizarTexto(it.descricao),
+            unidade: it.unidade ?? "un",
+            quantidade: String(it.quantidade),
+            precoUnitario: String(it.precoUnitario),
+            total: String((n(it.quantidade) * n(it.precoUnitario)).toFixed(2)),
+            insumoCodigo: it.insumoCodigo ?? null,
+          })));
+        }
+      }
+      triggerFinancialSync(input.companyId);
+      return { id: input.id, numeroOc };
     }),
 
   atualizarOrdem: protectedProcedure
