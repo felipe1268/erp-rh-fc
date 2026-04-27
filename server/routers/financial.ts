@@ -2557,7 +2557,7 @@ export const financialRouter = router({
       FROM planejamento_projetos pp
       LEFT JOIN obras o ON o.id = pp.obra_id
       WHERE pp.company_id = $1
-        AND pp.deleted_at IS NULL
+        AND pp.status NOT IN ('cancelado','encerrado','Cancelado','Encerrado')
       ORDER BY COALESCE(o.nome, pp.nome) ASC
     `, [input.companyId]);
     const projetos = projRes.rows;
