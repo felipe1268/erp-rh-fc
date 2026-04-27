@@ -816,38 +816,57 @@ export const planejamentoRouter = router({
       });
 
       // ─── Importar % Concluído do arquivo como avanço da semana atual ─────────
-      // Quando o usuário importa um .mpp atualizado, o percentConcluido de cada
-      // atividade é salvo em planejamento_avancos para a segunda-feira da semana
-      // atual, garantindo que o Realizado do sistema reflita o arquivo do Project.
       const atividadesComAvanco = input.atividades.filter(a => (a.percentConcluido ?? 0) > 0 && !a.isGrupo);
+      console.log(`[ImportAvanco] total atividades=${input.atividades.length} com_avanco=${atividadesComAvanco.length}`);
+
       if (atividadesComAvanco.length > 0) {
         // Calcula a segunda-feira da semana atual (ISO)
         const hoje = new Date();
-        const diaSemana = hoje.getUTCDay(); // 0=dom,1=seg,...,6=sab
+        const diaSemana = hoje.getUTCDay();
         const diffParaSeg = diaSemana === 0 ? -6 : 1 - diaSemana;
         const segunda = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate() + diffParaSeg));
         const semanaIso = segunda.toISOString().slice(0, 10);
 
-        // Busca IDs das atividades salvas por eapCodigo nesta revisão
+        // Busca TODAS as atividades desta revisão (por eapCodigo E por nome, para fallback)
         const atividadesSalvas = await db.select({
           id: planejamentoAtividades.id,
           eapCodigo: planejamentoAtividades.eapCodigo,
+          nome: planejamentoAtividades.nome,
         }).from(planejamentoAtividades)
           .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
 
+        console.log(`[ImportAvanco] atividades salvas na revisão ${input.revisaoId}: ${atividadesSalvas.length}`);
+
+        // Índice por eapCodigo (primário) e nome (fallback)
         const eapToId = new Map<string, number>();
-        for (const a of atividadesSalvas) eapToId.set(a.eapCodigo ?? "", a.id);
+        const nomeToId = new Map<string, number>();
+        for (const a of atividadesSalvas) {
+          if (a.eapCodigo) eapToId.set(a.eapCodigo.trim(), a.id);
+          if (a.nome) nomeToId.set(a.nome.trim().toLowerCase(), a.id);
+        }
 
         const userName = (ctx as any).user?.name ?? "Importação MS Project";
+        let inseridos = 0;
+        let atualizados = 0;
+        let naoEncontrados = 0;
 
         for (const a of atividadesComAvanco) {
-          const eap = a.eapCodigo || "";
-          const atividadeId = eapToId.get(eap);
-          if (!atividadeId) continue;
+          const eap = (a.eapCodigo || "").trim();
+          const nome = (a.nome || "").trim().toLowerCase();
+          // Tenta por EAP primeiro, depois por nome
+          const atividadeId = eapToId.get(eap) ?? nomeToId.get(nome);
+
+          if (!atividadeId) {
+            naoEncontrados++;
+            if (naoEncontrados <= 3) {
+              console.log(`[ImportAvanco] não encontrou: eap="${eap}" nome="${a.nome}" pct=${a.percentConcluido}`);
+            }
+            continue;
+          }
+
           const pct = String((a.percentConcluido ?? 0).toFixed(4));
 
-          // Verifica se já existe registro para esta atividade nesta semana
-          const [existente] = await db.select({ id: planejamentoAvancos.id, percentualAcumulado: planejamentoAvancos.percentualAcumulado })
+          const [existente] = await db.select({ id: planejamentoAvancos.id })
             .from(planejamentoAvancos)
             .where(and(
               eq(planejamentoAvancos.atividadeId, atividadeId),
@@ -858,8 +877,8 @@ export const planejamentoRouter = router({
             await db.update(planejamentoAvancos)
               .set({ percentualAcumulado: pct, criadoPor: userName })
               .where(eq(planejamentoAvancos.id, existente.id));
+            atualizados++;
           } else {
-            // Busca último avanço registrado para calcular % semanal incremental
             const [ultimo] = await db.select({ percentualAcumulado: planejamentoAvancos.percentualAcumulado })
               .from(planejamentoAvancos)
               .where(and(
@@ -881,8 +900,11 @@ export const planejamentoRouter = router({
               observacao:          "Importado do MS Project",
               criadoPor:           userName,
             });
+            inseridos++;
           }
         }
+
+        console.log(`[ImportAvanco] semana=${semanaIso} inseridos=${inseridos} atualizados=${atualizados} não_encontrados=${naoEncontrados}`);
       }
 
       // ─── REGRA DE OURO: Sincroniza cronograma financeiro automaticamente ──
