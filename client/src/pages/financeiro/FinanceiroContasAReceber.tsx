@@ -107,7 +107,7 @@ export default function FinanceiroContasAReceber() {
   // ─── Query ─────────────────────────────────────────────────────────────────
   const { data, isLoading, refetch } = (trpc as any).financial.getContasReceberMatrix.useQuery(
     { companyId, ano },
-    { enabled: !!companyId, staleTime: 30_000 }
+    { enabled: !!companyId, staleTime: 0, refetchOnWindowFocus: true }
   );
 
   const mesesChave = MESES_CHAVE(ano);

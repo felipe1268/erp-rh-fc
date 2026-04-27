@@ -2589,6 +2589,7 @@ export const financialRouter = router({
     `, []);
     const configByProjeto: Record<number, any> = {};
     for (const c of configRes.rows) configByProjeto[Number(c.projeto_id)] = c;
+    console.log(`[ContasReceber] configs=${configRes.rows.length}`, configRes.rows.map((c: any) => `pid=${c.projeto_id} tipo=${c.tipo_medicao} entrada=${c.entrada} parcelas=${c.numero_parcelas} inicio=${c.inicio_faturamento}`).join(" | "));
 
     // 3. Distribuição mensal de venda bruta via cruzamento atividades×orçamento
     //    Cobre o timeline completo do projeto (todos os meses, não só o ano atual)
@@ -2854,6 +2855,15 @@ export const financialRouter = router({
           prevByProjeto[pid][proxMes] = (prevByProjeto[pid][proxMes] ?? 0) + parseFloat(totalRetencao.toFixed(2));
         }
       }
+    }
+
+    // debug: mostra resultado do cálculo por projeto
+    for (const p of projetos) {
+      const pid = Number(p.projeto_id);
+      const cfg = configByProjeto[pid];
+      const prevMeses = prevByProjeto[pid] ?? {};
+      const totalPrev = Object.values(prevMeses).reduce((s: number, v) => s + (v as number), 0);
+      console.log(`[ContasReceber]   pid=${pid} tipo=${cfg?.tipo_medicao ?? "avanco(sem config)"} totalPrev=${totalPrev.toFixed(0)} meses=[${Object.entries(prevMeses).map(([m, v]) => `${m}:${(v as number).toFixed(0)}`).join(",")}]`);
     }
 
     // 6. Mapa medições salvas por projeto+mês
