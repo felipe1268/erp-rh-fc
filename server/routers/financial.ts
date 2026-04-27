@@ -2541,7 +2541,9 @@ export const financialRouter = router({
     return { sincronizados: count };
   }),
 
-  // ── Matriz Contas a Receber — espelho direto do cronograma financeiro ────
+  // ── Matriz Contas a Receber — espelho do cronograma financeiro ────────────
+  // Previsto = distribuição proporcional do valor_contrato pelo timeline das atividades
+  // Realizado = medições salvas (planejamento_medicoes) sobrepostas ao previsto
   getContasReceberMatrix: protectedProcedure.input(z.object({
     companyId: z.number(),
     ano: z.number(),
@@ -2549,69 +2551,240 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-    // 1. Busca todos os projetos ativos da empresa
+    // 1. Projetos ativos + orcamento total de venda
     const projRes = await dbExecute(db, `
       SELECT pp.id AS projeto_id, pp.nome AS projeto_nome, pp.cliente,
              pp.valor_contrato, pp.obra_id,
-             COALESCE(o.nome, pp.nome) AS obra_nome
+             COALESCE(o.nome, pp.nome) AS obra_nome,
+             COALESCE(orc.valor_negociado::numeric,
+                      orc."totalVenda"::numeric,
+                      pp.valor_contrato::numeric, 0) AS total_venda
       FROM planejamento_projetos pp
       LEFT JOIN obras o ON o.id = pp.obra_id
+      LEFT JOIN orcamentos orc ON orc.id = pp.orcamento_id
       WHERE pp.company_id = $1
         AND pp.status NOT IN ('cancelado','encerrado','Cancelado','Encerrado')
       ORDER BY COALESCE(o.nome, pp.nome) ASC
     `, [input.companyId]);
     const projetos = projRes.rows;
+    if (!projetos.length) return { projetos: [], totaisMes: {}, ano: input.ano, kpis: { totalContrato: 0, totalPrevisto: 0, totalFaturado: 0, totalRecebido: 0 } };
 
-    if (!projetos.length) return { projetos: [], totaisMes: {}, ano: input.ano };
-
-    // 2. Busca todas as medições do ano para esses projetos
-    const projetoIds = projetos.map((p: any) => p.projeto_id);
+    const projetoIds = projetos.map((p: any) => Number(p.projeto_id)).filter(Boolean);
     const idsStr = projetoIds.join(",");
+
+    // 2. Distribuição mensal prevista via cruzamento atividades × orçamento
+    //    Uma única query SQL calcula a fração de dias de cada par (item × atividade) por mês
+    const prevRes = await dbExecute(db, `
+      WITH rev_ativa AS (
+        SELECT DISTINCT ON (r.projeto_id) r.projeto_id, r.id AS rev_id
+        FROM planejamento_revisoes r
+        WHERE r.projeto_id IN (${idsStr}) AND r.status = 'aprovada'
+        ORDER BY r.projeto_id, r.numero DESC
+      ),
+      orc_scope AS (
+        SELECT i.*, p.id AS projeto_id
+        FROM orcamento_itens i
+        JOIN planejamento_projetos p ON p.orcamento_id = i."orcamentoId"
+        WHERE p.id IN (${idsStr})
+          AND (i."vendaTotal"::numeric > 0 OR i."custoTotalMat"::numeric > 0)
+      ),
+      folhas AS (
+        SELECT o.*
+        FROM orc_scope o
+        WHERE NOT EXISTS (
+          SELECT 1 FROM orc_scope c
+          WHERE c."eapCodigo" LIKE o."eapCodigo" || '.%'
+            AND c.id != o.id AND c.projeto_id = o.projeto_id
+        )
+      ),
+      norm_ativ AS (
+        SELECT a.projeto_id, a.id AS ativ_id,
+               a.data_inicio::date AS data_inicio, a.data_fim::date AS data_fim,
+               LOWER(REGEXP_REPLACE(TRIM(a.nome), '[[:space:]]+', ' ', 'g')) AS nome_norm
+        FROM planejamento_atividades a
+        JOIN rev_ativa ra ON ra.rev_id = a.revisao_id AND ra.projeto_id = a.projeto_id
+        WHERE NOT a.is_grupo AND a.data_inicio IS NOT NULL AND a.data_fim IS NOT NULL
+      ),
+      norm_name AS (
+        SELECT *, LOWER(REGEXP_REPLACE(TRIM(descricao), '[[:space:]]+', ' ', 'g')) AS nome_norm
+        FROM folhas
+      ),
+      match_exact AS (
+        SELECT i.id AS item_id, a.ativ_id, i.projeto_id
+        FROM norm_name i JOIN norm_ativ a ON a.nome_norm = i.nome_norm AND a.projeto_id = i.projeto_id
+      ),
+      match_contains AS (
+        SELECT i.id AS item_id, a.ativ_id, i.projeto_id
+        FROM norm_name i JOIN norm_ativ a
+          ON (a.nome_norm LIKE '%' || i.nome_norm || '%' OR i.nome_norm LIKE '%' || a.nome_norm || '%')
+          AND a.projeto_id = i.projeto_id
+        WHERE NOT EXISTS (SELECT 1 FROM match_exact m WHERE m.item_id = i.id)
+          AND LENGTH(i.nome_norm) >= 5 AND LENGTH(a.nome_norm) >= 5
+      ),
+      all_pairs AS (
+        SELECT i.projeto_id, i.id AS item_id,
+               (i."vendaTotal"::numeric / COUNT(*) OVER (PARTITION BY i.id)) AS venda_frac,
+               a.data_inicio, a.data_fim,
+               (a.data_fim - a.data_inicio + 1) AS dur_total
+        FROM folhas i
+        JOIN (SELECT * FROM match_exact UNION ALL SELECT * FROM match_contains) m ON m.item_id = i.id
+        JOIN norm_ativ a ON a.ativ_id = m.ativ_id
+      ),
+      proj_sums AS (
+        SELECT projeto_id, SUM(venda_frac) AS soma_venda
+        FROM all_pairs GROUP BY projeto_id
+      ),
+      -- Fallback: projetos sem cruzamento → distribuição linear por timeline das atividades
+      ativ_range AS (
+        SELECT na.projeto_id,
+               MIN(na.data_inicio) AS inicio, MAX(na.data_fim) AS fim,
+               (MAX(na.data_fim) - MIN(na.data_inicio) + 1) AS total_dias
+        FROM norm_ativ na
+        WHERE na.projeto_id NOT IN (SELECT projeto_id FROM proj_sums WHERE soma_venda > 0)
+        GROUP BY na.projeto_id
+      ),
+      -- Meses do ano alvo para o cruzamento
+      meses_ano AS (
+        SELECT generate_series(
+          TO_DATE($1 || '-01-01', 'YYYY-MM-DD'),
+          TO_DATE($1 || '-12-01', 'YYYY-MM-DD'),
+          '1 month'::interval
+        )::date AS mes_inicio
+      ),
+      -- Distribuição via cruzamento atividade×orçamento
+      dist_cruzamento AS (
+        SELECT ap.projeto_id,
+               TO_CHAR(m.mes_inicio, 'YYYY-MM') AS competencia,
+               SUM(
+                 GREATEST(0,
+                   LEAST(ap.data_fim, (m.mes_inicio + INTERVAL '1 month' - INTERVAL '1 day')::date)
+                   - GREATEST(ap.data_inicio, m.mes_inicio) + 1
+                 )::numeric / NULLIF(ap.dur_total, 0) * ap.venda_frac
+               ) AS valor_raw,
+               ps.soma_venda
+        FROM all_pairs ap
+        JOIN meses_ano m ON m.mes_inicio <= ap.data_fim AND (m.mes_inicio + INTERVAL '1 month' - INTERVAL '1 day')::date >= ap.data_inicio
+        JOIN proj_sums ps ON ps.projeto_id = ap.projeto_id
+        GROUP BY ap.projeto_id, m.mes_inicio, ps.soma_venda
+      ),
+      -- Distribuição fallback (linear)
+      dist_fallback AS (
+        SELECT ar.projeto_id,
+               TO_CHAR(m.mes_inicio, 'YYYY-MM') AS competencia,
+               GREATEST(0,
+                 LEAST(ar.fim, (m.mes_inicio + INTERVAL '1 month' - INTERVAL '1 day')::date)
+                 - GREATEST(ar.inicio, m.mes_inicio) + 1
+               )::numeric / NULLIF(ar.total_dias, 0) AS frac_mes,
+               ar.total_dias
+        FROM ativ_range ar
+        JOIN meses_ano m ON m.mes_inicio <= ar.fim AND (m.mes_inicio + INTERVAL '1 month' - INTERVAL '1 day')::date >= ar.inicio
+      )
+      SELECT dc.projeto_id, dc.competencia,
+             dc.valor_raw AS valor_previsto_raw,
+             dc.soma_venda AS soma_venda,
+             NULL::numeric AS frac_fallback
+      FROM dist_cruzamento dc WHERE dc.valor_raw > 0
+      UNION ALL
+      SELECT df.projeto_id, df.competencia,
+             NULL AS valor_previsto_raw,
+             NULL AS soma_venda,
+             df.frac_mes AS frac_fallback
+      FROM dist_fallback df WHERE df.frac_mes > 0
+      ORDER BY projeto_id, competencia
+    `, [String(input.ano)]);
+    const prevRows = prevRes.rows;
+
+    // 3. Medições salvas (realizado) para os projetos no ano
     const medRes = await dbExecute(db, `
-      SELECT pm.id, pm.projeto_id, pm.competencia, pm.numero,
-             pm.valor_previsto, pm.valor_medido,
+      SELECT pm.id, pm.projeto_id,
+             SUBSTRING(pm.competencia::text, 1, 7) AS competencia,
+             pm.numero, pm.valor_previsto, pm.valor_medido,
              pm.percentual_previsto, pm.percentual_medido,
              pm.status AS status_medicao,
-             fr.id          AS fr_id,
-             fr.status      AS status_financeiro,
-             fr.nf_numero   AS nf_numero,
-             fr.data_vencimento AS data_vencimento,
-             fr.data_recebimento AS data_recebimento,
-             fr.valor_recebido AS valor_recebido,
-             fr.valor_medicao AS fr_valor_medicao
+             fr.id AS fr_id, fr.status AS status_financeiro,
+             fr.nf_numero, fr.data_vencimento, fr.data_recebimento,
+             fr.valor_recebido, fr.valor_medicao AS fr_valor_medicao
       FROM planejamento_medicoes pm
+      JOIN planejamento_projetos pp ON pp.id = pm.projeto_id
       LEFT JOIN financial_revenue fr ON fr.medicao_id = pm.id
-      WHERE pm.projeto_id IN (${idsStr})
-        AND pm.competencia LIKE $1
+      WHERE pp.company_id = $1
+        AND LEFT(pm.competencia::text, 4) = $2
         AND pm.status NOT IN ('cancelada','rejeitada')
       ORDER BY pm.competencia ASC, pm.numero ASC
-    `, [`${input.ano}-%`]);
+    `, [input.companyId, String(input.ano)]);
     const medicoes = medRes.rows;
+    console.log(`[ContasReceber] company=${input.companyId} ano=${input.ano} projetos=${projetos.length} prev_rows=${prevRows.length} medicoes=${medicoes.length}`);
 
-    // 3. Monta estrutura por projeto
-    const medicoesByProjeto: Record<number, any[]> = {};
+    // 4. Monta mapa previsto por projeto+mês (com normalização para valor_contrato)
+    // Agrupa prevRows por projeto
+    const prevByProjeto: Record<number, Record<string, number>> = {};
+    const somaVendaByProjeto: Record<number, number> = {};
+    for (const r of prevRows) {
+      const pid = Number(r.projeto_id);
+      const mes = String(r.competencia);
+      if (!prevByProjeto[pid]) prevByProjeto[pid] = {};
+      if (r.valor_previsto_raw !== null && r.valor_previsto_raw !== undefined) {
+        prevByProjeto[pid][mes] = (prevByProjeto[pid][mes] ?? 0) + parseFloat(r.valor_previsto_raw ?? "0");
+        somaVendaByProjeto[pid] = parseFloat(r.soma_venda ?? "0") || 0;
+      }
+    }
+    // Fallback rows: frac × valor_contrato do projeto
+    const projetoMap: Record<number, any> = {};
+    for (const p of projetos) projetoMap[Number(p.projeto_id)] = p;
+    for (const r of prevRows) {
+      if (r.frac_fallback !== null && r.frac_fallback !== undefined) {
+        const pid = Number(r.projeto_id);
+        const mes = String(r.competencia);
+        const totalVenda = parseFloat(projetoMap[pid]?.total_venda ?? "0") || parseFloat(projetoMap[pid]?.valor_contrato ?? "0") || 0;
+        if (!prevByProjeto[pid]) prevByProjeto[pid] = {};
+        prevByProjeto[pid][mes] = (prevByProjeto[pid][mes] ?? 0) + parseFloat(r.frac_fallback ?? "0") * totalVenda;
+      }
+    }
+    // Normaliza cruzamento: escala soma para total_venda do orçamento
+    for (const p of projetos) {
+      const pid = Number(p.projeto_id);
+      const totalVenda = parseFloat(p.total_venda ?? "0") || parseFloat(p.valor_contrato ?? "0") || 0;
+      const soma = somaVendaByProjeto[pid] ?? 0;
+      if (soma > 0 && totalVenda > 0 && Math.abs(soma - totalVenda) > 1) {
+        const esc = totalVenda / soma;
+        for (const mes of Object.keys(prevByProjeto[pid] ?? {})) {
+          prevByProjeto[pid][mes] *= esc;
+        }
+      }
+    }
+
+    // 5. Mapa medições salvas por projeto+mês
+    const medByProjeto: Record<number, any[]> = {};
     for (const m of medicoes) {
       const pid = Number(m.projeto_id);
-      if (!medicoesByProjeto[pid]) medicoesByProjeto[pid] = [];
-      medicoesByProjeto[pid].push(m);
+      if (!medByProjeto[pid]) medByProjeto[pid] = [];
+      medByProjeto[pid].push(m);
     }
 
-    // 4. Calcula totais por mês
-    const totaisMes: Record<string, number> = {};
-    for (const m of medicoes) {
-      const mes = String(m.competencia).slice(0, 7);
-      const val = parseFloat(m.valor_medido ?? "0") || parseFloat(m.valor_previsto ?? "0") || 0;
-      totaisMes[mes] = (totaisMes[mes] ?? 0) + val;
-    }
+    // 6. Meses do ano
+    const meses12 = Array.from({ length: 12 }, (_, i) =>
+      `${input.ano}-${String(i + 1).padStart(2, "0")}`
+    );
 
-    // 5. KPIs globais
+    // 7. KPIs e totais mensais
     let totalContrato = 0, totalPrevisto = 0, totalFaturado = 0, totalRecebido = 0;
+    const totaisMes: Record<string, number> = {};
     for (const p of projetos) {
       totalContrato += parseFloat(p.valor_contrato ?? "0") || 0;
     }
+    for (const mes of meses12) {
+      for (const pid of projetoIds) {
+        // Se há medição salva, usa ela; senão usa previsto calculado
+        const meds = (medByProjeto[pid] ?? []).filter((m: any) => String(m.competencia).slice(0, 7) === mes);
+        const val = meds.length > 0
+          ? meds.reduce((s: number, m: any) => s + (parseFloat(m.valor_medido ?? "0") || parseFloat(m.valor_previsto ?? "0") || 0), 0)
+          : (prevByProjeto[pid]?.[mes] ?? 0);
+        totaisMes[mes] = (totaisMes[mes] ?? 0) + val;
+        totalPrevisto += val;
+      }
+    }
     for (const m of medicoes) {
       const val = parseFloat(m.valor_medido ?? "0") || parseFloat(m.valor_previsto ?? "0") || 0;
-      totalPrevisto += val;
       const sf = m.status_financeiro ?? m.status_medicao;
       if (["faturado","a_receber","recebido_parcial","recebido_total"].includes(sf)) totalFaturado += val;
       if (["recebido_parcial","recebido_total"].includes(sf)) totalRecebido += parseFloat(m.valor_recebido ?? "0") || val;
@@ -2619,29 +2792,54 @@ export const financialRouter = router({
 
     return {
       ano: input.ano,
-      projetos: projetos.map((p: any) => ({
-        projetoId: Number(p.projeto_id),
-        obraId: p.obra_id ? Number(p.obra_id) : null,
-        obraNome: p.obra_nome ?? p.projeto_nome,
-        cliente: p.cliente,
-        valorContrato: parseFloat(p.valor_contrato ?? "0") || 0,
-        medicoes: (medicoesByProjeto[Number(p.projeto_id)] ?? []).map((m: any) => ({
-          id: m.id,
-          competencia: String(m.competencia).slice(0, 7),
-          numero: m.numero,
-          valorPrevisto: parseFloat(m.valor_previsto ?? "0") || 0,
-          valorMedido: parseFloat(m.valor_medido ?? "0") || 0,
-          percentualPrevisto: parseFloat(m.percentual_previsto ?? "0") || 0,
-          percentualMedido: parseFloat(m.percentual_medido ?? "0") || 0,
-          statusMedicao: m.status_medicao ?? "pendente",
-          statusFinanceiro: m.status_financeiro ?? null,
-          frId: m.fr_id ?? null,
-          nfNumero: m.nf_numero ?? null,
-          dataVencimento: m.data_vencimento ?? null,
-          dataRecebimento: m.data_recebimento ?? null,
-          valorRecebido: parseFloat(m.valor_recebido ?? "0") || 0,
-        })),
-      })),
+      projetos: projetos.map((p: any) => {
+        const pid = Number(p.projeto_id);
+        const meds = medByProjeto[pid] ?? [];
+        const medByMes: Record<string, any> = {};
+        for (const m of meds) medByMes[String(m.competencia).slice(0, 7)] = m;
+        return {
+          projetoId: pid,
+          obraId: p.obra_id ? Number(p.obra_id) : null,
+          obraNome: p.obra_nome ?? p.projeto_nome,
+          cliente: p.cliente,
+          valorContrato: parseFloat(p.valor_contrato ?? "0") || 0,
+          // Células mensais: previsto calculado + realizado salvo
+          meses: Object.fromEntries(meses12.map(mes => {
+            const previsto = prevByProjeto[pid]?.[mes] ?? 0;
+            const med = medByMes[mes];
+            const valorMedido = med ? (parseFloat(med.valor_medido ?? "0") || parseFloat(med.valor_previsto ?? "0") || 0) : 0;
+            const sf = med ? (med.status_financeiro ?? med.status_medicao ?? "previsto") : (previsto > 0 ? "previsto" : null);
+            return [mes, {
+              valorPrevisto: previsto,
+              valorMedido,
+              status: sf,
+              medicaoId: med?.id ?? null,
+              frId: med?.fr_id ?? null,
+              nfNumero: med?.nf_numero ?? null,
+              dataVencimento: med?.data_vencimento ?? null,
+              dataRecebimento: med?.data_recebimento ?? null,
+              valorRecebido: med ? (parseFloat(med.valor_recebido ?? "0") || 0) : 0,
+            }];
+          })),
+          // Medições salvas (compatibilidade com painel lateral)
+          medicoes: meds.map((m: any) => ({
+            id: m.id,
+            competencia: String(m.competencia).slice(0, 7),
+            numero: m.numero,
+            valorPrevisto: parseFloat(m.valor_previsto ?? "0") || 0,
+            valorMedido: parseFloat(m.valor_medido ?? "0") || 0,
+            percentualPrevisto: parseFloat(m.percentual_previsto ?? "0") || 0,
+            percentualMedido: parseFloat(m.percentual_medido ?? "0") || 0,
+            statusMedicao: m.status_medicao ?? "pendente",
+            statusFinanceiro: m.status_financeiro ?? null,
+            frId: m.fr_id ?? null,
+            nfNumero: m.nf_numero ?? null,
+            dataVencimento: m.data_vencimento ?? null,
+            dataRecebimento: m.data_recebimento ?? null,
+            valorRecebido: parseFloat(m.valor_recebido ?? "0") || 0,
+          })),
+        };
+      }),
       totaisMes,
       kpis: { totalContrato, totalPrevisto, totalFaturado, totalRecebido },
     };

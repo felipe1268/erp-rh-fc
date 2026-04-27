@@ -33,6 +33,7 @@ type StatusKey =
   | "cancelado";
 
 const STATUS_CFG: Record<string, { label: string; cell: string; badge: string; icon: any }> = {
+  previsto:         { label: "Previsto",       cell: "bg-indigo-50 text-indigo-500",  badge: "bg-indigo-100 text-indigo-600",icon: CalendarClock },
   pendente:         { label: "Pendente",       cell: "bg-gray-50 text-gray-500",      badge: "bg-gray-100 text-gray-500",    icon: Clock },
   a_faturar:        { label: "A Faturar",      cell: "bg-amber-50 text-amber-700",    badge: "bg-amber-100 text-amber-700",  icon: Clock },
   medicao_enviada:  { label: "Med. Enviada",   cell: "bg-sky-50 text-sky-700",        badge: "bg-sky-100 text-sky-700",      icon: Send },
@@ -54,9 +55,11 @@ const STATUS_NEXT: Record<string, string> = {
 };
 
 function resolveStatus(m: MedicaoCell): string {
-  if (m.statusFinanceiro) return m.statusFinanceiro;
+  if (m.statusFinanceiro && m.statusFinanceiro !== "previsto") return m.statusFinanceiro;
+  if (m.statusMedicao === "previsto") return "previsto";
   if (m.statusMedicao === "aprovada" || m.statusMedicao === "faturada") return "faturado";
-  if (m.valor > 0) return "a_faturar";
+  if (m.valor > 0 && m.statusMedicao !== "previsto") return "a_faturar";
+  if (m.valor > 0) return "previsto";
   return "pendente";
 }
 
@@ -109,12 +112,32 @@ export default function FinanceiroContasAReceber() {
 
   const mesesChave = MESES_CHAVE(ano);
 
-  // Monta linhas com índice por mês
+  // Monta linhas com índice por mês — usa meses calculados (previsto das atividades)
+  // sobrepostos por medições salvas onde existem
   const obras: ObraRow[] = (data?.projetos ?? []).map((p: any) => {
     const byMes: Record<string, MedicaoCell> = {};
-    for (const m of (p.medicoes ?? [])) {
-      const cell: MedicaoCell = { ...m, valor: m.valorMedido > 0 ? m.valorMedido : m.valorPrevisto };
-      byMes[m.competencia] = cell;
+    // Nova estrutura: p.meses é um mapa competencia → {valorPrevisto, valorMedido, status, ...}
+    for (const [mes, raw] of Object.entries(p.meses ?? {})) {
+      const r = raw as any;
+      const valorDisplay = r.valorMedido > 0 ? r.valorMedido : r.valorPrevisto;
+      if (valorDisplay === 0) continue;
+      byMes[mes] = {
+        id: r.medicaoId ?? 0,
+        competencia: mes,
+        numero: 0,
+        valorPrevisto: r.valorPrevisto,
+        valorMedido: r.valorMedido,
+        percentualPrevisto: 0,
+        percentualMedido: 0,
+        statusMedicao: r.status ?? "previsto",
+        statusFinanceiro: (r.status && r.status !== "previsto") ? r.status : null,
+        frId: r.frId ?? null,
+        nfNumero: r.nfNumero ?? null,
+        dataVencimento: r.dataVencimento ?? null,
+        dataRecebimento: r.dataRecebimento ?? null,
+        valorRecebido: r.valorRecebido ?? 0,
+        valor: valorDisplay,
+      };
     }
     const totalAno = Object.values(byMes).reduce((s: number, c: any) => s + (c as MedicaoCell).valor, 0);
     return { ...p, byMes, totalAno } as ObraRow;
@@ -233,7 +256,7 @@ export default function FinanceiroContasAReceber() {
         {obras.length > 0 && (
           <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
             <span className="font-medium">Legenda:</span>
-            {(["pendente","a_faturar","faturado","a_receber","recebido_total"] as StatusKey[]).map(s => {
+            {(["previsto","a_faturar","faturado","a_receber","recebido_total"] as any[]).map((s: any) => {
               const cfg = STATUS_CFG[s];
               const Icon = cfg.icon;
               return (
