@@ -623,6 +623,35 @@ export default function PainelCompras() {
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {alertasData.entregas.listaAtrasadas?.length > 0 && (
+                <div className="bg-white rounded-xl border border-red-200 shadow-sm p-4">
+                  <button className="flex items-center justify-between w-full mb-2"
+                    onClick={() => setAlertasExpanded(p => ({ ...p, entregasAtr: !p.entregasAtr }))}>
+                    <SectionHeader icon={Truck} title="Entregas Atrasadas" count={alertasData.entregas.atrasadas} color="text-red-500"
+                      onVerTodos={() => navigate("/compras/ordens?filtro=atrasadas")} />
+                    {alertasExpanded.entregasAtr ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                  </button>
+                  {(alertasExpanded.entregasAtr !== false) && (
+                    <div className="space-y-1.5 max-h-[260px] overflow-auto">
+                      {alertasData.entregas.listaAtrasadas.map((oc: any) => (
+                        <button key={oc.id} onClick={() => navigate("/compras/ordens")}
+                          className="flex items-center justify-between px-3 py-2 rounded-lg bg-red-50 border border-red-100 text-xs w-full hover:bg-red-100 transition-colors">
+                          <div className="text-left min-w-0">
+                            <span className="font-mono font-semibold text-gray-800">{oc.numeroOc}</span>
+                            {oc.fornecedorNome && <span className="text-gray-500 ml-2 truncate">{oc.fornecedorNome}</span>}
+                            {oc.obraNome && <span className="text-gray-400 ml-1 truncate hidden sm:inline">· {oc.obraNome}</span>}
+                          </div>
+                          <div className="text-right flex-shrink-0 ml-2">
+                            <span className="font-bold text-red-700">{oc.diasAtraso}d atraso</span>
+                            <span className="text-gray-400 ml-2">{fmtDate(oc.dataEntregaPrevista)}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {alertasData.pagamentos.vencidas.length > 0 && (
                 <div className="bg-white rounded-xl border border-red-200 shadow-sm p-4">
                   <button className="flex items-center justify-between w-full mb-2"

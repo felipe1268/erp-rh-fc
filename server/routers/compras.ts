@@ -5962,9 +5962,14 @@ Retorne APENAS um JSON válido neste formato:
           status: comprasOrdens.status,
           dataEntregaPrevista: comprasOrdens.dataEntregaPrevista,
           fornecedorId: comprasOrdens.fornecedorId,
+          fornecedorNome: fornecedores.nomeFantasia,
+          fornecedorRazao: fornecedores.razaoSocial,
           obraId: comprasOrdens.obraId,
+          obraNome: obras.nome,
           total: comprasOrdens.total,
         }).from(comprasOrdens)
+          .leftJoin(fornecedores, eq(fornecedores.id, comprasOrdens.fornecedorId))
+          .leftJoin(obras, eq(obras.id, comprasOrdens.obraId))
           .where(and(
             inArray(comprasOrdens.companyId, ids),
             or(
@@ -6014,10 +6019,19 @@ Retorne APENAS um JSON válido neste formato:
       const CLOSED_OC = ["entregue", "cancelada", "recebido"];
       const ocsAtrasadas = ocsRows.filter(oc =>
         oc.dataEntregaPrevista && oc.dataEntregaPrevista < hoje && !CLOSED_OC.includes(oc.status)
-      );
+      ).map(oc => ({
+        ...oc,
+        fornecedorNome: oc.fornecedorNome || oc.fornecedorRazao || null,
+        total: oc.total ? parseFloat(String(oc.total)) : 0,
+        diasAtraso: Math.floor((Date.now() - new Date(oc.dataEntregaPrevista! + "T00:00:00").getTime()) / 86400000),
+      }));
       const ocsProximas = ocsRows.filter(oc =>
         oc.dataEntregaPrevista && oc.dataEntregaPrevista >= hoje && oc.dataEntregaPrevista <= em7dias && !CLOSED_OC.includes(oc.status)
-      );
+      ).map(oc => ({
+        ...oc,
+        fornecedorNome: oc.fornecedorNome || oc.fornecedorRazao || null,
+        total: oc.total ? parseFloat(String(oc.total)) : 0,
+      }));
 
       const scsSemCobertura: { scId: number; numero: string; titulo: string; itensCount: number }[] = [];
       const scIds = scsRows.map(s => s.id);
