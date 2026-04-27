@@ -339,6 +339,7 @@ export default function Ordens() {
   }
 
   function handleCloseGuard() {
+    if (showGuardDialog) return;
     if (formHasData()) {
       setShowGuardDialog(true);
     } else {
@@ -780,6 +781,13 @@ export default function Ordens() {
         subtitle={rascunhoId ? "Complete as informações do rascunho" : "Preencha os dados da OC"}
         icon={<ShoppingBag className="h-5 w-5 text-white" />}
         headerColor="bg-gradient-to-r from-emerald-700 to-emerald-500"
+        zIndex={40}
+        headerActions={
+          <Button variant="ghost" size="sm" onClick={handleSalvarRascunho} disabled={salvarRascunhoMut.isPending} className="text-white hover:bg-white/20 gap-1.5 border border-white/30">
+            {salvarRascunhoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Salvar Rascunho
+          </Button>
+        }
       >
           <div className="space-y-5 pt-2">
             {/* Obra obrigatória */}
@@ -1207,10 +1215,6 @@ export default function Ordens() {
 
             <div className="flex gap-3 pt-2">
               <Button variant="outline" onClick={handleCloseGuard} className="border-gray-300 text-gray-600 hover:bg-gray-50">Cancelar</Button>
-              <Button variant="outline" onClick={handleSalvarRascunho} disabled={salvarRascunhoMut.isPending} className="border-yellow-400 text-yellow-700 hover:bg-yellow-50 gap-1.5">
-                {salvarRascunhoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Salvar Rascunho
-              </Button>
               <Button onClick={handleSalvar} disabled={criarManual.isPending || confirmarRascunhoMut.isPending} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5">
                 {(criarManual.isPending || confirmarRascunhoMut.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
                 {rascunhoId ? "Confirmar OC" : "Criar OC"}
@@ -1220,8 +1224,13 @@ export default function Ordens() {
       </FullScreenDialog>
 
       {/* Guard dialog — fechar formulário com dados não salvos */}
-      <Dialog open={showGuardDialog} onOpenChange={setShowGuardDialog}>
-        <DialogContent className="border-gray-200 max-w-md" style={{ background: "#fff", color: "#111827" }}>
+      <Dialog open={showGuardDialog} onOpenChange={v => { if (!v && !salvarRascunhoMut.isPending) setShowGuardDialog(false); }}>
+        <DialogContent
+          className="border-gray-200 max-w-md"
+          style={{ background: "#fff", color: "#111827", zIndex: 200 }}
+          onEscapeKeyDown={e => e.preventDefault()}
+          onInteractOutside={e => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-gray-900">
               <Save className="h-5 w-5 text-yellow-500" /> Salvar rascunho?
