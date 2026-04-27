@@ -94,6 +94,170 @@ async function startServer() {
       res.status(500).json({ ok: false, error: e.message, stack: e.stack?.substring(0, 500) });
     }
   });
+  // Endpoint de diagnóstico financeiro — consulta Neon DB diretamente
+  app.get("/api/diag/financial-neon", async (_req: any, res: any) => {
+    try {
+      const { getDb } = await import("../db");
+      const { sql } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) return res.status(500).json({ ok: false, error: "DB not available" });
+
+      const companiesRes = await db.execute(sql`
+        SELECT id, "razaoSocial", cnpj FROM companies
+        WHERE "razaoSocial" ILIKE '%engenharia%' OR "razaoSocial" ILIKE '%FC%'
+        ORDER BY id LIMIT 20
+      `);
+      const companies = (companiesRes as any)?.rows ?? companiesRes;
+
+      const projRes = await db.execute(sql`
+        SELECT pp.id, pp.company_id, pp.nome, pp.obra_id, pp.valor_contrato,
+               COUNT(pr.id) as revisoes,
+               (SELECT COUNT(*) FROM planejamento_atividades pa
+                JOIN planejamento_revisoes pr2 ON pa.revisao_id = pr2.id
+                WHERE pr2.projeto_id = pp.id) as atividades
+        FROM planejamento_projetos pp
+        LEFT JOIN planejamento_revisoes pr ON pr.projeto_id = pp.id
+        GROUP BY pp.id, pp.company_id, pp.nome, pp.obra_id, pp.valor_contrato
+        ORDER BY pp.id LIMIT 30
+      `);
+      const projetos = (projRes as any)?.rows ?? projRes;
+
+      const obrasRes = await db.execute(sql`
+        SELECT id, nome FROM obras
+        WHERE "deletedAt" IS NULL ORDER BY id LIMIT 20
+      `);
+      const obras = (obrasRes as any)?.rows ?? obrasRes;
+
+      const finRes = await db.execute(sql`
+        SELECT company_id, COUNT(*) as entries, SUM(valor_previsto) as total_previsto
+        FROM financial_entries
+        GROUP BY company_id ORDER BY entries DESC LIMIT 10
+      `);
+      const financial = (finRes as any)?.rows ?? finRes;
+
+      const finDetailRes = await db.execute(sql`
+        SELECT origem_modulo, tipo, status, COUNT(*) as qtd,
+               SUM(valor_previsto) as total_previsto,
+               MIN(data_competencia) as mais_antiga,
+               MAX(data_competencia) as mais_recente
+        FROM financial_entries
+        WHERE company_id = 60002
+        GROUP BY origem_modulo, tipo, status
+        ORDER BY qtd DESC
+      `);
+      const finDetail = (finDetailRes as any)?.rows ?? finDetailRes;
+
+      const finCronRes = await db.execute(sql`
+        SELECT data_competencia, COUNT(*) as qtd, SUM(valor_previsto) as total
+        FROM financial_entries
+        WHERE company_id = 60002 AND origem_modulo = 'cronograma_atividade'
+        GROUP BY data_competencia ORDER BY data_competencia LIMIT 20
+      `);
+      const finCronograma = (finCronRes as any)?.rows ?? finCronRes;
+
+      res.json({ ok: true, companies, projetos, obras, financial, finDetail, finCronograma });
+    } catch (e: any) {
+      res.status(500).json({ ok: false, error: e.message, stack: e.stack?.substring(0, 500) });
+    }
+  });
+
+  // Endpoint para disparar importação do cronograma para empresa específica
+  app.get("/api/diag/run-cronograma/:companyId", async (req: any, res: any) => {
+    try {
+      const companyId = Number(req.params.companyId);
+      const { importAtividadesCronogramaToFinancial } = await import("../services/financialIntegrationBridge");
+      const count = await importAtividadesCronogramaToFinancial(companyId);
+      res.json({ ok: true, companyId, imported: count });
+    } catch (e: any) {
+      res.status(500).json({ ok: false, error: e.message, stack: e.stack?.substring(0, 800) });
+    }
+  });
+
+  // Endpoint de diagnóstico: mostra o estado real das atividades de cronograma no Neon
+  app.get("/api/diag/cronograma-atividades/:companyId", async (req: any, res: any) => {
+    try {
+      const companyId = Number(req.params.companyId);
+      const { getDb } = await import("../db");
+      const { sql } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) return res.status(500).json({ ok: false, error: "DB not available" });
+
+      // Revisões dos projetos da empresa
+      const revisoes = await db.execute(sql`
+        SELECT pr.id, pr.projeto_id, pr.numero, pr.status, pp.nome AS projeto_nome
+        FROM planejamento_revisoes pr
+        JOIN planejamento_projetos pp ON pp.id = pr.projeto_id
+        WHERE pp.company_id = ${companyId}
+        ORDER BY pr.projeto_id, pr.numero DESC
+      `);
+
+      // Amostra de atividades para cada revisão (sem filtros)
+      const ativSample = await db.execute(sql`
+        SELECT pa.revisao_id, pa.id,
+               pa.is_grupo, pa.disabled, pa.data_inicio, pa.data_fim,
+               pa.peso_financeiro, pa.quantidade_planejada, pa.nome
+        FROM planejamento_atividades pa
+        JOIN planejamento_revisoes pr ON pr.id = pa.revisao_id
+        JOIN planejamento_projetos pp ON pp.id = pr.projeto_id
+        WHERE pp.company_id = ${companyId}
+        LIMIT 30
+      `);
+
+      // Contagem por filtro para cada revisão
+      const counts = await db.execute(sql`
+        SELECT pa.revisao_id,
+               COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE pa.is_grupo = false) AS nao_grupo,
+               COUNT(*) FILTER (WHERE pa.is_grupo = false AND pa.disabled = false) AS nao_disabled,
+               COUNT(*) FILTER (WHERE pa.is_grupo = false AND pa.disabled = false
+                                      AND pa.data_inicio IS NOT NULL AND pa.data_fim IS NOT NULL) AS com_datas,
+               COUNT(*) FILTER (WHERE pa.is_grupo = false AND pa.disabled = false
+                                      AND pa.data_inicio IS NOT NULL AND pa.data_fim IS NOT NULL
+                                      AND (
+                                        (pa.peso_financeiro IS NOT NULL AND pa.peso_financeiro::numeric > 0)
+                                        OR (pa.quantidade_planejada IS NOT NULL AND pa.quantidade_planejada::numeric > 0)
+                                      )) AS passam_filtro
+        FROM planejamento_atividades pa
+        JOIN planejamento_revisoes pr ON pr.id = pa.revisao_id
+        JOIN planejamento_projetos pp ON pp.id = pr.projeto_id
+        WHERE pp.company_id = ${companyId}
+        GROUP BY pa.revisao_id
+        ORDER BY pa.revisao_id
+      `);
+
+      const revisaoRows = (revisoes as any)?.rows ?? revisoes;
+      const sampleRows = (ativSample as any)?.rows ?? ativSample;
+      const countRows = (counts as any)?.rows ?? counts;
+
+      // Checa orcamentos vinculados aos projetos
+      const orcRes = await db.execute(sql`
+        SELECT pp.id AS projeto_id, pp.nome AS projeto_nome, pp.orcamento_id,
+               o.id AS orc_id, o.descricao, o."totalVenda", o."totalCusto", o.valor_negociado, o.status
+        FROM planejamento_projetos pp
+        LEFT JOIN orcamentos o ON o.id = pp.orcamento_id
+        WHERE pp.company_id = ${companyId}
+        ORDER BY pp.id
+      `);
+      const orcamentosLinked = (orcRes as any)?.rows ?? orcRes;
+
+      // Checa orcamentos pelo obra_id quando orcamento_id não está setado
+      const orcByObraRes = await db.execute(sql`
+        SELECT pp.id AS projeto_id, pp.obra_id, o.id AS orc_id, o.descricao,
+               o."totalVenda", o."totalCusto", o.valor_negociado, o.status
+        FROM planejamento_projetos pp
+        JOIN orcamentos o ON o."obraId" = pp.obra_id
+        WHERE pp.company_id = ${companyId}
+          AND o.deleted_at IS NULL
+        ORDER BY pp.id, o.id DESC
+      `);
+      const orcByObra = (orcByObraRes as any)?.rows ?? orcByObraRes;
+
+      res.json({ ok: true, revisoes: revisaoRows, amostra: sampleRows, contagens: countRows, orcamentosLinked, orcByObra });
+    } catch (e: any) {
+      res.status(500).json({ ok: false, error: e.message, stack: e.stack?.substring(0, 800) });
+    }
+  });
+
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // Download de arquivos SST em ZIP

@@ -1810,32 +1810,30 @@ export async function importObrasToFinancialRevenue(companyId: number, mesRef?: 
   let erros = 0;
 
   try {
-    // Busca obras ativas com valor de contrato e datas definidas
+    // Busca todas obras ativas (com ou sem valor de contrato)
+    // Tenta pegar valorContrato da obra OU do planejamento_projetos vinculado
+    const cid = Number(companyId);
     const { rows: obras } = await dbExecute(db,
-      `SELECT id, nome, cliente,
-              "valorContrato" AS valor_contrato,
-              "dataInicio" AS data_inicio,
-              "dataPrevisaoFim" AS data_previsao_fim,
-              status
-       FROM obras
-       WHERE "companyId" = $1
-         AND "deletedAt" IS NULL
-         AND "isActive" = 1
-         AND "valorContrato" IS NOT NULL
-         AND "valorContrato"::numeric > 0
-         AND "dataInicio" IS NOT NULL
-         AND "dataPrevisaoFim" IS NOT NULL
-         AND status NOT IN ('Concluída','Concluida','Cancelada','Cancelado','Encerrada','Encerrado','Inativa','Inativo')`,
-      [companyId]
+      `SELECT o.id, o.nome, o.cliente,
+              COALESCE(o."valorContrato"::numeric, pp.valor_contrato::numeric) AS valor_contrato,
+              o."dataInicio" AS data_inicio,
+              o."dataPrevisaoFim" AS data_previsao_fim,
+              o.status
+       FROM obras o
+       LEFT JOIN planejamento_projetos pp ON pp.obra_id = o.id AND pp.company_id = $1
+       WHERE o."companyId" = $2
+         AND o."deletedAt" IS NULL
+         AND o."isActive" = 1
+         AND o."dataInicio" IS NOT NULL
+         AND o."dataPrevisaoFim" IS NOT NULL
+         AND o.status NOT IN ('Concluída','Concluida','Cancelada','Cancelado','Encerrada','Encerrado','Inativa','Inativo')`,
+      [cid, cid]
     );
 
-    if (obras.length > 0) {
-      console.log(`[FinancialBridge][obras_previsto] company=${companyId} obras=${obras.length}`);
-    }
+    console.log(`[FinancialBridge][obras_previsto] company=${companyId} obras=${obras.length}`);
 
     for (const obra of obras) {
       const valorContrato = parseFloat(obra.valor_contrato ?? "0");
-      if (valorContrato <= 0) continue;
 
       const inicioStr = String(obra.data_inicio).substring(0, 10);
       const terminoStr = String(obra.data_previsao_fim).substring(0, 10);
@@ -1854,13 +1852,15 @@ export async function importObrasToFinancialRevenue(companyId: number, mesRef?: 
       }
       if (meses.length === 0) continue;
 
-      const valorMensal = Math.round((valorContrato / meses.length) * 100) / 100;
+      const valorMensal = valorContrato > 0
+        ? Math.round((valorContrato / meses.length) * 100) / 100
+        : 0;
 
       for (const mes of meses) {
         const dataCompetencia = mes + "-01";
         const dataVencimento = mes + "-28";
 
-        // ── 1. financial_revenue ──────────────────────────────────────
+        // ── 1. financial_revenue (aparece em Contas a Receber) ──────────
         const { rows: revExist } = await dbExecute(db,
           `SELECT id FROM financial_revenue
            WHERE company_id=$1 AND obra_id=$2 AND observacoes='obra_previsto'
@@ -1877,32 +1877,35 @@ export async function importObrasToFinancialRevenue(companyId: number, mesRef?: 
              VALUES ($1,$2,$3,$4,$5,$6,$7,'a_faturar','obra_previsto',NOW(),NOW())
              ON CONFLICT DO NOTHING`,
             [companyId, obra.id, obra.nome, obra.cliente ?? null,
-             valorContrato.toFixed(2), valorMensal.toFixed(2), dataVencimento]
+             valorContrato > 0 ? valorContrato.toFixed(2) : null,
+             valorMensal > 0 ? valorMensal.toFixed(2) : null, dataVencimento]
           );
           imported++;
         }
 
-        // ── 2. financial_entries (livro geral) ───────────────────────
-        const { rows: entExist } = await dbExecute(db,
-          `SELECT id FROM financial_entries
-           WHERE company_id=$1 AND origem_modulo='obra_previsto' AND origem_id=$2 AND data_competencia=$3
-           LIMIT 1`,
-          [companyId, obra.id, dataCompetencia]
-        );
-        if (entExist.length === 0) {
-          await dbExecute(db,
-            `INSERT INTO financial_entries
-             (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
-              valor_previsto, valor_realizado, data_competencia, data_vencimento,
-              status, origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW())
-             ON CONFLICT DO NOTHING`,
-            [companyId, obra.id, obra.nome, "Previsão de Faturamento",
-             "receita", "variavel", valorMensal, null,
-             dataCompetencia, dataVencimento, "previsto",
-             "obra_previsto", obra.id, `Previsão de faturamento — ${obra.nome} (${mes})`,
-             `Previsão mensal obra: ${obra.nome}`]
+        // ── 2. financial_entries (fluxo de caixa projetado) ──────────────
+        if (valorMensal > 0) {
+          const { rows: entExist } = await dbExecute(db,
+            `SELECT id FROM financial_entries
+             WHERE company_id=$1 AND origem_modulo='obra_previsto' AND origem_id=$2 AND data_competencia=$3
+             LIMIT 1`,
+            [companyId, obra.id, dataCompetencia]
           );
+          if (entExist.length === 0) {
+            await dbExecute(db,
+              `INSERT INTO financial_entries
+               (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
+                valor_previsto, valor_realizado, data_competencia, data_vencimento,
+                status, origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW())
+               ON CONFLICT DO NOTHING`,
+              [companyId, obra.id, obra.nome, "Previsão de Faturamento",
+               "receita", "variavel", valorMensal, null,
+               dataCompetencia, dataVencimento, "a_receber",
+               "obra_previsto", obra.id, `Previsão de faturamento — ${obra.nome} (${mes})`,
+               `Previsão mensal obra: ${obra.nome}`]
+            );
+          }
         }
       }
     }
@@ -1915,7 +1918,247 @@ export async function importObrasToFinancialRevenue(companyId: number, mesRef?: 
   return imported;
 }
 
-// MASTER: executar todos os imports de receita
+// Importa atividades do cronograma (planejamento_atividades) como despesas previstas no fluxo de caixa
+export async function importAtividadesCronogramaToFinancial(companyId: number, mesRef?: string): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  let imported = 0;
+  let erros = 0;
+
+  try {
+    // Busca projetos vinculados a obras desta empresa (incluindo projetos com valor_contrato=0)
+    // Inclui fallback de valor via orcamento vinculado (por orcamento_id ou por obra_id)
+    const { rows: projetos } = await dbExecute(db,
+      `SELECT pp.id AS projeto_id, pp.obra_id, pp.nome,
+              pp.valor_contrato::numeric AS valor_contrato,
+              pp.orcamento_id,
+              o.nome AS obra_nome,
+              COALESCE(
+                NULLIF(pp.valor_contrato::numeric, 0),
+                orc_direto.valor_negociado::numeric,
+                orc_direto."totalVenda"::numeric,
+                orc_direto."totalCusto"::numeric,
+                orc_obra.valor_negociado::numeric,
+                orc_obra."totalVenda"::numeric,
+                orc_obra."totalCusto"::numeric,
+                0
+              ) AS valor_base
+       FROM planejamento_projetos pp
+       JOIN obras o ON o.id = pp.obra_id
+       LEFT JOIN orcamentos orc_direto ON orc_direto.id = pp.orcamento_id
+                                      AND orc_direto.deleted_at IS NULL
+       LEFT JOIN LATERAL (
+         SELECT valor_negociado, "totalVenda", "totalCusto"
+         FROM orcamentos
+         WHERE "obraId" = pp.obra_id AND deleted_at IS NULL
+         ORDER BY id DESC LIMIT 1
+       ) orc_obra ON true
+       WHERE pp.company_id = $1
+         AND o."deletedAt" IS NULL`,
+      [companyId]
+    );
+
+    console.log(`[FinancialBridge][cronograma] company=${companyId} projetos encontrados=${projetos.length}`);
+
+    for (const proj of projetos) {
+      const valorContrato = parseFloat(proj.valor_contrato ?? "0");
+      const valorBase = parseFloat(proj.valor_base ?? "0");
+      const semValorBase = valorBase === 0;
+
+      if (semValorBase) {
+        console.warn(`[FinancialBridge][cronograma] projeto=${proj.projeto_id} (${proj.nome}) sem valor_contrato nem orçamento — criando entradas com valor R$0 (placeholder)`);
+      }
+
+      // Pega a revisão mais recente aprovada; se não houver, usa a mais recente qualquer
+      const { rows: revs } = await dbExecute(db,
+        `SELECT id FROM planejamento_revisoes
+         WHERE projeto_id = $1
+         ORDER BY (CASE WHEN status = 'aprovada' THEN 0 ELSE 1 END), numero DESC
+         LIMIT 1`,
+        [proj.projeto_id]
+      );
+      if (revs.length === 0) {
+        console.log(`[FinancialBridge][cronograma] projeto=${proj.projeto_id} sem revisão, pulando`);
+        continue;
+      }
+      const revisaoId = revs[0].id;
+      console.log(`[FinancialBridge][cronograma] projeto=${proj.projeto_id} valorContrato=${valorContrato} valorBase=${valorBase} revisao=${revisaoId}`);
+
+      // Busca atividades desta revisão (ignora grupos e desabilitados)
+      // Quando valor_base > 0: usa peso_financeiro * valor_base
+      // Quando valor_base = 0: usa quantidade_planejada diretamente (BRL)
+      // Quando ambos = 0: cria entradas placeholder com valor 0 (para mostrar o cronograma no financeiro)
+      const { rows: atividades } = await dbExecute(db,
+        `SELECT id, nome, eap_codigo, data_inicio, data_fim,
+                peso_financeiro::numeric AS peso,
+                quantidade_planejada::numeric AS quantidade_planejada,
+                is_indireta
+         FROM planejamento_atividades
+         WHERE revisao_id = $1
+           AND is_grupo = false
+           AND disabled = false
+           AND data_inicio IS NOT NULL
+           AND data_fim IS NOT NULL`,
+        [revisaoId]
+      );
+
+      console.log(`[FinancialBridge][cronograma] projeto=${proj.projeto_id} atividades=${atividades.length}`);
+
+      if (atividades.length === 0) continue;
+
+      // Pré-busca todas as entradas existentes deste projeto (1 query em vez de N queries)
+      const { rows: existentes } = await dbExecute(db,
+        `SELECT origem_id::integer, data_competencia, valor_previsto FROM financial_entries
+         WHERE company_id=$1 AND origem_modulo='cronograma_atividade' AND obra_id=$2`,
+        [companyId, proj.obra_id]
+      );
+      const existMap = new Map<string, number>();
+      for (const e of existentes) {
+        existMap.set(`${e.origem_id}|${String(e.data_competencia).substring(0, 10)}`, parseFloat(e.valor_previsto ?? "0"));
+      }
+
+      // Calcula todas as entradas esperadas em memória
+      type EntradaCronograma = {
+        companyId: number; obraId: number; obraNome: string; contaNome: string;
+        valorMensal: number; dataComp: string; dataVenc: string;
+        origemId: number; origemDesc: string; descricao: string;
+      };
+      const toInsert: EntradaCronograma[] = [];
+      const toUpdate: EntradaCronograma[] = [];
+
+      for (const at of atividades) {
+        const peso = parseFloat(at.peso ?? "0");
+        const quantidadePlanejada = parseFloat(at.quantidade_planejada ?? "0");
+
+        let valorTotalAt: number;
+        if (valorBase > 0 && peso > 0) {
+          valorTotalAt = Math.round((peso / 100) * valorBase * 100) / 100;
+        } else if (quantidadePlanejada > 0) {
+          valorTotalAt = Math.round(quantidadePlanejada * 100) / 100;
+        } else {
+          valorTotalAt = 0;
+        }
+
+        const inicioStr = String(at.data_inicio).substring(0, 10);
+        const fimStr = String(at.data_fim).substring(0, 10);
+        const [iniY, iniM] = inicioStr.split("-").map(Number);
+        const [terY, terM] = fimStr.split("-").map(Number);
+        if (!iniY || !iniM || !terY || !terM) continue;
+
+        const meses: string[] = [];
+        let y = iniY, m = iniM;
+        while (y < terY || (y === terY && m <= terM)) {
+          meses.push(`${y}-${String(m).padStart(2, "0")}`);
+          m++; if (m > 12) { m = 1; y++; }
+          if (meses.length > 60) break;
+        }
+        if (meses.length === 0) continue;
+
+        const valorMensal = Math.round((valorTotalAt / meses.length) * 100) / 100;
+        const contaNome = at.is_indireta ? "Custos Indiretos" : "Custos Diretos de Obra";
+        const origemDesc = `${at.eap_codigo ?? ""} - ${at.nome}`.trim().replace(/^- /, "");
+
+        for (const mes of meses) {
+          const dataComp = mes + "-01";
+          const dataVenc = mes + "-28";
+          const descricao = semValorBase
+            ? `Cronograma (sem valor): ${origemDesc} (${mes}) — configure valor_contrato no projeto`
+            : `Cronograma: ${origemDesc} (${mes})`;
+
+          const key = `${at.id}|${dataComp}`;
+          if (!existMap.has(key)) {
+            toInsert.push({ companyId, obraId: proj.obra_id, obraNome: proj.obra_nome,
+              contaNome, valorMensal, dataComp, dataVenc,
+              origemId: at.id, origemDesc, descricao });
+          } else {
+            const existVal = existMap.get(key)!;
+            if (Math.abs(existVal - valorMensal) > 0.005) {
+              toUpdate.push({ companyId, obraId: proj.obra_id, obraNome: proj.obra_nome,
+                contaNome, valorMensal, dataComp, dataVenc,
+                origemId: at.id, origemDesc, descricao });
+            }
+          }
+        }
+      }
+
+      // Bulk INSERT via pg pool nativo (evita stack overflow do Drizzle SQL builder)
+      // db.$client é o Pool do node-postgres
+      const pgPool = (db as any).$client;
+      const BATCH = 200;
+
+      if (pgPool && typeof pgPool.query === "function") {
+        for (let i = 0; i < toInsert.length; i += BATCH) {
+          const batch = toInsert.slice(i, i + BATCH);
+          if (batch.length === 0) continue;
+          const vals = batch.map((_, idx) => {
+            const b = idx * 15;
+            return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10},$${b+11},$${b+12},$${b+13},$${b+14},$${b+15},NOW(),NOW())`;
+          }).join(",");
+          const params = batch.flatMap(e => [
+            e.companyId, e.obraId, e.obraNome, e.contaNome, "despesa", "variavel",
+            e.valorMensal, null, e.dataComp, e.dataVenc, "a_pagar",
+            "cronograma_atividade", e.origemId, e.origemDesc, e.descricao
+          ]);
+          await pgPool.query(
+            `INSERT INTO financial_entries
+             (company_id,obra_id,obra_nome,conta_nome,tipo,natureza,
+              valor_previsto,valor_realizado,data_competencia,data_vencimento,
+              status,origem_modulo,origem_id,origem_descricao,descricao,created_at,updated_at)
+             VALUES ${vals} ON CONFLICT DO NOTHING`,
+            params
+          );
+          imported += batch.length;
+        }
+
+        // UPDATE para entradas com valor mudado
+        for (const e of toUpdate) {
+          await pgPool.query(
+            `UPDATE financial_entries
+             SET valor_previsto=$1, obra_nome=$2, conta_nome=$3, descricao=$4, updated_at=NOW()
+             WHERE company_id=$5 AND origem_modulo='cronograma_atividade' AND origem_id=$6 AND data_competencia=$7`,
+            [e.valorMensal, e.obraNome, e.contaNome, e.descricao, e.companyId, e.origemId, e.dataComp]
+          );
+          imported++;
+        }
+      } else {
+        // Fallback: individual inserts se o pool não estiver acessível
+        for (const e of toInsert) {
+          await dbExecute(db,
+            `INSERT INTO financial_entries
+             (company_id,obra_id,obra_nome,conta_nome,tipo,natureza,
+              valor_previsto,valor_realizado,data_competencia,data_vencimento,
+              status,origem_modulo,origem_id,origem_descricao,descricao,created_at,updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW())
+             ON CONFLICT DO NOTHING`,
+            [e.companyId, e.obraId, e.obraNome, e.contaNome, "despesa", "variavel",
+             e.valorMensal, null, e.dataComp, e.dataVenc, "a_pagar",
+             "cronograma_atividade", e.origemId, e.origemDesc, e.descricao]
+          );
+          imported++;
+        }
+        for (const e of toUpdate) {
+          await dbExecute(db,
+            `UPDATE financial_entries
+             SET valor_previsto=$1, obra_nome=$2, conta_nome=$3, descricao=$4, updated_at=NOW()
+             WHERE company_id=$5 AND origem_modulo='cronograma_atividade' AND origem_id=$6 AND data_competencia=$7`,
+            [e.valorMensal, e.obraNome, e.contaNome, e.descricao, e.companyId, e.origemId, e.dataComp]
+          );
+          imported++;
+        }
+      }
+
+      console.log(`[FinancialBridge][cronograma] projeto=${proj.projeto_id} inseridos=${toInsert.length} atualizados=${toUpdate.length}`);
+    }
+  } catch (e) {
+    erros++;
+    console.error("[FinancialBridge][cronograma_atividade]", e);
+  }
+
+  await logImport(db, companyId, "cronograma_atividade", mesRef ?? mesComp(), imported, erros);
+  return imported;
+}
+
+// MASTER: executar todos os imports de receita + previsões + cronograma
 export async function runAllReceitasImport(companyId: number, mesRef?: string) {
   const mes = mesRef ?? mesComp();
   const results = await Promise.allSettled([
@@ -1925,8 +2168,8 @@ export async function runAllReceitasImport(companyId: number, mesRef?: string) {
     importPlanejamentoMedicoesToFinancial(companyId, mes),
     importPlanejamentoProjetosPrevistoToFinancial(companyId, mes),
     importObrasToFinancialRevenue(companyId, mes),
-    // Importar receitas cadastradas manualmente em Receitas de Obras → Contas a Receber
     importFinancialRevenueToEntries(companyId, mes),
+    importAtividadesCronogramaToFinancial(companyId, mes),
   ]);
 
   const totals = results.map(r => r.status === "fulfilled" ? r.value : 0);

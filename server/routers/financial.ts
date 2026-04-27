@@ -802,10 +802,10 @@ export const financialRouter = router({
               descricao, conta_nome AS "contaNome", obra_nome AS "obraNome"
        FROM financial_entries
        WHERE company_id IN (${inlineIds(ids)})
-                  AND COALESCE(data_pagamento,data_vencimento,data_competencia) BETWEEN           AND          
-                  AND status NOT IN ('cancelado')
-                  ${obraCond}
-              ORDER BY COALESCE(data_pagamento,data_vencimento,data_competencia) ASC`,
+         AND COALESCE(data_pagamento,data_vencimento,data_competencia) BETWEEN $1 AND $2
+         AND status NOT IN ('cancelado')
+         ${obraCond}
+       ORDER BY COALESCE(data_pagamento,data_vencimento,data_competencia) ASC`,
       [input.dataInicio, input.dataFim]
     );
     const lancamentos = rows(res);
