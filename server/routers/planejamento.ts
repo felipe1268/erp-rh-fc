@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
+import { importAtividadesCronogramaToFinancial } from "../services/financialIntegrationBridge";
 import { eq, and, desc, asc, sql, isNotNull, inArray, or, ilike, lt, ne } from "drizzle-orm";
 import {
   planejamentoProjetos,
@@ -363,11 +364,26 @@ export const planejamentoRouter = router({
 
   aprovarRevisao: protectedProcedure
     .input(z.object({ id: z.number(), aprovadoPor: z.string().optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [rev] = await db.select({ projetoId: planejamentoRevisoes.projetoId })
+        .from(planejamentoRevisoes).where(eq(planejamentoRevisoes.id, input.id)).limit(1);
       await db.update(planejamentoRevisoes)
         .set({ status: "aprovada", aprovadoPor: input.aprovadoPor ?? null })
         .where(eq(planejamentoRevisoes.id, input.id));
+
+      // ─── REGRA DE OURO: Aprovação de revisão → atualiza cronograma financeiro ──
+      // Quando uma revisão é aprovada, o financeiro deve refletir o novo baseline
+      // imediatamente, removendo projeções obsoletas e inserindo as novas.
+      const companyId = (ctx as any).user?.companyId;
+      if (companyId && rev?.projetoId) {
+        setImmediate(() => {
+          importAtividadesCronogramaToFinancial(Number(companyId), undefined, { projetoId: rev.projetoId! })
+            .then(n => console.log(`[GoldenRule][aprovarRevisao] revisao=${input.id} → ${n} entradas sync`))
+            .catch(e => console.error("[GoldenRule][aprovarRevisao]", e));
+        });
+      }
+
       return { success: true };
     }),
 
@@ -797,6 +813,18 @@ export const planejamentoRouter = router({
           }
         }
       });
+
+      // ─── REGRA DE OURO: Sincroniza cronograma financeiro automaticamente ──
+      // Qualquer alteração nas atividades (pesos, datas, remoção) reflete
+      // imediatamente no fluxo de caixa projetado da empresa — sem intervenção manual.
+      const companyId = (ctx as any).user?.companyId;
+      if (companyId) {
+        setImmediate(() => {
+          importAtividadesCronogramaToFinancial(Number(companyId), undefined, { projetoId: input.projetoId })
+            .then(n => console.log(`[GoldenRule][salvarAtividades] projeto=${input.projetoId} → ${n} entradas sync`))
+            .catch(e => console.error("[GoldenRule][salvarAtividades]", e));
+        });
+      }
 
       return { success: true };
     }),

@@ -1919,7 +1919,11 @@ export async function importObrasToFinancialRevenue(companyId: number, mesRef?: 
 }
 
 // Importa atividades do cronograma (planejamento_atividades) como despesas previstas no fluxo de caixa
-export async function importAtividadesCronogramaToFinancial(companyId: number, mesRef?: string): Promise<number> {
+export async function importAtividadesCronogramaToFinancial(
+  companyId: number,
+  mesRef?: string,
+  opts?: { projetoId?: number }
+): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
   let imported = 0;
@@ -1928,6 +1932,7 @@ export async function importAtividadesCronogramaToFinancial(companyId: number, m
   try {
     // Busca projetos vinculados a obras desta empresa (incluindo projetos com valor_contrato=0)
     // Inclui fallback de valor via orcamento vinculado (por orcamento_id ou por obra_id)
+    const projetoFilter = opts?.projetoId ? `AND pp.id = ${Number(opts.projetoId)}` : "";
     const { rows: projetos } = await dbExecute(db,
       `SELECT pp.id AS projeto_id, pp.obra_id, pp.nome,
               pp.valor_contrato::numeric AS valor_contrato,
@@ -1954,7 +1959,8 @@ export async function importAtividadesCronogramaToFinancial(companyId: number, m
          ORDER BY id DESC LIMIT 1
        ) orc_obra ON true
        WHERE pp.company_id = $1
-         AND o."deletedAt" IS NULL`,
+         AND o."deletedAt" IS NULL
+         ${projetoFilter}`,
       [companyId]
     );
 
@@ -2025,6 +2031,8 @@ export async function importAtividadesCronogramaToFinancial(companyId: number, m
       };
       const toInsert: EntradaCronograma[] = [];
       const toUpdate: EntradaCronograma[] = [];
+      // Rastreia todos os pares (origemId|dataComp) esperados — usados para limpar órfãos
+      const expectedKeys = new Set<string>();
 
       for (const at of atividades) {
         const peso = parseFloat(at.peso ?? "0");
@@ -2066,6 +2074,8 @@ export async function importAtividadesCronogramaToFinancial(companyId: number, m
             : `Cronograma: ${origemDesc} (${mes})`;
 
           const key = `${at.id}|${dataComp}`;
+          expectedKeys.add(key);
+
           if (!existMap.has(key)) {
             toInsert.push({ companyId, obraId: proj.obra_id, obraNome: proj.obra_nome,
               contaNome, valorMensal, dataComp, dataVenc,
@@ -2079,6 +2089,36 @@ export async function importAtividadesCronogramaToFinancial(companyId: number, m
             }
           }
         }
+      }
+
+      // ─── LIMPEZA DE ÓRFÃOS (REGRA DE OURO) ───────────────────────────────
+      // Quando o cronograma é revisado (atividades removidas, datas encurtadas),
+      // as entradas financeiras que não correspondem mais ao cronograma atual
+      // devem ser removidas para manter o caixa sempre sincronizado.
+      const orphanKeys = [...existMap.keys()].filter(k => !expectedKeys.has(k));
+      if (orphanKeys.length > 0) {
+        const pgPool2 = (db as any).$client;
+        for (const orphanKey of orphanKeys) {
+          const [origemIdStr, dataCompStr] = orphanKey.split("|");
+          const origemIdNum = parseInt(origemIdStr);
+          if (!origemIdNum || !dataCompStr) continue;
+          if (pgPool2 && typeof pgPool2.query === "function") {
+            await pgPool2.query(
+              `DELETE FROM financial_entries
+               WHERE company_id=$1 AND origem_modulo='cronograma_atividade'
+                 AND origem_id=$2 AND data_competencia=$3 AND status='a_pagar'`,
+              [companyId, origemIdNum, dataCompStr]
+            );
+          } else {
+            await dbExecute(db,
+              `DELETE FROM financial_entries
+               WHERE company_id=$1 AND origem_modulo='cronograma_atividade'
+                 AND origem_id=$2 AND data_competencia=$3 AND status='a_pagar'`,
+              [companyId, origemIdNum, dataCompStr]
+            );
+          }
+        }
+        console.log(`[FinancialBridge][cronograma] projeto=${proj.projeto_id} órfãos removidos=${orphanKeys.length}`);
       }
 
       // Bulk INSERT via pg pool nativo (evita stack overflow do Drizzle SQL builder)
