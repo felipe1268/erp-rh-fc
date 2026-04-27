@@ -404,6 +404,35 @@ export const financialRouter = router({
        input.observacoes ?? null]
     );
     const id = rows(res)[0]?.id;
+
+    // Criar automaticamente um financial_entry tipo='receita' para aparecer no Contas a Receber
+    if (id) {
+      const mesComp = input.dataVencimento
+        ? input.dataVencimento.substring(0, 7)
+        : new Date().toISOString().substring(0, 7);
+      const obraInfo = input.obraNome ?? `Obra ${input.obraId}`;
+      const clienteInfo = input.clienteNome ? ` — ${input.clienteNome}` : "";
+      const medicaoInfo = input.medicaoNumero ? ` #${input.medicaoNumero}` : "";
+      await db.execute(
+        `INSERT INTO financial_entries
+         (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
+          valor_previsto, data_competencia, data_vencimento, status,
+          origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at)
+         VALUES ($1,$2,$3,'Faturamento de Obras','receita','variavel',
+                 $4, $5::date, $6::date, 'a_receber',
+                 'revenue', $7, $8, $9, NOW(), NOW())`,
+        [
+          input.companyId, input.obraId, obraInfo,
+          vlq > 0 ? vlq : input.valorMedicao,
+          mesComp + "-01",
+          input.dataVencimento ?? mesComp + "-30",
+          id,
+          `Medição${medicaoInfo} — ${obraInfo}${clienteInfo}`,
+          `Faturamento${medicaoInfo}: ${obraInfo}`,
+        ]
+      );
+    }
+
     await createAuditLog({ action: "financial_revenue_created", userId: ctx.user?.id, companyId: input.companyId, details: `Receita obra ${input.obraId}: R$${input.valorMedicao}` });
     return { id };
   }),
@@ -430,6 +459,27 @@ export const financialRouter = router({
        input.dataRecebimento ?? null, input.valorRecebido ?? null,
        input.formaPagamento ?? null, input.id, input.companyId]
     );
+
+    // Sincronizar status no financial_entry correspondente
+    const entryStatusMap: Record<string, string> = {
+      a_faturar: "a_receber",
+      faturado: "a_receber",
+      a_receber: "a_receber",
+      recebido_parcial: "recebido_parcial",
+      recebido_total: "recebido",
+      cancelado: "cancelado",
+    };
+    const entryStatus = entryStatusMap[input.status] ?? "a_receber";
+    await db.execute(
+      `UPDATE financial_entries
+       SET status=$1,
+           valor_realizado=CASE WHEN $2::numeric > 0 THEN $2::numeric ELSE valor_realizado END,
+           data_pagamento=COALESCE($3, data_pagamento),
+           updated_at=NOW()
+       WHERE origem_modulo='revenue' AND origem_id=$4 AND company_id=$5`,
+      [entryStatus, input.valorRecebido ?? 0, input.dataRecebimento ?? null, input.id, input.companyId]
+    );
+
     await createAuditLog({ action: "financial_revenue_status_updated", userId: ctx.user?.id, companyId: input.companyId, details: `Revenue ${input.id} → ${input.status}` });
     return { ok: true };
   }),

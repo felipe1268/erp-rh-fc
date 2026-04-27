@@ -1477,6 +1477,82 @@ export async function importPlanejamentoMedicoesToFinancial(companyId: number, m
   return imported;
 }
 
+// 3.5 — financial_revenue histórico → financial_entries (receitas de obras cadastradas)
+// Garante que qualquer receita criada manualmente apareça no Contas a Receber
+export async function importFinancialRevenueToEntries(companyId: number, mesRef?: string): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  let imported = 0;
+  let erros = 0;
+
+  try {
+    const { rows } = await dbExecute(db,
+      `SELECT fr.id, fr.obra_id, fr.obra_nome, fr.cliente_nome, fr.valor_medicao,
+              fr.valor_liquido_receber, fr.medicao_numero, fr.data_vencimento,
+              fr.status, fr.created_at
+       FROM financial_revenue fr
+       WHERE fr.company_id = $1
+         AND fr.status NOT IN ('cancelado','recebido_total')
+         AND fr.valor_medicao > 0
+         AND NOT EXISTS (
+           SELECT 1 FROM financial_entries fe
+           WHERE fe.origem_modulo = 'revenue'
+             AND fe.origem_id = fr.id
+             AND fe.company_id = $2
+         )
+       ORDER BY fr.created_at DESC
+       LIMIT 500`,
+      [companyId, companyId]
+    );
+
+    const statusMap: Record<string, string> = {
+      a_faturar: "a_receber",
+      faturado: "a_receber",
+      a_receber: "a_receber",
+      recebido_parcial: "recebido_parcial",
+      recebido_total: "recebido",
+      cancelado: "cancelado",
+    };
+
+    for (const r of rows) {
+      const valor = parseFloat(r.valor_liquido_receber ?? r.valor_medicao ?? "0");
+      if (valor <= 0) continue;
+      // data_vencimento vem como string "YYYY-MM-DD" do banco; created_at como Date — usar mesComp() quando nulo
+      const vencimento = r.data_vencimento
+        ? String(r.data_vencimento).substring(0, 10)
+        : mesComp() + "-30";
+      const mesCompetencia = vencimento.substring(0, 7);
+      const numInfo = r.medicao_numero ? ` #${r.medicao_numero}` : "";
+      const clienteInfo = r.cliente_nome ? ` — ${r.cliente_nome}` : "";
+      const entryStatus = statusMap[r.status] ?? "a_receber";
+
+      await insertEntry(db, {
+        companyId,
+        obraId: r.obra_id ?? null,
+        obraNome: r.obra_nome ?? null,
+        contaNome: "Faturamento de Obras",
+        tipo: "receita",
+        natureza: "variavel",
+        valorPrevisto: valor,
+        dataCompetencia: mesCompetencia + "-01",
+        dataVencimento: vencimento,
+        status: entryStatus,
+        origemModulo: "revenue",
+        origemId: r.id,
+        origemDescricao: `Medição${numInfo} — ${r.obra_nome ?? "Obra"}${clienteInfo}`,
+        descricao: `Faturamento${numInfo}: ${r.obra_nome ?? "Obra"}`,
+      });
+      imported++;
+    }
+  } catch (e) {
+    erros++;
+    console.error("[FinancialBridge][financial_revenue]", e);
+  }
+
+  await logImport(db, companyId, "financial_revenue", mesRef ?? mesComp(), imported, erros);
+  return imported;
+}
+
 // ─────────────────────────────────────────────────────────────
 // MASTER: executar todos os imports de despesa
 // ─────────────────────────────────────────────────────────────
@@ -1512,8 +1588,9 @@ export async function runAllReceitasImport(companyId: number, mesRef?: string) {
     importMedicoesObraToFinancial(companyId, mes),
     importMedicoesPJToFinancial(companyId, mes),
     importTerceiroCobravelToFinancial(companyId, mes),
-    // NOVO — Planejamento medições (recebimentos de contratos)
     importPlanejamentoMedicoesToFinancial(companyId, mes),
+    // Importar receitas cadastradas manualmente em Receitas de Obras → Contas a Receber
+    importFinancialRevenueToEntries(companyId, mes),
   ]);
 
   const totals = results.map(r => r.status === "fulfilled" ? r.value : 0);
