@@ -119,7 +119,7 @@ const ALL_ROUTES = [
   { section: "Financeiro", color: "emerald", routes: [
     { path: "/financeiro", label: "Painel Financeiro", icon: "LayoutDashboard" },
     { path: "/financeiro/lancamentos", label: "Lançamentos", icon: "Receipt" },
-    { path: "/financeiro/receitas", label: "Receitas", icon: "TrendingUp" },
+    { path: "/financeiro/contas-a-receber", label: "Contas a Receber", icon: "TrendingUp" },
     { path: "/financeiro/contas-a-pagar", label: "Contas a Pagar", icon: "Wallet" },
     { path: "/financeiro/contas-a-receber", label: "Contas a Receber", icon: "Banknote" },
     { path: "/financeiro/dre", label: "DRE", icon: "BarChart2" },

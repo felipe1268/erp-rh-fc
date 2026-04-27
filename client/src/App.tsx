@@ -352,7 +352,7 @@ function Router() {
         <Route path={"/banco-horas"} component={() => <RouteGuard component={BancoHoras} route="/banco-horas" />} />
         <Route path="/financeiro" component={() => <RouteGuard component={FinanceiroDashboard} route="/financeiro" />} />
         <Route path="/financeiro/lancamentos" component={() => <RouteGuard component={FinanceiroLancamentos} route="/financeiro/lancamentos" />} />
-        <Route path="/financeiro/receitas" component={() => <RouteGuard component={FinanceiroReceitas} route="/financeiro/lancamentos" />} />
+        <Route path="/financeiro/receitas" component={() => { window.location.replace("/financeiro/contas-a-receber"); return null; }} />
         <Route path="/financeiro/contas-a-pagar" component={() => <RouteGuard component={FinanceiroContasAPagar} route="/financeiro/contas-a-pagar" />} />
         <Route path="/financeiro/contas-a-receber" component={() => <RouteGuard component={FinanceiroContasAReceber} route="/financeiro/contas-a-receber" />} />
         <Route path="/financeiro/dre" component={() => <RouteGuard component={FinanceiroDRE} route="/financeiro/dre" />} />

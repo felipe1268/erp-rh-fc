@@ -419,9 +419,8 @@ const menuSectionsFinanceiro: MenuSection[] = [
     items: [
       { icon: DollarSign,    label: "Lançamentos",       path: "/financeiro/lancamentos" },
       { icon: Repeat,        label: "Recorrentes",        path: "/financeiro/recorrentes" },
-      { icon: TrendingUp,    label: "Receitas de Obras",  path: "/financeiro/receitas" },
+      { icon: TrendingUp,    label: "Contas a Receber",   path: "/financeiro/contas-a-receber" },
       { icon: CheckCircle,   label: "Contas a Pagar",     path: "/financeiro/contas-a-pagar" },
-      { icon: CreditCard,    label: "Contas a Receber",   path: "/financeiro/contas-a-receber" },
     ],
   },
   {

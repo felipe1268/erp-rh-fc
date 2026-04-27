@@ -2320,7 +2320,7 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
   financeiro: [
     { section: "Painel", label: "Dashboard", path: "/financeiro" },
     { section: "Movimentações", label: "Lançamentos", path: "/financeiro/lancamentos" },
-    { section: "Movimentações", label: "Receitas de Obras", path: "/financeiro/receitas" },
+    { section: "Movimentações", label: "Contas a Receber", path: "/financeiro/contas-a-receber" },
     { section: "Movimentações", label: "Contas a Pagar", path: "/financeiro/contas-a-pagar" },
     { section: "Movimentações", label: "Contas a Receber", path: "/financeiro/contas-a-receber" },
     { section: "Análise", label: "DRE", path: "/financeiro/dre" },
