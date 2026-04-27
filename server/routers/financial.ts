@@ -2572,9 +2572,26 @@ export const financialRouter = router({
     const projetoIds = projetos.map((p: any) => Number(p.projeto_id)).filter(Boolean);
     const idsStr = projetoIds.join(",");
 
-    // 2. Distribuição mensal prevista via cruzamento atividades × orçamento
-    //    Uma única query SQL calcula a fração de dias de cada par (item × atividade) por mês
-    const anoInt = Number(input.ano); // seguro inlinear: validado pelo Zod como number
+    // 2. Configurações de medição por projeto (tipo, sinal, retenção, parcelas)
+    const anoInt = Number(input.ano);
+    const configRes = await dbExecute(db, `
+      SELECT c.projeto_id,
+             c.tipo_medicao,
+             c.entrada::numeric         AS entrada,
+             c.numero_parcelas,
+             c.inicio_faturamento::text AS inicio_faturamento,
+             c.sinal_pct::numeric       AS sinal_pct,
+             c.sinal_valor::numeric     AS sinal_valor,
+             c.retencao_pct::numeric    AS retencao_pct,
+             c.data_inicio_obra::text   AS data_inicio_obra
+      FROM planejamento_medicao_config c
+      WHERE c.projeto_id IN (${idsStr})
+    `, []);
+    const configByProjeto: Record<number, any> = {};
+    for (const c of configRes.rows) configByProjeto[Number(c.projeto_id)] = c;
+
+    // 3. Distribuição mensal de venda bruta via cruzamento atividades×orçamento
+    //    Cobre o timeline completo do projeto (todos os meses, não só o ano atual)
     const prevRes = await dbExecute(db, `
       WITH rev_ativa AS (
         SELECT DISTINCT ON (r.projeto_id) r.projeto_id, r.id AS rev_id
@@ -2635,7 +2652,12 @@ export const financialRouter = router({
         SELECT projeto_id, SUM(venda_frac) AS soma_venda
         FROM all_pairs GROUP BY projeto_id
       ),
-      -- Fallback: projetos sem cruzamento → distribuição linear por timeline das atividades
+      -- Range completo de cada projeto (para gerar meses do timeline todo, não só o ano)
+      ativ_any AS (
+        SELECT na.projeto_id, MIN(na.data_inicio) AS inicio, MAX(na.data_fim) AS fim
+        FROM norm_ativ na GROUP BY na.projeto_id
+      ),
+      -- Fallback: projetos sem cruzamento → distribuição linear por timeline
       ativ_range AS (
         SELECT na.projeto_id,
                MIN(na.data_inicio) AS inicio, MAX(na.data_fim) AS fim,
@@ -2644,13 +2666,15 @@ export const financialRouter = router({
         WHERE na.projeto_id NOT IN (SELECT projeto_id FROM proj_sums WHERE soma_venda > 0)
         GROUP BY na.projeto_id
       ),
-      -- Meses do ano alvo para o cruzamento
-      meses_ano AS (
-        SELECT generate_series(
-          MAKE_DATE(${anoInt}, 1, 1),
-          MAKE_DATE(${anoInt}, 12, 1),
-          '1 month'::interval
-        )::date AS mes_inicio
+      -- Todos os meses do timeline de cada projeto
+      meses_all AS (
+        SELECT aa.projeto_id,
+               generate_series(
+                 DATE_TRUNC('month', aa.inicio),
+                 DATE_TRUNC('month', aa.fim),
+                 '1 month'::interval
+               )::date AS mes_inicio
+        FROM ativ_any aa
       ),
       -- Distribuição via cruzamento atividade×orçamento
       dist_cruzamento AS (
@@ -2664,7 +2688,9 @@ export const financialRouter = router({
                ) AS valor_raw,
                ps.soma_venda
         FROM all_pairs ap
-        JOIN meses_ano m ON m.mes_inicio <= ap.data_fim AND (m.mes_inicio + INTERVAL '1 month' - INTERVAL '1 day')::date >= ap.data_inicio
+        JOIN meses_all m ON m.projeto_id = ap.projeto_id
+          AND m.mes_inicio <= ap.data_fim
+          AND (m.mes_inicio + INTERVAL '1 month' - INTERVAL '1 day')::date >= ap.data_inicio
         JOIN proj_sums ps ON ps.projeto_id = ap.projeto_id
         GROUP BY ap.projeto_id, m.mes_inicio, ps.soma_venda
       ),
@@ -2678,7 +2704,9 @@ export const financialRouter = router({
                )::numeric / NULLIF(ar.total_dias, 0) AS frac_mes,
                ar.total_dias
         FROM ativ_range ar
-        JOIN meses_ano m ON m.mes_inicio <= ar.fim AND (m.mes_inicio + INTERVAL '1 month' - INTERVAL '1 day')::date >= ar.inicio
+        JOIN meses_all m ON m.projeto_id = ar.projeto_id
+          AND m.mes_inicio <= ar.fim
+          AND (m.mes_inicio + INTERVAL '1 month' - INTERVAL '1 day')::date >= ar.inicio
       )
       SELECT dc.projeto_id, dc.competencia,
              dc.valor_raw AS valor_previsto_raw,
@@ -2714,47 +2742,121 @@ export const financialRouter = router({
       ORDER BY pm.competencia ASC, pm.numero ASC
     `, [input.companyId, String(input.ano)]);
     const medicoes = medRes.rows;
-    console.log(`[ContasReceber] company=${input.companyId} ano=${input.ano} projetos=${projetos.length} prev_rows=${prevRows.length} medicoes=${medicoes.length}`);
+    console.log(`[ContasReceber] company=${input.companyId} ano=${input.ano} projetos=${projetos.length} prev_rows=${prevRows.length} medicoes=${medRes.rows.length}`);
 
-    // 4. Monta mapa previsto por projeto+mês (com normalização para valor_contrato)
-    // Agrupa prevRows por projeto
-    const prevByProjeto: Record<number, Record<string, number>> = {};
+    // 4. Agrupa venda bruta por projeto+mês e normaliza para total_venda do orçamento
+    const projetoMap: Record<number, any> = {};
+    for (const p of projetos) projetoMap[Number(p.projeto_id)] = p;
+
+    const rawVendaByProjeto: Record<number, Record<string, number>> = {};
     const somaVendaByProjeto: Record<number, number> = {};
     for (const r of prevRows) {
       const pid = Number(r.projeto_id);
       const mes = String(r.competencia);
-      if (!prevByProjeto[pid]) prevByProjeto[pid] = {};
+      if (!rawVendaByProjeto[pid]) rawVendaByProjeto[pid] = {};
+      const p = projetoMap[pid];
+      const totalVenda = parseFloat(p?.total_venda ?? "0") || parseFloat(p?.valor_contrato ?? "0") || 0;
       if (r.valor_previsto_raw !== null && r.valor_previsto_raw !== undefined) {
-        prevByProjeto[pid][mes] = (prevByProjeto[pid][mes] ?? 0) + parseFloat(r.valor_previsto_raw ?? "0");
-        somaVendaByProjeto[pid] = parseFloat(r.soma_venda ?? "0") || 0;
+        rawVendaByProjeto[pid][mes] = (rawVendaByProjeto[pid][mes] ?? 0) + parseFloat(r.valor_previsto_raw);
+        if (!somaVendaByProjeto[pid]) somaVendaByProjeto[pid] = parseFloat(r.soma_venda ?? "0") || 0;
+      } else if (r.frac_fallback !== null && r.frac_fallback !== undefined) {
+        rawVendaByProjeto[pid][mes] = (rawVendaByProjeto[pid][mes] ?? 0) + parseFloat(r.frac_fallback) * totalVenda;
       }
     }
-    // Fallback rows: frac × valor_contrato do projeto
-    const projetoMap: Record<number, any> = {};
-    for (const p of projetos) projetoMap[Number(p.projeto_id)] = p;
-    for (const r of prevRows) {
-      if (r.frac_fallback !== null && r.frac_fallback !== undefined) {
-        const pid = Number(r.projeto_id);
-        const mes = String(r.competencia);
-        const totalVenda = parseFloat(projetoMap[pid]?.total_venda ?? "0") || parseFloat(projetoMap[pid]?.valor_contrato ?? "0") || 0;
-        if (!prevByProjeto[pid]) prevByProjeto[pid] = {};
-        prevByProjeto[pid][mes] = (prevByProjeto[pid][mes] ?? 0) + parseFloat(r.frac_fallback ?? "0") * totalVenda;
-      }
-    }
-    // Normaliza cruzamento: escala soma para total_venda do orçamento
     for (const p of projetos) {
       const pid = Number(p.projeto_id);
       const totalVenda = parseFloat(p.total_venda ?? "0") || parseFloat(p.valor_contrato ?? "0") || 0;
       const soma = somaVendaByProjeto[pid] ?? 0;
       if (soma > 0 && totalVenda > 0 && Math.abs(soma - totalVenda) > 1) {
         const esc = totalVenda / soma;
-        for (const mes of Object.keys(prevByProjeto[pid] ?? {})) {
-          prevByProjeto[pid][mes] *= esc;
+        for (const mes of Object.keys(rawVendaByProjeto[pid] ?? {})) rawVendaByProjeto[pid][mes] *= esc;
+      }
+    }
+
+    // 5. Aplica configuração de medição (tipo, sinal, retenção, parcelas) para calcular
+    //    o liquido previsto por projeto+mês — replica exatamente a lógica do frontend
+    const prevByProjeto: Record<number, Record<string, number>> = {};
+    for (const p of projetos) {
+      const pid = Number(p.projeto_id);
+      const cfg = configByProjeto[pid];
+      const totalVenda = parseFloat(p.total_venda ?? "0") || parseFloat(p.valor_contrato ?? "0") || 0;
+      const vendaByMes = rawVendaByProjeto[pid] ?? {};
+      const tipoMedicao = cfg?.tipo_medicao ?? "avanco";
+      const retencaoPct = parseFloat(cfg?.retencao_pct ?? "0") || 0;
+      prevByProjeto[pid] = {};
+
+      if (tipoMedicao === "parcela_fixa" && cfg) {
+        // Parcelas fixas: entrada no mês inicial, N parcelas mensais seguintes
+        const entrada = parseFloat(cfg.entrada ?? "0") || 0;
+        const numeroParcelas = Math.max(1, parseInt(cfg.numero_parcelas ?? "6") || 6);
+        const priDataMes = Object.keys(vendaByMes).sort()[0] ?? null;
+        const inicioMes = (cfg.inicio_faturamento as string | null)?.substring(0, 7) ?? priDataMes;
+        if (inicioMes) {
+          const saldoParcelar = Math.max(0, totalVenda - entrada);
+          const valorParcela = numeroParcelas > 0 ? saldoParcelar / numeroParcelas : 0;
+          let totalRetencao = 0;
+          let lastMes = inicioMes;
+          if (entrada > 0) {
+            const ret = parseFloat((entrada * retencaoPct / 100).toFixed(2));
+            prevByProjeto[pid][inicioMes] = (prevByProjeto[pid][inicioMes] ?? 0) + parseFloat((entrada - ret).toFixed(2));
+            totalRetencao += ret;
+          }
+          for (let i = 1; i <= numeroParcelas; i++) {
+            const d = new Date(inicioMes + "-01");
+            d.setMonth(d.getMonth() + i);
+            const pm = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            const ret = parseFloat((valorParcela * retencaoPct / 100).toFixed(2));
+            prevByProjeto[pid][pm] = (prevByProjeto[pid][pm] ?? 0) + parseFloat((valorParcela - ret).toFixed(2));
+            totalRetencao += ret;
+            if (pm > lastMes) lastMes = pm;
+          }
+          if (totalRetencao > 0) {
+            const [aU, mU] = lastMes.split("-").map(Number);
+            const nd = new Date(aU, mU, 1);
+            const proxMes = `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, "0")}`;
+            prevByProjeto[pid][proxMes] = (prevByProjeto[pid][proxMes] ?? 0) + parseFloat(totalRetencao.toFixed(2));
+          }
+        }
+      } else {
+        // Avanço físico: distribui proporcionalmente ao cruzamento orç×cronograma
+        const sinalValor = parseFloat(cfg?.sinal_valor ?? "0") || 0;
+        const sinalPct   = parseFloat(cfg?.sinal_pct   ?? "0") || 0;
+        const dataInicioObra = (cfg?.data_inicio_obra as string | null) ?? null;
+        const sinalRaw   = sinalValor > 0 ? sinalValor : (totalVenda * sinalPct / 100);
+        const sinalTotal = Math.max(0, Math.min(sinalRaw, totalVenda));
+        const hasSinal   = sinalTotal > 0 && dataInicioObra !== null;
+        const baseMedicoes = hasSinal ? totalVenda - sinalTotal : totalVenda;
+        const escala = totalVenda > 0 ? baseMedicoes / totalVenda : 1;
+
+        const mesesOrd = Object.keys(vendaByMes).sort();
+        let somaArredondada = 0;
+        let totalRetencao = 0;
+        let lastMes = "";
+        for (let i = 0; i < mesesOrd.length; i++) {
+          const mes = mesesOrd[i];
+          const medicaoBruta = i === mesesOrd.length - 1
+            ? parseFloat((baseMedicoes - somaArredondada).toFixed(2))
+            : parseFloat(((vendaByMes[mes] ?? 0) * escala).toFixed(2));
+          somaArredondada += medicaoBruta;
+          const retencao = parseFloat((medicaoBruta * retencaoPct / 100).toFixed(2));
+          prevByProjeto[pid][mes] = (prevByProjeto[pid][mes] ?? 0) + parseFloat((medicaoBruta - retencao).toFixed(2));
+          totalRetencao += retencao;
+          lastMes = mes;
+        }
+        if (hasSinal && dataInicioObra) {
+          const sinalMes = dataInicioObra.substring(0, 7);
+          prevByProjeto[pid][sinalMes] = (prevByProjeto[pid][sinalMes] ?? 0) + sinalTotal;
+        }
+        if (totalRetencao > 0 && lastMes) {
+          const [aU, mU] = lastMes.split("-").map(Number);
+          const nd = new Date(aU, mU, 1);
+          const proxMes = `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, "0")}`;
+          prevByProjeto[pid][proxMes] = (prevByProjeto[pid][proxMes] ?? 0) + parseFloat(totalRetencao.toFixed(2));
         }
       }
     }
 
-    // 5. Mapa medições salvas por projeto+mês
+    // 6. Mapa medições salvas por projeto+mês
     const medByProjeto: Record<number, any[]> = {};
     for (const m of medicoes) {
       const pid = Number(m.projeto_id);
