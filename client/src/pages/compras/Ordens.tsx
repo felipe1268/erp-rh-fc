@@ -838,7 +838,7 @@ export default function Ordens() {
               )}
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className={`grid gap-4 ${numParc > 1 ? "grid-cols-2" : "grid-cols-3"}`}>
               <div className="space-y-1.5">
                 <Label className="text-gray-700 text-sm font-medium">Prazo Entrega (dias) *</Label>
                 <Input type="number" min="1" className="bg-white border-gray-300 text-gray-900" value={(form as any).prazoEntregaDias ?? ""} onChange={e => {
@@ -871,11 +871,13 @@ export default function Ordens() {
                   });
                 }} />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-gray-700 text-sm font-medium text-orange-700">Vencimento do Pagamento</Label>
-                <Input type="date" className="bg-white border-orange-300 text-gray-900 focus:border-orange-500" value={form.dataVencimento} onChange={e => setForm(p => ({ ...p, dataVencimento: e.target.value }))} />
-                <p className="text-xs text-orange-500">Data que o pagamento deve ser efetuado ao fornecedor.</p>
-              </div>
+              {numParc === 1 && (
+                <div className="space-y-1.5">
+                  <Label className="text-gray-700 text-sm font-medium text-orange-700">Vencimento do Pagamento</Label>
+                  <Input type="date" className="bg-white border-orange-300 text-gray-900 focus:border-orange-500" value={form.dataVencimento} onChange={e => setForm(p => ({ ...p, dataVencimento: e.target.value }))} />
+                  <p className="text-xs text-orange-500">Data que o pagamento deve ser efetuado ao fornecedor.</p>
+                </div>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label className="text-gray-700 text-sm font-medium">Observações</Label>
