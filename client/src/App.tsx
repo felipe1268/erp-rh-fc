@@ -112,7 +112,6 @@ const FinanceiroCentrosCusto  = lazy(() => import("./pages/financeiro/Financeiro
 const FinanceiroConfiguracoes = lazy(() => import("./pages/financeiro/FinanceiroConfiguracoes"));
 const FinanceiroConciliacao   = lazy(() => import("./pages/financeiro/FinanceiroConciliacao"));
 const FinanceiroRecorrentes  = lazy(() => import("./pages/financeiro/FinanceiroRecorrentes"));
-const FinanceiroIntegracao   = lazy(() => import("./pages/financeiro/FinanceiroIntegracao"));
 const ApontamentosCampo = lazy(() => import("./pages/ApontamentosCampo"));
 const Feriados = lazy(() => import("./pages/Feriados"));
 const Dissidio = lazy(() => import("./pages/Dissidio"));
@@ -363,7 +362,6 @@ function Router() {
         <Route path="/financeiro/configuracoes" component={() => <RouteGuard component={FinanceiroConfiguracoes} route="/financeiro/lancamentos" />} />
         <Route path="/financeiro/conciliacao" component={() => <RouteGuard component={FinanceiroConciliacao} route="/financeiro/conciliacao" />} />
         <Route path="/financeiro/recorrentes" component={() => <RouteGuard component={FinanceiroRecorrentes} route="/financeiro/recorrentes" />} />
-        <Route path="/financeiro/integracao" component={() => <RouteGuard component={FinanceiroIntegracao} route="/financeiro/integracao" />} />
         <Route path={"/apontamentos-campo"} component={() => <RouteGuard component={ApontamentosCampo} route="/apontamentos-campo" />} />
         <Route path={"/feriados"} component={() => <RouteGuard component={Feriados} route="/feriados" />} />
         <Route path={"/dissidio"} component={() => <RouteGuard component={Dissidio} route="/dissidio" />} />
