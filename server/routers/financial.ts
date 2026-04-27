@@ -46,6 +46,13 @@ async function dbExecute(db: any, query: string, params: unknown[] = []): Promis
   return { rows: rowsArr };
 }
 
+
+// Safe inline of integer IDs to avoid pg-driver array literal issues
+function inlineIds(ids: number[]): string {
+  if (!ids || !ids.length) return "0";
+  return ids.map(Number).join(",");
+}
+
 export const financialRouter = router({
 
   // ─────────────────── PLANO DE CONTAS ───────────────────
@@ -66,9 +73,9 @@ export const financialRouter = router({
               conta_pai_id AS "contaPaiId", classificacao_dre AS "classificacaoDRE",
               ativo, ordem
        FROM financial_accounts
-       WHERE company_id = ANY($1::int[]) ${ativoPart} ${tipoPart}
-       ORDER BY ordem ASC, codigo ASC`,
-      [ids]
+       WHERE company_id IN (${inlineIds(ids)}) ${ativoPart} ${tipoPart}
+              ORDER BY ordem ASC, codigo ASC`,
+      []
     );
     return rows(res);
   }),
@@ -144,9 +151,9 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
-    const conds: string[] = [`e.company_id = ANY($1::int[])`];
-    const vals: any[] = [ids];
-    let i = 2;
+    const conds: string[] = [`e.company_id IN (${inlineIds(ids)})`];
+    const vals: any[] = [];
+    let i = 1;
     if (input.obraId) { conds.push(`e.obra_id=$${i++}`); vals.push(input.obraId); }
     if (input.tipo) { conds.push(`e.tipo=$${i++}`); vals.push(input.tipo); }
     if (input.status) { conds.push(`e.status=$${i++}`); vals.push(input.status); }
@@ -299,31 +306,31 @@ export const financialRouter = router({
     const [recRes, despRes, aReceberRes, apagarRes, vencRes] = await Promise.all([
       dbExecute(db, 
         `SELECT COALESCE(SUM(valor_realizado),0) AS total FROM financial_entries
-         WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('recebido','pago')
-           AND TO_CHAR(data_competencia,'YYYY-MM')=$2`,
-        [ids, mes]
+         WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('recebido','pago')
+           AND TO_CHAR(data_competencia,'YYYY-MM')=$1`,
+        [mes]
       ),
       dbExecute(db, 
         `SELECT COALESCE(SUM(valor_realizado),0) AS total FROM financial_entries
-         WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status IN ('pago','recebido')
-           AND TO_CHAR(data_competencia,'YYYY-MM')=$2`,
-        [ids, mes]
+         WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status IN ('pago','recebido')
+           AND TO_CHAR(data_competencia,'YYYY-MM')=$1`,
+        [mes]
       ),
       dbExecute(db, 
         `SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries
-         WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status='a_receber'`,
-        [ids]
+         WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status='a_receber'`,
+        []
       ),
       dbExecute(db, 
         `SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries
-         WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status='a_pagar'`,
-        [ids]
+         WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status='a_pagar'`,
+        []
       ),
       dbExecute(db, 
         `SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries
-         WHERE company_id=ANY($1::int[]) AND status IN ('a_pagar','a_receber')
+         WHERE company_id IN (${inlineIds(ids)}) AND status IN ('a_pagar','a_receber')
            AND data_vencimento < CURRENT_DATE`,
-        [ids]
+        []
       ),
     ]);
 
@@ -357,9 +364,11 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
-    const conds: string[] = [`company_id=ANY($1::int[])`];
-    const vals: any[] = [ids];
-    let i = 2;
+    // Monta IN clause diretamente (ids são integers — sem risco de injection)
+    const idList = ids.map(Number).join(",");
+    const conds: string[] = [`company_id IN (${idList})`];
+    const vals: any[] = [];
+    let i = 1;
     if (input.obraId) { conds.push(`obra_id=$${i++}`); vals.push(input.obraId); }
     if (input.status) { conds.push(`status=$${i++}`); vals.push(input.status); }
     vals.push(input.limit, input.offset);
@@ -512,9 +521,9 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
-    const conds: string[] = [`company_id=ANY($1::int[])`];
-    const vals: any[] = [ids];
-    let i = 2;
+    const conds: string[] = [`company_id IN (${inlineIds(ids)})`];
+    const vals: any[] = [];
+    let i = 1;
     if (input.mesCompetencia) { conds.push(`mes_competencia=$${i++}`); vals.push(input.mesCompetencia); }
     if (input.status) { conds.push(`status=$${i++}`); vals.push(input.status); }
     if (input.tipo) { conds.push(`tipo=$${i++}`); vals.push(input.tipo); }
@@ -682,56 +691,56 @@ export const financialRouter = router({
     const obraCond = input.obraId ? `AND obra_id=${input.obraId}` : "";
     const receitaBruta = await dbExecute(db, 
       `SELECT COALESCE(SUM(COALESCE(valor_realizado,valor_previsto)),0) AS total
-       FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' ${dataCond} ${obraCond} AND status NOT IN ('cancelado')`,
-      [ids]
+       FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' ${dataCond} ${obraCond} AND status NOT IN ('cancelado')`,
+      []
     );
     const deducoes = await dbExecute(db, 
       `SELECT COALESCE(SUM(COALESCE(valor_realizado,valor_previsto)),0) AS total
-       FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='imposto' ${dataCond} ${obraCond} AND status NOT IN ('cancelado')`,
-      [ids]
+       FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='imposto' ${dataCond} ${obraCond} AND status NOT IN ('cancelado')`,
+      []
     );
     const custoObra = await dbExecute(db, 
       `SELECT fa.classificacao_dre, COALESCE(SUM(COALESCE(fe.valor_realizado,fe.valor_previsto)),0) AS total
        FROM financial_entries fe
        LEFT JOIN financial_accounts fa ON fa.id=fe.conta_id
-       WHERE fe.company_id=ANY($1::int[]) AND fe.tipo='despesa' AND fa.tipo='custo_obra' ${dataCond} ${obraCond} AND fe.status NOT IN ('cancelado')
-       GROUP BY fa.classificacao_dre`,
-      [ids]
+       WHERE fe.company_id IN (${inlineIds(ids)}) AND fe.tipo='despesa' AND fa.tipo='custo_obra' ${dataCond} ${obraCond} AND fe.status NOT IN ('cancelado')
+              GROUP BY fa.classificacao_dre`,
+      []
     );
     const despFixa = await dbExecute(db, 
       `SELECT COALESCE(SUM(COALESCE(fe.valor_realizado,fe.valor_previsto)),0) AS total
        FROM financial_entries fe
        LEFT JOIN financial_accounts fa ON fa.id=fe.conta_id
-       WHERE fe.company_id=ANY($1::int[]) AND fe.tipo='despesa' AND fa.tipo='despesa_fixa' ${dataCond} AND fe.status NOT IN ('cancelado')`,
-      [ids]
+       WHERE fe.company_id IN (${inlineIds(ids)}) AND fe.tipo='despesa' AND fa.tipo='despesa_fixa' ${dataCond} AND fe.status NOT IN ('cancelado')`,
+      []
     );
     const despVar = await dbExecute(db, 
       `SELECT COALESCE(SUM(COALESCE(fe.valor_realizado,fe.valor_previsto)),0) AS total
        FROM financial_entries fe
        LEFT JOIN financial_accounts fa ON fa.id=fe.conta_id
-       WHERE fe.company_id=ANY($1::int[]) AND fe.tipo='despesa' AND fa.tipo='despesa_variavel' ${dataCond} AND fe.status NOT IN ('cancelado')`,
-      [ids]
+       WHERE fe.company_id IN (${inlineIds(ids)}) AND fe.tipo='despesa' AND fa.tipo='despesa_variavel' ${dataCond} AND fe.status NOT IN ('cancelado')`,
+      []
     );
     const despFin = await dbExecute(db, 
       `SELECT COALESCE(SUM(COALESCE(fe.valor_realizado,fe.valor_previsto)),0) AS total
        FROM financial_entries fe
        LEFT JOIN financial_accounts fa ON fa.id=fe.conta_id
-       WHERE fe.company_id=ANY($1::int[]) AND fe.tipo='despesa' AND fa.tipo='despesa_financeira' ${dataCond} AND fe.status NOT IN ('cancelado')`,
-      [ids]
+       WHERE fe.company_id IN (${inlineIds(ids)}) AND fe.tipo='despesa' AND fa.tipo='despesa_financeira' ${dataCond} AND fe.status NOT IN ('cancelado')`,
+      []
     );
     const recFin = await dbExecute(db, 
       `SELECT COALESCE(SUM(COALESCE(fe.valor_realizado,fe.valor_previsto)),0) AS total
        FROM financial_entries fe
        LEFT JOIN financial_accounts fa ON fa.id=fe.conta_id
-       WHERE fe.company_id=ANY($1::int[]) AND fe.tipo='receita' AND fa.tipo='receita_financeira' ${dataCond} AND fe.status NOT IN ('cancelado')`,
-      [ids]
+       WHERE fe.company_id IN (${inlineIds(ids)}) AND fe.tipo='receita' AND fa.tipo='receita_financeira' ${dataCond} AND fe.status NOT IN ('cancelado')`,
+      []
     );
     const impostos = await dbExecute(db, 
       `SELECT COALESCE(SUM(COALESCE(fe.valor_realizado,fe.valor_previsto)),0) AS total
        FROM financial_entries fe
        LEFT JOIN financial_accounts fa ON fa.id=fe.conta_id
-       WHERE fe.company_id=ANY($1::int[]) AND fa.tipo='imposto_resultado' ${dataCond} AND fe.status NOT IN ('cancelado')`,
-      [ids]
+       WHERE fe.company_id IN (${inlineIds(ids)}) AND fa.tipo='imposto_resultado' ${dataCond} AND fe.status NOT IN ('cancelado')`,
+      []
     );
 
     const rb = Number(rows(receitaBruta)[0]?.total ?? 0);
@@ -792,12 +801,12 @@ export const financialRouter = router({
               COALESCE(valor_realizado,valor_previsto) AS valor,
               descricao, conta_nome AS "contaNome", obra_nome AS "obraNome"
        FROM financial_entries
-       WHERE company_id=ANY($1::int[])
-         AND COALESCE(data_pagamento,data_vencimento,data_competencia) BETWEEN $2 AND $3
-         AND status NOT IN ('cancelado')
-         ${obraCond}
-       ORDER BY COALESCE(data_pagamento,data_vencimento,data_competencia) ASC`,
-      [ids, input.dataInicio, input.dataFim]
+       WHERE company_id IN (${inlineIds(ids)})
+                  AND COALESCE(data_pagamento,data_vencimento,data_competencia) BETWEEN           AND          
+                  AND status NOT IN ('cancelado')
+                  ${obraCond}
+              ORDER BY COALESCE(data_pagamento,data_vencimento,data_competencia) ASC`,
+      [input.dataInicio, input.dataFim]
     );
     const lancamentos = rows(res);
 
@@ -837,8 +846,8 @@ export const financialRouter = router({
     const res = await dbExecute(db, 
       `SELECT id, company_id AS "companyId", codigo, nome, tipo, obra_id AS "obraId",
               responsavel_nome AS "responsavelNome", orcamento_mensal AS "orcamentoMensal", ativo
-       FROM financial_cost_centers WHERE company_id=ANY($1::int[]) AND ativo=1 ORDER BY codigo ASC`,
-      [ids]
+       FROM financial_cost_centers WHERE company_id IN (${inlineIds(ids)}) AND ativo=1 ORDER BY codigo ASC`,
+      []
     );
     return rows(res);
   }),
@@ -927,8 +936,8 @@ export const financialRouter = router({
     const res = await dbExecute(db, 
       `SELECT id, "companyId", banco, "codigoBanco", agencia, conta,
               "tipoConta" AS tipo, apelido AS descricao, ativo
-       FROM company_bank_accounts WHERE "companyId"=ANY($1::int[]) ORDER BY banco ASC`,
-      [ids]
+       FROM company_bank_accounts WHERE "companyId" IN (${inlineIds(ids)}) ORDER BY banco ASC`,
+      []
     );
     return rows(res);
   }),
@@ -1195,41 +1204,41 @@ export const financialRouter = router({
       proxVencimentosRes,
       receitaPorObraRes,
     ] = await Promise.all([
-      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('recebido','pago') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mes]),
-      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mes]),
-      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('recebido','pago') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mesAnterior]),
-      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$2`, [ids, mesAnterior]),
-      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('a_receber','recebido_parcial')`, [ids]),
-      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status='a_pagar'`, [ids]),
-      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND status IN ('a_receber','recebido_parcial') AND data_vencimento < $2`, [ids, today]),
-      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status='a_pagar' AND data_vencimento < $2`, [ids, today]),
-      dbExecute(db, `SELECT id, banco, agencia, conta, "tipoConta" AS tipo, apelido AS descricao FROM company_bank_accounts WHERE "companyId"=ANY($1::int[]) AND ativo=1 ORDER BY banco ASC`, [ids]),
+      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('recebido','pago') AND TO_CHAR(data_competencia,'YYYY-MM')=$1`, [mes]),
+      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$1`, [mes]),
+      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('recebido','pago') AND TO_CHAR(data_competencia,'YYYY-MM')=$1`, [mesAnterior]),
+      dbExecute(db, `SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$1`, [mesAnterior]),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('a_receber','recebido_parcial')`, []),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status='a_pagar'`, []),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND status IN ('a_receber','recebido_parcial') AND data_vencimento < $1`, [today]),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total, COUNT(*) AS qtd FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status='a_pagar' AND data_vencimento < $1`, [today]),
+      dbExecute(db, `SELECT id, banco, agencia, conta, "tipoConta" AS tipo, apelido AS descricao FROM company_bank_accounts WHERE "companyId" IN (${inlineIds(ids)}) AND ativo=1 ORDER BY banco ASC`, []),
       dbExecute(db, `
         SELECT TO_CHAR(data_competencia, 'YYYY-MM-DD') AS dia,
                SUM(CASE WHEN tipo='receita' AND status IN ('recebido','pago') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS entradas,
                SUM(CASE WHEN tipo='despesa' AND status IN ('pago','recebido') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS saidas
         FROM financial_entries
-        WHERE company_id=ANY($1::int[]) AND data_competencia >= (CURRENT_DATE - INTERVAL '30 days') AND status IN ('pago','recebido')
-        GROUP BY TO_CHAR(data_competencia, 'YYYY-MM-DD')
-        ORDER BY dia ASC`, [ids]),
+        WHERE company_id IN (${inlineIds(ids)}) AND data_competencia >= (CURRENT_DATE - INTERVAL '30 days') AND status IN ('pago','recebido')
+                GROUP BY TO_CHAR(data_competencia, 'YYYY-MM-DD')
+                ORDER BY dia ASC`, []),
       dbExecute(db, `
         SELECT conta_nome AS "categoria", SUM(COALESCE(valor_realizado, valor_previsto)) AS total
         FROM financial_entries
-        WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=$2
-        GROUP BY conta_nome ORDER BY total DESC LIMIT 8`, [ids, mes]),
+        WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND status IN ('pago','recebido') AND TO_CHAR(data_competencia,'YYYY-MM')=        
+                GROUP BY conta_nome ORDER BY total DESC LIMIT 8`, [mes]),
       dbExecute(db, `
         SELECT id, descricao, obra_nome AS "obraNome", valor_previsto AS "valor", data_vencimento AS "vencimento", tipo,
                CASE WHEN data_vencimento < CURRENT_DATE THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
         FROM financial_entries
-        WHERE company_id=ANY($1::int[]) AND status IN ('a_pagar','a_receber','recebido_parcial')
-        ORDER BY data_vencimento ASC LIMIT 15`, [ids]),
+        WHERE company_id IN (${inlineIds(ids)}) AND status IN ('a_pagar','a_receber','recebido_parcial')
+                ORDER BY data_vencimento ASC LIMIT 15`, []),
       dbExecute(db, `
         SELECT obra_nome AS "obraNome", obra_id AS "obraId",
                SUM(CASE WHEN tipo='receita' AND status IN ('recebido','pago') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS receita,
                SUM(CASE WHEN tipo='despesa' AND status IN ('pago','recebido') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS despesa
         FROM financial_entries
-        WHERE company_id=ANY($1::int[]) AND obra_id IS NOT NULL AND TO_CHAR(data_competencia,'YYYY-MM')=$2
-        GROUP BY obra_nome, obra_id ORDER BY receita DESC LIMIT 10`, [ids, mes]),
+        WHERE company_id IN (${inlineIds(ids)}) AND obra_id IS NOT NULL AND TO_CHAR(data_competencia,'YYYY-MM')=        
+                GROUP BY obra_nome, obra_id ORDER BY receita DESC LIMIT 10`, [mes]),
     ]);
 
     const rec = Number(rows(receitaMesRes)[0]?.total ?? 0);
@@ -1243,7 +1252,7 @@ export const financialRouter = router({
 
     const openingRes = await dbExecute(db, 
       `SELECT conta_bancaria_id, COALESCE(SUM(valor),0) AS total
-       FROM financial_opening_balances WHERE company_id=ANY($1::int[]) GROUP BY conta_bancaria_id`, [ids]
+       FROM financial_opening_balances WHERE company_id IN (${inlineIds(ids)}) GROUP BY conta_bancaria_id`, []
     );
     const openingMap: Record<number, number> = {};
     rows(openingRes).forEach((r: any) => { openingMap[r.conta_bancaria_id] = Number(r.total ?? 0); });
@@ -1564,9 +1573,9 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
-    const conds = [`company_id=ANY($1::int[])`, `tipo='receita'`, `status IN ('a_receber','recebido_parcial')`];
-    const vals: any[] = [ids];
-    let i = 2;
+    const conds = [`company_id IN (${inlineIds(ids)})`, `tipo='receita'`, `status IN ('a_receber','recebido_parcial')`];
+    const vals: any[] = [];
+    let i = 1;
     if (input.vencimentoAte) { conds.push(`data_vencimento<=$${i++}`); vals.push(input.vencimentoAte); }
     const res = await dbExecute(db, 
       `SELECT id, obra_id AS "obraId", obra_nome AS "obraNome", descricao,
@@ -1587,9 +1596,9 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
-    const conds = [`company_id=ANY($1::int[])`, `tipo='despesa'`, `status='a_pagar'`];
-    const vals: any[] = [ids];
-    let i = 2;
+    const conds = [`company_id IN (${inlineIds(ids)})`, `tipo='despesa'`, `status='a_pagar'`];
+    const vals: any[] = [];
+    let i = 1;
     if (input.vencimentoAte) { conds.push(`data_vencimento<=$${i++}`); vals.push(input.vencimentoAte); }
     const res = await dbExecute(db, 
       `SELECT id, obra_id AS "obraId", obra_nome AS "obraNome", descricao,
@@ -1704,9 +1713,9 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
-    const conds: string[] = [`company_id=ANY($1::int[])`];
-    const vals: any[] = [ids];
-    let i = 2;
+    const conds: string[] = [`company_id IN (${inlineIds(ids)})`];
+    const vals: any[] = [];
+    let i = 1;
     if (input.nivel) { conds.push(`nivel=$${i++}`); vals.push(input.nivel); }
     if (input.resolvido !== undefined) { conds.push(`resolvido=$${i++}`); vals.push(input.resolvido ? 1 : 0); }
     if (input.tipo) { conds.push(`tipo=$${i++}`); vals.push(input.tipo); }
@@ -1927,13 +1936,13 @@ export const financialRouter = router({
               COALESCE(SUM(CASE WHEN status IN ('pago','recebido') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END), 0) AS total_realizado,
               COALESCE(SUM(CASE WHEN status='a_pagar' OR status='a_receber' THEN valor_previsto ELSE 0 END), 0) AS total_pendente
        FROM financial_entries
-       WHERE company_id=ANY($1::int[])
-         AND TO_CHAR(data_competencia,'YYYY-MM')=$2
-         AND status NOT IN ('cancelado')
-         AND origem_modulo IS NOT NULL
-       GROUP BY origem_modulo, tipo
-       ORDER BY total_previsto DESC`,
-      [ids, mes]
+       WHERE company_id IN (${inlineIds(ids)})
+                  AND TO_CHAR(data_competencia,'YYYY-MM')=         
+                  AND status NOT IN ('cancelado')
+                  AND origem_modulo IS NOT NULL
+                GROUP BY origem_modulo, tipo
+                ORDER BY total_previsto DESC`,
+      [mes]
     );
     return rows(res);
   }),
@@ -1971,12 +1980,12 @@ export const financialRouter = router({
     const mes = input.periodo ?? new Date().toISOString().slice(0, 7);
 
     const [recRes, despRes, alertRes, vencRes, tributosRes, aprovRes] = await Promise.all([
-      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND TO_CHAR(data_competencia,'YYYY-MM')=$2 AND status NOT IN ('cancelado')`, [ids, mes]),
-      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND TO_CHAR(data_competencia,'YYYY-MM')=$2 AND status NOT IN ('cancelado')`, [ids, mes]),
-      dbExecute(db, `SELECT COUNT(*) AS total FROM financial_revision_alerts WHERE company_id=ANY($1::int[]) AND resolvido=0`, [ids]),
-      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND status IN ('a_pagar','a_receber') AND data_vencimento < CURRENT_DATE`, [ids]),
-      dbExecute(db, `SELECT COALESCE(SUM(valor_total),0) AS total FROM financial_tax_obligations WHERE company_id=ANY($1::int[]) AND mes_competencia=$2 AND status='a_pagar'`, [ids, mes]),
-      dbExecute(db, `SELECT COUNT(*) AS total FROM financial_payment_approvals WHERE company_id=ANY($1::int[]) AND status='pendente'`, [ids]),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='receita' AND TO_CHAR(data_competencia,'YYYY-MM')=$1 AND status NOT IN ('cancelado')`, [mes]),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND tipo='despesa' AND TO_CHAR(data_competencia,'YYYY-MM')=$1 AND status NOT IN ('cancelado')`, [mes]),
+      dbExecute(db, `SELECT COUNT(*) AS total FROM financial_revision_alerts WHERE company_id IN (${inlineIds(ids)}) AND resolvido=0`, []),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE company_id IN (${inlineIds(ids)}) AND status IN ('a_pagar','a_receber') AND data_vencimento < CURRENT_DATE`, []),
+      dbExecute(db, `SELECT COALESCE(SUM(valor_total),0) AS total FROM financial_tax_obligations WHERE company_id IN (${inlineIds(ids)}) AND mes_competencia=$1 AND status='a_pagar'`, [mes]),
+      dbExecute(db, `SELECT COUNT(*) AS total FROM financial_payment_approvals WHERE company_id IN (${inlineIds(ids)}) AND status='pendente'`, []),
     ]);
 
     const receita = parseFloat(rows(recRes)[0]?.total ?? "0");

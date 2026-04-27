@@ -1630,8 +1630,10 @@ export async function runAllDespesasImport(companyId: number, mesRef?: string) {
 // ─────────────────────────────────────────────────────────────
 // PREVISTO — distribui valor_contrato linearmente pelos meses
 // do projeto (data_inicio → data_termino_contratual).
-// origem_modulo = 'planejamento_projeto_previsto'
-// Dedup: (company_id, origem_modulo, origem_id, data_competencia)
+// Grava em financial_entries (livro geral) E financial_revenue
+// (Contas a Receber) com status 'a_faturar'.
+// Dedup entries: (company_id, origem_modulo, origem_id, data_competencia)
+// Dedup revenue: (company_id, obra_nome, data_vencimento, observacoes='planejamento_previsto')
 // ─────────────────────────────────────────────────────────────
 export async function importPlanejamentoProjetosPrevistoToFinancial(companyId: number, mesRef?: string): Promise<number> {
   const db = await getDb();
@@ -1640,6 +1642,22 @@ export async function importPlanejamentoProjetosPrevistoToFinancial(companyId: n
   let erros = 0;
 
   try {
+    // Diagnóstico: conta todos os registros sem filtro para detectar dados ausentes
+    const { rows: diagRows } = await dbExecute(db,
+      `SELECT COUNT(*) AS total,
+              COUNT(*) FILTER (WHERE valor_contrato IS NOT NULL AND valor_contrato::numeric > 0) AS com_valor,
+              COUNT(*) FILTER (WHERE data_inicio IS NOT NULL) AS com_inicio,
+              COUNT(*) FILTER (WHERE data_termino_contratual IS NOT NULL) AS com_termino,
+              COUNT(*) FILTER (WHERE status NOT IN ('cancelado','encerrado','Cancelado','Encerrado')) AS status_ok
+       FROM planejamento_projetos
+       WHERE company_id = $1`,
+      [companyId]
+    );
+    const diag = diagRows[0] ?? {};
+    if (Number(diag.total) > 0) {
+      console.log(`[FinancialBridge][previsto][diag] company=${companyId} total=${diag.total} com_valor=${diag.com_valor} com_inicio=${diag.com_inicio} com_termino=${diag.com_termino} status_ok=${diag.status_ok}`);
+    }
+
     const { rows: projetos } = await dbExecute(db,
       `SELECT pp.id, pp.obra_id, pp.nome, pp.cliente,
               pp.valor_contrato, pp.data_inicio, pp.data_termino_contratual, pp.status,
@@ -1651,9 +1669,11 @@ export async function importPlanejamentoProjetosPrevistoToFinancial(companyId: n
          AND pp.valor_contrato::numeric > 0
          AND pp.data_inicio IS NOT NULL
          AND pp.data_termino_contratual IS NOT NULL
-         AND pp.status NOT IN ('cancelado', 'encerrado')`,
+         AND pp.status NOT IN ('cancelado', 'encerrado', 'Cancelado', 'Encerrado')`,
       [companyId]
     );
+
+    console.log(`[FinancialBridge][previsto] company=${companyId} projetos=${projetos.length}`);
 
     for (const proj of projetos) {
       const valorContrato = parseFloat(proj.valor_contrato ?? "0");
@@ -1665,6 +1685,8 @@ export async function importPlanejamentoProjetosPrevistoToFinancial(companyId: n
       const [iniY, iniM] = inicioStr.split("-").map(Number);
       const [terY, terM] = terminoStr.split("-").map(Number);
 
+      if (!iniY || !iniM || !terY || !terM) continue;
+
       // Constrói lista de meses (YYYY-MM) entre início e término
       const meses: string[] = [];
       let y = iniY, m = iniM;
@@ -1672,54 +1694,103 @@ export async function importPlanejamentoProjetosPrevistoToFinancial(companyId: n
         meses.push(`${y}-${String(m).padStart(2, "0")}`);
         m++;
         if (m > 12) { m = 1; y++; }
+        if (meses.length > 120) break; // proteção: máx 10 anos
       }
       if (meses.length === 0) continue;
 
       const valorMensal = Math.round((valorContrato / meses.length) * 100) / 100;
       const nomeProjeto = proj.obra_nome_ref ?? proj.nome;
-      const clienteInfo = proj.cliente ? ` — ${proj.cliente}` : "";
+      const pct = (1 / meses.length);
 
       for (const mes of meses) {
         const dataCompetencia = mes + "-01";
+        const dataVencimento = mes + "-30";
 
-        // Dedup por projeto + mês (origem_id = project id, discriminado por data_competencia)
-        const { rows: existing } = await dbExecute(db,
+        // ── 1. financial_entries (livro geral) ──────────────────
+        const { rows: entExisting } = await dbExecute(db,
           `SELECT id FROM financial_entries
            WHERE company_id=$1 AND origem_modulo=$2 AND origem_id=$3 AND data_competencia=$4
            LIMIT 1`,
           [companyId, "planejamento_projeto_previsto", proj.id, dataCompetencia]
         );
-        if (existing.length > 0) continue;
+        if (entExisting.length === 0) {
+          await dbExecute(db,
+            `INSERT INTO financial_entries
+             (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
+              valor_previsto, valor_realizado, data_competencia, data_vencimento, data_pagamento,
+              status, origem_modulo, origem_id, origem_descricao, descricao, forma_pagamento,
+              created_at, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW(),NOW())
+             ON CONFLICT DO NOTHING`,
+            [
+              companyId,
+              proj.obra_id ?? null,
+              nomeProjeto,
+              "Previsão de Faturamento",
+              "receita",
+              "variavel",
+              valorMensal,
+              null,
+              dataCompetencia,
+              dataVencimento,
+              null,
+              "previsto",
+              "planejamento_projeto_previsto",
+              proj.id,
+              `Previsão mensal — ${nomeProjeto}${proj.cliente ? " — " + proj.cliente : ""}`,
+              `Previsão ${mes}: ${nomeProjeto}`,
+              null,
+            ]
+          );
+          imported++;
+        }
 
-        await dbExecute(db,
-          `INSERT INTO financial_entries
-           (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
-            valor_previsto, valor_realizado, data_competencia, data_vencimento, data_pagamento,
-            status, origem_modulo, origem_id, origem_descricao, descricao, forma_pagamento,
-            created_at, updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW(),NOW())
-           ON CONFLICT DO NOTHING`,
-          [
-            companyId,
-            proj.obra_id ?? null,
-            nomeProjeto,
-            "Previsão de Faturamento",
-            "receita",
-            "variavel",
-            valorMensal,
-            null,
-            dataCompetencia,
-            mes + "-30",
-            null,
-            "previsto",
-            "planejamento_projeto_previsto",
-            proj.id,
-            `Previsão mensal — ${nomeProjeto}${clienteInfo}`,
-            `Previsão ${mes}: ${nomeProjeto}`,
-            null,
-          ]
+        // ── 2. financial_revenue (Contas a Receber) ─────────────
+        // Dedup: obra_nome + data_vencimento + observacoes='planejamento_previsto'
+        // Não cria se já existe uma medição real para o mesmo mês/obra
+        const { rows: revExisting } = await dbExecute(db,
+          `SELECT id FROM financial_revenue
+           WHERE company_id=$1
+             AND COALESCE(obra_id::text,'') = $2
+             AND data_vencimento=$3
+             AND observacoes='planejamento_previsto'
+           LIMIT 1`,
+          [companyId, String(proj.obra_id ?? ""), dataVencimento]
         );
-        imported++;
+        if (revExisting.length === 0) {
+          // Verificar se já existe medição real para não sobrepor
+          const { rows: realMedicao } = await dbExecute(db,
+            `SELECT id FROM financial_revenue
+             WHERE company_id=$1 AND obra_id=$2 AND medicao_id IS NOT NULL
+               AND data_vencimento BETWEEN $3 AND $4
+             LIMIT 1`,
+            [companyId, proj.obra_id ?? null, mes + "-01", mes + "-31"]
+          );
+          if (realMedicao.length === 0) {
+            await dbExecute(db,
+              `INSERT INTO financial_revenue
+               (company_id, obra_id, obra_nome, cliente_nome,
+                valor_contrato, medicao_numero, percentual_medicao,
+                valor_medicao, valor_liquido_receber,
+                data_vencimento, status, observacoes, created_at, updated_at)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW())`,
+              [
+                companyId,
+                proj.obra_id ?? null,
+                nomeProjeto,
+                proj.cliente ?? null,
+                valorContrato.toFixed(2),
+                null,
+                pct.toFixed(4),
+                valorMensal.toFixed(2),
+                valorMensal.toFixed(2),
+                dataVencimento,
+                "a_faturar",
+                "planejamento_previsto",
+              ]
+            );
+          }
+        }
       }
     }
   } catch (e) {
@@ -1728,6 +1799,119 @@ export async function importPlanejamentoProjetosPrevistoToFinancial(companyId: n
   }
 
   await logImport(db, companyId, "planejamento_projeto_previsto", mesRef ?? mesComp(), imported, erros);
+  return imported;
+}
+
+// ── NOVO: obras ativas → Contas a Receber (financial_revenue) ──────────────
+export async function importObrasToFinancialRevenue(companyId: number, mesRef?: string): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  let imported = 0;
+  let erros = 0;
+
+  try {
+    // Busca obras ativas com valor de contrato e datas definidas
+    const { rows: obras } = await dbExecute(db,
+      `SELECT id, nome, cliente,
+              "valorContrato" AS valor_contrato,
+              "dataInicio" AS data_inicio,
+              "dataPrevisaoFim" AS data_previsao_fim,
+              status
+       FROM obras
+       WHERE "companyId" = $1
+         AND "deletedAt" IS NULL
+         AND "isActive" = 1
+         AND "valorContrato" IS NOT NULL
+         AND "valorContrato"::numeric > 0
+         AND "dataInicio" IS NOT NULL
+         AND "dataPrevisaoFim" IS NOT NULL
+         AND status NOT IN ('Concluída','Concluida','Cancelada','Cancelado','Encerrada','Encerrado','Inativa','Inativo')`,
+      [companyId]
+    );
+
+    if (obras.length > 0) {
+      console.log(`[FinancialBridge][obras_previsto] company=${companyId} obras=${obras.length}`);
+    }
+
+    for (const obra of obras) {
+      const valorContrato = parseFloat(obra.valor_contrato ?? "0");
+      if (valorContrato <= 0) continue;
+
+      const inicioStr = String(obra.data_inicio).substring(0, 10);
+      const terminoStr = String(obra.data_previsao_fim).substring(0, 10);
+      const [iniY, iniM] = inicioStr.split("-").map(Number);
+      const [terY, terM] = terminoStr.split("-").map(Number);
+      if (!iniY || !iniM || !terY || !terM) continue;
+
+      // Lista de meses de vigência do contrato
+      const meses: string[] = [];
+      let y = iniY, m = iniM;
+      while (y < terY || (y === terY && m <= terM)) {
+        meses.push(`${y}-${String(m).padStart(2, "0")}`);
+        m++;
+        if (m > 12) { m = 1; y++; }
+        if (meses.length > 120) break;
+      }
+      if (meses.length === 0) continue;
+
+      const valorMensal = Math.round((valorContrato / meses.length) * 100) / 100;
+
+      for (const mes of meses) {
+        const dataCompetencia = mes + "-01";
+        const dataVencimento = mes + "-28";
+
+        // ── 1. financial_revenue ──────────────────────────────────────
+        const { rows: revExist } = await dbExecute(db,
+          `SELECT id FROM financial_revenue
+           WHERE company_id=$1 AND obra_id=$2 AND observacoes='obra_previsto'
+             AND data_vencimento=$3
+           LIMIT 1`,
+          [companyId, obra.id, dataVencimento]
+        );
+        if (revExist.length === 0) {
+          await dbExecute(db,
+            `INSERT INTO financial_revenue
+             (company_id, obra_id, obra_nome, cliente_nome,
+              valor_contrato, valor_medicao, data_vencimento,
+              status, observacoes, created_at, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,'a_faturar','obra_previsto',NOW(),NOW())
+             ON CONFLICT DO NOTHING`,
+            [companyId, obra.id, obra.nome, obra.cliente ?? null,
+             valorContrato.toFixed(2), valorMensal.toFixed(2), dataVencimento]
+          );
+          imported++;
+        }
+
+        // ── 2. financial_entries (livro geral) ───────────────────────
+        const { rows: entExist } = await dbExecute(db,
+          `SELECT id FROM financial_entries
+           WHERE company_id=$1 AND origem_modulo='obra_previsto' AND origem_id=$2 AND data_competencia=$3
+           LIMIT 1`,
+          [companyId, obra.id, dataCompetencia]
+        );
+        if (entExist.length === 0) {
+          await dbExecute(db,
+            `INSERT INTO financial_entries
+             (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
+              valor_previsto, valor_realizado, data_competencia, data_vencimento,
+              status, origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW())
+             ON CONFLICT DO NOTHING`,
+            [companyId, obra.id, obra.nome, "Previsão de Faturamento",
+             "receita", "variavel", valorMensal, null,
+             dataCompetencia, dataVencimento, "previsto",
+             "obra_previsto", obra.id, `Previsão de faturamento — ${obra.nome} (${mes})`,
+             `Previsão mensal obra: ${obra.nome}`]
+          );
+        }
+      }
+    }
+  } catch (e) {
+    erros++;
+    console.error("[FinancialBridge][obras_previsto]", e);
+  }
+
+  await logImport(db, companyId, "obra_previsto", mesRef ?? mesComp(), imported, erros);
   return imported;
 }
 
@@ -1740,6 +1924,7 @@ export async function runAllReceitasImport(companyId: number, mesRef?: string) {
     importTerceiroCobravelToFinancial(companyId, mes),
     importPlanejamentoMedicoesToFinancial(companyId, mes),
     importPlanejamentoProjetosPrevistoToFinancial(companyId, mes),
+    importObrasToFinancialRevenue(companyId, mes),
     // Importar receitas cadastradas manualmente em Receitas de Obras → Contas a Receber
     importFinancialRevenueToEntries(companyId, mes),
   ]);
