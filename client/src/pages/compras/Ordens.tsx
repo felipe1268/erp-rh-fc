@@ -97,7 +97,7 @@ function FornecedorContatoCard({ contato }: { contato: FornecedorContatoData | n
   );
 }
 
-interface ItemForm { descricao: string; unidade: string; quantidade: string; precoUnitario: string; }
+interface ItemForm { descricao: string; unidade: string; quantidade: string; precoUnitario: string; eapCodigo?: string; eapDescricao?: string; }
 const newItem = (): ItemForm => ({ descricao: "", unidade: "un", quantidade: "1", precoUnitario: "" });
 
 export default function Ordens() {
@@ -140,6 +140,7 @@ export default function Ordens() {
   });
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
   const [fornecedorPopoverOpen, setFornecedorPopoverOpen] = useState(false);
+  const [eapPopoverIdx, setEapPopoverIdx] = useState<number | null>(null);
 
   const q = trpc.compras.listarOrdens.useQuery(
     { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus, apenasAtrasadas: filtroAtrasadas || undefined },
@@ -152,6 +153,10 @@ export default function Ordens() {
   );
   const fornQ = trpc.compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: companyId > 0 });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
+  const eapQ = trpc.compras.getEapParaObra.useQuery(
+    { obraId: parseInt(form.obraId), companyId },
+    { enabled: !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0, staleTime: 60_000 }
+  );
   const contratosOS = trpc.terceiroContratos.listarContratos.useQuery(
     { companyId },
     { enabled: companyId > 0 }
@@ -258,6 +263,7 @@ export default function Ordens() {
         unidade: i.unidade,
         quantidade: parseFloat(i.quantidade) || 1,
         precoUnitario: parseFloat(i.precoUnitario) || 0,
+        insumoCodigo: i.eapCodigo ?? undefined,
       })),
     });
   }
@@ -672,31 +678,100 @@ export default function Ordens() {
                   <Plus className="h-3 w-3" /> Adicionar
                 </Button>
               </div>
-              <div className="space-y-2">
-                {itens.map((it, idx) => (
-                  <div key={idx} className="p-3 rounded-lg bg-gray-50 border border-gray-200 space-y-2">
-                    <div className="flex gap-2">
-                      <Input className="flex-1 bg-white border-gray-300 text-gray-900 text-sm" placeholder="Descrição *" value={it.descricao} onChange={e => updateItem(idx, "descricao", e.target.value)} onBlur={e => updateItem(idx, "descricao", normalizarTexto(e.target.value))} />
-                      {itens.length > 1 && (
-                        <button onClick={() => removeItem(idx)} className="p-1 text-gray-400 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
-                      )}
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <Select value={it.unidade} onValueChange={v => updateItem(idx, "unidade", v)}>
-                        <SelectTrigger className="w-20 bg-white border-gray-300 text-gray-900 text-sm h-8"><SelectValue /></SelectTrigger>
-                        <SelectContent className="bg-white border-gray-200">
-                          {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <Input className="w-24 bg-white border-gray-300 text-gray-900 text-sm h-8" type="number" min="0" placeholder="Qtd" value={it.quantidade} onChange={e => updateItem(idx, "quantidade", e.target.value)} />
-                      <Input className="flex-1 bg-white border-gray-300 text-gray-900 text-sm h-8" type="number" min="0" step="0.01" placeholder="Preço unit. (R$)" value={it.precoUnitario} onChange={e => updateItem(idx, "precoUnitario", e.target.value)} />
-                      <span className="text-emerald-700 text-sm font-medium w-28 text-right">
-                        {((parseFloat(it.quantidade) || 0) * (parseFloat(it.precoUnitario) || 0)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                      </span>
-                    </div>
+              {/* EAP items flat list for search — only when obra is selected */}
+              {(() => {
+                const eapItems = (eapQ.data?.items ?? []).filter((e: any) => e.descricao?.trim());
+                return (
+                  <div className="space-y-2">
+                    {itens.map((it, idx) => (
+                      <div key={idx} className="p-3 rounded-lg bg-gray-50 border border-gray-200 space-y-2">
+                        {/* EAP selector — visible only when obraId is set */}
+                        {form.obraId && form.obraId !== "none" && (
+                          <Popover open={eapPopoverIdx === idx} onOpenChange={open => setEapPopoverIdx(open ? idx : null)}>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                className={`flex w-full items-center gap-2 rounded border px-2 py-1.5 text-xs transition-colors ${it.eapCodigo ? "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100" : "border-dashed border-gray-300 bg-white text-gray-400 hover:border-gray-400 hover:text-gray-600"}`}
+                              >
+                                <Search className="h-3 w-3 shrink-0" />
+                                {it.eapCodigo ? (
+                                  <span><code className="font-mono font-semibold">{it.eapCodigo}</code> — {it.eapDescricao}</span>
+                                ) : (
+                                  eapQ.isLoading ? "Carregando itens do orçamento..." : eapItems.length === 0 ? "Obra sem orçamento vinculado" : "Selecionar item do orçamento para alocação de custo"
+                                )}
+                                {it.eapCodigo && (
+                                  <span
+                                    onClick={e => { e.stopPropagation(); setItens(p => p.map((x, i) => i === idx ? { ...x, eapCodigo: undefined, eapDescricao: undefined } : x)); }}
+                                    className="ml-auto text-violet-400 hover:text-red-500"
+                                    title="Remover vínculo"
+                                  >✕</span>
+                                )}
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0 bg-white border-gray-200 shadow-lg" align="start">
+                              <Command>
+                                <CommandInput placeholder="Buscar por código ou descrição..." className="h-9" />
+                                <CommandList className="max-h-60">
+                                  <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                                  <CommandGroup>
+                                    {eapItems.map((e: any) => (
+                                      <CommandItem
+                                        key={e.id}
+                                        value={`${e.eapCodigo ?? ""} ${e.descricao ?? ""}`}
+                                        onSelect={() => {
+                                          setItens(p => p.map((x, i) => i === idx ? {
+                                            ...x,
+                                            eapCodigo: e.eapCodigo ?? "",
+                                            eapDescricao: e.descricao ?? "",
+                                            descricao: x.descricao || (e.descricao ?? ""),
+                                            unidade: x.unidade !== "un" ? x.unidade : (e.unidade || "un"),
+                                          } : x));
+                                          setEapPopoverIdx(null);
+                                        }}
+                                        className="cursor-pointer"
+                                      >
+                                        <Check className={`mr-2 h-3 w-3 shrink-0 ${it.eapCodigo === e.eapCodigo ? "opacity-100 text-violet-600" : "opacity-0"}`} />
+                                        <div className="flex flex-col min-w-0">
+                                          <div className="flex items-center gap-2">
+                                            {e.eapCodigo && <code className="text-[10px] font-mono text-violet-600 bg-violet-50 px-1 rounded shrink-0">{e.eapCodigo}</code>}
+                                            <span className="text-xs font-medium truncate">{e.descricao}</span>
+                                          </div>
+                                          {(e.unidade || e.quantidade) && (
+                                            <span className="text-[10px] text-gray-400">{e.unidade}{e.quantidade ? ` · Qtd: ${parseFloat(e.quantidade).toLocaleString("pt-BR")}` : ""}</span>
+                                          )}
+                                        </div>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                        <div className="flex gap-2">
+                          <Input className="flex-1 bg-white border-gray-300 text-gray-900 text-sm" placeholder="Descrição *" value={it.descricao} onChange={e => updateItem(idx, "descricao", e.target.value)} onBlur={e => updateItem(idx, "descricao", normalizarTexto(e.target.value))} />
+                          {itens.length > 1 && (
+                            <button onClick={() => removeItem(idx)} className="p-1 text-gray-400 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
+                          )}
+                        </div>
+                        <div className="flex gap-2 items-center">
+                          <Select value={it.unidade} onValueChange={v => updateItem(idx, "unidade", v)}>
+                            <SelectTrigger className="w-20 bg-white border-gray-300 text-gray-900 text-sm h-8"><SelectValue /></SelectTrigger>
+                            <SelectContent className="bg-white border-gray-200">
+                              {UNIDADES.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <Input className="w-24 bg-white border-gray-300 text-gray-900 text-sm h-8" type="number" min="0" placeholder="Qtd" value={it.quantidade} onChange={e => updateItem(idx, "quantidade", e.target.value)} />
+                          <Input className="flex-1 bg-white border-gray-300 text-gray-900 text-sm h-8" type="number" min="0" step="0.01" placeholder="Preço unit. (R$)" value={it.precoUnitario} onChange={e => updateItem(idx, "precoUnitario", e.target.value)} />
+                          <span className="text-emerald-700 text-sm font-medium w-28 text-right">
+                            {((parseFloat(it.quantidade) || 0) * (parseFloat(it.precoUnitario) || 0)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                );
+              })()}
             </div>
 
             {/* Totalizadores */}

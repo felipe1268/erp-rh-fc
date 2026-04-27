@@ -5127,6 +5127,7 @@ Retorne APENAS um JSON válido neste formato:
         unidade: z.string().optional(),
         quantidade: z.number(),
         precoUnitario: z.number(),
+        insumoCodigo: z.string().optional(),
       })),
     }))
     .mutation(async ({ input }) => {
@@ -5180,6 +5181,7 @@ Retorne APENAS um JSON válido neste formato:
             quantidade: String(it.quantidade),
             precoUnitario: String(it.precoUnitario),
             total: String((n(it.quantidade) * n(it.precoUnitario)).toFixed(2)),
+            insumoCodigo: it.insumoCodigo ?? null,
           }))
         );
       }
