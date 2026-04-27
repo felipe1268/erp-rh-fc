@@ -1,4 +1,5 @@
 import { getDb } from "../db";
+import { sql } from "drizzle-orm";
 import { runAllAutoImports } from "./financialAutoImport";
 import { seedPlanoDeConta, ensureTaxConfig } from "./financialSeedAccounts";
 import {
@@ -23,17 +24,16 @@ async function getAllActiveCompanyIds(): Promise<number[]> {
   const db = await getDb();
   if (!db) return [];
   try {
-    const res = await db.execute(
-      `SELECT id FROM companies WHERE "isActive" = 1 LIMIT 500`
-    );
-    const rows = (res as any)?.rows ?? (res as any) ?? [];
-    const ids = rows.map((r: any) => Number(r.id)).filter(Boolean);
+    // Usar sql template — db.execute(string) ignora parâmetros e retorna resultado incorreto
+    const res = await db.execute(sql`SELECT id FROM companies WHERE "isActive" = 1 LIMIT 500`);
+    const rows = (res as any)?.rows ?? (Array.isArray(res) ? res : []);
+    const ids = rows.map((r: any) => Number(r.id)).filter((n: number) => n > 0 && Number.isFinite(n));
     if (ids.length > 0) return ids;
 
-    // Fallback: pegar qualquer empresa
-    const res2 = await db.execute(`SELECT id FROM companies LIMIT 50`);
-    const rows2 = (res2 as any)?.rows ?? (res2 as any) ?? [];
-    return rows2.map((r: any) => Number(r.id)).filter(Boolean);
+    // Fallback: qualquer empresa cadastrada
+    const res2 = await db.execute(sql`SELECT id FROM companies LIMIT 50`);
+    const rows2 = (res2 as any)?.rows ?? (Array.isArray(res2) ? res2 : []);
+    return rows2.map((r: any) => Number(r.id)).filter((n: number) => n > 0 && Number.isFinite(n));
   } catch {
     return [];
   }
