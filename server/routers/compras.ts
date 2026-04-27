@@ -2005,6 +2005,59 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       return { ok: true };
     }),
 
+  uploadAnexoOrdem: protectedProcedure
+    .input(z.object({
+      ordemId: z.number().optional(),
+      companyId: z.number(),
+      fileBase64: z.string().max(30_000_000),
+      fileName: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const allowedExts = new Set(["png", "pdf", "docx", "xlsx"]);
+      const ext = input.fileName.split(".").pop()?.toLowerCase() || "";
+      if (!allowedExts.has(ext)) throw new TRPCError({ code: "BAD_REQUEST", message: "Formato não suportado. Aceitos: PNG, PDF, DOCX, XLSX." });
+      const buffer = Buffer.from(input.fileBase64, "base64");
+      const maxSize = 20 * 1024 * 1024;
+      if (buffer.length > maxSize) throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo muito grande (máx. 20 MB)." });
+      const ts = Date.now();
+      const key = `compras/oc-anexos/${input.companyId}-${input.ordemId || "new"}-${ts}.${ext}`;
+      const mimeMap: Record<string, string> = {
+        png: "image/png",
+        pdf: "application/pdf",
+        docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      };
+      const contentType = mimeMap[ext] || "application/octet-stream";
+      const { url } = await storagePut(key, buffer, contentType);
+      const tipo = ext === "png" ? "imagem" : ext === "pdf" ? "pdf" : "documento";
+      const novoAnexo = { url, nome: input.fileName, tipo, ts };
+      if (input.ordemId) {
+        const [oc] = await db.select({ id: comprasOrdens.id, anexos: comprasOrdens.anexos }).from(comprasOrdens)
+          .where(and(eq(comprasOrdens.id, input.ordemId), eq(comprasOrdens.companyId, input.companyId)));
+        if (!oc) throw new TRPCError({ code: "FORBIDDEN", message: "OC não encontrada." });
+        const existingAnexos = Array.isArray(oc.anexos) ? oc.anexos as any[] : [];
+        await db.update(comprasOrdens)
+          .set({ anexos: [...existingAnexos, novoAnexo] as any })
+          .where(eq(comprasOrdens.id, input.ordemId));
+      }
+      return novoAnexo;
+    }),
+
+  removeAnexoOrdem: protectedProcedure
+    .input(z.object({ ordemId: z.number(), companyId: z.number(), url: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [oc] = await db.select({ anexos: comprasOrdens.anexos }).from(comprasOrdens)
+        .where(and(eq(comprasOrdens.id, input.ordemId), eq(comprasOrdens.companyId, input.companyId)));
+      if (!oc) throw new TRPCError({ code: "FORBIDDEN", message: "OC não encontrada." });
+      const anexos = Array.isArray(oc.anexos) ? (oc.anexos as any[]).filter(a => a.url !== input.url) : [];
+      await db.update(comprasOrdens)
+        .set({ anexos: anexos as any })
+        .where(eq(comprasOrdens.id, input.ordemId));
+      return { ok: true };
+    }),
+
   atualizarStatusSolicitacao: protectedProcedure
     .input(z.object({ id: z.number(), status: z.string() }))
     .mutation(async ({ input }) => {
@@ -5131,6 +5184,7 @@ Retorne APENAS um JSON válido neste formato:
       desconto: z.number().optional(),
       userId: z.number().optional(),
       userName: z.string().optional(),
+      anexos: z.array(z.object({ url: z.string(), nome: z.string(), tipo: z.string(), ts: z.number() })).optional(),
       itens: z.array(z.object({
         descricao: z.string(),
         unidade: z.string().optional(),
@@ -5175,6 +5229,7 @@ Retorne APENAS um JSON válido neste formato:
         parcelasJson: input.parcelasJson ? (input.parcelasJson as any) : null,
         observacoes: input.observacoes,
         condicaoPagamento: input.condicaoPagamento,
+        anexos: input.anexos ? (input.anexos as any) : null,
         status: "pendente",
         aprovacaoStatus: "aguardando",
         criadoPorId: input.userId ?? null,

@@ -1,7 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -18,7 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, Check } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, Check, Paperclip, Upload, X, FileText } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
@@ -99,6 +99,7 @@ function FornecedorContatoCard({ contato }: { contato: FornecedorContatoData | n
 
 interface ItemForm { descricao: string; unidade: string; quantidade: string; precoUnitario: string; eapCodigo?: string; eapDescricao?: string; }
 interface ParcelaForm { numero: number; vencimento: string; valor: string; }
+interface AnexoOC { url: string; nome: string; tipo: string; ts: number; }
 
 function gerarParcelas(n: number, total: number, primeiroVenc: string): ParcelaForm[] {
   const base = Math.floor((total / n) * 100) / 100;
@@ -163,6 +164,12 @@ export default function Ordens() {
   const [parcelas, setParcelas] = useState<ParcelaForm[]>([]);
   const [fornecedorPopoverOpen, setFornecedorPopoverOpen] = useState(false);
   const [eapPopoverIdx, setEapPopoverIdx] = useState<number | null>(null);
+  const [anexosForm, setAnexosForm] = useState<AnexoOC[]>([]);
+  const [uploadingAnexo, setUploadingAnexo] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [detalheAnexoDrag, setDetalheAnexoDrag] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const detalheFileInputRef = useRef<HTMLInputElement>(null);
 
   const q = trpc.compras.listarOrdens.useQuery(
     { companyId, status: filtroStatus === "todos" ? undefined : filtroStatus, apenasAtrasadas: filtroAtrasadas || undefined },
@@ -250,6 +257,45 @@ export default function Ordens() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const uploadAnexoOrdem = trpc.compras.uploadAnexoOrdem.useMutation({
+    onError: (e) => { toast.error(e.message); setUploadingAnexo(false); },
+  });
+  const removeAnexoOrdem = trpc.compras.removeAnexoOrdem.useMutation({
+    onSuccess: () => { detalheQ.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const ALLOWED_EXTS = ["png", "pdf", "docx", "xlsx"];
+
+  const processFiles = useCallback(async (files: FileList | File[], targetOrdemId?: number) => {
+    const arr = Array.from(files);
+    if (arr.length === 0) return;
+    for (const file of arr) {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "";
+      if (!ALLOWED_EXTS.includes(ext)) { toast.error(`Formato não suportado: ${file.name}. Aceitos: PNG, PDF, DOCX, XLSX.`); continue; }
+      if (file.size > 20 * 1024 * 1024) { toast.error(`Arquivo muito grande: ${file.name} (máx. 20 MB).`); continue; }
+      setUploadingAnexo(true);
+      try {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string).split(",")[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        const result = await uploadAnexoOrdem.mutateAsync({ companyId, fileBase64: base64, fileName: file.name, ordemId: targetOrdemId });
+        if (targetOrdemId) {
+          detalheQ.refetch();
+        } else {
+          setAnexosForm(prev => [...prev, result]);
+        }
+        toast.success(`Anexo adicionado: ${file.name}`);
+      } catch {
+        // error handled by onError
+      } finally {
+        setUploadingAnexo(false);
+      }
+    }
+  }, [companyId, uploadAnexoOrdem, detalheQ]);
   const [showAprovacaoExtra, setShowAprovacaoExtra] = useState<any>(null);
   const [aprovExtraForm, setAprovExtraForm] = useState({ adminEmail: "", adminSenha: "", justificativa: "" });
   const [editTransp, setEditTransp] = useState("");
@@ -260,6 +306,7 @@ export default function Ordens() {
     setItens([newItem()]);
     setNumParc(1);
     setParcelas([]);
+    setAnexosForm([]);
   }
 
   function handleSalvar() {
@@ -288,6 +335,7 @@ export default function Ordens() {
       desconto: parseFloat(form.desconto) || 0,
       userId: user?.id,
       userName: user?.name,
+      anexos: anexosForm.length > 0 ? anexosForm : undefined,
       itens: validos.map(i => ({
         descricao: i.descricao,
         unidade: i.unidade,
@@ -929,6 +977,50 @@ export default function Ordens() {
               <Textarea className="bg-white border-gray-300 text-gray-900 resize-none" rows={2} value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))} />
             </div>
 
+            {/* Anexos */}
+            <div className="space-y-2">
+              <Label className="text-gray-700 text-sm font-medium flex items-center gap-1.5">
+                <Paperclip className="h-3.5 w-3.5 text-gray-500" /> Anexos
+              </Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".png,.pdf,.docx,.xlsx"
+                className="hidden"
+                onChange={e => { if (e.target.files) processFiles(e.target.files); e.target.value = ""; }}
+              />
+              <div
+                className={`relative flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-5 text-center transition-colors cursor-pointer ${dragOver ? "border-emerald-500 bg-emerald-50" : "border-gray-300 bg-gray-50 hover:border-emerald-400 hover:bg-emerald-50/40"}`}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={e => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files) processFiles(e.dataTransfer.files); }}
+              >
+                {uploadingAnexo
+                  ? <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+                  : <Upload className="h-6 w-6 text-gray-400" />
+                }
+                <p className="text-sm text-gray-500">
+                  {uploadingAnexo ? "Enviando arquivo..." : "Arraste arquivos aqui ou clique para selecionar"}
+                </p>
+                <p className="text-xs text-gray-400">PNG, PDF, DOCX, XLSX — até 20 MB cada</p>
+              </div>
+              {anexosForm.length > 0 && (
+                <div className="space-y-1">
+                  {anexosForm.map((a, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm">
+                      <FileText className="h-4 w-4 text-gray-400 shrink-0" />
+                      <span className="flex-1 truncate text-gray-700">{a.nome}</span>
+                      <button type="button" onClick={() => setAnexosForm(prev => prev.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Totalizadores */}
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-2">
               <div className="text-xs text-gray-500 font-semibold uppercase tracking-widest mb-3">Totalizadores</div>
@@ -1269,6 +1361,62 @@ export default function Ordens() {
                     </div>
                   </div>
                 )}
+
+                {/* Anexos OC */}
+                {(() => {
+                  const anexosList: AnexoOC[] = Array.isArray((detalhe as any).anexos) ? (detalhe as any).anexos : [];
+                  return (
+                    <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+                      <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                        <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                          <Paperclip className="h-3.5 w-3.5" /> Anexos {anexosList.length > 0 && <span className="text-gray-400">({anexosList.length})</span>}
+                        </h3>
+                      </div>
+                      <div className="p-3 space-y-2">
+                        <input
+                          ref={detalheFileInputRef}
+                          type="file"
+                          multiple
+                          accept=".png,.pdf,.docx,.xlsx"
+                          className="hidden"
+                          onChange={e => { if (e.target.files) processFiles(e.target.files, detalhe.id); e.target.value = ""; }}
+                        />
+                        {anexosList.length > 0 && (
+                          <div className="space-y-1">
+                            {anexosList.map((a, i) => (
+                              <div key={i} className="flex items-center gap-2 rounded-md border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
+                                <FileText className="h-4 w-4 text-gray-400 shrink-0" />
+                                <a href={a.url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-blue-600 hover:underline">{a.nome}</a>
+                                <button
+                                  type="button"
+                                  onClick={() => removeAnexoOrdem.mutate({ ordemId: detalhe.id, companyId, url: a.url })}
+                                  disabled={removeAnexoOrdem.isPending}
+                                  className="text-gray-400 hover:text-red-500"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div
+                          className={`flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed p-4 text-center transition-colors cursor-pointer ${detalheAnexoDrag ? "border-emerald-500 bg-emerald-50" : "border-gray-200 bg-gray-50 hover:border-emerald-400 hover:bg-emerald-50/40"}`}
+                          onClick={() => detalheFileInputRef.current?.click()}
+                          onDragOver={e => { e.preventDefault(); setDetalheAnexoDrag(true); }}
+                          onDragLeave={() => setDetalheAnexoDrag(false)}
+                          onDrop={e => { e.preventDefault(); setDetalheAnexoDrag(false); if (e.dataTransfer.files) processFiles(e.dataTransfer.files, detalhe.id); }}
+                        >
+                          {uploadingAnexo
+                            ? <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
+                            : <Upload className="h-5 w-5 text-gray-400" />
+                          }
+                          <p className="text-xs text-gray-500">{uploadingAnexo ? "Enviando..." : "Arraste ou clique para adicionar anexos"}</p>
+                          <p className="text-[10px] text-gray-400">PNG, PDF, DOCX, XLSX — até 20 MB</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* PDF */}
                 <div className="flex gap-3 border-t border-gray-200 pt-4">

@@ -5650,6 +5650,7 @@ export const comprasOrdens = pgTable("compras_ordens", {
   condicaoPagamento:  varchar("condicao_pagamento", { length: 100 }),
   solicitacaoId:      integer("solicitacao_id"),
   observacoes:        text(),
+  anexos:             jsonb("anexos"),
   pdfUrl:             text("pdf_url"),
   pendenteCoberturaOrcamentaria: boolean("pendente_cobertura_orcamentaria").default(false),
   aprovacaoExtraRequerida: boolean("aprovacao_extra_requerida").default(false),
