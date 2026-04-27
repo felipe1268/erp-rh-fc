@@ -156,6 +156,7 @@ export default function Ordens() {
     obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "",
     frete: "", outrasDespesas: "", impostos: "", desconto: "",
     condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "",
+    formaPagamento: "", contaBancariaId: "",
   });
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
   const [numParc, setNumParc] = useState(1);
@@ -174,6 +175,7 @@ export default function Ordens() {
   );
   const fornQ = trpc.compras.listarFornecedores.useQuery({ companyId, ativo: true }, { enabled: companyId > 0 });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
+  const contasBancariasQ = trpc.folha.listarContasBancarias.useQuery({ companyId }, { enabled: companyId > 0, staleTime: 60_000 });
   const eapQ = trpc.compras.getEapParaObra.useQuery(
     { obraId: parseInt(form.obraId), companyId },
     { enabled: !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0, staleTime: 60_000 }
@@ -254,7 +256,7 @@ export default function Ordens() {
   const [editRastreio, setEditRastreio] = useState("");
 
   function resetForm() {
-    setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "", condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "" });
+    setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "", condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "", formaPagamento: "", contaBancariaId: "" });
     setItens([newItem()]);
     setNumParc(1);
     setParcelas([]);
@@ -271,6 +273,8 @@ export default function Ordens() {
       obraId: parseInt(form.obraId),
       fornecedorId: form.fornecedorId && form.fornecedorId !== "none" ? parseInt(form.fornecedorId) : undefined,
       numeroNf: form.numeroNf || undefined,
+      formaPagamento: form.formaPagamento || undefined,
+      contaBancariaId: form.contaBancariaId ? parseInt(form.contaBancariaId) : undefined,
       condicaoPagamento: form.condicaoPagamento,
       numeroParcelas: numParc,
       parcelasJson: parcelas.length > 0 ? parcelas.map(p => ({ numero: p.numero, vencimento: p.vencimento || undefined, valor: parseFloat(p.valor) || 0 })) : undefined,
@@ -753,6 +757,47 @@ export default function Ordens() {
                 value={form.numeroNf} onChange={e => setForm(p => ({ ...p, numeroNf: e.target.value }))} />
               <p className="text-xs text-gray-400">Opcional — número da nota fiscal ou documento vinculado a esta ordem.</p>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-gray-700 text-sm font-medium">Forma de Pagamento</Label>
+                <Select value={form.formaPagamento} onValueChange={v => setForm(p => ({ ...p, formaPagamento: v }))}>
+                  <SelectTrigger className="bg-white border-gray-300 text-gray-900">
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-gray-200">
+                    {[
+                      { value: "boleto",       label: "Boleto" },
+                      { value: "pix",          label: "PIX" },
+                      { value: "transferencia", label: "Transferência Bancária" },
+                      { value: "deposito",     label: "Depósito em Conta" },
+                      { value: "cheque",       label: "Cheque" },
+                      { value: "cartao_credito", label: "Cartão de Crédito" },
+                      { value: "cartao_debito",  label: "Cartão de Débito" },
+                      { value: "dinheiro",     label: "Dinheiro" },
+                    ].map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-gray-700 text-sm font-medium">Conta Bancária</Label>
+                <Select value={form.contaBancariaId} onValueChange={v => setForm(p => ({ ...p, contaBancariaId: v }))}>
+                  <SelectTrigger className="bg-white border-gray-300 text-gray-900">
+                    <SelectValue placeholder="Selecione a conta..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border-gray-200">
+                    <SelectItem value="none">Nenhuma</SelectItem>
+                    {(contasBancariasQ.data ?? []).filter((c: any) => c.ativo).map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.apelido ? `${c.apelido} — ` : ""}{c.banco} Ag.{c.agencia} C.{c.conta}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div className="space-y-1.5">
               <Label className="text-gray-700 text-sm font-medium">
                 Condição de Pagamento *

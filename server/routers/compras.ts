@@ -5112,6 +5112,8 @@ Retorne APENAS um JSON válido neste formato:
       obraId: z.number().nullable().optional(),
       fornecedorId: z.number().nullable().optional(),
       numeroNf: z.string().optional(),
+      formaPagamento: z.string().optional(),
+      contaBancariaId: z.number().int().optional(),
       condicaoPagamento: z.string().min(1, "Condição de pagamento é obrigatória"),
       numeroParcelas: z.number().int().min(1).max(60).optional(),
       parcelasJson: z.array(z.object({
@@ -5167,6 +5169,8 @@ Retorne APENAS um JSON válido neste formato:
         dataEntregaPrevista: input.dataEntregaPrevista,
         dataVencimento: input.dataVencimento ?? null,
         numeroNf: input.numeroNf ?? null,
+        formaPagamento: input.formaPagamento ?? null,
+        contaBancariaId: input.contaBancariaId ?? null,
         numeroParcelas: input.numeroParcelas ?? 1,
         parcelasJson: input.parcelasJson ? (input.parcelasJson as any) : null,
         observacoes: input.observacoes,

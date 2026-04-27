@@ -5631,6 +5631,7 @@ export const comprasOrdens = pgTable("compras_ordens", {
   formaPagamento:     varchar("forma_pagamento", { length: 30 }),
   numeroParcelas:     integer("numero_parcelas").default(1),
   parcelasJson:       jsonb("parcelas_json"),
+  contaBancariaId:    integer("conta_bancaria_id"),
   status:             varchar({ length: 30 }).notNull().default("pendente"),
   aprovacaoStatus:    varchar("aprovacao_status", { length: 30 }).default("aguardando"),
   aprovadorId:        integer("aprovador_id"),
