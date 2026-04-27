@@ -2272,13 +2272,13 @@ export default function Solicitacoes() {
                   }}
                 />
               </TableHead>
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Aprovação</TableHead>
+              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Status</TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Número</TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Título / Setor</TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Obra</TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Necessidade</TableHead>
               <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Recebido</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Aprovação</TableHead>
-              <TableHead className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Status</TableHead>
               <TableHead className="w-8"></TableHead>
             </TableRow>
           </TableHeader>
@@ -2305,6 +2305,8 @@ export default function Solicitacoes() {
                       }}
                     />
                   </TableCell>
+                  <TableCell><AprovBadge status={sc.aprovacaoStatus} /></TableCell>
+                  <TableCell><StatusBadge status={sc.status} /></TableCell>
                   <TableCell className="text-gray-900 font-mono font-semibold text-xs">
                     <div className="flex items-center gap-1.5">
                       {isUrgente && (
@@ -2355,8 +2357,6 @@ export default function Solicitacoes() {
                       </div>
                     ) : <span className="text-gray-300 text-xs">—</span>}
                   </TableCell>
-                  <TableCell><AprovBadge status={sc.aprovacaoStatus} /></TableCell>
-                  <TableCell><StatusBadge status={sc.status} /></TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       {!["cancelado"].includes(sc.status) && (
