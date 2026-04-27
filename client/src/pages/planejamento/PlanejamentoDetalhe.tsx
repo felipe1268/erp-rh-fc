@@ -685,6 +685,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             avancos={avancos}
             utils={utils}
             onSemanaChange={setSemanaVisualizacao}
+            usarPesoPorDuracao={usarPesoPorDuracao}
           />
         )}
         {canViewTab(aba) && aba === "revisoes" && (
@@ -4167,7 +4168,7 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: AVANÇO SEMANAL
 // ═════════════════════════════════════════════════════════════════════════════
-function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, onSemanaChange }: any) {
+function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, onSemanaChange, usarPesoPorDuracao }: any) {
   const [semanaAtual, setSemanaAtualRaw] = useState(() => toMonday(new Date()));
   const setSemanaAtual = (s: string) => { setSemanaAtualRaw(s); onSemanaChange?.(s); };
   const [avancoLocal, setAvancoLocal] = useState<Record<number, number>>({});
@@ -4251,24 +4252,26 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
   // exibido seja crescente e reflita corretamente o progresso global do projeto.
   const semanasComDados = useMemo(() => {
     const result: Record<string, number> = {};
-    const pesoTotalRaw = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
-    const semPeso = pesoTotalRaw === 0;
-    const pesoTotal = semPeso ? (folhas.length || 1) : pesoTotalRaw;
+    const pesoBrutoSCD = usarPesoPorDuracao
+      ? folhas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
+      : folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const semPesoSCD = pesoBrutoSCD === 0;
+    const pesoTotalSCD = semPesoSCD ? (folhas.length || 1) : pesoBrutoSCD;
     const todasSemanas = [...new Set((avancos as any[]).map((av: any) => av.semana as string))].sort();
     todasSemanas.forEach(sem => {
       let soma = 0;
       folhas.forEach((a: any) => {
-        const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+        const peso = semPesoSCD ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
         const avsAtiv = (avancos as any[])
           .filter((av: any) => av.atividadeId === a.id && av.semana <= sem);
         if (avsAtiv.length === 0) return;
         avsAtiv.sort((x: any, y: any) => y.semana.localeCompare(x.semana));
-        soma += n(avsAtiv[0].percentualAcumulado) * (peso / pesoTotal);
+        soma += n(avsAtiv[0].percentualAcumulado) * (peso / pesoTotalSCD);
       });
       result[sem] = +Math.min(100, soma).toFixed(1);
     });
     return result;
-  }, [avancos, folhas]);
+  }, [avancos, folhas, usarPesoPorDuracao]);
 
   // Pré-carrega avanços existentes da semana selecionada
   const avancoExistente = useMemo(() => {
@@ -4370,12 +4373,15 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
   // Usa o FIM da semana (= início da próxima) como referência, para que a
   // semana 1 mostre o previsto acumulado ao término da semana — não ao início,
   // que seria sempre 0% quando as atividades também iniciam nesse dia.
-  // Fallback para peso igual (1/n) quando nenhuma atividade tem peso financeiro.
+  // Quando usarPesoPorDuracao=true pondera por duracaoDias (igual à barra superior
+  // e ao MS Project); caso contrário usa pesoFinanceiro com fallback para peso igual.
   const previsto = useMemo(() => {
     const folhasComDatas = folhas.filter((a: any) => a.dataInicio && a.dataFim);
-    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
-    const semPeso   = pesoTotal === 0;
-    const denom     = semPeso ? (folhasComDatas.length || 1) : pesoTotal;
+    const pesoBruto = usarPesoPorDuracao
+      ? folhas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
+      : folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const semPeso = pesoBruto === 0;
+    const denom   = semPeso ? (folhasComDatas.length || 1) : pesoBruto;
     let soma = 0;
     folhasComDatas.forEach((a: any) => {
       const ini  = new Date(a.dataInicio + "T12:00:00").getTime();
@@ -4384,37 +4390,41 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
       let exp = 0;
       if (ref >= fim) exp = 100;
       else if (ref > ini) exp = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
-      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       soma += (exp * peso) / denom;
     });
     return +soma.toFixed(1);
-  }, [folhas, semanaFim]);
+  }, [folhas, semanaFim, usarPesoPorDuracao]);
 
   // ── Realizado acumulado ponderado (semana atual) ───────────────────────────
   // Prioriza avancoLocal > avancoExistente (semana exata) > avancoMaisRecente (semana mais recente ≤ atual)
-  // Fallback para peso igual (1/n) quando nenhuma atividade tem peso financeiro
+  // Quando usarPesoPorDuracao=true pondera por duracaoDias (igual à barra superior e ao MS Project)
   const realizadoAcum = useMemo(() => {
-    const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
-    const semPeso   = pesoTotal === 0;
-    const denom     = semPeso ? (folhas.length || 1) : pesoTotal;
+    const pesoBruto = usarPesoPorDuracao
+      ? folhas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
+      : folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const semPeso = pesoBruto === 0;
+    const denom   = semPeso ? (folhas.length || 1) : pesoBruto;
     let soma = 0;
     folhas.forEach((a: any) => {
       const val  = avancoLocal[a.id] !== undefined
         ? avancoLocal[a.id]
         : (avancoExistente[a.id] ?? avancoMaisRecente[a.id] ?? 0);
-      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       soma += (val * peso) / denom;
     });
     return +soma.toFixed(1);
-  }, [folhas, avancoExistente, avancoMaisRecente, avancoLocal]);
+  }, [folhas, avancoExistente, avancoMaisRecente, avancoLocal, usarPesoPorDuracao]);
 
   const delta = +(realizadoAcum - previsto).toFixed(2);
 
   const previstoComInd = useMemo(() => {
     const folhasComDatas = folhasComInd.filter((a: any) => a.dataInicio && a.dataFim);
-    const pesoTotal = folhasComInd.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
-    const semPeso   = pesoTotal === 0;
-    const denom     = semPeso ? (folhasComDatas.length || 1) : pesoTotal;
+    const pesoBruto = usarPesoPorDuracao
+      ? folhasComInd.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
+      : folhasComInd.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const semPeso = pesoBruto === 0;
+    const denom   = semPeso ? (folhasComDatas.length || 1) : pesoBruto;
     let soma = 0;
     folhasComDatas.forEach((a: any) => {
       const ini  = new Date(a.dataInicio + "T12:00:00").getTime();
@@ -4423,16 +4433,18 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
       let exp = 0;
       if (ref >= fim) exp = 100;
       else if (ref > ini) exp = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
-      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       soma += (exp * peso) / denom;
     });
     return +soma.toFixed(1);
-  }, [folhasComInd, semanaFim]);
+  }, [folhasComInd, semanaFim, usarPesoPorDuracao]);
 
   const realizadoComInd = useMemo(() => {
-    const pesoTotal = folhasComInd.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
-    const semPeso   = pesoTotal === 0;
-    const denom     = semPeso ? (folhasComInd.length || 1) : pesoTotal;
+    const pesoBruto = usarPesoPorDuracao
+      ? folhasComInd.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
+      : folhasComInd.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const semPeso = pesoBruto === 0;
+    const denom   = semPeso ? (folhasComInd.length || 1) : pesoBruto;
     let soma = 0;
     folhasComInd.forEach((a: any) => {
       let val: number;
@@ -4449,11 +4461,11 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
           ? avancoLocal[a.id]
           : (avancoExistente[a.id] ?? avancoMaisRecente[a.id] ?? 0);
       }
-      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       soma += (val * peso) / denom;
     });
     return +soma.toFixed(1);
-  }, [folhasComInd, avancoExistente, avancoMaisRecente, avancoLocal, semanaFim]);
+  }, [folhasComInd, avancoExistente, avancoMaisRecente, avancoLocal, semanaFim, usarPesoPorDuracao]);
 
   const distorcaoPrev = +(previstoComInd - previsto).toFixed(2);
   const distorcaoReal = +(realizadoComInd - realizadoAcum).toFixed(2);
