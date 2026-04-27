@@ -14,7 +14,7 @@ import {
   Plus, Search, ChevronLeft, ChevronRight, RefreshCw,
   FileText, AlertCircle, Clock, CheckCircle2, ReceiptText,
   ChevronDown, ChevronUp, Building2, Send, ThumbsUp,
-  TrendingUp, TrendingDown, Settings, Info, RefreshCcw
+  TrendingUp, TrendingDown, Settings, Info
 } from "lucide-react";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -425,13 +425,6 @@ export default function FinanceiroContasAReceber() {
     onSuccess:()=>{ toast({title:"Status atualizado!"}); setShowUpdate(null); refetch(); },
     onError:(e:any)=>toast({title:"Erro",description:e.message,variant:"destructive"}),
   });
-  const syncMut = (trpc as any).financial.syncCronogramaToReceber.useMutation({
-    onSuccess:(r:any)=>{
-      toast({title:`Sincronizado!`, description: r.sincronizados > 0 ? `${r.sincronizados} medição(ões) importada(s) do cronograma.` : "Nenhuma medição nova encontrada."});
-      refetch();
-    },
-    onError:(e:any)=>toast({title:"Erro na sincronização",description:e.message,variant:"destructive"}),
-  });
 
   // Dados do mês — exclui entradas auto-geradas sem valor (obra_previsto com valor_medicao = 0/null)
   const mesData = useMemo(()=>{
@@ -540,12 +533,6 @@ export default function FinanceiroContasAReceber() {
             <p className="text-xs text-gray-400 mt-0.5">Medições, faturamento e recebimentos das obras</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={()=>syncMut.mutate({companyId})}
-              disabled={syncMut.isPending}
-              className="h-9 text-xs border-blue-200 text-blue-700 hover:bg-blue-50">
-              <RefreshCcw className={`w-3.5 h-3.5 mr-1.5 ${syncMut.isPending?"animate-spin":""}`} />
-              Sincronizar Cronograma
-            </Button>
             <Button onClick={()=>setShowNew(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
               <Plus className="w-4 h-4 mr-2" />Nova Medição
             </Button>
@@ -673,15 +660,8 @@ export default function FinanceiroContasAReceber() {
                   <p className="text-gray-400 text-xs mt-1">
                     {filtroStatus
                       ? "Tente remover o filtro."
-                      : "Clique em 'Sincronizar Cronograma' para importar as medições previstas, ou registre manualmente."}
+                      : "As medições são sincronizadas automaticamente a partir do cronograma financeiro. Cadastre o cronograma da obra ou registre manualmente."}
                   </p>
-                  {!filtroStatus && (
-                    <Button variant="outline" size="sm" className="mt-3 text-xs border-blue-200 text-blue-600"
-                      onClick={()=>syncMut.mutate({companyId})} disabled={syncMut.isPending}>
-                      <RefreshCcw className={`w-3 h-3 mr-1 ${syncMut.isPending?"animate-spin":""}`} />
-                      Sincronizar Cronograma
-                    </Button>
-                  )}
                 </div>
               ) : (
                 <div className="overflow-x-auto">

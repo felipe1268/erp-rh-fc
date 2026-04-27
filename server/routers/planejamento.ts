@@ -1892,8 +1892,41 @@ export const planejamentoRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      return db.delete(planejamentoMedicoes)
+      // Antes de excluir: busca a medição para saber company e mês (para o gatilho)
+      const [medicao] = await db
+        .select({ projetoId: planejamentoMedicoes.projetoId, competencia: planejamentoMedicoes.competencia })
+        .from(planejamentoMedicoes)
+        .where(eq(planejamentoMedicoes.id, input.id))
+        .limit(1);
+
+      // Remove o financial_revenue vinculado se ainda não faturado/recebido
+      try {
+        await db.execute(sql`
+          DELETE FROM financial_revenue
+          WHERE medicao_id = ${input.id}
+            AND status IN ('a_faturar', 'obra_previsto')
+        `);
+      } catch {}
+
+      const result = await db.delete(planejamentoMedicoes)
         .where(eq(planejamentoMedicoes.id, input.id));
+
+      // Dispara re-sincronização financeira em background
+      if (medicao?.projetoId) {
+        try {
+          const [projRow] = await db
+            .select({ companyId: planejamentoProjetos.companyId })
+            .from(planejamentoProjetos)
+            .where(eq(planejamentoProjetos.id, medicao.projetoId))
+            .limit(1);
+          if (projRow?.companyId) {
+            const { triggerFinancialSync } = await import("../services/financialEventTrigger");
+            triggerFinancialSync(projRow.companyId, medicao.competencia + "-01");
+          }
+        } catch {}
+      }
+
+      return result;
     }),
 
   // ── Configuração de Modalidade de Medição ────────────────────────────────
