@@ -1708,6 +1708,91 @@ export const financialRouter = router({
     }
   }),
 
+  getCashFlow: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    dataInicio: z.string(),
+    dataFim: z.string(),
+    agrupamento: z.enum(["dia", "semana", "mes", "ano"]).default("dia"),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const { companyId, dataInicio, dataFim, agrupamento } = input;
+
+    // Build grouping expression — all label expressions derive from groupExpr so GROUP BY is clean
+    let groupExpr: string;
+    let labelExpr: string;
+    if (agrupamento === "dia") {
+      groupExpr = "data_vencimento::date";
+      labelExpr = "TO_CHAR(data_vencimento::date, 'DD/MM/YYYY')";
+    } else if (agrupamento === "semana") {
+      groupExpr = "DATE_TRUNC('week', data_vencimento)";
+      labelExpr = "TO_CHAR(DATE_TRUNC('week', data_vencimento), 'DD/MM/YYYY') || ' – ' || TO_CHAR(DATE_TRUNC('week', data_vencimento) + INTERVAL '6 days', 'DD/MM/YYYY')";
+    } else if (agrupamento === "mes") {
+      groupExpr = "DATE_TRUNC('month', data_vencimento)";
+      labelExpr = "TO_CHAR(DATE_TRUNC('month', data_vencimento), 'MM/YYYY')";
+    } else {
+      groupExpr = "DATE_TRUNC('year', data_vencimento)";
+      labelExpr = "TO_CHAR(DATE_TRUNC('year', data_vencimento), 'YYYY')";
+    }
+
+    const summaryRes = await dbExecute(db,
+      `SELECT
+         ${groupExpr} AS periodo_key,
+         ${labelExpr} AS periodo_label,
+         COALESCE(SUM(CASE WHEN tipo='receita' AND status IN ('pago','recebido') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END), 0) AS entradas_realizadas,
+         COALESCE(SUM(CASE WHEN tipo='despesa' AND status IN ('pago','recebido') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END), 0) AS saidas_realizadas,
+         COALESCE(SUM(CASE WHEN tipo='receita' AND status NOT IN ('cancelado','pago','recebido') THEN valor_previsto ELSE 0 END), 0) AS entradas_previstas,
+         COALESCE(SUM(CASE WHEN tipo='despesa' AND status NOT IN ('cancelado','pago','recebido') THEN valor_previsto ELSE 0 END), 0) AS saidas_previstas
+       FROM financial_entries
+       WHERE company_id=$1
+         AND status != 'cancelado'
+         AND data_vencimento IS NOT NULL
+         AND data_vencimento::date BETWEEN $2::date AND $3::date
+       GROUP BY ${groupExpr}
+       ORDER BY periodo_key`,
+      [companyId, dataInicio, dataFim]
+    );
+
+    const periodos = rows(summaryRes);
+
+    // Build totals
+    let saldoAcumuladoRealizado = 0;
+    let saldoAcumuladoTotal = 0;
+
+    const result = periodos.map((p: any) => {
+      const entR = parseFloat(p.entradas_realizadas ?? 0);
+      const saiR = parseFloat(p.saidas_realizadas ?? 0);
+      const entP = parseFloat(p.entradas_previstas ?? 0);
+      const saiP = parseFloat(p.saidas_previstas ?? 0);
+      saldoAcumuladoRealizado += entR - saiR;
+      saldoAcumuladoTotal += (entR + entP) - (saiR + saiP);
+
+      return {
+        periodoKey: p.periodo_key,
+        periodoLabel: p.periodo_label,
+        entradasRealizadas: entR,
+        saidasRealizadas: saiR,
+        entradasPrevistas: entP,
+        saidasPrevistas: saiP,
+        saldoLiquidoRealizado: entR - saiR,
+        saldoLiquidoPrevisto: entP - saiP,
+        saldoAcumuladoRealizado,
+        saldoAcumuladoTotal,
+      };
+    });
+
+    const totais = result.reduce((acc: any, p: any) => {
+      acc.entradasRealizadas += p.entradasRealizadas;
+      acc.saidasRealizadas += p.saidasRealizadas;
+      acc.entradasPrevistas += p.entradasPrevistas;
+      acc.saidasPrevistas += p.saidasPrevistas;
+      return acc;
+    }, { entradasRealizadas: 0, saidasRealizadas: 0, entradasPrevistas: 0, saidasPrevistas: 0 });
+
+    return { periodos: result, totais };
+  }),
+
   getEFDReinf: protectedProcedure.input(z.object({
     companyId: z.number(),
     mesRef: z.string(),
