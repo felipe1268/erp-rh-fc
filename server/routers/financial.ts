@@ -2574,6 +2574,7 @@ export const financialRouter = router({
 
     // 2. Distribuição mensal prevista via cruzamento atividades × orçamento
     //    Uma única query SQL calcula a fração de dias de cada par (item × atividade) por mês
+    const anoInt = Number(input.ano); // seguro inlinear: validado pelo Zod como number
     const prevRes = await dbExecute(db, `
       WITH rev_ativa AS (
         SELECT DISTINCT ON (r.projeto_id) r.projeto_id, r.id AS rev_id
@@ -2646,8 +2647,8 @@ export const financialRouter = router({
       -- Meses do ano alvo para o cruzamento
       meses_ano AS (
         SELECT generate_series(
-          TO_DATE($1 || '-01-01', 'YYYY-MM-DD'),
-          TO_DATE($1 || '-12-01', 'YYYY-MM-DD'),
+          MAKE_DATE(${anoInt}, 1, 1),
+          MAKE_DATE(${anoInt}, 12, 1),
           '1 month'::interval
         )::date AS mes_inicio
       ),
@@ -2691,7 +2692,7 @@ export const financialRouter = router({
              df.frac_mes AS frac_fallback
       FROM dist_fallback df WHERE df.frac_mes > 0
       ORDER BY projeto_id, competencia
-    `, [String(input.ano)]);
+    `, []);
     const prevRows = prevRes.rows;
 
     // 3. Medições salvas (realizado) para os projetos no ano
