@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
+import { triggerFinancialSync } from "../services/financialEventTrigger";
 import {
   parceirosConveniados,
   lancamentosParceiros,
@@ -547,6 +548,8 @@ export const parceirosRouter = router({
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
         const [result] = await db.insert(pagamentosParceiros).values(input as any);
+        // Gatilho financeiro — pagamento a parceiro gera despesa imediatamente
+        triggerFinancialSync(input.companyId, input.competencia);
         return { id: result[0].id };
       }),
 

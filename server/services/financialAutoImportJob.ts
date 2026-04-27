@@ -6,6 +6,7 @@ import {
   runAllReceitasImport,
   gerarAlertasVencimento,
 } from "./financialIntegrationBridge";
+import { retroacaoStartup } from "./financialEventTrigger";
 
 // ============================================================
 // JOB DE AUTO-IMPORTAÇÃO FINANCEIRA — roda a cada hora
@@ -100,20 +101,39 @@ async function runAlertasJob(): Promise<void> {
   }
 }
 
-export function startFinancialAutoImportJob(): void {
-  // Importação completa: aguarda 20s após o servidor subir, depois roda a cada 60 min
-  setTimeout(async () => {
-    await runJob().catch(console.error);
-    jobInterval = setInterval(() => runJob().catch(console.error), 60 * 60 * 1000);
-  }, 20_000);
+async function runStartupRetroacao(): Promise<void> {
+  try {
+    const companyIds = await getAllActiveCompanyIds();
+    if (!companyIds.length) return;
+    console.log(`[FinancialJob] Retroação de startup: importando últimos 6 meses para ${companyIds.length} empresa(s)...`);
+    for (const companyId of companyIds) {
+      await seedPlanoDeConta(companyId).catch(() => {});
+      await ensureTaxConfig(companyId).catch(() => {});
+      const total = await retroacaoStartup(companyId, 6).catch(() => 0);
+      if (total > 0) console.log(`[FinancialJob] Startup: company=${companyId} → ${total} lançamentos históricos importados`);
+    }
+    console.log("[FinancialJob] Retroação de startup concluída.");
+  } catch (e: any) {
+    console.error("[FinancialJob] Erro na retroação de startup:", e?.message);
+  }
+}
 
-  // Alertas de vencimento: roda a cada 6 horas
+export function startFinancialAutoImportJob(): void {
+  // Startup: retroação imediata (dados históricos) + job normal
+  setTimeout(async () => {
+    await runStartupRetroacao().catch(console.error);
+    await runJob().catch(console.error);
+    // Job periódico: a cada 5 minutos como segurança (gatilhos em tempo real já cobrem a maioria)
+    jobInterval = setInterval(() => runJob().catch(console.error), 5 * 60 * 1000);
+  }, 5_000); // 5 segundos após o servidor subir
+
+  // Alertas de vencimento: roda a cada 30 minutos
   setTimeout(async () => {
     await runAlertasJob().catch(console.error);
-    alertInterval = setInterval(() => runAlertasJob().catch(console.error), 6 * 60 * 60 * 1000);
-  }, 30_000);
+    alertInterval = setInterval(() => runAlertasJob().catch(console.error), 30 * 60 * 1000);
+  }, 15_000);
 
-  console.log("[FinancialJob] Auto-import job agendado (importação: 60 min | alertas: 6 horas).");
+  console.log("[FinancialJob] Integração em tempo real ativa · Retroação no startup · Job de segurança: 5 min · Alertas: 30 min.");
 }
 
 export function stopFinancialAutoImportJob(): void {

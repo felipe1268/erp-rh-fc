@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getEffectiveAllowedObraIds, userCanAccessObra } from "../db";
+import { triggerFinancialSync } from "../services/financialEventTrigger";
 import { eq, and, desc, asc, sql, gte, lte, inArray } from "drizzle-orm";
 import { resolveCompanyIds } from "../companyHelper";
 import {
@@ -1112,6 +1113,8 @@ Sempre retorne JSON válido, sem markdown.`;
         await db.update(vehicles).set({ kmAtual: input.kmNaManutencao, updatedAt: new Date().toISOString() } as any)
           .where(eq(vehicles.id, input.vehicleId));
       }
+      // Gatilho financeiro — manutenção gera despesa imediatamente
+      triggerFinancialSync(input.companyId, input.dataManutencao);
       return m;
     }),
 
@@ -1368,6 +1371,8 @@ Sempre retorne JSON válido, sem markdown.`;
         await db.update(vehicles).set({ kmAtual: input.kmAtual, updatedAt: new Date().toISOString() } as any)
           .where(eq(vehicles.id, input.vehicleId));
       }
+      // Gatilho financeiro — abastecimento gera despesa imediatamente
+      triggerFinancialSync(input.companyId, input.data);
       return r;
     }),
 

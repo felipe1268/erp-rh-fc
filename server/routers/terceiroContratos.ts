@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
+import { triggerFinancialSync } from "../services/financialEventTrigger";
 import { eq, and, desc, inArray, sql, asc } from "drizzle-orm";
 import {
   terceiroContratos,
@@ -1246,6 +1247,8 @@ export const terceiroContratosRouter = router({
         await db.insert(terceiroMedicaoItens).values({ ...im, medicaoId: medicao.id } as any);
       }
 
+      // Gatilho financeiro em tempo real — fire-and-forget
+      triggerFinancialSync(input.companyId, input.periodo);
       return { medicao, itens: itensMedicao.length, itensNaoVinculados };
     }),
 
@@ -1286,6 +1289,8 @@ export const terceiroContratosRouter = router({
           })
           .where(eq(terceiroContratoItens.id, im.contratoItemId));
       }
+      // Gatilho financeiro — medição aprovada gera lançamento imediatamente
+      triggerFinancialSync(input.companyId);
       return medicao;
     }),
 
