@@ -716,6 +716,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             initialSemana={refisInitSemana}
             onInitialSemanaConsumed={() => setRefisInitSemana(null)}
             onSemanaChange={setSemanaVisualizacao}
+            usarPesoPorDuracao={usarPesoPorDuracao}
           />
         )}
         {canViewTab(aba) && aba === "cronograma-financeiro" && (
@@ -8848,7 +8849,7 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: REFIS
 // ═════════════════════════════════════════════════════════════════════════════
-function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, hideFinancial, initialSemana, onInitialSemanaConsumed, onSemanaChange }: any) {
+function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, hideFinancial, initialSemana, onInitialSemanaConsumed, onSemanaChange, usarPesoPorDuracao }: any) {
   const [semana, setSemanaRaw] = useState(() => toMonday(new Date()));
   const setSemana = (s: string) => { setSemanaRaw(s); onSemanaChange?.(s); };
   const [obs, setObs] = useState("");
@@ -8978,11 +8979,18 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     return ((r - ini) / (fim - ini)) * 100;
   }
 
-  // Helper: denominator e peso por atividade — idêntico ao AvancoSemanal
+  // Helper: denominator e peso por atividade.
+  // Quando usarPesoPorDuracao=true usa duracaoDias (compatível com MS Project),
+  // caso contrário usa pesoFinanceiro com fallback para pesos iguais (1/n).
   function calcPesoTotal(folhas: any[]): { pesoTotal: number; semPeso: boolean } {
-    const soma = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const soma = usarPesoPorDuracao
+      ? folhas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
+      : folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
     const semPeso = soma === 0;
     return { pesoTotal: semPeso ? (folhas.length || 1) : soma, semPeso };
+  }
+  function getPeso(a: any, semPeso: boolean): number {
+    return semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
   }
 
   // Fim da semana selecionada (domingo = segunda + 6 dias).
@@ -9003,10 +9011,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
-      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      const peso = getPeso(a, semPeso);
       return s + prevIndRef(a, semanaFimRefis) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, semanaFimRefis]);
+  }, [atividades, semanaFimRefis, usarPesoPorDuracao]);
 
   const semIdx   = semanas.indexOf(semana);
   const semAntes = semIdx > 0 ? semanas[semIdx - 1] : null;
@@ -9025,10 +9033,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
-      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      const peso = getPeso(a, semPeso);
       return s + prevIndRef(a, semAntesFim) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, semAntesFim]);
+  }, [atividades, semAntesFim, usarPesoPorDuracao]);
 
   const avancoPrevSemanal = Math.max(0, avancoPrevisto - avancoPrevAntes);
 
@@ -9043,10 +9051,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
-      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      const peso = getPeso(a, semPeso);
       return s + (m[a.id] ?? 0) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, avancos, semana]);
+  }, [atividades, avancos, semana, usarPesoPorDuracao]);
 
   const avancoRealAntes = useMemo(() => {
     if (!semAntes) return 0;
@@ -9060,10 +9068,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
-      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      const peso = getPeso(a, semPeso);
       return s + (m[a.id] ?? 0) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, avancos, semAntes]);
+  }, [atividades, avancos, semAntes, usarPesoPorDuracao]);
 
   const avancoRealSemanal = Math.max(0, avancoRealAtual - avancoRealAntes);
   const spi = avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0;
@@ -9072,10 +9080,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     const f = atividades.filter((a: any) => !a.isGrupo);
     const { pesoTotal, semPeso } = calcPesoTotal(f);
     return Math.min(100, f.reduce((s: number, a: any) => {
-      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      const peso = getPeso(a, semPeso);
       return s + prevIndRef(a, semanaFimRefis) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, semanaFimRefis]);
+  }, [atividades, semanaFimRefis, usarPesoPorDuracao]);
 
   const refisRealComInd = useMemo(() => {
     const m: Record<number, number> = {};
@@ -9088,7 +9096,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     const f = atividades.filter((a: any) => !a.isGrupo);
     const { pesoTotal, semPeso } = calcPesoTotal(f);
     return Math.min(100, f.reduce((s: number, a: any) => {
-      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      const peso = getPeso(a, semPeso);
       let val: number;
       if (a.isIndireta) {
         val = prevIndRef(a, semanaFimRefis);
@@ -9097,7 +9105,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       }
       return s + val * (peso / pesoTotal);
     }, 0));
-  }, [atividades, avancos, semana, semanaFimRefis]);
+  }, [atividades, avancos, semana, semanaFimRefis, usarPesoPorDuracao]);
 
   const refisDistPrev = +(refisPrevistoComInd - avancoPrevisto).toFixed(2);
   const refisDistReal = +(refisRealComInd - avancoRealAtual).toFixed(2);
@@ -9108,10 +9116,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     const f = atividades.filter((a: any) => !a.isGrupo);
     const { pesoTotal, semPeso } = calcPesoTotal(f);
     return Math.min(100, f.reduce((s: number, a: any) => {
-      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      const peso = getPeso(a, semPeso);
       return s + prevIndRef(a, semAntesFim) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, semAntesFim]);
+  }, [atividades, semAntesFim, usarPesoPorDuracao]);
 
   const avancoRealAntesComInd = useMemo(() => {
     if (!semAntes) return 0;
@@ -9125,7 +9133,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     const f = atividades.filter((a: any) => !a.isGrupo);
     const { pesoTotal, semPeso } = calcPesoTotal(f);
     return Math.min(100, f.reduce((s: number, a: any) => {
-      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      const peso = getPeso(a, semPeso);
       let val: number;
       if (a.isIndireta) {
         val = semAntesFim ? prevIndRef(a, semAntesFim) : 0;
@@ -9134,7 +9142,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       }
       return s + val * (peso / pesoTotal);
     }, 0));
-  }, [atividades, avancos, semAntes, semAntesFim]);
+  }, [atividades, avancos, semAntes, semAntesFim, usarPesoPorDuracao]);
 
   const rPrev       = refisComIndiretas ? refisPrevistoComInd : avancoPrevisto;
   const rReal       = refisComIndiretas ? refisRealComInd : avancoRealAtual;
@@ -9173,10 +9181,14 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     }
 
     function calc(leaves: any[]) {
-      const pt = leaves.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || leaves.length || 1;
+      const ptBruto = usarPesoPorDuracao
+        ? leaves.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
+        : leaves.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+      const pt = ptBruto || leaves.length || 1;
+      const spGrupo = ptBruto === 0;
       let prev = 0, real = 0;
       leaves.forEach(a => {
-        const p = n(a.pesoFinanceiro) || 1;
+        const p = spGrupo ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
         prev += prevInd(a) * p / pt;
         real += (realMap[a.id] ?? 0) * p / pt;
       });
@@ -9214,7 +9226,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       const gDataFim = gFins[gFins.length - 1] ?? null;
       return { ...g, ...calc(gLeaves), nLeaves: gLeaves.length, etapas, dataInicio: gDataInicio, dataFim: gDataFim };
     }).filter((g: any) => g.nLeaves > 0);
-  }, [atividades, realMap, semana]);
+  }, [atividades, realMap, semana, usarPesoPorDuracao]);
 
   const existente = refisLista.find((r: any) => r.semana === semana);
 
@@ -9923,7 +9935,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               <div className="mt-3 w-full h-1.5 rounded-full overflow-hidden" style={{ background: "#bfdbfe" }}>
                 <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(rRealSem * 10, 100)}%`, background: "#3b82f6" }} />
               </div>
-              <p className="text-[9px] mt-2 text-blue-700 font-medium">Ponderado financeiramente</p>
+              <p className="text-[9px] mt-2 text-blue-700 font-medium">{usarPesoPorDuracao ? "Ponderado por duração" : "Ponderado financeiramente"}</p>
             </div>
 
             {/* SPI */}
