@@ -14,19 +14,21 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 export interface TarefaImportada {
-  wbs:       string;
-  nome:      string;
-  nivel:     number;
-  inicio:    string;
-  fim:       string;
-  durDias:   number;
-  pred:      string;
-  recurso:   string;
-  isGrupo:   boolean;
-  isMarco:   boolean;
+  wbs:              string;
+  nome:             string;
+  nivel:            number;
+  inicio:           string;
+  fim:              string;
+  durDias:          number;
+  pred:             string;
+  recurso:          string;
+  isGrupo:          boolean;
+  isMarco:          boolean;
   // pós-vinculação
-  eapCodigo: string;
-  pesoFin:   number;
+  eapCodigo:        string;
+  pesoFin:          number;
+  // progresso importado do arquivo
+  percentConcluido: number;
 }
 
 // ── Utilitários de parse ──────────────────────────────────────────────────────
@@ -136,13 +138,17 @@ export function parseMSProjectXML(text: string): TarefaImportada[] {
     const predWbs  = predUids.map(uid => uidToWbs.get(uid) ?? "").filter(Boolean);
     const pred     = predWbs.join(",");
 
+    // % Concluído — campo PercentComplete no XML do MS Project (0-100)
+    const pctRaw = task.querySelector("PercentComplete")?.textContent ?? "";
+    const percentConcluido = pctRaw !== "" ? Math.min(100, Math.max(0, parseFloat(pctRaw) || 0)) : 0;
+
     // Pula a tarefa de nível 0 (cabeçalho do projeto)
     if (uid === "0" || name === "" || level === 0) continue;
 
     result.push({
       wbs, nome: name, nivel: level, inicio: start, fim: fin,
       durDias: parseDuration(durRaw), pred, recurso: res,
-      isGrupo: summ, isMarco, eapCodigo: wbs, pesoFin: 0,
+      isGrupo: summ, isMarco, eapCodigo: wbs, pesoFin: 0, percentConcluido,
     });
   }
   return result;
@@ -170,6 +176,7 @@ export async function parseMSProjectXLSX(buffer: ArrayBuffer): Promise<TarefaImp
   const KEYS_REC  = ["Resource Names", "Recursos", "Recurso", "Resource"];
   const KEYS_SUMM  = ["Summary", "Resumo", "Grupo", "Is Summary", "Outline Level", "Nível", "Nivel"];
   const KEYS_MARCO = ["Milestone", "Marco", "Is Milestone", "Marcos"];
+  const KEYS_PCT   = ["% Complete", "% Concluído", "% Concluido", "Percent Complete", "Percentual", "% Work Complete"];
 
   const headers = Object.keys(rows[0] ?? {});
 
@@ -190,6 +197,7 @@ export async function parseMSProjectXLSX(buffer: ArrayBuffer): Promise<TarefaImp
   const kRec   = findKey(KEYS_REC);
   const kSumm  = findKey(KEYS_SUMM);
   const kMarco = findKey(KEYS_MARCO);
+  const kPct   = findKey(KEYS_PCT);
 
   if (!kNome) {
     const cols = headers.slice(0, 8).join(", ");
@@ -226,7 +234,16 @@ export async function parseMSProjectXLSX(buffer: ArrayBuffer): Promise<TarefaImp
         isMarco = true;
       }
 
-      return { wbs, nome, nivel: level, inicio: ini, fim, durDias, pred, recurso: rec, isGrupo, isMarco, eapCodigo: wbs, pesoFin: 0 };
+      // % Concluído — pode vir como "45%", "45" ou "0.45" dependendo do export
+      let percentConcluido = 0;
+      if (kPct && r[kPct] != null && r[kPct] !== "") {
+        const raw = r[kPct].toString().replace("%", "").trim();
+        const val = parseFloat(raw) || 0;
+        // MS Project Excel export armazena como decimal (0.45) ou como inteiro (45)
+        percentConcluido = val <= 1 && val > 0 ? Math.round(val * 100) : Math.min(100, Math.max(0, val));
+      }
+
+      return { wbs, nome, nivel: level, inicio: ini, fim, durDias, pred, recurso: rec, isGrupo, isMarco, eapCodigo: wbs, pesoFin: 0, percentConcluido };
     });
 
   // Detecção automática de grupos: se há WBS filhos, o pai é grupo
@@ -404,6 +421,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
       isGrupo:             t.isGrupo,
       isMarco:             t.isMarco,
       ordem:               i,
+      percentConcluido:    t.percentConcluido ?? 0,
     }));
     salvarMutation.mutate({ revisaoId: revisaoAtiva.id, projetoId, atividades });
   }
@@ -452,6 +470,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                 <p>• <strong>XML</strong>: Arquivo → Salvar Como → <em>XML do Project (*.xml)</em></p>
                 <p>• <strong>Excel</strong>: Arquivo → Salvar Como → <em>Pasta de Trabalho do Excel (*.xlsx)</em></p>
                 <p>As atividades serão vinculadas automaticamente à EAP do orçamento (se disponível).</p>
+                <p className="text-blue-600 font-medium mt-1">O campo <strong>% Concluído</strong> de cada tarefa será importado automaticamente e registrado como Avanço Realizado da semana atual — mantendo o sistema alinhado com o Project.</p>
               </div>
 
               <div
@@ -581,6 +600,9 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                       <th className="py-2 px-2 text-left w-24">Fim</th>
                       <th className="py-2 px-2 text-right w-14">Dias</th>
                       <th className="py-2 px-2 text-right w-16">Peso%</th>
+                      {tarefas.some(t => (t.percentConcluido ?? 0) > 0) && (
+                        <th className="py-2 px-2 text-right w-16 text-blue-200">% Conc.</th>
+                      )}
                       <th className="py-2 px-2 text-left w-28">Recurso</th>
                       {orcamentoId && <th className="py-2 px-2 text-center w-8">EAP</th>}
                     </tr>
@@ -651,6 +673,14 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                               />
                             )}
                           </td>
+                          {tarefas.some(t => (t.percentConcluido ?? 0) > 0) && (
+                            <td className="px-2 py-1 text-right">
+                              {(t.percentConcluido ?? 0) > 0
+                                ? <span className="text-blue-600 font-medium text-[11px]">{t.percentConcluido}%</span>
+                                : <span className="text-slate-300 text-[10px]">—</span>
+                              }
+                            </td>
+                          )}
                           <td className="px-2 py-1 text-slate-500 truncate max-w-[100px]">{t.recurso}</td>
                           {orcamentoId && (
                             <td className="px-2 py-1 text-center">

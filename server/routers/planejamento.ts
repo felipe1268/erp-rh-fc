@@ -683,6 +683,7 @@ export const planejamentoRouter = router({
         isGrupo:             z.boolean().optional(),
         isMarco:             z.boolean().optional(),
         isIndireta:          z.boolean().optional(),
+        percentConcluido:    z.preprocess(v => v == null ? 0 : Number(v), z.number().min(0).max(100)).optional(),
       })),
     }))
     .mutation(async ({ input }) => {
@@ -813,6 +814,76 @@ export const planejamentoRouter = router({
           }
         }
       });
+
+      // ─── Importar % Concluído do arquivo como avanço da semana atual ─────────
+      // Quando o usuário importa um .mpp atualizado, o percentConcluido de cada
+      // atividade é salvo em planejamento_avancos para a segunda-feira da semana
+      // atual, garantindo que o Realizado do sistema reflita o arquivo do Project.
+      const atividadesComAvanco = input.atividades.filter(a => (a.percentConcluido ?? 0) > 0 && !a.isGrupo);
+      if (atividadesComAvanco.length > 0) {
+        // Calcula a segunda-feira da semana atual (ISO)
+        const hoje = new Date();
+        const diaSemana = hoje.getUTCDay(); // 0=dom,1=seg,...,6=sab
+        const diffParaSeg = diaSemana === 0 ? -6 : 1 - diaSemana;
+        const segunda = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate() + diffParaSeg));
+        const semanaIso = segunda.toISOString().slice(0, 10);
+
+        // Busca IDs das atividades salvas por eapCodigo nesta revisão
+        const atividadesSalvas = await db.select({
+          id: planejamentoAtividades.id,
+          eapCodigo: planejamentoAtividades.eapCodigo,
+        }).from(planejamentoAtividades)
+          .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
+
+        const eapToId = new Map<string, number>();
+        for (const a of atividadesSalvas) eapToId.set(a.eapCodigo ?? "", a.id);
+
+        const userName = (ctx as any).user?.name ?? "Importação MS Project";
+
+        for (const a of atividadesComAvanco) {
+          const eap = a.eapCodigo || "";
+          const atividadeId = eapToId.get(eap);
+          if (!atividadeId) continue;
+          const pct = String((a.percentConcluido ?? 0).toFixed(4));
+
+          // Verifica se já existe registro para esta atividade nesta semana
+          const [existente] = await db.select({ id: planejamentoAvancos.id, percentualAcumulado: planejamentoAvancos.percentualAcumulado })
+            .from(planejamentoAvancos)
+            .where(and(
+              eq(planejamentoAvancos.atividadeId, atividadeId),
+              eq(planejamentoAvancos.semana, semanaIso),
+            )).limit(1);
+
+          if (existente) {
+            await db.update(planejamentoAvancos)
+              .set({ percentualAcumulado: pct, criadoPor: userName })
+              .where(eq(planejamentoAvancos.id, existente.id));
+          } else {
+            // Busca último avanço registrado para calcular % semanal incremental
+            const [ultimo] = await db.select({ percentualAcumulado: planejamentoAvancos.percentualAcumulado })
+              .from(planejamentoAvancos)
+              .where(and(
+                eq(planejamentoAvancos.atividadeId, atividadeId),
+                sql`semana < ${semanaIso}`,
+              ))
+              .orderBy(desc(planejamentoAvancos.semana))
+              .limit(1);
+            const ultimoPct = parseFloat(String(ultimo?.percentualAcumulado ?? "0")) || 0;
+            const semanal = Math.max(0, (a.percentConcluido ?? 0) - ultimoPct);
+
+            await db.insert(planejamentoAvancos).values({
+              projetoId:           input.projetoId,
+              atividadeId,
+              revisaoId:           input.revisaoId,
+              semana:              semanaIso,
+              percentualAcumulado: pct,
+              percentualSemanal:   String(semanal.toFixed(4)),
+              observacao:          "Importado do MS Project",
+              criadoPor:           userName,
+            });
+          }
+        }
+      }
 
       // ─── REGRA DE OURO: Sincroniza cronograma financeiro automaticamente ──
       // Qualquer alteração nas atividades (pesos, datas, remoção) reflete
