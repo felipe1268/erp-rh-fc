@@ -617,59 +617,6 @@ export default function Ordens() {
                 </PopoverContent>
               </Popover>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-gray-700 text-sm font-medium">
-                Condição de Pagamento *
-              </Label>
-              <Input className="bg-white border-gray-300 text-gray-900" placeholder="Ex: 30/60/90 dias, à vista, boleto 28 dias..."
-                value={form.condicaoPagamento} onChange={e => setForm(p => ({ ...p, condicaoPagamento: e.target.value }))} />
-              <p className="text-xs text-gray-400">Obrigatório — informe a forma/condição de pagamento negociada.</p>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-gray-700 text-sm font-medium">Prazo Entrega (dias) *</Label>
-                <Input type="number" min="1" className="bg-white border-gray-300 text-gray-900" value={(form as any).prazoEntregaDias ?? ""} onChange={e => {
-                  const dias = e.target.value;
-                  setForm(p => {
-                    const upd: any = { ...p, prazoEntregaDias: dias };
-                    if (dias && parseInt(dias) > 0) {
-                      const dt = new Date();
-                      dt.setDate(dt.getDate() + parseInt(dias));
-                      upd.dataEntregaPrevista = dt.toISOString().split("T")[0];
-                    }
-                    return upd;
-                  });
-                }} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-gray-700 text-sm font-medium">Previsão de Entrega</Label>
-                <Input type="date" className="bg-white border-gray-300 text-gray-900" value={form.dataEntregaPrevista} onChange={e => {
-                  const dataStr = e.target.value;
-                  setForm(p => {
-                    const upd: any = { ...p, dataEntregaPrevista: dataStr };
-                    if (dataStr) {
-                      const hoje = new Date();
-                      hoje.setHours(0, 0, 0, 0);
-                      const dt = new Date(dataStr + "T00:00:00");
-                      const diffDias = Math.max(0, Math.round((dt.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)));
-                      upd.prazoEntregaDias = String(diffDias);
-                    }
-                    return upd;
-                  });
-                }} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-gray-700 text-sm font-medium text-orange-700">Vencimento do Pagamento</Label>
-                <Input type="date" className="bg-white border-orange-300 text-gray-900 focus:border-orange-500" value={form.dataVencimento} onChange={e => setForm(p => ({ ...p, dataVencimento: e.target.value }))} />
-                <p className="text-xs text-orange-500">Data que o pagamento deve ser efetuado ao fornecedor.</p>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-gray-700 text-sm font-medium">Observações</Label>
-              <Textarea className="bg-white border-gray-300 text-gray-900 resize-none" rows={2} value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))} />
-            </div>
-
             {/* Itens */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -772,6 +719,59 @@ export default function Ordens() {
                   </div>
                 );
               })()}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-gray-700 text-sm font-medium">
+                Condição de Pagamento *
+              </Label>
+              <Input className="bg-white border-gray-300 text-gray-900" placeholder="Ex: 30/60/90 dias, à vista, boleto 28 dias..."
+                value={form.condicaoPagamento} onChange={e => setForm(p => ({ ...p, condicaoPagamento: e.target.value }))} />
+              <p className="text-xs text-gray-400">Obrigatório — informe a forma/condição de pagamento negociada.</p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-gray-700 text-sm font-medium">Prazo Entrega (dias) *</Label>
+                <Input type="number" min="1" className="bg-white border-gray-300 text-gray-900" value={(form as any).prazoEntregaDias ?? ""} onChange={e => {
+                  const dias = e.target.value;
+                  setForm(p => {
+                    const upd: any = { ...p, prazoEntregaDias: dias };
+                    if (dias && parseInt(dias) > 0) {
+                      const dt = new Date();
+                      dt.setDate(dt.getDate() + parseInt(dias));
+                      upd.dataEntregaPrevista = dt.toISOString().split("T")[0];
+                    }
+                    return upd;
+                  });
+                }} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-gray-700 text-sm font-medium">Previsão de Entrega</Label>
+                <Input type="date" className="bg-white border-gray-300 text-gray-900" value={form.dataEntregaPrevista} onChange={e => {
+                  const dataStr = e.target.value;
+                  setForm(p => {
+                    const upd: any = { ...p, dataEntregaPrevista: dataStr };
+                    if (dataStr) {
+                      const hoje = new Date();
+                      hoje.setHours(0, 0, 0, 0);
+                      const dt = new Date(dataStr + "T00:00:00");
+                      const diffDias = Math.max(0, Math.round((dt.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)));
+                      upd.prazoEntregaDias = String(diffDias);
+                    }
+                    return upd;
+                  });
+                }} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-gray-700 text-sm font-medium text-orange-700">Vencimento do Pagamento</Label>
+                <Input type="date" className="bg-white border-orange-300 text-gray-900 focus:border-orange-500" value={form.dataVencimento} onChange={e => setForm(p => ({ ...p, dataVencimento: e.target.value }))} />
+                <p className="text-xs text-orange-500">Data que o pagamento deve ser efetuado ao fornecedor.</p>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-gray-700 text-sm font-medium">Observações</Label>
+              <Textarea className="bg-white border-gray-300 text-gray-900 resize-none" rows={2} value={form.observacoes} onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))} />
             </div>
 
             {/* Totalizadores */}
