@@ -5,6 +5,22 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { seedPlanoDeConta, ensureTaxConfig } from "../services/financialSeedAccounts";
 import { runAllAutoImports } from "../services/financialAutoImport";
+import {
+  runAllDespesasImport,
+  runAllReceitasImport,
+  verificarImpactoFinanceiro,
+  solicitarAprovacaoPorAlcada,
+  rollbackFinanceiroPorOrigem,
+  sincronizarStatusPagamento,
+  gerarAlertasVencimento,
+} from "../services/financialIntegrationBridge";
+import {
+  calcularKpis,
+  calcularDRE,
+  projetarFluxoCaixa90Dias,
+  gerarEFDReinf,
+} from "../services/financialKpiService";
+import { runFinancialJobNow } from "../services/financialAutoImportJob";
 
 // ============================================================
 // MÓDULO FINANCEIRO — Router tRPC
@@ -1519,5 +1535,401 @@ export const financialRouter = router({
       vals
     );
     return rows(res);
+  }),
+
+  // ─────────────────── FASE 5: KPIs FINANCEIROS ───────────────────
+
+  getKpis: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    periodo: z.string().optional(),
+  })).query(async ({ input }) => {
+    try {
+      const kpis = await calcularKpis(input.companyId, input.periodo);
+      return kpis;
+    } catch (e: any) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "Erro ao calcular KPIs" });
+    }
+  }),
+
+  getDRE: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    periodo: z.string(),
+  })).query(async ({ input }) => {
+    try {
+      const dre = await calcularDRE(input.companyId, input.periodo);
+      return dre;
+    } catch (e: any) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "Erro ao calcular DRE" });
+    }
+  }),
+
+  getFluxoCaixa: protectedProcedure.input(z.object({
+    companyId: z.number(),
+  })).query(async ({ input }) => {
+    try {
+      const fluxo = await projetarFluxoCaixa90Dias(input.companyId);
+      return fluxo;
+    } catch (e: any) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "Erro ao projetar fluxo de caixa" });
+    }
+  }),
+
+  getEFDReinf: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    mesRef: z.string(),
+  })).query(async ({ input }) => {
+    try {
+      const efd = await gerarEFDReinf(input.companyId, input.mesRef);
+      return efd;
+    } catch (e: any) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "Erro ao gerar EFD-REINF" });
+    }
+  }),
+
+  getKpiPorObra: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    obraId: z.number(),
+    periodo: z.string().optional(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const mes = input.periodo ?? new Date().toISOString().slice(0, 7);
+    const res = await db.execute(
+      `SELECT tipo,
+              COALESCE(SUM(CASE WHEN status NOT IN ('cancelado') THEN valor_previsto ELSE 0 END), 0) AS previsto,
+              COALESCE(SUM(CASE WHEN status IN ('pago','recebido') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END), 0) AS realizado,
+              COUNT(*) AS qtd
+       FROM financial_entries
+       WHERE company_id=$1 AND obra_id=$2
+         AND TO_CHAR(data_competencia,'YYYY-MM')=$3
+         AND status NOT IN ('cancelado')
+       GROUP BY tipo`,
+      [input.companyId, input.obraId, mes]
+    );
+    const linhas = rows(res);
+    const rec = linhas.find((l: any) => l.tipo === "receita") ?? { previsto: "0", realizado: "0" };
+    const desp = linhas.find((l: any) => l.tipo === "despesa") ?? { previsto: "0", realizado: "0" };
+    const receitaPrev = parseFloat(rec.previsto);
+    const despesaPrev = parseFloat(desp.previsto);
+    const margem = receitaPrev - despesaPrev;
+    return {
+      obraId: input.obraId,
+      periodo: mes,
+      receitaPrevista: receitaPrev,
+      receitaRealizada: parseFloat(rec.realizado),
+      despesaPrevista: despesaPrev,
+      despesaRealizada: parseFloat(desp.realizado),
+      margem,
+      margemPct: receitaPrev > 0 ? (margem / receitaPrev) * 100 : 0,
+    };
+  }),
+
+  // ─────────────────── FASE 4: ALERTAS E APROVAÇÕES ───────────────────
+
+  getAlerts: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    nivel: z.string().optional(),
+    resolvido: z.boolean().optional(),
+    tipo: z.string().optional(),
+    limit: z.number().default(50),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    const conds: string[] = [`company_id=ANY($1::int[])`];
+    const vals: any[] = [ids];
+    let i = 2;
+    if (input.nivel) { conds.push(`nivel=$${i++}`); vals.push(input.nivel); }
+    if (input.resolvido !== undefined) { conds.push(`resolvido=$${i++}`); vals.push(input.resolvido ? 1 : 0); }
+    if (input.tipo) { conds.push(`tipo=$${i++}`); vals.push(input.tipo); }
+    vals.push(input.limit);
+    const res = await db.execute(
+      `SELECT id, company_id AS "companyId", entry_id AS "entryId", revenue_id AS "revenueId",
+              tipo, nivel, titulo, descricao, valor_referencia AS "valorReferencia",
+              data_referencia AS "dataReferencia", responsavel_nome AS "responsavelNome",
+              lido, lido_em AS "lidoEm", resolvido, resolvido_em AS "resolvidoEm",
+              origem_modulo AS "origemModulo", origem_id AS "origemId",
+              created_at AS "createdAt"
+       FROM financial_revision_alerts
+       WHERE ${conds.join(" AND ")}
+       ORDER BY CASE nivel WHEN 'critical' THEN 1 WHEN 'warning' THEN 2 ELSE 3 END, created_at DESC
+       LIMIT $${i}`,
+      vals
+    );
+    return rows(res);
+  }),
+
+  markAlertRead: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await db.execute(
+      `UPDATE financial_revision_alerts SET lido=1, lido_em=NOW() WHERE id=$1 AND company_id=$2`,
+      [input.id, input.companyId]
+    );
+    return { ok: true };
+  }),
+
+  resolveAlert: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await db.execute(
+      `UPDATE financial_revision_alerts
+       SET resolvido=1, resolvido_em=NOW(), resolvido_por_nome=$1 WHERE id=$2 AND company_id=$3`,
+      [ctx.user?.name ?? "Sistema", input.id, input.companyId]
+    );
+    return { ok: true };
+  }),
+
+  gerarAlertasVencimento: protectedProcedure.input(z.object({
+    companyId: z.number(),
+  })).mutation(async ({ input }) => {
+    const gerados = await gerarAlertasVencimento(input.companyId);
+    return { gerados };
+  }),
+
+  getApprovals: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    status: z.string().optional(),
+    nivel: z.string().optional(),
+    limit: z.number().default(50),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const conds: string[] = [`company_id=$1`];
+    const vals: any[] = [input.companyId];
+    let i = 2;
+    if (input.status) { conds.push(`status=$${i++}`); vals.push(input.status); }
+    if (input.nivel) { conds.push(`nivel=$${i++}`); vals.push(input.nivel); }
+    vals.push(input.limit);
+    const res = await db.execute(
+      `SELECT id, entry_id AS "entryId", valor, nivel, status,
+              solicitante_nome AS "solicitanteNome", aprovador_nome AS "aprovadorNome",
+              motivo_recusa AS "motivoRecusa", created_at AS "createdAt", resolvido_em AS "resolvidoEm"
+       FROM financial_payment_approvals
+       WHERE ${conds.join(" AND ")} ORDER BY created_at DESC LIMIT $${i}`,
+      vals
+    );
+    return rows(res);
+  }),
+
+  resolveApproval: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+    status: z.enum(["aprovado", "recusado"]),
+    motivoRecusa: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await db.execute(
+      `UPDATE financial_payment_approvals
+       SET status=$1, aprovador_id=$2, aprovador_nome=$3, motivo_recusa=$4, resolvido_em=NOW()
+       WHERE id=$5 AND company_id=$6`,
+      [input.status, ctx.user?.id ?? null, ctx.user?.name ?? "Sistema",
+       input.motivoRecusa ?? null, input.id, input.companyId]
+    );
+    await createAuditLog({ action: "financial_approval_resolved", userId: ctx.user?.id, companyId: input.companyId, details: `Aprovação ${input.id} → ${input.status}` });
+    return { ok: true };
+  }),
+
+  verificarImpacto: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    origemModulo: z.string(),
+    origemId: z.number(),
+  })).query(async ({ input }) => {
+    return verificarImpactoFinanceiro(input.companyId, input.origemModulo, input.origemId);
+  }),
+
+  rollbackOrigem: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    origemModulo: z.string(),
+    origemId: z.number(),
+    motivo: z.string(),
+  })).mutation(async ({ input, ctx }) => {
+    const cancelados = await rollbackFinanceiroPorOrigem(input.companyId, input.origemModulo, input.origemId, input.motivo);
+    await createAuditLog({ action: "financial_rollback", userId: ctx.user?.id, companyId: input.companyId, details: `Rollback ${input.origemModulo}#${input.origemId}: ${cancelados} entries cancelados — ${input.motivo}` });
+    return { cancelados };
+  }),
+
+  sincronizarStatus: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    entryId: z.number(),
+    novoStatus: z.string(),
+    dataPagamento: z.string().optional(),
+    valorRealizado: z.number().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    await sincronizarStatusPagamento(input.companyId, input.entryId, input.novoStatus, input.dataPagamento, input.valorRealizado);
+    await createAuditLog({ action: "financial_status_sync", userId: ctx.user?.id, companyId: input.companyId, details: `Entry ${input.entryId} → ${input.novoStatus}` });
+    return { ok: true };
+  }),
+
+  // ─────────────────── FASE 6: RETROAÇÃO HISTÓRICA ───────────────────
+
+  retroacaoHistorica: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    meses: z.number().min(1).max(24).default(6),
+  })).mutation(async ({ input, ctx }) => {
+    const { runAllAutoImports: autoImport } = await import("../services/financialAutoImport");
+    const { runAllDespesasImport: despImport, runAllReceitasImport: recImport } = await import("../services/financialIntegrationBridge");
+
+    let totalImportado = 0;
+    const resultados: Record<string, number> = {};
+
+    const hoje = new Date();
+    for (let i = 0; i < input.meses; i++) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const mes = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+      const [r1, r2] = await Promise.all([
+        autoImport(input.companyId, mes).catch(() => ({ folha: 0, pj: 0, parceiros: 0 })),
+        despImport(input.companyId, mes).catch(() => 0),
+      ]);
+      const r3 = await recImport(input.companyId, mes).catch(() => 0);
+
+      const sub = r1.folha + r1.pj + r1.parceiros + (r2 as number) + r3;
+      resultados[mes] = sub;
+      totalImportado += sub;
+    }
+
+    await createAuditLog({
+      action: "financial_retroacao",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `Retroação ${input.meses} meses: ${totalImportado} lançamentos importados`,
+    });
+
+    return { totalImportado, resultados };
+  }),
+
+  // ─────────────────── IMPORTAÇÃO MANUAL ───────────────────
+
+  importarAgora: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    mesRef: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const mes = input.mesRef ?? new Date().toISOString().slice(0, 7);
+    const { runAllAutoImports: autoImport } = await import("../services/financialAutoImport");
+    const { runAllDespesasImport: despImport, runAllReceitasImport: recImport } = await import("../services/financialIntegrationBridge");
+
+    const [r1, r2, r3] = await Promise.all([
+      autoImport(input.companyId, mes).catch(() => ({ folha: 0, pj: 0, parceiros: 0 })),
+      despImport(input.companyId, mes).catch(() => 0),
+      recImport(input.companyId, mes).catch(() => 0),
+    ]);
+
+    const totalImportado = r1.folha + r1.pj + r1.parceiros + (r2 as number) + (r3 as number);
+
+    await createAuditLog({
+      action: "financial_import_manual",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `Importação manual ${mes}: folha=${r1.folha} pj=${r1.pj} parceiros=${r1.parceiros} despesas=${r2} receitas=${r3} TOTAL=${totalImportado}`,
+    });
+
+    return {
+      totalImportado,
+      folha: r1.folha,
+      pj: r1.pj,
+      parceiros: r1.parceiros,
+      despesas: r2 as number,
+      receitas: r3 as number,
+    };
+  }),
+
+  // ─────────────────── RESUMO POR MÓDULO ORIGEM ───────────────────
+
+  getResumoModulos: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    periodo: z.string().optional(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    const mes = input.periodo ?? new Date().toISOString().slice(0, 7);
+    const res = await db.execute(
+      `SELECT origem_modulo AS "origemModulo", tipo,
+              COUNT(*) AS qtd,
+              COALESCE(SUM(valor_previsto), 0) AS total_previsto,
+              COALESCE(SUM(CASE WHEN status IN ('pago','recebido') THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END), 0) AS total_realizado,
+              COALESCE(SUM(CASE WHEN status='a_pagar' OR status='a_receber' THEN valor_previsto ELSE 0 END), 0) AS total_pendente
+       FROM financial_entries
+       WHERE company_id=ANY($1::int[])
+         AND TO_CHAR(data_competencia,'YYYY-MM')=$2
+         AND status NOT IN ('cancelado')
+         AND origem_modulo IS NOT NULL
+       GROUP BY origem_modulo, tipo
+       ORDER BY total_previsto DESC`,
+      [ids, mes]
+    );
+    return rows(res);
+  }),
+
+  // ─────────────────── LOG DE IMPORTAÇÃO ───────────────────
+
+  getImportLog: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    limit: z.number().default(100),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const res = await db.execute(
+      `SELECT id, origem_modulo AS "origemModulo", mes_referencia AS "mesReferencia",
+              total_importados AS "totalImportados", total_erros AS "totalErros",
+              detalhes, executado_em AS "executadoEm"
+       FROM financial_import_log
+       WHERE company_id=$1
+       ORDER BY executado_em DESC LIMIT $2`,
+      [input.companyId, input.limit]
+    );
+    return rows(res);
+  }),
+
+  // ─────────────────── INDICADORES RÁPIDOS (para cards do dashboard) ───────────────────
+
+  getIndicadores: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    periodo: z.string().optional(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    const mes = input.periodo ?? new Date().toISOString().slice(0, 7);
+
+    const [recRes, despRes, alertRes, vencRes, tributosRes, aprovRes] = await Promise.all([
+      db.execute(`SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='receita' AND TO_CHAR(data_competencia,'YYYY-MM')=$2 AND status NOT IN ('cancelado')`, [ids, mes]),
+      db.execute(`SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND tipo='despesa' AND TO_CHAR(data_competencia,'YYYY-MM')=$2 AND status NOT IN ('cancelado')`, [ids, mes]),
+      db.execute(`SELECT COUNT(*) AS total FROM financial_revision_alerts WHERE company_id=ANY($1::int[]) AND resolvido=0`, [ids]),
+      db.execute(`SELECT COALESCE(SUM(valor_previsto),0) AS total FROM financial_entries WHERE company_id=ANY($1::int[]) AND status IN ('a_pagar','a_receber') AND data_vencimento < CURRENT_DATE`, [ids]),
+      db.execute(`SELECT COALESCE(SUM(valor_total),0) AS total FROM financial_tax_obligations WHERE company_id=ANY($1::int[]) AND mes_competencia=$2 AND status='a_pagar'`, [ids, mes]),
+      db.execute(`SELECT COUNT(*) AS total FROM financial_payment_approvals WHERE company_id=ANY($1::int[]) AND status='pendente'`, [ids]),
+    ]);
+
+    const receita = parseFloat(rows(recRes)[0]?.total ?? "0");
+    const despesa = parseFloat(rows(despRes)[0]?.total ?? "0");
+    const alertas = parseInt(rows(alertRes)[0]?.total ?? "0");
+    const vencidos = parseFloat(rows(vencRes)[0]?.total ?? "0");
+    const tributos = parseFloat(rows(tributosRes)[0]?.total ?? "0");
+    const aprovacoespendentes = parseInt(rows(aprovRes)[0]?.total ?? "0");
+
+    return {
+      receita,
+      despesa,
+      resultado: receita - despesa,
+      margemPct: receita > 0 ? ((receita - despesa) / receita) * 100 : 0,
+      alertas,
+      vencidos,
+      tributos,
+      aprovacoespendentes,
+      periodo: mes,
+    };
   }),
 });

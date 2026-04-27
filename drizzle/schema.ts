@@ -6271,6 +6271,102 @@ export const financialBudget = pgTable("financial_budget", {
   updatedAt: timestamp({ mode: "string" }).defaultNow().notNull(),
 }, (t) => [index("idx_fb_company_ano").on(t.companyId, t.ano)]);
 
+// 18. Alertas de revisão financeira
+export const financialRevisionAlerts = pgTable("financial_revision_alerts", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  entryId: integer("entry_id"),
+  revenueId: integer("revenue_id"),
+  tipo: text().notNull(), // vencimento_proximo | vencimento_atrasado | divergencia_valor | aprovacao_pendente | limite_alcada
+  nivel: text().notNull().default("info"), // info | warning | critical
+  titulo: varchar({ length: 255 }).notNull(),
+  descricao: text(),
+  valorReferencia: numeric("valor_referencia", { precision: 15, scale: 2 }),
+  dataReferencia: date("data_referencia", { mode: "string" }),
+  responsavelId: integer("responsavel_id"),
+  responsavelNome: varchar("responsavel_nome", { length: 255 }),
+  lido: smallint().default(0),
+  lidoEm: timestamp("lido_em", { mode: "string" }),
+  resolvido: smallint().default(0),
+  resolvidoEm: timestamp("resolvido_em", { mode: "string" }),
+  resolvidoPorId: integer("resolvido_por_id"),
+  resolvidoPorNome: varchar("resolvido_por_nome", { length: 255 }),
+  origemModulo: varchar("origem_modulo", { length: 50 }),
+  origemId: integer("origem_id"),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_fra_company").on(t.companyId),
+  index("idx_fra_tipo").on(t.tipo),
+  index("idx_fra_nivel").on(t.nivel),
+  index("idx_fra_resolvido").on(t.resolvido),
+]);
+
+// 19. Aprovações de pagamento (alçada — COSO Framework)
+export const financialPaymentApprovals = pgTable("financial_payment_approvals", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  entryId: integer("entry_id").notNull(),
+  valor: numeric({ precision: 15, scale: 2 }).notNull(),
+  nivel: text().notNull(), // coordenador | gerente | diretoria
+  status: text().default("pendente").notNull(), // pendente | aprovado | recusado
+  solicitanteId: integer("solicitante_id"),
+  solicitanteNome: varchar("solicitante_nome", { length: 255 }),
+  aprovadorId: integer("aprovador_id"),
+  aprovadorNome: varchar("aprovador_nome", { length: 255 }),
+  motivoRecusa: text("motivo_recusa"),
+  observacoes: text(),
+  expiradoEm: timestamp("expirado_em", { mode: "string" }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  resolvidoEm: timestamp("resolvido_em", { mode: "string" }),
+}, (t) => [
+  index("idx_fpa_company").on(t.companyId),
+  index("idx_fpa_status").on(t.status),
+]);
+
+// 20. Conciliação bancária detalhada
+export const financialReconciliationLog = pgTable("financial_reconciliation_log", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  contaBancariaId: integer("conta_bancaria_id").notNull(),
+  periodoInicio: date("periodo_inicio", { mode: "string" }).notNull(),
+  periodoFim: date("periodo_fim", { mode: "string" }).notNull(),
+  saldoExtrato: numeric("saldo_extrato", { precision: 15, scale: 2 }),
+  saldoSistema: numeric("saldo_sistema", { precision: 15, scale: 2 }),
+  diferenca: numeric({ precision: 15, scale: 2 }),
+  totalItens: integer("total_itens").default(0),
+  itensConciliados: integer("itens_conciliados").default(0),
+  status: text().default("aberto"), // aberto | conciliado | pendente_revisao
+  realizadoPorId: integer("realizado_por_id"),
+  realizadoPorNome: varchar("realizado_por_nome", { length: 255 }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  fechadoEm: timestamp("fechado_em", { mode: "string" }),
+}, (t) => [index("idx_frl_company").on(t.companyId)]);
+
+// 21. KPIs financeiros cache (Fase 5)
+export const financialKpiCache = pgTable("financial_kpi_cache", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  obraId: integer("obra_id"),
+  periodo: varchar({ length: 7 }).notNull(),
+  tipoPeriodo: text("tipo_periodo").default("mensal").notNull(),
+  kpiJson: text("kpi_json").notNull(),
+  calculadoEm: timestamp("calculado_em", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_fkc_company_periodo").on(t.companyId, t.periodo),
+]);
+
+// 22. Log de importação financeira automática
+export const financialImportLog = pgTable("financial_import_log", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  origemModulo: varchar("origem_modulo", { length: 50 }).notNull(),
+  mesReferencia: varchar("mes_referencia", { length: 7 }),
+  totalImportados: integer("total_importados").default(0),
+  totalErros: integer("total_erros").default(0),
+  detalhes: text(),
+  executadoEm: timestamp("executado_em", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [index("idx_fil_company").on(t.companyId)]);
+
 // ============================================================
 // MÓDULO DE COMPRAS — TABELAS COMPLETAS
 // ============================================================
