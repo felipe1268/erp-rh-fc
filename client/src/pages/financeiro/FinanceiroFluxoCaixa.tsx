@@ -1,537 +1,495 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import {
-  TrendingUp, TrendingDown, RefreshCw, Calendar,
-  ChevronDown, ChevronRight, ArrowUpCircle, ArrowDownCircle,
-  Wallet, Activity
+  ChevronLeft, ChevronRight, ChevronDown, ChevronRight as ChevronR,
+  RefreshCw, TrendingUp, TrendingDown
 } from "lucide-react";
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatBRL(v: number) {
+const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+function fmt(v: number, compact = false): string {
+  if (compact && Math.abs(v) >= 1000) {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency", currency: "BRL",
+      minimumFractionDigits: 0, maximumFractionDigits: 0,
+    }).format(v);
+  }
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
-function toISO(date: Date) {
-  return date.toISOString().split("T")[0];
+function pct(v: number): string {
+  return v.toFixed(1).replace(".", ",") + "%";
 }
 
-// ─── Período Presets ────────────────────────────────────────────────────────
+// ─── Tipos ───────────────────────────────────────────────────────────────────
 
-type Agrupamento = "dia" | "semana" | "mes" | "ano";
-type PresetKey = "semana" | "mes" | "trimestre" | "semestre" | "ano" | "personalizado";
-
-const PRESETS: { key: PresetKey; label: string; agrupamento: Agrupamento }[] = [
-  { key: "semana",       label: "Esta Semana",     agrupamento: "dia" },
-  { key: "mes",          label: "Este Mês",        agrupamento: "dia" },
-  { key: "trimestre",    label: "Trimestre",       agrupamento: "mes" },
-  { key: "semestre",     label: "Semestre",        agrupamento: "mes" },
-  { key: "ano",          label: "Este Ano",        agrupamento: "mes" },
-  { key: "personalizado",label: "Personalizado",   agrupamento: "dia" },
-];
-
-function calcPreset(key: PresetKey): { inicio: string; fim: string } {
-  const hoje = new Date();
-  const ano = hoje.getFullYear();
-  const mes = hoje.getMonth();
-
-  if (key === "semana") {
-    const diaSemana = hoje.getDay() === 0 ? 6 : hoje.getDay() - 1;
-    const inicio = new Date(hoje);
-    inicio.setDate(hoje.getDate() - diaSemana);
-    const fim = new Date(inicio);
-    fim.setDate(inicio.getDate() + 6);
-    return { inicio: toISO(inicio), fim: toISO(fim) };
-  }
-  if (key === "mes") {
-    return {
-      inicio: toISO(new Date(ano, mes, 1)),
-      fim: toISO(new Date(ano, mes + 1, 0)),
-    };
-  }
-  if (key === "trimestre") {
-    const trimestre = Math.floor(mes / 3);
-    return {
-      inicio: toISO(new Date(ano, trimestre * 3, 1)),
-      fim: toISO(new Date(ano, trimestre * 3 + 3, 0)),
-    };
-  }
-  if (key === "semestre") {
-    const semestre = mes < 6 ? 0 : 1;
-    return {
-      inicio: toISO(new Date(ano, semestre * 6, 1)),
-      fim: toISO(new Date(ano, semestre * 6 + 6, 0)),
-    };
-  }
-  if (key === "ano") {
-    return {
-      inicio: toISO(new Date(ano, 0, 1)),
-      fim: toISO(new Date(ano, 11, 31)),
-    };
-  }
-  return {
-    inicio: toISO(new Date(ano, mes, 1)),
-    fim: toISO(new Date(ano, mes + 1, 0)),
+interface MesData {
+  mes: number;
+  receitaRealizada: number;
+  receitaPrevista: number;
+  totalReceitas: number;
+  despesaRealizada: number;
+  despesaPrevista: number;
+  totalDespesas: number;
+  resultado: number;
+  saldoAcumulado: number;
+  lucratividade: number;
+  detalhe: {
+    faturamento: { realizado: number; previsto: number };
+    medicao_prevista: { realizado: number; previsto: number };
+    cronograma_receita: { realizado: number; previsto: number };
+    receita_outros: { realizado: number; previsto: number };
+    folha: { realizado: number; previsto: number };
+    compras: { realizado: number; previsto: number };
+    frota: { realizado: number; previsto: number };
+    obras: { realizado: number; previsto: number };
+    terceiros: { realizado: number; previsto: number };
+    recorrente: { realizado: number; previsto: number };
+    outros: { realizado: number; previsto: number };
   };
 }
 
-// ─── Agrupamento Labels ─────────────────────────────────────────────────────
+// ─── Célula de valor ─────────────────────────────────────────────────────────
 
-const AGRUPAMENTOS: { key: Agrupamento; label: string }[] = [
-  { key: "dia",    label: "Por Dia" },
-  { key: "semana", label: "Por Semana" },
-  { key: "mes",    label: "Por Mês" },
-  { key: "ano",    label: "Por Ano" },
-];
-
-// ─── KPI Card ────────────────────────────────────────────────────────────────
-
-function KpiCard({
-  label, value, sub, color, icon, border
+function ValorCell({
+  value, colorMode = "neutral", mesAtual = false, italic = false, small = false,
 }: {
-  label: string;
   value: number;
-  sub?: string;
-  color: "green" | "red" | "blue" | "orange";
-  icon: React.ReactNode;
-  border?: string;
+  colorMode?: "neutral" | "resultado" | "acumulado" | "receita" | "despesa" | "pct";
+  mesAtual?: boolean;
+  italic?: boolean;
+  small?: boolean;
 }) {
-  const colorMap = {
-    green:  { bg: "bg-green-50",  text: "text-green-700",  icon: "text-green-500" },
-    red:    { bg: "bg-red-50",    text: "text-red-700",    icon: "text-red-500" },
-    blue:   { bg: "bg-blue-50",   text: "text-blue-700",   icon: "text-blue-500" },
-    orange: { bg: "bg-orange-50", text: "text-orange-700", icon: "text-orange-500" },
-  };
-  const c = colorMap[color];
+  let textColor = "text-gray-700";
+  let bgColor = "";
+
+  if (colorMode === "resultado") {
+    bgColor = value > 0 ? "bg-green-100" : value < 0 ? "bg-red-100" : "bg-gray-100";
+    textColor = value > 0 ? "text-green-800 font-bold" : value < 0 ? "text-red-700 font-bold" : "text-gray-500 font-bold";
+  } else if (colorMode === "acumulado") {
+    bgColor = value > 0 ? "bg-green-100" : value < 0 ? "bg-red-50" : "bg-gray-100";
+    textColor = value > 0 ? "text-green-800 font-bold" : value < 0 ? "text-red-700 font-bold" : "text-gray-500 font-bold";
+  } else if (colorMode === "receita") {
+    textColor = value > 0 ? "text-green-700 font-semibold" : "text-gray-400";
+  } else if (colorMode === "despesa") {
+    textColor = value > 0 ? "text-red-600 font-semibold" : "text-gray-400";
+  } else if (colorMode === "pct") {
+    textColor = value > 0 ? "text-green-700" : value < 0 ? "text-red-600" : "text-gray-400";
+  }
+
+  const displayValue = colorMode === "pct" ? pct(value) : fmt(value, true);
+
   return (
-    <div className={`rounded-xl p-4 ${c.bg} ${border ?? ""}`}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</p>
-          <p className={`text-xl font-bold mt-1 ${c.text}`}>{formatBRL(value)}</p>
-          {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
-        </div>
-        <div className={`${c.icon} opacity-70`}>{icon}</div>
-      </div>
-    </div>
+    <td
+      className={`px-2 py-2 text-right text-xs whitespace-nowrap border-l border-gray-200
+        ${bgColor}
+        ${mesAtual ? "ring-2 ring-inset ring-blue-300" : ""}
+      `}
+    >
+      <span className={`${textColor} ${italic ? "italic" : ""} ${small ? "text-[10px]" : ""}`}>
+        {displayValue}
+      </span>
+    </td>
   );
 }
 
-// ─── Linha da Tabela ────────────────────────────────────────────────────────
+// ─── Linha separadora / seção ────────────────────────────────────────────────
 
-function PeriodoRow({ p, idx }: { p: any; idx: number }) {
-  const [open, setOpen] = useState(false);
-  const temRealizado = p.entradasRealizadas > 0 || p.saidasRealizadas > 0;
-  const temPrevisto  = p.entradasPrevistas > 0 || p.saidasPrevistas > 0;
-  const saldoPeriodo = (p.entradasRealizadas + p.entradasPrevistas) - (p.saidasRealizadas + p.saidasPrevistas);
-  const saldoColor   = p.saldoAcumuladoTotal >= 0 ? "text-green-700" : "text-red-600";
-
+function SectionRow({ label, meses, mesSel, getVal, colorMode, expandable, expanded, onToggle, indent = false, italic = false }: {
+  label: string;
+  meses: MesData[];
+  mesSel: number;
+  getVal: (m: MesData) => number;
+  colorMode?: any;
+  expandable?: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
+  indent?: boolean;
+  italic?: boolean;
+}) {
+  const total = meses.reduce((s, m) => s + getVal(m), 0);
   return (
-    <>
-      <tr
-        className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${idx % 2 === 0 ? "" : "bg-gray-50/40"}`}
-        onClick={() => setOpen(!open)}
+    <tr className="border-b border-gray-200 hover:bg-gray-50/50">
+      <td
+        className={`px-3 py-2 text-xs font-semibold whitespace-nowrap sticky left-0 z-10 border-r border-gray-300
+          ${indent ? "bg-gray-50 text-gray-600 pl-7" : "bg-[#1a3a5c] text-white"}
+        `}
+        style={{ minWidth: 180 }}
       >
-        {/* Expand */}
-        <td className="w-8 pl-3 py-3 text-gray-400">
-          {open
-            ? <ChevronDown className="w-4 h-4" />
-            : <ChevronRight className="w-4 h-4" />}
-        </td>
-
-        {/* Período */}
-        <td className="py-3 pr-4">
-          <span className="text-sm font-semibold text-gray-800">{p.periodoLabel}</span>
-        </td>
-
-        {/* Entradas Realizadas */}
-        <td className="py-3 pr-4 text-right">
-          {p.entradasRealizadas > 0
-            ? <span className="text-sm font-medium text-green-700">{formatBRL(p.entradasRealizadas)}</span>
-            : <span className="text-sm text-gray-300">—</span>}
-        </td>
-
-        {/* Saídas Realizadas */}
-        <td className="py-3 pr-4 text-right">
-          {p.saidasRealizadas > 0
-            ? <span className="text-sm font-medium text-red-600">{formatBRL(p.saidasRealizadas)}</span>
-            : <span className="text-sm text-gray-300">—</span>}
-        </td>
-
-        {/* Entradas Previstas */}
-        <td className="py-3 pr-4 text-right">
-          {p.entradasPrevistas > 0
-            ? <span className="text-sm text-green-500">{formatBRL(p.entradasPrevistas)}</span>
-            : <span className="text-sm text-gray-300">—</span>}
-        </td>
-
-        {/* Saídas Previstas */}
-        <td className="py-3 pr-4 text-right">
-          {p.saidasPrevistas > 0
-            ? <span className="text-sm text-red-400">{formatBRL(p.saidasPrevistas)}</span>
-            : <span className="text-sm text-gray-300">—</span>}
-        </td>
-
-        {/* Saldo Período */}
-        <td className="py-3 pr-4 text-right">
-          <span className={`text-sm font-semibold ${saldoPeriodo >= 0 ? "text-blue-700" : "text-red-600"}`}>
-            {saldoPeriodo >= 0 ? "+" : ""}{formatBRL(saldoPeriodo)}
-          </span>
-        </td>
-
-        {/* Saldo Acumulado */}
-        <td className="py-3 pr-4 text-right">
-          <span className={`text-sm font-bold ${saldoColor}`}>
-            {formatBRL(p.saldoAcumuladoTotal)}
-          </span>
-        </td>
-      </tr>
-
-      {/* Detalhe expandido */}
-      {open && (
-        <tr className="bg-blue-50/30 border-b border-blue-100">
-          <td colSpan={8} className="px-8 py-3">
-            <div className="grid grid-cols-2 gap-6 text-xs">
-              {temRealizado && (
-                <div>
-                  <p className="font-semibold text-gray-700 mb-2 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
-                    Realizado no período
-                  </p>
-                  <div className="flex gap-8">
-                    <div>
-                      <p className="text-gray-400">Entradas</p>
-                      <p className="font-semibold text-green-700">{formatBRL(p.entradasRealizadas)}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400">Saídas</p>
-                      <p className="font-semibold text-red-600">{formatBRL(p.saidasRealizadas)}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400">Resultado</p>
-                      <p className={`font-semibold ${p.saldoLiquidoRealizado >= 0 ? "text-blue-700" : "text-red-600"}`}>
-                        {formatBRL(p.saldoLiquidoRealizado)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {temPrevisto && (
-                <div>
-                  <p className="font-semibold text-gray-700 mb-2 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />
-                    Previsto no período
-                  </p>
-                  <div className="flex gap-8">
-                    <div>
-                      <p className="text-gray-400">Entradas</p>
-                      <p className="font-semibold text-green-500">{formatBRL(p.entradasPrevistas)}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400">Saídas</p>
-                      <p className="font-semibold text-red-400">{formatBRL(p.saidasPrevistas)}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400">Resultado</p>
-                      <p className={`font-semibold ${p.saldoLiquidoPrevisto >= 0 ? "text-blue-600" : "text-red-500"}`}>
-                        {formatBRL(p.saldoLiquidoPrevisto)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
+        <div className="flex items-center gap-1">
+          {expandable && (
+            <button onClick={onToggle} className={`${indent ? "text-gray-500 hover:text-gray-700" : "text-blue-200 hover:text-white"}`}>
+              {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronR className="w-3 h-3" />}
+            </button>
+          )}
+          {label}
+        </div>
+      </td>
+      {meses.map(m => (
+        <ValorCell
+          key={m.mes}
+          value={getVal(m)}
+          colorMode={colorMode ?? "neutral"}
+          mesAtual={m.mes === mesSel}
+          italic={indent || italic}
+          small={indent}
+        />
+      ))}
+      {/* Total */}
+      <td className={`px-2 py-2 text-right text-xs font-bold whitespace-nowrap border-l-2 border-gray-400
+        ${indent ? "bg-gray-100 text-gray-600" : "bg-[#0f2a45] text-white"}`}>
+        {colorMode === "pct" ? pct(total / meses.length) : fmt(total, true)}
+      </td>
+    </tr>
   );
 }
 
-// ─── Componente Principal ───────────────────────────────────────────────────
+// ─── Linha de cabeçalho de grupo ─────────────────────────────────────────────
+
+function GroupHeaderRow({ label, meses, mesSel, getTotal, icon, bgClass, textClass }: {
+  label: string;
+  meses: MesData[];
+  mesSel: number;
+  getTotal: (m: MesData) => number;
+  icon?: React.ReactNode;
+  bgClass: string;
+  textClass: string;
+}) {
+  const total = meses.reduce((s, m) => s + getTotal(m), 0);
+  return (
+    <tr className="border-b border-gray-300">
+      <td className={`px-3 py-2.5 text-xs font-bold sticky left-0 z-10 border-r border-gray-300 ${bgClass} ${textClass}`}
+        style={{ minWidth: 180 }}>
+        <div className="flex items-center gap-1.5">{icon}{label}</div>
+      </td>
+      {meses.map(m => (
+        <td key={m.mes}
+          className={`px-2 py-2.5 text-right text-xs font-bold whitespace-nowrap border-l border-gray-200 ${bgClass} ${textClass}
+            ${m.mes === mesSel ? "ring-2 ring-inset ring-blue-300" : ""}`}>
+          {fmt(getTotal(m), true)}
+        </td>
+      ))}
+      <td className={`px-2 py-2.5 text-right text-xs font-bold whitespace-nowrap border-l-2 border-gray-400 ${bgClass} ${textClass}`}>
+        {fmt(total, true)}
+      </td>
+    </tr>
+  );
+}
+
+// ─── Componente Principal ─────────────────────────────────────────────────────
 
 export default function FinanceiroFluxoCaixa() {
   const { companyId } = useCompany();
+  const hoje = new Date();
+  const [ano, setAno] = useState(hoje.getFullYear());
+  const [mesSel] = useState(hoje.getMonth() + 1);
+  const [expandReceitas, setExpandReceitas] = useState(false);
+  const [expandDespesas, setExpandDespesas] = useState(false);
 
-  const [preset, setPreset]         = useState<PresetKey>("mes");
-  const [agrupamento, setAgrupamento] = useState<Agrupamento>("dia");
-  const [customInicio, setCustomInicio] = useState(toISO(new Date()));
-  const [customFim, setCustomFim]       = useState(toISO(new Date()));
-
-  const datas = useMemo(() => {
-    if (preset === "personalizado") return { inicio: customInicio, fim: customFim };
-    return calcPreset(preset);
-  }, [preset, customInicio, customFim]);
-
-  const { data, isLoading, refetch, isFetching } = (trpc as any).financial.getCashFlow.useQuery(
-    { companyId, dataInicio: datas.inicio, dataFim: datas.fim, agrupamento },
+  const { data, isLoading, refetch, isFetching } = (trpc as any).financial.getCashFlowMatrix.useQuery(
+    { companyId, ano },
     { enabled: !!companyId }
   );
 
-  const periodos: any[] = data?.periodos ?? [];
-  const totais = data?.totais ?? { entradasRealizadas: 0, saidasRealizadas: 0, entradasPrevistas: 0, saidasPrevistas: 0 };
+  const meses: MesData[] = data?.meses ?? [];
 
-  const saldoRealizado  = totais.entradasRealizadas - totais.saidasRealizadas;
-  const saldoPrevisto   = totais.entradasPrevistas  - totais.saidasPrevistas;
-  const saldoTotal      = saldoRealizado + saldoPrevisto;
+  // Totais anuais
+  const totalReceitas  = meses.reduce((s, m) => s + m.totalReceitas, 0);
+  const totalDespesas  = meses.reduce((s, m) => s + m.totalDespesas, 0);
+  const totalResultado = totalReceitas - totalDespesas;
+  const lucrAnual      = totalReceitas > 0 ? (totalResultado / totalReceitas) * 100 : 0;
 
-  function handlePreset(key: PresetKey) {
-    setPreset(key);
-    const p = PRESETS.find(x => x.key === key);
-    if (p && key !== "personalizado") setAgrupamento(p.agrupamento);
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <RefreshCw className="w-8 h-8 text-blue-400 animate-spin mr-3" />
+          <span className="text-gray-500">Carregando fluxo de caixa...</span>
+        </div>
+      </DashboardLayout>
+    );
   }
 
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto p-6 space-y-5">
+      <div className="p-6 space-y-5">
 
         {/* ── Cabeçalho ── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Activity className="w-6 h-6 text-blue-600" />
-              Fluxo de Caixa
-            </h1>
-            <p className="text-sm text-gray-400 mt-0.5">Realizado e projetado conforme lançamentos e cronograma</p>
+            <h1 className="text-2xl font-bold text-gray-900">Fluxo de Caixa</h1>
+            <p className="text-sm text-gray-400 mt-0.5">Resultado consolidado mensal — realizados e previstos</p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="self-start"
-          >
-            <RefreshCw className={`w-4 h-4 mr-1 ${isFetching ? "animate-spin" : ""}`} />
-            Atualizar
-          </Button>
+          <div className="flex items-center gap-3">
+            {/* Seletor de Ano */}
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+              <button onClick={() => setAno(a => a - 1)} className="text-gray-400 hover:text-gray-700 transition-colors">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-base font-bold text-gray-800 min-w-[3rem] text-center">{ano}</span>
+              <button onClick={() => setAno(a => a + 1)} className="text-gray-400 hover:text-gray-700 transition-colors">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+              <RefreshCw className={`w-4 h-4 mr-1 ${isFetching ? "animate-spin" : ""}`} />
+              Atualizar
+            </Button>
+          </div>
         </div>
 
-        {/* ── Filtros de Período ── */}
-        <Card className="border border-gray-200 shadow-none">
-          <CardContent className="p-4 space-y-3">
-            {/* Presets */}
-            <div className="flex flex-wrap gap-2">
-              <span className="text-xs text-gray-500 flex items-center gap-1 mr-1">
-                <Calendar className="w-3.5 h-3.5" /> Período:
-              </span>
-              {PRESETS.map(p => (
-                <button
-                  key={p.key}
-                  onClick={() => handlePreset(p.key)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
-                    preset === p.key
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600"
-                  }`}
+        {/* ── KPIs resumo do ano ── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Total Receitas {ano}</p>
+            <p className="text-xl font-bold text-green-700 mt-1">{fmt(totalReceitas)}</p>
+          </div>
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Total Despesas {ano}</p>
+            <p className="text-xl font-bold text-red-700 mt-1">{fmt(totalDespesas)}</p>
+          </div>
+          <div className={`border rounded-xl p-4 ${totalResultado >= 0 ? "bg-blue-50 border-blue-200" : "bg-orange-50 border-orange-200"}`}>
+            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Resultado {ano}</p>
+            <p className={`text-xl font-bold mt-1 ${totalResultado >= 0 ? "text-blue-700" : "text-orange-700"}`}>
+              {totalResultado >= 0 ? "+" : ""}{fmt(totalResultado)}
+            </p>
+          </div>
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Lucratividade {ano}</p>
+            <p className={`text-xl font-bold mt-1 flex items-center gap-1 ${lucrAnual >= 0 ? "text-green-700" : "text-red-600"}`}>
+              {lucrAnual >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+              {pct(lucrAnual)}
+            </p>
+          </div>
+        </div>
+
+        {/* ── Legenda ── */}
+        <div className="flex items-center gap-6 text-xs text-gray-500 px-1">
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-sm bg-green-100 border border-green-300 inline-block" />
+            Resultado positivo
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-sm bg-red-100 border border-red-300 inline-block" />
+            Resultado negativo
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-sm ring-2 ring-blue-300 inline-block" />
+            Mês atual
+          </span>
+          <span className="flex items-center gap-1 italic text-[10px]">
+            <span className="text-gray-400">valores em itálico = previsto</span>
+          </span>
+        </div>
+
+        {/* ── Matriz ── */}
+        <div className="overflow-x-auto rounded-xl border border-gray-300 shadow-sm">
+          <table className="border-collapse" style={{ minWidth: 900 }}>
+            <thead>
+              <tr className="bg-[#1a3a5c]">
+                <th
+                  className="px-3 py-3 text-left text-xs font-bold text-white sticky left-0 z-20 bg-[#1a3a5c] border-r border-blue-700"
+                  style={{ minWidth: 180 }}
                 >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+                  Fluxo de Caixa
+                </th>
+                {MESES_ABREV.map((m, i) => {
+                  const num = i + 1;
+                  const isAtual = num === mesSel && ano === hoje.getFullYear();
+                  return (
+                    <th
+                      key={m}
+                      className={`px-2 py-3 text-center text-xs font-bold text-white border-l border-blue-700 whitespace-nowrap
+                        ${isAtual ? "bg-blue-600" : ""}`}
+                      style={{ minWidth: 90 }}
+                    >
+                      {m}
+                      {isAtual && <span className="block text-[9px] text-blue-200 font-normal">atual</span>}
+                    </th>
+                  );
+                })}
+                <th className="px-2 py-3 text-center text-xs font-bold text-white border-l-2 border-blue-500 whitespace-nowrap bg-[#0f2a45]"
+                  style={{ minWidth: 95 }}>
+                  Total
+                </th>
+              </tr>
+            </thead>
+            <tbody>
 
-            {/* Datas Personalizadas */}
-            {preset === "personalizado" && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-gray-500">De:</span>
-                <Input
-                  type="date"
-                  value={customInicio}
-                  onChange={e => setCustomInicio(e.target.value)}
-                  className="h-8 text-sm w-36"
-                />
-                <span className="text-xs text-gray-500">até:</span>
-                <Input
-                  type="date"
-                  value={customFim}
-                  onChange={e => setCustomFim(e.target.value)}
-                  className="h-8 text-sm w-36"
-                />
-              </div>
-            )}
+              {/* ══ RECEITAS ══ */}
+              <GroupHeaderRow
+                label="↑ RECEITAS"
+                meses={meses}
+                mesSel={mesSel}
+                getTotal={m => m.totalReceitas}
+                icon={<TrendingUp className="w-3 h-3" />}
+                bgClass="bg-[#1e5c2e]"
+                textClass="text-white"
+              />
 
-            {/* Agrupamento */}
-            <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-gray-100">
-              <span className="text-xs text-gray-500">Visualizar:</span>
-              {AGRUPAMENTOS.map(a => (
-                <button
-                  key={a.key}
-                  onClick={() => setAgrupamento(a.key)}
-                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                    agrupamento === a.key
-                      ? "bg-gray-800 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  {a.label}
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              {expandReceitas && (
+                <>
+                  <SectionRow label="Faturamento de Obras" meses={meses} mesSel={mesSel}
+                    getVal={m => m.detalhe.faturamento.realizado + m.detalhe.faturamento.previsto}
+                    colorMode="receita" indent />
+                  <SectionRow label="Previsão Cronograma" meses={meses} mesSel={mesSel}
+                    getVal={m => m.detalhe.cronograma_receita.realizado + m.detalhe.cronograma_receita.previsto + m.detalhe.medicao_prevista.realizado + m.detalhe.medicao_prevista.previsto}
+                    colorMode="receita" indent italic />
+                  <SectionRow label="Outros Créditos" meses={meses} mesSel={mesSel}
+                    getVal={m => m.detalhe.receita_outros.realizado + m.detalhe.receita_outros.previsto}
+                    colorMode="receita" indent />
+                </>
+              )}
 
-        {/* ── KPIs ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <KpiCard
-            label="Entradas Realizadas"
-            value={totais.entradasRealizadas}
-            sub="Confirmadas no período"
-            color="green"
-            icon={<ArrowUpCircle className="w-7 h-7" />}
-          />
-          <KpiCard
-            label="Saídas Realizadas"
-            value={totais.saidasRealizadas}
-            sub="Confirmadas no período"
-            color="red"
-            icon={<ArrowDownCircle className="w-7 h-7" />}
-          />
-          <KpiCard
-            label="Entradas Previstas"
-            value={totais.entradasPrevistas}
-            sub="Projetadas a receber"
-            color="blue"
-            icon={<TrendingUp className="w-7 h-7" />}
-          />
-          <KpiCard
-            label="Saídas Previstas"
-            value={totais.saidasPrevistas}
-            sub="Projetadas a pagar"
-            color="orange"
-            icon={<TrendingDown className="w-7 h-7" />}
-          />
+              <SectionRow
+                label="Receitas Realizadas"
+                meses={meses}
+                mesSel={mesSel}
+                getVal={m => m.receitaRealizada}
+                colorMode="receita"
+                expandable
+                expanded={expandReceitas}
+                onToggle={() => setExpandReceitas(v => !v)}
+              />
+              <SectionRow
+                label="Receitas Previstas"
+                meses={meses}
+                mesSel={mesSel}
+                getVal={m => m.receitaPrevista}
+                colorMode="receita"
+                italic
+              />
+
+              {/* ══ DESPESAS ══ */}
+              <GroupHeaderRow
+                label="↓ DESPESAS"
+                meses={meses}
+                mesSel={mesSel}
+                getTotal={m => m.totalDespesas}
+                icon={<TrendingDown className="w-3 h-3" />}
+                bgClass="bg-[#7a1a1a]"
+                textClass="text-white"
+              />
+
+              {expandDespesas && (
+                <>
+                  <SectionRow label="Folha de Pagamento" meses={meses} mesSel={mesSel}
+                    getVal={m => m.detalhe.folha.realizado + m.detalhe.folha.previsto}
+                    colorMode="despesa" indent />
+                  <SectionRow label="Compras / Materiais" meses={meses} mesSel={mesSel}
+                    getVal={m => m.detalhe.compras.realizado + m.detalhe.compras.previsto}
+                    colorMode="despesa" indent />
+                  <SectionRow label="Frota" meses={meses} mesSel={mesSel}
+                    getVal={m => m.detalhe.frota.realizado + m.detalhe.frota.previsto}
+                    colorMode="despesa" indent />
+                  <SectionRow label="Obras / Cronograma" meses={meses} mesSel={mesSel}
+                    getVal={m => m.detalhe.obras.realizado + m.detalhe.obras.previsto}
+                    colorMode="despesa" indent />
+                  <SectionRow label="Terceiros / Subcontrat." meses={meses} mesSel={mesSel}
+                    getVal={m => m.detalhe.terceiros.realizado + m.detalhe.terceiros.previsto}
+                    colorMode="despesa" indent />
+                  <SectionRow label="Recorrentes" meses={meses} mesSel={mesSel}
+                    getVal={m => m.detalhe.recorrente.realizado + m.detalhe.recorrente.previsto}
+                    colorMode="despesa" indent />
+                  <SectionRow label="Outros" meses={meses} mesSel={mesSel}
+                    getVal={m => m.detalhe.outros.realizado + m.detalhe.outros.previsto}
+                    colorMode="despesa" indent />
+                </>
+              )}
+
+              <SectionRow
+                label="Despesas Realizadas"
+                meses={meses}
+                mesSel={mesSel}
+                getVal={m => m.despesaRealizada}
+                colorMode="despesa"
+                expandable
+                expanded={expandDespesas}
+                onToggle={() => setExpandDespesas(v => !v)}
+              />
+              <SectionRow
+                label="Despesas Previstas"
+                meses={meses}
+                mesSel={mesSel}
+                getVal={m => m.despesaPrevista}
+                colorMode="despesa"
+                italic
+              />
+
+              {/* ══ RESULTADO ══ */}
+              <tr className="border-b border-gray-300">
+                <td className="px-3 py-3 text-xs font-bold sticky left-0 z-10 bg-[#1a3a5c] text-white border-r border-gray-300 whitespace-nowrap"
+                  style={{ minWidth: 180 }}>
+                  Lucro / Prejuízo
+                </td>
+                {meses.map(m => (
+                  <td key={m.mes}
+                    className={`px-2 py-3 text-right text-xs font-bold whitespace-nowrap border-l border-gray-200
+                      ${m.resultado > 0 ? "bg-green-100 text-green-800" : m.resultado < 0 ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500"}
+                      ${m.mes === mesSel ? "ring-2 ring-inset ring-blue-300" : ""}`}>
+                    {m.resultado >= 0 ? "+" : ""}{fmt(m.resultado, true)}
+                  </td>
+                ))}
+                <td className={`px-2 py-3 text-right text-xs font-bold whitespace-nowrap border-l-2 border-gray-400
+                  ${totalResultado >= 0 ? "bg-green-200 text-green-900" : "bg-red-200 text-red-900"}`}>
+                  {totalResultado >= 0 ? "+" : ""}{fmt(totalResultado, true)}
+                </td>
+              </tr>
+
+              {/* ══ ACUMULADO ══ */}
+              <tr className="border-b border-gray-300">
+                <td className="px-3 py-3 text-xs font-bold sticky left-0 z-10 bg-[#1a3a5c] text-white border-r border-gray-300 whitespace-nowrap"
+                  style={{ minWidth: 180 }}>
+                  Acumulado
+                </td>
+                {meses.map(m => (
+                  <td key={m.mes}
+                    className={`px-2 py-3 text-right text-xs font-bold whitespace-nowrap border-l border-gray-200
+                      ${m.saldoAcumulado >= 0 ? "bg-green-50 text-green-800" : "bg-red-50 text-red-700"}
+                      ${m.mes === mesSel ? "ring-2 ring-inset ring-blue-300" : ""}`}>
+                    {fmt(m.saldoAcumulado, true)}
+                  </td>
+                ))}
+                <td className="px-2 py-3 text-right text-xs font-bold whitespace-nowrap border-l-2 border-gray-400 bg-[#0f2a45] text-white">
+                  —
+                </td>
+              </tr>
+
+              {/* ══ LUCRATIVIDADE ══ */}
+              <tr>
+                <td className="px-3 py-3 text-xs font-bold sticky left-0 z-10 bg-[#1a3a5c] text-white border-r border-gray-300 whitespace-nowrap rounded-bl-xl"
+                  style={{ minWidth: 180 }}>
+                  Lucratividade
+                </td>
+                {meses.map(m => (
+                  <td key={m.mes}
+                    className={`px-2 py-3 text-right text-xs font-semibold whitespace-nowrap border-l border-gray-200 bg-gray-50
+                      ${m.lucratividade > 0 ? "text-green-700" : m.lucratividade < 0 ? "text-red-600" : "text-gray-400"}
+                      ${m.mes === mesSel ? "ring-2 ring-inset ring-blue-300" : ""}`}>
+                    {pct(m.lucratividade)}
+                  </td>
+                ))}
+                <td className="px-2 py-3 text-right text-xs font-semibold whitespace-nowrap border-l-2 border-gray-400 bg-[#0f2a45] text-white rounded-br-xl">
+                  {pct(lucrAnual)}
+                </td>
+              </tr>
+
+            </tbody>
+          </table>
         </div>
-
-        {/* ── Resumo do Saldo ── */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className={`rounded-xl p-4 border-2 ${saldoRealizado >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Resultado Realizado</p>
-            <p className={`text-2xl font-bold mt-1 ${saldoRealizado >= 0 ? "text-green-700" : "text-red-700"}`}>
-              {saldoRealizado >= 0 ? "+" : ""}{formatBRL(saldoRealizado)}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">Entradas − Saídas realizadas</p>
-          </div>
-          <div className={`rounded-xl p-4 border-2 ${saldoPrevisto >= 0 ? "bg-blue-50 border-blue-200" : "bg-orange-50 border-orange-200"}`}>
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Resultado Previsto</p>
-            <p className={`text-2xl font-bold mt-1 ${saldoPrevisto >= 0 ? "text-blue-700" : "text-orange-700"}`}>
-              {saldoPrevisto >= 0 ? "+" : ""}{formatBRL(saldoPrevisto)}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">Entradas − Saídas previstas</p>
-          </div>
-          <div className={`rounded-xl p-4 border-2 ${saldoTotal >= 0 ? "bg-gray-50 border-gray-300" : "bg-red-50 border-red-300"}`}>
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Saldo Total do Período</p>
-            <p className={`text-2xl font-bold mt-1 ${saldoTotal >= 0 ? "text-gray-800" : "text-red-700"}`}>
-              {saldoTotal >= 0 ? "+" : ""}{formatBRL(saldoTotal)}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">Realizado + Previsto</p>
-          </div>
-        </div>
-
-        {/* ── Tabela ── */}
-        <Card className="border border-gray-200 shadow-none overflow-hidden">
-          {/* Legenda das colunas */}
-          <div className="px-4 pt-4 pb-2 border-b border-gray-100">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-gray-700">
-                Detalhamento {agrupamento === "dia" ? "Diário" : agrupamento === "semana" ? "Semanal" : agrupamento === "mes" ? "Mensal" : "Anual"}
-              </p>
-              <div className="flex items-center gap-4 text-xs text-gray-400">
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
-                  Realizado
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />
-                  Previsto
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {isLoading ? (
-            <div className="p-12 text-center">
-              <RefreshCw className="w-8 h-8 text-gray-300 mx-auto mb-3 animate-spin" />
-              <p className="text-gray-400 text-sm">Carregando fluxo de caixa...</p>
-            </div>
-          ) : periodos.length === 0 ? (
-            <div className="p-12 text-center">
-              <Wallet className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-              <p className="text-gray-400 text-sm font-medium">Nenhum lançamento encontrado neste período</p>
-              <p className="text-gray-300 text-xs mt-1">Tente ajustar o período ou verifique se há lançamentos cadastrados</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="w-8 pl-3" />
-                    <th className="py-2.5 pr-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                      Período
-                    </th>
-                    <th className="py-2.5 pr-4 text-right text-xs font-semibold text-green-600 uppercase tracking-wide">
-                      ↑ Entradas
-                    </th>
-                    <th className="py-2.5 pr-4 text-right text-xs font-semibold text-red-500 uppercase tracking-wide">
-                      ↓ Saídas
-                    </th>
-                    <th className="py-2.5 pr-4 text-right text-xs font-semibold text-green-400 uppercase tracking-wide">
-                      ↑ Prev. Entrada
-                    </th>
-                    <th className="py-2.5 pr-4 text-right text-xs font-semibold text-red-300 uppercase tracking-wide">
-                      ↓ Prev. Saída
-                    </th>
-                    <th className="py-2.5 pr-4 text-right text-xs font-semibold text-blue-600 uppercase tracking-wide">
-                      Saldo Período
-                    </th>
-                    <th className="py-2.5 pr-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">
-                      Saldo Acumulado
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {periodos.map((p: any, idx: number) => (
-                    <PeriodoRow key={`${p.periodoKey}-${idx}`} p={p} idx={idx} />
-                  ))}
-                </tbody>
-                {/* Rodapé de totais */}
-                <tfoot>
-                  <tr className="bg-gray-100 border-t-2 border-gray-300">
-                    <td />
-                    <td className="py-3 pr-4 text-xs font-bold text-gray-700 uppercase tracking-wide">
-                      Total do Período
-                    </td>
-                    <td className="py-3 pr-4 text-right text-sm font-bold text-green-700">
-                      {formatBRL(totais.entradasRealizadas)}
-                    </td>
-                    <td className="py-3 pr-4 text-right text-sm font-bold text-red-600">
-                      {formatBRL(totais.saidasRealizadas)}
-                    </td>
-                    <td className="py-3 pr-4 text-right text-sm font-bold text-green-500">
-                      {formatBRL(totais.entradasPrevistas)}
-                    </td>
-                    <td className="py-3 pr-4 text-right text-sm font-bold text-red-400">
-                      {formatBRL(totais.saidasPrevistas)}
-                    </td>
-                    <td className="py-3 pr-4 text-right text-sm font-bold text-blue-700">
-                      {saldoTotal >= 0 ? "+" : ""}{formatBRL(saldoTotal)}
-                    </td>
-                    <td />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-        </Card>
 
         {/* ── Nota de rodapé ── */}
-        <p className="text-xs text-gray-400 text-center">
-          Valores realizados referem-se a lançamentos com status <strong>Pago / Recebido</strong>.
-          Valores previstos incluem lançamentos <strong>A Pagar / A Receber / Previsto</strong> conforme cronograma.
-        </p>
+        <div className="text-xs text-gray-400 flex flex-wrap gap-4 px-1">
+          <span>• <strong>Realizados</strong>: status Pago / Recebido</span>
+          <span>• <em>Previstos</em>: status A Pagar / A Receber / Previsto / A Faturar</span>
+          <span>• Clique em <strong>↑ RECEITAS</strong> ou <strong>↓ DESPESAS</strong> para ver o detalhamento por categoria</span>
+        </div>
+
       </div>
     </DashboardLayout>
   );

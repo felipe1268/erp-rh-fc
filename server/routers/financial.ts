@@ -1793,6 +1793,125 @@ export const financialRouter = router({
     return { periodos: result, totais };
   }),
 
+  getCashFlowMatrix: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    const { companyId, ano } = input;
+
+    // Query all relevant entries for the year, grouped by month + origem_modulo + tipo + status category
+    const res = await dbExecute(db,
+      `SELECT
+         EXTRACT(MONTH FROM data_competencia)::integer AS mes,
+         COALESCE(origem_modulo, 'outros') AS origem_modulo,
+         tipo,
+         CASE WHEN status IN ('pago','recebido') THEN 'realizado' ELSE 'previsto' END AS categoria,
+         SUM(CASE WHEN status IN ('pago','recebido')
+             THEN COALESCE(valor_realizado, valor_previsto)
+             ELSE valor_previsto END
+         )::numeric AS valor
+       FROM financial_entries
+       WHERE company_id=$1
+         AND EXTRACT(YEAR FROM data_competencia)=$2
+         AND status NOT IN ('cancelado')
+         AND data_competencia IS NOT NULL
+       GROUP BY mes, origem_modulo, tipo, categoria
+       ORDER BY mes`,
+      [companyId, ano]
+    );
+
+    const rawRows = rows(res);
+
+    // Categorize origins into display groups
+    function categorizeOrigem(origem: string, tipo: string): string {
+      if (tipo === "receita") {
+        if (["revenue", "receita"].includes(origem)) return "faturamento";
+        if (["planejamento_medicao", "obra_previsto"].includes(origem)) return "medicao_prevista";
+        if (["cronograma_receita"].includes(origem)) return "cronograma_receita";
+        if (["cronograma_receita_baseline"].includes(origem)) return "cronograma_baseline";
+        return "receita_outros";
+      } else {
+        if (origem === "folha_clt") return "folha";
+        if (origem === "compras") return "compras";
+        if (["frotas", "frota_manutencao"].includes(origem)) return "frota";
+        if (origem === "cronograma_atividade") return "obras";
+        if (origem === "recorrente") return "recorrente";
+        if (origem === "terceiro_medicao") return "terceiros";
+        return "outros";
+      }
+    }
+
+    // Build a month → category → { realizado, previsto } map
+    type CatData = { realizado: number; previsto: number };
+    type MesData = Record<string, CatData>;
+    const matrix: Record<number, MesData> = {};
+    for (let m = 1; m <= 12; m++) {
+      matrix[m] = {};
+    }
+
+    for (const row of rawRows) {
+      const mes = parseInt(row.mes);
+      const grupo = categorizeOrigem(row.origem_modulo, row.tipo);
+      const valor = parseFloat(row.valor ?? "0");
+      if (!matrix[mes][grupo]) matrix[mes][grupo] = { realizado: 0, previsto: 0 };
+      if (row.categoria === "realizado") matrix[mes][grupo].realizado += valor;
+      else matrix[mes][grupo].previsto += valor;
+    }
+
+    // Build per-month summary
+    const RECEITA_CATS = ["faturamento", "medicao_prevista", "cronograma_receita", "cronograma_baseline", "receita_outros"];
+    const DESPESA_CATS = ["folha", "compras", "frota", "obras", "terceiros", "recorrente", "outros"];
+
+    const meses: any[] = [];
+    let saldoAcum = 0;
+
+    for (let m = 1; m <= 12; m++) {
+      const md = matrix[m];
+      const receitaRealizada = RECEITA_CATS.reduce((s, c) => s + (md[c]?.realizado ?? 0), 0);
+      const receitaPrevista  = RECEITA_CATS.reduce((s, c) => s + (md[c]?.previsto ?? 0), 0);
+      const despesaRealizada = DESPESA_CATS.reduce((s, c) => s + (md[c]?.realizado ?? 0), 0);
+      const despesaPrevista  = DESPESA_CATS.reduce((s, c) => s + (md[c]?.previsto ?? 0), 0);
+
+      const totalReceitas = receitaRealizada + receitaPrevista;
+      const totalDespesas = despesaRealizada + despesaPrevista;
+      const resultado = totalReceitas - totalDespesas;
+      saldoAcum += resultado;
+
+      meses.push({
+        mes: m,
+        receitaRealizada,
+        receitaPrevista,
+        totalReceitas,
+        despesaRealizada,
+        despesaPrevista,
+        totalDespesas,
+        resultado,
+        saldoAcumulado: saldoAcum,
+        lucratividade: totalReceitas > 0 ? (resultado / totalReceitas) * 100 : 0,
+        detalhe: {
+          // receitas
+          faturamento: md.faturamento ?? { realizado: 0, previsto: 0 },
+          medicao_prevista: md.medicao_prevista ?? { realizado: 0, previsto: 0 },
+          cronograma_receita: md.cronograma_receita ?? { realizado: 0, previsto: 0 },
+          receita_outros: md.receita_outros ?? { realizado: 0, previsto: 0 },
+          // despesas
+          folha: md.folha ?? { realizado: 0, previsto: 0 },
+          compras: md.compras ?? { realizado: 0, previsto: 0 },
+          frota: md.frota ?? { realizado: 0, previsto: 0 },
+          obras: md.obras ?? { realizado: 0, previsto: 0 },
+          terceiros: md.terceiros ?? { realizado: 0, previsto: 0 },
+          recorrente: md.recorrente ?? { realizado: 0, previsto: 0 },
+          outros: md.outros ?? { realizado: 0, previsto: 0 },
+        },
+      });
+    }
+
+    return { ano, meses };
+  }),
+
   getEFDReinf: protectedProcedure.input(z.object({
     companyId: z.number(),
     mesRef: z.string(),
