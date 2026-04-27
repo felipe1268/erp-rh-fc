@@ -2540,4 +2540,110 @@ export const financialRouter = router({
     const count = await importAllMedicoesPrevistaToRevenue(input.companyId);
     return { sincronizados: count };
   }),
+
+  // ── Matriz Contas a Receber — espelho direto do cronograma financeiro ────
+  getContasReceberMatrix: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    // 1. Busca todos os projetos ativos da empresa
+    const projRes = await dbExecute(db, `
+      SELECT pp.id AS projeto_id, pp.nome AS projeto_nome, pp.cliente,
+             pp.valor_contrato, pp.obra_id,
+             COALESCE(o.nome, pp.nome) AS obra_nome
+      FROM planejamento_projetos pp
+      LEFT JOIN obras o ON o.id = pp.obra_id
+      WHERE pp.company_id = $1
+        AND pp.deleted_at IS NULL
+      ORDER BY COALESCE(o.nome, pp.nome) ASC
+    `, [input.companyId]);
+    const projetos = projRes.rows;
+
+    if (!projetos.length) return { projetos: [], totaisMes: {}, ano: input.ano };
+
+    // 2. Busca todas as medições do ano para esses projetos
+    const projetoIds = projetos.map((p: any) => p.projeto_id);
+    const idsStr = projetoIds.join(",");
+    const medRes = await dbExecute(db, `
+      SELECT pm.id, pm.projeto_id, pm.competencia, pm.numero,
+             pm.valor_previsto, pm.valor_medido,
+             pm.percentual_previsto, pm.percentual_medido,
+             pm.status AS status_medicao,
+             fr.id          AS fr_id,
+             fr.status      AS status_financeiro,
+             fr.nf_numero   AS nf_numero,
+             fr.data_vencimento AS data_vencimento,
+             fr.data_recebimento AS data_recebimento,
+             fr.valor_recebido AS valor_recebido,
+             fr.valor_medicao AS fr_valor_medicao
+      FROM planejamento_medicoes pm
+      LEFT JOIN financial_revenue fr ON fr.medicao_id = pm.id
+      WHERE pm.projeto_id IN (${idsStr})
+        AND pm.competencia LIKE $1
+        AND pm.status NOT IN ('cancelada','rejeitada')
+      ORDER BY pm.competencia ASC, pm.numero ASC
+    `, [`${input.ano}-%`]);
+    const medicoes = medRes.rows;
+
+    // 3. Monta estrutura por projeto
+    const medicoesByProjeto: Record<number, any[]> = {};
+    for (const m of medicoes) {
+      const pid = Number(m.projeto_id);
+      if (!medicoesByProjeto[pid]) medicoesByProjeto[pid] = [];
+      medicoesByProjeto[pid].push(m);
+    }
+
+    // 4. Calcula totais por mês
+    const totaisMes: Record<string, number> = {};
+    for (const m of medicoes) {
+      const mes = String(m.competencia).slice(0, 7);
+      const val = parseFloat(m.valor_medido ?? "0") || parseFloat(m.valor_previsto ?? "0") || 0;
+      totaisMes[mes] = (totaisMes[mes] ?? 0) + val;
+    }
+
+    // 5. KPIs globais
+    let totalContrato = 0, totalPrevisto = 0, totalFaturado = 0, totalRecebido = 0;
+    for (const p of projetos) {
+      totalContrato += parseFloat(p.valor_contrato ?? "0") || 0;
+    }
+    for (const m of medicoes) {
+      const val = parseFloat(m.valor_medido ?? "0") || parseFloat(m.valor_previsto ?? "0") || 0;
+      totalPrevisto += val;
+      const sf = m.status_financeiro ?? m.status_medicao;
+      if (["faturado","a_receber","recebido_parcial","recebido_total"].includes(sf)) totalFaturado += val;
+      if (["recebido_parcial","recebido_total"].includes(sf)) totalRecebido += parseFloat(m.valor_recebido ?? "0") || val;
+    }
+
+    return {
+      ano: input.ano,
+      projetos: projetos.map((p: any) => ({
+        projetoId: Number(p.projeto_id),
+        obraId: p.obra_id ? Number(p.obra_id) : null,
+        obraNome: p.obra_nome ?? p.projeto_nome,
+        cliente: p.cliente,
+        valorContrato: parseFloat(p.valor_contrato ?? "0") || 0,
+        medicoes: (medicoesByProjeto[Number(p.projeto_id)] ?? []).map((m: any) => ({
+          id: m.id,
+          competencia: String(m.competencia).slice(0, 7),
+          numero: m.numero,
+          valorPrevisto: parseFloat(m.valor_previsto ?? "0") || 0,
+          valorMedido: parseFloat(m.valor_medido ?? "0") || 0,
+          percentualPrevisto: parseFloat(m.percentual_previsto ?? "0") || 0,
+          percentualMedido: parseFloat(m.percentual_medido ?? "0") || 0,
+          statusMedicao: m.status_medicao ?? "pendente",
+          statusFinanceiro: m.status_financeiro ?? null,
+          frId: m.fr_id ?? null,
+          nfNumero: m.nf_numero ?? null,
+          dataVencimento: m.data_vencimento ?? null,
+          dataRecebimento: m.data_recebimento ?? null,
+          valorRecebido: parseFloat(m.valor_recebido ?? "0") || 0,
+        })),
+      })),
+      totaisMes,
+      kpis: { totalContrato, totalPrevisto, totalFaturado, totalRecebido },
+    };
+  }),
 });
