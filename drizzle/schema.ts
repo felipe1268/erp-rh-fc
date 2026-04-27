@@ -5644,6 +5644,7 @@ export const comprasOrdens = pgTable("compras_ordens", {
   impostos:           numeric({ precision: 14, scale: 2 }).default("0"),
   desconto:           numeric({ precision: 14, scale: 2 }).default("0"),
   total:              numeric({ precision: 14, scale: 2 }).default("0"),
+  numeroNf:           varchar("numero_nf", { length: 100 }),
   condicaoPagamento:  varchar("condicao_pagamento", { length: 100 }),
   solicitacaoId:      integer("solicitacao_id"),
   observacoes:        text(),

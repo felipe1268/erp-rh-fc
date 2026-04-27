@@ -136,7 +136,7 @@ export default function Ordens() {
   const [form, setForm] = useState({
     obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "",
     frete: "", outrasDespesas: "", impostos: "", desconto: "",
-    condicaoPagamento: "", prazoEntregaDias: "",
+    condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "",
   });
   const [itens, setItens] = useState<ItemForm[]>([newItem()]);
   const [fornecedorPopoverOpen, setFornecedorPopoverOpen] = useState(false);
@@ -233,7 +233,7 @@ export default function Ordens() {
   const [editRastreio, setEditRastreio] = useState("");
 
   function resetForm() {
-    setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "", condicaoPagamento: "", prazoEntregaDias: "" });
+    setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "", condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "" });
     setItens([newItem()]);
   }
 
@@ -247,6 +247,7 @@ export default function Ordens() {
       companyId,
       obraId: parseInt(form.obraId),
       fornecedorId: form.fornecedorId && form.fornecedorId !== "none" ? parseInt(form.fornecedorId) : undefined,
+      numeroNf: form.numeroNf || undefined,
       condicaoPagamento: form.condicaoPagamento,
       prazoEntregaDias: parseInt((form as any).prazoEntregaDias) || undefined,
       dataEntregaPrevista: form.dataEntregaPrevista || undefined,
@@ -721,6 +722,12 @@ export default function Ordens() {
               })()}
             </div>
 
+            <div className="space-y-1.5">
+              <Label className="text-gray-700 text-sm font-medium">Nº Nota Fiscal / Documento</Label>
+              <Input className="bg-white border-gray-300 text-gray-900" placeholder="Ex: NF-0001234, NFe 1234, RECIBO-001..."
+                value={form.numeroNf} onChange={e => setForm(p => ({ ...p, numeroNf: e.target.value }))} />
+              <p className="text-xs text-gray-400">Opcional — número da nota fiscal ou documento vinculado a esta ordem.</p>
+            </div>
             <div className="space-y-1.5">
               <Label className="text-gray-700 text-sm font-medium">
                 Condição de Pagamento *
