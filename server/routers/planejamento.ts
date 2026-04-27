@@ -1207,7 +1207,7 @@ export const planejamentoRouter = router({
 
   // ── Curva S ───────────────────────────────────────────────────────────────
   getCurvaS: protectedProcedure
-    .input(z.object({ projetoId: z.number(), revisaoId: z.number(), baselineId: z.number() }))
+    .input(z.object({ projetoId: z.number(), revisaoId: z.number(), baselineId: z.number(), usarPesoPorDuracao: z.boolean().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       const [atividades, baseline, avancosRaw] = await Promise.all([
@@ -1232,10 +1232,15 @@ export const planejamentoRouter = router({
         const folhas = ativs.filter(a => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
         if (!folhas.length) return [];
 
-        const pesoBruto   = folhas.reduce((s, a) => s + n(a.pesoFinanceiro), 0);
-        const ativComPeso = folhas.filter(a => n(a.pesoFinanceiro) > 0).length;
-        // Usa peso igual se: todos têm peso 0 OU menos de 20% das atividades têm peso definido
-        // (evita que poucas atividades com peso dominem a curva, como "FIM DO PROJETO")
+        // Modo MS Project: pondera por duração em dias (igual ao cálculo nativo do Project)
+        // Modo Financeiro: pondera por pesoFinanceiro (pesos % configurados na EAP)
+        const porDuracao = !!input.usarPesoPorDuracao;
+        const pesoBruto = porDuracao
+          ? folhas.reduce((s, a) => s + (a.duracaoDias ?? 0), 0)
+          : folhas.reduce((s, a) => s + n(a.pesoFinanceiro), 0);
+        const ativComPeso = porDuracao
+          ? folhas.filter(a => (a.duracaoDias ?? 0) > 0).length
+          : folhas.filter(a => n(a.pesoFinanceiro) > 0).length;
         const usarIgual = pesoBruto === 0 || ativComPeso < folhas.length * 0.2;
         const pesoTotal = usarIgual ? folhas.length : pesoBruto;
 
@@ -1254,11 +1259,9 @@ export const planejamentoRouter = router({
           const inicioSeg = new Date(toMondayStr(inicio) + "T12:00:00Z");
           const fimSeg    = new Date(toMondayStr(fim)    + "T12:00:00Z");
           // dur = nº de semanas que a atividade ocupa.
-          // inicioSeg e fimSeg são sempre segundas-feiras → diferença é SEMPRE múltiplo exato de 7 dias.
-          // +1 para incluir a semana do fimSeg (atividade está ativa nesse período).
           const weeksDiff = (fimSeg.getTime() - inicioSeg.getTime()) / (7 * 86400000); // inteiro exato
           const dur       = Math.max(1, weeksDiff + 1);
-          const pesoAtiv = usarIgual ? 1 : n(a.pesoFinanceiro);
+          const pesoAtiv = usarIgual ? 1 : (porDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
           const semPeso  = pesoAtiv / dur / pesoTotal * 100;
           let cur = new Date(inicioSeg);
           for (let i = 0; i < dur; i++) {
@@ -1291,12 +1294,15 @@ export const planejamentoRouter = router({
         ? gerarCurvaPlanejada(atividades)
         : [];
 
-      // Curva realizada — acumulado ponderado por atividade (idêntico ao REFIS)
-      // Para cada semana com avanços, calcula o acumulado ponderado real
-      // (mesmo algoritmo usado em avancoRealAtual no cliente)
+      // Curva realizada — acumulado ponderado por atividade
+      const porDuracaoCurva    = !!input.usarPesoPorDuracao;
       const folhasParaCurva    = atividades.filter(a => !a.isGrupo && !a.isIndireta);
-      const pesoBrutoCurva     = folhasParaCurva.reduce((s, a) => s + n(a.pesoFinanceiro), 0);
-      const ativComPesoCurva   = folhasParaCurva.filter(a => n(a.pesoFinanceiro) > 0).length;
+      const pesoBrutoCurva     = porDuracaoCurva
+        ? folhasParaCurva.reduce((s, a) => s + (a.duracaoDias ?? 0), 0)
+        : folhasParaCurva.reduce((s, a) => s + n(a.pesoFinanceiro), 0);
+      const ativComPesoCurva   = porDuracaoCurva
+        ? folhasParaCurva.filter(a => (a.duracaoDias ?? 0) > 0).length
+        : folhasParaCurva.filter(a => n(a.pesoFinanceiro) > 0).length;
       const usarIgualCurva     = pesoBrutoCurva === 0 || ativComPesoCurva < folhasParaCurva.length * 0.2;
       const pesoTotalCurva     = usarIgualCurva ? folhasParaCurva.length || 1 : pesoBrutoCurva;
 
@@ -1315,7 +1321,7 @@ export const planejamentoRouter = router({
           });
         let soma = 0;
         folhasParaCurva.forEach(a => {
-          const peso = usarIgualCurva ? 1 : n(a.pesoFinanceiro);
+          const peso = usarIgualCurva ? 1 : (porDuracaoCurva ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
           soma += (latestMap[a.id]?.val ?? 0) * (peso / pesoTotalCurva);
         });
         return { semana, acumulado: +Math.min(100, soma).toFixed(2) };

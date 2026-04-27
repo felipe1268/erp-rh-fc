@@ -191,6 +191,9 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   const { selectedCompany, companyId } = useCompany();
   const [refisInitSemana, setRefisInitSemana] = useState<string | null>(null);
   const [semanaVisualizacao, setSemanaVisualizacao] = useState<string | null>(null);
+  const [usarPesoPorDuracao, setUsarPesoPorDuracao] = useState<boolean>(() => {
+    try { return localStorage.getItem(`planDuracao_${projetoId}`) === "1"; } catch { return false; }
+  });
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const [dragIdx, setDragIdx]   = useState<number | null>(null);
   const [overIdx, setOverIdx]   = useState<number | null>(null);
@@ -342,7 +345,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
 
   const curvaBaselineId = baselineRev?.id ?? revisaoAtiva?.id ?? 0;
   const { data: curvaData, isLoading: curvaLoading, isFetching: curvaFetching } = trpc.planejamento.getCurvaS.useQuery(
-    { projetoId, revisaoId: revisaoAtiva?.id ?? 0, baselineId: curvaBaselineId },
+    { projetoId, revisaoId: revisaoAtiva?.id ?? 0, baselineId: curvaBaselineId, usarPesoPorDuracao },
     { enabled: !!revisaoAtiva && curvaBaselineId > 0 }
   );
 
@@ -377,15 +380,17 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   const avancoAtual = useMemo(() => {
     if (!atividades.length) return 0;
     const folhas    = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
-    const pesoBruto = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const pesoBruto = usarPesoPorDuracao
+      ? folhas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
+      : folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
     const semPeso   = pesoBruto === 0;
     const pesoTotal = semPeso ? folhas.length || 1 : pesoBruto;
     const ponderado = folhas.reduce((s: number, a: any) => {
-      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       return s + (avancosMapSemana[a.id] ?? 0) * (peso / pesoTotal);
     }, 0);
     return Math.min(100, ponderado);
-  }, [atividades, avancosMapSemana]);
+  }, [atividades, avancosMapSemana, usarPesoPorDuracao]);
 
   const avancoPrevistoDia = useMemo(() => {
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
@@ -395,7 +400,9 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     d.setDate(d.getDate() + 7);
     const refStr = d.toISOString().split("T")[0];
     const ref = new Date(refStr + "T12:00:00").getTime();
-    const pesoBruto = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+    const pesoBruto = usarPesoPorDuracao
+      ? folhas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
+      : folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
     const semPeso = pesoBruto === 0;
     const denom = semPeso ? (folhas.length || 1) : pesoBruto;
     let soma = 0;
@@ -405,11 +412,11 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       let exp = 0;
       if (ref >= fim) exp = 100;
       else if (ref > ini) exp = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
-      const peso = semPeso ? 1 : n(a.pesoFinanceiro);
+      const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       soma += (exp * peso) / denom;
     });
     return +soma.toFixed(1);
-  }, [atividades, semanaVisualizacao]);
+  }, [atividades, semanaVisualizacao, usarPesoPorDuracao]);
 
   if (loadingProj) return (
     <DashboardLayout>
@@ -501,6 +508,17 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                   {desvio !== null && Math.abs(desvio) < 0.1 && (
                     <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">No prazo</span>
                   )}
+                  <button
+                    onClick={() => {
+                      const next = !usarPesoPorDuracao;
+                      setUsarPesoPorDuracao(next);
+                      try { localStorage.setItem(`planDuracao_${projetoId}`, next ? "1" : "0"); } catch {}
+                    }}
+                    title={usarPesoPorDuracao ? "Ponderação por Duração (MS Project) — clique para usar Peso Financeiro" : "Ponderação por Peso Financeiro — clique para usar Duração (MS Project)"}
+                    className={`text-[10px] font-semibold px-2 py-0.5 rounded border transition-colors ${usarPesoPorDuracao ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-500 border-slate-300 hover:border-blue-400 hover:text-blue-600"}`}
+                  >
+                    {usarPesoPorDuracao ? "⏱ Duração (Project)" : "💰 Peso Financeiro"}
+                  </button>
                 </div>
               </div>
               {/* Barra Previsto */}
@@ -632,6 +650,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             fPct={fPct}
             user={user}
             hideFinancial={hideFinancial}
+            usarPesoPorDuracao={usarPesoPorDuracao}
             onEditarProjeto={abrirEditProjeto}
             onVerRefisCompleto={(semana: string) => { setRefisInitSemana(semana); setAba("refis"); }}
           />
@@ -1278,7 +1297,7 @@ function WeatherWidget({ local }: { local: string | null | undefined }) {
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: VISÃO GERAL
 // ═════════════════════════════════════════════════════════════════════════════
-function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia, refisLista, revisaoAtiva, fmt, fPct, user, hideFinancial, onEditarProjeto, onVerRefisCompleto }: any) {
+function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia, refisLista, revisaoAtiva, fmt, fPct, user, hideFinancial, usarPesoPorDuracao, onEditarProjeto, onVerRefisCompleto }: any) {
   const { selectedCompany } = useCompany();
   const [refisAberto, setRefisAberto] = useState<any | null>(null);
   const [atrasosAberto, setAtrasosAberto] = useState(false);
@@ -1299,7 +1318,7 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
 
   const kpis = [
     { label: "Atividades",         value: `${concluidas}/${totalAtiv}`,    color: "text-blue-600",   bg: "bg-blue-50",   icon: <ClipboardList className="h-4 w-4" />, tip: `Atividades concluídas (100%) sobre o total de atividades folha (excluindo grupos e indiretas). ${concluidas} de ${totalAtiv} finalizadas.` },
-    { label: "Avanço Físico",      value: fPct(avancoAtual),               color: "text-emerald-600",bg: "bg-emerald-50",icon: <TrendingUp className="h-4 w-4" />, tip: "Progresso real ponderado da obra: média dos avanços de cada atividade multiplicada pelo seu peso financeiro. Não inclui atividades indiretas." },
+    { label: "Avanço Físico",      value: fPct(avancoAtual),               color: "text-emerald-600",bg: "bg-emerald-50",icon: <TrendingUp className="h-4 w-4" />, tip: usarPesoPorDuracao ? "Progresso real ponderado pela duração de cada atividade (compatível com MS Project). Não inclui atividades indiretas." : "Progresso real ponderado da obra: média dos avanços de cada atividade multiplicada pelo seu peso financeiro. Não inclui atividades indiretas." },
     { label: "SPI (prazo)",        value: spiValido ? spi.toFixed(2) : "—", color: !spiValido ? "text-slate-400" : spi >= 1 ? "text-emerald-600" : "text-red-600", bg: !spiValido ? "bg-slate-100" : spi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <Activity className="h-4 w-4" />, tip: `Schedule Performance Index — Realizado ÷ Previsto.\n${realizado.toFixed(2)}% ÷ ${(previsto ?? 0).toFixed(2)}% = ${spiValido ? spi.toFixed(2) : "—"}\nAcima de 1.0 = adiantado; abaixo de 1.0 = atrasado.\nMesmos valores da barra de progresso acima.`, detail: spiValido ? `${realizado.toFixed(1)}% ÷ ${previsto!.toFixed(1)}%` : undefined },
     ...(!hideFinancial ? [
       { label: "CPI (custo)",        value: cpi.toFixed(2),                  color: cpi >= 1 ? "text-emerald-600" : "text-red-600", bg: cpi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <DollarSign className="h-4 w-4" />, tip: "Cost Performance Index — Valor agregado ÷ Custo real. Acima de 1.0 = gastando menos que o previsto; abaixo de 1.0 = acima do orçamento." },
