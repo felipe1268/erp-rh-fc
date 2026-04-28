@@ -2834,26 +2834,42 @@ export const financialRouter = router({
 
     // 3b. Standalone financial_revenue (Dar Baixa direto, sem medicao_id)
     //     Indexado por obra_id+competencia para sobrepor células "Previsto"
-    const obraIds = projetos.map((p: any) => p.obra_id).filter(Boolean).map(Number);
-    const standaloneByObraByMes: Record<number, Record<string, any>> = {};
-    if (obraIds.length > 0) {
-      const stRes = await dbExecute(db, `
-        SELECT fr.id, fr.obra_id,
-               TO_CHAR(fr.data_vencimento, 'YYYY-MM') AS competencia,
-               fr.status, fr.data_recebimento, fr.valor_recebido,
-               fr.valor_medicao, fr.forma_pagamento, fr.nf_numero, fr.data_vencimento
-        FROM financial_revenue fr
-        WHERE fr.company_id = $1
-          AND fr.medicao_id IS NULL
-          AND fr.obra_id IN (${inlineIds(obraIds)})
-          AND LEFT(fr.data_vencimento::text, 4) = $2
-      `, [input.companyId, String(input.ano)]);
-      for (const fr of stRes.rows) {
-        const oid = Number(fr.obra_id);
-        const mes = String(fr.competencia);
-        if (!standaloneByObraByMes[oid]) standaloneByObraByMes[oid] = {};
-        standaloneByObraByMes[oid][mes] = fr;
+    // Standalone FRs: busca todos para a empresa no ano, cruza por obra_id ou obra_nome
+    // (projetos podem não ter obra_id vinculado)
+    const stRes = await dbExecute(db, `
+      SELECT fr.id, fr.obra_id, fr.obra_nome,
+             TO_CHAR(fr.data_vencimento, 'YYYY-MM') AS competencia,
+             fr.status, fr.data_recebimento, fr.valor_recebido,
+             fr.valor_medicao, fr.forma_pagamento, fr.nf_numero, fr.data_vencimento
+      FROM financial_revenue fr
+      WHERE fr.company_id = $1
+        AND fr.medicao_id IS NULL
+        AND fr.data_vencimento IS NOT NULL
+        AND LEFT(fr.data_vencimento::text, 4) = $2
+    `, [input.companyId, String(input.ano)]);
+
+    // Indexa por projeto_id → mes, cruzando obra_id ou obra_nome
+    const obraIdToProjId: Record<number, number> = {};
+    const obraNameToProjId: Record<string, number> = {};
+    for (const p of projetos) {
+      const pid = Number(p.projeto_id);
+      if (p.obra_id) obraIdToProjId[Number(p.obra_id)] = pid;
+      const nome = (p.obra_nome ?? p.projeto_nome ?? "").trim().toLowerCase();
+      if (nome) obraNameToProjId[nome] = pid;
+    }
+
+    const standaloneByProjetoByMes: Record<number, Record<string, any>> = {};
+    for (const fr of stRes.rows) {
+      let pid: number | undefined;
+      if (fr.obra_id) pid = obraIdToProjId[Number(fr.obra_id)];
+      if (!pid) {
+        const nome = (fr.obra_nome ?? "").trim().toLowerCase();
+        if (nome) pid = obraNameToProjId[nome];
       }
+      if (!pid) continue;
+      const mes = String(fr.competencia);
+      if (!standaloneByProjetoByMes[pid]) standaloneByProjetoByMes[pid] = {};
+      standaloneByProjetoByMes[pid][mes] = fr;
     }
 
     console.log(`[ContasReceber] company=${input.companyId} ano=${input.ano} projetos=${projetos.length} prev_rows=${prevRows.length} medicoes=${medRes.rows.length}`);
@@ -3008,7 +3024,7 @@ export const financialRouter = router({
       if (["recebido_parcial","recebido_total"].includes(sf)) totalRecebido += parseFloat(m.valor_recebido ?? "0") || val;
     }
     // Standalone FRs (Dar Baixa direto, sem medicao)
-    for (const obraFrs of Object.values(standaloneByObraByMes)) {
+    for (const obraFrs of Object.values(standaloneByProjetoByMes)) {
       for (const fr of Object.values(obraFrs)) {
         const sf = (fr as any).status;
         if (["recebido_parcial","recebido_total"].includes(sf)) {
@@ -3035,8 +3051,7 @@ export const financialRouter = router({
           meses: Object.fromEntries(meses12.map(mes => {
             const previsto = prevByProjeto[pid]?.[mes] ?? 0;
             const med = medByMes[mes];
-            const obraId = p.obra_id ? Number(p.obra_id) : null;
-            const standaloneFr = obraId ? (standaloneByObraByMes[obraId]?.[mes] ?? null) : null;
+            const standaloneFr = standaloneByProjetoByMes[pid]?.[mes] ?? null;
             const valorMedido = med ? (parseFloat(med.valor_medido ?? "0") || parseFloat(med.valor_previsto ?? "0") || 0) : 0;
             let sf: string | null;
             let frId: number | null = null;
