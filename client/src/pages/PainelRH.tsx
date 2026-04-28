@@ -103,9 +103,9 @@ export default function PainelRH() {
     (homeData.feriasAlerta ?? []).forEach((f: any) => {
       alertasList.push({ id: `ferias-${f.id}`, tipo: 'ferias', titulo: `Férias ${f.diasParaVencer <= 0 ? 'VENCIDAS' : 'Vencendo'}`, nome: f.nome, empStatus: f.status, descricao: `${f.periodoAquisitivo}º período aquisitivo. ${f.diasParaVencer <= 0 ? 'Já venceu!' : `Vence em ${f.diasParaVencer} dias`}`, urgencia: f.diasParaVencer <= 0 ? 'critico' : f.urgente ? 'urgente' : 'atencao', link: '/ferias' });
     });
-    // Experiências vencidas/urgentes
-    (homeData.experiencias ?? []).filter((e: any) => e.urgencia === 'vencido' || e.urgencia === 'urgente').forEach((e: any) => {
-      alertasList.push({ id: `exp-${e.id}`, tipo: 'experiencia', titulo: `Contrato Experiência ${e.urgencia === 'vencido' ? 'VENCIDO' : 'Urgente'}`, nome: e.nome, empStatus: e.empStatus, descricao: `Tipo: ${e.tipo}. ${e.urgencia === 'vencido' ? 'Prazo expirado!' : `${e.diasRestantes} dias restantes`}`, urgencia: e.urgencia === 'vencido' ? 'critico' : 'urgente', link: '/colaboradores' });
+    // Experiências vencidas/urgentes/atenção (até 30 dias)
+    (homeData.experiencias ?? []).filter((e: any) => e.urgencia === 'vencido' || e.urgencia === 'urgente' || e.urgencia === 'atencao').forEach((e: any) => {
+      alertasList.push({ id: `exp-${e.id}`, tipo: 'experiencia', titulo: `Contrato Experiência ${e.urgencia === 'vencido' ? 'VENCIDO' : e.urgencia === 'urgente' ? 'Urgente' : 'Vencendo'}`, nome: e.nome, empStatus: e.empStatus, descricao: `Tipo: ${e.tipo}. ${e.urgencia === 'vencido' ? 'Prazo expirado!' : `${e.diasRestantes} dias restantes`}`, urgencia: e.urgencia === 'vencido' ? 'critico' : e.urgencia === 'urgente' ? 'urgente' : 'atencao', link: '/colaboradores' });
     });
     // Avisos prévios vencendo
     (homeData.avisosPrevios ?? []).filter((a: any) => a.urgencia === 'critico' || a.urgencia === 'vencido').forEach((a: any) => {

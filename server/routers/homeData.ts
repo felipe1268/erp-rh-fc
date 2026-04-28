@@ -137,9 +137,9 @@ export const homeDataRouter = router({
       const ativosIds = new Set(ativos.map(e => e.id));
       const empMap = new Map(allEmps.map(e => [e.id, e]));
 
-      const em60dias = new Date(hoje);
-      em60dias.setDate(em60dias.getDate() + 60);
-      const em60diasStr = em60dias.toISOString().split("T")[0];
+      const em30dias = new Date(hoje);
+      em30dias.setDate(em30dias.getDate() + 30);
+      const em30diasStr = em30dias.toISOString().split("T")[0];
 
       const todosNaoDesligadosIds = new Set(todosNaoDesligados.map(e => e.id));
 
@@ -170,7 +170,7 @@ export const homeDataRouter = router({
         const diffMs = validade.getTime() - hoje.getTime();
         const diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
-        if (diasRestantes <= 60) {
+        if (diasRestantes <= 30) {
           asosAlerta.push({
             employeeId: empId,
             nome: emp.nomeCompleto,
@@ -217,10 +217,10 @@ export const homeDataRouter = router({
             mesesTrabalhados,
             periodoAquisitivo: anosCompletos + 1,
             diasParaVencer,
-            urgente: diasParaVencer <= 60,
+            urgente: diasParaVencer <= 15,
           };
         })
-        .filter(e => e.diasParaVencer <= 120) // Mostrar só quem vence em até 120 dias
+        .filter(e => e.diasParaVencer <= 30) // Mostrar só quem vence em até 30 dias
         .sort((a, b) => a.diasParaVencer - b.diasParaVencer);
 
       // ============================================================
@@ -478,7 +478,7 @@ export const homeDataRouter = router({
           let urgencia: 'normal' | 'atencao' | 'urgente' | 'vencido' = 'normal';
           if (diasRestantes < 0) urgencia = 'vencido';
           else if (diasRestantes <= 7) urgencia = 'urgente';
-          else if (diasRestantes <= 15) urgencia = 'atencao';
+          else if (diasRestantes <= 30) urgencia = 'atencao';
 
           return {
             id: e.id,
