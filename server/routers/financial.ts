@@ -2701,9 +2701,18 @@ export const financialRouter = router({
     const projetoIds = projetos.map((p: any) => Number(p.projeto_id)).filter(Boolean);
     const idsStr = projetoIds.join(",");
 
-    // 2. Configurações de medição por projeto (tipo, sinal, retenção, parcelas)
+    // 2-7. Todas as queries dependentes rodam em PARALELO após obter projetos
     const anoInt = Number(input.ano);
-    const configRes = await dbExecute(db, `
+    const t0 = Date.now();
+
+    // Mapa projeto_id → projeto (necessário antes do processamento das queries paralelas)
+    const projetoMap: Record<number, any> = {};
+    for (const p of projetos) projetoMap[Number(p.projeto_id)] = p;
+
+    const [configRes, prevRes, medRes, stRes, previsaoFatRes, totalRecebidoHistRes] = await Promise.all([
+
+    // 2. Configurações de medição
+    dbExecute(db, `
       SELECT c.projeto_id,
              c.tipo_medicao,
              c.entrada::numeric         AS entrada,
@@ -2715,14 +2724,11 @@ export const financialRouter = router({
              c.data_inicio_obra::text   AS data_inicio_obra
       FROM planejamento_medicao_config c
       WHERE c.projeto_id IN (${idsStr})
-    `, []);
-    const configByProjeto: Record<number, any> = {};
-    for (const c of configRes.rows) configByProjeto[Number(c.projeto_id)] = c;
-    console.log(`[ContasReceber] configs=${configRes.rows.length}`, configRes.rows.map((c: any) => `pid=${c.projeto_id} tipo=${c.tipo_medicao} entrada=${c.entrada} parcelas=${c.numero_parcelas} inicio=${c.inicio_faturamento}`).join(" | "));
+    `, []),
 
     // 3. Distribuição mensal de venda bruta via cruzamento atividades×orçamento
     //    Cobre o timeline completo do projeto (todos os meses, não só o ano atual)
-    const prevRes = await dbExecute(db, `
+    dbExecute(db, `
       WITH rev_ativa AS (
         SELECT DISTINCT ON (r.projeto_id) r.projeto_id, r.id AS rev_id
         FROM planejamento_revisoes r
@@ -2850,11 +2856,10 @@ export const financialRouter = router({
              df.frac_mes AS frac_fallback
       FROM dist_fallback df WHERE df.frac_mes > 0
       ORDER BY projeto_id, competencia
-    `, []);
-    const prevRows = prevRes.rows;
+    `, []),
 
-    // 3. Medições salvas (realizado) para os projetos no ano
-    const medRes = await dbExecute(db, `
+    // 4. Medições salvas (realizado)
+    dbExecute(db, `
       SELECT pm.id, pm.projeto_id,
              SUBSTRING(pm.competencia::text, 1, 7) AS competencia,
              pm.numero, pm.valor_previsto, pm.valor_medido,
@@ -2870,14 +2875,10 @@ export const financialRouter = router({
         AND LEFT(pm.competencia::text, 4) = $2
         AND pm.status NOT IN ('cancelada','rejeitada')
       ORDER BY pm.competencia ASC, pm.numero ASC
-    `, [input.companyId, String(input.ano)]);
-    const medicoes = medRes.rows;
+    `, [input.companyId, String(input.ano)]),
 
-    // 3b. Standalone financial_revenue (Dar Baixa direto, sem medicao_id)
-    //     Indexado por obra_id+competencia para sobrepor células "Previsto"
-    // Standalone FRs: busca todos para a empresa no ano, cruza por obra_id ou obra_nome
-    // (projetos podem não ter obra_id vinculado)
-    const stRes = await dbExecute(db, `
+    // 5. Standalone financial_revenue (Dar Baixa direto, sem medicao_id)
+    dbExecute(db, `
       SELECT fr.id, fr.obra_id, fr.obra_nome,
              TO_CHAR(fr.data_vencimento, 'YYYY-MM') AS competencia,
              fr.status, fr.data_recebimento, fr.valor_recebido,
@@ -2887,7 +2888,67 @@ export const financialRouter = router({
         AND fr.medicao_id IS NULL
         AND fr.data_vencimento IS NOT NULL
         AND LEFT(fr.data_vencimento::text, 4) = $2
-    `, [input.companyId, String(input.ano)]);
+    `, [input.companyId, String(input.ano)]),
+
+    // 6. Avanço físico mensal por projeto (Camada 2 - Previsão de Faturamento)
+    //    DISTINCT ON = mais eficiente que ROW_NUMBER para este caso
+    dbExecute(db, `
+      WITH latest_per_month AS (
+        SELECT DISTINCT ON (a.id, DATE_TRUNC('month', av.semana))
+          a.projeto_id,
+          a.id AS atividade_id,
+          COALESCE(a.peso_financeiro, 0)::numeric AS peso,
+          DATE_TRUNC('month', av.semana)::date AS mes_inicio,
+          av.percentual_acumulado::numeric AS pct_acumulado
+        FROM planejamento_atividades a
+        JOIN planejamento_avancos av ON av.atividade_id = a.id
+        WHERE a.projeto_id IN (${idsStr})
+          AND NOT a.is_grupo
+        ORDER BY a.id, DATE_TRUNC('month', av.semana), av.semana DESC
+      ),
+      with_prev_month AS (
+        SELECT
+          lm.*,
+          LAG(lm.pct_acumulado) OVER (
+            PARTITION BY lm.atividade_id
+            ORDER BY lm.mes_inicio
+          ) AS pct_mes_anterior
+        FROM latest_per_month lm
+      ),
+      project_total_peso AS (
+        SELECT projeto_id, NULLIF(SUM(COALESCE(peso_financeiro, 0)), 0) AS total_peso
+        FROM planejamento_atividades
+        WHERE projeto_id IN (${idsStr}) AND NOT is_grupo
+        GROUP BY projeto_id
+      )
+      SELECT
+        wp.projeto_id,
+        TO_CHAR(wp.mes_inicio, 'YYYY-MM') AS competencia,
+        SUM(GREATEST(0, (wp.pct_acumulado - COALESCE(wp.pct_mes_anterior, 0))) / 100.0 * wp.peso) AS incremento_peso,
+        pt.total_peso
+      FROM with_prev_month wp
+      JOIN project_total_peso pt ON pt.projeto_id = wp.projeto_id
+      GROUP BY wp.projeto_id, wp.mes_inicio, pt.total_peso
+      HAVING SUM(GREATEST(0, (wp.pct_acumulado - COALESCE(wp.pct_mes_anterior, 0))) / 100.0 * wp.peso) > 0
+      ORDER BY wp.projeto_id, wp.mes_inicio
+    `, []),
+
+    // 7. Total recebido histórico (todos os anos) para saldo de contrato
+    dbExecute(db, `
+      SELECT fr.obra_id, fr.obra_nome,
+             SUM(COALESCE(fr.valor_recebido, 0)) AS total_recebido
+      FROM financial_revenue fr
+      WHERE fr.company_id = $1
+        AND fr.valor_recebido > 0
+      GROUP BY fr.obra_id, fr.obra_nome
+    `, [input.companyId]),
+
+    ]); // fim Promise.all
+
+    console.log(`[ContasReceber] company=${input.companyId} ano=${input.ano} projetos=${projetos.length} prev_rows=${prevRes.rows.length} medicoes=${medRes.rows.length} tempo=${Date.now()-t0}ms`);
+
+    const prevRows = prevRes.rows;
+    const medicoes = medRes.rows;
 
     // Indexa por projeto_id → mes, cruzando obra_id ou obra_nome
     const obraIdToProjId: Record<number, number> = {};
@@ -2913,59 +2974,10 @@ export const financialRouter = router({
       standaloneByProjetoByMes[pid][mes] = fr;
     }
 
-    // 3c. Avanço físico mensal por projeto (Camada 2 - Previsão de Faturamento)
-    //     Calcula o incremento mensal de progresso de cada atividade e converte para R$
-    const previsaoFatRes = await dbExecute(db, `
-      WITH activity_latest AS (
-        SELECT
-          a.projeto_id,
-          a.id AS atividade_id,
-          COALESCE(a.peso_financeiro, 0)::numeric AS peso,
-          DATE_TRUNC('month', av.semana)::date AS mes_inicio,
-          av.percentual_acumulado::numeric AS pct_acumulado,
-          ROW_NUMBER() OVER (
-            PARTITION BY a.id, DATE_TRUNC('month', av.semana)
-            ORDER BY av.semana DESC
-          ) AS rn
-        FROM planejamento_atividades a
-        JOIN planejamento_avancos av ON av.atividade_id = a.id
-        WHERE a.projeto_id IN (${idsStr})
-          AND NOT a.is_grupo
-      ),
-      month_end_pct AS (
-        SELECT projeto_id, atividade_id, peso, mes_inicio, pct_acumulado
-        FROM activity_latest WHERE rn = 1
-      ),
-      with_prev_month AS (
-        SELECT
-          me.*,
-          LAG(me.pct_acumulado) OVER (
-            PARTITION BY me.atividade_id
-            ORDER BY me.mes_inicio
-          ) AS pct_mes_anterior
-        FROM month_end_pct me
-      ),
-      project_total_peso AS (
-        SELECT projeto_id, NULLIF(SUM(COALESCE(peso_financeiro, 0)), 0) AS total_peso
-        FROM planejamento_atividades
-        WHERE projeto_id IN (${idsStr}) AND NOT is_grupo
-        GROUP BY projeto_id
-      )
-      SELECT
-        wp.projeto_id,
-        TO_CHAR(wp.mes_inicio, 'YYYY-MM') AS competencia,
-        SUM(
-          GREATEST(0, (wp.pct_acumulado - COALESCE(wp.pct_mes_anterior, 0))) / 100.0 * wp.peso
-        ) AS incremento_peso,
-        pt.total_peso
-      FROM with_prev_month wp
-      JOIN project_total_peso pt ON pt.projeto_id = wp.projeto_id
-      GROUP BY wp.projeto_id, wp.mes_inicio, pt.total_peso
-      HAVING SUM(GREATEST(0, (wp.pct_acumulado - COALESCE(wp.pct_mes_anterior, 0))) / 100.0 * wp.peso) > 0
-      ORDER BY wp.projeto_id, wp.mes_inicio
-    `, []);
+    // Processa previsão de faturamento (resultado da query 6)
+    const configByProjeto: Record<number, any> = {};
+    for (const c of configRes.rows) configByProjeto[Number(c.projeto_id)] = c;
 
-    // Mapeia previsão de faturamento por projeto+mês (R$ convertido do avanço físico)
     const previsaoByProjeto: Record<number, Record<string, number>> = {};
     for (const r of previsaoFatRes.rows) {
       const pid = Number(r.projeto_id);
@@ -2980,16 +2992,7 @@ export const financialRouter = router({
       }
     }
 
-    // 3d. Total recebido histórico por projeto (todos os anos) para saldo de contrato
-    const totalRecebidoHistRes = await dbExecute(db, `
-      SELECT fr.obra_id, fr.obra_nome,
-             SUM(COALESCE(fr.valor_recebido, 0)) AS total_recebido
-      FROM financial_revenue fr
-      WHERE fr.company_id = $1
-        AND fr.valor_recebido > 0
-      GROUP BY fr.obra_id, fr.obra_nome
-    `, [input.companyId]);
-
+    // Processa total recebido histórico (resultado da query 7)
     const totalRecebidoHistByProjId: Record<number, number> = {};
     for (const r of totalRecebidoHistRes.rows) {
       let pid: number | undefined;
@@ -3002,12 +3005,7 @@ export const financialRouter = router({
       totalRecebidoHistByProjId[pid] = (totalRecebidoHistByProjId[pid] ?? 0) + parseFloat(r.total_recebido ?? "0");
     }
 
-    console.log(`[ContasReceber] company=${input.companyId} ano=${input.ano} projetos=${projetos.length} prev_rows=${prevRows.length} medicoes=${medRes.rows.length}`);
-
     // 4. Agrupa venda bruta por projeto+mês e normaliza para total_venda do orçamento
-    const projetoMap: Record<number, any> = {};
-    for (const p of projetos) projetoMap[Number(p.projeto_id)] = p;
-
     const rawVendaByProjeto: Record<number, Record<string, number>> = {};
     const somaVendaByProjeto: Record<number, number> = {};
     for (const r of prevRows) {
