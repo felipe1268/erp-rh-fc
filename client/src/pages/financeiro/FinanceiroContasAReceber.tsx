@@ -518,7 +518,7 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, onCell
   onCellClick: (mes: string, cell: MedicaoCell) => void;
   onDetalheClick: (mes: string, cell: MedicaoCell) => void;
 }) {
-  const rowBg = zebra ? "bg-white" : "bg-gray-50/50";
+  const rowBg = zebra ? "bg-white" : "bg-gray-50";
   const hasPartial = mesesChave.some(mk => {
     const rawC = obra.byMes[mk];
     const ov = cellOverrides[`${obra.projetoId}_${mk}`];
