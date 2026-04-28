@@ -1033,7 +1033,7 @@ export default function PainelRH() {
 
       {/* ===== DIALOG DE ALERTAS ===== */}
       <Dialog open={alertasOpen} onOpenChange={setAlertasOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh]">
+        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Bell className="h-5 w-5 text-red-600" />
@@ -1052,7 +1052,7 @@ export default function PainelRH() {
               <TabsTrigger value="solicitacao_mo" className="flex-1 text-xs">MO ({alertasList.filter(a => a.tipo === 'solicitacao_mo').length})</TabsTrigger>
             </TabsList>
             <TabsContent value={alertaTab} className="mt-3">
-              <ScrollArea className="h-[55vh]">
+              <ScrollArea className="h-[72vh]">
                 {filteredAlertas.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                     <CheckCircle2 className="h-10 w-10 mb-3 text-green-500" />
