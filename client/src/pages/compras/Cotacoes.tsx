@@ -1965,7 +1965,15 @@ export default function Cotacoes() {
         return;
       }
 
-      const itensParaFechamento = itensDoMapa.map((it: any) => {
+      const itensJaEmOC: number[] = mapa?.itensJaEmOC ?? [];
+      const itensPendentes = itensDoMapa.filter((it: any) => !itensJaEmOC.includes(it.id));
+
+      if (itensPendentes.length === 0) {
+        toast.success("Todos os itens desta cotação já foram processados em Ordens de Compra.");
+        return;
+      }
+
+      const itensParaFechamento = itensPendentes.map((it: any) => {
         let melhorFornId = melhorForn?.fornecedorId ?? (participantes[0]?.fornecedorId ?? 0);
         let melhorTotal = Infinity;
         for (const p of participantes) {
@@ -2535,6 +2543,22 @@ export default function Cotacoes() {
                       {reverterOS.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />} Reverter Aprovação
                     </Button>
                   )}
+                  {detalheFullscreen.status === "aprovada" && (detalheFullscreen as any).tipo !== "servico" && (() => {
+                    const jaEmOC = mapa?.itensJaEmOC ?? [];
+                    const pendentes = (mapa?.itens ?? []).filter((it: any) => !jaEmOC.includes(it.id));
+                    return pendentes.length > 0 && (mapa?.participantes ?? []).length >= 1;
+                  })() && (
+                    <Button variant="outline"
+                      onClick={() => handleAbrirCotacaoParcial(detalheFullscreen.id)}
+                      disabled={gerarOCsParciais.isPending}
+                      className="border-blue-300 text-blue-700 hover:bg-blue-50 gap-2">
+                      <GitBranch className="h-4 w-4" />
+                      Complementar OC Parcial
+                      <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
+                        {(mapa?.itens ?? []).filter((it: any) => !(mapa?.itensJaEmOC ?? []).includes(it.id)).length} pendente(s)
+                      </span>
+                    </Button>
+                  )}
                   {detalheFullscreen.status === "aprovada" && isAdminMaster && !(detalheFullscreen as any).contratoTerceiroId && (
                     <Button variant="outline" onClick={() => { setJustificativaCancelar(""); setCancelarCotacaoId(showDetalhe); setShowCancelarAprovacao(true); }}
                       className="border-orange-200 text-orange-600 hover:bg-orange-50 gap-2">
@@ -2814,6 +2838,22 @@ export default function Cotacoes() {
                           <X className="h-4 w-4" /> Recusar
                         </Button>
                       </>
+                    )}
+                    {detalheFullscreen.status === "aprovada" && (detalheFullscreen as any).tipo !== "servico" && (() => {
+                      const jaEmOC = mapa?.itensJaEmOC ?? [];
+                      const pendentes = (mapa?.itens ?? []).filter((it: any) => !jaEmOC.includes(it.id));
+                      return pendentes.length > 0 && (mapa?.participantes ?? []).length >= 1;
+                    })() && (
+                      <Button variant="outline"
+                        onClick={() => handleAbrirCotacaoParcial(detalheFullscreen.id)}
+                        disabled={gerarOCsParciais.isPending}
+                        className="border-blue-300 text-blue-700 hover:bg-blue-50 gap-2">
+                        <GitBranch className="h-4 w-4" />
+                        Complementar OC Parcial
+                        <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
+                          {(mapa?.itens ?? []).filter((it: any) => !(mapa?.itensJaEmOC ?? []).includes(it.id)).length} pendente(s)
+                        </span>
+                      </Button>
                     )}
                     {(detalheFullscreen.status === "aprovada" || detalheFullscreen.status === "concluida") && (detalheFullscreen as any).contratoTerceiroId && (
                       <Button variant="outline" onClick={() => { setShowDetalhe(null); navigate(`/terceiros/contratos/${(detalheFullscreen as any).contratoTerceiroId}`); }}
@@ -3840,6 +3880,11 @@ export default function Cotacoes() {
                                               </>
                                             )}
                                           </div>
+                                        )}
+                                        {!it._grouped && (mapa?.itensJaEmOC ?? []).includes(it.id) && (
+                                          <span className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                            ✓ Em OC
+                                          </span>
                                         )}
                                         {(it as any).qtdOrcada > 0 && (() => {
                                           const orcada = (it as any).qtdOrcada;
@@ -4955,7 +5000,8 @@ export default function Cotacoes() {
           <button
             onClick={() => {
               setShowConfirmarTipoCotDialog(false);
-              const _itensDoMapa: any[] = mapa?.itens ?? [];
+              const _jaEmOC: number[] = mapa?.itensJaEmOC ?? [];
+              const _itensDoMapa: any[] = (mapa?.itens ?? []).filter((it: any) => !_jaEmOC.includes(it.id));
               const _participantes: any[] = mapa?.participantes ?? [];
               const _itensParaFechamento = _itensDoMapa.map((it: any) => {
                 let fId = vencedorPorItem[it.id];
@@ -4999,6 +5045,25 @@ export default function Cotacoes() {
             <GitBranch className="h-5 w-5 text-blue-500" /> Cotação Parcial — Selecionar Itens por Fornecedor
           </DialogTitle>
         </DialogHeader>
+        {(() => {
+          const jaEmOC = mapa?.itensJaEmOC ?? [];
+          const itensProcessados = (mapa?.itens ?? []).filter((it: any) => jaEmOC.includes(it.id));
+          if (itensProcessados.length === 0) return null;
+          return (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 mb-1">
+              <p className="text-xs font-semibold text-emerald-800 flex items-center gap-1.5 mb-1.5">
+                <CheckCircle className="h-3.5 w-3.5" /> {itensProcessados.length} {itensProcessados.length === 1 ? "item já tem OC gerada" : "itens já têm OC gerada"} (não serão reprocessados)
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {itensProcessados.map((it: any) => (
+                  <span key={it.id} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">
+                    {it.descricao}
+                  </span>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
         <p className="text-sm text-gray-600 pb-1">
           Cada item será fechado com o fornecedor indicado. Desmarque os itens que não deseja incluir neste fechamento.
         </p>

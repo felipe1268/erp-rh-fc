@@ -3134,7 +3134,25 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const pValorFrete = pFreteTipo === "fob" ? n((p as any).valorFrete) : 0;
         totaisPorFornecedor[p.fornecedorId] = totalItens + pValorFrete;
       }
-      return { cotacao: cot, tipoEfetivo, incluirEquipamentos: incluirEquipamentosMapa, itens: itensComMeta, participantes: participantes.map(p => ({ ...p, fornecedor: forns.find(f => f.id === p.fornecedorId) })), respostaMap, totaisPorFornecedor };
+      // Quais itens da cotação já têm OC gerada (não rascunho)
+      const ocsAtivas = await db.select({ id: comprasOrdens.id })
+        .from(comprasOrdens)
+        .where(and(eq(comprasOrdens.cotacaoId, input.cotacaoId), sql`${comprasOrdens.status} != 'rascunho'`));
+      const itensJaEmOC: number[] = [];
+      if (ocsAtivas.length > 0) {
+        const ocItensAtivos = await db.select({ cotacaoItemId: comprasOrdensItens.cotacaoItemId, ordemId: comprasOrdensItens.ordemId, fornecedorId: comprasOrdens.fornecedorId })
+          .from(comprasOrdensItens)
+          .innerJoin(comprasOrdens, eq(comprasOrdens.id, comprasOrdensItens.ordemId))
+          .where(and(
+            inArray(comprasOrdensItens.ordemId, ocsAtivas.map(o => o.id)),
+            sql`${comprasOrdensItens.cotacaoItemId} is not null`
+          ));
+        for (const oi of ocItensAtivos) {
+          if (oi.cotacaoItemId) itensJaEmOC.push(oi.cotacaoItemId);
+        }
+      }
+
+      return { cotacao: cot, tipoEfetivo, incluirEquipamentos: incluirEquipamentosMapa, itens: itensComMeta, participantes: participantes.map(p => ({ ...p, fornecedor: forns.find(f => f.id === p.fornecedorId) })), respostaMap, totaisPorFornecedor, itensJaEmOC };
     }),
 
   adicionarFornecedorMapa: protectedProcedure
@@ -5129,7 +5147,9 @@ Retorne APENAS um JSON válido neste formato:
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
-      if (cot.status === "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Esta cotação já foi aprovada." });
+      if (!["pendente", "aprovada"].includes(cot.status)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Esta cotação não pode receber novas OCs neste status." });
+      }
 
       const todosItens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
 
@@ -5254,6 +5274,7 @@ Retorne APENAS um JSON válido neste formato:
               return {
                 ordemId: oc.id,
                 solicitacaoItemId: it.solicitacaoItemId ?? null,
+                cotacaoItemId: it.id,
                 descricao: normalizarTexto(it.descricao),
                 unidade: it.unidade,
                 quantidade: String(qty),
@@ -5295,15 +5316,38 @@ Retorne APENAS um JSON válido neste formato:
       }
 
       if (!input.comoRascunho) {
-        await db.update(comprasCotacoes).set({
-          status: "aprovada",
-          aprovadoPorId: ctx.user?.id ?? input.userId ?? null,
-          aprovadoPorNome: ctx.user?.name || ctx.user?.email || input.userName || null,
-          aprovadoEm: new Date().toISOString(),
-        } as any).where(eq(comprasCotacoes.id, input.cotacaoId));
+        // Verificar se TODOS os itens da cotação agora têm OC (pode ter sido gerada em rodadas anteriores)
+        const ocsExistentes = await db.select({ id: comprasOrdens.id })
+          .from(comprasOrdens)
+          .where(and(eq(comprasOrdens.cotacaoId, input.cotacaoId), sql`${comprasOrdens.status} != 'rascunho'`));
+        const ocItemsCobertos = ocsExistentes.length > 0
+          ? await db.select({ cotacaoItemId: comprasOrdensItens.cotacaoItemId })
+              .from(comprasOrdensItens)
+              .where(and(
+                inArray(comprasOrdensItens.ordemId, ocsExistentes.map(o => o.id)),
+                sql`${comprasOrdensItens.cotacaoItemId} is not null`
+              ))
+          : [];
+        const itemIdsCobertos = new Set(ocItemsCobertos.map(i => i.cotacaoItemId).filter(Boolean));
+        const todosCobertos = todosItens.every(it => itemIdsCobertos.has(it.id));
 
-        if (cot.solicitacaoId) {
-          await db.update(comprasSolicitacoes).set({ status: "aprovado", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+        if (todosCobertos) {
+          // Todos os itens cobertos → cotação concluída
+          await db.update(comprasCotacoes).set({
+            status: "aprovada",
+            aprovadoPorId: ctx.user?.id ?? input.userId ?? null,
+            aprovadoPorNome: ctx.user?.name || ctx.user?.email || input.userName || null,
+            aprovadoEm: new Date().toISOString(),
+          } as any).where(eq(comprasCotacoes.id, input.cotacaoId));
+
+          if (cot.solicitacaoId) {
+            await db.update(comprasSolicitacoes).set({ status: "aprovado", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+          }
+        } else {
+          // Ainda há itens sem OC → manter pendente para novas rodadas
+          await db.update(comprasCotacoes).set({
+            status: "pendente",
+          }).where(eq(comprasCotacoes.id, input.cotacaoId));
         }
         triggerFinancialSync(input.companyId);
       }

@@ -5683,6 +5683,7 @@ export const comprasOrdensItens = pgTable("compras_ordens_itens", {
   id:               serial().primaryKey(),
   ordemId:          integer("ordem_id").notNull(),
   solicitacaoItemId:integer("solicitacao_item_id"),
+  cotacaoItemId:    integer("cotacao_item_id"),
   insumoCodigo:     varchar("insumo_codigo", { length: 100 }),
   descricao:        varchar({ length: 300 }).notNull(),
   unidade:          varchar({ length: 30 }),

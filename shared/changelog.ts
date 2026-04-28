@@ -9104,6 +9104,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-04-28 23:30:00",
   },
   {
+    version: 1325,
+    titulo: "Cotações: Fluxo multi-rodada de OC Parcial — botão 'Complementar OC Parcial', badge 'Em OC' e resumo de itens já processados",
+    descricao: "Completado o fluxo de múltiplas rodadas de geração de OC parcial: (1) Botão 'Complementar OC Parcial' exibido nos dois painéis de ação da visão de detalhe quando a cotação está 'aprovada' e há itens sem OC gerada — mostra contador de pendentes; (2) Badge '✓ Em OC' (verde) exibido em cada item da tabela de mapa que já possui OC ativa; (3) Dialog de fechamento parcial exibe aviso visual (fundo verde) listando itens já processados em rodadas anteriores; (4) Botão 'Parcial' no dialog de tipo de cotação filtra automaticamente itens já em OC da lista; (5) handleAbrirCotacaoParcial filtra itens já em OC antes de abrir o dialog; (6) Backend criarOCsParciais aceita cotações 'aprovada' e só marca 'aprovada' quando todos os itens tiverem OC.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-29 00:30:00",
+  },
+  {
     version: 1321,
     titulo: "Cotações: Cotação Parcial agora acessível via botão dedicado no Mapa de Cotação",
     descricao: "O recurso de cotação parcial (dividir itens entre diferentes fornecedores e gerar OCs separadas por fornecedor) estava implementado no backend mas inacessível na prática — dependia de ícones de pin minúsculos na tabela de comparação que ninguém encontrava. Agora: (1) Botão 'Cotação Parcial' adicionado no footer de ações junto de 'Aprovar e Gerar OC' nos painéis de detalhe e fullscreen; (2) Botão 'Cotação Parcial — atribuir itens por fornecedor' adicionado diretamente no cabeçalho da tabela de comparação do Mapa, visível enquanto o usuário analisa os preços; (3) Ao clicar, o modal abre com todos os itens pré-populados, cada item automaticamente atribuído ao fornecedor mais barato para aquele item específico; (4) O dropdown de seleção de fornecedor por item agora exibe o preço total de cada fornecedor para aquele item, facilitando a comparação e a decisão. O fluxo de geração de OCs parciais separadas por fornecedor permanece o mesmo.",
