@@ -8995,4 +8995,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-26 14:30:00",
   },
+  {
+    version: 1312,
+    titulo: "Planejamento: Fluxo de Caixa — Recebimento 100% automático via Financeiro",
+    descricao: "O Planejamento não possui mais botão 'Dar Baixa' no Fluxo de Caixa — a coluna 'Recebimento' agora é somente-leitura e atualiza automaticamente quando o Financeiro registra ou cancela um recebimento. Backend: registrarRecebimento faz upsert em planejamento_medicoes (status='confirmado', valorMedido=valorRecebido) em ambos os fluxos (FR existente e FR novo). cancelarRecebimento recebe projetoId+competencia opcionais e reseta planejamento_medicoes (status='pendente', valorMedido=0). Frontend Financeiro: onCancel passa projetoId+competencia. Frontend Planejamento: listarMedicoes com refetchInterval=15s — quando o Financeiro confirma, a linha do mês exibe '✓ R$X,XX · via Financeiro'; quando o recebimento é cancelado, volta a exibir '—'. Labels atualizados para 'Integração Financeiro' (antes: 'Baixa Manual / integração financeira futura').",
+    tipo: "feature",
+    modulos: "Planejamento, Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-28 11:00:00",
+  },
 ];

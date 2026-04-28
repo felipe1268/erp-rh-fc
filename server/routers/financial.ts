@@ -585,6 +585,19 @@ export const financialRouter = router({
          WHERE origem_modulo='revenue' AND origem_id=$3 AND company_id=$4`,
         [input.valorRecebido, input.dataRecebimento, input.frId, input.companyId]
       );
+      // Sync planejamento_medicoes → marcar competência como confirmada
+      await dbExecute(db,
+        `WITH upd AS (
+           UPDATE planejamento_medicoes
+           SET valor_medido=$1, status='confirmado', atualizado_em=NOW()
+           WHERE projeto_id=$2 AND competencia=$3
+           RETURNING id
+         )
+         INSERT INTO planejamento_medicoes (projeto_id, competencia, numero, valor_medido, status, atualizado_em)
+         SELECT $2::int, $3, 0, $1, 'confirmado', NOW()
+         WHERE NOT EXISTS (SELECT 1 FROM upd)`,
+        [input.valorRecebido, input.projetoId, input.competencia]
+      );
       await createAuditLog({ action: "dar_baixa", userId: ctx.user?.id, companyId: input.companyId,
         details: `Baixa fr_id=${input.frId} R$${input.valorRecebido} em ${input.dataRecebimento}` });
       return { ok: true, frId: input.frId };
@@ -628,6 +641,19 @@ export const financialRouter = router({
       );
     }
 
+    // Sync planejamento_medicoes → marcar competência como confirmada
+    await dbExecute(db,
+      `WITH upd AS (
+         UPDATE planejamento_medicoes
+         SET valor_medido=$1, status='confirmado', atualizado_em=NOW()
+         WHERE projeto_id=$2 AND competencia=$3
+         RETURNING id
+       )
+       INSERT INTO planejamento_medicoes (projeto_id, competencia, numero, valor_medido, status, atualizado_em)
+       SELECT $2::int, $3, 0, $1, 'confirmado', NOW()
+       WHERE NOT EXISTS (SELECT 1 FROM upd)`,
+      [input.valorRecebido, input.projetoId, input.competencia]
+    );
     await createAuditLog({ action: "dar_baixa", userId: ctx.user?.id, companyId: input.companyId,
       details: `Nova baixa projeto ${input.projetoId} R$${input.valorRecebido} em ${input.dataRecebimento}` });
     return { ok: true, frId: newFrId };
@@ -635,9 +661,11 @@ export const financialRouter = router({
 
   // ─── Cancelar Recebimento ─────────────────────────────────────────────────
   cancelarRecebimento: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    frId:      z.number(),
-    medicaoId: z.number().nullable().optional(),  // se existir medicao vinculada
+    companyId:  z.number(),
+    frId:       z.number(),
+    medicaoId:  z.number().nullable().optional(),
+    projetoId:  z.number().optional(),   // para resetar planejamento_medicoes
+    competencia: z.string().optional(),  // "YYYY-MM"
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -669,6 +697,15 @@ export const financialRouter = router({
       );
     }
 
+    // Sync planejamento_medicoes → resetar competência para pendente
+    if (input.projetoId && input.competencia) {
+      await dbExecute(db,
+        `UPDATE planejamento_medicoes
+         SET valor_medido=0, status='pendente', atualizado_em=NOW()
+         WHERE projeto_id=$1 AND competencia=$2`,
+        [input.projetoId, input.competencia]
+      );
+    }
     await createAuditLog({ action: "cancelar_baixa", userId: ctx.user?.id, companyId: input.companyId,
       details: `Cancelamento recebimento fr_id=${input.frId}` });
     return { ok: true };

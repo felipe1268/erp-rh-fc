@@ -30,7 +30,7 @@ import {
   Bot, Brain, Sparkles, MessageSquare, Send, Zap,
   CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
   ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye, EyeOff, Printer, CheckSquare,
-  TrendingDown, ArrowUpRight, ArrowDownRight, Circle, CalendarClock, Network,
+  TrendingDown, ArrowUpRight, ArrowDownRight, CalendarClock, Network,
   Users, HardHat, CheckCircle, Calculator, Info, Box,
 } from "lucide-react";
 import {
@@ -5274,7 +5274,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
 
   // ── Integração bidirecional com Cronograma de Medições (DB) ───────────────
   const { data: medicoesBD = [] } = trpc.planejamento.listarMedicoes.useQuery(
-    { projetoId }, { enabled: !!projetoId, staleTime: 5000 });
+    { projetoId }, { enabled: !!projetoId, staleTime: 5000, refetchInterval: 15000 });
   const trpcUtils = trpc.useUtils();
   const salvarMedicaoMut = trpc.planejamento.salvarMedicao.useMutation({
     onSuccess: () => {
@@ -6242,10 +6242,10 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                     <div className="flex items-center justify-between mb-2">
                       <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1.5">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                        Previsto × Recebido — Baixa Manual
-                        <span className="text-[9px] font-normal text-slate-400 ml-1 normal-case">(integração financeira futura)</span>
+                        Previsto × Recebido — Integração Financeiro
+                        <span className="text-[9px] font-normal text-emerald-600 ml-1 normal-case">(confirmado automaticamente pelo módulo Financeiro)</span>
                       </p>
-                      <span className="text-[10px] text-slate-400">{nBaixas}/{nMeses} medições confirmadas</span>
+                      <span className="text-[10px] text-slate-400">{nBaixas}/{nMeses} confirmadas via Financeiro</span>
                     </div>
                     <div className="grid grid-cols-3 gap-3 mb-2">
                       <div className="bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
@@ -6407,7 +6407,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                       <th className="py-2 px-3 text-right text-emerald-700 font-semibold">= Líquido</th>
                       <th className="py-2 px-3 text-right text-slate-500">Custo Prev.</th>
                       <th className="py-2 px-3 text-right">Margem</th>
-                      <th className="py-2 px-3 text-center text-emerald-700 font-semibold w-28">Baixa</th>
+                      <th className="py-2 px-3 text-center text-emerald-700 font-semibold w-32">Recebimento</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -6442,22 +6442,16 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                             <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
                             <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
                             <td className="py-2 px-3 text-center">
-                              <button
-                                type="button"
-                                onClick={() => abrirBaixa(r.mes, r.liquido, r.nomeMes)}
-                                title={confirmado ? `Recebido em ${baixa?.data} — clique para desfazer` : "Marcar liberação como recebida"}
-                                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border transition-all ${
-                                  confirmado
-                                    ? "bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700"
-                                    : "bg-white border-amber-300 text-amber-600 hover:border-amber-500 hover:bg-amber-50"
-                                }`}
-                              >
-                                {confirmado ? (
-                                  <><CheckCircle2 className="h-3 w-3" /> Recebido</>
-                                ) : (
-                                  <><Circle className="h-3 w-3" /> Dar Baixa</>
-                                )}
-                              </button>
+                              {confirmado ? (
+                                <div>
+                                  <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-semibold bg-emerald-600 border border-emerald-700 text-white">
+                                    <CheckCircle2 className="h-3 w-3" /> {fmt(baixa!.valor)}
+                                  </span>
+                                  <p className="text-[9px] text-emerald-600 mt-0.5">via Financeiro</p>
+                                </div>
+                              ) : (
+                                <span className="text-slate-300 text-[10px]">—</span>
+                              )}
                             </td>
                           </tr>
                         );
@@ -6484,22 +6478,16 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                             <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
                             <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
                             <td className="py-2 px-3 text-center">
-                              <button
-                                type="button"
-                                onClick={() => abrirBaixa(r.mes, r.liquido, r.nomeMes)}
-                                title={confirmado ? `Recebido em ${baixa?.data} — clique para desfazer` : "Marcar sinal como recebido"}
-                                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border transition-all ${
-                                  confirmado
-                                    ? "bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700"
-                                    : "bg-white border-violet-300 text-violet-600 hover:border-violet-500 hover:bg-violet-50"
-                                }`}
-                              >
-                                {confirmado ? (
-                                  <><CheckCircle2 className="h-3 w-3" /> Recebido</>
-                                ) : (
-                                  <><Circle className="h-3 w-3" /> Dar Baixa</>
-                                )}
-                              </button>
+                              {confirmado ? (
+                                <div>
+                                  <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-semibold bg-emerald-600 border border-emerald-700 text-white">
+                                    <CheckCircle2 className="h-3 w-3" /> {fmt(baixa!.valor)}
+                                  </span>
+                                  <p className="text-[9px] text-emerald-600 mt-0.5">via Financeiro</p>
+                                </div>
+                              ) : (
+                                <span className="text-slate-300 text-[10px]">—</span>
+                              )}
                             </td>
                           </tr>
                         );
@@ -6546,30 +6534,18 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                             {(temDados || pendenteMesAnterior > 0) ? `${margem >= 0 ? "+" : ""}${fmt(margem)}` : "—"}
                           </td>
                           <td className="py-2 px-3 text-center">
-                            {temLiquido ? (
-                              <>
-                              <button
-                                type="button"
-                                onClick={() => abrirBaixa(r.mes, liquidoEfetivo, r.nomeMes)}
-                                title={confirmado ? `Recebido em ${baixa.data} — clique para desfazer` : "Marcar líquido como recebido"}
-                                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border transition-all ${
-                                  confirmado
-                                    ? "bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700"
-                                    : "bg-white border-slate-300 text-slate-500 hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50"
-                                }`}
-                              >
-                                {confirmado ? (
-                                  <><CheckCircle2 className="h-3 w-3" /> {fmt(baixa.valor)}</>
-                                ) : (
-                                  <><Circle className="h-3 w-3" /> Dar Baixa</>
+                            {confirmado ? (
+                              <div>
+                                <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-semibold bg-emerald-600 border border-emerald-700 text-white">
+                                  <CheckCircle2 className="h-3 w-3" /> {fmt(baixa.valor)}
+                                </span>
+                                <p className="text-[9px] text-emerald-600 mt-0.5">via Financeiro</p>
+                                {baixa?.pendente && baixa.pendente > 0 && (
+                                  <p className="text-[9px] text-orange-500 mt-0.5">
+                                    Saldo: {fmt(baixa.pendente)}
+                                  </p>
                                 )}
-                              </button>
-                              {confirmado && baixa?.pendente && baixa.pendente > 0 && (
-                                <p className="text-[9px] text-orange-500 mt-0.5">
-                                  Saldo: {fmt(baixa.pendente)}
-                                </p>
-                              )}
-                              </>
+                              </div>
                             ) : (
                               <span className="text-slate-300 text-[10px]">—</span>
                             )}
@@ -6656,10 +6632,10 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-1.5">
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                    Previsto × Recebido — Baixa Manual
-                    <span className="text-[9px] font-normal text-slate-400 ml-1 normal-case">(integração financeira futura)</span>
+                    Previsto × Recebido — Integração Financeiro
+                    <span className="text-[9px] font-normal text-emerald-600 ml-1 normal-case">(confirmado automaticamente pelo módulo Financeiro)</span>
                   </p>
-                  <span className="text-[10px] text-slate-400">{nBaixas}/{nParcelas} parcelas confirmadas</span>
+                  <span className="text-[10px] text-slate-400">{nBaixas}/{nParcelas} confirmadas via Financeiro</span>
                 </div>
                 <div className="grid grid-cols-3 gap-3 mb-2">
                   <div className="bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
@@ -6703,7 +6679,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                     <th className="py-2 px-3 text-right text-amber-700">Recebimento Prev.</th>
                     <th className="py-2 px-3 text-right">Saldo Mês</th>
                     <th className="py-2 px-3 text-right font-semibold">Caixa Acumulado</th>
-                    <th className="py-2 px-3 text-center text-emerald-700 font-semibold w-28">Baixa</th>
+                    <th className="py-2 px-3 text-center text-emerald-700 font-semibold w-32">Recebimento</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -6792,23 +6768,13 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                             </div>
                           </td>
                           <td className="py-2 px-3 text-center">
-                            {temRecebimento ? (
-                              <button
-                                type="button"
-                                onClick={() => abrirBaixa(r.mes, r.recebido, r.nomeMes)}
-                                title={confirmado ? `Recebido em ${baixa.data} — clique para desfazer` : "Marcar como recebido"}
-                                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10px] font-semibold border transition-all ${
-                                  confirmado
-                                    ? "bg-emerald-600 border-emerald-700 text-white hover:bg-emerald-700"
-                                    : "bg-white border-slate-300 text-slate-500 hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50"
-                                }`}
-                              >
-                                {confirmado ? (
-                                  <><CheckCircle2 className="h-3 w-3" /> Recebido</>
-                                ) : (
-                                  <><Circle className="h-3 w-3" /> Dar Baixa</>
-                                )}
-                              </button>
+                            {confirmado ? (
+                              <div>
+                                <span className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-semibold bg-emerald-600 border border-emerald-700 text-white">
+                                  <CheckCircle2 className="h-3 w-3" /> {fmt(baixa.valor)}
+                                </span>
+                                <p className="text-[9px] text-emerald-600 mt-0.5">via Financeiro</p>
+                              </div>
                             ) : (
                               <span className="text-slate-300 text-[10px]">—</span>
                             )}
@@ -6868,87 +6834,6 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
           )}
         </div>
       )}
-
-      {/* ── Modal Dar Baixa com valor editável ─────────────────────────────── */}
-      <Dialog open={!!baixaModal} onOpenChange={(o) => { if (!o) setBaixaModal(null); }}>
-        <DialogContent style={{ background: "#ffffff", color: "#111827" }} className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-              Confirmar Recebimento
-            </DialogTitle>
-          </DialogHeader>
-          {baixaModal && (() => {
-            const valNum = parseFloat(baixaValorInputStr.replace(/\./g, "").replace(",", ".")) || 0;
-            const pendente = Math.max(0, baixaModal.valorPrevisto - valNum);
-            const isPartial = valNum < baixaModal.valorPrevisto && valNum > 0;
-            return (
-              <div className="space-y-4 pt-1">
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Competência</p>
-                  <p className="text-sm font-semibold text-slate-800">{baixaModal.label}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Valor previsto da parcela</p>
-                  <p className="text-sm font-semibold text-amber-700">{fmt(baixaModal.valorPrevisto)}</p>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-600 block mb-1">
-                    Valor efetivamente recebido (R$)
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    autoFocus
-                    value={baixaValorInputStr}
-                    onChange={e => {
-                      setBaixaValorInputStr(fmtBaixaInput(e.target.value));
-                    }}
-                    onKeyDown={e => { if (e.key === "Enter") confirmarBaixaValor(); }}
-                    className="h-10 w-full text-lg border border-slate-300 rounded-lg px-3 focus:ring-2 focus:ring-emerald-400 outline-none font-semibold"
-                    placeholder="0,00"
-                  />
-                </div>
-                {isPartial && (
-                  <div className="flex items-start gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
-                    <AlertCircle className="h-3.5 w-3.5 text-orange-500 shrink-0 mt-0.5" />
-                    <div className="text-xs text-orange-700">
-                      <p className="font-semibold">Pagamento parcial</p>
-                      <p>Saldo de <strong>{fmt(pendente)}</strong> será exibido no próximo mês como crédito pendente.</p>
-                    </div>
-                  </div>
-                )}
-                {valNum > baixaModal.valorPrevisto && (
-                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
-                    <p className="text-xs text-blue-700">
-                      Valor acima do previsto (+{fmt(valNum - baixaModal.valorPrevisto)}).
-                    </p>
-                  </div>
-                )}
-                <div className="flex gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setBaixaModal(null)}
-                    className="flex-1 h-9 rounded-lg border border-slate-300 text-sm text-slate-600 hover:bg-slate-50 transition-colors font-medium"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={confirmarBaixaValor}
-                    disabled={valNum <= 0}
-                    className="flex-1 h-9 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Confirmar Baixa
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
 
       {/* ── Modal de Desbloqueio (senha Admin Master) ─────────────────────── */}
       <Dialog open={showDesbloquearModal} onOpenChange={open => { if (!open) setShowDesbloquearModal(false); }}>

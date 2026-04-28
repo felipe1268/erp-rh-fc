@@ -450,7 +450,7 @@ export default function FinanceiroContasAReceber() {
           isPending={baixaMut.isPending || cancelarMut.isPending}
           onClose={() => setBaixa(null)}
           onSave={(payload) => baixaMut.mutate(payload)}
-          onCancel={(frId, medicaoId) => cancelarMut.mutate({ companyId, frId, medicaoId })}
+          onCancel={(frId, medicaoId, projetoId, competencia) => cancelarMut.mutate({ companyId, frId, medicaoId, projetoId, competencia })}
           onVerDetalhes={() => { setDetalhe(baixa); setBaixa(null); }}
         />
       )}
@@ -671,7 +671,7 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
   isPending: boolean;
   onClose: () => void;
   onSave: (d: any) => void;
-  onCancel: (frId: number, medicaoId: number | null) => void;
+  onCancel: (frId: number, medicaoId: number | null, projetoId: number, competencia: string) => void;
   onVerDetalhes: () => void;
 }) {
   const mesIdx = parseInt(mes.slice(5, 7)) - 1;
@@ -864,7 +864,7 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
                       Não
                     </button>
                     <button
-                      onClick={() => onCancel(cell.frId!, cell.id || null)}
+                      onClick={() => onCancel(cell.frId!, cell.id || null, obra.projetoId, mes)}
                       disabled={isPending}
                       className="flex-1 text-xs text-white bg-red-600 hover:bg-red-700 rounded-md py-1.5 font-semibold disabled:opacity-50"
                     >
