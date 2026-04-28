@@ -616,6 +616,9 @@ export default function Cotacoes() {
   const [showGerarOCModeDialog, setShowGerarOCModeDialog] = useState(false);
   const [pendingGerarOCParams, setPendingGerarOCParams] = useState<{ cotacaoId: number; autorizacaoSemVerba?: { adminId: number; adminNome: string; justificativa: string } } | null>(null);
   const [vencedorPorItem, setVencedorPorItem] = useState<Record<number, number>>({});
+  const [mapaItemsChecked, setMapaItemsChecked] = useState<Set<number>>(new Set());
+  const [atribuirFornId, setAtribuirFornId] = useState<string>("");
+  const [showConfirmarTipoCotDialog, setShowConfirmarTipoCotDialog] = useState(false);
   const [showFechamentoParcialDialog, setShowFechamentoParcialDialog] = useState(false);
   const [fechamentoParcialItens, setFechamentoParcialItens] = useState<{ itemId: number; fornecedorId: number; incluir: boolean; descricao: string }[]>([]);
   const [showValidacaoErroDialog, setShowValidacaoErroDialog] = useState(false);
@@ -863,6 +866,8 @@ export default function Cotacoes() {
         setShowFechamentoParcialDialog(false);
         setShowGerarOCModeDialog(false);
         setVencedorPorItem({});
+        setMapaItemsChecked(new Set());
+        setAtribuirFornId("");
         const n = data.ocsGeradas.length;
         toast.success(`${n} ${n === 1 ? "OC gerada" : "OCs geradas"} com sucesso!`);
       }, 2200);
@@ -1977,7 +1982,6 @@ export default function Cotacoes() {
     }
 
     function handleAprovarGerarOC(cotacaoId: number) {
-      if (!validarCondicoesVencedor()) return;
       if (temItensSemVerba && !semVerbaAutorizado) {
         setSemVerbaAdminEmail("");
         setSemVerbaAdminSenha("");
@@ -1985,12 +1989,22 @@ export default function Cotacoes() {
         setShowSemVerbaDialog(true);
         return;
       }
-      const fornTotal = parseFloat(fornParaSaldo.totalOrcado ?? "0");
+      setPendingGerarOCParams({
+        cotacaoId,
+        ...(semVerbaAutorizado ? { autorizacaoSemVerba: semVerbaAutorizado } : {}),
+      });
+      setShowConfirmarTipoCotDialog(true);
+    }
+
+    function handleConfirmarTotal() {
+      setShowConfirmarTipoCotDialog(false);
+      if (!validarCondicoesVencedor()) return;
+      const fornTotal = parseFloat(fornParaSaldo?.totalOrcado ?? "0");
       const metaTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) =>
         acc + (Math.round(parseFloat(it.metaUnitario ?? "0") * 100) / 100 * parseFloat(it.metaQtd ?? it.quantidade ?? "0")), 0);
       if (metaTotal > 0 && fornTotal > metaTotal && !cobertoPorRisco && !semVerbaAutorizado) {
         const defVal = (fornTotal - metaTotal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-        const fornNome = fornParaSaldo.fornecedor?.nomeFantasia || fornParaSaldo.fornecedor?.razaoSocial || "Fornecedor";
+        const fornNome = fornParaSaldo?.fornecedor?.nomeFantasia || fornParaSaldo?.fornecedor?.razaoSocial || "Fornecedor";
         const ok = confirm(
           `⚠️ ATENÇÃO: O valor do fornecedor ${fornNome} (${fornTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) ` +
           `está acima da meta orçamentária (${metaTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).\n\n` +
@@ -2000,24 +2014,36 @@ export default function Cotacoes() {
         );
         if (!ok) return;
       }
-      setPendingGerarOCParams({
-        cotacaoId,
-        ...(semVerbaAutorizado ? { autorizacaoSemVerba: semVerbaAutorizado } : {}),
-      });
+      setShowGerarOCModeDialog(true);
+    }
 
-      const temSelecaoPorItem = Object.keys(vencedorPorItem).length > 0;
-      if (temSelecaoPorItem) {
-        const itensDoMapa: any[] = mapa?.itens ?? [];
-        const globalVencedorId = fornParaSaldo?.fornecedorId;
-        const itensParaFechamento = itensDoMapa.map((it: any) => {
-          const fId = vencedorPorItem[it.id] ?? globalVencedorId ?? 0;
-          return { itemId: it.id, fornecedorId: fId, incluir: true, descricao: it.descricao ?? `Item #${it.id}` };
-        }).filter(it => it.fornecedorId > 0);
-        setFechamentoParcialItens(itensParaFechamento);
-        setShowFechamentoParcialDialog(true);
-      } else {
-        setShowGerarOCModeDialog(true);
-      }
+    function handleConfirmarParcial() {
+      setShowConfirmarTipoCotDialog(false);
+      const itensDoMapa: any[] = mapa?.itens ?? [];
+      const participantes: any[] = mapa?.participantes ?? [];
+      const itensParaFechamento = itensDoMapa.map((it: any) => {
+        let fId = vencedorPorItem[it.id];
+        if (!fId) {
+          let melhorTotal = Infinity;
+          for (const p of participantes) {
+            const key = `${it.id}_${p.fornecedorId}`;
+            const resp = mapa?.respostaMap?.[key];
+            if (resp) {
+              const pu = parseFloat((resp as any).precoUnitario ?? "0");
+              const qty = parseFloat((resp as any).quantidade ?? it.quantidade ?? "1");
+              const total = pu * qty;
+              if (pu > 0 && total < melhorTotal) {
+                melhorTotal = total;
+                fId = p.fornecedorId;
+              }
+            }
+          }
+          if (!fId) fId = melhorForn?.fornecedorId ?? (participantes[0]?.fornecedorId ?? 0);
+        }
+        return { itemId: it.id, fornecedorId: fId ?? 0, incluir: !!(fId && fId > 0), descricao: it.descricao ?? `Item #${it.id}` };
+      }).filter(it => it.fornecedorId > 0);
+      setFechamentoParcialItens(itensParaFechamento);
+      setShowFechamentoParcialDialog(true);
     }
 
     function handleAutorizarSemVerba() {
@@ -3168,18 +3194,72 @@ export default function Cotacoes() {
                   {mapaQ.isLoading ? (
                     <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
                   ) : (mapa?.participantes ?? []).length === 0 ? null : (
-                    <div className="space-y-4">
+                    <div className="space-y-2">
+                      {/* Toolbar de seleção de itens para cotação parcial */}
+                      {detalheFullscreen?.status === "pendente" && (mapa?.participantes ?? []).length >= 2 && mapaItemsChecked.size > 0 && (
+                        <div className="flex items-center gap-2 bg-blue-50 border border-blue-300 rounded-lg px-3 py-2">
+                          <span className="text-xs font-semibold text-blue-800">{mapaItemsChecked.size} {mapaItemsChecked.size === 1 ? "item selecionado" : "itens selecionados"}</span>
+                          <div className="flex-1" />
+                          <select
+                            value={atribuirFornId}
+                            onChange={e => setAtribuirFornId(e.target.value)}
+                            className="text-xs border border-blue-300 rounded px-2 py-1 bg-white text-gray-800 focus:outline-none focus:border-blue-500"
+                          >
+                            <option value="">Selecionar fornecedor...</option>
+                            {(mapa?.participantes ?? []).map((p: any) => (
+                              <option key={p.fornecedorId} value={p.fornecedorId}>
+                                {p.fornecedor?.nomeFantasia || p.fornecedor?.razaoSocial || `#${p.fornecedorId}`}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            disabled={!atribuirFornId}
+                            onClick={() => {
+                              if (!atribuirFornId) return;
+                              const fornId = parseInt(atribuirFornId);
+                              setVencedorPorItem(prev => {
+                                const next = { ...prev };
+                                mapaItemsChecked.forEach(id => { next[id] = fornId; });
+                                return next;
+                              });
+                              setMapaItemsChecked(new Set());
+                              setAtribuirFornId("");
+                            }}
+                            className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                          >
+                            <Check className="h-3.5 w-3.5" /> Fechar para fornecedor
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setMapaItemsChecked(new Set()); setAtribuirFornId(""); }}
+                            className="text-xs text-blue-600 hover:text-blue-800 underline"
+                          >
+                            Limpar seleção
+                          </button>
+                        </div>
+                      )}
+                      {/* Resumo de itens já atribuídos */}
+                      {Object.keys(vencedorPorItem).length > 0 && (
+                        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
+                          <GitBranch className="h-3.5 w-3.5 text-emerald-600" />
+                          <span className="text-xs font-semibold text-emerald-700">{Object.keys(vencedorPorItem).length} {Object.keys(vencedorPorItem).length === 1 ? "item atribuído" : "itens atribuídos"} a fornecedores específicos</span>
+                          <button
+                            type="button"
+                            onClick={() => setVencedorPorItem({})}
+                            className="ml-auto text-xs text-emerald-600 hover:text-red-600 underline"
+                          >
+                            Limpar atribuições
+                          </button>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between gap-2 px-1">
                         <div className="flex items-center gap-2">
-                          {detalheFullscreen?.status === "pendente" && (mapa?.participantes ?? []).length >= 2 && (
-                            <button
-                              type="button"
-                              onClick={() => handleAbrirCotacaoParcial(detalheFullscreen.id)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-blue-50 border border-blue-300 text-blue-700 hover:bg-blue-100 transition-colors"
-                            >
+                          {detalheFullscreen?.status === "pendente" && (mapa?.participantes ?? []).length >= 2 && mapaItemsChecked.size === 0 && Object.keys(vencedorPorItem).length === 0 && (
+                            <span className="inline-flex items-center gap-1.5 text-xs text-gray-400">
                               <GitBranch className="h-3.5 w-3.5" />
-                              Cotação Parcial — atribuir itens por fornecedor
-                            </button>
+                              Marque itens na tabela para atribuir a fornecedores específicos
+                            </span>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
@@ -3202,6 +3282,27 @@ export default function Cotacoes() {
                           <thead className="sticky top-0 z-20">
                             {/* Linha 1: nomes dos grupos de colunas */}
                             <tr className="border-b border-gray-200 bg-gray-50">
+                              {detalheFullscreen?.status === "pendente" && (mapa?.participantes ?? []).length >= 2 && (() => {
+                                const allItemIds = (mapa?.itens ?? []).map((it: any) => it.id) as number[];
+                                const allChecked = allItemIds.length > 0 && allItemIds.every(id => mapaItemsChecked.has(id));
+                                return (
+                                  <th rowSpan={2} className="bg-gray-50 px-2 py-2 border-r border-gray-200 w-9">
+                                    <input
+                                      type="checkbox"
+                                      checked={allChecked}
+                                      onChange={e => {
+                                        if (e.target.checked) {
+                                          setMapaItemsChecked(new Set(allItemIds));
+                                        } else {
+                                          setMapaItemsChecked(new Set());
+                                        }
+                                      }}
+                                      title={allChecked ? "Desmarcar todos" : "Selecionar todos"}
+                                      className="rounded border-gray-400 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5 cursor-pointer"
+                                    />
+                                  </th>
+                                );
+                              })()}
                               <th rowSpan={2} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-2 min-w-56 max-w-md border-r border-gray-200 bg-gray-50 sticky left-0 z-30">Item</th>
                               <th rowSpan={2} className="text-center text-xs font-semibold text-gray-500 uppercase px-2 py-2 w-12 border-r border-gray-200 bg-gray-50">Un.</th>
                               <th colSpan={3} className="text-center text-xs font-semibold text-blue-600 uppercase px-2 py-2 border-r border-blue-100 bg-blue-50/60">
@@ -3627,8 +3728,37 @@ export default function Cotacoes() {
                               const numFornCols = (mapa?.participantes ?? []).length * 3;
                               return (
                                 <React.Fragment key={it.id}>
-                                <tr className={`border-b border-gray-100 hover:bg-gray-50/60 ${it._isPacoteGroup ? "bg-indigo-50/30" : ""}`}>
-                                  <td className={`px-4 py-2 border-r border-gray-100 sticky left-0 z-10 max-w-md ${it._isPacoteGroup ? "bg-indigo-50/30" : "bg-white"}`}>
+                                <tr className={`border-b border-gray-100 hover:bg-gray-50/60 ${it._isPacoteGroup ? "bg-indigo-50/30" : ""} ${mapaItemsChecked.has(it.id) ? "bg-blue-50/40" : ""}`}>
+                                  {detalheFullscreen?.status === "pendente" && (mapa?.participantes ?? []).length >= 2 && (
+                                    <td className={`px-2 py-1 border-r border-gray-100 w-9 align-middle ${it._isPacoteGroup ? "bg-indigo-50/30" : mapaItemsChecked.has(it.id) ? "bg-blue-50" : "bg-white"}`}>
+                                      <div className="flex flex-col items-center gap-1">
+                                        <input
+                                          type="checkbox"
+                                          checked={mapaItemsChecked.has(it.id)}
+                                          onChange={e => {
+                                            setMapaItemsChecked(prev => {
+                                              const next = new Set(prev);
+                                              if (e.target.checked) next.add(it.id);
+                                              else next.delete(it.id);
+                                              return next;
+                                            });
+                                          }}
+                                          className="rounded border-gray-400 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5 cursor-pointer"
+                                        />
+                                        {vencedorPorItem[it.id] && (() => {
+                                          const p = (mapa?.participantes ?? []).find((pp: any) => pp.fornecedorId === vencedorPorItem[it.id]);
+                                          const nome = p?.fornecedor?.nomeFantasia || p?.fornecedor?.razaoSocial || `#${vencedorPorItem[it.id]}`;
+                                          const nome2 = nome.length > 8 ? nome.substring(0, 8) + "…" : nome;
+                                          return (
+                                            <span className="inline-flex items-center px-1 py-0 rounded text-[8px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 leading-tight" title={nome}>
+                                              {nome2}
+                                            </span>
+                                          );
+                                        })()}
+                                      </div>
+                                    </td>
+                                  )}
+                                  <td className={`px-4 py-2 border-r border-gray-100 sticky left-0 z-10 max-w-md ${it._isPacoteGroup ? "bg-indigo-50/30" : mapaItemsChecked.has(it.id) ? "bg-blue-50/40" : "bg-white"}`}>
                                     <div className="flex items-start gap-1.5">
                                       {(hasComposicao || hasPacoteExpand) && (
                                         <button
@@ -5685,6 +5815,49 @@ export default function Cotacoes() {
         </div>,
         document.body
       )}
+
+    {/* Dialog — Confirmar tipo: Parcial ou Total */}
+    <Dialog open={showConfirmarTipoCotDialog} onOpenChange={v => { if (!v) setShowConfirmarTipoCotDialog(false); }}>
+      <DialogContent className="border-gray-200 max-w-lg" style={{ background: "#fff", color: "#111827" }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-gray-900">
+            <ShoppingCart className="h-5 w-5 text-emerald-600" /> Confirmar geração de Ordem de Compra
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-gray-600 pb-2">
+          Esta cotação é <strong>total</strong> (um único fornecedor para todos os itens) ou <strong>parcial</strong> (itens divididos entre fornecedores diferentes)?
+        </p>
+        {Object.keys(vencedorPorItem).length > 0 && (
+          <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-2">
+            <GitBranch className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span className="text-xs text-emerald-800">
+              <strong>{Object.keys(vencedorPorItem).length} {Object.keys(vencedorPorItem).length === 1 ? "item já atribuído" : "itens já atribuídos"}</strong> a fornecedores específicos. Escolha "Parcial" para usar essas atribuições.
+            </span>
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <button
+            onClick={handleConfirmarTotal}
+            className="flex flex-col items-center gap-2 rounded-xl border-2 border-emerald-300 bg-emerald-50 p-5 hover:bg-emerald-100 transition-colors"
+          >
+            <CheckCircle className="h-8 w-8 text-emerald-600" />
+            <span className="text-sm font-bold text-emerald-800">Total</span>
+            <span className="text-xs text-emerald-600 text-center">Um único fornecedor vencedor<br/>para todos os itens</span>
+          </button>
+          <button
+            onClick={handleConfirmarParcial}
+            className="flex flex-col items-center gap-2 rounded-xl border-2 border-blue-300 bg-blue-50 p-5 hover:bg-blue-100 transition-colors"
+          >
+            <GitBranch className="h-8 w-8 text-blue-600" />
+            <span className="text-sm font-bold text-blue-800">Parcial</span>
+            <span className="text-xs text-blue-600 text-center">Itens divididos entre<br/>múltiplos fornecedores</span>
+          </button>
+        </div>
+        <div className="flex justify-end pt-2">
+          <button onClick={() => setShowConfirmarTipoCotDialog(false)} className="text-xs text-gray-500 hover:text-gray-700">Cancelar</button>
+        </div>
+      </DialogContent>
+    </Dialog>
 
     {/* Dialog — como gerar OC: confirmar ou rascunho */}
     <Dialog open={showFechamentoParcialDialog} onOpenChange={v => { if (!v) { setShowFechamentoParcialDialog(false); } }}>
