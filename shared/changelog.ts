@@ -9058,4 +9058,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-28 19:30:00",
   },
+  {
+    version: 1319,
+    titulo: "Cotações: botão 'Confirmar' no modal de Condições de Pagamento agora salva direto no banco",
+    descricao: "Corrigida causa raiz que impedia a geração da OC mesmo com informações aparentemente preenchidas. O modal de Condições de Pagamento (formaPagamento, prazo, parcelamento, módulo de medição) apenas armazenava os dados no estado local do React e mostrava um toast 'Clique em Salvar para persistir', levando o usuário a acreditar que os dados estavam salvos quando na verdade não estavam. O botão foi renomeado para 'Confirmar e Salvar' e agora chama salvarCondicoesComerciais diretamente, persistindo todos os campos (formaPagamento, tipoPagamento, condicaoPagamento, prazoEntregaDias, numeroParcelas, moduloMedicao) no banco de dados imediatamente. O modal só fecha após confirmação de sucesso. Backend de salvarCondicoesComerciais também atualizado para aceitar e salvar o campo moduloMedicao.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-28 21:00:00",
+  },
 ];

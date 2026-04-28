@@ -1819,11 +1819,33 @@ export default function Cotacoes() {
 
           <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 rounded-b-2xl flex justify-end gap-2">
             <button onClick={() => setCondModalFornId(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Fechar</button>
-            <button onClick={() => {
-              setCondModalFornId(null);
-              toast.success("Condições atualizadas! Clique em Salvar para persistir.");
-            }} className="px-5 py-2 text-sm font-semibold bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors">
-              Confirmar
+            <button
+              disabled={salvarCondicoesComerciais.isPending}
+              onClick={() => {
+                if (!showDetalhe) return;
+                const prazoVal = editPrazo[fId] ? parseInt(editPrazo[fId]) : undefined;
+                const parcList = condCustomParcelas[fId] ?? [];
+                const modo = condModo[fId] ?? "padrao";
+                const numParcelas = modo === "custom" && parcList.length > 0 ? parcList.length : undefined;
+                salvarCondicoesComerciais.mutate({
+                  cotacaoId: showDetalhe,
+                  fornecedorId: fId,
+                  companyId,
+                  formaPagamento: editFormaPag[fId] || "",
+                  tipoPagamento: editTipoPag[fId] || "",
+                  condicaoPagamento: editCondPag[fId] || "",
+                  prazoEntregaDias: prazoVal,
+                  numeroParcelas: numParcelas,
+                  moduloMedicao: editModuloMedicao[fId] || undefined,
+                }, {
+                  onSuccess: () => {
+                    setCondModalFornId(null);
+                    toast.success("Condições salvas com sucesso!");
+                  },
+                });
+              }}
+              className="px-5 py-2 text-sm font-semibold bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-60">
+              {salvarCondicoesComerciais.isPending ? "Salvando..." : "Confirmar e Salvar"}
             </button>
           </div>
         </div>

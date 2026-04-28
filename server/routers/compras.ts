@@ -3277,6 +3277,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       numeroParcelas: z.number().optional(),
       prazoEntregaDias: z.number().optional(),
       observacoes: z.string().optional(),
+      moduloMedicao: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -3289,6 +3290,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       if (input.numeroParcelas !== undefined) updateData.numeroParcelas = input.numeroParcelas;
       if (input.prazoEntregaDias !== undefined) updateData.prazoEntregaDias = input.prazoEntregaDias;
       if (input.observacoes !== undefined) updateData.observacoes = input.observacoes;
+      if (input.moduloMedicao !== undefined) updateData.moduloMedicao = input.moduloMedicao || null;
       if (Object.keys(updateData).length > 0) {
         if (input.fornecedorId === 0) {
           await db.update(comprasCotacoes)
