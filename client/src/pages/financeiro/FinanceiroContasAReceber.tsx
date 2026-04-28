@@ -99,6 +99,7 @@ interface MedicaoCell {
   competencia: string;
   numero: number;
   valorPrevisto: number;
+  valorContratoBL: number;
   valorMedido: number;
   valorPrevisao: number;
   percentualPrevisto: number;
@@ -157,6 +158,7 @@ export default function FinanceiroContasAReceber() {
         competencia: mes,
         numero: 0,
         valorPrevisto: r.valorPrevisto,
+        valorContratoBL: r.valorContratoBL ?? r.valorPrevisto,
         valorMedido: r.valorMedido,
         valorPrevisao,
         percentualPrevisto: 0,
@@ -438,6 +440,15 @@ function ObraTableRow({ obra, mesesChave, zebra, onCellClick, onDetalheClick }: 
         const Icon = cfg.icon;
         const isRecebido = status === "recebido_total" || status === "recebido_parcial";
 
+        // Divergência cronograma vs baseline: >5% e status ainda não tem medição real
+        const noMedicao = status === "previsto" || status === "previsao_faturamento";
+        const blDivergence = noMedicao && cell.valorContratoBL > 0 &&
+          Math.abs(cell.valorContratoBL - cell.valorPrevisto) > cell.valorContratoBL * 0.05;
+        const blAbaixo = blDivergence && cell.valorPrevisto < cell.valorContratoBL; // blAcima = !blAbaixo (usado no JSX)
+        // Barra de progresso para células recebidas
+        const pctRecebido = cell.valor > 0 ? Math.min(100, (cell.valorRecebido / cell.valor) * 100) : 0;
+        const isParcial = status === "recebido_parcial";
+
         return (
           <td key={mk} className="px-1 py-1.5 text-center">
             <div className="relative group">
@@ -445,19 +456,38 @@ function ObraTableRow({ obra, mesesChave, zebra, onCellClick, onDetalheClick }: 
                 onClick={() => onCellClick(mk, cell)}
                 className={`w-full rounded-lg px-2 py-1.5 text-xs font-medium transition-all hover:ring-2 hover:ring-blue-300 cursor-pointer ${cfg.cell}`}
               >
+                {/* Status badge */}
                 <div className="flex items-center justify-center gap-1 mb-0.5">
                   <Icon className="w-3 h-3 shrink-0" />
                   <span className="text-[10px] leading-none">{cfg.label}</span>
                 </div>
+
+                {/* Valor principal (cronograma) */}
                 <p className="font-bold text-xs">{BRL(cell.valor)}</p>
-                {cell.valorRecebido > 0 && cell.valorRecebido < cell.valor && (
-                  <div className="mt-0.5 bg-amber-100 rounded px-1 py-0.5">
-                    <p className="text-[9px] font-bold text-amber-800">↙ {BRL(cell.valorRecebido)} recebido</p>
-                    <p className="text-[8px] text-amber-600">Dif: {BRL(cell.valor - cell.valorRecebido)}</p>
+
+                {/* Divergência: cronograma revisado difere do contrato original */}
+                {blDivergence && (
+                  <div className={`mt-0.5 rounded px-1 py-0.5 text-[8px] flex items-center justify-center gap-0.5 ${blAbaixo ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}>
+                    {blAbaixo ? "↓" : "↑"}
+                    <span>Contrato: {BRL(cell.valorContratoBL)}</span>
                   </div>
                 )}
-                {cell.valorRecebido > 0 && cell.valorRecebido >= cell.valor && (
-                  <p className="text-[9px] opacity-70">{BRL(cell.valorRecebido)} recebido</p>
+
+                {/* Barra de progresso + valor recebido */}
+                {cell.valorRecebido > 0 && (
+                  <div className="mt-1">
+                    <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${isParcial ? "bg-amber-500" : "bg-green-500"}`}
+                        style={{ width: `${pctRecebido}%` }}
+                      />
+                    </div>
+                    {isParcial ? (
+                      <p className="text-[8px] font-bold text-amber-700 mt-0.5">↙ {BRL(cell.valorRecebido)} · Δ {BRL(cell.valor - cell.valorRecebido)}</p>
+                    ) : (
+                      <p className="text-[8px] text-green-700 mt-0.5">{BRL(cell.valorRecebido)}</p>
+                    )}
+                  </div>
                 )}
               </button>
               {/* Ícone "detalhes" para células já recebidas */}
