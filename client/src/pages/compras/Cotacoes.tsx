@@ -618,6 +618,8 @@ export default function Cotacoes() {
   const [vencedorPorItem, setVencedorPorItem] = useState<Record<number, number>>({});
   const [showFechamentoParcialDialog, setShowFechamentoParcialDialog] = useState(false);
   const [fechamentoParcialItens, setFechamentoParcialItens] = useState<{ itemId: number; fornecedorId: number; incluir: boolean; descricao: string }[]>([]);
+  const [showValidacaoErroDialog, setShowValidacaoErroDialog] = useState(false);
+  const [validacaoErroInfo, setValidacaoErroInfo] = useState<{ titulo: string; mensagem: string; irParaMapa?: boolean } | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -835,7 +837,16 @@ export default function Cotacoes() {
         setTimeout(() => { setAprovacaoProgress(null); toast.success("Ordem de Compra gerada com sucesso!"); }, 2200);
       }
     },
-    onError: (e) => { setAprovacaoProgress(null); toast.error(e.message); },
+    onError: (e) => {
+      setAprovacaoProgress(null);
+      const msg = e.message ?? "";
+      if (msg.includes("Condição de Pagamento") || msg.includes("Prazo de Entrega") || msg.includes("OC ativa") || msg.includes("já foi aprovada")) {
+        setValidacaoErroInfo({ titulo: "Não foi possível gerar a OC", mensagem: msg, irParaMapa: msg.includes("Condição") || msg.includes("Prazo") });
+        setShowValidacaoErroDialog(true);
+      } else {
+        toast.error(msg);
+      }
+    },
   });
   const gerarOCsParciais = trpc.compras.criarOCsParciais.useMutation({
     onMutate: () => {
@@ -1866,7 +1877,12 @@ export default function Cotacoes() {
 
     function validarCondicoesVencedor(): boolean {
       if (!fornParaSaldo) {
-        toast.error("Selecione um fornecedor vencedor antes de aprovar.");
+        setValidacaoErroInfo({
+          titulo: "Nenhum fornecedor vencedor identificado",
+          mensagem: "Não foi possível identificar o fornecedor vencedor desta cotação. Acesse o Mapa de Cotação, verifique se os fornecedores enviaram propostas com preços preenchidos e, se necessário, clique em \"Selecionar como Vencedor\" no fornecedor desejado.",
+          irParaMapa: true,
+        });
+        setShowValidacaoErroDialog(true);
         return false;
       }
       const condPag = (fornParaSaldo as any).condicaoPagamento || (fornParaSaldo as any).formaPagamento;
@@ -1879,7 +1895,12 @@ export default function Cotacoes() {
       if (!isMdoMedicao && (!prazo || Number(prazo) <= 0)) erros.push("Prazo de Entrega");
       if (erros.length > 0) {
         const nomeForn = (fornParaSaldo as any).fornecedor?.nomeFantasia || (fornParaSaldo as any).fornecedor?.razaoSocial || "do fornecedor vencedor";
-        toast.error(`Preencha ${erros.join(" e ")} de ${nomeForn} antes de aprovar. Clique em "Editar" no card do fornecedor no Mapa de Cotação, preencha os campos e clique em "Salvar".`, { duration: 8000 });
+        setValidacaoErroInfo({
+          titulo: `Informações obrigatórias faltando — ${nomeForn}`,
+          mensagem: `Para gerar a Ordem de Compra, é necessário preencher: ${erros.map(e => `• ${e}`).join("\n")}\n\nComo corrigir: acesse o Mapa de Cotação, localize o card de ${nomeForn}, clique em "Editar", preencha os campos indicados e clique em "Salvar".`,
+          irParaMapa: true,
+        });
+        setShowValidacaoErroDialog(true);
         return false;
       }
       return true;
@@ -5737,6 +5758,33 @@ export default function Cotacoes() {
         )}
         <DialogFooter>
           <button onClick={() => { setShowFechamentoParcialDialog(false); setPendingGerarOCParams(null); }} className="text-sm text-gray-500 hover:text-gray-700">Cancelar</button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={showValidacaoErroDialog} onOpenChange={v => { if (!v) setShowValidacaoErroDialog(false); }}>
+      <DialogContent className="border-red-200 max-w-md" style={{ background: "#fff", color: "#111827" }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-700">
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+            {validacaoErroInfo?.titulo ?? "Ação necessária"}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="py-2 space-y-3">
+          {(validacaoErroInfo?.mensagem ?? "").split("\n").map((line, i) => (
+            <p key={i} className={`text-sm ${line.startsWith("•") ? "pl-3 text-red-700 font-medium" : line.startsWith("Como corrigir") ? "text-gray-500 text-xs italic" : "text-gray-700"}`}>{line}</p>
+          ))}
+        </div>
+        <DialogFooter className="flex gap-2">
+          {validacaoErroInfo?.irParaMapa && (
+            <Button onClick={() => { setShowValidacaoErroDialog(false); setAbaAtiva("mapa"); }}
+              className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
+              <BarChart3 className="h-4 w-4" /> Ir para o Mapa de Cotação
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => setShowValidacaoErroDialog(false)} className="text-gray-600">
+            Fechar
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

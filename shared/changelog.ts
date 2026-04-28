@@ -9049,4 +9049,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-28 18:00:00",
   },
+  {
+    version: 1318,
+    titulo: "Cotações: erros de validação ao gerar OC agora exibem diálogo claro em vez de toast",
+    descricao: "Corrigido problema onde o botão 'Aprovar e Gerar OC' bloqueava silenciosamente sem feedback adequado ao usuário. Antes, quando a Forma de Pagamento ou o Prazo de Entrega do fornecedor vencedor não estavam preenchidos no Mapa de Cotação, o sistema exibia apenas um toast breve que passava despercebido. Agora: (1) Aparece um diálogo de erro com título, campos exatos que precisam ser preenchidos e instruções claras de como corrigir; (2) O diálogo inclui botão 'Ir para o Mapa de Cotação' que leva diretamente para a aba correta; (3) Erros retornados pelo servidor (OC já existe, condição de pagamento ausente, prazo ausente) também exibem o diálogo em vez de toast; (4) Caso não haja nenhum fornecedor vencedor identificado (sem preços no mapa), mensagem específica orienta o usuário.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-28 19:00:00",
+  },
 ];
