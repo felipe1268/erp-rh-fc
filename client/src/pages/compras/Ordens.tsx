@@ -128,6 +128,9 @@ export default function Ordens() {
 
   const [abaAtiva, setAbaAtiva] = useState<"oc" | "os">("oc");
   const [busca, setBusca] = useState("");
+  const [filtroFornecedor, setFiltroFornecedor] = useState("");
+  const [filtroValorMin, setFiltroValorMin] = useState("");
+  const [filtroValorMax, setFiltroValorMax] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroAtrasadas, setFiltroAtrasadas] = useState(false);
   const [showNova, setShowNova] = useState(false);
@@ -513,7 +516,18 @@ export default function Ordens() {
   const fornecedores = fornQ.data ?? [];
   const obras = obrasQ.data ?? [];
   const lista = q.data ?? [];
-  const filt = lista.filter(o => !busca || o.numeroOc?.toLowerCase().includes(busca.toLowerCase()));
+  const filt = lista.filter(o => {
+    if (busca && !o.numeroOc?.toLowerCase().includes(busca.toLowerCase())) return false;
+    if (filtroFornecedor) {
+      const forn = fornecedores.find((f: any) => f.id === o.fornecedorId);
+      const nome = forn?.nomeFantasia || forn?.razaoSocial || "";
+      if (!normalizarTexto(nome).includes(normalizarTexto(filtroFornecedor))) return false;
+    }
+    const total = parseFloat((o as any).total ?? "0");
+    if (filtroValorMin && !isNaN(parseFloat(filtroValorMin)) && total < parseFloat(filtroValorMin)) return false;
+    if (filtroValorMax && !isNaN(parseFloat(filtroValorMax)) && total > parseFloat(filtroValorMax)) return false;
+    return true;
+  });
   const detalhe = detalheQ.data;
 
   const allFilteredIds = filt.map(o => o.id);
@@ -581,7 +595,7 @@ export default function Ordens() {
       {/* Tabs OC / OS */}
       <div className="flex gap-1 bg-white rounded-xl border border-gray-200 p-1 shadow-sm w-fit">
         <button
-          onClick={() => { setAbaAtiva("oc"); setBusca(""); setFiltroStatus("todos"); setFiltroAtrasadas(false); }}
+          onClick={() => { setAbaAtiva("oc"); setBusca(""); setFiltroFornecedor(""); setFiltroValorMin(""); setFiltroValorMax(""); setFiltroStatus("todos"); setFiltroAtrasadas(false); }}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${abaAtiva === "oc" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>
           <ShoppingBag className="h-4 w-4" />
           Ordens de Compra (Material)
@@ -610,23 +624,73 @@ export default function Ordens() {
         ))}
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input placeholder="Buscar por número..." className="pl-9 bg-white border-gray-300 text-gray-900" value={busca} onChange={e => setBusca(e.target.value)} />
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {["todos", "rascunho", "pendente", "aprovada", "entregue_parcial", "entregue", "cancelada"].map(s => (
-            <button key={s} onClick={() => { setFiltroStatus(s); setFiltroAtrasadas(false); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroStatus === s && !filtroAtrasadas ? (s === "rascunho" ? "bg-yellow-500 border-yellow-400 text-white" : "bg-emerald-600 border-emerald-500 text-white") : (s === "rascunho" ? "bg-yellow-50 border-yellow-300 text-yellow-700 hover:border-yellow-400" : "bg-white border-gray-300 text-gray-600 hover:border-gray-400")}`}>
-              {s === "todos" ? "Todos" : STATUS_LABELS[s]?.label}
+      {/* Filtros — linha 1: número, linha 2: fornecedor + valor */}
+      <div className="space-y-2">
+        {/* Linha 1: busca por número */}
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="relative flex-1 min-w-48 max-w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input placeholder="Buscar por número..." className="pl-9 bg-white border-gray-300 text-gray-900 h-9 text-sm" value={busca} onChange={e => setBusca(e.target.value)} />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {["todos", "rascunho", "pendente", "aprovada", "entregue_parcial", "entregue", "cancelada"].map(s => (
+              <button key={s} onClick={() => { setFiltroStatus(s); setFiltroAtrasadas(false); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroStatus === s && !filtroAtrasadas ? (s === "rascunho" ? "bg-yellow-500 border-yellow-400 text-white" : "bg-emerald-600 border-emerald-500 text-white") : (s === "rascunho" ? "bg-yellow-50 border-yellow-300 text-yellow-700 hover:border-yellow-400" : "bg-white border-gray-300 text-gray-600 hover:border-gray-400")}`}>
+                {s === "todos" ? "Todos" : STATUS_LABELS[s]?.label}
+              </button>
+            ))}
+            <button onClick={() => { setFiltroAtrasadas(!filtroAtrasadas); setFiltroStatus("todos"); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-1 ${filtroAtrasadas ? "bg-red-600 border-red-500 text-white" : "bg-white border-red-300 text-red-600 hover:border-red-400"}`}>
+              <AlertTriangle className="h-3 w-3" /> Atrasadas
             </button>
-          ))}
-          <button onClick={() => { setFiltroAtrasadas(!filtroAtrasadas); setFiltroStatus("todos"); }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-1 ${filtroAtrasadas ? "bg-red-600 border-red-500 text-white" : "bg-white border-red-300 text-red-600 hover:border-red-400"}`}>
-            <AlertTriangle className="h-3 w-3" /> Atrasadas
-          </button>
+          </div>
+        </div>
+        {/* Linha 2: fornecedor + valor mín/máx */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="relative flex-1 min-w-48 max-w-72">
+            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Buscar por fornecedor..."
+              className="pl-9 bg-white border-gray-300 text-gray-900 h-9 text-sm"
+              value={filtroFornecedor}
+              onChange={e => setFiltroFornecedor(e.target.value)}
+            />
+            {filtroFornecedor && (
+              <button onClick={() => setFiltroFornecedor("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <DollarSign className="h-4 w-4 text-gray-400 shrink-0" />
+            <Input
+              type="number"
+              min={0}
+              placeholder="Valor mín"
+              className="w-32 bg-white border-gray-300 text-gray-900 h-9 text-sm"
+              value={filtroValorMin}
+              onChange={e => setFiltroValorMin(e.target.value)}
+            />
+            <span className="text-gray-400 text-xs">até</span>
+            <Input
+              type="number"
+              min={0}
+              placeholder="Valor máx"
+              className="w-32 bg-white border-gray-300 text-gray-900 h-9 text-sm"
+              value={filtroValorMax}
+              onChange={e => setFiltroValorMax(e.target.value)}
+            />
+            {(filtroValorMin || filtroValorMax) && (
+              <button onClick={() => { setFiltroValorMin(""); setFiltroValorMax(""); }} className="text-gray-400 hover:text-gray-600 ml-0.5" title="Limpar filtro de valor">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          {(filtroFornecedor || filtroValorMin || filtroValorMax) && (
+            <span className="text-[11px] text-emerald-600 font-medium bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+              {filt.length} resultado{filt.length !== 1 ? "s" : ""}
+            </span>
+          )}
         </div>
       </div>
 
