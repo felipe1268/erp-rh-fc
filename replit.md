@@ -227,6 +227,39 @@ SyncSchema + SyncRevisions run on every cold start → Neon DB kept up to date a
 - **Cadastro de Unidades de Medida** (Rev. 300): nova tabela `almoxarifado_unidades`; 22 unidades padrão pré-cadastradas; campo de unidade agora é select controlado (não digitação livre); modal "Gerenciar Unidades" com CRUD completo (adicionar com sigla+descrição, excluir com proteção contra uso); endpoints `listarUnidades`, `criarUnidade`, `excluirUnidade` in compras.ts
 - **Fornecedores**: Cadastro completo com busca automática CNPJ via BrasilAPI
 
+## Conceito Pendente: Contas a Receber — Camadas de Valor (a implementar)
+
+O usuário validou o conceito abaixo e quer implementar depois. Não implementar sem confirmar com o usuário.
+
+Cada célula da matriz (obra × mês) deve evoluir automaticamente por 4 camadas conforme o estágio:
+
+| Camada | Nome | Origem | Cor | Quando aparece |
+|--------|------|---------|-----|----------------|
+| 1 | **Previsto (Contrato)** | Cronograma financeiro original (`planejamento_revisoes` + `orcamento_itens`) | Azul | Sempre — não muda após contrato |
+| 2 | **Previsão de Faturamento** | % avanço físico real (AvancoSemanal) × valor total contrato | Laranja | Atualizado semanalmente; substitui Previsto quando disponível |
+| 3 | **Faturado** | `planejamento_medicoes` aprovadas + `financial_revenue` | Verde escuro | Após medição aprovada |
+| 4 | **Recebido / A Receber** | `financial_entries` status 'recebido'/'a_receber' | Verde / Laranja | Após pagamento registrado |
+
+**Lógica de cascata por célula:**
+```
+Se tem pagamento   → mostra Recebido + A Receber
+Se tem medição     → mostra Faturado
+Se tem previsão    → mostra Previsão de Faturamento (do Planejamento semanal)
+Caso contrário     → mostra Previsto (contrato)
+```
+
+**KPIs novos a adicionar no topo:**
+- Previsão de Faturamento (baseada no avanço físico atual)
+- A Receber (faturado mas não pago)
+
+**Pergunta em aberto (pendente de resposta do usuário):**
+A "Previsão de Faturamento" deve ser calculada automaticamente do % de avanço físico semanal do Planejamento, ou lançada manualmente na medição antes da aprovação formal?
+
+**Arquivos relevantes:**
+- Frontend: `client/src/pages/financeiro/FinanceiroContasAReceber.tsx`
+- Backend: `server/routers/financial.ts` (endpoint `getContasReceberMatrix`)
+- Tabelas: `planejamento_medicoes`, `financial_revenue`, `financial_entries`, `planejamento_medicao_config`
+
 ## User Preferences
 - After every completed adjustment, remind the user to click **Publish** to deploy. Deployment config: autoscale, build=`pnpm run build`, run=`node dist/index.js`.
 
