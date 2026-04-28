@@ -449,44 +449,55 @@ function ObraTableRow({ obra, mesesChave, zebra, onCellClick, onDetalheClick }: 
         const pctRecebido = cell.valor > 0 ? Math.min(100, (cell.valorRecebido / cell.valor) * 100) : 0;
         const isParcial = status === "recebido_parcial";
 
+        const diferenca = cell.valorRecebido > 0 ? cell.valor - cell.valorRecebido : 0;
+
         return (
-          <td key={mk} className="px-1 py-1.5 text-center">
+          <td key={mk} className="px-1 py-1 text-center">
             <div className="relative group">
               <button
                 onClick={() => onCellClick(mk, cell)}
-                className={`w-full rounded-lg px-2 py-1.5 text-xs font-medium transition-all hover:ring-2 hover:ring-blue-300 cursor-pointer ${cfg.cell}`}
+                className="w-full flex flex-col gap-0.5 transition-all hover:opacity-90 cursor-pointer"
               >
-                {/* Status badge */}
-                <div className="flex items-center justify-center gap-1 mb-0.5">
-                  <Icon className="w-3 h-3 shrink-0" />
-                  <span className="text-[10px] leading-none">{cfg.label}</span>
+                {/* ── Balão 1: Status + Previsto ── */}
+                <div className={`w-full rounded-md px-2 py-1 ${cfg.cell}`}>
+                  <div className="flex items-center justify-center gap-1">
+                    <Icon className="w-3 h-3 shrink-0" />
+                    <span className="text-[9px] leading-none font-medium">{cfg.label}</span>
+                  </div>
+                  <p className="font-semibold text-[11px] leading-tight mt-0.5">{BRL(cell.valor)}</p>
+                  {blDivergence && (
+                    <p className={`text-[8px] mt-0.5 ${blAbaixo ? "text-red-600" : "text-emerald-600"}`}>
+                      {blAbaixo ? "↓" : "↑"} Ctr: {BRL(cell.valorContratoBL)}
+                    </p>
+                  )}
                 </div>
 
-                {/* Valor principal (cronograma) */}
-                <p className="font-bold text-xs">{BRL(cell.valor)}</p>
-
-                {/* Divergência: cronograma revisado difere do contrato original */}
-                {blDivergence && (
-                  <div className={`mt-0.5 rounded px-1 py-0.5 text-[8px] flex items-center justify-center gap-0.5 ${blAbaixo ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}>
-                    {blAbaixo ? "↓" : "↑"}
-                    <span>Contrato: {BRL(cell.valorContratoBL)}</span>
-                  </div>
-                )}
-
-                {/* Barra de progresso + valor recebido */}
+                {/* ── Balão 2: Recebido (destaque) — só quando há valor ── */}
                 {cell.valorRecebido > 0 && (
-                  <div className="mt-1">
-                    <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                  <div className={`w-full rounded-md px-2 py-1.5 ${isParcial ? "bg-amber-50 border border-amber-300" : "bg-green-50 border border-green-300"}`}>
+                    <p className={`text-[8px] font-medium leading-none mb-0.5 ${isParcial ? "text-amber-600" : "text-green-600"}`}>
+                      Recebido
+                    </p>
+                    <p className={`font-bold text-sm leading-tight ${isParcial ? "text-amber-700" : "text-green-700"}`}>
+                      {BRL(cell.valorRecebido)}
+                    </p>
+                    {/* Barra de progresso */}
+                    <div className="mt-1 h-1 w-full bg-gray-200 rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full ${isParcial ? "bg-amber-500" : "bg-green-500"}`}
                         style={{ width: `${pctRecebido}%` }}
                       />
                     </div>
-                    {isParcial ? (
-                      <p className="text-[8px] font-bold text-amber-700 mt-0.5">↙ {BRL(cell.valorRecebido)} · Δ {BRL(cell.valor - cell.valorRecebido)}</p>
-                    ) : (
-                      <p className="text-[8px] text-green-700 mt-0.5">{BRL(cell.valorRecebido)}</p>
-                    )}
+                  </div>
+                )}
+
+                {/* ── Balão 3: Diferença — só quando parcial ── */}
+                {isParcial && diferenca > 0 && (
+                  <div className="w-full rounded-md px-2 py-1 bg-red-50 border border-red-200">
+                    <p className="text-[8px] text-red-500 leading-none mb-0.5">Saldo a receber</p>
+                    <p className="font-bold text-[11px] text-red-700 leading-tight">
+                      {BRL(diferenca)}
+                    </p>
                   </div>
                 )}
               </button>
