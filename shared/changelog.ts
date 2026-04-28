@@ -9040,4 +9040,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-28 16:00:00",
   },
+  {
+    version: 1317,
+    titulo: "Cotação Parcial: fechar itens com fornecedores diferentes no Mapa de Cotação",
+    descricao: "Implementado Cotação Parcial no Mapa de Cotação do módulo de Compras. O usuário agora pode selecionar um fornecedor diferente para cada item individualmente — basta clicar no ícone de alfinete (📌) na célula de total de cada fornecedor por item. Ao clicar em 'Aprovar e Gerar OC' com seleções por item ativas, abre um novo diálogo 'Cotação Parcial' que mostra a lista de itens, o fornecedor atribuído a cada um (alterável via dropdown), permite marcar/desmarcar itens para incluir no fechamento atual, e exibe um resumo com o total por fornecedor. As OCs são geradas uma por fornecedor, cada uma com apenas os itens a ela atribuídos. Backend: novo endpoint 'criarOCsParciais' que aceita mapeamento {fornecedorId, itemIds[]} e gera múltiplas OCs com criação de parcelas financeiras e atualização de status da cotação.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-28 18:00:00",
+  },
 ];

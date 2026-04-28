@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 
@@ -615,6 +615,9 @@ export default function Cotacoes() {
   const [showCancelarAprovacao, setShowCancelarAprovacao] = useState(false);
   const [showGerarOCModeDialog, setShowGerarOCModeDialog] = useState(false);
   const [pendingGerarOCParams, setPendingGerarOCParams] = useState<{ cotacaoId: number; autorizacaoSemVerba?: { adminId: number; adminNome: string; justificativa: string } } | null>(null);
+  const [vencedorPorItem, setVencedorPorItem] = useState<Record<number, number>>({});
+  const [showFechamentoParcialDialog, setShowFechamentoParcialDialog] = useState(false);
+  const [fechamentoParcialItens, setFechamentoParcialItens] = useState<{ itemId: number; fornecedorId: number; incluir: boolean; descricao: string }[]>([]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -831,6 +834,27 @@ export default function Cotacoes() {
       } else {
         setTimeout(() => { setAprovacaoProgress(null); toast.success("Ordem de Compra gerada com sucesso!"); }, 2200);
       }
+    },
+    onError: (e) => { setAprovacaoProgress(null); toast.error(e.message); },
+  });
+  const gerarOCsParciais = trpc.compras.criarOCsParciais.useMutation({
+    onMutate: () => {
+      setAprovacaoProgress({ step: 0 });
+      setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 1 } : p), 600);
+      setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 2 } : p), 1200);
+    },
+    onSuccess: (data) => {
+      q.refetch(); detalheQ.refetch(); mapaQ.refetch(); setSemVerbaAutorizado(null);
+      setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 3 } : p), 400);
+      setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 4 } : p), 1000);
+      setTimeout(() => {
+        setAprovacaoProgress(null);
+        setShowFechamentoParcialDialog(false);
+        setShowGerarOCModeDialog(false);
+        setVencedorPorItem({});
+        const n = data.ocsGeradas.length;
+        toast.success(`${n} ${n === 1 ? "OC gerada" : "OCs geradas"} com sucesso!`);
+      }, 2200);
     },
     onError: (e) => { setAprovacaoProgress(null); toast.error(e.message); },
   });
@@ -1897,7 +1921,20 @@ export default function Cotacoes() {
         cotacaoId,
         ...(semVerbaAutorizado ? { autorizacaoSemVerba: semVerbaAutorizado } : {}),
       });
-      setShowGerarOCModeDialog(true);
+
+      const temSelecaoPorItem = Object.keys(vencedorPorItem).length > 0;
+      if (temSelecaoPorItem) {
+        const itensDoMapa: any[] = mapa?.itens ?? [];
+        const globalVencedorId = fornParaSaldo?.fornecedorId;
+        const itensParaFechamento = itensDoMapa.map((it: any) => {
+          const fId = vencedorPorItem[it.id] ?? globalVencedorId ?? 0;
+          return { itemId: it.id, fornecedorId: fId, incluir: true, descricao: it.descricao ?? `Item #${it.id}` };
+        }).filter(it => it.fornecedorId > 0);
+        setFechamentoParcialItens(itensParaFechamento);
+        setShowFechamentoParcialDialog(true);
+      } else {
+        setShowGerarOCModeDialog(true);
+      }
     }
 
     function handleAutorizarSemVerba() {
@@ -3702,10 +3739,32 @@ export default function Cotacoes() {
                                             </span>
                                           )}
                                         </td>
-                                        <td key={`tot_${p.fornecedorId}`} className={`px-2 py-1 text-right border-r border-gray-200 ${rowCls} ${isBest ? "bg-emerald-50" : ""}`}>
-                                          <span className={`text-xs font-semibold ${isMelhor ? "text-emerald-700" : "text-gray-700"}`}>
-                                            {displayTotal > 0 ? displayTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
-                                          </span>
+                                        <td key={`tot_${p.fornecedorId}`} className={`px-2 py-1 text-right border-r border-gray-200 ${rowCls} ${isBest ? "bg-emerald-50" : ""} ${vencedorPorItem[it.id] === p.fornecedorId ? "ring-1 ring-inset ring-emerald-400" : ""}`}>
+                                          <div className="flex items-center justify-end gap-1">
+                                            <span className={`text-xs font-semibold ${isMelhor ? "text-emerald-700" : "text-gray-700"}`}>
+                                              {displayTotal > 0 ? displayTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                            </span>
+                                            {displayPreco > 0 && detalheFullscreen?.status !== "aprovada" && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setVencedorPorItem(prev => {
+                                                    if (prev[it.id] === p.fornecedorId) {
+                                                      const next = { ...prev };
+                                                      delete next[it.id];
+                                                      return next;
+                                                    }
+                                                    return { ...prev, [it.id]: p.fornecedorId };
+                                                  });
+                                                }}
+                                                className={`shrink-0 p-0.5 rounded-full transition-colors ${vencedorPorItem[it.id] === p.fornecedorId ? "text-emerald-600 bg-emerald-100 border border-emerald-300" : "text-gray-300 hover:text-amber-500 hover:bg-amber-50"}`}
+                                                title={vencedorPorItem[it.id] === p.fornecedorId ? "Remover seleção deste item" : "Selecionar fornecedor para este item"}
+                                              >
+                                                <Pin className="h-2.5 w-2.5" />
+                                              </button>
+                                            )}
+                                          </div>
                                         </td>
                                       </>
                                     );
@@ -5058,9 +5117,14 @@ export default function Cotacoes() {
                   )}
                   {detalhe.status === "pendente" && (detalhe as any).tipo !== "servico" && (
                     <>
-                      <Button size="sm" onClick={() => { if (!validarCondicoesVencedor()) return; setPendingGerarOCParams({ cotacaoId: detalhe.id }); setShowGerarOCModeDialog(true); }} disabled={gerarOC.isPending}
+                      <Button size="sm" onClick={() => handleAprovarGerarOC(detalhe.id)} disabled={gerarOC.isPending || gerarOCsParciais.isPending}
                         className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs gap-1">
                         <CheckCircle className="h-3 w-3" /> Aprovar e Gerar OC
+                        {Object.keys(vencedorPorItem).length > 0 && (
+                          <span className="ml-1 px-1 py-0 rounded-full text-[9px] font-bold bg-white text-emerald-700">
+                            {Object.keys(vencedorPorItem).length} pin
+                          </span>
+                        )}
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => atualizarStatus.mutate({ id: detalhe.id, status: "recusada" })}
                         className="border-red-200 text-red-600 hover:bg-red-50 text-xs gap-1">
@@ -5508,6 +5572,175 @@ export default function Cotacoes() {
       )}
 
     {/* Dialog — como gerar OC: confirmar ou rascunho */}
+    <Dialog open={showFechamentoParcialDialog} onOpenChange={v => { if (!v) { setShowFechamentoParcialDialog(false); } }}>
+      <DialogContent className="border-gray-200 max-w-2xl" style={{ background: "#fff", color: "#111827" }}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-gray-900">
+            <GitBranch className="h-5 w-5 text-blue-500" /> Cotação Parcial — Selecionar Itens por Fornecedor
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-gray-600 pb-1">
+          Cada item será fechado com o fornecedor indicado. Desmarque os itens que não deseja incluir neste fechamento.
+        </p>
+
+        {(() => {
+          const totaisPorForn: Record<number, { fornecedorId: number; nome: string; total: number; itens: number }> = {};
+          for (const fi of fechamentoParcialItens) {
+            if (!fi.incluir) continue;
+            const p = (mapa?.participantes ?? []).find((pp: any) => pp.fornecedorId === fi.fornecedorId);
+            const nome = p?.fornecedor?.nomeFantasia || p?.fornecedor?.razaoSocial || `Fornecedor #${fi.fornecedorId}`;
+            const key = `${fi.itemId}_${fi.fornecedorId}`;
+            const resp = mapa?.respostaMap?.[key];
+            const mapaItem = (mapa?.itens ?? []).find((it: any) => it.id === fi.itemId);
+            const pu = resp ? parseFloat((resp as any).precoUnitario ?? "0") : parseFloat(mapaItem?.precoUnitario ?? "0");
+            const qty = resp ? parseFloat((resp as any).quantidade ?? "1") : parseFloat(mapaItem?.quantidade ?? "1");
+            const tot = pu * qty;
+            if (!totaisPorForn[fi.fornecedorId]) totaisPorForn[fi.fornecedorId] = { fornecedorId: fi.fornecedorId, nome, total: 0, itens: 0 };
+            totaisPorForn[fi.fornecedorId].total += tot;
+            totaisPorForn[fi.fornecedorId].itens += 1;
+          }
+          const resumo = Object.values(totaisPorForn);
+          return (
+            <>
+              {resumo.length > 0 && (
+                <div className="flex flex-wrap gap-2 pb-1">
+                  {resumo.map(r => (
+                    <div key={r.fornecedorId} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs">
+                      <Trophy className="h-3 w-3 text-blue-500" />
+                      <span className="font-semibold text-blue-800">{r.nome}</span>
+                      <span className="text-blue-600">— {r.itens} {r.itens === 1 ? "item" : "itens"} · {r.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="max-h-72 overflow-y-auto border border-gray-200 rounded-lg">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-3 py-2 text-left w-8"></th>
+                      <th className="px-3 py-2 text-left text-gray-500 font-semibold">Item</th>
+                      <th className="px-3 py-2 text-left text-gray-500 font-semibold">Fornecedor</th>
+                      <th className="px-3 py-2 text-right text-gray-500 font-semibold">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fechamentoParcialItens.map((fi, idx) => {
+                      const p = (mapa?.participantes ?? []).find((pp: any) => pp.fornecedorId === fi.fornecedorId);
+                      const nomeForn = p?.fornecedor?.nomeFantasia || p?.fornecedor?.razaoSocial || `Fornecedor #${fi.fornecedorId}`;
+                      const key = `${fi.itemId}_${fi.fornecedorId}`;
+                      const resp = mapa?.respostaMap?.[key];
+                      const mapaItem = (mapa?.itens ?? []).find((it: any) => it.id === fi.itemId);
+                      const pu = resp ? parseFloat((resp as any).precoUnitario ?? "0") : parseFloat(mapaItem?.precoUnitario ?? "0");
+                      const qty = resp ? parseFloat((resp as any).quantidade ?? "1") : parseFloat(mapaItem?.quantidade ?? "1");
+                      const total = pu * qty;
+                      return (
+                        <tr key={fi.itemId} className={`border-b border-gray-100 ${!fi.incluir ? "opacity-40" : "hover:bg-gray-50"}`}>
+                          <td className="px-3 py-2">
+                            <Checkbox
+                              checked={fi.incluir}
+                              onCheckedChange={v => setFechamentoParcialItens(prev => prev.map((x, i) => i === idx ? { ...x, incluir: !!v } : x))}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-gray-800 font-medium max-w-xs truncate" title={fi.descricao}>{fi.descricao}</td>
+                          <td className="px-3 py-2">
+                            <select
+                              className="text-xs border border-gray-200 rounded px-1.5 py-0.5 bg-white text-gray-700 focus:outline-none focus:border-blue-400"
+                              value={fi.fornecedorId}
+                              onChange={e => {
+                                const newFornId = parseInt(e.target.value);
+                                setFechamentoParcialItens(prev => prev.map((x, i) => i === idx ? { ...x, fornecedorId: newFornId } : x));
+                              }}
+                            >
+                              {(mapa?.participantes ?? []).map((pp: any) => (
+                                <option key={pp.fornecedorId} value={pp.fornecedorId}>
+                                  {pp.fornecedor?.nomeFantasia || pp.fornecedor?.razaoSocial || `#${pp.fornecedorId}`}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-700 font-semibold">
+                            {total > 0 ? total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <p className="text-xs text-gray-500">
+                {fechamentoParcialItens.filter(fi => fi.incluir).length} de {fechamentoParcialItens.length} itens selecionados
+              </p>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <button
+                  disabled={gerarOCsParciais.isPending || fechamentoParcialItens.filter(fi => fi.incluir).length === 0}
+                  onClick={() => {
+                    if (!pendingGerarOCParams) return;
+                    const itensSelecionados = fechamentoParcialItens.filter(fi => fi.incluir);
+                    const grupos: Record<number, number[]> = {};
+                    for (const fi of itensSelecionados) {
+                      if (!grupos[fi.fornecedorId]) grupos[fi.fornecedorId] = [];
+                      grupos[fi.fornecedorId].push(fi.itemId);
+                    }
+                    gerarOCsParciais.mutate({
+                      companyId,
+                      cotacaoId: pendingGerarOCParams.cotacaoId,
+                      itensPorFornecedor: Object.entries(grupos).map(([fId, itemIds]) => ({ fornecedorId: parseInt(fId), itemIds })),
+                      userId: user?.id,
+                      userName: user?.name,
+                      ...(pendingGerarOCParams.autorizacaoSemVerba ? { autorizacaoSemVerba: pendingGerarOCParams.autorizacaoSemVerba } : {}),
+                    });
+                  }}
+                  className="flex flex-col items-center gap-2 rounded-lg border-2 border-emerald-300 bg-emerald-50 p-4 hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                >
+                  <CheckCircle className="h-7 w-7 text-emerald-600" />
+                  <span className="text-sm font-semibold text-emerald-800">Confirmar diretamente</span>
+                  <span className="text-xs text-emerald-600 text-center">Gera {(() => { const g: Record<number,number[]> = {}; fechamentoParcialItens.filter(f=>f.incluir).forEach(f => { if(!g[f.fornecedorId]) g[f.fornecedorId]=[]; g[f.fornecedorId].push(f.itemId); }); return Object.keys(g).length; })()} OC(s) como <strong>Pendente</strong></span>
+                </button>
+                <button
+                  disabled={gerarOCsParciais.isPending || fechamentoParcialItens.filter(fi => fi.incluir).length === 0}
+                  onClick={() => {
+                    if (!pendingGerarOCParams) return;
+                    const itensSelecionados = fechamentoParcialItens.filter(fi => fi.incluir);
+                    const grupos: Record<number, number[]> = {};
+                    for (const fi of itensSelecionados) {
+                      if (!grupos[fi.fornecedorId]) grupos[fi.fornecedorId] = [];
+                      grupos[fi.fornecedorId].push(fi.itemId);
+                    }
+                    gerarOCsParciais.mutate({
+                      companyId,
+                      cotacaoId: pendingGerarOCParams.cotacaoId,
+                      itensPorFornecedor: Object.entries(grupos).map(([fId, itemIds]) => ({ fornecedorId: parseInt(fId), itemIds })),
+                      comoRascunho: true,
+                      userId: user?.id,
+                      userName: user?.name,
+                      ...(pendingGerarOCParams.autorizacaoSemVerba ? { autorizacaoSemVerba: pendingGerarOCParams.autorizacaoSemVerba } : {}),
+                    });
+                  }}
+                  className="flex flex-col items-center gap-2 rounded-lg border-2 border-yellow-300 bg-yellow-50 p-4 hover:bg-yellow-100 transition-colors disabled:opacity-50"
+                >
+                  <Save className="h-7 w-7 text-yellow-600" />
+                  <span className="text-sm font-semibold text-yellow-800">Salvar como Rascunho</span>
+                  <span className="text-xs text-yellow-600 text-center">As OCs ficam como <strong>Rascunho</strong> para revisar depois</span>
+                </button>
+              </div>
+            </>
+          );
+        })()}
+
+        {gerarOCsParciais.isPending && (
+          <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+            <Loader2 className="h-4 w-4 animate-spin" /> Gerando OCs...
+          </div>
+        )}
+        <DialogFooter>
+          <button onClick={() => { setShowFechamentoParcialDialog(false); setPendingGerarOCParams(null); }} className="text-sm text-gray-500 hover:text-gray-700">Cancelar</button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
     <Dialog open={showGerarOCModeDialog} onOpenChange={v => { if (!v) { setShowGerarOCModeDialog(false); setPendingGerarOCParams(null); } }}>
       <DialogContent className="border-gray-200 max-w-md" style={{ background: "#fff", color: "#111827" }}>
         <DialogHeader>

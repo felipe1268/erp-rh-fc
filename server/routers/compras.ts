@@ -5075,6 +5075,205 @@ Retorne APENAS um JSON válido neste formato:
       return { ...oc, contratoGeradoId, terceiroContratoGeradoId };
     }),
 
+  criarOCsParciais: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      cotacaoId: z.number(),
+      itensPorFornecedor: z.array(z.object({
+        fornecedorId: z.number(),
+        itemIds: z.array(z.number()),
+      })),
+      comoRascunho: z.boolean().optional(),
+      userId: z.number().optional(),
+      userName: z.string().optional(),
+      autorizacaoSemVerba: z.object({ adminId: z.number(), adminNome: z.string(), justificativa: z.string() }).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
+      if (cot.status === "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Esta cotação já foi aprovada." });
+
+      const todosItens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
+
+      const scTipo = cot.solicitacaoId
+        ? (await db.select({ tipo: comprasSolicitacoes.tipo }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, cot.solicitacaoId)))?.[0]?.tipo ?? "material"
+        : "material";
+      const ordemTipo = scTipo === "pacote" ? "pacote" : (scTipo === "servico" ? "servico" : "compra");
+
+      const ocsGeradas: { id: number; numeroOc: string; fornecedorId: number }[] = [];
+
+      for (const grupo of input.itensPorFornecedor) {
+        if (grupo.itemIds.length === 0) continue;
+
+        const [fornPart] = await db.select().from(comprasCotacaoFornecedores).where(
+          and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, grupo.fornecedorId))
+        );
+        if (!fornPart) continue;
+
+        const itensGrupo = todosItens.filter(it => grupo.itemIds.includes(it.id));
+        if (itensGrupo.length === 0) continue;
+
+        const respostas = await db.select().from(comprasCotacaoRespostas).where(
+          and(
+            eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId),
+            eq(comprasCotacaoRespostas.fornecedorId, grupo.fornecedorId),
+            inArray(comprasCotacaoRespostas.itemId, grupo.itemIds)
+          )
+        );
+        const precoMap = new Map(respostas.map(r => [r.itemId, r]));
+
+        const condPag = (fornPart as any).condicaoPagamento ?? cot.condicaoPagamento ?? null;
+        const formaPag = (fornPart as any).formaPagamento ?? (cot as any).formaPagamento ?? null;
+        const tipoPag = (fornPart as any).tipoPagamento ?? cot.tipoPagamento ?? null;
+        const numeroParcelas = fornPart.numeroParcelas ?? cot.numeroParcelas ?? 1;
+        const freteValor = n((fornPart as any).valorFrete ?? 0);
+        const freteTipo = (fornPart as any).freteTipo ?? "cif";
+        const transportadora = (fornPart as any).transportadora ?? null;
+        const freteParaTotal = freteTipo === "fob" ? freteValor : 0;
+        const prazoEntregaDias = (fornPart as any).prazoEntregaDias ?? null;
+
+        let subtotal = 0;
+        for (const it of itensGrupo) {
+          const resp = precoMap.get(it.id);
+          const pu = resp ? n(resp.precoUnitario) : n(it.precoUnitario);
+          const qty = resp ? n(resp.quantidade) : n(it.quantidade);
+          subtotal += pu * qty;
+        }
+        const totalOC = subtotal + freteParaTotal;
+
+        let dataEntregaPrevista: string | null = null;
+        if (prazoEntregaDias && Number(prazoEntregaDias) > 0) {
+          const d = new Date();
+          d.setDate(d.getDate() + Number(prazoEntregaDias));
+          dataEntregaPrevista = d.toISOString().slice(0, 10);
+        }
+
+        let numeroOc: string;
+        if (ordemTipo === "servico" || ordemTipo === "pacote") {
+          const configOS = await db.select().from(ocNumberConfig).where(eq(ocNumberConfig.companyId, input.companyId)).limit(1);
+          if (!configOS[0]) {
+            await db.insert(ocNumberConfig).values({ companyId: input.companyId, proximoNumeroOs: 1, prefixoOs: "OS" } as any);
+          }
+          const proxOs = (configOS[0] as any)?.proximoNumeroOs ?? 1;
+          const prefOs = (configOS[0] as any)?.prefixoOs ?? "OS";
+          const digitos = configOS[0]?.digitosSequencial ?? 3;
+          const seqOs = String(proxOs).padStart(digitos, "0");
+          numeroOc = `${prefOs}-${new Date().getFullYear()}-${seqOs}`;
+          await db.update(ocNumberConfig).set({ proximoNumeroOs: proxOs + 1, updatedAt: new Date().toISOString() } as any).where(eq(ocNumberConfig.companyId, input.companyId));
+        } else {
+          const count = await db.select({ c: sql<number>`count(*)` }).from(comprasOrdens).where(eq(comprasOrdens.companyId, input.companyId));
+          const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+          numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
+        }
+
+        const [fornData] = await db.select({ nome: fornecedores.nomeFantasia, razao: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, grupo.fornecedorId));
+        const fornNome = fornData?.nome || fornData?.razao || null;
+
+        const [oc] = await db.insert(comprasOrdens).values({
+          companyId: input.companyId,
+          numeroOc,
+          cotacaoId: input.cotacaoId,
+          solicitacaoId: cot.solicitacaoId ?? null,
+          obraId: cot.obraId ?? null,
+          fornecedorId: grupo.fornecedorId,
+          fornecedorNome: fornNome,
+          criadoPorId: input.userId ?? null,
+          criadoPorNome: input.userName ?? null,
+          tipo: ordemTipo,
+          status: input.comoRascunho ? "rascunho" : "aprovada",
+          aprovacaoStatus: input.comoRascunho ? "aguardando" : "aprovado",
+          aprovacaoExtraRequerida: false,
+          subtotal: String(subtotal.toFixed(2)),
+          frete: String(freteValor.toFixed(2)),
+          freteTipo,
+          transportadora,
+          outrasDespesas: "0",
+          impostos: "0",
+          desconto: "0",
+          total: String(totalOC.toFixed(2)),
+          condicaoPagamento: condPag,
+          tipoPagamento: tipoPag,
+          formaPagamento: formaPag,
+          numeroParcelas,
+          dataEntregaPrevista,
+          pendenteCoberturaOrcamentaria: false,
+          ...(input.autorizacaoSemVerba ? {
+            aprovacaoExtraAdminId: input.autorizacaoSemVerba.adminId,
+            aprovacaoExtraAdminNome: input.autorizacaoSemVerba.adminNome,
+            aprovacaoExtraJustificativa: input.autorizacaoSemVerba.justificativa,
+            aprovacaoExtraMotivo: "Compra sem verba orçamentária autorizada pelo admin",
+            aprovacaoExtraEm: new Date().toISOString(),
+          } : {}),
+        } as any).returning();
+
+        if (itensGrupo.length > 0) {
+          await db.insert(comprasOrdensItens).values(
+            itensGrupo.map(it => {
+              const resp = precoMap.get(it.id);
+              const pu = resp ? n(resp.precoUnitario) : n(it.precoUnitario);
+              const qty = resp ? n(resp.quantidade) : n(it.quantidade);
+              const tot = pu * qty;
+              return {
+                ordemId: oc.id,
+                solicitacaoItemId: it.solicitacaoItemId ?? null,
+                descricao: normalizarTexto(it.descricao),
+                unidade: it.unidade,
+                quantidade: String(qty),
+                precoUnitario: String(pu.toFixed(4)),
+                total: String(tot.toFixed(2)),
+              };
+            })
+          );
+        }
+
+        if (!input.comoRascunho && grupo.fornecedorId) {
+          try {
+            const { entryIds } = await criarParcelasFinanceiras({
+              ocId: oc.id,
+              companyId: input.companyId,
+              obraId: oc.obraId ?? undefined,
+              supplierId: grupo.fornecedorId,
+              supplierNome: fornData?.razao || null,
+              valorTotal: totalOC,
+              tipoPagamento: tipoPag,
+              formaPagamento: formaPag ?? null,
+              numeroParcelas: Number(numeroParcelas),
+              dataBase: dataEntregaPrevista,
+              numero: oc.numeroOc,
+            }, input.userId ?? 0, input.userName ?? "Sistema");
+            if (entryIds.length > 0) {
+              await db.update(comprasOrdens).set({ financialEntryId: entryIds[0] }).where(eq(comprasOrdens.id, oc.id));
+            }
+          } catch (finErr: any) {
+            console.warn(`[criarOCsParciais] Erro ao criar parcelas financeiras para OC ${oc.id}:`, finErr?.message);
+          }
+        }
+
+        ocsGeradas.push({ id: oc.id, numeroOc, fornecedorId: grupo.fornecedorId });
+      }
+
+      if (ocsGeradas.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma OC foi gerada. Verifique se os itens e fornecedores estão corretamente configurados." });
+      }
+
+      if (!input.comoRascunho) {
+        await db.update(comprasCotacoes).set({
+          status: "aprovada",
+          aprovadoPorId: ctx.user?.id ?? input.userId ?? null,
+          aprovadoPorNome: ctx.user?.name || ctx.user?.email || input.userName || null,
+          aprovadoEm: new Date().toISOString(),
+        } as any).where(eq(comprasCotacoes.id, input.cotacaoId));
+
+        if (cot.solicitacaoId) {
+          await db.update(comprasSolicitacoes).set({ status: "aprovado", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+        }
+        triggerFinancialSync(input.companyId);
+      }
+
+      return { ocsGeradas };
+    }),
+
   cancelarAprovacaoCotacao: protectedProcedure
     .input(z.object({
       cotacaoId:    z.number(),
