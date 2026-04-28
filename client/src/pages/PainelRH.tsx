@@ -1057,7 +1057,7 @@ export default function PainelRH() {
             </Tabs>
           </div>
 
-          <ScrollArea className="flex-1 px-6 py-4">
+          <div className="flex-1 overflow-y-auto px-6 py-4">
             {filteredAlertas.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                 <CheckCircle2 className="h-12 w-12 mb-3 text-green-500" />
@@ -1102,7 +1102,7 @@ export default function PainelRH() {
                 ))}
               </div>
             )}
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
     <PrintFooterLGPD />
