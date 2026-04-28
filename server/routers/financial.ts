@@ -2986,13 +2986,17 @@ export const financialRouter = router({
     `, []),
 
     // 7. Total recebido histórico (todos os anos) para saldo de contrato
+    // GROUP BY obra_id (quando não nulo) ou obra_nome (quando obra_id é nulo),
+    // evitando dupla contagem quando a mesma obra_id tem variações de obra_nome.
     dbExecute(db, `
-      SELECT fr.obra_id, fr.obra_nome,
+      SELECT fr.obra_id,
+             CASE WHEN fr.obra_id IS NULL THEN fr.obra_nome ELSE NULL END AS obra_nome,
              SUM(COALESCE(fr.valor_recebido, 0)) AS total_recebido
       FROM financial_revenue fr
       WHERE fr.company_id = $1
         AND fr.valor_recebido > 0
-      GROUP BY fr.obra_id, fr.obra_nome
+      GROUP BY fr.obra_id,
+               CASE WHEN fr.obra_id IS NULL THEN fr.obra_nome ELSE NULL END
     `, [input.companyId]),
 
     // 8. Baseline: mesma distribuição mas usando a PRIMEIRA revisão aprovada
