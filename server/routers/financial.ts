@@ -535,6 +535,93 @@ export const financialRouter = router({
     return { ok: true };
   }),
 
+  // ─── Dar Baixa — registra recebimento direto (sem burocracia de status) ─────
+  registrarRecebimento: protectedProcedure.input(z.object({
+    companyId:       z.number(),
+    projetoId:       z.number(),
+    obraId:          z.number().nullable().optional(),
+    obraNome:        z.string().optional(),
+    clienteNome:     z.string().optional(),
+    competencia:     z.string(),  // "YYYY-MM"
+    valorPrevisto:   z.number(),
+    valorRecebido:   z.number(),
+    dataRecebimento: z.string(),  // "YYYY-MM-DD"
+    formaPagamento:  z.string().optional(),
+    frId:            z.number().nullable().optional(),  // se já existe financial_revenue
+    observacoes:     z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    // Se já existe um financial_revenue para esta medição → apenas atualiza
+    if (input.frId) {
+      await dbExecute(db,
+        `UPDATE financial_revenue
+         SET status='recebido_total',
+             valor_recebido=$1,
+             data_recebimento=$2,
+             forma_pagamento=COALESCE($3, forma_pagamento),
+             updated_at=NOW()
+         WHERE id=$4 AND company_id=$5`,
+        [input.valorRecebido, input.dataRecebimento, input.formaPagamento ?? null,
+         input.frId, input.companyId]
+      );
+      await dbExecute(db,
+        `UPDATE financial_entries
+         SET status='recebido',
+             valor_realizado=$1,
+             data_pagamento=$2,
+             updated_at=NOW()
+         WHERE origem_modulo='revenue' AND origem_id=$3 AND company_id=$4`,
+        [input.valorRecebido, input.dataRecebimento, input.frId, input.companyId]
+      );
+      await createAuditLog({ action: "dar_baixa", userId: ctx.user?.id, companyId: input.companyId,
+        details: `Baixa fr_id=${input.frId} R$${input.valorRecebido} em ${input.dataRecebimento}` });
+      return { ok: true, frId: input.frId };
+    }
+
+    // Não existe registro → cria financial_revenue direto como recebido_total
+    const obraId   = input.obraId ?? null;
+    const obraNome = input.obraNome ?? `Projeto ${input.projetoId}`;
+    const mesDate  = `${input.competencia}-01`;
+
+    const revRes = await dbExecute(db,
+      `INSERT INTO financial_revenue
+       (company_id, obra_id, obra_nome, cliente_nome, valor_contrato,
+        valor_medicao, valor_recebido, data_recebimento, forma_pagamento,
+        status, observacoes, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,NULL,$5,$6,$7,$8,'recebido_total',$9,NOW(),NOW())
+       RETURNING id`,
+      [input.companyId, obraId, obraNome, input.clienteNome ?? null,
+       input.valorPrevisto, input.valorRecebido, input.dataRecebimento,
+       input.formaPagamento ?? null, input.observacoes ?? null]
+    );
+    const newFrId = rows(revRes)[0]?.id;
+
+    if (newFrId) {
+      await dbExecute(db,
+        `INSERT INTO financial_entries
+         (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
+          valor_previsto, valor_realizado, data_competencia, data_vencimento,
+          data_pagamento, status, origem_modulo, origem_id, origem_descricao,
+          descricao, created_at, updated_at)
+         VALUES ($1,$2,$3,'Faturamento de Obras','receita','variavel',
+                 $4,$5,$6::date,$6::date,$7,'recebido',
+                 'revenue',$8,$9,$10,NOW(),NOW())`,
+        [input.companyId, obraId, obraNome,
+         input.valorPrevisto, input.valorRecebido,
+         mesDate, input.dataRecebimento,
+         newFrId,
+         `Recebimento — ${obraNome}`,
+         `Baixa: ${obraNome}`]
+      );
+    }
+
+    await createAuditLog({ action: "dar_baixa", userId: ctx.user?.id, companyId: input.companyId,
+      details: `Nova baixa projeto ${input.projetoId} R$${input.valorRecebido} em ${input.dataRecebimento}` });
+    return { ok: true, frId: newFrId };
+  }),
+
   // ─────────────────── OBRIGAÇÕES FISCAIS ───────────────────
 
   getTaxObligations: protectedProcedure.input(z.object({

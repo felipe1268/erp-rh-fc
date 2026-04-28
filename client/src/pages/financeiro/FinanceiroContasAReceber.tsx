@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ChevronLeft, ChevronRight, Plus, Building2,
   FileText, Clock, CheckCircle2, ReceiptText, Send, ThumbsUp, AlertCircle,
-  TrendingUp, Wallet, BadgeCheck, CalendarClock,
+  TrendingUp, Wallet, BadgeCheck, CalendarClock, DollarSign, ChevronDown, ChevronUp,
 } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -21,9 +21,16 @@ function BRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
+function parseBRL(s: string): number {
+  const clean = s.replace(/[R$\s.]/g, "").replace(",", ".");
+  return parseFloat(clean) || 0;
+}
+
 const MESES_CURTOS = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_CHAVE = (ano: number) =>
   Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, "0")}`);
+
+const FORMAS_PAGAMENTO = ["PIX","TED","Boleto","Cheque","Dinheiro","Cartão","Outro"];
 
 // ─── Status ───────────────────────────────────────────────────────────────────
 
@@ -103,6 +110,7 @@ export default function FinanceiroContasAReceber() {
   const [ano, setAno] = useState(anoAtual);
   const [showNew, setShowNew] = useState(false);
   const [detalhe, setDetalhe] = useState<{ obra: ObraRow; mes: string; cell: MedicaoCell } | null>(null);
+  const [baixa, setBaixa] = useState<{ obra: ObraRow; mes: string; cell: MedicaoCell } | null>(null);
 
   // ─── Query ─────────────────────────────────────────────────────────────────
   const { data, isLoading, refetch } = (trpc as any).financial.getContasReceberMatrix.useQuery(
@@ -112,11 +120,8 @@ export default function FinanceiroContasAReceber() {
 
   const mesesChave = MESES_CHAVE(ano);
 
-  // Monta linhas com índice por mês — usa meses calculados (previsto das atividades)
-  // sobrepostos por medições salvas onde existem
   const obras: ObraRow[] = (data?.projetos ?? []).map((p: any) => {
     const byMes: Record<string, MedicaoCell> = {};
-    // Nova estrutura: p.meses é um mapa competencia → {valorPrevisto, valorMedido, status, ...}
     for (const [mes, raw] of Object.entries(p.meses ?? {})) {
       const r = raw as any;
       const valorDisplay = r.valorMedido > 0 ? r.valorMedido : r.valorPrevisto;
@@ -155,6 +160,14 @@ export default function FinanceiroContasAReceber() {
     onSuccess: () => { toast({ title: "Medição criada!" }); setShowNew(false); refetch(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
+  const baixaMut = (trpc as any).financial.registrarRecebimento.useMutation({
+    onSuccess: () => {
+      toast({ title: "✅ Recebimento registrado!", description: "Valor atualizado em todos os módulos." });
+      setBaixa(null);
+      refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao registrar", description: e.message, variant: "destructive" }),
+  });
 
   // ─── KPI Cards ─────────────────────────────────────────────────────────────
   const aReceber = kpis.totalPrevisto - kpis.totalRecebido;
@@ -170,7 +183,6 @@ export default function FinanceiroContasAReceber() {
             <p className="text-xs text-gray-400 mt-0.5">Espelho do cronograma financeiro · atualizado automaticamente</p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Navegação de ano */}
             <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1">
               <button onClick={() => setAno(a => a - 1)} className="p-1 hover:bg-white rounded transition-colors">
                 <ChevronLeft className="w-4 h-4 text-gray-600" />
@@ -230,7 +242,15 @@ export default function FinanceiroContasAReceber() {
                       obra={obra}
                       mesesChave={mesesChave}
                       zebra={idx % 2 === 0}
-                      onCellClick={(mes, cell) => setDetalhe({ obra, mes, cell })}
+                      onCellClick={(mes, cell) => {
+                        const st = resolveStatus(cell);
+                        if (st === "recebido_total" || st === "recebido_parcial") {
+                          setDetalhe({ obra, mes, cell });
+                        } else {
+                          setBaixa({ obra, mes, cell });
+                        }
+                      }}
+                      onDetalheClick={(mes, cell) => setDetalhe({ obra, mes, cell })}
                     />
                   ))}
                 </tbody>
@@ -269,7 +289,21 @@ export default function FinanceiroContasAReceber() {
         )}
       </div>
 
-      {/* Painel de Detalhe */}
+      {/* Modal Dar Baixa */}
+      {baixa && (
+        <DarBaixaModal
+          obra={baixa.obra}
+          mes={baixa.mes}
+          cell={baixa.cell}
+          companyId={companyId}
+          isPending={baixaMut.isPending}
+          onClose={() => setBaixa(null)}
+          onSave={(payload) => baixaMut.mutate(payload)}
+          onVerDetalhes={() => { setDetalhe(baixa); setBaixa(null); }}
+        />
+      )}
+
+      {/* Painel de Detalhe (fluxo completo) */}
       {detalhe && (
         <DetalhePanel
           obra={detalhe.obra}
@@ -314,11 +348,12 @@ function KpiCard({ icon: Icon, label, value, color, bg, sub }: {
   );
 }
 
-function ObraTableRow({ obra, mesesChave, zebra, onCellClick }: {
+function ObraTableRow({ obra, mesesChave, zebra, onCellClick, onDetalheClick }: {
   obra: ObraRow;
   mesesChave: string[];
   zebra: boolean;
   onCellClick: (mes: string, cell: MedicaoCell) => void;
+  onDetalheClick: (mes: string, cell: MedicaoCell) => void;
 }) {
   const rowBg = zebra ? "bg-white" : "bg-gray-50/50";
   return (
@@ -349,21 +384,37 @@ function ObraTableRow({ obra, mesesChave, zebra, onCellClick }: {
         const status = resolveStatus(cell);
         const cfg = STATUS_CFG[status] ?? STATUS_CFG.pendente;
         const Icon = cfg.icon;
+        const isRecebido = status === "recebido_total" || status === "recebido_parcial";
+
         return (
           <td key={mk} className="px-1 py-1.5 text-center">
-            <button
-              onClick={() => onCellClick(mk, cell)}
-              className={`w-full rounded-lg px-2 py-1.5 text-xs font-medium transition-all hover:ring-2 hover:ring-blue-300 cursor-pointer ${cfg.cell}`}
-            >
-              <div className="flex items-center justify-center gap-1 mb-0.5">
-                <Icon className="w-3 h-3 shrink-0" />
-                <span className="text-[10px] leading-none">{cfg.label}</span>
-              </div>
-              <p className="font-bold text-xs">{BRL(cell.valor)}</p>
-              {cell.percentualPrevisto > 0 && (
-                <p className="text-[9px] opacity-70">{(cell.percentualPrevisto * 100).toFixed(1)}%</p>
+            <div className="relative group">
+              <button
+                onClick={() => onCellClick(mk, cell)}
+                className={`w-full rounded-lg px-2 py-1.5 text-xs font-medium transition-all hover:ring-2 hover:ring-blue-300 cursor-pointer ${cfg.cell}`}
+              >
+                <div className="flex items-center justify-center gap-1 mb-0.5">
+                  <Icon className="w-3 h-3 shrink-0" />
+                  <span className="text-[10px] leading-none">{cfg.label}</span>
+                </div>
+                <p className="font-bold text-xs">{BRL(cell.valor)}</p>
+                {cell.valorRecebido > 0 && (
+                  <p className="text-[9px] opacity-70">{BRL(cell.valorRecebido)} recebido</p>
+                )}
+              </button>
+              {/* Ícone "detalhes" para células já recebidas */}
+              {!isRecebido && (
+                <div
+                  className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                  onClick={(e) => { e.stopPropagation(); onDetalheClick(mk, cell); }}
+                  title="Ver detalhes / fluxo de status"
+                >
+                  <div className="w-4 h-4 bg-gray-400 hover:bg-gray-600 rounded-full flex items-center justify-center cursor-pointer">
+                    <span className="text-white text-[8px] font-bold leading-none">···</span>
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
           </td>
         );
       })}
@@ -381,7 +432,156 @@ function ObraTableRow({ obra, mesesChave, zebra, onCellClick }: {
   );
 }
 
-// ─── Painel de Detalhe ───────────────────────────────────────────────────────
+// ─── Modal Dar Baixa ──────────────────────────────────────────────────────────
+
+function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave, onVerDetalhes }: {
+  obra: ObraRow; mes: string; cell: MedicaoCell; companyId: number;
+  isPending: boolean;
+  onClose: () => void;
+  onSave: (d: any) => void;
+  onVerDetalhes: () => void;
+}) {
+  const mesIdx = parseInt(mes.slice(5, 7)) - 1;
+  const anoStr = mes.slice(0, 4);
+  const hoje = new Date().toISOString().split("T")[0];
+
+  const [valorStr, setValorStr] = useState(
+    cell.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  );
+  const [data, setData] = useState(hoje);
+  const [forma, setForma] = useState("PIX");
+  const [obs, setObs] = useState("");
+
+  const valorNum = parseBRL(valorStr);
+  const valido = valorNum > 0 && data;
+
+  function handleSave() {
+    if (!valido) return;
+    onSave({
+      companyId,
+      projetoId: obra.projetoId,
+      obraId: obra.obraId,
+      obraNome: obra.obraNome,
+      clienteNome: obra.cliente,
+      competencia: mes,
+      valorPrevisto: cell.valorPrevisto || cell.valor,
+      valorRecebido: valorNum,
+      dataRecebimento: data,
+      formaPagamento: forma,
+      frId: cell.frId,
+      observacoes: obs || undefined,
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm p-0 overflow-hidden">
+        {/* Cabeçalho colorido */}
+        <div className="bg-gradient-to-r from-green-600 to-emerald-500 px-5 py-4 text-white">
+          <div className="flex items-center gap-2 mb-1">
+            <DollarSign className="w-5 h-5" />
+            <DialogHeader>
+              <DialogTitle className="text-white text-base font-bold">Registrar Recebimento</DialogTitle>
+            </DialogHeader>
+          </div>
+          <p className="text-sm font-semibold opacity-90 truncate">{obra.obraNome}</p>
+          <p className="text-xs opacity-75">{MESES_CURTOS[mesIdx]} {anoStr} · Previsto: {BRL(cell.valor)}</p>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Valor */}
+          <div>
+            <Label className="text-xs text-gray-600 font-semibold mb-1 block">Valor recebido (R$)</Label>
+            <Input
+              value={valorStr}
+              onChange={e => setValorStr(e.target.value)}
+              onFocus={e => e.target.select()}
+              className="text-lg font-bold text-center h-11 border-2 focus:border-green-500"
+              placeholder="0,00"
+            />
+            {valorNum > 0 && valorNum !== cell.valor && (
+              <p className="text-xs text-amber-600 mt-1">
+                {valorNum < cell.valor ? "⚠ Abaixo do previsto" : "✓ Acima do previsto"}
+              </p>
+            )}
+          </div>
+
+          {/* Data */}
+          <div>
+            <Label className="text-xs text-gray-600 font-semibold mb-1 block">Data do recebimento</Label>
+            <Input
+              type="date"
+              value={data}
+              onChange={e => setData(e.target.value)}
+              className="h-9"
+            />
+          </div>
+
+          {/* Forma de pagamento */}
+          <div>
+            <Label className="text-xs text-gray-600 font-semibold mb-1 block">Forma de pagamento</Label>
+            <Select value={forma} onValueChange={setForma}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FORMAS_PAGAMENTO.map(f => (
+                  <SelectItem key={f} value={f}>{f}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Observação (colapsável) */}
+          <ObsField value={obs} onChange={setObs} />
+
+          {/* Botões */}
+          <Button
+            className="w-full bg-green-600 hover:bg-green-700 text-white h-11 text-sm font-bold"
+            disabled={!valido || isPending}
+            onClick={handleSave}
+          >
+            {isPending ? "Registrando..." : "✓ Confirmar Recebimento"}
+          </Button>
+
+          <button
+            onClick={onVerDetalhes}
+            className="w-full text-xs text-gray-400 hover:text-gray-600 text-center transition-colors"
+          >
+            Ver fluxo completo de status →
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ObsField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+      >
+        {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        {open ? "Ocultar observação" : "Adicionar observação (opcional)"}
+      </button>
+      {open && (
+        <Textarea
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          rows={2}
+          placeholder="Ex: pagamento parcial referente à medição nº 3..."
+          className="mt-2 text-sm"
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Painel de Detalhe (fluxo completo de status) ────────────────────────────
 
 function DetalhePanel({ obra, mes, cell, onClose, onUpdateStatus, isPending }: {
   obra: ObraRow; mes: string; cell: MedicaoCell;
@@ -420,9 +620,9 @@ function DetalhePanel({ obra, mes, cell, onClose, onUpdateStatus, isPending }: {
               <span className="text-xs font-semibold">{cfg.label}</span>
             </div>
             <p className="text-2xl font-bold">{BRL(cell.valor)}</p>
-            <p className="text-xs opacity-70 mt-0.5">
-              Medição #{cell.numero} · {(cell.percentualPrevisto * 100).toFixed(1)}% do contrato
-            </p>
+            {cell.valorRecebido > 0 && (
+              <p className="text-sm font-semibold mt-1">Recebido: {BRL(cell.valorRecebido)}</p>
+            )}
           </div>
 
           {/* Detalhes */}
@@ -523,7 +723,9 @@ function NovaMedicaoModal({ companyId, obras, onClose, onSave, isPending }: {
           <div>
             <Label className="text-xs">Obra</Label>
             <Select onValueChange={handleObraChange} defaultValue={String(obras[0]?.projetoId)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="Selecione a obra" />
+              </SelectTrigger>
               <SelectContent>
                 {obras.map(o => (
                   <SelectItem key={o.projetoId} value={String(o.projetoId)}>{o.obraNome}</SelectItem>
@@ -531,32 +733,30 @@ function NovaMedicaoModal({ companyId, obras, onClose, onSave, isPending }: {
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-xs">Nº Medição</Label>
-              <Input type="number" value={form.medicaoNumero} className="mt-1"
-                onChange={e => set("medicaoNumero", Number(e.target.value))} />
+              <Input type="number" value={form.medicaoNumero} onChange={e => set("medicaoNumero", +e.target.value)} className="h-9 text-sm" />
             </div>
             <div>
               <Label className="text-xs">Valor (R$)</Label>
-              <Input type="number" value={form.valorMedicao} className="mt-1" placeholder="0,00"
-                onChange={e => set("valorMedicao", e.target.value)} />
+              <Input value={form.valorMedicao} onChange={e => set("valorMedicao", e.target.value)} className="h-9 text-sm" placeholder="0,00" />
             </div>
           </div>
           <div>
             <Label className="text-xs">Data de Vencimento</Label>
-            <Input type="date" value={form.dataVencimento} className="mt-1"
-              onChange={e => set("dataVencimento", e.target.value)} />
+            <Input type="date" value={form.dataVencimento} onChange={e => set("dataVencimento", e.target.value)} className="h-9 text-sm" />
           </div>
           <div>
             <Label className="text-xs">Observações</Label>
-            <Textarea value={form.observacoes} rows={2} className="mt-1"
-              onChange={e => set("observacoes", e.target.value)} />
+            <Textarea value={form.observacoes} onChange={e => set("observacoes", e.target.value)} rows={2} className="text-sm" />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button disabled={isPending || !form.valorMedicao} className="bg-blue-600 text-white"
+        <div className="flex gap-2 pt-2">
+          <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
+          <Button
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+            disabled={isPending || !form.valorMedicao}
             onClick={() => onSave({
               companyId,
               obraId: form.obraId,
@@ -564,14 +764,14 @@ function NovaMedicaoModal({ companyId, obras, onClose, onSave, isPending }: {
               clienteNome: form.clienteNome,
               valorContrato: form.valorContrato,
               medicaoNumero: form.medicaoNumero,
-              valorMedicao: Number(form.valorMedicao),
+              valorMedicao: parseBRL(form.valorMedicao),
               dataVencimento: form.dataVencimento,
-              observacoes: form.observacoes || null,
-              status: "a_faturar",
-            })}>
-            Salvar
+              observacoes: form.observacoes,
+            })}
+          >
+            {isPending ? "Criando..." : "Criar Medição"}
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
