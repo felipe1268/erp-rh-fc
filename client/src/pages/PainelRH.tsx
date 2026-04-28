@@ -1033,7 +1033,7 @@ export default function PainelRH() {
 
       {/* ===== DIALOG DE ALERTAS ===== */}
       <Dialog open={alertasOpen} onOpenChange={setAlertasOpen}>
-        <DialogContent className="w-[90vw] max-w-6xl max-h-[88vh] flex flex-col gap-0 p-0 overflow-hidden">
+        <DialogContent className="w-[96vw] max-w-none max-h-[92vh] flex flex-col gap-0 p-0 overflow-hidden">
           <DialogHeader className="px-6 py-4 border-b shrink-0">
             <DialogTitle className="flex items-center gap-2 text-base">
               <Bell className="h-5 w-5 text-red-600" />
@@ -1063,7 +1063,7 @@ export default function PainelRH() {
                 <p className="text-base font-medium">Nenhum alerta nesta categoria</p>
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-4 pb-2">
+              <div className="grid grid-cols-4 gap-4 pb-2">
                 {filteredAlertas.map((alerta: any) => (
                   <div
                     key={alerta.id}
