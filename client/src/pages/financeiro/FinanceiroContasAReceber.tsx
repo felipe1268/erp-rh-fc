@@ -59,7 +59,7 @@ const STATUS_CFG: Record<string, { label: string; cell: string; badge: string; i
   aprovada_parcial:      { label: "Aprov. Parcial",   cell: "bg-orange-50 text-orange-700",  badge: "bg-orange-100 text-orange-700", icon: ThumbsUp },
   faturado:              { label: "Faturado",         cell: "bg-blue-50 text-blue-700",      badge: "bg-blue-100 text-blue-700",     icon: FileText },
   a_receber:             { label: "A Receber",        cell: "bg-purple-50 text-purple-700",  badge: "bg-purple-100 text-purple-700", icon: ReceiptText },
-  recebido_parcial:      { label: "Parc. Recebido",   cell: "bg-teal-50 text-teal-700",      badge: "bg-teal-100 text-teal-700",     icon: CheckCircle2 },
+  recebido_parcial:      { label: "Parc. Recebido",   cell: "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-300", badge: "bg-amber-100 text-amber-700", icon: AlertTriangle },
   recebido_total:        { label: "Recebido",         cell: "bg-green-50 text-green-700",    badge: "bg-green-100 text-green-700",   icon: BadgeCheck },
   cancelado:             { label: "Cancelado",        cell: "bg-gray-50 text-gray-300",      badge: "bg-gray-100 text-gray-400",     icon: AlertCircle },
 };
@@ -75,7 +75,11 @@ const STATUS_NEXT: Record<string, string> = {
 
 function resolveStatus(m: MedicaoCell): string {
   // Camada 4: Recebido
-  if (m.statusFinanceiro && ["recebido_total","recebido_parcial"].includes(m.statusFinanceiro)) return m.statusFinanceiro;
+  if (m.statusFinanceiro && ["recebido_total","recebido_parcial"].includes(m.statusFinanceiro)) {
+    // Detecta recebimento parcial: valor recebido menor que o previsto
+    if (m.valorRecebido > 0 && m.valorRecebido < m.valor - 0.01) return "recebido_parcial";
+    return "recebido_total";
+  }
   // Camada 3: Faturado / A Receber
   if (m.statusFinanceiro && m.statusFinanceiro !== "previsto" && m.statusFinanceiro !== "previsao_faturamento") return m.statusFinanceiro;
   if (m.statusMedicao === "aprovada" || m.statusMedicao === "faturada") return "faturado";
@@ -390,16 +394,30 @@ function ObraTableRow({ obra, mesesChave, zebra, onCellClick, onDetalheClick }: 
   onDetalheClick: (mes: string, cell: MedicaoCell) => void;
 }) {
   const rowBg = zebra ? "bg-white" : "bg-gray-50/50";
+  const hasPartial = mesesChave.some(mk => {
+    const c = obra.byMes[mk];
+    return c && resolveStatus(c) === "recebido_parcial";
+  });
   return (
-    <tr className={`border-b border-gray-100 hover:bg-blue-50/20 transition-colors ${rowBg}`}>
+    <tr className={`border-b border-gray-100 hover:bg-blue-50/20 transition-colors ${rowBg} ${hasPartial ? "border-l-2 border-l-amber-400" : ""}`}>
       {/* Obra */}
       <td className={`sticky left-0 z-10 px-4 py-2.5 ${rowBg}`}>
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-            <Building2 className="w-3.5 h-3.5 text-blue-600" />
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${hasPartial ? "bg-amber-100" : "bg-blue-100"}`}>
+            {hasPartial
+              ? <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+              : <Building2 className="w-3.5 h-3.5 text-blue-600" />}
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-gray-800 truncate max-w-[150px]">{obra.obraNome}</p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="text-xs font-semibold text-gray-800 truncate max-w-[130px]">{obra.obraNome}</p>
+              {hasPartial && (
+                <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-amber-100 rounded text-[9px] font-bold text-amber-700 shrink-0">
+                  <AlertTriangle className="w-2.5 h-2.5" />
+                  Parcial
+                </span>
+              )}
+            </div>
             <p className="text-xs text-gray-400 truncate max-w-[150px]">{obra.cliente || "—"}</p>
           </div>
         </div>
