@@ -20,7 +20,7 @@ import {
   Printer, Plane, DollarSign, ClipboardCheck, UserPlus, Ban, RefreshCw,
   Bell, FileText, CheckCircle2, XCircle, User, Calendar, TrendingDown, Info,
   BarChart2, ArrowRight, TrendingUp, Minus, GitCompareArrows, Award, Trophy, Star,
-  Maximize2, Save
+  Maximize2, Save, X
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -1033,47 +1033,62 @@ export default function PainelRH() {
 
       {/* ===== DIALOG DE ALERTAS ===== */}
       <Dialog open={alertasOpen} onOpenChange={setAlertasOpen}>
-        <DialogContent className="!max-w-none w-screen h-screen max-h-screen m-0 rounded-none flex flex-col overflow-hidden p-6">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+        <DialogContent
+          className="flex flex-col overflow-hidden rounded-none border-0 p-0 shadow-xl"
+          style={{ position: 'fixed', inset: 0, left: 0, top: 0, right: 0, bottom: 0, transform: 'none', maxWidth: 'none', width: '100vw', height: '100vh', margin: 0 }}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b bg-white shrink-0">
+            <div className="flex items-center gap-3">
               <Bell className="h-5 w-5 text-red-600" />
-              Central de Alertas
+              <h2 className="text-lg font-semibold">Central de Alertas</h2>
               <Badge variant="destructive" className="text-xs">{alertasList.length}</Badge>
-            </DialogTitle>
-          </DialogHeader>
-          <Tabs value={alertaTab} onValueChange={setAlertaTab} className="flex-1 flex flex-col overflow-hidden">
-            <TabsList className="w-full">
-              <TabsTrigger value="todos" className="flex-1 text-xs">Todos ({alertasList.length})</TabsTrigger>
-              <TabsTrigger value="aso" className="flex-1 text-xs">ASOs ({alertasList.filter(a => a.tipo === 'aso').length})</TabsTrigger>
-              <TabsTrigger value="ferias" className="flex-1 text-xs">Férias ({alertasList.filter(a => a.tipo === 'ferias').length})</TabsTrigger>
-              <TabsTrigger value="experiencia" className="flex-1 text-xs">Experiência ({alertasList.filter(a => a.tipo === 'experiencia').length})</TabsTrigger>
-              <TabsTrigger value="aviso" className="flex-1 text-xs">Avisos ({alertasList.filter(a => a.tipo === 'aviso').length})</TabsTrigger>
-              <TabsTrigger value="solicitacao_he" className="flex-1 text-xs">HE ({alertasList.filter(a => a.tipo === 'solicitacao_he').length})</TabsTrigger>
-              <TabsTrigger value="solicitacao_mo" className="flex-1 text-xs">MO ({alertasList.filter(a => a.tipo === 'solicitacao_mo').length})</TabsTrigger>
-            </TabsList>
-            <TabsContent value={alertaTab} className="mt-3 flex-1 overflow-hidden">
-              <ScrollArea className="h-full" style={{ height: 'calc(100vh - 160px)' }}>
-                {filteredAlertas.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                    <CheckCircle2 className="h-10 w-10 mb-3 text-green-500" />
-                    <p className="text-sm font-medium">Nenhum alerta nesta categoria</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pr-3">
-                    {filteredAlertas.map(alerta => (
-                      <div
-                        key={alerta.id}
-                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow h-full ${
-                          alerta.urgencia === 'critico' ? 'bg-red-50 border-red-200 hover:border-red-300' :
-                          alerta.urgencia === 'urgente' ? 'bg-orange-50 border-orange-200 hover:border-orange-300' :
-                          'bg-amber-50 border-amber-200 hover:border-amber-300'
-                        }`}
-                        onClick={() => { navigate(alerta.link); setAlertasOpen(false); }}
-                      >
-                        <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+            </div>
+            <button onClick={() => setAlertasOpen(false)} className="rounded-full p-1.5 hover:bg-slate-100 transition-colors">
+              <X className="h-5 w-5 text-slate-500" />
+            </button>
+          </div>
+
+          {/* Tabs bar */}
+          <div className="px-6 pt-3 shrink-0 bg-white border-b">
+            <Tabs value={alertaTab} onValueChange={setAlertaTab}>
+              <TabsList className="w-full">
+                <TabsTrigger value="todos" className="flex-1 text-xs">Todos ({alertasList.length})</TabsTrigger>
+                <TabsTrigger value="aso" className="flex-1 text-xs">ASOs ({alertasList.filter((a: any) => a.tipo === 'aso').length})</TabsTrigger>
+                <TabsTrigger value="ferias" className="flex-1 text-xs">Férias ({alertasList.filter((a: any) => a.tipo === 'ferias').length})</TabsTrigger>
+                <TabsTrigger value="experiencia" className="flex-1 text-xs">Experiência ({alertasList.filter((a: any) => a.tipo === 'experiencia').length})</TabsTrigger>
+                <TabsTrigger value="aviso" className="flex-1 text-xs">Avisos ({alertasList.filter((a: any) => a.tipo === 'aviso').length})</TabsTrigger>
+                <TabsTrigger value="solicitacao_he" className="flex-1 text-xs">HE ({alertasList.filter((a: any) => a.tipo === 'solicitacao_he').length})</TabsTrigger>
+                <TabsTrigger value="solicitacao_mo" className="flex-1 text-xs">MO ({alertasList.filter((a: any) => a.tipo === 'solicitacao_mo').length})</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+
+          {/* Content area — fills all remaining height */}
+          <div className="flex-1 overflow-hidden bg-slate-50 px-6 py-4">
+            <ScrollArea className="h-full">
+              {filteredAlertas.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
+                  <CheckCircle2 className="h-12 w-12 mb-3 text-green-500" />
+                  <p className="text-base font-medium">Nenhum alerta nesta categoria</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-4">
+                  {filteredAlertas.map((alerta: any) => (
+                    <div
+                      key={alerta.id}
+                      onClick={() => { navigate(alerta.link); setAlertasOpen(false); }}
+                      className={`flex flex-col gap-2 p-4 rounded-xl border cursor-pointer hover:shadow-md transition-all ${
+                        alerta.urgencia === 'critico' ? 'bg-red-50 border-red-200 hover:border-red-400' :
+                        alerta.urgencia === 'urgente' ? 'bg-orange-50 border-orange-200 hover:border-orange-400' :
+                        'bg-amber-50 border-amber-200 hover:border-amber-400'
+                      }`}
+                    >
+                      {/* Top row: icon + badge */}
+                      <div className="flex items-center justify-between">
+                        <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${
                           alerta.urgencia === 'critico' ? 'bg-red-100' :
-                          alerta.urgencia === 'urgente' ? 'bg-orange-100' :
-                          'bg-amber-100'
+                          alerta.urgencia === 'urgente' ? 'bg-orange-100' : 'bg-amber-100'
                         }`}>
                           {alerta.tipo === 'aso' ? <HeartPulse className={`h-4 w-4 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} /> :
                            alerta.tipo === 'ferias' ? <CalendarClock className={`h-4 w-4 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} /> :
@@ -1082,26 +1097,30 @@ export default function PainelRH() {
                            alerta.tipo === 'solicitacao_mo' ? <Briefcase className={`h-4 w-4 ${alerta.urgencia === 'critico' ? 'text-red-600' : 'text-indigo-600'}`} /> :
                            <FileText className={`h-4 w-4 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} />}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{alerta.titulo}</p>
-                          <p className="text-sm font-semibold text-foreground flex items-center gap-1.5 flex-wrap">{alerta.nome}<EmpStatusBadge status={alerta.empStatus} /></p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{alerta.descricao}</p>
-                        </div>
-                        <Badge className={`text-[10px] shrink-0 ${
+                        <Badge className={`text-[10px] ${
                           alerta.urgencia === 'critico' ? 'bg-red-600 text-white' :
                           alerta.urgencia === 'urgente' ? 'bg-orange-500 text-white' :
                           'bg-amber-500 text-white'
                         }`}>
                           {alerta.urgencia === 'critico' ? 'CRÍTICO' : alerta.urgencia === 'urgente' ? 'URGENTE' : 'ATENÇÃO'}
                         </Badge>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
                       </div>
-                    ))}
-                  </div>
-                )}
-              </ScrollArea>
-            </TabsContent>
-          </Tabs>
+
+                      {/* Type label */}
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide leading-tight">{alerta.titulo}</p>
+
+                      {/* Name — never truncated, wraps naturally */}
+                      <p className="text-sm font-semibold text-foreground leading-snug">{alerta.nome}</p>
+                      <EmpStatusBadge status={alerta.empStatus} />
+
+                      {/* Description */}
+                      <p className="text-xs text-muted-foreground leading-relaxed">{alerta.descricao}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
     <PrintFooterLGPD />
