@@ -145,6 +145,7 @@ export default function PainelRH() {
   // Ordenar por urgência
   const urgOrder: Record<string, number> = { critico: 0, urgente: 1, atencao: 2 };
   alertasList.sort((a, b) => (urgOrder[a.urgencia] ?? 3) - (urgOrder[b.urgencia] ?? 3));
+  alertasList.splice(0, alertasList.length, ...alertasList.filter(a => a.empStatus?.toLowerCase() !== 'desligado'));
   const filteredAlertas = alertaTab === 'todos' ? alertasList : alertasList.filter(a => a.tipo === alertaTab);
 
   return (
