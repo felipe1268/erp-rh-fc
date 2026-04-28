@@ -5241,6 +5241,13 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
   const [cfgSinalValor, setCfgSinalValor] = useState<number | null>(null);
   const [cfgBloqueado, setCfgBloqueado] = useState(false);
   const [cfgValorParcelaManual, setCfgValorParcelaManual] = useState(0);
+  // ── Desbloqueio seguro (senha Admin Master) ───────────────────────────────
+  const { user: authUser } = useAuth();
+  const isMaster = authUser?.role === "admin_master";
+  const [showDesbloquearModal, setShowDesbloquearModal] = useState(false);
+  const [desbloquearSenha, setDesbloquearSenha] = useState("");
+  const [desbloquearPending, setDesbloquearPending] = useState(false);
+  const [desbloquearError, setDesbloquearError] = useState("");
   const [parcelaManualFocused, setParcelaManualFocused] = useState(false);
   const [parcelaManualInput, setParcelaManualInput] = useState("");
   // ── Reforços de Parcela (anti-caixa negativo) — persiste em localStorage ──
@@ -5363,6 +5370,29 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
   const toggleBloqueioMut = trpc.planejamento.toggleBloqueioMedicao.useMutation({
     onSuccess: () => refetchCfg(),
   });
+
+  const verifyPasswordMut = trpc.auth.verifyPassword.useMutation();
+
+  const { data: parcelasPagasData } = trpc.planejamento.getParcelasPagasConfig.useQuery(
+    { projetoId }, { enabled: !!projetoId }
+  );
+  const parcelasPagas: { competencia: string; valorRecebido: number }[] = parcelasPagasData?.meses ?? [];
+
+  async function handleDesbloquear() {
+    if (!desbloquearSenha) { setDesbloquearError("Digite sua senha para confirmar."); return; }
+    setDesbloquearPending(true);
+    setDesbloquearError("");
+    try {
+      await verifyPasswordMut.mutateAsync({ password: desbloquearSenha });
+      toggleBloqueioMut.mutate({ projetoId, bloqueado: false });
+      setShowDesbloquearModal(false);
+      setDesbloquearSenha("");
+    } catch (e: any) {
+      setDesbloquearError(e.message || "Senha incorreta. Tente novamente.");
+    } finally {
+      setDesbloquearPending(false);
+    }
+  }
 
   useEffect(() => {
     if (configMed) {
@@ -5725,6 +5755,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
       retencaoPct: cfgRetencaoPct,
       dataInicioObra: cfgDataInicioObra || null,
       valorParcelaFixa: cfgValorParcelaManual > 0 ? cfgValorParcelaManual : 0,
+      revisadoPorNome: authUser?.name ?? authUser?.email ?? undefined,
     });
   }
 
@@ -5769,15 +5800,26 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
               <Lock className="h-3 w-3" /> Configuração Congelada
             </span>
           )}
+          {(configMed as any)?.revisaoNumero > 0 && (
+            <span className="ml-1 text-[10px] bg-white/15 px-2 py-0.5 rounded-full text-white/80">
+              Rev {(configMed as any).revisaoNumero} · {(configMed as any).revisadoPorNome ?? "—"}
+            </span>
+          )}
           <div className="ml-auto">
             {cfgBloqueado ? (
-              <button
-                onClick={() => toggleBloqueioMut.mutate({ projetoId, bloqueado: false })}
-                disabled={toggleBloqueioMut.isPending}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white font-semibold transition-colors disabled:opacity-50">
-                <LockOpen className="h-3.5 w-3.5" />
-                Descongelar
-              </button>
+              isMaster ? (
+                <button
+                  onClick={() => { setDesbloquearSenha(""); setDesbloquearError(""); setShowDesbloquearModal(true); }}
+                  disabled={toggleBloqueioMut.isPending}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white font-semibold transition-colors disabled:opacity-50">
+                  <LockOpen className="h-3.5 w-3.5" />
+                  Descongelar
+                </button>
+              ) : (
+                <span className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white/10 text-white/50 cursor-not-allowed" title="Apenas o Administrador Master pode desbloquear">
+                  <Lock className="h-3.5 w-3.5" /> Apenas Admin Master
+                </span>
+              )
             ) : configMed && (
               <button
                 onClick={() => toggleBloqueioMut.mutate({ projetoId, bloqueado: true })}
@@ -5791,6 +5833,17 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
         </div>
 
         {/* Banner de congelado */}
+        {/* Aviso de parcelas já pagas (quando desbloqueado para revisão) */}
+        {!cfgBloqueado && parcelasPagas.length > 0 && (
+          <div className="flex items-start gap-2 px-4 py-3 bg-amber-50 border-b border-amber-300">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-amber-800">
+              <p className="font-semibold mb-0.5">Atenção: {parcelasPagas.length} {parcelasPagas.length === 1 ? "parcela já foi recebida" : "parcelas já foram recebidas"} e não pode{parcelasPagas.length === 1 ? "" : "m"} ser revisada{parcelasPagas.length === 1 ? "" : "s"}.</p>
+              <p className="text-amber-700">{parcelasPagas.map(p => p.competencia.substring(0,7)).join(", ")} — apenas as parcelas futuras serão recalculadas.</p>
+            </div>
+          </div>
+        )}
+
         {cfgBloqueado && (
           <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border-b border-emerald-200">
             <Lock className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
@@ -6048,13 +6101,19 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
             }
           </div>
           {cfgBloqueado ? (
-            <button
-              onClick={() => toggleBloqueioMut.mutate({ projetoId, bloqueado: false })}
-              disabled={toggleBloqueioMut.isPending}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white border border-emerald-300 text-emerald-700 font-semibold hover:bg-emerald-50 transition-colors disabled:opacity-50 whitespace-nowrap">
-              <LockOpen className="h-3.5 w-3.5" />
-              Desbloquear
-            </button>
+            isMaster ? (
+              <button
+                onClick={() => { setDesbloquearSenha(""); setDesbloquearError(""); setShowDesbloquearModal(true); }}
+                disabled={toggleBloqueioMut.isPending}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white border border-emerald-300 text-emerald-700 font-semibold hover:bg-emerald-50 transition-colors disabled:opacity-50 whitespace-nowrap">
+                <LockOpen className="h-3.5 w-3.5" />
+                Desbloquear
+              </button>
+            ) : (
+              <span className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed whitespace-nowrap" title="Apenas o Administrador Master pode desbloquear">
+                <Lock className="h-3.5 w-3.5" /> Apenas Admin Master
+              </span>
+            )
           ) : (
             <button
               type="button"
@@ -6888,6 +6947,59 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
               </div>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal de Desbloqueio (senha Admin Master) ─────────────────────── */}
+      <Dialog open={showDesbloquearModal} onOpenChange={open => { if (!open) setShowDesbloquearModal(false); }}>
+        <DialogContent className="max-w-sm p-0 overflow-hidden">
+          <div className="bg-gradient-to-r from-amber-600 to-orange-500 px-5 py-4 text-white">
+            <div className="flex items-center gap-2">
+              <LockOpen className="w-5 h-5" />
+              <DialogHeader>
+                <DialogTitle className="text-white text-base font-bold">Desbloquear Configuração</DialogTitle>
+              </DialogHeader>
+            </div>
+            <p className="text-xs opacity-80 mt-1">Esta ação fica registrada no log financeiro e não pode ser desfeita sem autorização.</p>
+          </div>
+          <div className="p-5 space-y-4">
+            {parcelasPagas.length > 0 && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800">
+                  <strong>{parcelasPagas.length} {parcelasPagas.length === 1 ? "parcela já recebida" : "parcelas já recebidas"}:</strong>{" "}
+                  {parcelasPagas.map(p => p.competencia.substring(0,7)).join(", ")}. Essas não poderão ser alteradas.
+                </p>
+              </div>
+            )}
+            <div>
+              <Label className="text-xs text-gray-600 font-semibold mb-1 block">Sua senha (Administrador Master)</Label>
+              <Input
+                type="password"
+                value={desbloquearSenha}
+                onChange={e => { setDesbloquearSenha(e.target.value); setDesbloquearError(""); }}
+                onKeyDown={e => { if (e.key === "Enter") handleDesbloquear(); }}
+                placeholder="Digite sua senha..."
+                autoFocus
+                className="text-sm"
+              />
+              {desbloquearError && (
+                <p className="text-xs text-red-600 mt-1">{desbloquearError}</p>
+              )}
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" className="flex-1 h-9 text-sm" onClick={() => setShowDesbloquearModal(false)} disabled={desbloquearPending}>
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 h-9 text-sm bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={handleDesbloquear}
+                disabled={desbloquearPending || !desbloquearSenha}
+              >
+                {desbloquearPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><LockOpen className="h-3.5 w-3.5 mr-1.5" />Confirmar Desbloqueio</>}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

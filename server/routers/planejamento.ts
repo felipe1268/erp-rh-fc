@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, createAuditLog } from "../db";
 import { importAtividadesCronogramaToFinancial } from "../services/financialIntegrationBridge";
 import { eq, and, desc, asc, sql, isNotNull, inArray, or, ilike, lt, ne } from "drizzle-orm";
 import {
@@ -23,6 +23,7 @@ import {
   heSolicitacaoFuncionarios,
   employees,
   obras,
+  financialRevenue,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(v || "0") || 0;
@@ -2052,9 +2053,22 @@ export const planejamentoRouter = router({
       retencaoPct:       z.number().min(0).max(100).optional(),
       dataInicioObra:    z.string().nullable().optional(),
       valorParcelaFixa:  z.number().min(0).optional(),
+      revisadoPorNome:   z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+
+      // Fetch current revision number to increment
+      const [existing] = await db.select({
+        id: planejamentoMedicaoConfig.id,
+        revisaoNumero: planejamentoMedicaoConfig.revisaoNumero,
+      }).from(planejamentoMedicaoConfig)
+        .where(eq(planejamentoMedicaoConfig.projetoId, input.projetoId))
+        .limit(1);
+
+      const nextRevisao = (existing?.revisaoNumero ?? 0) + (existing ? 1 : 0);
+      const revisadoPorNome = input.revisadoPorNome ?? ctx.user.name ?? ctx.user.email ?? "Sistema";
+      const agora = new Date();
 
       const data = {
         projetoId:         input.projetoId,
@@ -2071,7 +2085,10 @@ export const planejamentoRouter = router({
         dataInicioObra:    input.dataInicioObra ?? null,
         valorParcelaFixa:  String(input.valorParcelaFixa ?? 0),
         bloqueado:         false,
-        atualizadoEm:      new Date(),
+        revisaoNumero:     nextRevisao,
+        revisadoPorNome:   nextRevisao > 0 ? revisadoPorNome : undefined,
+        revisadoEm:        nextRevisao > 0 ? agora : undefined,
+        atualizadoEm:      agora,
       };
 
       const updateData = {
@@ -2086,22 +2103,40 @@ export const planejamentoRouter = router({
         dataInicioObra:    data.dataInicioObra,
         valorParcelaFixa:  data.valorParcelaFixa,
         bloqueado:         false,
-        atualizadoEm:      data.atualizadoEm,
+        revisaoNumero:     nextRevisao,
+        revisadoPorNome:   data.revisadoPorNome,
+        revisadoEm:        data.revisadoEm,
+        atualizadoEm:      agora,
       };
 
       await db.insert(planejamentoMedicaoConfig)
-        .values(data)
+        .values(data as any)
         .onConflictDoUpdate({
           target: planejamentoMedicaoConfig.projetoId,
-          set: updateData,
+          set: updateData as any,
         });
 
-      return { success: true };
+      if (nextRevisao > 0) {
+        await createAuditLog({
+          userId:     ctx.user.id,
+          userName:   revisadoPorNome,
+          action:     "UPDATE",
+          module:     "planejamento",
+          entityType: "medicao_config",
+          entityId:   input.projetoId,
+          details:    `Configuração de medição revisada (Rev ${nextRevisao}): tipo=${input.tipoMedicao}, entrada=${input.entrada ?? 0}, parcelas=${input.numeroParcelas ?? 6}`,
+        });
+      }
+
+      return { success: true, revisaoNumero: nextRevisao };
     }),
 
   toggleBloqueioMedicao: protectedProcedure
     .input(z.object({ projetoId: z.number(), bloqueado: z.boolean() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      if (!input.bloqueado && ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o Administrador Master pode desbloquear a configuração de medição." });
+      }
       const db = await getDb();
       const [existing] = await db.select({ id: planejamentoMedicaoConfig.id })
         .from(planejamentoMedicaoConfig)
@@ -2111,7 +2146,35 @@ export const planejamentoRouter = router({
       await db.update(planejamentoMedicaoConfig)
         .set({ bloqueado: input.bloqueado, atualizadoEm: new Date() })
         .where(eq(planejamentoMedicaoConfig.id, existing.id));
+      if (!input.bloqueado) {
+        await createAuditLog({
+          userId: ctx.user.id, userName: ctx.user.name ?? ctx.user.email ?? "Sistema",
+          action: "UPDATE", module: "planejamento", entityType: "medicao_config",
+          entityId: input.projetoId, details: "Configuração de medição desbloqueada pelo Admin Master para revisão.",
+        });
+      }
       return { success: true };
+    }),
+
+  getParcelasPagasConfig: protectedProcedure
+    .input(z.object({ projetoId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const proj = await db.select({ companyId: planejamentoProjetos.companyId, obraId: planejamentoProjetos.obraId })
+        .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
+      if (!proj[0]) return { meses: [] };
+      const { companyId } = proj[0];
+      const rows = await db.select({
+        competencia: financialRevenue.competencia,
+        valorRecebido: financialRevenue.valorRecebido,
+        status: financialRevenue.status,
+      }).from(financialRevenue)
+        .where(and(
+          eq(financialRevenue.companyId, companyId),
+          eq(financialRevenue.projetoId, input.projetoId),
+          eq(financialRevenue.status, "recebido_total"),
+        ));
+      return { meses: rows.map(r => ({ competencia: r.competencia ?? "", valorRecebido: Number(r.valorRecebido ?? 0) })) };
     }),
 
   // ── Programação Semanal — recursos por EAP ───────────────────────────────
