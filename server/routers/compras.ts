@@ -4702,28 +4702,38 @@ Retorne APENAS um JSON válido neste formato:
         .limit(1);
       if (existingOC.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Já existe uma OC ativa para esta cotação." });
 
-      const fornParts = cot.fornecedorId
-        ? await db.select().from(comprasCotacaoFornecedores).where(
-            and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, cot.fornecedorId))
-          )
-        : [];
-      const fornInfoCheck = fornParts[0] ?? null;
-      const condPag = (fornInfoCheck as any)?.condicaoPagamento ?? cot.condicaoPagamento;
-      const formaPag = (fornInfoCheck as any)?.formaPagamento ?? (cot as any).formaPagamento;
-      const prazoEntrega = (fornInfoCheck as any)?.prazoEntregaDias;
-      const tipoPagCheck = (fornInfoCheck as any)?.tipoPagamento ?? "";
+      // Identifica o vencedor do mapa: igual ao frontend (selecionado=true, senão o mais barato com totalOrcado > 0)
+      const todosParticipantes = await db.select().from(comprasCotacaoFornecedores)
+        .where(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId));
+      const vencedorSelecionado = todosParticipantes.find(p => p.selecionado === true) ?? null;
+      const melhorForn = (() => {
+        const comTotal = todosParticipantes.filter(p => n(p.totalOrcado) > 0);
+        if (comTotal.length === 0) return null;
+        return comTotal.reduce((best, curr) => {
+          const bTotal = n(best.totalOrcado); const cTotal = n(curr.totalOrcado);
+          if (cTotal < bTotal) return curr;
+          if (cTotal === bTotal && (curr.prazoEntregaDias ?? 9999) < (best.prazoEntregaDias ?? 9999)) return curr;
+          return best;
+        }, comTotal[0]);
+      })();
+      const fornInfoCheck = vencedorSelecionado ?? melhorForn ?? (cot.fornecedorId ? todosParticipantes.find(p => p.fornecedorId === cot.fornecedorId) ?? null : null);
+      if (!fornInfoCheck) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum fornecedor vencedor identificado. Acesse o Mapa de Cotação, verifique se há preços preenchidos e, se necessário, clique em 'Selecionar como Vencedor'." });
+      const vencedorFornecedorId = fornInfoCheck.fornecedorId;
+
+      const condPag = fornInfoCheck.condicaoPagamento ?? cot.condicaoPagamento;
+      const formaPag = fornInfoCheck.formaPagamento ?? (cot as any).formaPagamento;
+      const prazoEntrega = fornInfoCheck.prazoEntregaDias;
+      const tipoPagCheck = fornInfoCheck.tipoPagamento ?? "";
       const isMdoMedicao = ((cot as any).tipo === "servico" || (cot as any).tipo === "pacote") && (tipoPagCheck === "medicao" || (condPag ?? "").toLowerCase().includes("medição"));
-      if (!condPag && !formaPag) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina a Condição de Pagamento antes de gerar a OC. Edite as condições do vencedor na cotação." });
-      if (!isMdoMedicao && (!prazoEntrega || Number(prazoEntrega) <= 0)) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina o Prazo de Entrega antes de gerar a OC. Edite as condições do vencedor na cotação." });
+      if (!condPag && !formaPag) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina a Condição de Pagamento antes de gerar a OC. No Mapa de Cotação, edite o card do fornecedor vencedor e preencha a Forma de Pagamento." });
+      if (!isMdoMedicao && (!prazoEntrega || Number(prazoEntrega) <= 0)) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina o Prazo de Entrega antes de gerar a OC. No Mapa de Cotação, edite o card do fornecedor vencedor e preencha o Prazo de Entrega." });
 
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
 
       // Busca preços do fornecedor vencedor no mapa de cotação
-      const respostasForn = cot.fornecedorId
-        ? await db.select().from(comprasCotacaoRespostas).where(
-            and(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId), eq(comprasCotacaoRespostas.fornecedorId, cot.fornecedorId))
-          )
-        : [];
+      const respostasForn = await db.select().from(comprasCotacaoRespostas).where(
+        and(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId), eq(comprasCotacaoRespostas.fornecedorId, vencedorFornecedorId))
+      );
       const precoMap = new Map(respostasForn.map(r => [r.itemId, r]));
 
       const fornInfo = fornInfoCheck;
@@ -4844,8 +4854,8 @@ Retorne APENAS um JSON válido neste formato:
         cotacaoId: input.cotacaoId,
         solicitacaoId: cot.solicitacaoId ?? null,
         obraId: cot.obraId ?? null,
-        fornecedorId: cot.fornecedorId ?? null,
-        fornecedorNome: cot.fornecedorId ? (await db.select({ nome: fornecedores.nomeFantasia, razao: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId!))).map(f => f.nome || f.razao || null)[0] ?? null : null,
+        fornecedorId: vencedorFornecedorId ?? null,
+        fornecedorNome: vencedorFornecedorId ? (await db.select({ nome: fornecedores.nomeFantasia, razao: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, vencedorFornecedorId))).map(f => f.nome || f.razao || null)[0] ?? null : null,
         criadoPorId: input.userId ?? null,
         criadoPorNome: input.userName ?? null,
         tipo: ordemTipo,

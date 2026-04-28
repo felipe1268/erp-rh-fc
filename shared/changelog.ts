@@ -9051,11 +9051,11 @@ export const CHANGELOG: RevisionEntry[] = [
   },
   {
     version: 1318,
-    titulo: "Cotações: erros de validação ao gerar OC agora exibem diálogo claro em vez de toast",
-    descricao: "Corrigido problema onde o botão 'Aprovar e Gerar OC' bloqueava silenciosamente sem feedback adequado ao usuário. Antes, quando a Forma de Pagamento ou o Prazo de Entrega do fornecedor vencedor não estavam preenchidos no Mapa de Cotação, o sistema exibia apenas um toast breve que passava despercebido. Agora: (1) Aparece um diálogo de erro com título, campos exatos que precisam ser preenchidos e instruções claras de como corrigir; (2) O diálogo inclui botão 'Ir para o Mapa de Cotação' que leva diretamente para a aba correta; (3) Erros retornados pelo servidor (OC já existe, condição de pagamento ausente, prazo ausente) também exibem o diálogo em vez de toast; (4) Caso não haja nenhum fornecedor vencedor identificado (sem preços no mapa), mensagem específica orienta o usuário.",
+    titulo: "Cotações: corrigida geração de OC — backend agora usa o vencedor real do mapa, não cot.fornecedorId",
+    descricao: "Corrigido bug crítico que impedia a geração de Ordem de Compra a partir do Mapa de Cotação. O backend em criarOrdemDeCotacao usava cot.fornecedorId (campo legado da cotação, frequentemente null ou apontando para o fornecedor original) para identificar o vencedor e buscar suas condições comerciais. Isso causava falha silenciosa pois o campo estava null ou diferia do vencedor real do mapa. Agora: (1) Backend carrega todos os participantes do mapa (compras_cotacao_fornecedores); (2) Usa o mesmo critério do frontend: primeiro busca participante com selecionado=true, senão o mais barato com totalOrcado > 0; (3) A OC é criada com o fornecedorId correto do vencedor real; (4) Os preços usados na OC são as respostas desse fornecedor. Adicionalmente: erros de validação no frontend agora exibem diálogo modal detalhado em vez de toast efêmero, com botão 'Ir para o Mapa de Cotação' para navegação direta.",
     tipo: "bugfix",
     modulos: "Compras",
     criadoPor: "Sistema",
-    dataPublicacao: "2026-04-28 19:00:00",
+    dataPublicacao: "2026-04-28 19:30:00",
   },
 ];
