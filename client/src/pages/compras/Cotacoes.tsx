@@ -1918,10 +1918,14 @@ export default function Cotacoes() {
         setShowValidacaoErroDialog(true);
         return false;
       }
-      const condPag = (fornParaSaldo as any).condicaoPagamento || (fornParaSaldo as any).formaPagamento;
-      const prazo = (fornParaSaldo as any).prazoEntregaDias;
-      const tipoPag = (fornParaSaldo as any).tipoPagamento ?? "";
-      const cotTipoVal = (mapaQ.data as any)?.tipoEfetivo ?? (mapaQ.data?.cotacao as any)?.tipo;
+      // Fallback para condição de pagamento da cotação (igual lógica do servidor)
+      const condPag = (fornParaSaldo as any).condicaoPagamento
+        || (fornParaSaldo as any).formaPagamento
+        || (detalheFullscreen as any)?.condicaoPagamento
+        || (detalheFullscreen as any)?.formaPagamento;
+      const prazo = (fornParaSaldo as any).prazoEntregaDias ?? (detalheFullscreen as any)?.prazoEntregaDias;
+      const tipoPag = (fornParaSaldo as any).tipoPagamento ?? (detalheFullscreen as any)?.tipoPagamento ?? "";
+      const cotTipoVal = (detalheFullscreen as any)?.tipo ?? (mapaQ.data as any)?.tipoEfetivo ?? (mapaQ.data?.cotacao as any)?.tipo;
       const isMdoMedicao = (cotTipoVal === "servico" || cotTipoVal === "pacote") && (tipoPag === "medicao" || (condPag ?? "").toLowerCase().includes("medição"));
       const erros: string[] = [];
       if (!condPag) erros.push("Forma de Pagamento");
@@ -1940,8 +1944,14 @@ export default function Cotacoes() {
     }
 
     // Detecta se condições comerciais do vencedor estão faltando (para alerta visual)
-    const condPagVencedor = fornParaSaldo ? ((fornParaSaldo as any).condicaoPagamento || (fornParaSaldo as any).formaPagamento) : true;
-    const prazoVencedor = fornParaSaldo ? (fornParaSaldo as any).prazoEntregaDias : true;
+    // Inclui fallback para condição de pagamento da cotação (mesma lógica do servidor)
+    const condPagVencedor = fornParaSaldo
+      ? ((fornParaSaldo as any).condicaoPagamento || (fornParaSaldo as any).formaPagamento
+          || (detalheFullscreen as any)?.condicaoPagamento || (detalheFullscreen as any)?.formaPagamento)
+      : true;
+    const prazoVencedor = fornParaSaldo
+      ? ((fornParaSaldo as any).prazoEntregaDias ?? (detalheFullscreen as any)?.prazoEntregaDias)
+      : true;
     const cotTipoVencedor = (mapaQ.data as any)?.tipoEfetivo ?? (mapaQ.data?.cotacao as any)?.tipo;
     const tipoPagVencedor = fornParaSaldo ? ((fornParaSaldo as any).tipoPagamento ?? "") : "";
     const isMdoMedicaoVencedor = (cotTipoVencedor === "servico" || cotTipoVencedor === "pacote") && (tipoPagVencedor === "medicao" || (condPagVencedor ?? "").toLowerCase?.().includes("medição"));
@@ -1950,7 +1960,10 @@ export default function Cotacoes() {
     function handleAbrirCotacaoParcial(cotacaoId: number) {
       const itensDoMapa: any[] = mapa?.itens ?? [];
       const participantes: any[] = mapa?.participantes ?? [];
-      if (itensDoMapa.length === 0 || participantes.length === 0) return;
+      if (itensDoMapa.length === 0 || participantes.length === 0) {
+        toast.error("Mapa de Cotação ainda não carregado ou sem participantes. Aguarde e tente novamente.");
+        return;
+      }
 
       const itensParaFechamento = itensDoMapa.map((it: any) => {
         let melhorFornId = melhorForn?.fornecedorId ?? (participantes[0]?.fornecedorId ?? 0);

@@ -9077,6 +9077,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-04-28 21:00:00",
   },
   {
+    version: 1323,
+    titulo: "Compras: Correção na validação para gerar OC — fallback de condição de pagamento da cotação",
+    descricao: "Corrigida inconsistência entre a validação do frontend e a lógica do servidor ao gerar OC. O frontend agora aceita condição de pagamento definida diretamente na cotação (não só no card do fornecedor), alinhando-se ao comportamento do servidor. Também adicionado fallback de prazo de entrega da cotação. Além disso, handleAbrirCotacaoParcial agora exibe toast informativo em vez de retornar silenciosamente quando o mapa não está carregado.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-28 23:59:00",
+  },
+  {
     version: 1322,
     titulo: "Cotações: Cotação Parcial com checkboxes por item e confirmação Parcial/Total antes de gerar OC",
     descricao: "Redesenho completo do fluxo de cotação parcial no Mapa de Cotação. (1) Checkboxes adicionados em cada linha de item da tabela de comparação, com 'Selecionar todos' no cabeçalho — visíveis apenas em cotações pendentes com 2+ fornecedores; (2) Toolbar de atribuição aparece ao selecionar itens: mostra contagem de selecionados, dropdown de fornecedor e botão 'Fechar para fornecedor'; ao confirmar, os itens são marcados com badge do fornecedor escolhido; (3) Banner verde mostra quantos itens já estão atribuídos a fornecedores específicos, com opção de limpar; (4) O botão 'Aprovar e Gerar OC' agora SEMPRE exibe um dialog de confirmação perguntando se a cotação é Total (um fornecedor, flow tradicional) ou Parcial (múltiplos fornecedores, gera OC separada por fornecedor); (5) Caminho 'Total' valida condições do vencedor normalmente; caminho 'Parcial' pré-popula itens com atribuições já feitas ou com o fornecedor mais barato por item.",
