@@ -606,11 +606,12 @@ export const financialRouter = router({
           data_pagamento, status, origem_modulo, origem_id, origem_descricao,
           descricao, created_at, updated_at)
          VALUES ($1,$2,$3,'Faturamento de Obras','receita','variavel',
-                 $4,$5,$6::date,$6::date,$7,'recebido',
-                 'revenue',$8,$9,$10,NOW(),NOW())`,
+                 $4,$5,$6::date,$7::date,$8,'recebido',
+                 'revenue',$9,$10,$11,NOW(),NOW())`,
         [input.companyId, obraId, obraNome,
          input.valorPrevisto, input.valorRecebido,
-         mesDate, input.dataRecebimento,
+         mesDate, mesDate,
+         input.dataRecebimento,
          newFrId,
          `Recebimento — ${obraNome}`,
          `Baixa: ${obraNome}`]
