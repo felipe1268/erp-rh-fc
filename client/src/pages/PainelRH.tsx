@@ -1033,7 +1033,7 @@ export default function PainelRH() {
 
       {/* ===== DIALOG DE ALERTAS ===== */}
       <Dialog open={alertasOpen} onOpenChange={setAlertasOpen}>
-        <DialogContent className="max-w-5xl w-[92vw] max-h-[92vh] flex flex-col overflow-hidden">
+        <DialogContent className="max-w-6xl w-[95vw] max-h-[82vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Bell className="h-5 w-5 text-red-600" />
@@ -1052,18 +1052,18 @@ export default function PainelRH() {
               <TabsTrigger value="solicitacao_mo" className="flex-1 text-xs">MO ({alertasList.filter(a => a.tipo === 'solicitacao_mo').length})</TabsTrigger>
             </TabsList>
             <TabsContent value={alertaTab} className="mt-3">
-              <ScrollArea className="h-[72vh]">
+              <ScrollArea className="h-[60vh]">
                 {filteredAlertas.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                     <CheckCircle2 className="h-10 w-10 mb-3 text-green-500" />
                     <p className="text-sm font-medium">Nenhum alerta nesta categoria</p>
                   </div>
                 ) : (
-                  <div className="space-y-2 pr-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pr-3">
                     {filteredAlertas.map(alerta => (
                       <div
                         key={alerta.id}
-                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow ${
+                        className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow h-full ${
                           alerta.urgencia === 'critico' ? 'bg-red-50 border-red-200 hover:border-red-300' :
                           alerta.urgencia === 'urgente' ? 'bg-orange-50 border-orange-200 hover:border-orange-300' :
                           'bg-amber-50 border-amber-200 hover:border-amber-300'
