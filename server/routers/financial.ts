@@ -2988,7 +2988,7 @@ export const financialRouter = router({
     let totalContrato = 0, totalPrevisto = 0, totalFaturado = 0, totalRecebido = 0;
     const totaisMes: Record<string, number> = {};
     for (const p of projetos) {
-      totalContrato += parseFloat(p.valor_contrato ?? "0") || 0;
+      totalContrato += parseFloat(p.total_venda ?? p.valor_contrato ?? "0") || 0;
     }
     for (const mes of meses12) {
       for (const pid of projetoIds) {
@@ -3030,7 +3030,7 @@ export const financialRouter = router({
           obraId: p.obra_id ? Number(p.obra_id) : null,
           obraNome: p.obra_nome ?? p.projeto_nome,
           cliente: p.cliente,
-          valorContrato: parseFloat(p.valor_contrato ?? "0") || 0,
+          valorContrato: parseFloat(p.total_venda ?? p.valor_contrato ?? "0") || 0,
           // Células mensais: previsto calculado + realizado salvo
           meses: Object.fromEntries(meses12.map(mes => {
             const previsto = prevByProjeto[pid]?.[mes] ?? 0;
