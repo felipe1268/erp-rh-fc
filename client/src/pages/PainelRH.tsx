@@ -1033,7 +1033,7 @@ export default function PainelRH() {
 
       {/* ===== DIALOG DE ALERTAS ===== */}
       <Dialog open={alertasOpen} onOpenChange={setAlertasOpen}>
-        <DialogContent className="max-w-6xl w-[95vw] max-h-[82vh] flex flex-col overflow-hidden">
+        <DialogContent className="!max-w-none w-screen h-screen max-h-screen m-0 rounded-none flex flex-col overflow-hidden p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Bell className="h-5 w-5 text-red-600" />
@@ -1041,7 +1041,7 @@ export default function PainelRH() {
               <Badge variant="destructive" className="text-xs">{alertasList.length}</Badge>
             </DialogTitle>
           </DialogHeader>
-          <Tabs value={alertaTab} onValueChange={setAlertaTab}>
+          <Tabs value={alertaTab} onValueChange={setAlertaTab} className="flex-1 flex flex-col overflow-hidden">
             <TabsList className="w-full">
               <TabsTrigger value="todos" className="flex-1 text-xs">Todos ({alertasList.length})</TabsTrigger>
               <TabsTrigger value="aso" className="flex-1 text-xs">ASOs ({alertasList.filter(a => a.tipo === 'aso').length})</TabsTrigger>
@@ -1051,15 +1051,15 @@ export default function PainelRH() {
               <TabsTrigger value="solicitacao_he" className="flex-1 text-xs">HE ({alertasList.filter(a => a.tipo === 'solicitacao_he').length})</TabsTrigger>
               <TabsTrigger value="solicitacao_mo" className="flex-1 text-xs">MO ({alertasList.filter(a => a.tipo === 'solicitacao_mo').length})</TabsTrigger>
             </TabsList>
-            <TabsContent value={alertaTab} className="mt-3">
-              <ScrollArea className="h-[60vh]">
+            <TabsContent value={alertaTab} className="mt-3 flex-1 overflow-hidden">
+              <ScrollArea className="h-full" style={{ height: 'calc(100vh - 160px)' }}>
                 {filteredAlertas.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                     <CheckCircle2 className="h-10 w-10 mb-3 text-green-500" />
                     <p className="text-sm font-medium">Nenhum alerta nesta categoria</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pr-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pr-3">
                     {filteredAlertas.map(alerta => (
                       <div
                         key={alerta.id}
