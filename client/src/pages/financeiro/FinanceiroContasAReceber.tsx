@@ -339,7 +339,7 @@ export default function FinanceiroContasAReceber() {
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-[#1e2d40] text-white">
-                    <th className="sticky left-0 z-10 bg-[#1e2d40] px-4 py-3 text-left text-xs font-semibold min-w-[200px]">
+                    <th className="sticky left-0 z-30 bg-[#1e2d40] px-4 py-3 text-left text-xs font-semibold min-w-[220px] shadow-[2px_0_6px_rgba(0,0,0,0.18)]">
                       Obra / Cliente
                     </th>
                     {mesesChave.map((mk, i) => (
@@ -347,8 +347,8 @@ export default function FinanceiroContasAReceber() {
                         {MESES_CURTOS[i]}
                       </th>
                     ))}
-                    <th className="px-3 py-3 text-right text-xs font-semibold min-w-[120px] bg-[#162130]">
-                      Total Ano
+                    <th className="px-3 py-3 text-right text-xs font-semibold min-w-[160px] bg-[#162130]">
+                      Totais da Obra
                     </th>
                   </tr>
                 </thead>
@@ -370,14 +370,23 @@ export default function FinanceiroContasAReceber() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-[#1e2d40] text-white font-semibold">
-                    <td className="sticky left-0 z-10 bg-[#1e2d40] px-4 py-3 text-xs">TOTAL</td>
+                    <td className="sticky left-0 z-30 bg-[#1e2d40] px-4 py-3 text-xs shadow-[2px_0_6px_rgba(0,0,0,0.18)]">TOTAL</td>
                     {mesesChave.map(mk => (
                       <td key={mk} className="px-2 py-3 text-center text-xs">
                         {totaisMes[mk] ? BRL(totaisMes[mk]) : <span className="text-gray-500">—</span>}
                       </td>
                     ))}
                     <td className="px-3 py-3 text-right text-xs bg-[#162130]">
-                      {BRL(obras.reduce((s, o) => s + o.totalAno, 0))}
+                      <div className="space-y-0.5">
+                        <div>
+                          <p className="text-[8px] text-gray-400 uppercase">Faturado</p>
+                          <p>{BRL(obras.reduce((s, o) => s + o.totalRecebidoHistorico, 0))}</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] text-orange-300 uppercase">Saldo</p>
+                          <p className="text-orange-300">{BRL(obras.reduce((s, o) => s + Math.max(0, o.saldoContrato), 0))}</p>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 </tfoot>
@@ -519,16 +528,16 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, onCell
   return (
     <tr className={`border-b border-gray-100 hover:bg-blue-50/20 transition-colors ${rowBg} ${hasPartial ? "border-l-2 border-l-amber-400" : ""}`}>
       {/* Obra */}
-      <td className={`sticky left-0 z-10 px-4 py-2.5 ${rowBg}`}>
-        <div className="flex items-center gap-2">
-          <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${hasPartial ? "bg-amber-100" : "bg-blue-100"}`}>
+      <td className={`sticky left-0 z-20 px-4 py-2.5 ${rowBg} shadow-[2px_0_6px_rgba(0,0,0,0.08)]`}>
+        <div className="flex items-start gap-2">
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${hasPartial ? "bg-amber-100" : "bg-blue-100"}`}>
             {hasPartial
               ? <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
               : <Building2 className="w-3.5 h-3.5 text-blue-600" />}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <p className="text-xs font-semibold text-gray-800 truncate max-w-[130px]">{obra.obraNome}</p>
+              <p className="text-xs font-semibold text-gray-800 truncate max-w-[145px]">{obra.obraNome}</p>
               {hasPartial && (
                 <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-amber-100 rounded text-[9px] font-bold text-amber-700 shrink-0">
                   <AlertTriangle className="w-2.5 h-2.5" />
@@ -536,7 +545,21 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, onCell
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-400 truncate max-w-[150px]">{obra.cliente || "—"}</p>
+            <p className="text-[10px] text-gray-400 truncate max-w-[160px] mb-1">{obra.cliente || "—"}</p>
+            <div className="flex flex-col gap-0.5">
+              {obra.totalRecebidoHistorico > 0 && (
+                <div className="flex items-center gap-1">
+                  <span className="text-[9px] text-gray-400 shrink-0">Recebido:</span>
+                  <span className="text-[9px] font-semibold text-emerald-700 truncate">{BRL(obra.totalRecebidoHistorico)}</span>
+                </div>
+              )}
+              {obra.saldoContrato > 0 && (
+                <div className="flex items-center gap-1">
+                  <span className="text-[9px] text-gray-400 shrink-0">Saldo:</span>
+                  <span className="text-[9px] font-semibold text-orange-600 truncate">{BRL(obra.saldoContrato)}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </td>
@@ -646,18 +669,38 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, onCell
         );
       })}
 
-      {/* Total obra + saldo contrato */}
-      <td className="px-3 py-2.5 text-right bg-gray-50 border-l border-gray-100 min-w-[130px]">
-        <p className="text-xs font-bold text-gray-700">{BRL(obra.totalAno)}</p>
+      {/* Totais da obra */}
+      <td className="px-3 py-2.5 text-right bg-gray-50 border-l border-gray-200 min-w-[160px]">
+        {/* Contrato */}
         {obra.valorContrato > 0 && (
-          <p className="text-[10px] text-gray-400">
-            {((obra.totalAno / obra.valorContrato) * 100).toFixed(0)}% contrato
-          </p>
+          <div className="mb-1.5">
+            <p className="text-[9px] text-gray-400 uppercase tracking-wide leading-none mb-0.5">Contrato</p>
+            <p className="text-xs font-bold text-gray-700">{BRL(obra.valorContrato)}</p>
+          </div>
         )}
+        {/* Total Faturado */}
+        <div className="mb-1.5">
+          <p className="text-[9px] text-gray-400 uppercase tracking-wide leading-none mb-0.5">Total Faturado</p>
+          <p className="text-xs font-bold text-emerald-700">{BRL(obra.totalRecebidoHistorico)}</p>
+          {obra.valorContrato > 0 && (
+            <p className="text-[9px] text-gray-400">
+              {((obra.totalRecebidoHistorico / obra.valorContrato) * 100).toFixed(0)}% do contrato
+            </p>
+          )}
+        </div>
+        {/* Saldo a Faturar */}
         {obra.saldoContrato > 0 && (
-          <p className="text-[10px] text-emerald-600 font-medium mt-0.5" title="Saldo a receber do contrato (histórico)">
-            Saldo: {BRL(obra.saldoContrato)}
-          </p>
+          <div>
+            <p className="text-[9px] text-gray-400 uppercase tracking-wide leading-none mb-0.5">Saldo a Faturar</p>
+            <p className="text-xs font-bold text-orange-600">{BRL(obra.saldoContrato)}</p>
+          </div>
+        )}
+        {obra.saldoContrato <= 0 && obra.totalRecebidoHistorico > 0 && (
+          <div>
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-100 rounded text-[9px] font-bold text-emerald-700">
+              ✓ Quitado
+            </span>
+          </div>
         )}
       </td>
     </tr>
