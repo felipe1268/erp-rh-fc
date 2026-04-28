@@ -18,7 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
@@ -131,6 +131,8 @@ export default function Ordens() {
   const [filtroFornecedor, setFiltroFornecedor] = useState("");
   const [filtroValorMin, setFiltroValorMin] = useState("");
   const [filtroValorMax, setFiltroValorMax] = useState("");
+  const [filtroDataInicio, setFiltroDataInicio] = useState("");
+  const [filtroDataFim, setFiltroDataFim] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroAtrasadas, setFiltroAtrasadas] = useState(false);
   const [showNova, setShowNova] = useState(false);
@@ -526,6 +528,9 @@ export default function Ordens() {
     const total = parseFloat((o as any).total ?? "0");
     if (filtroValorMin && !isNaN(parseFloat(filtroValorMin)) && total < parseFloat(filtroValorMin)) return false;
     if (filtroValorMax && !isNaN(parseFloat(filtroValorMax)) && total > parseFloat(filtroValorMax)) return false;
+    const dataCriacao = ((o as any).criadoEm ?? "").slice(0, 10);
+    if (filtroDataInicio && dataCriacao < filtroDataInicio) return false;
+    if (filtroDataFim && dataCriacao > filtroDataFim) return false;
     return true;
   });
   const detalhe = detalheQ.data;
@@ -595,7 +600,7 @@ export default function Ordens() {
       {/* Tabs OC / OS */}
       <div className="flex gap-1 bg-white rounded-xl border border-gray-200 p-1 shadow-sm w-fit">
         <button
-          onClick={() => { setAbaAtiva("oc"); setBusca(""); setFiltroFornecedor(""); setFiltroValorMin(""); setFiltroValorMax(""); setFiltroStatus("todos"); setFiltroAtrasadas(false); }}
+          onClick={() => { setAbaAtiva("oc"); setBusca(""); setFiltroFornecedor(""); setFiltroValorMin(""); setFiltroValorMax(""); setFiltroDataInicio(""); setFiltroDataFim(""); setFiltroStatus("todos"); setFiltroAtrasadas(false); }}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${abaAtiva === "oc" ? "bg-emerald-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>
           <ShoppingBag className="h-4 w-4" />
           Ordens de Compra (Material)
@@ -686,7 +691,30 @@ export default function Ordens() {
               </button>
             )}
           </div>
-          {(filtroFornecedor || filtroValorMin || filtroValorMax) && (
+          <div className="flex items-center gap-1.5">
+            <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
+            <Input
+              type="date"
+              className="w-36 bg-white border-gray-300 text-gray-900 h-9 text-sm"
+              value={filtroDataInicio}
+              onChange={e => setFiltroDataInicio(e.target.value)}
+              title="Data inicial"
+            />
+            <span className="text-gray-400 text-xs">até</span>
+            <Input
+              type="date"
+              className="w-36 bg-white border-gray-300 text-gray-900 h-9 text-sm"
+              value={filtroDataFim}
+              onChange={e => setFiltroDataFim(e.target.value)}
+              title="Data final"
+            />
+            {(filtroDataInicio || filtroDataFim) && (
+              <button onClick={() => { setFiltroDataInicio(""); setFiltroDataFim(""); }} className="text-gray-400 hover:text-gray-600 ml-0.5" title="Limpar filtro de data">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          {(filtroFornecedor || filtroValorMin || filtroValorMax || filtroDataInicio || filtroDataFim) && (
             <span className="text-[11px] text-emerald-600 font-medium bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
               {filt.length} resultado{filt.length !== 1 ? "s" : ""}
             </span>

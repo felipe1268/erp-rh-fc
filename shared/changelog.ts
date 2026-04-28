@@ -9013,4 +9013,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-28 14:00:00",
   },
+  {
+    version: 1314,
+    titulo: "Compras: Filtro por data de criação nas Ordens de Compra",
+    descricao: "Adicionado filtro de intervalo de datas na listagem de OCs, na mesma linha dos filtros de fornecedor e valor. Dois campos de data (De / Até) permitem filtrar OCs pelo campo criadoEm (data de emissão da ordem). Botão X limpa o intervalo de datas. Badge verde de resultados atualizado para considerar também o filtro de data ativo. Reset automático ao trocar de aba OC/OS. Filtragem 100% no frontend.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-28 14:30:00",
+  },
 ];
