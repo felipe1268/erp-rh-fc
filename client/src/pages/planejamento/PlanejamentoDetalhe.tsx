@@ -9077,7 +9077,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // Calcula avanço previsto ponderado para a semana a partir do cronograma.
   // Usa o FIM da semana (domingo) como referência — igual ao AvancoSemanal.
   const avancoPrevisto = useMemo(() => {
-    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
+    if (!folhas.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
       const peso = getPeso(a, semPeso);
@@ -9099,7 +9100,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const avancoPrevAntes = useMemo(() => {
     if (!semAntesFim) return 0;
-    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
+    if (!folhas.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
       const peso = getPeso(a, semPeso);
@@ -9146,7 +9148,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const spi = avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0;
 
   const refisPrevistoComInd = useMemo(() => {
-    const f = atividades.filter((a: any) => !a.isGrupo);
+    const f = atividades.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim);
+    if (!f.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(f);
     return Math.min(100, f.reduce((s: number, a: any) => {
       const peso = getPeso(a, semPeso);
@@ -9182,7 +9185,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const avancoPrevAntesComInd = useMemo(() => {
     if (!semAntesFim) return 0;
-    const f = atividades.filter((a: any) => !a.isGrupo);
+    const f = atividades.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim);
+    if (!f.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(f);
     return Math.min(100, f.reduce((s: number, a: any) => {
       const peso = getPeso(a, semPeso);

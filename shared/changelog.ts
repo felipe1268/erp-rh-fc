@@ -9031,4 +9031,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-28 14:30:00",
   },
+  {
+    version: 1316,
+    titulo: "REFIS: corrigido Previsto/Realizado zerado no modo Peso Financeiro",
+    descricao: "Corrigido bug onde o REFIS exibia 0.00% para Previsto e Realizado quando no modo Peso Financeiro e todas as atividades tinham pesoFinanceiro=0 (situação típica após importação do MS Project sem pesos configurados). Causa raiz: o fallback de pesos iguais (semPeso=true) usava folhas.length como denominador, incluindo atividades sem datas que contribuem sempre 0 via prevIndRef — com muitas atividades dateless o acumulado ficava diluído a 0.00%. Correção idêntica ao bug análogo do modo Duração: os 4 memos de previsto do REFIS (avancoPrevisto, avancoPrevAntes, refisPrevistoComInd, avancoPrevAntesComInd) agora filtram previamente as folhas para apenas atividades com dataInicio e dataFim antes de calcular pesoTotal e semPeso, garantindo que o denominador inclua apenas atividades que podem ter progresso planejado.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-28 16:00:00",
+  },
 ];
