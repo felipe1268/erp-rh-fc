@@ -13,7 +13,7 @@ import {
   ChevronLeft, ChevronRight, Plus, Building2,
   FileText, Clock, CheckCircle2, ReceiptText, Send, ThumbsUp, AlertCircle,
   TrendingUp, Wallet, BadgeCheck, CalendarClock, DollarSign, ChevronDown, ChevronUp,
-  Pencil, Trash2,
+  Pencil, Trash2, AlertTriangle, ArrowRight,
 } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -432,7 +432,13 @@ function ObraTableRow({ obra, mesesChave, zebra, onCellClick, onDetalheClick }: 
                   <span className="text-[10px] leading-none">{cfg.label}</span>
                 </div>
                 <p className="font-bold text-xs">{BRL(cell.valor)}</p>
-                {cell.valorRecebido > 0 && (
+                {cell.valorRecebido > 0 && cell.valorRecebido < cell.valor && (
+                  <div className="mt-0.5 bg-amber-100 rounded px-1 py-0.5">
+                    <p className="text-[9px] font-bold text-amber-800">↙ {BRL(cell.valorRecebido)} recebido</p>
+                    <p className="text-[8px] text-amber-600">Dif: {BRL(cell.valor - cell.valorRecebido)}</p>
+                  </div>
+                )}
+                {cell.valorRecebido > 0 && cell.valorRecebido >= cell.valor && (
                   <p className="text-[9px] opacity-70">{BRL(cell.valorRecebido)} recebido</p>
                 )}
               </button>
@@ -495,11 +501,14 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
   const [forma, setForma] = useState("PIX");
   const [obs, setObs] = useState("");
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [step, setStep] = useState<"form" | "carry">("form");
 
   const valorNum = parseBRL(valorStr);
   const valido = valorNum > 0 && data;
+  const diferenca = cell.valor - valorNum;
+  const isParcial = valorNum > 0 && diferenca > 0.01;
 
-  function handleSave() {
+  function handleSave(carryNote?: string) {
     if (!valido) return;
     onSave({
       companyId,
@@ -513,8 +522,17 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
       dataRecebimento: data,
       formaPagamento: forma,
       frId: cell.frId,
-      observacoes: obs || undefined,
+      observacoes: [obs, carryNote].filter(Boolean).join(" | ") || undefined,
     });
+  }
+
+  function handleConfirmClick() {
+    if (!valido) return;
+    if (isParcial && !isEdit) {
+      setStep("carry");
+    } else {
+      handleSave();
+    }
   }
 
   const headerGradient = isEdit
@@ -560,7 +578,7 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
           )}
         </div>
 
-        <div className="p-5 space-y-4">
+        {step === "form" && <div className="p-5 space-y-4">
           {/* Valor */}
           <div>
             <Label className="text-xs text-gray-600 font-semibold mb-1 block">Valor recebido (R$)</Label>
@@ -571,10 +589,30 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
               className="text-lg font-bold text-center h-11 border-2 focus:border-green-500"
               placeholder="0,00"
             />
-            {valorNum > 0 && valorNum !== cell.valor && (
-              <p className="text-xs text-amber-600 mt-1">
-                {valorNum < cell.valor ? "⚠ Abaixo do previsto" : "✓ Acima do previsto"}
-              </p>
+            {isParcial && (
+              <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                <div className="flex items-center gap-1 mb-1.5">
+                  <AlertTriangle className="w-3 h-3 text-amber-600" />
+                  <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">Recebimento parcial</span>
+                </div>
+                <div className="space-y-0.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Previsto</span>
+                    <span className="font-medium">{BRL(cell.valor)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Recebendo</span>
+                    <span className="font-bold text-green-700">{BRL(valorNum)}</span>
+                  </div>
+                  <div className="border-t border-amber-200 pt-1 mt-1 flex justify-between text-xs">
+                    <span className="font-semibold text-amber-700">Diferença</span>
+                    <span className="font-bold text-amber-700">- {BRL(diferenca)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {valorNum > 0 && valorNum > cell.valor && (
+              <p className="text-xs text-blue-600 mt-1">✓ Acima do previsto</p>
             )}
           </div>
 
@@ -611,9 +649,9 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
           <Button
             className={`w-full h-11 text-sm font-bold text-white ${isEdit ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
             disabled={!valido || isPending}
-            onClick={handleSave}
+            onClick={handleConfirmClick}
           >
-            {isPending ? "Salvando..." : isEdit ? "✓ Salvar Alterações" : "✓ Confirmar Recebimento"}
+            {isPending ? "Salvando..." : isEdit ? "✓ Salvar Alterações" : isParcial ? "Continuar →" : "✓ Confirmar Recebimento"}
           </Button>
 
           {/* Cancelar recebimento (só em modo edição) */}
@@ -657,7 +695,70 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
           >
             Ver fluxo completo de status →
           </button>
-        </div>
+        </div>}
+
+        {step === "carry" && (
+          <div className="p-5">
+            {/* Resumo da diferença */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="text-sm font-bold text-amber-800">Recebimento parcial registrado</span>
+              </div>
+              <div className="space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Valor previsto</span>
+                  <span className="font-medium">{BRL(cell.valor)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Valor recebido</span>
+                  <span className="font-bold text-green-700">{BRL(valorNum)}</span>
+                </div>
+                <div className="border-t border-amber-200 pt-1.5 mt-1.5 flex justify-between">
+                  <span className="font-bold text-amber-800">Diferença em aberto</span>
+                  <span className="font-bold text-amber-800">{BRL(diferenca)}</span>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-sm font-semibold text-gray-700 mb-3 text-center">
+              A diferença de <span className="text-amber-700">{BRL(diferenca)}</span> deve ser relançada no próximo mês?
+            </p>
+
+            <div className="space-y-2">
+              <button
+                onClick={() => handleSave(`Diferença de ${BRL(diferenca)} relançada no próximo mês sem correção`)}
+                disabled={isPending}
+                className="w-full flex items-center justify-between px-4 py-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg text-sm font-medium text-blue-800 transition-colors disabled:opacity-50"
+              >
+                <span>Sim, sem correção</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => handleSave(`Diferença de ${BRL(diferenca)} relançada no próximo mês com correção monetária`)}
+                disabled={isPending}
+                className="w-full flex items-center justify-between px-4 py-3 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-lg text-sm font-medium text-orange-800 transition-colors disabled:opacity-50"
+              >
+                <span>Sim, com correção monetária</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => handleSave()}
+                disabled={isPending}
+                className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 transition-colors disabled:opacity-50"
+              >
+                Não, registrar apenas o valor recebido
+              </button>
+            </div>
+
+            <button
+              onClick={() => setStep("form")}
+              className="w-full mt-3 text-xs text-gray-400 hover:text-gray-600 text-center transition-colors"
+            >
+              ← Voltar e corrigir valor
+            </button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
