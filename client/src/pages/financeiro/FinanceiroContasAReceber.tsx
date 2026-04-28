@@ -27,6 +27,16 @@ function parseBRL(s: string): number {
   return parseFloat(clean) || 0;
 }
 
+function formatBRLInput(raw: string): string {
+  const cleaned = raw.replace(/[^\d,]/g, "");
+  const commaIdx = cleaned.indexOf(",");
+  let intPart = commaIdx >= 0 ? cleaned.slice(0, commaIdx) : cleaned;
+  const decPart = commaIdx >= 0 ? cleaned.slice(commaIdx + 1, commaIdx + 3) : null;
+  intPart = intPart.replace(/^0+(\d)/, "$1");
+  intPart = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return decPart !== null ? `${intPart},${decPart}` : intPart;
+}
+
 const MESES_CURTOS = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_CHAVE = (ano: number) =>
   Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, "0")}`);
@@ -556,7 +566,7 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
             <Label className="text-xs text-gray-600 font-semibold mb-1 block">Valor recebido (R$)</Label>
             <Input
               value={valorStr}
-              onChange={e => setValorStr(e.target.value)}
+              onChange={e => setValorStr(formatBRLInput(e.target.value))}
               onFocus={e => e.target.select()}
               className="text-lg font-bold text-center h-11 border-2 focus:border-green-500"
               placeholder="0,00"
@@ -837,7 +847,7 @@ function NovaMedicaoModal({ companyId, obras, onClose, onSave, isPending }: {
             </div>
             <div>
               <Label className="text-xs">Valor (R$)</Label>
-              <Input value={form.valorMedicao} onChange={e => set("valorMedicao", e.target.value)} className="h-9 text-sm" placeholder="0,00" />
+              <Input value={form.valorMedicao} onChange={e => set("valorMedicao", formatBRLInput(e.target.value))} className="h-9 text-sm" placeholder="0,00" />
             </div>
           </div>
           <div>
