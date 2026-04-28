@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, createAuditLog } from "../db";
 import { importAtividadesCronogramaToFinancial } from "../services/financialIntegrationBridge";
-import { eq, and, desc, asc, sql, isNotNull, inArray, or, ilike, lt, ne } from "drizzle-orm";
+import { eq, and, desc, asc, sql, isNotNull, inArray, or, ilike, lt, ne, gt } from "drizzle-orm";
 import {
   planejamentoProjetos,
   planejamentoRevisoes,
@@ -2160,19 +2160,16 @@ export const planejamentoRouter = router({
     .input(z.object({ projetoId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      const proj = await db.select({ companyId: planejamentoProjetos.companyId, obraId: planejamentoProjetos.obraId })
-        .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
-      if (!proj[0]) return { meses: [] };
-      const { companyId } = proj[0];
+      // Usa planejamento_medicoes como fonte de verdade (syncado pelo registrarRecebimento)
       const rows = await db.select({
-        competencia: financialRevenue.competencia,
-        valorRecebido: financialRevenue.valorRecebido,
-        status: financialRevenue.status,
-      }).from(financialRevenue)
+        competencia: planejamentoMedicoes.competencia,
+        valorRecebido: planejamentoMedicoes.valorMedido,
+        status: planejamentoMedicoes.status,
+      }).from(planejamentoMedicoes)
         .where(and(
-          eq(financialRevenue.companyId, companyId),
-          eq(financialRevenue.projetoId, input.projetoId),
-          eq(financialRevenue.status, "recebido_total"),
+          eq(planejamentoMedicoes.projetoId, input.projetoId),
+          eq(planejamentoMedicoes.status, "confirmado"),
+          gt(planejamentoMedicoes.valorMedido, "0"),
         ));
       return { meses: rows.map(r => ({ competencia: r.competencia ?? "", valorRecebido: Number(r.valorRecebido ?? 0) })) };
     }),

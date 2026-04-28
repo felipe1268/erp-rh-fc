@@ -586,6 +586,8 @@ export const financialRouter = router({
         [input.valorRecebido, input.dataRecebimento, input.frId, input.companyId]
       );
       // Sync planejamento_medicoes → marcar competência como confirmada
+      // Nota: parâmetros são listados com índices únicos ($4,$5,$6) para evitar
+      // repetição que confunde o dbExecute (que trata $N como posição sequencial)
       await dbExecute(db,
         `WITH upd AS (
            UPDATE planejamento_medicoes
@@ -594,9 +596,10 @@ export const financialRouter = router({
            RETURNING id
          )
          INSERT INTO planejamento_medicoes (projeto_id, competencia, numero, valor_medido, status, atualizado_em)
-         SELECT $2::int, $3, 0, $1, 'confirmado', NOW()
+         SELECT $4::int, $5, 0, $6, 'confirmado', NOW()
          WHERE NOT EXISTS (SELECT 1 FROM upd)`,
-        [input.valorRecebido, input.projetoId, input.competencia]
+        [input.valorRecebido, input.projetoId, input.competencia,
+         input.projetoId, input.competencia, input.valorRecebido]
       );
       await createAuditLog({ action: "dar_baixa", userId: ctx.user?.id, companyId: input.companyId,
         details: `Baixa fr_id=${input.frId} R$${input.valorRecebido} em ${input.dataRecebimento}` });
@@ -650,9 +653,10 @@ export const financialRouter = router({
          RETURNING id
        )
        INSERT INTO planejamento_medicoes (projeto_id, competencia, numero, valor_medido, status, atualizado_em)
-       SELECT $2::int, $3, 0, $1, 'confirmado', NOW()
+       SELECT $4::int, $5, 0, $6, 'confirmado', NOW()
        WHERE NOT EXISTS (SELECT 1 FROM upd)`,
-      [input.valorRecebido, input.projetoId, input.competencia]
+      [input.valorRecebido, input.projetoId, input.competencia,
+       input.projetoId, input.competencia, input.valorRecebido]
     );
     await createAuditLog({ action: "dar_baixa", userId: ctx.user?.id, companyId: input.companyId,
       details: `Nova baixa projeto ${input.projetoId} R$${input.valorRecebido} em ${input.dataRecebimento}` });
