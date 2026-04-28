@@ -469,7 +469,7 @@ export const financialRouter = router({
 
   updateRevenueStatus: protectedProcedure.input(z.object({
     id: z.number(),
-    companyId: z.number(),
+    companyId: z.number().optional(),
     status: z.string(),
     nfNumero: z.string().optional(),
     nfEmitidaEm: z.string().optional(),
@@ -479,9 +479,17 @@ export const financialRouter = router({
     valorAprovado: z.number().optional(),
     dataAprovacao: z.string().optional(),
     medicaoEnviadaEm: z.string().optional(),
+    observacoes: z.string().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // Resolve companyId — use provided value or look up from the record itself
+    let companyId = (input.companyId && input.companyId > 0) ? input.companyId : 0;
+    if (!companyId) {
+      const rec = rows(await dbExecute(db, `SELECT company_id FROM financial_revenue WHERE id=$1`, [input.id]));
+      companyId = Number(rec[0]?.company_id ?? 0);
+    }
+    if (!companyId) throw new TRPCError({ code: "NOT_FOUND", message: "Registro financeiro não encontrado" });
     const glosa = input.valorAprovado != null
       ? (await dbExecute(db, `SELECT valor_medicao FROM financial_revenue WHERE id=$1`, [input.id]))
           .then((r: any) => {
@@ -502,13 +510,15 @@ export const financialRouter = router({
            data_aprovacao=COALESCE($10,data_aprovacao),
            medicao_enviada_em=COALESCE($11,medicao_enviada_em),
            glosa=$12,
+           observacoes=COALESCE($13,observacoes),
            updated_at=NOW()
        WHERE id=$7 AND company_id=$8`,
       [input.status, input.nfNumero ?? null, input.nfEmitidaEm ?? null,
        input.dataRecebimento ?? null, input.valorRecebido ?? null,
-       input.formaPagamento ?? null, input.id, input.companyId,
+       input.formaPagamento ?? null, input.id, companyId,
        input.valorAprovado ?? null, input.dataAprovacao ?? null,
-       input.medicaoEnviadaEm ?? null, glosaVal]
+       input.medicaoEnviadaEm ?? null, glosaVal,
+       input.observacoes || null]
     );
 
     // Sincronizar status no financial_entry correspondente
@@ -528,10 +538,10 @@ export const financialRouter = router({
            data_pagamento=COALESCE($3, data_pagamento),
            updated_at=NOW()
        WHERE origem_modulo='revenue' AND origem_id=$4 AND company_id=$5`,
-      [entryStatus, input.valorRecebido ?? 0, input.dataRecebimento ?? null, input.id, input.companyId]
+      [entryStatus, input.valorRecebido ?? 0, input.dataRecebimento ?? null, input.id, companyId]
     );
 
-    await createAuditLog({ action: "financial_revenue_status_updated", userId: ctx.user?.id, companyId: input.companyId, details: `Revenue ${input.id} → ${input.status}` });
+    await createAuditLog({ action: "financial_revenue_status_updated", userId: ctx.user?.id, companyId, details: `Revenue ${input.id} → ${input.status}` });
     return { ok: true };
   }),
 
