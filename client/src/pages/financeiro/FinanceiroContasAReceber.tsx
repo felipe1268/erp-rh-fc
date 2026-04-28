@@ -137,6 +137,7 @@ export default function FinanceiroContasAReceber() {
   const [showNew, setShowNew] = useState(false);
   const [detalhe, setDetalhe] = useState<{ obra: ObraRow; mes: string; cell: MedicaoCell } | null>(null);
   const [baixa, setBaixa] = useState<{ obra: ObraRow; mes: string; cell: MedicaoCell } | null>(null);
+  const [viewMode, setViewMode] = useState<"cronograma" | "contrato">("cronograma");
 
   // ─── Query ─────────────────────────────────────────────────────────────────
   const { data, isLoading, refetch } = (trpc as any).financial.getContasReceberMatrix.useQuery(
@@ -221,9 +222,28 @@ export default function FinanceiroContasAReceber() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Contas a Receber</h1>
-            <p className="text-xs text-gray-400 mt-0.5">Espelho do cronograma financeiro · atualizado automaticamente</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {viewMode === "contrato" ? "Previsto original do contrato (baseline)" : "Cronograma atualizado conforme avanço"}
+              {" · "}atualizado automaticamente
+            </p>
           </div>
           <div className="flex items-center gap-3">
+            {/* Toggle Contrato / Cronograma */}
+            <div className="flex items-center bg-gray-100 rounded-lg p-0.5 text-xs font-medium">
+              <button
+                onClick={() => setViewMode("contrato")}
+                className={`px-3 py-1.5 rounded-md transition-all ${viewMode === "contrato" ? "bg-white shadow text-indigo-700 font-semibold" : "text-gray-500 hover:text-gray-700"}`}
+              >
+                Contrato
+              </button>
+              <button
+                onClick={() => setViewMode("cronograma")}
+                className={`px-3 py-1.5 rounded-md transition-all ${viewMode === "cronograma" ? "bg-white shadow text-blue-700 font-semibold" : "text-gray-500 hover:text-gray-700"}`}
+              >
+                Cronograma
+              </button>
+            </div>
+
             <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1">
               <button onClick={() => setAno(a => a - 1)} className="p-1 hover:bg-white rounded transition-colors">
                 <ChevronLeft className="w-4 h-4 text-gray-600" />
@@ -286,6 +306,7 @@ export default function FinanceiroContasAReceber() {
                       obra={obra}
                       mesesChave={mesesChave}
                       zebra={idx % 2 === 0}
+                      viewMode={viewMode}
                       onCellClick={(mes, cell) => {
                         setBaixa({ obra, mes, cell });
                       }}
@@ -388,10 +409,11 @@ function KpiCard({ icon: Icon, label, value, color, bg, sub }: {
   );
 }
 
-function ObraTableRow({ obra, mesesChave, zebra, onCellClick, onDetalheClick }: {
+function ObraTableRow({ obra, mesesChave, zebra, viewMode, onCellClick, onDetalheClick }: {
   obra: ObraRow;
   mesesChave: string[];
   zebra: boolean;
+  viewMode: "cronograma" | "contrato";
   onCellClick: (mes: string, cell: MedicaoCell) => void;
   onDetalheClick: (mes: string, cell: MedicaoCell) => void;
 }) {
@@ -440,16 +462,20 @@ function ObraTableRow({ obra, mesesChave, zebra, onCellClick, onDetalheClick }: 
         const Icon = cfg.icon;
         const isRecebido = status === "recebido_total" || status === "recebido_parcial";
 
-        // Divergência cronograma vs baseline: >5% e status ainda não tem medição real
+        // Modo de visualização: contrato (baseline) vs cronograma (revisão atual)
         const noMedicao = status === "previsto" || status === "previsao_faturamento";
-        const blDivergence = noMedicao && cell.valorContratoBL > 0 &&
+        // Valor a exibir no Balão 1: baseline quando modo=contrato e célula sem medição real
+        const valorExibido = (viewMode === "contrato" && noMedicao && cell.valorContratoBL > 0)
+          ? cell.valorContratoBL
+          : cell.valor;
+        // Indicador de divergência: só exibe em modo cronograma quando revisto ≠ baseline
+        const blDivergence = viewMode === "cronograma" && noMedicao && cell.valorContratoBL > 0 &&
           Math.abs(cell.valorContratoBL - cell.valorPrevisto) > cell.valorContratoBL * 0.05;
-        const blAbaixo = blDivergence && cell.valorPrevisto < cell.valorContratoBL; // blAcima = !blAbaixo (usado no JSX)
-        // Barra de progresso para células recebidas
-        const pctRecebido = cell.valor > 0 ? Math.min(100, (cell.valorRecebido / cell.valor) * 100) : 0;
+        const blAbaixo = blDivergence && cell.valorPrevisto < cell.valorContratoBL;
+        // Barra de progresso e diferença
+        const pctRecebido = valorExibido > 0 ? Math.min(100, (cell.valorRecebido / valorExibido) * 100) : 0;
         const isParcial = status === "recebido_parcial";
-
-        const diferenca = cell.valorRecebido > 0 ? cell.valor - cell.valorRecebido : 0;
+        const diferenca = cell.valorRecebido > 0 ? valorExibido - cell.valorRecebido : 0;
 
         return (
           <td key={mk} className="px-1 py-1 text-center">
@@ -459,12 +485,19 @@ function ObraTableRow({ obra, mesesChave, zebra, onCellClick, onDetalheClick }: 
                 className="w-full flex flex-col gap-0.5 transition-all hover:opacity-90 cursor-pointer"
               >
                 {/* ── Balão 1: Status + Previsto — cor neutra fixa ── */}
-                <div className="w-full rounded-md px-2 py-1 bg-slate-50 border border-slate-200">
+                <div className={`w-full rounded-md px-2 py-1 border ${viewMode === "contrato" ? "bg-indigo-50 border-indigo-200" : "bg-slate-50 border-slate-200"}`}>
                   <div className={`inline-flex items-center gap-0.5 rounded px-1 py-0.5 ${cfg.badge} mb-0.5`}>
                     <Icon className="w-2.5 h-2.5 shrink-0" />
                     <span className="text-[8px] leading-none font-medium">{cfg.label}</span>
                   </div>
-                  <p className="font-semibold text-[11px] leading-tight text-slate-700">{BRL(cell.valor)}</p>
+                  {noMedicao && (
+                    <p className={`text-[7px] leading-none mb-0.5 ${viewMode === "contrato" ? "text-indigo-400" : "text-slate-400"}`}>
+                      {viewMode === "contrato" ? "Contrato (BL)" : "Cronograma"}
+                    </p>
+                  )}
+                  <p className={`font-semibold text-[11px] leading-tight ${viewMode === "contrato" ? "text-indigo-700" : "text-slate-700"}`}>
+                    {BRL(valorExibido)}
+                  </p>
                   {blDivergence && (
                     <p className={`text-[8px] mt-0.5 ${blAbaixo ? "text-red-600" : "text-emerald-600"}`}>
                       {blAbaixo ? "↓" : "↑"} Ctr: {BRL(cell.valorContratoBL)}
