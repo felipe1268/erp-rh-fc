@@ -13,6 +13,7 @@ import {
   ChevronLeft, ChevronRight, Plus, Building2,
   FileText, Clock, CheckCircle2, ReceiptText, Send, ThumbsUp, AlertCircle,
   TrendingUp, Wallet, BadgeCheck, CalendarClock, DollarSign, ChevronDown, ChevronUp,
+  Pencil, Trash2,
 } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -169,6 +170,15 @@ export default function FinanceiroContasAReceber() {
     onError: (e: any) => toast({ title: "Erro ao registrar", description: e.message, variant: "destructive" }),
   });
 
+  const cancelarMut = (trpc as any).financial.cancelarRecebimento.useMutation({
+    onSuccess: () => {
+      toast({ title: "Recebimento cancelado", description: "O registro foi removido." });
+      setBaixa(null);
+      refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao cancelar", description: e.message, variant: "destructive" }),
+  });
+
   // ─── KPI Cards ─────────────────────────────────────────────────────────────
   const aReceber = kpis.totalPrevisto - kpis.totalRecebido;
 
@@ -243,12 +253,7 @@ export default function FinanceiroContasAReceber() {
                       mesesChave={mesesChave}
                       zebra={idx % 2 === 0}
                       onCellClick={(mes, cell) => {
-                        const st = resolveStatus(cell);
-                        if (st === "recebido_total" || st === "recebido_parcial") {
-                          setDetalhe({ obra, mes, cell });
-                        } else {
-                          setBaixa({ obra, mes, cell });
-                        }
+                        setBaixa({ obra, mes, cell });
                       }}
                       onDetalheClick={(mes, cell) => setDetalhe({ obra, mes, cell })}
                     />
@@ -296,9 +301,10 @@ export default function FinanceiroContasAReceber() {
           mes={baixa.mes}
           cell={baixa.cell}
           companyId={companyId}
-          isPending={baixaMut.isPending}
+          isPending={baixaMut.isPending || cancelarMut.isPending}
           onClose={() => setBaixa(null)}
           onSave={(payload) => baixaMut.mutate(payload)}
+          onCancel={(frId, medicaoId) => cancelarMut.mutate({ companyId, frId, medicaoId })}
           onVerDetalhes={() => { setDetalhe(baixa); setBaixa(null); }}
         />
       )}
@@ -434,23 +440,28 @@ function ObraTableRow({ obra, mesesChave, zebra, onCellClick, onDetalheClick }: 
 
 // ─── Modal Dar Baixa ──────────────────────────────────────────────────────────
 
-function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave, onVerDetalhes }: {
+function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave, onCancel, onVerDetalhes }: {
   obra: ObraRow; mes: string; cell: MedicaoCell; companyId: number;
   isPending: boolean;
   onClose: () => void;
   onSave: (d: any) => void;
+  onCancel: (frId: number, medicaoId: number | null) => void;
   onVerDetalhes: () => void;
 }) {
   const mesIdx = parseInt(mes.slice(5, 7)) - 1;
   const anoStr = mes.slice(0, 4);
   const hoje = new Date().toISOString().split("T")[0];
+  const isEdit = !!(cell.frId && (cell.statusMedicao === "recebido_total" || cell.statusMedicao === "recebido_parcial" || cell.statusFinanceiro === "recebido_total" || cell.statusFinanceiro === "recebido_parcial"));
 
-  const [valorStr, setValorStr] = useState(
-    cell.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  );
-  const [data, setData] = useState(hoje);
+  const initValor = isEdit && cell.valorRecebido > 0
+    ? cell.valorRecebido.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : cell.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const [valorStr, setValorStr] = useState(initValor);
+  const [data, setData] = useState(isEdit && cell.dataRecebimento ? cell.dataRecebimento.slice(0, 10) : hoje);
   const [forma, setForma] = useState("PIX");
   const [obs, setObs] = useState("");
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const valorNum = parseBRL(valorStr);
   const valido = valorNum > 0 && data;
@@ -473,15 +484,21 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
     });
   }
 
+  const headerGradient = isEdit
+    ? "bg-gradient-to-r from-blue-600 to-indigo-500"
+    : "bg-gradient-to-r from-green-600 to-emerald-500";
+
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-sm p-0 overflow-hidden">
         {/* Cabeçalho colorido */}
-        <div className="bg-gradient-to-r from-green-600 to-emerald-500 px-5 py-4 text-white">
+        <div className={`${headerGradient} px-5 py-4 text-white`}>
           <div className="flex items-center gap-2 mb-1">
-            <DollarSign className="w-5 h-5" />
+            {isEdit ? <Pencil className="w-5 h-5" /> : <DollarSign className="w-5 h-5" />}
             <DialogHeader>
-              <DialogTitle className="text-white text-base font-bold">Registrar Recebimento</DialogTitle>
+              <DialogTitle className="text-white text-base font-bold">
+                {isEdit ? "Editar Recebimento" : "Registrar Recebimento"}
+              </DialogTitle>
             </DialogHeader>
           </div>
           <p className="text-sm font-semibold opacity-90 truncate">{obra.obraNome}</p>
@@ -535,14 +552,49 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
           {/* Observação (colapsável) */}
           <ObsField value={obs} onChange={setObs} />
 
-          {/* Botões */}
+          {/* Botão principal */}
           <Button
-            className="w-full bg-green-600 hover:bg-green-700 text-white h-11 text-sm font-bold"
+            className={`w-full h-11 text-sm font-bold text-white ${isEdit ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
             disabled={!valido || isPending}
             onClick={handleSave}
           >
-            {isPending ? "Registrando..." : "✓ Confirmar Recebimento"}
+            {isPending ? "Salvando..." : isEdit ? "✓ Salvar Alterações" : "✓ Confirmar Recebimento"}
           </Button>
+
+          {/* Cancelar recebimento (só em modo edição) */}
+          {isEdit && cell.frId && (
+            <div className="border-t border-gray-100 pt-3">
+              {!confirmCancel ? (
+                <button
+                  onClick={() => setConfirmCancel(true)}
+                  className="w-full flex items-center justify-center gap-1.5 text-xs text-red-500 hover:text-red-700 transition-colors py-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Cancelar recebimento
+                </button>
+              ) : (
+                <div className="bg-red-50 rounded-lg p-3 space-y-2">
+                  <p className="text-xs text-red-700 font-medium text-center">Confirmar cancelamento do recebimento?</p>
+                  <p className="text-xs text-red-500 text-center">Esta ação não pode ser desfeita.</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setConfirmCancel(false)}
+                      className="flex-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-md py-1.5"
+                    >
+                      Não
+                    </button>
+                    <button
+                      onClick={() => onCancel(cell.frId!, cell.id || null)}
+                      disabled={isPending}
+                      className="flex-1 text-xs text-white bg-red-600 hover:bg-red-700 rounded-md py-1.5 font-semibold disabled:opacity-50"
+                    >
+                      {isPending ? "..." : "Sim, cancelar"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <button
             onClick={onVerDetalhes}

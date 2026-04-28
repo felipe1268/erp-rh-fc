@@ -623,6 +623,47 @@ export const financialRouter = router({
     return { ok: true, frId: newFrId };
   }),
 
+  // ─── Cancelar Recebimento ─────────────────────────────────────────────────
+  cancelarRecebimento: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    frId:      z.number(),
+    medicaoId: z.number().nullable().optional(),  // se existir medicao vinculada
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    if (input.medicaoId) {
+      // FR vinculado a medição: reverte para "a_receber" (não exclui)
+      await dbExecute(db,
+        `UPDATE financial_revenue
+         SET status='a_receber', valor_recebido=NULL, data_recebimento=NULL, updated_at=NOW()
+         WHERE id=$1 AND company_id=$2`,
+        [input.frId, input.companyId]
+      );
+      await dbExecute(db,
+        `UPDATE financial_entries
+         SET status='a_receber', valor_realizado=NULL, data_pagamento=NULL, updated_at=NOW()
+         WHERE origem_modulo='revenue' AND origem_id=$1 AND company_id=$2`,
+        [input.frId, input.companyId]
+      );
+    } else {
+      // FR standalone (criado via Dar Baixa): exclui o registro
+      await dbExecute(db,
+        `DELETE FROM financial_entries
+         WHERE origem_modulo='revenue' AND origem_id=$1 AND company_id=$2`,
+        [input.frId, input.companyId]
+      );
+      await dbExecute(db,
+        `DELETE FROM financial_revenue WHERE id=$1 AND company_id=$2`,
+        [input.frId, input.companyId]
+      );
+    }
+
+    await createAuditLog({ action: "cancelar_baixa", userId: ctx.user?.id, companyId: input.companyId,
+      details: `Cancelamento recebimento fr_id=${input.frId}` });
+    return { ok: true };
+  }),
+
   // ─────────────────── OBRIGAÇÕES FISCAIS ───────────────────
 
   getTaxObligations: protectedProcedure.input(z.object({
