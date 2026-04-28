@@ -1064,44 +1064,40 @@ export default function PainelRH() {
                 <p className="text-base font-medium">Nenhum alerta nesta categoria</p>
               </div>
             ) : (
-              <div className="grid grid-cols-4 gap-4 pb-2">
+              <div className="grid grid-cols-5 gap-2 pb-2">
                 {filteredAlertas.map((alerta: any) => (
                   <div
                     key={alerta.id}
                     onClick={() => { navigate(alerta.link); setAlertasOpen(false); }}
-                    className={`flex flex-col gap-2 p-4 rounded-lg border cursor-pointer hover:shadow-md transition-all ${
+                    className={`flex flex-col gap-1 p-2.5 rounded-lg border cursor-pointer hover:shadow-sm transition-all ${
                       alerta.urgencia === 'critico' ? 'bg-red-50 border-red-200 hover:border-red-400' :
                       alerta.urgencia === 'urgente' ? 'bg-orange-50 border-orange-200 hover:border-orange-400' :
                       'bg-amber-50 border-amber-200 hover:border-amber-400'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 ${
+                    <div className="flex items-center gap-1.5">
+                      <div className={`h-5 w-5 rounded-full flex items-center justify-center shrink-0 ${
                         alerta.urgencia === 'critico' ? 'bg-red-100' :
                         alerta.urgencia === 'urgente' ? 'bg-orange-100' : 'bg-amber-100'
                       }`}>
-                        {alerta.tipo === 'aso' ? <HeartPulse className={`h-3.5 w-3.5 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} /> :
-                         alerta.tipo === 'ferias' ? <CalendarClock className={`h-3.5 w-3.5 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} /> :
-                         alerta.tipo === 'experiencia' ? <ClipboardCheck className={`h-3.5 w-3.5 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} /> :
-                         alerta.tipo === 'solicitacao_he' ? <Clock className={`h-3.5 w-3.5 ${alerta.urgencia === 'critico' ? 'text-red-600' : 'text-blue-600'}`} /> :
-                         alerta.tipo === 'solicitacao_mo' ? <Briefcase className={`h-3.5 w-3.5 ${alerta.urgencia === 'critico' ? 'text-red-600' : 'text-indigo-600'}`} /> :
-                         <FileText className={`h-3.5 w-3.5 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} />}
+                        {alerta.tipo === 'aso' ? <HeartPulse className={`h-3 w-3 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} /> :
+                         alerta.tipo === 'ferias' ? <CalendarClock className={`h-3 w-3 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} /> :
+                         alerta.tipo === 'experiencia' ? <ClipboardCheck className={`h-3 w-3 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} /> :
+                         alerta.tipo === 'solicitacao_he' ? <Clock className={`h-3 w-3 ${alerta.urgencia === 'critico' ? 'text-red-600' : 'text-blue-600'}`} /> :
+                         alerta.tipo === 'solicitacao_mo' ? <Briefcase className={`h-3 w-3 ${alerta.urgencia === 'critico' ? 'text-red-600' : 'text-indigo-600'}`} /> :
+                         <FileText className={`h-3 w-3 ${alerta.urgencia === 'critico' ? 'text-red-600' : alerta.urgencia === 'urgente' ? 'text-orange-600' : 'text-amber-600'}`} />}
                       </div>
-                      <Badge className={`text-[10px] ml-auto ${
+                      <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wide truncate flex-1">{alerta.titulo}</span>
+                      <Badge className={`text-[9px] px-1 py-0 shrink-0 ${
                         alerta.urgencia === 'critico' ? 'bg-red-600 text-white' :
                         alerta.urgencia === 'urgente' ? 'bg-orange-500 text-white' :
                         'bg-amber-500 text-white'
                       }`}>
                         {alerta.urgencia === 'critico' ? 'CRÍTICO' : alerta.urgencia === 'urgente' ? 'URGENTE' : 'ATENÇÃO'}
                       </Badge>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                     </div>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">{alerta.titulo}</p>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{alerta.nome}</p>
-                      <EmpStatusBadge status={alerta.empStatus} />
-                    </div>
-                    <p className="text-xs text-muted-foreground">{alerta.descricao}</p>
+                    <p className="text-xs font-semibold text-foreground leading-tight line-clamp-2">{alerta.nome}</p>
+                    <p className="text-[10px] text-muted-foreground leading-tight">{alerta.descricao}</p>
                   </div>
                 ))}
               </div>
