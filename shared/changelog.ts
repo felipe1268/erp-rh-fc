@@ -9004,4 +9004,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-28 11:00:00",
   },
+  {
+    version: 1313,
+    titulo: "Compras: Filtros por fornecedor e valor nas Ordens de Compra",
+    descricao: "Adicionados dois novos filtros na listagem de OCs, em linha abaixo dos filtros existentes: (1) campo de texto 'Buscar por fornecedor...' que filtra por nomeFantasia ou razaoSocial do fornecedor vinculado, com botão X para limpar; (2) campos numéricos 'Valor mín' e 'Valor máx' para filtrar pelo total da OC, com botão X para limpar o intervalo. Quando algum desses filtros está ativo, um badge verde exibe a contagem de resultados encontrados. Filtragem 100% no frontend sobre dados já carregados, sem chamadas extras ao servidor.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-28 14:00:00",
+  },
 ];
