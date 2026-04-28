@@ -1876,11 +1876,17 @@ export default function Cotacoes() {
 
     function getMelhorFornecedor(): any | null {
       if (!mapa || mapa.participantes.length === 0) return null;
-      const comTotal = mapa.participantes.filter((p: any) => parseFloat(p.totalOrcado ?? "0") > 0);
+      const totaisVivos: Record<number, number> = (mapa as any).totaisPorFornecedor ?? {};
+      const getTotal = (p: any) => {
+        const stored = parseFloat(p.totalOrcado ?? "0");
+        const vivo = totaisVivos[p.fornecedorId] ?? 0;
+        return stored > 0 ? stored : vivo;
+      };
+      const comTotal = mapa.participantes.filter((p: any) => getTotal(p) > 0);
       if (comTotal.length === 0) return null;
       return comTotal.reduce((best: any, curr: any) => {
-        const bTotal = parseFloat(best.totalOrcado ?? "0");
-        const cTotal = parseFloat(curr.totalOrcado ?? "0");
+        const bTotal = getTotal(best);
+        const cTotal = getTotal(curr);
         if (cTotal < bTotal) return curr;
         if (cTotal === bTotal && (curr.prazoEntregaDias ?? 9999) < (best.prazoEntregaDias ?? 9999)) return curr;
         return best;

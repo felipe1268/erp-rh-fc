@@ -9059,6 +9059,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-04-28 19:30:00",
   },
   {
+    version: 1320,
+    titulo: "Cotações: vencedor identificado mesmo quando total_orcado não foi gravado (fallback em respostas)",
+    descricao: "Corrigido bug onde a identificação do fornecedor vencedor falhava quando o campo total_orcado de compras_cotacao_fornecedores era nulo — situação que ocorre quando os preços foram inseridos por outra via que não o 'Salvar' do Mapa. Frontend getMelhorFornecedor() agora usa totaisPorFornecedor (calculado ao vivo das respostas) como fallback quando stored totalOrcado=0. Backend criarOrdemDeCotacao também computa totais das respostas em tempo real para identificar o vencedor quando total_orcado é nulo. Ambas as sides agora são consistentes: o fornecedor mais barato com respostas preenchidas é identificado corretamente mesmo sem total_orcado salvo.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-28 22:00:00",
+  },
+  {
     version: 1319,
     titulo: "Cotações: botão 'Confirmar' no modal de Condições de Pagamento agora salva direto no banco",
     descricao: "Corrigida causa raiz que impedia a geração da OC mesmo com informações aparentemente preenchidas. O modal de Condições de Pagamento (formaPagamento, prazo, parcelamento, módulo de medição) apenas armazenava os dados no estado local do React e mostrava um toast 'Clique em Salvar para persistir', levando o usuário a acreditar que os dados estavam salvos quando na verdade não estavam. O botão foi renomeado para 'Confirmar e Salvar' e agora chama salvarCondicoesComerciais diretamente, persistindo todos os campos (formaPagamento, tipoPagamento, condicaoPagamento, prazoEntregaDias, numeroParcelas, moduloMedicao) no banco de dados imediatamente. O modal só fecha após confirmação de sucesso. Backend de salvarCondicoesComerciais também atualizado para aceitar e salvar o campo moduloMedicao.",

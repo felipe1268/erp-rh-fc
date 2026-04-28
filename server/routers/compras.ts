@@ -4705,20 +4705,45 @@ Retorne APENAS um JSON válido neste formato:
       if (existingOC.length > 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Já existe uma OC ativa para esta cotação." });
 
       // Identifica o vencedor do mapa: igual ao frontend (selecionado=true, senão o mais barato com totalOrcado > 0)
+      // Fallback: se total_orcado está nulo, calcula dos itens de resposta em tempo real
       const todosParticipantes = await db.select().from(comprasCotacaoFornecedores)
         .where(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId));
       const vencedorSelecionado = todosParticipantes.find(p => p.selecionado === true) ?? null;
+
+      // Calcula totais ao vivo das respostas para todos os participantes (fallback quando total_orcado é nulo)
+      const todasRespostas = await db.select().from(comprasCotacaoRespostas)
+        .where(eq(comprasCotacaoRespostas.cotacaoId, input.cotacaoId));
+      const itensCotacao = await db.select({ id: comprasCotacoesItens.id, quantidade: comprasCotacoesItens.quantidade })
+        .from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
+      const totalVivoPorForn: Record<number, number> = {};
+      for (const r of todasRespostas) {
+        const it = itensCotacao.find(i => i.id === r.itemId);
+        const qty = parseFloat(it?.quantidade ?? "1");
+        const preco = parseFloat(r.precoUnitario ?? "0");
+        if (preco > 0) totalVivoPorForn[r.fornecedorId] = (totalVivoPorForn[r.fornecedorId] ?? 0) + preco * qty;
+      }
+      // Adiciona frete FOB ao total vivo
+      for (const p of todosParticipantes) {
+        if ((p as any).freteTipo === "fob") totalVivoPorForn[p.fornecedorId] = (totalVivoPorForn[p.fornecedorId] ?? 0) + n((p as any).valorFrete);
+      }
+
+      const getTotal = (p: typeof todosParticipantes[0]) => {
+        const stored = n(p.totalOrcado);
+        return stored > 0 ? stored : (totalVivoPorForn[p.fornecedorId] ?? 0);
+      };
+
       const melhorForn = (() => {
-        const comTotal = todosParticipantes.filter(p => n(p.totalOrcado) > 0);
+        const comTotal = todosParticipantes.filter(p => getTotal(p) > 0);
         if (comTotal.length === 0) return null;
         return comTotal.reduce((best, curr) => {
-          const bTotal = n(best.totalOrcado); const cTotal = n(curr.totalOrcado);
+          const bTotal = getTotal(best); const cTotal = getTotal(curr);
           if (cTotal < bTotal) return curr;
           if (cTotal === bTotal && (curr.prazoEntregaDias ?? 9999) < (best.prazoEntregaDias ?? 9999)) return curr;
           return best;
         }, comTotal[0]);
       })();
       const fornInfoCheck = vencedorSelecionado ?? melhorForn ?? (cot.fornecedorId ? todosParticipantes.find(p => p.fornecedorId === cot.fornecedorId) ?? null : null);
+      console.log(`[criarOrdemDeCotacao] cotacaoId=${input.cotacaoId} participantes=${todosParticipantes.length} vencedorSelecionado=${vencedorSelecionado?.fornecedorId ?? "none"} melhorForn=${melhorForn?.fornecedorId ?? "none"} fornInfoCheck=${fornInfoCheck?.fornecedorId ?? "none"} totaisVivos=${JSON.stringify(totalVivoPorForn)}`);
       if (!fornInfoCheck) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhum fornecedor vencedor identificado. Acesse o Mapa de Cotação, verifique se há preços preenchidos e, se necessário, clique em 'Selecionar como Vencedor'." });
       const vencedorFornecedorId = fornInfoCheck.fornecedorId;
 
