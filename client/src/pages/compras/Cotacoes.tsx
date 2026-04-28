@@ -5837,7 +5837,24 @@ export default function Cotacoes() {
         )}
         <div className="grid grid-cols-2 gap-3 pt-1">
           <button
-            onClick={handleConfirmarTotal}
+            onClick={() => {
+              setShowConfirmarTipoCotDialog(false);
+              if (!validarCondicoesVencedor()) return;
+              const fornTotal = parseFloat(fornParaSaldo?.totalOrcado ?? "0");
+              const metaTotal = (mapa?.itens ?? []).reduce((acc: number, it: any) =>
+                acc + (Math.round(parseFloat(it.metaUnitario ?? "0") * 100) / 100 * parseFloat(it.metaQtd ?? it.quantidade ?? "0")), 0);
+              if (metaTotal > 0 && fornTotal > metaTotal && !cobertoPorRisco && !semVerbaAutorizado) {
+                const defVal = (fornTotal - metaTotal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                const fornNome = fornParaSaldo?.fornecedor?.nomeFantasia || fornParaSaldo?.fornecedor?.razaoSocial || "Fornecedor";
+                const ok = confirm(
+                  `⚠️ ATENÇÃO: O valor do fornecedor ${fornNome} (${fornTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}) ` +
+                  `está acima da meta orçamentária (${metaTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}).\n\n` +
+                  `Déficit: ${defVal}\n\nRecomendamos utilizar o painel de Realocação de Verba antes de aprovar.\n\nDeseja continuar mesmo assim?`
+                );
+                if (!ok) return;
+              }
+              setShowGerarOCModeDialog(true);
+            }}
             className="flex flex-col items-center gap-2 rounded-xl border-2 border-emerald-300 bg-emerald-50 p-5 hover:bg-emerald-100 transition-colors"
           >
             <CheckCircle className="h-8 w-8 text-emerald-600" />
@@ -5845,7 +5862,31 @@ export default function Cotacoes() {
             <span className="text-xs text-emerald-600 text-center">Um único fornecedor vencedor<br/>para todos os itens</span>
           </button>
           <button
-            onClick={handleConfirmarParcial}
+            onClick={() => {
+              setShowConfirmarTipoCotDialog(false);
+              const _itensDoMapa: any[] = mapa?.itens ?? [];
+              const _participantes: any[] = mapa?.participantes ?? [];
+              const _itensParaFechamento = _itensDoMapa.map((it: any) => {
+                let fId = vencedorPorItem[it.id];
+                if (!fId) {
+                  let melhorTotal = Infinity;
+                  for (const p of _participantes) {
+                    const key = `${it.id}_${p.fornecedorId}`;
+                    const resp = mapa?.respostaMap?.[key];
+                    if (resp) {
+                      const pu = parseFloat((resp as any).precoUnitario ?? "0");
+                      const qty = parseFloat((resp as any).quantidade ?? it.quantidade ?? "1");
+                      const total = pu * qty;
+                      if (pu > 0 && total < melhorTotal) { melhorTotal = total; fId = p.fornecedorId; }
+                    }
+                  }
+                  if (!fId) fId = melhorForn?.fornecedorId ?? (_participantes[0]?.fornecedorId ?? 0);
+                }
+                return { itemId: it.id, fornecedorId: fId ?? 0, incluir: !!(fId && fId > 0), descricao: it.descricao ?? `Item #${it.id}` };
+              }).filter((it: any) => it.fornecedorId > 0);
+              setFechamentoParcialItens(_itensParaFechamento);
+              setShowFechamentoParcialDialog(true);
+            }}
             className="flex flex-col items-center gap-2 rounded-xl border-2 border-blue-300 bg-blue-50 p-5 hover:bg-blue-100 transition-colors"
           >
             <GitBranch className="h-8 w-8 text-blue-600" />
