@@ -9086,6 +9086,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-04-28 23:59:00",
   },
   {
+    version: 1324,
+    titulo: "Cotações: Correção crítica — diálogos de aprovação/geração de OC agora aparecem corretamente na view de detalhe",
+    descricao: "Identificado e corrigido bug estrutural no componente Cotacoes.tsx: os quatro diálogos responsáveis pelo fluxo de aprovação (Confirmar Parcial/Total, Fechamento Parcial, Erro de Validação e Modo de Geração de OC) estavam renderizados na view de lista do componente. Como o componente usa early-return para a view de detalhe, esses diálogos nunca eram montados no DOM quando o usuário clicava em 'Aprovar e Gerar OC' ou 'Cotação Parcial'. Resultado: os estados dos diálogos eram setados corretamente, mas os elementos Dialog nunca apareciam. Solução: os quatro diálogos foram movidos para dentro do bloco JSX da view de detalhe (antes do fechamento do DashboardLayout), onde têm acesso às mesmas variáveis locais (mapa, fornParaSaldo, validarCondicoesVencedor, etc.) e são efetivamente renderizados quando necessários.",
+    tipo: "fix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-28 23:59:00",
+  },
+  {
     version: 1322,
     titulo: "Cotações: Cotação Parcial com checkboxes por item e confirmação Parcial/Total antes de gerar OC",
     descricao: "Redesenho completo do fluxo de cotação parcial no Mapa de Cotação. (1) Checkboxes adicionados em cada linha de item da tabela de comparação, com 'Selecionar todos' no cabeçalho — visíveis apenas em cotações pendentes com 2+ fornecedores; (2) Toolbar de atribuição aparece ao selecionar itens: mostra contagem de selecionados, dropdown de fornecedor e botão 'Fechar para fornecedor'; ao confirmar, os itens são marcados com badge do fornecedor escolhido; (3) Banner verde mostra quantos itens já estão atribuídos a fornecedores específicos, com opção de limpar; (4) O botão 'Aprovar e Gerar OC' agora SEMPRE exibe um dialog de confirmação perguntando se a cotação é Total (um fornecedor, flow tradicional) ou Parcial (múltiplos fornecedores, gera OC separada por fornecedor); (5) Caminho 'Total' valida condições do vencedor normalmente; caminho 'Parcial' pré-popula itens com atribuições já feitas ou com o fornecedor mais barato por item.",
