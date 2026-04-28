@@ -3241,13 +3241,25 @@ export default function Cotacoes() {
                       )}
                       {/* Resumo de itens já atribuídos */}
                       {Object.keys(vencedorPorItem).length > 0 && (
-                        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
-                          <GitBranch className="h-3.5 w-3.5 text-emerald-600" />
-                          <span className="text-xs font-semibold text-emerald-700">{Object.keys(vencedorPorItem).length} {Object.keys(vencedorPorItem).length === 1 ? "item atribuído" : "itens atribuídos"} a fornecedores específicos</span>
+                        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                          <GitBranch className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                          <span className="text-xs font-semibold text-emerald-700">
+                            {Object.keys(vencedorPorItem).length} {Object.keys(vencedorPorItem).length === 1 ? "item atribuído" : "itens atribuídos"} a fornecedores específicos
+                          </span>
+                          <div className="flex-1" />
+                          {detalheFullscreen?.status === "pendente" && (
+                            <button
+                              type="button"
+                              onClick={() => handleAprovarGerarOC(detalheFullscreen.id)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm"
+                            >
+                              <ShoppingCart className="h-3.5 w-3.5" /> Gerar OC Parcial
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => setVencedorPorItem({})}
-                            className="ml-auto text-xs text-emerald-600 hover:text-red-600 underline"
+                            className="text-xs text-emerald-600 hover:text-red-600 underline"
                           >
                             Limpar atribuições
                           </button>
