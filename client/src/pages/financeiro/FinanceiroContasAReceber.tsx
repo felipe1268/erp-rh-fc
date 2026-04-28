@@ -41,16 +41,17 @@ type StatusKey =
   | "cancelado";
 
 const STATUS_CFG: Record<string, { label: string; cell: string; badge: string; icon: any }> = {
-  previsto:         { label: "Previsto",       cell: "bg-indigo-50 text-indigo-500",  badge: "bg-indigo-100 text-indigo-600",icon: CalendarClock },
-  pendente:         { label: "Pendente",       cell: "bg-gray-50 text-gray-500",      badge: "bg-gray-100 text-gray-500",    icon: Clock },
-  a_faturar:        { label: "A Faturar",      cell: "bg-amber-50 text-amber-700",    badge: "bg-amber-100 text-amber-700",  icon: Clock },
-  medicao_enviada:  { label: "Med. Enviada",   cell: "bg-sky-50 text-sky-700",        badge: "bg-sky-100 text-sky-700",      icon: Send },
-  aprovada_parcial: { label: "Aprov. Parcial", cell: "bg-orange-50 text-orange-700",  badge: "bg-orange-100 text-orange-700",icon: ThumbsUp },
-  faturado:         { label: "Faturado",       cell: "bg-blue-50 text-blue-700",      badge: "bg-blue-100 text-blue-700",    icon: FileText },
-  a_receber:        { label: "A Receber",      cell: "bg-purple-50 text-purple-700",  badge: "bg-purple-100 text-purple-700",icon: ReceiptText },
-  recebido_parcial: { label: "Parc. Recebido", cell: "bg-teal-50 text-teal-700",      badge: "bg-teal-100 text-teal-700",    icon: CheckCircle2 },
-  recebido_total:   { label: "Recebido",       cell: "bg-green-50 text-green-700",    badge: "bg-green-100 text-green-700",  icon: BadgeCheck },
-  cancelado:        { label: "Cancelado",      cell: "bg-gray-50 text-gray-300",      badge: "bg-gray-100 text-gray-400",    icon: AlertCircle },
+  previsto:              { label: "Previsto",         cell: "bg-indigo-50 text-indigo-500",  badge: "bg-indigo-100 text-indigo-600", icon: CalendarClock },
+  previsao_faturamento:  { label: "Prev. Faturamento",cell: "bg-orange-50 text-orange-600",  badge: "bg-orange-100 text-orange-600", icon: TrendingUp },
+  pendente:              { label: "Pendente",         cell: "bg-gray-50 text-gray-500",      badge: "bg-gray-100 text-gray-500",     icon: Clock },
+  a_faturar:             { label: "A Faturar",        cell: "bg-amber-50 text-amber-700",    badge: "bg-amber-100 text-amber-700",   icon: Clock },
+  medicao_enviada:       { label: "Med. Enviada",     cell: "bg-sky-50 text-sky-700",        badge: "bg-sky-100 text-sky-700",       icon: Send },
+  aprovada_parcial:      { label: "Aprov. Parcial",   cell: "bg-orange-50 text-orange-700",  badge: "bg-orange-100 text-orange-700", icon: ThumbsUp },
+  faturado:              { label: "Faturado",         cell: "bg-blue-50 text-blue-700",      badge: "bg-blue-100 text-blue-700",     icon: FileText },
+  a_receber:             { label: "A Receber",        cell: "bg-purple-50 text-purple-700",  badge: "bg-purple-100 text-purple-700", icon: ReceiptText },
+  recebido_parcial:      { label: "Parc. Recebido",   cell: "bg-teal-50 text-teal-700",      badge: "bg-teal-100 text-teal-700",     icon: CheckCircle2 },
+  recebido_total:        { label: "Recebido",         cell: "bg-green-50 text-green-700",    badge: "bg-green-100 text-green-700",   icon: BadgeCheck },
+  cancelado:             { label: "Cancelado",        cell: "bg-gray-50 text-gray-300",      badge: "bg-gray-100 text-gray-400",     icon: AlertCircle },
 };
 
 const STATUS_NEXT: Record<string, string> = {
@@ -63,10 +64,16 @@ const STATUS_NEXT: Record<string, string> = {
 };
 
 function resolveStatus(m: MedicaoCell): string {
-  if (m.statusFinanceiro && m.statusFinanceiro !== "previsto") return m.statusFinanceiro;
-  if (m.statusMedicao === "previsto") return "previsto";
+  // Camada 4: Recebido
+  if (m.statusFinanceiro && ["recebido_total","recebido_parcial"].includes(m.statusFinanceiro)) return m.statusFinanceiro;
+  // Camada 3: Faturado / A Receber
+  if (m.statusFinanceiro && m.statusFinanceiro !== "previsto" && m.statusFinanceiro !== "previsao_faturamento") return m.statusFinanceiro;
   if (m.statusMedicao === "aprovada" || m.statusMedicao === "faturada") return "faturado";
   if (m.valor > 0 && m.statusMedicao !== "previsto") return "a_faturar";
+  // Camada 2: Previsão de Faturamento (avanço físico)
+  if (m.valorPrevisao > 0 && m.valorPrevisto === 0) return "previsao_faturamento";
+  // Camada 1: Previsto (cronograma)
+  if (m.statusMedicao === "previsto" || m.valorPrevisto > 0) return "previsto";
   if (m.valor > 0) return "previsto";
   return "pendente";
 }
@@ -79,6 +86,7 @@ interface MedicaoCell {
   numero: number;
   valorPrevisto: number;
   valorMedido: number;
+  valorPrevisao: number;
   percentualPrevisto: number;
   percentualMedido: number;
   statusMedicao: string;
@@ -97,6 +105,8 @@ interface ObraRow {
   obraNome: string;
   cliente: string;
   valorContrato: number;
+  totalRecebidoHistorico: number;
+  saldoContrato: number;
   medicoes: MedicaoCell[];
   byMes: Record<string, MedicaoCell>;
   totalAno: number;
@@ -125,14 +135,16 @@ export default function FinanceiroContasAReceber() {
     const byMes: Record<string, MedicaoCell> = {};
     for (const [mes, raw] of Object.entries(p.meses ?? {})) {
       const r = raw as any;
-      const valorDisplay = r.valorMedido > 0 ? r.valorMedido : r.valorPrevisto;
-      if (valorDisplay === 0) continue;
+      const valorPrevisao = r.valorPrevisao ?? 0;
+      const valorDisplay = r.valorMedido > 0 ? r.valorMedido : (r.valorPrevisto > 0 ? r.valorPrevisto : valorPrevisao);
+      if (valorDisplay === 0 && valorPrevisao === 0) continue;
       byMes[mes] = {
         id: r.medicaoId ?? 0,
         competencia: mes,
         numero: 0,
         valorPrevisto: r.valorPrevisto,
         valorMedido: r.valorMedido,
+        valorPrevisao,
         percentualPrevisto: 0,
         percentualMedido: 0,
         statusMedicao: r.status ?? "previsto",
@@ -146,10 +158,16 @@ export default function FinanceiroContasAReceber() {
       };
     }
     const totalAno = Object.values(byMes).reduce((s: number, c: any) => s + (c as MedicaoCell).valor, 0);
-    return { ...p, byMes, totalAno } as ObraRow;
+    return {
+      ...p,
+      totalRecebidoHistorico: p.totalRecebidoHistorico ?? 0,
+      saldoContrato: p.saldoContrato ?? Math.max(0, (p.valorContrato ?? 0) - (p.totalRecebidoHistorico ?? 0)),
+      byMes,
+      totalAno,
+    } as ObraRow;
   });
 
-  const kpis = data?.kpis ?? { totalContrato: 0, totalPrevisto: 0, totalFaturado: 0, totalRecebido: 0 };
+  const kpis = data?.kpis ?? { totalContrato: 0, totalPrevisto: 0, totalPrevisaoFaturamento: 0, totalFaturado: 0, totalAReceber: 0, totalRecebido: 0 };
   const totaisMes: Record<string, number> = data?.totaisMes ?? {};
 
   // Mutations
@@ -179,9 +197,6 @@ export default function FinanceiroContasAReceber() {
     onError: (e: any) => toast({ title: "Erro ao cancelar", description: e.message, variant: "destructive" }),
   });
 
-  // ─── KPI Cards ─────────────────────────────────────────────────────────────
-  const aReceber = kpis.totalPrevisto - kpis.totalRecebido;
-
   return (
     <DashboardLayout>
       <div className="p-6 space-y-5">
@@ -208,13 +223,16 @@ export default function FinanceiroContasAReceber() {
           </div>
         </div>
 
-        {/* KPIs */}
-        <div className="grid grid-cols-4 gap-4">
-          <KpiCard icon={Wallet}        label="Total Contratos"  value={BRL(kpis.totalContrato)}  color="text-gray-700"   bg="bg-gray-50" />
-          <KpiCard icon={CalendarClock} label="Previsto no Ano"  value={BRL(kpis.totalPrevisto)}  color="text-blue-700"   bg="bg-blue-50" />
-          <KpiCard icon={TrendingUp}    label="Já Faturado"      value={BRL(kpis.totalFaturado)}  color="text-purple-700" bg="bg-purple-50" />
-          <KpiCard icon={CheckCircle2}  label="Recebido"         value={BRL(kpis.totalRecebido)}  color="text-green-700"  bg="bg-green-50"
-            sub={aReceber > 0 ? `A receber: ${BRL(aReceber)}` : undefined} />
+        {/* KPIs — 2 linhas de 3 */}
+        <div className="grid grid-cols-3 gap-3">
+          <KpiCard icon={Wallet}        label="Total Contratos"       value={BRL(kpis.totalContrato)}               color="text-gray-700"   bg="bg-gray-50" />
+          <KpiCard icon={CalendarClock} label="Previsto no Ano"       value={BRL(kpis.totalPrevisto)}               color="text-blue-700"   bg="bg-blue-50" />
+          <KpiCard icon={TrendingUp}    label="Prev. Faturamento"     value={BRL(kpis.totalPrevisaoFaturamento)}    color="text-orange-600" bg="bg-orange-50"
+            sub={kpis.totalPrevisaoFaturamento > 0 ? "Baseado no avanço físico" : "Sem avanço físico registrado"} />
+          <KpiCard icon={FileText}      label="Já Faturado"           value={BRL(kpis.totalFaturado)}               color="text-blue-700"   bg="bg-blue-50" />
+          <KpiCard icon={ReceiptText}   label="A Receber"             value={BRL(kpis.totalAReceber)}               color="text-purple-700" bg="bg-purple-50"
+            sub="Faturado ainda não recebido" />
+          <KpiCard icon={CheckCircle2}  label="Recebido"              value={BRL(kpis.totalRecebido)}               color="text-green-700"  bg="bg-green-50" />
         </div>
 
         {/* Matriz */}
@@ -279,9 +297,9 @@ export default function FinanceiroContasAReceber() {
 
         {/* Legenda */}
         {obras.length > 0 && (
-          <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
+          <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
             <span className="font-medium">Legenda:</span>
-            {(["previsto","a_faturar","faturado","a_receber","recebido_total"] as any[]).map((s: any) => {
+            {(["previsto","previsao_faturamento","a_faturar","faturado","a_receber","recebido_total"] as any[]).map((s: any) => {
               const cfg = STATUS_CFG[s];
               const Icon = cfg.icon;
               return (
@@ -425,12 +443,17 @@ function ObraTableRow({ obra, mesesChave, zebra, onCellClick, onDetalheClick }: 
         );
       })}
 
-      {/* Total obra */}
-      <td className="px-3 py-2.5 text-right bg-gray-50 border-l border-gray-100">
+      {/* Total obra + saldo contrato */}
+      <td className="px-3 py-2.5 text-right bg-gray-50 border-l border-gray-100 min-w-[130px]">
         <p className="text-xs font-bold text-gray-700">{BRL(obra.totalAno)}</p>
         {obra.valorContrato > 0 && (
           <p className="text-[10px] text-gray-400">
             {((obra.totalAno / obra.valorContrato) * 100).toFixed(0)}% contrato
+          </p>
+        )}
+        {obra.saldoContrato > 0 && (
+          <p className="text-[10px] text-emerald-600 font-medium mt-0.5" title="Saldo a receber do contrato (histórico)">
+            Saldo: {BRL(obra.saldoContrato)}
           </p>
         )}
       </td>
@@ -503,6 +526,28 @@ function DarBaixaModal({ obra, mes, cell, companyId, isPending, onClose, onSave,
           </div>
           <p className="text-sm font-semibold opacity-90 truncate">{obra.obraNome}</p>
           <p className="text-xs opacity-75">{MESES_CURTOS[mesIdx]} {anoStr} · Previsto: {BRL(cell.valor)}</p>
+
+          {/* Saldo de Contrato — dentro do header colorido */}
+          {obra.valorContrato > 0 && (
+            <div className="bg-white/15 rounded-lg mt-3 px-3 py-2 flex items-center justify-between gap-2">
+              <div className="text-center">
+                <p className="text-[10px] text-white/60 uppercase tracking-wide">Contrato</p>
+                <p className="text-xs font-bold text-white">{BRL(obra.valorContrato)}</p>
+              </div>
+              <div className="w-px h-6 bg-white/20" />
+              <div className="text-center">
+                <p className="text-[10px] text-white/60 uppercase tracking-wide">Recebido</p>
+                <p className="text-xs font-bold text-white">{BRL(obra.totalRecebidoHistorico)}</p>
+              </div>
+              <div className="w-px h-6 bg-white/20" />
+              <div className="text-center">
+                <p className="text-[10px] text-white/60 uppercase tracking-wide">Saldo</p>
+                <p className={`text-xs font-bold ${obra.saldoContrato > 0 ? "text-emerald-300" : "text-white"}`}>
+                  {BRL(obra.saldoContrato)}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="p-5 space-y-4">

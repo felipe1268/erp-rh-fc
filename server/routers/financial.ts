@@ -2913,6 +2913,95 @@ export const financialRouter = router({
       standaloneByProjetoByMes[pid][mes] = fr;
     }
 
+    // 3c. Avanço físico mensal por projeto (Camada 2 - Previsão de Faturamento)
+    //     Calcula o incremento mensal de progresso de cada atividade e converte para R$
+    const previsaoFatRes = await dbExecute(db, `
+      WITH activity_latest AS (
+        SELECT
+          a.projeto_id,
+          a.id AS atividade_id,
+          COALESCE(a.peso_financeiro, 0)::numeric AS peso,
+          DATE_TRUNC('month', av.semana)::date AS mes_inicio,
+          av.percentual_acumulado::numeric AS pct_acumulado,
+          ROW_NUMBER() OVER (
+            PARTITION BY a.id, DATE_TRUNC('month', av.semana)
+            ORDER BY av.semana DESC
+          ) AS rn
+        FROM planejamento_atividades a
+        JOIN planejamento_avancos av ON av.atividade_id = a.id
+        WHERE a.projeto_id IN (${idsStr})
+          AND NOT a.is_grupo
+      ),
+      month_end_pct AS (
+        SELECT projeto_id, atividade_id, peso, mes_inicio, pct_acumulado
+        FROM activity_latest WHERE rn = 1
+      ),
+      with_prev_month AS (
+        SELECT
+          me.*,
+          LAG(me.pct_acumulado) OVER (
+            PARTITION BY me.atividade_id
+            ORDER BY me.mes_inicio
+          ) AS pct_mes_anterior
+        FROM month_end_pct me
+      ),
+      project_total_peso AS (
+        SELECT projeto_id, NULLIF(SUM(COALESCE(peso_financeiro, 0)), 0) AS total_peso
+        FROM planejamento_atividades
+        WHERE projeto_id IN (${idsStr}) AND NOT is_grupo
+        GROUP BY projeto_id
+      )
+      SELECT
+        wp.projeto_id,
+        TO_CHAR(wp.mes_inicio, 'YYYY-MM') AS competencia,
+        SUM(
+          GREATEST(0, (wp.pct_acumulado - COALESCE(wp.pct_mes_anterior, 0))) / 100.0 * wp.peso
+        ) AS incremento_peso,
+        pt.total_peso
+      FROM with_prev_month wp
+      JOIN project_total_peso pt ON pt.projeto_id = wp.projeto_id
+      GROUP BY wp.projeto_id, wp.mes_inicio, pt.total_peso
+      HAVING SUM(GREATEST(0, (wp.pct_acumulado - COALESCE(wp.pct_mes_anterior, 0))) / 100.0 * wp.peso) > 0
+      ORDER BY wp.projeto_id, wp.mes_inicio
+    `, []);
+
+    // Mapeia previsão de faturamento por projeto+mês (R$ convertido do avanço físico)
+    const previsaoByProjeto: Record<number, Record<string, number>> = {};
+    for (const r of previsaoFatRes.rows) {
+      const pid = Number(r.projeto_id);
+      const mes = String(r.competencia);
+      const totalPeso = parseFloat(r.total_peso ?? "0") || 0;
+      const incrementoPeso = parseFloat(r.incremento_peso ?? "0") || 0;
+      if (!previsaoByProjeto[pid]) previsaoByProjeto[pid] = {};
+      const proj = projetoMap[pid];
+      const totalVenda = parseFloat(proj?.total_venda ?? "0") || parseFloat(proj?.valor_contrato ?? "0") || 0;
+      if (totalPeso > 0 && totalVenda > 0) {
+        previsaoByProjeto[pid][mes] = (previsaoByProjeto[pid][mes] ?? 0) + (incrementoPeso / totalPeso) * totalVenda;
+      }
+    }
+
+    // 3d. Total recebido histórico por projeto (todos os anos) para saldo de contrato
+    const totalRecebidoHistRes = await dbExecute(db, `
+      SELECT fr.obra_id, fr.obra_nome,
+             SUM(COALESCE(fr.valor_recebido, 0)) AS total_recebido
+      FROM financial_revenue fr
+      WHERE fr.company_id = $1
+        AND fr.valor_recebido > 0
+      GROUP BY fr.obra_id, fr.obra_nome
+    `, [input.companyId]);
+
+    const totalRecebidoHistByProjId: Record<number, number> = {};
+    for (const r of totalRecebidoHistRes.rows) {
+      let pid: number | undefined;
+      if (r.obra_id) pid = obraIdToProjId[Number(r.obra_id)];
+      if (!pid) {
+        const nome = (r.obra_nome ?? "").trim().toLowerCase();
+        if (nome) pid = obraNameToProjId[nome];
+      }
+      if (!pid) continue;
+      totalRecebidoHistByProjId[pid] = (totalRecebidoHistByProjId[pid] ?? 0) + parseFloat(r.total_recebido ?? "0");
+    }
+
     console.log(`[ContasReceber] company=${input.companyId} ano=${input.ano} projetos=${projetos.length} prev_rows=${prevRows.length} medicoes=${medRes.rows.length}`);
 
     // 4. Agrupa venda bruta por projeto+mês e normaliza para total_venda do orçamento
@@ -3042,7 +3131,7 @@ export const financialRouter = router({
     );
 
     // 7. KPIs e totais mensais
-    let totalContrato = 0, totalPrevisto = 0, totalFaturado = 0, totalRecebido = 0;
+    let totalContrato = 0, totalPrevisto = 0, totalFaturado = 0, totalRecebido = 0, totalPrevisaoFat = 0;
     const totaisMes: Record<string, number> = {};
     for (const p of projetos) {
       totalContrato += parseFloat(p.total_venda ?? p.valor_contrato ?? "0") || 0;
@@ -3056,6 +3145,13 @@ export const financialRouter = router({
           : (prevByProjeto[pid]?.[mes] ?? 0);
         totaisMes[mes] = (totaisMes[mes] ?? 0) + val;
         totalPrevisto += val;
+
+        // Previsão de faturamento: soma apenas onde não há medição formal nem standalone
+        const hasMedicao = meds.length > 0;
+        const hasStandalone = !!(standaloneByProjetoByMes[pid]?.[mes]);
+        if (!hasMedicao && !hasStandalone) {
+          totalPrevisaoFat += previsaoByProjeto[pid]?.[mes] ?? 0;
+        }
       }
     }
     for (const m of medicoes) {
@@ -3082,15 +3178,20 @@ export const financialRouter = router({
         const meds = medByProjeto[pid] ?? [];
         const medByMes: Record<string, any> = {};
         for (const m of meds) medByMes[String(m.competencia).slice(0, 7)] = m;
+        const valorContrato = parseFloat(p.total_venda ?? p.valor_contrato ?? "0") || 0;
+        const totalRecebidoHistorico = totalRecebidoHistByProjId[pid] ?? 0;
         return {
           projetoId: pid,
           obraId: p.obra_id ? Number(p.obra_id) : null,
           obraNome: p.obra_nome ?? p.projeto_nome,
           cliente: p.cliente,
-          valorContrato: parseFloat(p.total_venda ?? p.valor_contrato ?? "0") || 0,
-          // Células mensais: previsto calculado + realizado salvo
+          valorContrato,
+          totalRecebidoHistorico,
+          saldoContrato: Math.max(0, valorContrato - totalRecebidoHistorico),
+          // Células mensais: previsto calculado + realizado salvo + previsão faturamento
           meses: Object.fromEntries(meses12.map(mes => {
             const previsto = prevByProjeto[pid]?.[mes] ?? 0;
+            const previsao = previsaoByProjeto[pid]?.[mes] ?? 0;
             const med = medByMes[mes];
             const standaloneFr = standaloneByProjetoByMes[pid]?.[mes] ?? null;
             const valorMedido = med ? (parseFloat(med.valor_medido ?? "0") || parseFloat(med.valor_previsto ?? "0") || 0) : 0;
@@ -3115,11 +3216,12 @@ export const financialRouter = router({
               dataVencimento = standaloneFr.data_vencimento ?? null;
               nfNumero = standaloneFr.nf_numero ?? null;
             } else {
-              sf = previsto > 0 ? "previsto" : null;
+              sf = previsto > 0 ? "previsto" : (previsao > 0 ? "previsao_faturamento" : null);
             }
             return [mes, {
               valorPrevisto: previsto,
               valorMedido,
+              valorPrevisao: previsao,
               status: sf,
               medicaoId: med?.id ?? null,
               frId,
@@ -3149,7 +3251,14 @@ export const financialRouter = router({
         };
       }),
       totaisMes,
-      kpis: { totalContrato, totalPrevisto, totalFaturado, totalRecebido },
+      kpis: {
+        totalContrato,
+        totalPrevisto,
+        totalPrevisaoFaturamento: totalPrevisaoFat,
+        totalFaturado,
+        totalAReceber: Math.max(0, totalFaturado - totalRecebido),
+        totalRecebido,
+      },
     };
   }),
 });
