@@ -1158,7 +1158,7 @@ export default function Solicitacoes() {
   const [sugestaoAberta, setSugestaoAberta] = useState(false);
 
   const q = trpc.compras.listarSolicitacoes.useQuery(
-    { companyId, busca: busca || undefined, status: (filtroStatus === "todos" || filtroStatus === "pendente_oc" || filtroStatus === "pendente_entrega") ? undefined : filtroStatus },
+    { companyId, busca: busca || undefined, status: (filtroStatus === "todos" || filtroStatus === "pendente_oc" || filtroStatus === "pendente_entrega" || filtroStatus === "recusado") ? undefined : filtroStatus },
     { enabled: companyId > 0 }
   );
   const qTodas = trpc.compras.listarSolicitacoes.useQuery(
@@ -2120,6 +2120,8 @@ export default function Solicitacoes() {
     ? listaFiltradaObraBase.filter((r: any) => !(r._hasOC) && !["aprovado", "recusado", "cancelado"].includes(r.status))
     : filtroStatus === "pendente_entrega"
     ? listaFiltradaObraBase.filter((r: any) => r._hasOC === true && r.status !== "aprovado")
+    : filtroStatus === "recusado"
+    ? listaFiltradaObraBase.filter((r: any) => r.status === "recusado" || r.status === "cancelado")
     : listaFiltradaObraBase;
   const listaFiltradaObra = filtroClassificacao === "todas"
     ? listaFiltradaObraStatus
