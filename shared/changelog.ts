@@ -9014,6 +9014,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-04-28 14:00:00",
   },
   {
+    version: 1315,
+    titulo: "Compras: Solicitações — filtros Pend. de OC e Pend. de Entrega",
+    descricao: "Os filtros 'Pendente' e 'Em Cotação' foram substituídos por dois filtros mais informativos: (1) 'Pend. de OC' (âmbar) — exibe SCs que ainda não têm nenhuma Ordem de Compra gerada (_hasOC === false e status ≠ aprovado/recusado/cancelado); (2) 'Pend. de Entrega' (laranja) — exibe SCs que já possuem OC emitida mas ainda não foram concluídas (_hasOC === true e status ≠ aprovado). Os filtros 'Concluído' e 'Recusado' permanecem inalterados. Cada pill tem cor de ring distinta ao ser selecionado. Filtragem frontend-only usando o campo _hasOC retornado pela API. KPIs calculados sobre listaFiltradaObraBase para refletir contagens sem duplo-filtro.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-28 15:00:00",
+  },
+  {
     version: 1314,
     titulo: "Compras: Filtro por data de criação nas Ordens de Compra",
     descricao: "Adicionado filtro de intervalo de datas na listagem de OCs, na mesma linha dos filtros de fornecedor e valor. Dois campos de data (De / Até) permitem filtrar OCs pelo campo criadoEm (data de emissão da ordem). Botão X limpa o intervalo de datas. Badge verde de resultados atualizado para considerar também o filtro de data ativo. Reset automático ao trocar de aba OC/OS. Filtragem 100% no frontend.",

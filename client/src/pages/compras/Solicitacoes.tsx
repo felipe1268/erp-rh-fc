@@ -1158,7 +1158,7 @@ export default function Solicitacoes() {
   const [sugestaoAberta, setSugestaoAberta] = useState(false);
 
   const q = trpc.compras.listarSolicitacoes.useQuery(
-    { companyId, busca: busca || undefined, status: filtroStatus === "todos" ? undefined : filtroStatus },
+    { companyId, busca: busca || undefined, status: (filtroStatus === "todos" || filtroStatus === "pendente_oc" || filtroStatus === "pendente_entrega") ? undefined : filtroStatus },
     { enabled: companyId > 0 }
   );
   const qTodas = trpc.compras.listarSolicitacoes.useQuery(
@@ -2116,9 +2116,14 @@ export default function Solicitacoes() {
   }, []);
 
   const listaFiltradaObraBase = filtroObra === "todas" ? lista : lista.filter((r: any) => String(r.obraId) === filtroObra);
+  const listaFiltradaObraStatus = filtroStatus === "pendente_oc"
+    ? listaFiltradaObraBase.filter((r: any) => !(r._hasOC) && !["aprovado", "recusado", "cancelado"].includes(r.status))
+    : filtroStatus === "pendente_entrega"
+    ? listaFiltradaObraBase.filter((r: any) => r._hasOC === true && r.status !== "aprovado")
+    : listaFiltradaObraBase;
   const listaFiltradaObra = filtroClassificacao === "todas"
-    ? listaFiltradaObraBase
-    : listaFiltradaObraBase.filter((r: any) => {
+    ? listaFiltradaObraStatus
+    : listaFiltradaObraStatus.filter((r: any) => {
         const tipo = r.tipo || "material";
         if (filtroClassificacao === "material") return tipo === "material" && !r.vehicleId;
         if (filtroClassificacao === "servico") return tipo === "servico";
@@ -2130,11 +2135,11 @@ export default function Solicitacoes() {
   const todasSCs = filtroStatus !== "todos" ? (qTodas.data ?? lista) : lista;
   const urgentesAtivos = useMemo(() => todasSCs.filter((r: any) => r.prioridade === "urgente" && !["aprovado", "cancelado", "recusado"].includes(r.status) && !r._hasOC), [todasSCs]);
   const kpis = useMemo(() => ({
-    pendente: listaFiltradaObra.filter(r => r.status === "pendente").length,
-    cotacao:  listaFiltradaObra.filter(r => r.status === "cotacao").length,
-    aprovado: listaFiltradaObra.filter(r => r.status === "aprovado").length,
-    recusado: listaFiltradaObra.filter(r => r.status === "recusado" || r.status === "cancelado").length,
-  }), [listaFiltradaObra]);
+    pendenteOC:       listaFiltradaObraBase.filter((r: any) => !(r._hasOC) && !["aprovado", "recusado", "cancelado"].includes(r.status)).length,
+    pendenteEntrega:  listaFiltradaObraBase.filter((r: any) => r._hasOC === true && r.status !== "aprovado").length,
+    aprovado: listaFiltradaObraBase.filter((r: any) => r.status === "aprovado").length,
+    recusado: listaFiltradaObraBase.filter((r: any) => r.status === "recusado" || r.status === "cancelado").length,
+  }), [listaFiltradaObraBase]);
 
   function nomeObra(id: number | null | undefined) {
     if (!id) return null;
@@ -2163,14 +2168,14 @@ export default function Solicitacoes() {
       {/* KPI badges */}
       <div className="flex flex-wrap gap-3">
         {[
-          { label: "Pendente",    count: kpis.pendente,  cls: "bg-amber-50 border-amber-200 text-amber-700",    key: "pendente" },
-          { label: "Em Cotação", count: kpis.cotacao,   cls: "bg-blue-50 border-blue-200 text-blue-700",        key: "cotacao" },
-          { label: "Concluído",  count: kpis.aprovado,  cls: "bg-emerald-50 border-emerald-200 text-emerald-700", key: "aprovado" },
-          { label: "Recusado",   count: kpis.recusado,  cls: "bg-red-50 border-red-200 text-red-700",            key: "recusado" },
+          { label: "Pend. de OC",       count: kpis.pendenteOC,      cls: "bg-amber-50 border-amber-200 text-amber-700",        key: "pendente_oc",      ring: "ring-amber-400" },
+          { label: "Pend. de Entrega",  count: kpis.pendenteEntrega, cls: "bg-orange-50 border-orange-200 text-orange-700",     key: "pendente_entrega", ring: "ring-orange-400" },
+          { label: "Concluído",         count: kpis.aprovado,        cls: "bg-emerald-50 border-emerald-200 text-emerald-700",  key: "aprovado",         ring: "ring-emerald-400" },
+          { label: "Recusado",          count: kpis.recusado,        cls: "bg-red-50 border-red-200 text-red-700",              key: "recusado",         ring: "ring-red-400" },
         ].map(k => (
           <button key={k.key}
             onClick={() => setFiltroStatus(filtroStatus === k.key ? "todos" : k.key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition-all ${k.cls} ${filtroStatus === k.key ? "ring-2 ring-offset-1 ring-amber-400" : "opacity-80 hover:opacity-100"}`}>
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition-all ${k.cls} ${filtroStatus === k.key ? `ring-2 ring-offset-1 ${k.ring}` : "opacity-80 hover:opacity-100"}`}>
             <span className="text-xl font-bold">{k.count}</span>
             <span>{k.label}</span>
           </button>
