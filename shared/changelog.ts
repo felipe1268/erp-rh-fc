@@ -9076,4 +9076,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-28 21:00:00",
   },
+  {
+    version: 1321,
+    titulo: "Cotações: Cotação Parcial agora acessível via botão dedicado no Mapa de Cotação",
+    descricao: "O recurso de cotação parcial (dividir itens entre diferentes fornecedores e gerar OCs separadas por fornecedor) estava implementado no backend mas inacessível na prática — dependia de ícones de pin minúsculos na tabela de comparação que ninguém encontrava. Agora: (1) Botão 'Cotação Parcial' adicionado no footer de ações junto de 'Aprovar e Gerar OC' nos painéis de detalhe e fullscreen; (2) Botão 'Cotação Parcial — atribuir itens por fornecedor' adicionado diretamente no cabeçalho da tabela de comparação do Mapa, visível enquanto o usuário analisa os preços; (3) Ao clicar, o modal abre com todos os itens pré-populados, cada item automaticamente atribuído ao fornecedor mais barato para aquele item específico; (4) O dropdown de seleção de fornecedor por item agora exibe o preço total de cada fornecedor para aquele item, facilitando a comparação e a decisão. O fluxo de geração de OCs parciais separadas por fornecedor permanece o mesmo.",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-04-28 23:00:00",
+  },
 ];

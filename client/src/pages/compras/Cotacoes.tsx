@@ -1942,6 +1942,40 @@ export default function Cotacoes() {
     const isMdoMedicaoVencedor = (cotTipoVencedor === "servico" || cotTipoVencedor === "pacote") && (tipoPagVencedor === "medicao" || (condPagVencedor ?? "").toLowerCase?.().includes("medição"));
     const condicoesIncompletas = detalheFullscreen?.status === "pendente" && fornParaSaldo && (!condPagVencedor || (!isMdoMedicaoVencedor && (!prazoVencedor || Number(prazoVencedor) <= 0)));
 
+    function handleAbrirCotacaoParcial(cotacaoId: number) {
+      const itensDoMapa: any[] = mapa?.itens ?? [];
+      const participantes: any[] = mapa?.participantes ?? [];
+      if (itensDoMapa.length === 0 || participantes.length === 0) return;
+
+      const itensParaFechamento = itensDoMapa.map((it: any) => {
+        let melhorFornId = melhorForn?.fornecedorId ?? (participantes[0]?.fornecedorId ?? 0);
+        let melhorTotal = Infinity;
+        for (const p of participantes) {
+          const key = `${it.id}_${p.fornecedorId}`;
+          const resp = mapa?.respostaMap?.[key];
+          if (resp) {
+            const pu = parseFloat((resp as any).precoUnitario ?? "0");
+            const qty = parseFloat((resp as any).quantidade ?? it.quantidade ?? "1");
+            const total = pu * qty;
+            if (pu > 0 && total < melhorTotal) {
+              melhorTotal = total;
+              melhorFornId = p.fornecedorId;
+            }
+          }
+        }
+        return {
+          itemId: it.id,
+          fornecedorId: melhorFornId,
+          incluir: melhorFornId > 0,
+          descricao: it.descricao ?? `Item #${it.id}`,
+        };
+      }).filter(it => it.fornecedorId > 0);
+
+      setPendingGerarOCParams({ cotacaoId });
+      setFechamentoParcialItens(itensParaFechamento);
+      setShowFechamentoParcialDialog(true);
+    }
+
     function handleAprovarGerarOC(cotacaoId: number) {
       if (!validarCondicoesVencedor()) return;
       if (temItensSemVerba && !semVerbaAutorizado) {
@@ -2428,6 +2462,12 @@ export default function Cotacoes() {
                         {gerarOC.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : temItensSemVerba && !semVerbaAutorizado ? <ShieldAlert className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
                         {temItensSemVerba && !semVerbaAutorizado ? "Aprovar (Requer Autorização)" : semVerbaAutorizado ? "Aprovar e Gerar OC (Autorizado)" : isMedicaoVencedor ? "Aprovar e Gerar Contrato" : "Aprovar e Gerar OC"}
                       </Button>
+                      {(mapa?.participantes ?? []).length >= 2 && !isMedicaoVencedor && (
+                        <Button variant="outline" onClick={() => handleAbrirCotacaoParcial(detalheFullscreen.id)} disabled={gerarOC.isPending || gerarOCsParciais.isPending}
+                          className="border-blue-300 text-blue-700 hover:bg-blue-50 gap-2">
+                          <GitBranch className="h-4 w-4" /> Cotação Parcial
+                        </Button>
+                      )}
                       {isMedicaoVencedor && (
                         <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full flex items-center gap-1">
                           <FileText className="h-3 w-3" /> Contrato será gerado no módulo Terceiros
@@ -2719,6 +2759,12 @@ export default function Cotacoes() {
                           {gerarOC.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : temItensSemVerba && !semVerbaAutorizado ? <ShieldAlert className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
                           {temItensSemVerba && !semVerbaAutorizado ? "Aprovar (Requer Autorização)" : semVerbaAutorizado ? "Aprovar e Gerar OC (Autorizado)" : isMedicaoVencedor ? "Aprovar e Gerar Contrato" : "Aprovar e Gerar OC"}
                         </Button>
+                        {(mapa?.participantes ?? []).length >= 2 && !isMedicaoVencedor && (
+                          <Button variant="outline" onClick={() => handleAbrirCotacaoParcial(detalheFullscreen.id)} disabled={gerarOC.isPending || gerarOCsParciais.isPending}
+                            className="border-blue-300 text-blue-700 hover:bg-blue-50 gap-2">
+                            <GitBranch className="h-4 w-4" /> Cotação Parcial
+                          </Button>
+                        )}
                         {isMedicaoVencedor && (
                           <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full flex items-center gap-1">
                             <FileText className="h-3 w-3" /> Contrato será gerado no módulo Terceiros
@@ -3123,19 +3169,33 @@ export default function Cotacoes() {
                     <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
                   ) : (mapa?.participantes ?? []).length === 0 ? null : (
                     <div className="space-y-4">
-                      <div className="flex items-center justify-end gap-2 px-1">
-                        {((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote' ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
-                            <Package className="h-3.5 w-3.5" />
-                            Cotação por Pacote — itens agrupados por composição
-                          </span>
-                        ) : (
-                          <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                            <input type="checkbox" checked={agruparItens} onChange={e => setAgruparItens(e.target.checked)}
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5" />
-                            <span className="text-xs text-gray-500">Agrupar itens iguais</span>
-                          </label>
-                        )}
+                      <div className="flex items-center justify-between gap-2 px-1">
+                        <div className="flex items-center gap-2">
+                          {detalheFullscreen?.status === "pendente" && (mapa?.participantes ?? []).length >= 2 && (
+                            <button
+                              type="button"
+                              onClick={() => handleAbrirCotacaoParcial(detalheFullscreen.id)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-blue-50 border border-blue-300 text-blue-700 hover:bg-blue-100 transition-colors"
+                            >
+                              <GitBranch className="h-3.5 w-3.5" />
+                              Cotação Parcial — atribuir itens por fornecedor
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote' ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                              <Package className="h-3.5 w-3.5" />
+                              Cotação por Pacote — itens agrupados por composição
+                            </span>
+                          ) : (
+                            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                              <input type="checkbox" checked={agruparItens} onChange={e => setAgruparItens(e.target.checked)}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5" />
+                              <span className="text-xs text-gray-500">Agrupar itens iguais</span>
+                            </label>
+                          )}
+                        </div>
                       </div>
                       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
                         <table className="text-sm border-collapse" style={{ minWidth: "max-content" }}>
@@ -5175,6 +5235,12 @@ export default function Cotacoes() {
                           </span>
                         )}
                       </Button>
+                      {(mapa?.participantes ?? []).length >= 2 && (
+                        <Button size="sm" variant="outline" onClick={() => handleAbrirCotacaoParcial(detalhe.id)} disabled={gerarOC.isPending || gerarOCsParciais.isPending}
+                          className="border-blue-300 text-blue-700 hover:bg-blue-50 text-xs gap-1">
+                          <GitBranch className="h-3 w-3" /> Cotação Parcial
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => atualizarStatus.mutate({ id: detalhe.id, status: "recusada" })}
                         className="border-red-200 text-red-600 hover:bg-red-50 text-xs gap-1">
                         <X className="h-3 w-3" /> Recusar
@@ -5701,11 +5767,19 @@ export default function Cotacoes() {
                                 setFechamentoParcialItens(prev => prev.map((x, i) => i === idx ? { ...x, fornecedorId: newFornId } : x));
                               }}
                             >
-                              {(mapa?.participantes ?? []).map((pp: any) => (
-                                <option key={pp.fornecedorId} value={pp.fornecedorId}>
-                                  {pp.fornecedor?.nomeFantasia || pp.fornecedor?.razaoSocial || `#${pp.fornecedorId}`}
-                                </option>
-                              ))}
+                              {(mapa?.participantes ?? []).map((pp: any) => {
+                                const rKey = `${fi.itemId}_${pp.fornecedorId}`;
+                                const rResp = mapa?.respostaMap?.[rKey];
+                                const rPu = rResp ? parseFloat((rResp as any).precoUnitario ?? "0") : 0;
+                                const rQty = rResp ? parseFloat((rResp as any).quantidade ?? "1") : 1;
+                                const rTot = rPu * rQty;
+                                const nome = pp.fornecedor?.nomeFantasia || pp.fornecedor?.razaoSocial || `#${pp.fornecedorId}`;
+                                return (
+                                  <option key={pp.fornecedorId} value={pp.fornecedorId}>
+                                    {nome}{rTot > 0 ? ` — ${rTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : " — sem preço"}
+                                  </option>
+                                );
+                              })}
                             </select>
                           </td>
                           <td className="px-3 py-2 text-right text-gray-700 font-semibold">
