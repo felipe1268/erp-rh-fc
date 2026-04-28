@@ -472,6 +472,7 @@ async function startServer() {
             ALTER TABLE seguro_vida_coberturas ADD COLUMN IF NOT EXISTS cancelado_por TEXT;
             ALTER TABLE seguro_vida_coberturas ADD COLUMN IF NOT EXISTS data_vencimento_apolice TEXT;
             ALTER TABLE seguro_vida_importacoes ADD COLUMN IF NOT EXISTS pdf_dados TEXT;
+            ALTER TABLE compras_ordens_itens ADD COLUMN IF NOT EXISTS cotacao_item_id INTEGER;
           EXCEPTION WHEN OTHERS THEN NULL;
           END $$
         `);

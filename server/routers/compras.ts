@@ -3135,22 +3135,23 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         totaisPorFornecedor[p.fornecedorId] = totalItens + pValorFrete;
       }
       // Quais itens da cotação já têm OC gerada (não rascunho)
-      const ocsAtivas = await db.select({ id: comprasOrdens.id })
-        .from(comprasOrdens)
-        .where(and(eq(comprasOrdens.cotacaoId, input.cotacaoId), sql`${comprasOrdens.status} != 'rascunho'`));
       const itensJaEmOC: number[] = [];
-      if (ocsAtivas.length > 0) {
-        const ocItensAtivos = await db.select({ cotacaoItemId: comprasOrdensItens.cotacaoItemId, ordemId: comprasOrdensItens.ordemId, fornecedorId: comprasOrdens.fornecedorId })
-          .from(comprasOrdensItens)
-          .innerJoin(comprasOrdens, eq(comprasOrdens.id, comprasOrdensItens.ordemId))
-          .where(and(
-            inArray(comprasOrdensItens.ordemId, ocsAtivas.map(o => o.id)),
-            sql`${comprasOrdensItens.cotacaoItemId} is not null`
-          ));
-        for (const oi of ocItensAtivos) {
-          if (oi.cotacaoItemId) itensJaEmOC.push(oi.cotacaoItemId);
+      try {
+        const ocsAtivas = await db.select({ id: comprasOrdens.id })
+          .from(comprasOrdens)
+          .where(and(eq(comprasOrdens.cotacaoId, input.cotacaoId), sql`${comprasOrdens.status} != 'rascunho'`));
+        if (ocsAtivas.length > 0) {
+          const ocItensAtivos = await db.select({ cotacaoItemId: comprasOrdensItens.cotacaoItemId })
+            .from(comprasOrdensItens)
+            .where(and(
+              inArray(comprasOrdensItens.ordemId, ocsAtivas.map(o => o.id)),
+              sql`${comprasOrdensItens.cotacaoItemId} is not null`
+            ));
+          for (const oi of ocItensAtivos) {
+            if (oi.cotacaoItemId) itensJaEmOC.push(oi.cotacaoItemId);
+          }
         }
-      }
+      } catch (_) { /* coluna ainda não existe — retorna lista vazia */ }
 
       return { cotacao: cot, tipoEfetivo, incluirEquipamentos: incluirEquipamentosMapa, itens: itensComMeta, participantes: participantes.map(p => ({ ...p, fornecedor: forns.find(f => f.id === p.fornecedorId) })), respostaMap, totaisPorFornecedor, itensJaEmOC };
     }),
