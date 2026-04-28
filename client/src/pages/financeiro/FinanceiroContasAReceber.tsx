@@ -138,6 +138,7 @@ export default function FinanceiroContasAReceber() {
   const [detalhe, setDetalhe] = useState<{ obra: ObraRow; mes: string; cell: MedicaoCell } | null>(null);
   const [baixa, setBaixa] = useState<{ obra: ObraRow; mes: string; cell: MedicaoCell } | null>(null);
   const [viewMode, setViewMode] = useState<"cronograma" | "contrato">("cronograma");
+  const [optimisticCells, setOptimisticCells] = useState<Record<string, Partial<MedicaoCell>>>({});
 
   // ─── Query ─────────────────────────────────────────────────────────────────
   const { data, isLoading, refetch } = (trpc as any).financial.getContasReceberMatrix.useQuery(
@@ -197,18 +198,35 @@ export default function FinanceiroContasAReceber() {
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
   const baixaMut = (trpc as any).financial.registrarRecebimento.useMutation({
-    onSuccess: () => {
-      toast({ title: "✅ Recebimento registrado!", description: "Valor atualizado em todos os módulos." });
+    onMutate: (variables: any) => {
       setBaixa(null);
-      refetch();
+      toast({ title: "✅ Recebimento registrado!", description: "Valor atualizado em todos os módulos." });
+      const isFullyPaid = !(variables.valorRecebido > 0 && variables.valorRecebido < (variables.valorPrevisto ?? 0) - 0.01);
+      const key = `${variables.projetoId}_${variables.competencia}`;
+      setOptimisticCells(prev => ({
+        ...prev,
+        [key]: {
+          statusFinanceiro: isFullyPaid ? "recebido_total" : "recebido_parcial",
+          valorRecebido: variables.valorRecebido,
+          dataRecebimento: variables.dataRecebimento ?? null,
+        },
+      }));
     },
-    onError: (e: any) => toast({ title: "Erro ao registrar", description: e.message, variant: "destructive" }),
+    onSuccess: () => {
+      refetch().then(() => setOptimisticCells({}));
+    },
+    onError: (e: any) => {
+      setOptimisticCells({});
+      toast({ title: "Erro ao registrar", description: e.message, variant: "destructive" });
+    },
   });
 
   const cancelarMut = (trpc as any).financial.cancelarRecebimento.useMutation({
-    onSuccess: () => {
-      toast({ title: "Recebimento cancelado", description: "O registro foi removido." });
+    onMutate: () => {
       setBaixa(null);
+      toast({ title: "Recebimento cancelado", description: "O registro foi removido." });
+    },
+    onSuccess: () => {
       refetch();
     },
     onError: (e: any) => toast({ title: "Erro ao cancelar", description: e.message, variant: "destructive" }),
@@ -307,6 +325,7 @@ export default function FinanceiroContasAReceber() {
                       mesesChave={mesesChave}
                       zebra={idx % 2 === 0}
                       viewMode={viewMode}
+                      cellOverrides={optimisticCells}
                       onCellClick={(mes, cell) => {
                         setBaixa({ obra, mes, cell });
                       }}
@@ -409,17 +428,20 @@ function KpiCard({ icon: Icon, label, value, color, bg, sub }: {
   );
 }
 
-function ObraTableRow({ obra, mesesChave, zebra, viewMode, onCellClick, onDetalheClick }: {
+function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, onCellClick, onDetalheClick }: {
   obra: ObraRow;
   mesesChave: string[];
   zebra: boolean;
   viewMode: "cronograma" | "contrato";
+  cellOverrides: Record<string, Partial<MedicaoCell>>;
   onCellClick: (mes: string, cell: MedicaoCell) => void;
   onDetalheClick: (mes: string, cell: MedicaoCell) => void;
 }) {
   const rowBg = zebra ? "bg-white" : "bg-gray-50/50";
   const hasPartial = mesesChave.some(mk => {
-    const c = obra.byMes[mk];
+    const rawC = obra.byMes[mk];
+    const ov = cellOverrides[`${obra.projetoId}_${mk}`];
+    const c = ov ? { ...rawC, ...ov } : rawC;
     return c && resolveStatus(c) === "recebido_parcial";
   });
   return (
@@ -449,7 +471,9 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, onCellClick, onDetalh
 
       {/* Células por mês */}
       {mesesChave.map(mk => {
-        const cell = obra.byMes[mk];
+        const rawCell = obra.byMes[mk];
+        const ov = cellOverrides[`${obra.projetoId}_${mk}`];
+        const cell = (rawCell && ov) ? { ...rawCell, ...ov } : rawCell;
         if (!cell || cell.valor === 0) {
           return (
             <td key={mk} className="px-2 py-2.5 text-center">
