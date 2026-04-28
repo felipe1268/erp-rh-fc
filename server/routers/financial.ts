@@ -588,13 +588,13 @@ export const financialRouter = router({
     const revRes = await dbExecute(db,
       `INSERT INTO financial_revenue
        (company_id, obra_id, obra_nome, cliente_nome, valor_contrato,
-        valor_medicao, valor_recebido, data_recebimento, forma_pagamento,
-        status, observacoes, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,NULL,$5,$6,$7,$8,'recebido_total',$9,NOW(),NOW())
+        valor_medicao, valor_recebido, data_vencimento, data_recebimento,
+        forma_pagamento, status, observacoes, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,NULL,$5,$6,$7::date,$8,$9,'recebido_total',$10,NOW(),NOW())
        RETURNING id`,
       [input.companyId, obraId, obraNome, input.clienteNome ?? null,
-       input.valorPrevisto, input.valorRecebido, input.dataRecebimento,
-       input.formaPagamento ?? null, input.observacoes ?? null]
+       input.valorPrevisto, input.valorRecebido, mesDate,
+       input.dataRecebimento, input.formaPagamento ?? null, input.observacoes ?? null]
     );
     const newFrId = rows(revRes)[0]?.id;
 
@@ -2831,6 +2831,31 @@ export const financialRouter = router({
       ORDER BY pm.competencia ASC, pm.numero ASC
     `, [input.companyId, String(input.ano)]);
     const medicoes = medRes.rows;
+
+    // 3b. Standalone financial_revenue (Dar Baixa direto, sem medicao_id)
+    //     Indexado por obra_id+competencia para sobrepor células "Previsto"
+    const obraIds = projetos.map((p: any) => p.obra_id).filter(Boolean).map(Number);
+    const standaloneByObraByMes: Record<number, Record<string, any>> = {};
+    if (obraIds.length > 0) {
+      const stRes = await dbExecute(db, `
+        SELECT fr.id, fr.obra_id,
+               TO_CHAR(fr.data_vencimento, 'YYYY-MM') AS competencia,
+               fr.status, fr.data_recebimento, fr.valor_recebido,
+               fr.valor_medicao, fr.forma_pagamento, fr.nf_numero, fr.data_vencimento
+        FROM financial_revenue fr
+        WHERE fr.company_id = $1
+          AND fr.medicao_id IS NULL
+          AND fr.obra_id IN (${inlineIds(obraIds)})
+          AND LEFT(fr.data_vencimento::text, 4) = $2
+      `, [input.companyId, String(input.ano)]);
+      for (const fr of stRes.rows) {
+        const oid = Number(fr.obra_id);
+        const mes = String(fr.competencia);
+        if (!standaloneByObraByMes[oid]) standaloneByObraByMes[oid] = {};
+        standaloneByObraByMes[oid][mes] = fr;
+      }
+    }
+
     console.log(`[ContasReceber] company=${input.companyId} ano=${input.ano} projetos=${projetos.length} prev_rows=${prevRows.length} medicoes=${medRes.rows.length}`);
 
     // 4. Agrupa venda bruta por projeto+mês e normaliza para total_venda do orçamento
@@ -2982,6 +3007,16 @@ export const financialRouter = router({
       if (["faturado","a_receber","recebido_parcial","recebido_total"].includes(sf)) totalFaturado += val;
       if (["recebido_parcial","recebido_total"].includes(sf)) totalRecebido += parseFloat(m.valor_recebido ?? "0") || val;
     }
+    // Standalone FRs (Dar Baixa direto, sem medicao)
+    for (const obraFrs of Object.values(standaloneByObraByMes)) {
+      for (const fr of Object.values(obraFrs)) {
+        const sf = (fr as any).status;
+        if (["recebido_parcial","recebido_total"].includes(sf)) {
+          totalRecebido += parseFloat((fr as any).valor_recebido ?? "0") || 0;
+          totalFaturado += parseFloat((fr as any).valor_recebido ?? "0") || 0;
+        }
+      }
+    }
 
     return {
       ano: input.ano,
@@ -3000,18 +3035,42 @@ export const financialRouter = router({
           meses: Object.fromEntries(meses12.map(mes => {
             const previsto = prevByProjeto[pid]?.[mes] ?? 0;
             const med = medByMes[mes];
+            const obraId = p.obra_id ? Number(p.obra_id) : null;
+            const standaloneFr = obraId ? (standaloneByObraByMes[obraId]?.[mes] ?? null) : null;
             const valorMedido = med ? (parseFloat(med.valor_medido ?? "0") || parseFloat(med.valor_previsto ?? "0") || 0) : 0;
-            const sf = med ? (med.status_financeiro ?? med.status_medicao ?? "previsto") : (previsto > 0 ? "previsto" : null);
+            let sf: string | null;
+            let frId: number | null = null;
+            let dataRecebimento: string | null = null;
+            let valorRecebido = 0;
+            let dataVencimento: string | null = null;
+            let nfNumero: string | null = null;
+            if (med) {
+              sf = med.status_financeiro ?? med.status_medicao ?? "previsto";
+              frId = med.fr_id ?? null;
+              dataRecebimento = med.data_recebimento ?? null;
+              valorRecebido = parseFloat(med.valor_recebido ?? "0") || 0;
+              dataVencimento = med.data_vencimento ?? null;
+              nfNumero = med.nf_numero ?? null;
+            } else if (standaloneFr) {
+              sf = standaloneFr.status ?? "recebido_total";
+              frId = Number(standaloneFr.id);
+              dataRecebimento = standaloneFr.data_recebimento ?? null;
+              valorRecebido = parseFloat(standaloneFr.valor_recebido ?? "0") || 0;
+              dataVencimento = standaloneFr.data_vencimento ?? null;
+              nfNumero = standaloneFr.nf_numero ?? null;
+            } else {
+              sf = previsto > 0 ? "previsto" : null;
+            }
             return [mes, {
               valorPrevisto: previsto,
               valorMedido,
               status: sf,
               medicaoId: med?.id ?? null,
-              frId: med?.fr_id ?? null,
-              nfNumero: med?.nf_numero ?? null,
-              dataVencimento: med?.data_vencimento ?? null,
-              dataRecebimento: med?.data_recebimento ?? null,
-              valorRecebido: med ? (parseFloat(med.valor_recebido ?? "0") || 0) : 0,
+              frId,
+              nfNumero,
+              dataVencimento,
+              dataRecebimento,
+              valorRecebido,
             }];
           })),
           // Medições salvas (compatibilidade com painel lateral)
