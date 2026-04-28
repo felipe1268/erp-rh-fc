@@ -13,7 +13,7 @@ import {
   ChevronLeft, ChevronRight, Plus, Building2,
   FileText, Clock, CheckCircle2, ReceiptText, Send, ThumbsUp, AlertCircle,
   TrendingUp, Wallet, BadgeCheck, CalendarClock, DollarSign, ChevronDown, ChevronUp,
-  Pencil, Trash2, AlertTriangle, ArrowRight,
+  Pencil, Trash2, AlertTriangle, ArrowRight, BookOpen, BarChart2, Info,
 } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -247,17 +247,27 @@ export default function FinanceiroContasAReceber() {
           </div>
           <div className="flex items-center gap-3">
             {/* Toggle Contrato / Cronograma */}
-            <div className="flex items-center bg-gray-100 rounded-lg p-0.5 text-xs font-medium">
+            <div className="flex items-center rounded-xl border border-gray-200 bg-gray-50 p-0.5 gap-0.5">
               <button
                 onClick={() => setViewMode("contrato")}
-                className={`px-3 py-1.5 rounded-md transition-all ${viewMode === "contrato" ? "bg-white shadow text-indigo-700 font-semibold" : "text-gray-500 hover:text-gray-700"}`}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  viewMode === "contrato"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-gray-500 hover:text-indigo-600 hover:bg-indigo-50"
+                }`}
               >
+                <BookOpen className="w-3.5 h-3.5" />
                 Contrato
               </button>
               <button
                 onClick={() => setViewMode("cronograma")}
-                className={`px-3 py-1.5 rounded-md transition-all ${viewMode === "cronograma" ? "bg-white shadow text-blue-700 font-semibold" : "text-gray-500 hover:text-gray-700"}`}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  viewMode === "cronograma"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                }`}
               >
+                <BarChart2 className="w-3.5 h-3.5" />
                 Cronograma
               </button>
             </div>
@@ -274,6 +284,31 @@ export default function FinanceiroContasAReceber() {
             <Button onClick={() => setShowNew(true)} className="bg-blue-600 hover:bg-blue-700 text-white h-9">
               <Plus className="w-4 h-4 mr-1.5" />Nova Medição
             </Button>
+          </div>
+        </div>
+
+        {/* Banner do modo de visualização */}
+        <div className={`flex items-start gap-2.5 px-4 py-2.5 rounded-xl text-xs border ${
+          viewMode === "contrato"
+            ? "bg-indigo-50 border-indigo-200 text-indigo-800"
+            : "bg-blue-50 border-blue-200 text-blue-800"
+        }`}>
+          {viewMode === "contrato"
+            ? <BookOpen className="w-4 h-4 shrink-0 mt-0.5 text-indigo-500" />
+            : <BarChart2 className="w-4 h-4 shrink-0 mt-0.5 text-blue-500" />
+          }
+          <div>
+            {viewMode === "contrato" ? (
+              <>
+                <span className="font-semibold">Visão Contrato (Baseline): </span>
+                Exibe o valor original assinado no contrato para cada mês, sem considerar avanço físico ou reprogramações. Use para comparar o que foi combinado inicialmente com o que está sendo faturado.
+              </>
+            ) : (
+              <>
+                <span className="font-semibold">Visão Cronograma (Atualizado): </span>
+                Exibe o valor previsto recalculado conforme o avanço físico real e o cronograma mais recente. Use para acompanhar o faturamento real e o fluxo de caixa do projeto.
+              </>
+            )}
           </div>
         </div>
 
@@ -353,17 +388,54 @@ export default function FinanceiroContasAReceber() {
 
         {/* Legenda */}
         {obras.length > 0 && (
-          <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
-            <span className="font-medium">Legenda:</span>
-            {(["previsto","previsao_faturamento","a_faturar","faturado","a_receber","recebido_total"] as any[]).map((s: any) => {
-              const cfg = STATUS_CFG[s];
-              const Icon = cfg.icon;
-              return (
-                <span key={s} className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${cfg.badge}`}>
-                  <Icon className="w-3 h-3" />{cfg.label}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
+            {/* Título */}
+            <div className="flex items-center gap-2">
+              <Info className="w-4 h-4 text-gray-400" />
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Legenda — Status das Células</p>
+            </div>
+
+            {/* Grid de status */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {([
+                { s: "previsto",             desc: "Parcela planejada no cronograma, ainda não faturada" },
+                { s: "previsao_faturamento", desc: "Estimativa de faturamento baseada no avanço físico real" },
+                { s: "a_faturar",            desc: "Medição registrada — NF ainda não emitida ao cliente" },
+                { s: "medicao_enviada",      desc: "Medição enviada ao cliente, aguardando aprovação" },
+                { s: "faturado",             desc: "NF emitida — boleto/pix enviado, aguardando vencimento" },
+                { s: "a_receber",            desc: "Faturado e no prazo — aguardando pagamento pelo cliente" },
+                { s: "recebido_parcial",     desc: "Valor recebido parcialmente — saldo ainda em aberto" },
+                { s: "recebido_total",       desc: "Pagamento integral confirmado e registrado" },
+              ] as { s: string; desc: string }[]).map(({ s, desc }) => {
+                const cfg = STATUS_CFG[s];
+                if (!cfg) return null;
+                const Icon = cfg.icon;
+                return (
+                  <div key={s} className="flex items-start gap-2">
+                    <span className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold shrink-0 ${cfg.badge}`}>
+                      <Icon className="w-3 h-3" />{cfg.label}
+                    </span>
+                    <span className="text-[11px] text-gray-500 leading-tight pt-0.5">{desc}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Separador modos */}
+            <div className="border-t border-gray-100 pt-3 flex flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold">
+                  <BookOpen className="w-3 h-3" />Contrato
                 </span>
-              );
-            })}
+                <span className="text-[11px] text-gray-500">Valor original do contrato assinado (baseline imutável)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-600 text-white text-[11px] font-semibold">
+                  <BarChart2 className="w-3 h-3" />Cronograma
+                </span>
+                <span className="text-[11px] text-gray-500">Previsão recalculada conforme avanço físico e cronograma atual</span>
+              </div>
+            </div>
           </div>
         )}
       </div>
