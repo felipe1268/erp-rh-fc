@@ -695,13 +695,6 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, onCell
             <p className="text-xs font-bold text-orange-600">{BRL(obra.saldoContrato)}</p>
           </div>
         )}
-        {obra.saldoContrato <= 0 && obra.totalRecebidoHistorico > 0 && (
-          <div>
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-100 rounded text-[9px] font-bold text-emerald-700">
-              ✓ Quitado
-            </span>
-          </div>
-        )}
       </td>
     </tr>
   );
