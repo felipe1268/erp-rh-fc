@@ -391,7 +391,7 @@ export default function FinanceiroContasAReceber() {
           cell={detalhe.cell}
           onClose={() => setDetalhe(null)}
           onUpdateStatus={(frId, status, obs) =>
-            updateMut.mutate({ id: frId, status, observacoes: obs })
+            updateMut.mutate({ id: frId, companyId, status, observacoes: obs })
           }
           isPending={updateMut.isPending}
         />
