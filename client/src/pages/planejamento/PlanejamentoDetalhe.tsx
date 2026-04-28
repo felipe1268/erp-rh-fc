@@ -5240,6 +5240,9 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
   const [sinalValorInput, setSinalValorInput] = useState("");
   const [cfgSinalValor, setCfgSinalValor] = useState<number | null>(null);
   const [cfgBloqueado, setCfgBloqueado] = useState(false);
+  const [cfgValorParcelaManual, setCfgValorParcelaManual] = useState(0);
+  const [parcelaManualFocused, setParcelaManualFocused] = useState(false);
+  const [parcelaManualInput, setParcelaManualInput] = useState("");
   // ── Reforços de Parcela (anti-caixa negativo) — persiste em localStorage ──
   const reforcoKey = `reforcos_${projetoId}`;
   const [reforcos, setReforcos] = useState<Record<string, number>>(() => {
@@ -5378,6 +5381,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
       setCfgRetencaoPct(retVal != null && !isNaN(retVal) ? retVal : 5);
       setCfgDataInicioObra((configMed as any).dataInicioObra ?? "");
       setCfgBloqueado(configMed.bloqueado ?? false);
+      const vpf = n((configMed as any).valorParcelaFixa);
+      setCfgValorParcelaManual(vpf > 0 ? vpf : 0);
     }
   }, [configMed]);
 
@@ -5627,7 +5632,14 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
   const fluxoCaixa = useMemo(() => {
     if (dadosMensais.length === 0) return [];
     const saldoParcelar = Math.max(0, baseV - cfgEntrada);
-    const valorParcela  = cfgParcelas > 0 ? saldoParcelar / cfgParcelas : 0;
+    // Parcela base: usa valor manual se definido, senão divide igualmente
+    const parcelaBase = (cfgValorParcelaManual > 0 && cfgParcelas > 0)
+      ? cfgValorParcelaManual
+      : (cfgParcelas > 0 ? saldoParcelar / cfgParcelas : 0);
+    // Última parcela absorve o ajuste de arredondamento (diferença)
+    const valorUltimaParcela = cfgParcelas > 1
+      ? Math.max(0, saldoParcelar - parcelaBase * (cfgParcelas - 1))
+      : saldoParcelar;
     const inicioMes = cfgInicioFat ? cfgInicioFat.substring(0, 7) : (dadosMensais[0]?.mes ?? "");
     let caixaAcum = 0;
     let parcelasAtribuidas = 0;
@@ -5641,7 +5653,10 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
         const thisDate  = new Date(d.mes + "-01");
         const diffM = (thisDate.getFullYear() - startDate.getFullYear()) * 12
                     + (thisDate.getMonth() - startDate.getMonth());
-        if (diffM >= 1 && diffM <= cfgParcelas) { recebido = valorParcela; parcelasAtribuidas++; }
+        if (diffM >= 1 && diffM <= cfgParcelas) {
+          parcelasAtribuidas++;
+          recebido = (parcelasAtribuidas === cfgParcelas) ? valorUltimaParcela : parcelaBase;
+        }
       }
       const reforco = reforcos[d.mes] ?? 0;
       recebido += reforco;
@@ -5659,10 +5674,12 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
         refDate.setMonth(refDate.getMonth() + extra);
         const mes = `${refDate.getFullYear()}-${String(refDate.getMonth() + 1).padStart(2, "0")}`;
         const mesesAposObra = extra;
-        // Sugestão de reajuste SELIC: juros simples sobre a parcela (meses × SELIC/12)
-        const reajuste = valorParcela * (SELIC_ANUAL / 12) * mesesAposObra;
+        parcelasAtribuidas++;
+        const isLast = parcelasAtribuidas === cfgParcelas;
+        const parcelaValor = isLast ? valorUltimaParcela : parcelaBase;
+        const reajuste = parcelaBase * (SELIC_ANUAL / 12) * mesesAposObra;
         const reforco  = reforcos[mes] ?? 0;
-        const recebido = valorParcela + reforco;
+        const recebido = parcelaValor + reforco;
         const saldoMes = recebido;
         caixaAcum += saldoMes;
         rows.push({
@@ -5674,16 +5691,25 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
           aposObra: true,
           mesesAposObra,
           reajusteSelic: reajuste,
-          nParcela: parcelasAtribuidas + extra,
+          nParcela: parcelasAtribuidas,
         });
       }
     }
 
     return rows;
-  }, [cfgEntrada, cfgParcelas, cfgInicioFat, dadosMensais, baseV, reforcos]);
+  }, [cfgEntrada, cfgParcelas, cfgInicioFat, cfgValorParcelaManual, dadosMensais, baseV, reforcos]);
 
   const mesesNeg = fluxoCaixa.filter(r => r.caixaAcum < 0).length;
-  const valorParcela = cfgParcelas > 0 ? Math.max(0, baseV - cfgEntrada) / cfgParcelas : 0;
+  // valorParcela exibido: manual se definido, senão automático
+  const valorParcela = (cfgValorParcelaManual > 0 && cfgParcelas > 0)
+    ? cfgValorParcelaManual
+    : (cfgParcelas > 0 ? Math.max(0, baseV - cfgEntrada) / cfgParcelas : 0);
+  const saldoParcelarDisplay = Math.max(0, baseV - cfgEntrada);
+  const valorUltimaParcela = cfgParcelas > 1
+    ? Math.max(0, saldoParcelarDisplay - valorParcela * (cfgParcelas - 1))
+    : saldoParcelarDisplay;
+  const temAjusteUltimaParcela = cfgValorParcelaManual > 0 &&
+    Math.abs(valorUltimaParcela - valorParcela) > 0.01;
 
   function salvarConfig() {
     setSalvando(true);
@@ -5698,6 +5724,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
       sinalValor: cfgSinalValor ?? 0,
       retencaoPct: cfgRetencaoPct,
       dataInicioObra: cfgDataInicioObra || null,
+      valorParcelaFixa: cfgValorParcelaManual > 0 ? cfgValorParcelaManual : 0,
     });
   }
 
@@ -5940,6 +5967,48 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                       onChange={e => setCfgInicioFat(e.target.value)}
                       className="h-9 w-full text-sm border border-amber-200 rounded-lg px-3 bg-white focus:ring-2 focus:ring-amber-400 outline-none" />
                   </div>
+
+                  {/* Valor fixo da parcela (opcional) */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-1 font-medium">
+                      Valor da Parcela (R$)
+                      <span className="ml-1 text-slate-400 font-normal">· opcional</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={parcelaManualFocused
+                        ? parcelaManualInput
+                        : (cfgValorParcelaManual > 0
+                          ? cfgValorParcelaManual.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                          : "")
+                      }
+                      placeholder={cfgParcelas > 0
+                        ? Math.max(0, baseV - cfgEntrada) / cfgParcelas > 0
+                          ? `Auto: ${(Math.max(0, baseV - cfgEntrada) / cfgParcelas).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : "Automático"
+                        : "Automático"
+                      }
+                      onFocus={() => {
+                        setParcelaManualFocused(true);
+                        setParcelaManualInput(cfgValorParcelaManual > 0
+                          ? cfgValorParcelaManual.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                          : "");
+                      }}
+                      onBlur={() => {
+                        setParcelaManualFocused(false);
+                        const raw = parcelaManualInput.replace(/\./g, "").replace(",", ".");
+                        const val = parseFloat(raw) || 0;
+                        setCfgValorParcelaManual(val > 0 ? val : 0);
+                      }}
+                      onChange={e => {
+                        const clean = e.target.value.replace(/[^\d,]/g, "");
+                        setParcelaManualInput(clean);
+                      }}
+                      className="h-9 w-full text-sm border border-amber-200 rounded-lg px-3 bg-white focus:ring-2 focus:ring-amber-400 outline-none font-semibold" />
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      {cfgValorParcelaManual > 0 ? "Última parcela = ajuste de fechamento" : "Deixe em branco para dividir igualmente"}
+                    </p>
+                  </div>
                 </>
               )}
             </div>
@@ -5949,7 +6018,10 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
             <p className="text-xs text-slate-500">
               {cfgTipo === "avanco"
                 ? `Valor base do contrato: ${fmt(baseV)}`
-                : `Contrato: ${fmt(baseV)} · Entrada: ${fmt(cfgEntrada)} · Parcela: ${fmt(valorParcela)}`}
+                : temAjusteUltimaParcela
+                  ? `Contrato: ${fmt(baseV)} · Entrada: ${fmt(cfgEntrada)} · Parcela: ${fmt(valorParcela)} · Última: ${fmt(valorUltimaParcela)}`
+                  : `Contrato: ${fmt(baseV)} · Entrada: ${fmt(cfgEntrada)} · Parcela: ${fmt(valorParcela)}`
+              }
             </p>
           </div>
         </div>

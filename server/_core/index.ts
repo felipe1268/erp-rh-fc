@@ -894,6 +894,7 @@ async function startServer() {
             ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_retencao_tecnica NUMERIC(6,3) DEFAULT 0;
             ALTER TABLE terceiro_medicoes ADD COLUMN IF NOT EXISTS retencao_tecnica NUMERIC(18,2) DEFAULT 0;
             ALTER TABLE planejamento_medicao_config ADD COLUMN IF NOT EXISTS sinal_valor NUMERIC(18,2) DEFAULT 0;
+            ALTER TABLE planejamento_medicao_config ADD COLUMN IF NOT EXISTS valor_parcela_fixa NUMERIC(18,2) DEFAULT 0;
             ALTER TABLE compras_solicitacoes_itens ADD COLUMN IF NOT EXISTS incluir_ajudante BOOLEAN DEFAULT true;
             ALTER TABLE compras_solicitacoes_itens ADD COLUMN IF NOT EXISTS meta_mdo_profissional NUMERIC(18,4) DEFAULT 0;
             ALTER TABLE compras_solicitacoes_itens ADD COLUMN IF NOT EXISTS meta_mdo_ajudante NUMERIC(18,4) DEFAULT 0;

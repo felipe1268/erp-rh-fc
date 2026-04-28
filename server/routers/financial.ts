@@ -2721,7 +2721,8 @@ export const financialRouter = router({
              c.sinal_pct::numeric       AS sinal_pct,
              c.sinal_valor::numeric     AS sinal_valor,
              c.retencao_pct::numeric    AS retencao_pct,
-             c.data_inicio_obra::text   AS data_inicio_obra
+             c.data_inicio_obra::text   AS data_inicio_obra,
+             c.valor_parcela_fixa::numeric AS valor_parcela_fixa
       FROM planejamento_medicao_config c
       WHERE c.projeto_id IN (${idsStr})
     `, []),
@@ -3176,14 +3177,21 @@ export const financialRouter = router({
           if (inicioMes) {
             const [anoIni, mesIni] = inicioMes.split("-").map(Number);
             const saldoParcelar = Math.max(0, totalVenda - entrada);
-            const valorParcela = numeroParcelas > 0 ? saldoParcelar / numeroParcelas : 0;
+            const valorParcelaManual = parseFloat(cfg.valor_parcela_fixa ?? "0") || 0;
+            const parcelaBase = (valorParcelaManual > 0 && numeroParcelas > 0)
+              ? valorParcelaManual
+              : (numeroParcelas > 0 ? saldoParcelar / numeroParcelas : 0);
+            const valorUltimaParcela = numeroParcelas > 1
+              ? Math.max(0, saldoParcelar - parcelaBase * (numeroParcelas - 1))
+              : saldoParcelar;
             if (entrada > 0) result[pid][inicioMes] = (result[pid][inicioMes] ?? 0) + entrada;
             for (let i = 1; i <= numeroParcelas; i++) {
               const offset = mesIni - 1 + i;
               const pmAno = anoIni + Math.floor(offset / 12);
               const pmMes = (offset % 12) + 1;
               const pm = `${pmAno}-${String(pmMes).padStart(2, "0")}`;
-              result[pid][pm] = (result[pid][pm] ?? 0) + valorParcela;
+              const parcelaValor = (i === numeroParcelas) ? valorUltimaParcela : parcelaBase;
+              result[pid][pm] = (result[pid][pm] ?? 0) + parcelaValor;
             }
           }
         } else {

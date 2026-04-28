@@ -2051,6 +2051,7 @@ export const planejamentoRouter = router({
       sinalValor:        z.number().optional(),
       retencaoPct:       z.number().min(0).max(100).optional(),
       dataInicioObra:    z.string().nullable().optional(),
+      valorParcelaFixa:  z.number().min(0).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -2068,6 +2069,7 @@ export const planejamentoRouter = router({
         sinalValor:        String(input.sinalValor ?? 0),
         retencaoPct:       String(input.retencaoPct ?? 5),
         dataInicioObra:    input.dataInicioObra ?? null,
+        valorParcelaFixa:  String(input.valorParcelaFixa ?? 0),
         bloqueado:         false,
         atualizadoEm:      new Date(),
       };
@@ -2082,6 +2084,7 @@ export const planejamentoRouter = router({
         sinalValor:        data.sinalValor,
         retencaoPct:       data.retencaoPct,
         dataInicioObra:    data.dataInicioObra,
+        valorParcelaFixa:  data.valorParcelaFixa,
         bloqueado:         false,
         atualizadoEm:      data.atualizadoEm,
       };
