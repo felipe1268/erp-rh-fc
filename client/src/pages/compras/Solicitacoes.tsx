@@ -2134,12 +2134,14 @@ export default function Solicitacoes() {
       });
   const todasSCs = filtroStatus !== "todos" ? (qTodas.data ?? lista) : lista;
   const urgentesAtivos = useMemo(() => todasSCs.filter((r: any) => r.prioridade === "urgente" && !["aprovado", "cancelado", "recusado"].includes(r.status) && !r._hasOC), [todasSCs]);
+  // KPIs sempre calculados a partir do total sem filtro de status (apenas filtro de obra aplicado)
+  const listaKpisBase = filtroObra === "todas" ? todasSCs : todasSCs.filter((r: any) => String(r.obraId) === filtroObra);
   const kpis = useMemo(() => ({
-    pendenteOC:       listaFiltradaObraBase.filter((r: any) => !(r._hasOC) && !["aprovado", "recusado", "cancelado"].includes(r.status)).length,
-    pendenteEntrega:  listaFiltradaObraBase.filter((r: any) => r._hasOC === true && r.status !== "aprovado").length,
-    aprovado: listaFiltradaObraBase.filter((r: any) => r.status === "aprovado").length,
-    recusado: listaFiltradaObraBase.filter((r: any) => r.status === "recusado" || r.status === "cancelado").length,
-  }), [listaFiltradaObraBase]);
+    pendenteOC:       listaKpisBase.filter((r: any) => !(r._hasOC) && !["aprovado", "recusado", "cancelado"].includes(r.status)).length,
+    pendenteEntrega:  listaKpisBase.filter((r: any) => r._hasOC === true && r.status !== "aprovado").length,
+    aprovado: listaKpisBase.filter((r: any) => r.status === "aprovado").length,
+    recusado: listaKpisBase.filter((r: any) => r.status === "recusado" || r.status === "cancelado").length,
+  }), [listaKpisBase]);
 
   function nomeObra(id: number | null | undefined) {
     if (!id) return null;
