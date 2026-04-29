@@ -75,13 +75,19 @@ const STATUS_NEXT: Record<string, string> = {
 
 function resolveStatus(m: MedicaoCell): string {
   // Camada 4: Recebido
-  if (m.statusFinanceiro && ["recebido_total","recebido_parcial"].includes(m.statusFinanceiro)) {
+  // 'confirmado' = PM confirmada pelo módulo Financeiro via "Dar Baixa" — trata como recebido_total
+  if (m.statusFinanceiro && ["recebido_total","recebido_parcial","confirmado"].includes(m.statusFinanceiro)) {
     // Detecta recebimento parcial: valor recebido menor que o previsto
     if (m.valorRecebido > 0 && m.valorRecebido < m.valor - 0.01) return "recebido_parcial";
     return "recebido_total";
   }
-  // Camada 3: Faturado / A Receber
-  if (m.statusFinanceiro && m.statusFinanceiro !== "previsto" && m.statusFinanceiro !== "previsao_faturamento") return m.statusFinanceiro;
+  // Camada 4b: statusMedicao='confirmado' (PM confirmada sem FR vinculado)
+  if (m.statusMedicao === "confirmado") {
+    if (m.valorRecebido > 0 && m.valorRecebido < m.valor - 0.01) return "recebido_parcial";
+    return "recebido_total";
+  }
+  // Camada 3: Faturado / A Receber ('confirmado' já tratado acima — excluir para evitar fallback)
+  if (m.statusFinanceiro && m.statusFinanceiro !== "previsto" && m.statusFinanceiro !== "previsao_faturamento" && m.statusFinanceiro !== "confirmado") return m.statusFinanceiro;
   if (m.statusMedicao === "aprovada" || m.statusMedicao === "faturada") return "faturado";
   if (m.valor > 0 && m.statusMedicao !== "previsto") return "a_faturar";
   // Camada 2: Previsão de Faturamento (avanço físico)
