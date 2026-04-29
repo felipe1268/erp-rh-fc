@@ -699,19 +699,23 @@ function KpiDetailPanel({
             <th className="py-2 pr-4 font-medium">Projeto</th>
             <th className="py-2 pr-4 font-medium">Mês</th>
             <th className="py-2 pr-4 font-medium">Status</th>
+            <th className="py-2 pr-4 font-medium">Recebido em</th>
             <th className="py-2 pr-4 font-medium">NF</th>
             <th className="py-2 font-medium text-right">Valor</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 && (
-            <tr><td colSpan={5} className="py-8 text-center text-gray-400">Nenhuma medição faturada registrada.</td></tr>
+            <tr><td colSpan={6} className="py-8 text-center text-gray-400">Nenhuma medição faturada registrada.</td></tr>
           )}
           {rows.map((r, i) => (
             <tr key={i} className={`border-b border-gray-50 ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
               <td className="py-3 pr-4 font-medium text-gray-900">{r.obra}</td>
               <td className="py-3 pr-4 text-gray-600">{mesLabel(r.mes)}</td>
               <td className="py-3 pr-4"><StatusBadge status={r.status} /></td>
+              <td className="py-3 pr-4 text-gray-700 font-medium">
+                {r.dataRec ? new Date(r.dataRec).toLocaleDateString("pt-BR") : <span className="text-gray-300">—</span>}
+              </td>
               <td className="py-3 pr-4 text-gray-500 text-xs">{r.nf || "—"}</td>
               <td className="py-3 text-right font-semibold text-blue-700">{BRL(r.val)}</td>
             </tr>
