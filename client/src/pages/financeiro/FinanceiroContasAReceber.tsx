@@ -755,6 +755,13 @@ function KpiDetailPanel({
         }
       }
     }
+    // Ordenar do recebimento mais recente para o mais antigo; sem data vai para o fim
+    rows.sort((a, b) => {
+      if (!a.dataRec && !b.dataRec) return b.val - a.val;
+      if (!a.dataRec) return 1;
+      if (!b.dataRec) return -1;
+      return new Date(b.dataRec).getTime() - new Date(a.dataRec).getTime();
+    });
     content = (
       <table className="w-full text-sm">
         <thead>
