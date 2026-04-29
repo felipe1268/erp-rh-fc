@@ -2871,7 +2871,9 @@ export default function Cotacoes() {
 
               {/* ── ABA: MAPA DE COTAÇÃO ── */}
               {abaAtiva === "mapa" && (
-                <div className="space-y-5">
+                <div className="flex gap-4" style={{ height: "calc(100vh - 200px)" }}>
+                  {/* ── Coluna esquerda: fornecedores + condições ── */}
+                  <div className="w-[340px] flex-shrink-0 overflow-y-auto space-y-4 pb-4">
                   {/* Adicionar fornecedor */}
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Fornecedores Participantes</p>
@@ -3215,7 +3217,10 @@ export default function Cotacoes() {
                       </div>
                     </div>
                   )}
+                  </div>{/* fim coluna esquerda */}
 
+                  {/* ── Coluna direita: matriz de preços ── */}
+                  <div className="flex-1 min-w-0 overflow-y-auto space-y-4 pb-4">
                   {cobertura && (
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Cobertura do Orçamento</p>
@@ -3342,7 +3347,7 @@ export default function Cotacoes() {
                           )}
                         </div>
                       </div>
-                      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
+                      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-auto" style={{ maxHeight: "calc(100vh - 180px)" }}>
                         <table className="text-sm border-collapse" style={{ minWidth: "max-content" }}>
                           <thead className="sticky top-0 z-20">
                             {/* Linha 1: nomes dos grupos de colunas */}
@@ -4359,7 +4364,8 @@ export default function Cotacoes() {
                       )}
                     </div>
                   )}
-                </div>
+                  </div>{/* fim coluna direita */}
+                </div>{/* fim flex mapa */}
               )}
             </>
           ) : null}
