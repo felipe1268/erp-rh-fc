@@ -3176,10 +3176,11 @@ export const financialRouter = router({
                END AS total_peso
         FROM planejamento_atividades
         WHERE projeto_id IN (${idsStr})
-          AND NOT is_grupo
+          AND NOT COALESCE(is_grupo, false)
         GROUP BY projeto_id
       ),
       -- Diretas: valor real registrado em planejamento_avancos
+      -- NULL em is_indireta é tratado como FALSE (atividade direta)
       diretas AS (
         SELECT DISTINCT ON (av.atividade_id)
           a.projeto_id,
@@ -3191,8 +3192,8 @@ export const financialRouter = router({
         JOIN planejamento_avancos av ON av.atividade_id = a.id
         JOIN proj_cfg pc ON pc.projeto_id = a.projeto_id
         WHERE a.projeto_id IN (${idsStr})
-          AND NOT a.is_grupo
-          AND NOT a.is_indireta
+          AND NOT COALESCE(a.is_grupo, false)
+          AND NOT COALESCE(a.is_indireta, false)
         ORDER BY av.atividade_id, av.semana DESC
       ),
       -- Indiretas: previsto proporcional ao prazo (ref = próxima segunda-feira = início semana seguinte)
@@ -3212,8 +3213,8 @@ export const financialRouter = router({
         FROM planejamento_atividades a
         JOIN proj_cfg pc ON pc.projeto_id = a.projeto_id
         WHERE a.projeto_id IN (${idsStr})
-          AND NOT a.is_grupo
-          AND a.is_indireta
+          AND NOT COALESCE(a.is_grupo, false)
+          AND COALESCE(a.is_indireta, false) = true
       ),
       combined AS (
         SELECT projeto_id, peso, val FROM diretas
