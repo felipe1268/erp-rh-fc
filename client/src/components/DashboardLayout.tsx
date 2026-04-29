@@ -37,7 +37,7 @@ import {
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft, Gauge,
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine,
-  Camera, Blocks, CheckSquare, Repeat, FileCheck2, Milestone,
+  Camera, Blocks, CheckSquare, FileCheck2, Milestone,
   UserMinus, Search, X,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
@@ -418,7 +418,6 @@ const menuSectionsFinanceiro: MenuSection[] = [
     title: "Movimentações",
     items: [
       { icon: DollarSign,    label: "Lançamentos",       path: "/financeiro/lancamentos" },
-      { icon: Repeat,        label: "Recorrentes",        path: "/financeiro/recorrentes" },
       { icon: TrendingUp,    label: "Contas a Receber",   path: "/financeiro/contas-a-receber" },
       { icon: CheckCircle,   label: "Contas a Pagar",     path: "/financeiro/contas-a-pagar" },
     ],
