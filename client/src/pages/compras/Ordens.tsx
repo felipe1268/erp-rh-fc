@@ -161,6 +161,8 @@ export default function Ordens() {
     }
   }, []);
 
+  const [tipoFaturamento, setTipoFaturamento] = useState<"normal" | "fd_cliente" | "fd_fc">("normal");
+  const [editandoOcStatus, setEditandoOcStatus] = useState<string | null>(null);
   const [form, setForm] = useState({
     obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "",
     frete: "", outrasDespesas: "", impostos: "", desconto: "",
@@ -335,6 +337,8 @@ export default function Ordens() {
     setParcelas([]);
     setAnexosForm([]);
     setRascunhoId(null);
+    setTipoFaturamento("normal");
+    setEditandoOcStatus(null);
   }
 
   function formHasData() {
@@ -374,6 +378,7 @@ export default function Ordens() {
       outrasDespesas: parseFloat(form.outrasDespesas) || 0,
       impostos: parseFloat(form.impostos) || 0,
       desconto: parseFloat(form.desconto) || 0,
+      modalidadeFd: tipoFaturamento,
       userId: user?.id,
       userName: user?.name,
       anexos: anexosForm.length > 0 ? anexosForm : undefined,
@@ -406,6 +411,9 @@ export default function Ordens() {
 
   function abrirEditarRascunho(ocDetalhe: any) {
     setRascunhoId(ocDetalhe.id);
+    setEditandoOcStatus(ocDetalhe.status ?? "rascunho");
+    const fd = (ocDetalhe as any).modalidadeFd;
+    setTipoFaturamento(fd === "fd_cliente" ? "fd_cliente" : fd === "fd_fc" ? "fd_fc" : "normal");
     setForm({
       obraId: ocDetalhe.obraId ? String(ocDetalhe.obraId) : "",
       fornecedorId: ocDetalhe.fornecedorId ? String(ocDetalhe.fornecedorId) : "",
@@ -465,6 +473,7 @@ export default function Ordens() {
         outrasDespesas: parseFloat(form.outrasDespesas) || 0,
         impostos: parseFloat(form.impostos) || 0,
         desconto: parseFloat(form.desconto) || 0,
+        modalidadeFd: tipoFaturamento,
         userId: user?.id,
         userName: user?.name,
         anexos: anexosForm.length > 0 ? anexosForm : undefined,
@@ -496,6 +505,7 @@ export default function Ordens() {
       outrasDespesas: parseFloat(form.outrasDespesas) || 0,
       impostos: parseFloat(form.impostos) || 0,
       desconto: parseFloat(form.desconto) || 0,
+      modalidadeFd: tipoFaturamento,
       userId: user?.id,
       userName: user?.name,
       anexos: anexosForm.length > 0 ? anexosForm : undefined,
@@ -869,15 +879,15 @@ export default function Ordens() {
       <FullScreenDialog
         open={showNova}
         onClose={handleCloseGuard}
-        title={rascunhoId ? "Editar Rascunho de OC" : "Nova Ordem de Compra (Manual)"}
-        subtitle={rascunhoId ? "Complete as informações do rascunho" : "Preencha os dados da OC"}
+        title={rascunhoId ? (editandoOcStatus && editandoOcStatus !== "rascunho" ? "Editar Ordem de Compra" : "Editar Rascunho de OC") : "Nova Ordem de Compra (Manual)"}
+        subtitle={rascunhoId ? (editandoOcStatus && editandoOcStatus !== "rascunho" ? "Altere os dados e salve como rascunho ou reconfirme" : "Complete as informações do rascunho") : "Preencha os dados da OC"}
         icon={<ShoppingBag className="h-5 w-5 text-white" />}
         headerColor="bg-gradient-to-r from-emerald-700 to-emerald-500"
         zIndex={40}
         headerActions={
           <Button variant="ghost" size="sm" onClick={handleSalvarRascunho} disabled={salvarRascunhoMut.isPending} className="text-white hover:bg-white/20 gap-1.5 border border-white/30">
             {salvarRascunhoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Salvar Rascunho
+            Salvar como Rascunho
           </Button>
         }
       >
@@ -952,6 +962,30 @@ export default function Ordens() {
                 </PopoverContent>
               </Popover>
             </div>
+            {/* Tipo de Faturamento */}
+            <div className="space-y-2">
+              <Label className="text-gray-700 text-sm font-medium flex items-center gap-1.5">
+                <DollarSign className="h-3.5 w-3.5 text-emerald-600" /> Tipo de Faturamento
+              </Label>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { value: "normal",     label: "Empresa FC",         desc: "Custo absorvido pela FC",       color: tipoFaturamento === "normal"     ? "bg-emerald-600 border-emerald-600 text-white" : "bg-white border-gray-300 text-gray-700 hover:border-emerald-400" },
+                  { value: "fd_cliente", label: "Pagamento Cliente",  desc: "Cliente paga diretamente",      color: tipoFaturamento === "fd_cliente" ? "bg-blue-600 border-blue-600 text-white"    : "bg-white border-gray-300 text-gray-700 hover:border-blue-400"    },
+                  { value: "fd_fc",      label: "Faturamento Direto", desc: "Cobrança via terceiro (FD)",    color: tipoFaturamento === "fd_fc"      ? "bg-amber-600 border-amber-600 text-white"  : "bg-white border-gray-300 text-gray-700 hover:border-amber-400"   },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setTipoFaturamento(opt.value)}
+                    className={`rounded-lg border-2 px-3 py-2.5 text-left transition-all ${opt.color}`}
+                  >
+                    <p className="text-xs font-semibold leading-tight">{opt.label}</p>
+                    <p className={`text-[10px] leading-tight mt-0.5 ${tipoFaturamento === opt.value ? "opacity-80" : "text-gray-400"}`}>{opt.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Itens */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -1309,7 +1343,7 @@ export default function Ordens() {
               <Button variant="outline" onClick={handleCloseGuard} className="border-gray-300 text-gray-600 hover:bg-gray-50">Cancelar</Button>
               <Button onClick={handleSalvar} disabled={criarManual.isPending || confirmarRascunhoMut.isPending} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5">
                 {(criarManual.isPending || confirmarRascunhoMut.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
-                {rascunhoId ? "Confirmar OC" : "Criar OC"}
+                {rascunhoId ? (editandoOcStatus && editandoOcStatus !== "rascunho" ? "Salvar OC" : "Confirmar OC") : "Criar OC"}
               </Button>
             </div>
           </div>
@@ -1387,6 +1421,20 @@ export default function Ordens() {
                         Confirmar OC
                       </Button>
                     </div>
+                  </div>
+                )}
+                {!["rascunho", "cancelada", "entregue", "entregue_parcial"].includes(detalhe.status) && (
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                    <div className="flex items-center gap-2 flex-1">
+                      <Edit3 className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-blue-800">Editar Ordem de Compra</p>
+                        <p className="text-xs text-blue-600">Abra o formulário para editar dados, itens e tipo de faturamento desta OC.</p>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => abrirEditarRascunho(detalhe)} className="border-blue-400 text-blue-700 hover:bg-blue-100 gap-1.5 shrink-0">
+                      <Edit3 className="h-3.5 w-3.5" /> Editar OC
+                    </Button>
                   </div>
                 )}
                 {semaforoDetalhe.status === "atrasado" && (() => {

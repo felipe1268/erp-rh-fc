@@ -5469,6 +5469,7 @@ Retorne APENAS um JSON válido neste formato:
       outrasDespesas: z.number().optional(),
       impostos: z.number().optional(),
       desconto: z.number().optional(),
+      modalidadeFd: z.enum(["normal", "fd_cliente", "fd_fc"]).optional(),
       userId: z.number().optional(),
       userName: z.string().optional(),
       anexos: z.array(z.object({ url: z.string(), nome: z.string(), tipo: z.string(), ts: z.number() })).optional(),
@@ -5527,6 +5528,8 @@ Retorne APENAS um JSON válido neste formato:
         impostos: String(impostos.toFixed(2)),
         desconto: String(desconto.toFixed(2)),
         total: String(total.toFixed(2)),
+        modalidadeFd: input.modalidadeFd ?? "normal",
+        fdPagador: input.modalidadeFd === "fd_cliente" ? "cliente" : input.modalidadeFd === "fd_fc" ? "fc" : null,
       } as any).returning();
       if (input.itens.length > 0) {
         await db.insert(comprasOrdensItens).values(
@@ -5565,6 +5568,7 @@ Retorne APENAS um JSON válido neste formato:
       outrasDespesas: z.number().optional(),
       impostos: z.number().optional(),
       desconto: z.number().optional(),
+      modalidadeFd: z.enum(["normal", "fd_cliente", "fd_fc"]).optional(),
       userId: z.number().optional(),
       userName: z.string().optional(),
       anexos: z.array(z.object({ url: z.string(), nome: z.string(), tipo: z.string(), ts: z.number() })).optional(),
@@ -5611,13 +5615,16 @@ Retorne APENAS um JSON válido neste formato:
         subtotal: String(subtotal.toFixed(2)),
         total: String(total.toFixed(2)),
         anexos: input.anexos ? (input.anexos as any) : null,
+        modalidadeFd: input.modalidadeFd ?? "normal",
+        fdPagador: input.modalidadeFd === "fd_cliente" ? "cliente" : input.modalidadeFd === "fd_fc" ? "fc" : null,
         atualizadoEm: new Date().toISOString(),
       };
       if (input.id) {
         const [existing] = await db.select({ id: comprasOrdens.id, status: comprasOrdens.status })
           .from(comprasOrdens).where(and(eq(comprasOrdens.id, input.id), eq(comprasOrdens.companyId, input.companyId)));
-        if (!existing || existing.status !== "rascunho") throw new TRPCError({ code: "FORBIDDEN", message: "OC não é um rascunho." });
-        await db.update(comprasOrdens).set(dadosUpdate as any).where(eq(comprasOrdens.id, input.id));
+        if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "OC não encontrada." });
+        if (existing.status === "cancelada" || existing.status === "entregue") throw new TRPCError({ code: "FORBIDDEN", message: "OC cancelada ou entregue não pode ser editada." });
+        await db.update(comprasOrdens).set({ ...dadosUpdate, status: "rascunho" } as any).where(eq(comprasOrdens.id, input.id));
         if (input.itens !== undefined) {
           await db.delete(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
           const validos = input.itens.filter(i => i.descricao?.trim());
@@ -5683,6 +5690,7 @@ Retorne APENAS um JSON válido neste formato:
       outrasDespesas: z.number().optional(),
       impostos: z.number().optional(),
       desconto: z.number().optional(),
+      modalidadeFd: z.enum(["normal", "fd_cliente", "fd_fc"]).optional(),
       userId: z.number().optional(),
       userName: z.string().optional(),
       anexos: z.array(z.object({ url: z.string(), nome: z.string(), tipo: z.string(), ts: z.number() })).optional(),
@@ -5700,17 +5708,20 @@ Retorne APENAS um JSON válido neste formato:
       const [oc] = await db.select().from(comprasOrdens)
         .where(and(eq(comprasOrdens.id, input.id), eq(comprasOrdens.companyId, input.companyId)));
       if (!oc) throw new TRPCError({ code: "NOT_FOUND" });
-      if (oc.status !== "rascunho") throw new TRPCError({ code: "BAD_REQUEST", message: "OC não está em modo rascunho." });
+      if (oc.status === "cancelada" || oc.status === "entregue") throw new TRPCError({ code: "FORBIDDEN", message: "OC cancelada ou entregue não pode ser editada." });
       const obraIdFinal = input.obraId ?? oc.obraId;
       const condPagFinal = input.condicaoPagamento ?? oc.condicaoPagamento ?? "";
       if (!obraIdFinal) throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione a Obra antes de confirmar a OC." });
       if (!condPagFinal.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe a Condição de Pagamento antes de confirmar a OC." });
-      // Generate proper OC number (excluding rascunho OCs from count)
-      const count = await db.select({ c: sql<number>`count(*)` })
-        .from(comprasOrdens)
-        .where(and(eq(comprasOrdens.companyId, input.companyId), sql`${comprasOrdens.status} != 'rascunho'`));
-      const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
-      const numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
+      // Generate new OC number only if coming from rascunho; otherwise preserve existing number
+      let numeroOc = oc.numeroOc ?? "";
+      if (oc.status === "rascunho") {
+        const count = await db.select({ c: sql<number>`count(*)` })
+          .from(comprasOrdens)
+          .where(and(eq(comprasOrdens.companyId, input.companyId), sql`${comprasOrdens.status} != 'rascunho'`));
+        const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+        numeroOc = `OC-${new Date().getFullYear()}-${seq}`;
+      }
       const subtotal = (input.itens !== undefined ? input.itens : []).reduce((s, it) => s + n(it.quantidade) * n(it.precoUnitario), 0);
       const frete = n(input.frete ?? oc.frete);
       const outrasDespesas = n(input.outrasDespesas ?? oc.outrasDespesas);
@@ -5724,6 +5735,7 @@ Retorne APENAS um JSON válido neste formato:
           .from(fornecedores).where(eq(fornecedores.id, input.fornecedorId));
         fornecedorNome = f?.nomeFantasia || f?.razaoSocial || null;
       }
+      const fdModalidade = input.modalidadeFd ?? (oc as any).modalidadeFd ?? "normal";
       await db.update(comprasOrdens).set({
         status: "pendente",
         numeroOc,
@@ -5746,6 +5758,8 @@ Retorne APENAS um JSON válido neste formato:
         subtotal: String((input.itens !== undefined ? subtotal : n(oc.subtotal)).toFixed(2)),
         total: String(total.toFixed(2)),
         anexos: input.anexos ? (input.anexos as any) : (oc as any).anexos,
+        modalidadeFd: fdModalidade,
+        fdPagador: fdModalidade === "fd_cliente" ? "cliente" : fdModalidade === "fd_fc" ? "fc" : null,
         atualizadoEm: new Date().toISOString(),
       } as any).where(eq(comprasOrdens.id, input.id));
       if (input.itens !== undefined) {
