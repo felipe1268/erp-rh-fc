@@ -3170,7 +3170,7 @@ export const financialRouter = router({
         FROM planejamento_refis
         WHERE projeto_id IN (${idsStr})
           AND status = 'consolidado'
-        ORDER BY projeto_id, created_at DESC
+        ORDER BY projeto_id, criado_em DESC NULLS LAST, semana DESC
       ),
       -- Fonte 2 (fallback): média ponderada por peso_financeiro dos últimos avanços
       latest_av AS (
