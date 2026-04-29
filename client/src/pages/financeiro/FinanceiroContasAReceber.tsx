@@ -132,6 +132,7 @@ interface ObraRow {
   cliente: string;
   valorContrato: number;
   totalRecebidoHistorico: number;
+  avancoFisicoReal: number | null;
   saldoContrato: number;
   medicoes: MedicaoCell[];
   byMes: Record<string, MedicaoCell>;
@@ -1126,21 +1127,52 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, mesAtu
             </div>
             <p className="text-[10px] text-gray-400 truncate max-w-[160px] mb-1">{obra.cliente || "—"}</p>
 
-            {/* % Execução financeira */}
+            {/* % Execução financeira vs Avanço Físico */}
             {pctExecucao !== null && (
-              <div className="mb-1">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[9px] text-gray-400">Execução</span>
+              <div className="mb-1 space-y-0.5">
+                {/* Linha financeira */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] text-gray-400">Financeiro</span>
                   <span className={`text-[9px] font-bold ${pctExecucao >= 75 ? "text-emerald-600" : pctExecucao >= 40 ? "text-blue-600" : "text-orange-500"}`}>
                     {pctExecucao}%
                   </span>
                 </div>
-                <div className="w-full h-1 bg-gray-200 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    className={`h-1 rounded-full ${pctExecucao >= 75 ? "bg-emerald-500" : pctExecucao >= 40 ? "bg-blue-500" : "bg-orange-400"}`}
+                    className={`h-1.5 rounded-full ${pctExecucao >= 75 ? "bg-emerald-500" : pctExecucao >= 40 ? "bg-blue-500" : "bg-orange-400"}`}
                     style={{ width: `${pctExecucao}%` }}
                   />
                 </div>
+                {/* Linha física (quando disponível) */}
+                {obra.avancoFisicoReal !== null && obra.avancoFisicoReal > 0 && (() => {
+                  const pctFisico = Math.min(100, Math.round(obra.avancoFisicoReal));
+                  const diff = pctFisico - pctExecucao;
+                  const isAtrasado = diff > 5;   // físico avançou mais que financeiro
+                  const isAdiantado = diff < -5;  // financeiro avançou mais que físico
+                  return (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] text-gray-400">Físico (cronograma)</span>
+                        <span className={`text-[9px] font-bold flex items-center gap-0.5 ${isAtrasado ? "text-red-500" : isAdiantado ? "text-emerald-600" : "text-gray-500"}`}>
+                          {isAtrasado && <span title="Físico à frente do financeiro">↑</span>}
+                          {isAdiantado && <span title="Financeiro à frente do físico">↓</span>}
+                          {pctFisico}%
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-1.5 rounded-full ${isAtrasado ? "bg-red-400" : isAdiantado ? "bg-emerald-400" : "bg-gray-400"}`}
+                          style={{ width: `${pctFisico}%` }}
+                        />
+                      </div>
+                      {Math.abs(diff) > 5 && (
+                        <p className={`text-[8px] font-medium ${isAtrasado ? "text-red-500" : "text-emerald-600"}`}>
+                          {isAtrasado ? `Físico +${diff}pp à frente` : `Fin. +${Math.abs(diff)}pp à frente`}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
 

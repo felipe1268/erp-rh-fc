@@ -3157,6 +3157,35 @@ export const financialRouter = router({
 
     ]); // fim Promise.all
 
+    // 9. Avanço físico acumulado real por projeto (weighted avg do último avanço por atividade)
+    const avancoFisicoRes = await dbExecute(db, `
+      WITH latest_av AS (
+        SELECT DISTINCT ON (av.atividade_id)
+          a.projeto_id,
+          COALESCE(a.peso_financeiro::numeric, 1) AS peso,
+          av.percentual_acumulado::numeric        AS pct
+        FROM planejamento_atividades a
+        JOIN planejamento_avancos av ON av.atividade_id = a.id
+        WHERE a.projeto_id IN (${idsStr})
+          AND NOT a.is_grupo
+        ORDER BY av.atividade_id, av.semana DESC
+      ),
+      totais AS (
+        SELECT projeto_id,
+               SUM(COALESCE(peso, 1)) AS total_peso,
+               SUM(COALESCE(peso, 1) * pct / 100.0) AS soma_ponderada
+        FROM latest_av
+        GROUP BY projeto_id
+      )
+      SELECT projeto_id,
+             ROUND(CASE WHEN total_peso > 0 THEN soma_ponderada / total_peso * 100.0 ELSE 0 END, 1) AS avanco_fisico_pct
+      FROM totais
+    `, []);
+    const avancoFisicoByProjId: Record<number, number> = {};
+    for (const r of avancoFisicoRes.rows) {
+      avancoFisicoByProjId[Number(r.projeto_id)] = parseFloat(r.avanco_fisico_pct ?? "0") || 0;
+    }
+
     console.log(`[ContasReceber] company=${input.companyId} ano=${input.ano} projetos=${projetos.length} prev_rows=${prevRes.rows.length} medicoes=${medRes.rows.length} tempo=${Date.now()-t0}ms`);
 
     const prevRows = prevRes.rows;
@@ -3418,6 +3447,7 @@ export const financialRouter = router({
         for (const m of meds) medByMes[String(m.competencia).slice(0, 7)] = m;
         const valorContrato = parseFloat(p.total_venda ?? p.valor_contrato ?? "0") || 0;
         const totalRecebidoHistorico = totalRecebidoHistByProjId[pid] ?? 0;
+        const avancoFisicoReal = avancoFisicoByProjId[pid] ?? null;
         return {
           projetoId: pid,
           obraId: p.obra_id ? Number(p.obra_id) : null,
@@ -3425,6 +3455,7 @@ export const financialRouter = router({
           cliente: p.cliente,
           valorContrato,
           totalRecebidoHistorico,
+          avancoFisicoReal,
           saldoContrato: Math.max(0, valorContrato - totalRecebidoHistorico),
           // Células mensais: previsto calculado + realizado salvo + previsão faturamento
           meses: Object.fromEntries(meses12.map(mes => {
