@@ -1011,7 +1011,7 @@ export default function Ordens() {
                               >
                                 <Search className="h-3 w-3 shrink-0" />
                                 {it.eapCodigo ? (
-                                  <span><code className="font-mono font-semibold">{it.eapCodigo}</code> — {it.eapDescricao}</span>
+                                  <span><code className="font-mono font-semibold">{it.eapCodigo}</code> — {it.eapDescricao || eapItems.find((e: any) => e.eapCodigo === it.eapCodigo)?.descricao || ""}</span>
                                 ) : (
                                   eapQ.isLoading ? "Carregando itens do orçamento..." : eapItems.length === 0 ? "Obra sem orçamento vinculado" : "Selecionar item do orçamento para alocação de custo"
                                 )}
