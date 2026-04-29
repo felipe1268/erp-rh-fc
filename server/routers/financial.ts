@@ -3384,9 +3384,14 @@ export const financialRouter = router({
       if (["faturado","a_receber","recebido_parcial","recebido_total","confirmado"].includes(sf)) totalFaturado += val;
       if (["recebido_parcial","recebido_total"].includes(sf)) totalRecebido += parseFloat(m.valor_recebido ?? "0") || val;
     }
-    // Standalone FRs (Dar Baixa direto, sem medicao)
-    for (const obraFrs of Object.values(standaloneByProjetoByMes)) {
-      for (const fr of Object.values(obraFrs)) {
+    // Standalone FRs (Dar Baixa direto, sem medicao) — só contar meses sem PM para evitar dupla contagem
+    for (const [pidStr, mesMap] of Object.entries(standaloneByProjetoByMes)) {
+      const pid = Number(pidStr);
+      for (const [mes, fr] of Object.entries(mesMap as Record<string, any>)) {
+        const hasPm = (medByProjeto[pid] ?? []).some(
+          (m: any) => String(m.competencia).slice(0, 7) === mes
+        );
+        if (hasPm) continue; // PM já contabilizado no loop anterior
         const sf = (fr as any).status;
         if (["recebido_parcial","recebido_total"].includes(sf)) {
           totalRecebido += parseFloat((fr as any).valor_recebido ?? "0") || 0;

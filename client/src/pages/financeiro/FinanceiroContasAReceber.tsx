@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
@@ -14,6 +14,7 @@ import {
   FileText, Clock, CheckCircle2, ReceiptText, Send, ThumbsUp, AlertCircle,
   TrendingUp, Wallet, BadgeCheck, CalendarClock, DollarSign, ChevronDown, ChevronUp,
   Pencil, Trash2, AlertTriangle, ArrowRight, BookOpen, BarChart2, Info,
+  X, ExternalLink,
 } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -145,6 +146,7 @@ export default function FinanceiroContasAReceber() {
   const [baixa, setBaixa] = useState<{ obra: ObraRow; mes: string; cell: MedicaoCell } | null>(null);
   const [viewMode, setViewMode] = useState<"cronograma" | "contrato">("cronograma");
   const [optimisticCells, setOptimisticCells] = useState<Record<string, Partial<MedicaoCell>>>({});
+  const [kpiPanel, setKpiPanel] = useState<string | null>(null);
 
   // ─── Query ─────────────────────────────────────────────────────────────────
   const { data, isLoading, refetch } = (trpc as any).financial.getContasReceberMatrix.useQuery(
@@ -320,15 +322,27 @@ export default function FinanceiroContasAReceber() {
 
         {/* KPIs — 2 linhas de 3 */}
         <div className="grid grid-cols-3 gap-3">
-          <KpiCard icon={Wallet}        label="Total Contratos"       value={BRL(kpis.totalContrato)}               color="text-gray-700"   bg="bg-gray-50" />
-          <KpiCard icon={CalendarClock} label="Previsto no Ano"       value={BRL(kpis.totalPrevisto)}               color="text-blue-700"   bg="bg-blue-50" />
-          <KpiCard icon={TrendingUp}    label="A Faturar (Previsto)"  value={BRL(kpis.totalPrevisaoFaturamento)}    color="text-orange-600" bg="bg-orange-50"
+          <KpiCard icon={Wallet}        label="Total Contratos"       value={BRL(kpis.totalContrato)}               color="text-gray-700"   bg="bg-gray-50"     onClick={() => setKpiPanel("totalContrato")} />
+          <KpiCard icon={CalendarClock} label="Previsto no Ano"       value={BRL(kpis.totalPrevisto)}               color="text-blue-700"   bg="bg-blue-50"     onClick={() => setKpiPanel("totalPrevisto")} />
+          <KpiCard icon={TrendingUp}    label="A Faturar (Previsto)"  value={BRL(kpis.totalPrevisaoFaturamento)}    color="text-orange-600" bg="bg-orange-50"   onClick={() => setKpiPanel("totalPrevisaoFaturamento")}
             sub="Meses ainda não faturados no cronograma" />
-          <KpiCard icon={FileText}      label="Já Faturado"           value={BRL(kpis.totalFaturado)}               color="text-blue-700"   bg="bg-blue-50" />
-          <KpiCard icon={ReceiptText}   label="A Receber"             value={BRL(kpis.totalAReceber)}               color="text-purple-700" bg="bg-purple-50"
+          <KpiCard icon={FileText}      label="Já Faturado"           value={BRL(kpis.totalFaturado)}               color="text-blue-700"   bg="bg-blue-50"     onClick={() => setKpiPanel("totalFaturado")} />
+          <KpiCard icon={ReceiptText}   label="A Receber"             value={BRL(kpis.totalAReceber)}               color="text-purple-700" bg="bg-purple-50"   onClick={() => setKpiPanel("totalAReceber")}
             sub={kpis.totalAReceber > 0 ? "Faturado ainda não recebido" : "Tudo faturado já foi recebido"} />
-          <KpiCard icon={CheckCircle2}  label="Recebido"              value={BRL(kpis.totalRecebido)}               color="text-green-700"  bg="bg-green-50" />
+          <KpiCard icon={CheckCircle2}  label="Recebido"              value={BRL(kpis.totalRecebido)}               color="text-green-700"  bg="bg-green-50"    onClick={() => setKpiPanel("totalRecebido")} />
         </div>
+
+        {/* KPI Detail Panel */}
+        {kpiPanel && (
+          <KpiDetailPanel
+            kpiKey={kpiPanel}
+            obras={obras}
+            mesesChave={mesesChave}
+            kpis={kpis}
+            ano={ano}
+            onClose={() => setKpiPanel(null)}
+          />
+        )}
 
         {/* Matriz */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -500,17 +514,341 @@ export default function FinanceiroContasAReceber() {
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
-function KpiCard({ icon: Icon, label, value, color, bg, sub }: {
-  icon: any; label: string; value: string; color: string; bg: string; sub?: string;
+function KpiCard({ icon: Icon, label, value, color, bg, sub, onClick }: {
+  icon: any; label: string; value: string; color: string; bg: string; sub?: string; onClick?: () => void;
 }) {
   return (
-    <div className={`rounded-xl border border-gray-100 p-4 ${bg}`}>
+    <div
+      className={`rounded-xl border border-gray-100 p-4 ${bg} ${onClick ? "cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all select-none group" : ""}`}
+      onClick={onClick}
+    >
       <div className="flex items-center gap-2 mb-1">
         <Icon className={`w-4 h-4 ${color}`} />
         <span className="text-xs text-gray-500 font-medium">{label}</span>
+        {onClick && <ExternalLink className={`w-3 h-3 ml-auto opacity-0 group-hover:opacity-60 transition-opacity ${color}`} />}
       </div>
       <p className={`text-xl font-bold ${color}`}>{value}</p>
       {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+// ─── KPI Detail Panel (full-screen overlay) ──────────────────────────────────
+
+const MESES_NOMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+function mesLabel(mes: string) {
+  const [, m] = mes.split("-");
+  return MESES_NOMES[parseInt(m, 10) - 1] ?? mes;
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const cfg = STATUS_CFG[status] ?? { label: status, badge: "bg-gray-100 text-gray-500" };
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.badge}`}>
+      {cfg.label}
+    </span>
+  );
+}
+
+function KpiDetailPanel({
+  kpiKey, obras, mesesChave, kpis, ano, onClose
+}: {
+  kpiKey: string;
+  obras: ObraRow[];
+  mesesChave: string[];
+  kpis: any;
+  ano: number;
+  onClose: () => void;
+}) {
+  const RECEBIDO_ST = new Set(["recebido_total","recebido_parcial","confirmado"]);
+  const FATURADO_ST = new Set(["faturado","a_receber","recebido_parcial","recebido_total","confirmado"]);
+
+  let title = "";
+  let subtitle = "";
+  let totalLabel = "";
+  let totalValue = 0;
+  let content: React.ReactNode = null;
+
+  if (kpiKey === "totalContrato") {
+    title = "Total de Contratos";
+    subtitle = `${obras.length} projeto(s) ativo(s) em ${ano}`;
+    totalLabel = "Total";
+    totalValue = kpis.totalContrato;
+    content = (
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wider">
+            <th className="py-2 pr-4 font-medium">Projeto</th>
+            <th className="py-2 pr-4 font-medium">Cliente</th>
+            <th className="py-2 pr-4 font-medium text-right">Valor Contrato</th>
+            <th className="py-2 pr-4 font-medium text-right">Já Recebido</th>
+            <th className="py-2 font-medium text-right">Saldo a Receber</th>
+          </tr>
+        </thead>
+        <tbody>
+          {obras.map((o, i) => (
+            <tr key={o.projetoId} className={`border-b border-gray-50 ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
+              <td className="py-3 pr-4 font-medium text-gray-900">{o.obraNome}</td>
+              <td className="py-3 pr-4 text-gray-500">{o.cliente || "—"}</td>
+              <td className="py-3 pr-4 text-right font-semibold text-gray-800">{BRL(o.valorContrato ?? 0)}</td>
+              <td className="py-3 pr-4 text-right text-green-700 font-medium">{BRL(o.totalRecebidoHistorico ?? 0)}</td>
+              <td className="py-3 text-right font-semibold text-purple-700">{BRL(o.saldoContrato ?? 0)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  else if (kpiKey === "totalPrevisto") {
+    title = "Previsto no Ano";
+    subtitle = `Cronograma financeiro de ${ano} por mês`;
+    totalLabel = "Total Previsto";
+    totalValue = kpis.totalPrevisto;
+    const rows: { mes: string; obras: { nome: string; val: number }[]; total: number }[] = mesesChave.map(mes => {
+      const items = obras
+        .filter(o => o.byMes[mes] && o.byMes[mes].valor > 0)
+        .map(o => ({ nome: o.obraNome, val: o.byMes[mes].valor }));
+      return { mes, obras: items, total: items.reduce((s, x) => s + x.val, 0) };
+    }).filter(r => r.total > 0);
+    content = (
+      <div className="space-y-2">
+        {rows.length === 0 && <p className="text-gray-400 text-sm py-8 text-center">Nenhum valor previsto cadastrado para {ano}.</p>}
+        {rows.map(r => (
+          <div key={r.mes} className="rounded-lg border border-gray-100 overflow-hidden">
+            <div className="flex items-center justify-between bg-blue-50 px-4 py-2">
+              <span className="font-semibold text-blue-800 text-sm">{mesLabel(r.mes)}</span>
+              <span className="font-bold text-blue-900 text-sm">{BRL(r.total)}</span>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {r.obras.map(ob => (
+                <div key={ob.nome} className="flex items-center justify-between px-4 py-2 text-xs text-gray-600">
+                  <span>{ob.nome}</span>
+                  <span className="font-medium text-gray-800">{BRL(ob.val)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  else if (kpiKey === "totalPrevisaoFaturamento") {
+    title = "A Faturar — Previsto no Cronograma";
+    subtitle = "Meses com saldo previsto que ainda não foram faturados";
+    totalLabel = "Total a Faturar";
+    totalValue = kpis.totalPrevisaoFaturamento;
+    const rows: { obra: string; mes: string; val: number }[] = [];
+    for (const o of obras) {
+      for (const mes of mesesChave) {
+        const cell = o.byMes[mes];
+        if (!cell) continue;
+        const st = resolveStatus(cell);
+        if (st === "previsto" || st === "previsao_faturamento") {
+          rows.push({ obra: o.obraNome, mes, val: cell.valor });
+        }
+      }
+    }
+    content = (
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wider">
+            <th className="py-2 pr-4 font-medium">Projeto</th>
+            <th className="py-2 pr-4 font-medium">Mês</th>
+            <th className="py-2 font-medium text-right">Valor Previsto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 && (
+            <tr><td colSpan={3} className="py-8 text-center text-gray-400">Nenhum mês pendente de faturamento.</td></tr>
+          )}
+          {rows.map((r, i) => (
+            <tr key={i} className={`border-b border-gray-50 ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
+              <td className="py-3 pr-4 font-medium text-gray-900">{r.obra}</td>
+              <td className="py-3 pr-4 text-gray-600">{mesLabel(r.mes)}</td>
+              <td className="py-3 text-right font-semibold text-orange-700">{BRL(r.val)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  else if (kpiKey === "totalFaturado") {
+    title = "Já Faturado";
+    subtitle = "Medições e recebimentos confirmados no ano";
+    totalLabel = "Total Faturado";
+    totalValue = kpis.totalFaturado;
+    const rows: { obra: string; mes: string; val: number; status: string; nf: string | null; dataRec: string | null }[] = [];
+    for (const o of obras) {
+      for (const mes of mesesChave) {
+        const cell = o.byMes[mes];
+        if (!cell) continue;
+        const st = resolveStatus(cell);
+        if (FATURADO_ST.has(st)) {
+          rows.push({ obra: o.obraNome, mes, val: cell.valor, status: st, nf: cell.nfNumero, dataRec: cell.dataRecebimento });
+        }
+      }
+    }
+    content = (
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wider">
+            <th className="py-2 pr-4 font-medium">Projeto</th>
+            <th className="py-2 pr-4 font-medium">Mês</th>
+            <th className="py-2 pr-4 font-medium">Status</th>
+            <th className="py-2 pr-4 font-medium">NF</th>
+            <th className="py-2 font-medium text-right">Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 && (
+            <tr><td colSpan={5} className="py-8 text-center text-gray-400">Nenhuma medição faturada registrada.</td></tr>
+          )}
+          {rows.map((r, i) => (
+            <tr key={i} className={`border-b border-gray-50 ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
+              <td className="py-3 pr-4 font-medium text-gray-900">{r.obra}</td>
+              <td className="py-3 pr-4 text-gray-600">{mesLabel(r.mes)}</td>
+              <td className="py-3 pr-4"><StatusBadge status={r.status} /></td>
+              <td className="py-3 pr-4 text-gray-500 text-xs">{r.nf || "—"}</td>
+              <td className="py-3 text-right font-semibold text-blue-700">{BRL(r.val)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  else if (kpiKey === "totalAReceber") {
+    title = "A Receber";
+    subtitle = "Faturado mas ainda não recebido";
+    totalLabel = "Total a Receber";
+    totalValue = kpis.totalAReceber;
+    const rows: { obra: string; mes: string; val: number; dataVenc: string | null }[] = [];
+    for (const o of obras) {
+      for (const mes of mesesChave) {
+        const cell = o.byMes[mes];
+        if (!cell) continue;
+        const st = resolveStatus(cell);
+        if (st === "a_receber" || st === "faturado") {
+          rows.push({ obra: o.obraNome, mes, val: cell.valor, dataVenc: cell.dataVencimento });
+        }
+      }
+    }
+    content = (
+      <div>
+        {rows.length === 0 ? (
+          <div className="py-16 text-center">
+            <CheckCircle2 className="w-12 h-12 text-green-300 mx-auto mb-3" />
+            <p className="text-gray-600 font-medium">Tudo faturado já foi recebido!</p>
+            <p className="text-gray-400 text-sm mt-1">Não há valores pendentes de recebimento.</p>
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wider">
+                <th className="py-2 pr-4 font-medium">Projeto</th>
+                <th className="py-2 pr-4 font-medium">Mês</th>
+                <th className="py-2 pr-4 font-medium">Vencimento</th>
+                <th className="py-2 font-medium text-right">Valor a Receber</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i} className={`border-b border-gray-50 ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
+                  <td className="py-3 pr-4 font-medium text-gray-900">{r.obra}</td>
+                  <td className="py-3 pr-4 text-gray-600">{mesLabel(r.mes)}</td>
+                  <td className="py-3 pr-4 text-gray-500">{r.dataVenc ? new Date(r.dataVenc).toLocaleDateString("pt-BR") : "—"}</td>
+                  <td className="py-3 text-right font-semibold text-purple-700">{BRL(r.val)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    );
+  }
+
+  else if (kpiKey === "totalRecebido") {
+    title = "Recebido";
+    subtitle = "Pagamentos confirmados no ano";
+    totalLabel = "Total Recebido";
+    totalValue = kpis.totalRecebido;
+    const rows: { obra: string; mes: string; val: number; valRec: number; dataRec: string | null; nf: string | null; status: string }[] = [];
+    for (const o of obras) {
+      for (const mes of mesesChave) {
+        const cell = o.byMes[mes];
+        if (!cell) continue;
+        const st = resolveStatus(cell);
+        if (RECEBIDO_ST.has(st)) {
+          rows.push({
+            obra: o.obraNome, mes, val: cell.valor,
+            valRec: cell.valorRecebido > 0 ? cell.valorRecebido : cell.valor,
+            dataRec: cell.dataRecebimento,
+            nf: cell.nfNumero,
+            status: st,
+          });
+        }
+      }
+    }
+    content = (
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wider">
+            <th className="py-2 pr-4 font-medium">Projeto</th>
+            <th className="py-2 pr-4 font-medium">Mês</th>
+            <th className="py-2 pr-4 font-medium">Status</th>
+            <th className="py-2 pr-4 font-medium">Recebido em</th>
+            <th className="py-2 pr-4 font-medium">NF</th>
+            <th className="py-2 font-medium text-right">Valor Recebido</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 && (
+            <tr><td colSpan={6} className="py-8 text-center text-gray-400">Nenhum recebimento registrado.</td></tr>
+          )}
+          {rows.map((r, i) => (
+            <tr key={i} className={`border-b border-gray-50 ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
+              <td className="py-3 pr-4 font-medium text-gray-900">{r.obra}</td>
+              <td className="py-3 pr-4 text-gray-600">{mesLabel(r.mes)}</td>
+              <td className="py-3 pr-4"><StatusBadge status={r.status} /></td>
+              <td className="py-3 pr-4 text-gray-500">{r.dataRec ? new Date(r.dataRec).toLocaleDateString("pt-BR") : "—"}</td>
+              <td className="py-3 pr-4 text-gray-500 text-xs">{r.nf || "—"}</td>
+              <td className="py-3 text-right font-bold text-green-700">{BRL(r.valRec)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-white/95 backdrop-blur-sm">
+      {/* Header */}
+      <div className="flex items-center justify-between px-8 py-5 border-b border-gray-200 bg-white shadow-sm shrink-0">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
+          <p className="text-sm text-gray-400 mt-0.5">{subtitle}</p>
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="text-right">
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">{totalLabel}</p>
+            <p className="text-3xl font-bold text-gray-900">{BRL(totalValue)}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2.5 rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-800"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+      {/* Body */}
+      <div className="flex-1 overflow-auto px-8 py-6">
+        {content}
+      </div>
     </div>
   );
 }
