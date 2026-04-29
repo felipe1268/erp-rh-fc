@@ -322,11 +322,11 @@ export default function FinanceiroContasAReceber() {
         <div className="grid grid-cols-3 gap-3">
           <KpiCard icon={Wallet}        label="Total Contratos"       value={BRL(kpis.totalContrato)}               color="text-gray-700"   bg="bg-gray-50" />
           <KpiCard icon={CalendarClock} label="Previsto no Ano"       value={BRL(kpis.totalPrevisto)}               color="text-blue-700"   bg="bg-blue-50" />
-          <KpiCard icon={TrendingUp}    label="Prev. Faturamento"     value={BRL(kpis.totalPrevisaoFaturamento)}    color="text-orange-600" bg="bg-orange-50"
-            sub={kpis.totalPrevisaoFaturamento > 0 ? "Baseado no avanço físico" : "Sem avanço físico registrado"} />
+          <KpiCard icon={TrendingUp}    label="A Faturar (Previsto)"  value={BRL(kpis.totalPrevisaoFaturamento)}    color="text-orange-600" bg="bg-orange-50"
+            sub="Meses ainda não faturados no cronograma" />
           <KpiCard icon={FileText}      label="Já Faturado"           value={BRL(kpis.totalFaturado)}               color="text-blue-700"   bg="bg-blue-50" />
           <KpiCard icon={ReceiptText}   label="A Receber"             value={BRL(kpis.totalAReceber)}               color="text-purple-700" bg="bg-purple-50"
-            sub="Faturado ainda não recebido" />
+            sub={kpis.totalAReceber > 0 ? "Faturado ainda não recebido" : "Tudo faturado já foi recebido"} />
           <KpiCard icon={CheckCircle2}  label="Recebido"              value={BRL(kpis.totalRecebido)}               color="text-green-700"  bg="bg-green-50" />
         </div>
 

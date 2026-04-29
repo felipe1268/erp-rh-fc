@@ -3360,10 +3360,28 @@ export const financialRouter = router({
         }
       }
     }
+    // Fallback: sem avanço físico registrado → Prev. Faturamento usa previsto cronograma
+    // de meses que ainda não têm medição nem FR standalone (pipeline a ser faturado).
+    if (totalPrevisaoFat === 0) {
+      for (const mes of meses12) {
+        for (const pid of projetoIds) {
+          const hasMed = (medByProjeto[pid] ?? []).some(
+            (m: any) => String(m.competencia).slice(0, 7) === mes
+          );
+          const hasSt = !!(standaloneByProjetoByMes[pid]?.[mes]);
+          if (!hasMed && !hasSt) {
+            totalPrevisaoFat += prevByProjeto[pid]?.[mes] ?? 0;
+          }
+        }
+      }
+    }
     for (const m of medicoes) {
       const val = parseFloat(m.valor_medido ?? "0") || parseFloat(m.valor_previsto ?? "0") || 0;
-      const sf = m.status_financeiro ?? m.status_medicao;
-      if (["faturado","a_receber","recebido_parcial","recebido_total"].includes(sf)) totalFaturado += val;
+      // sf: usa status_financeiro se disponível; caso PM seja 'confirmado' trata como recebido_total
+      const sf = m.status_financeiro === null && m.status_medicao === "confirmado"
+        ? "recebido_total"
+        : (m.status_financeiro ?? m.status_medicao);
+      if (["faturado","a_receber","recebido_parcial","recebido_total","confirmado"].includes(sf)) totalFaturado += val;
       if (["recebido_parcial","recebido_total"].includes(sf)) totalRecebido += parseFloat(m.valor_recebido ?? "0") || val;
     }
     // Standalone FRs (Dar Baixa direto, sem medicao)
