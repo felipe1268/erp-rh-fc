@@ -1160,10 +1160,13 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, mesAtu
 
         {/* Barras de progresso: Financeiro e Físico */}
         {pctExecucao !== null && (() => {
-          const pctFisico = obra.avancoFisicoReal !== null
-            ? Math.min(100, Math.round(obra.avancoFisicoReal))
+          const pctFisicoRaw = obra.avancoFisicoReal !== null
+            ? Math.min(100, obra.avancoFisicoReal)
             : null;
-          const diff = pctFisico !== null ? pctFisico - pctExecucao : null;
+          const pctFisicoLabel = pctFisicoRaw !== null
+            ? (Number.isInteger(pctFisicoRaw) ? `${pctFisicoRaw}` : pctFisicoRaw.toFixed(2))
+            : null;
+          const diff = pctFisicoRaw !== null ? pctFisicoRaw - pctExecucao : null;
           const isAtrasado = diff !== null && diff > 5;
           const isAdiantado = diff !== null && diff < -5;
           return (
@@ -1188,19 +1191,19 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, mesAtu
               <div>
                 <div className="flex items-center justify-between mb-0.5">
                   <span className="text-[10px] text-gray-500 font-medium">Físico (cronograma)</span>
-                  {pctFisico !== null ? (
+                  {pctFisicoRaw !== null ? (
                     <span className={`text-[10px] font-bold flex items-center gap-0.5 ${isAtrasado ? "text-red-500" : isAdiantado ? "text-emerald-600" : "text-gray-600"}`}>
-                      {isAtrasado && "↑"}{isAdiantado && "↓"}{pctFisico}%
+                      {isAtrasado && "↑"}{isAdiantado && "↓"}{pctFisicoLabel}%
                     </span>
                   ) : (
                     <span className="text-[10px] text-gray-300 italic">sem dados</span>
                   )}
                 </div>
                 <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                  {pctFisico !== null ? (
+                  {pctFisicoRaw !== null ? (
                     <div
                       className={`h-2 rounded-full transition-all ${isAtrasado ? "bg-red-400" : isAdiantado ? "bg-emerald-400" : "bg-gray-400"}`}
-                      style={{ width: `${pctFisico}%` }}
+                      style={{ width: `${pctFisicoRaw}%` }}
                     />
                   ) : (
                     <div className="h-2 rounded-full bg-gray-200 w-full opacity-40" style={{ backgroundImage: "repeating-linear-gradient(90deg,transparent,transparent 4px,#d1d5db 4px,#d1d5db 6px)" }} />
@@ -1208,7 +1211,7 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, mesAtu
                 </div>
                 {diff !== null && Math.abs(diff) > 5 && (
                   <p className={`text-[9px] font-semibold mt-0.5 ${isAtrasado ? "text-red-500" : "text-emerald-600"}`}>
-                    {isAtrasado ? `↑ Físico +${diff}pp à frente do financeiro` : `↑ Financeiro +${Math.abs(diff)}pp à frente do físico`}
+                    {isAtrasado ? `↑ Físico +${diff!.toFixed(1)}pp à frente do financeiro` : `↑ Financeiro +${Math.abs(diff!).toFixed(1)}pp à frente do físico`}
                   </p>
                 )}
               </div>

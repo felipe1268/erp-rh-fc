@@ -3157,59 +3157,21 @@ export const financialRouter = router({
 
     ]); // fim Promise.all
 
-    // 9. Avanço físico acumulado real por projeto — mesma lógica do cronograma:
-    //    1º fonte: REFIS consolidado mais recente (avanco_realizado)
-    //    2º fonte (fallback): média ponderada de planejamento_avancos por peso_financeiro
+    // 9. Avanço físico: valor exato do último REFIS da obra (sem cálculo nem média)
     const avancoFisicoRes = await dbExecute(db, `
-      WITH
-      -- Fonte 1: último REFIS consolidado por projeto
-      refis_consolidado AS (
-        SELECT DISTINCT ON (projeto_id)
-          projeto_id,
-          avanco_realizado::numeric AS avanco_pct
-        FROM planejamento_refis
-        WHERE projeto_id IN (${idsStr})
-          AND status = 'consolidado'
-        ORDER BY projeto_id, criado_em DESC NULLS LAST, semana DESC
-      ),
-      -- Fonte 2 (fallback): média ponderada por peso_financeiro dos últimos avanços
-      latest_av AS (
-        SELECT DISTINCT ON (av.atividade_id)
-          a.projeto_id,
-          COALESCE(a.peso_financeiro::numeric, 1) AS peso,
-          av.percentual_acumulado::numeric        AS pct
-        FROM planejamento_atividades a
-        JOIN planejamento_avancos av ON av.atividade_id = a.id
-        WHERE a.projeto_id IN (${idsStr})
-          AND NOT a.is_grupo
-        ORDER BY av.atividade_id, av.semana DESC
-      ),
-      ponderado AS (
-        SELECT projeto_id,
-               ROUND(
-                 CASE WHEN SUM(COALESCE(peso,1)) > 0
-                 THEN SUM(COALESCE(peso,1) * pct / 100.0) / SUM(COALESCE(peso,1)) * 100.0
-                 ELSE 0 END, 1
-               ) AS avanco_pct
-        FROM latest_av
-        GROUP BY projeto_id
-      ),
-      -- Todos os projetos: preferir REFIS se existir
-      todos AS (
-        SELECT p.projeto_id,
-               COALESCE(r.avanco_pct, po.avanco_pct) AS avanco_fisico_pct
-        FROM (SELECT UNNEST(ARRAY[${idsStr}]::int[]) AS projeto_id) p
-        LEFT JOIN refis_consolidado r ON r.projeto_id = p.projeto_id
-        LEFT JOIN ponderado         po ON po.projeto_id = p.projeto_id
-      )
-      SELECT projeto_id, avanco_fisico_pct
-      FROM todos
-      WHERE avanco_fisico_pct IS NOT NULL
+      SELECT DISTINCT ON (projeto_id)
+        projeto_id,
+        avanco_realizado::numeric AS avanco_fisico_pct
+      FROM planejamento_refis
+      WHERE projeto_id IN (${idsStr})
+      ORDER BY projeto_id, semana DESC, criado_em DESC NULLS LAST
     `, []);
     const avancoFisicoByProjId: Record<number, number> = {};
     for (const r of avancoFisicoRes.rows) {
-      avancoFisicoByProjId[Number(r.projeto_id)] = parseFloat(r.avanco_fisico_pct ?? "0") || 0;
+      const v = parseFloat(r.avanco_fisico_pct ?? "0");
+      if (!isNaN(v)) avancoFisicoByProjId[Number(r.projeto_id)] = v;
     }
+    console.log(`[ContasReceber] avancoFisico (REFIS direto) rows=${avancoFisicoRes.rows.length}`, JSON.stringify(avancoFisicoRes.rows.slice(0, 10)));
 
     console.log(`[ContasReceber] company=${input.companyId} ano=${input.ano} projetos=${projetos.length} prev_rows=${prevRes.rows.length} medicoes=${medRes.rows.length} tempo=${Date.now()-t0}ms`);
 
