@@ -3217,7 +3217,7 @@ export default function Cotacoes() {
                       </div>
                     </div>
                   )}
-                  </div>{/* fim coluna esquerda */}
+                  </div>
 
                   {/* ── Coluna direita: matriz de preços ── */}
                   <div className="flex-1 min-w-0 overflow-y-auto space-y-4 pb-4">
@@ -4364,8 +4364,8 @@ export default function Cotacoes() {
                       )}
                     </div>
                   )}
-                  </div>{/* fim coluna direita */}
-                </div>{/* fim flex mapa */}
+                  </div>
+                </div>
               )}
             </>
           ) : null}
