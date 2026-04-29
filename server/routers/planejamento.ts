@@ -687,7 +687,7 @@ export const planejamentoRouter = router({
         percentConcluido:    z.preprocess(v => v == null ? 0 : Number(v), z.number().min(0).max(100)).optional(),
       })),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const rows = input.atividades.map((a, i) => ({
         revisaoId:           input.revisaoId,
