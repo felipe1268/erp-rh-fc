@@ -1743,7 +1743,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           criadoPorNome: comprasCotacoes.criadoPorNome,
         }).from(comprasCotacoes)
           .where(and(eq(comprasCotacoes.solicitacaoId, input.id), eq(comprasCotacoes.companyId, sc.companyId)))
-          .orderBy(asc(comprasCotacoes.criadoEm));
+          .orderBy(desc(comprasCotacoes.criadoEm));
       } catch (e: any) { console.warn("[getSolicitacao] cotacoes query failed:", e?.message); }
 
       console.log("[getSolicitacao] step6: fetching ordens");
@@ -1761,7 +1761,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           criadoPorNome: comprasOrdens.criadoPorNome,
         }).from(comprasOrdens)
           .where(and(eq(comprasOrdens.solicitacaoId, input.id), eq(comprasOrdens.companyId, sc.companyId)))
-          .orderBy(asc(comprasOrdens.criadoEm));
+          .orderBy(desc(comprasOrdens.criadoEm));
       } catch (e: any) { console.warn("[getSolicitacao] ordens query failed:", e?.message); }
 
       console.log("[getSolicitacao] step7: fetching aprovadores + recebimentos");

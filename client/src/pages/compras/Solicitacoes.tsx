@@ -1146,6 +1146,7 @@ export default function Solicitacoes() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [pendingAnexos, setPendingAnexos] = useState<{ url?: string; nome: string; tipo: string; ts: number; base64?: string; preview?: string }[]>([]);
+  const [anexoDragOver, setAnexoDragOver] = useState(false);
   const [selectedSCIds, setSelectedSCIds] = useState<Set<number>>(new Set());
   const [confirmExcluirLote, setConfirmExcluirLote] = useState(false);
   const [excluirProgress, setExcluirProgress] = useState<{ total: number; done: number; errors: string[]; running: boolean } | null>(null);
@@ -3770,38 +3771,46 @@ export default function Solicitacoes() {
               <label className="text-xs font-medium text-gray-700">Anexos (opcional)</label>
               <input ref={fileInputRef} type="file" accept="image/*,application/pdf,video/mp4,video/quicktime,video/avi,video/x-matroska" multiple className="hidden" onChange={e => { if (e.target.files) handleMultipleFiles(e.target.files); e.target.value = ""; }} />
               <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImagemFile(f); e.target.value = ""; }} />
-              {pendingAnexos.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {pendingAnexos.map((anx, idx) => (
-                    <div key={idx} className="relative group">
-                      {anx.tipo === "imagem" && anx.preview ? (
-                        <img src={anx.preview} alt={anx.nome} className="h-20 w-20 rounded-lg border border-gray-200 object-cover" />
-                      ) : anx.tipo === "pdf" ? (
-                        <div className="h-20 w-20 rounded-lg border border-gray-200 bg-red-50 flex flex-col items-center justify-center">
-                          <FileText className="h-6 w-6 text-red-500" />
-                          <span className="text-[9px] text-red-600 mt-1">PDF</span>
-                        </div>
-                      ) : (
-                        <div className="h-20 w-20 rounded-lg border border-gray-200 bg-blue-50 flex flex-col items-center justify-center">
-                          <Film className="h-6 w-6 text-blue-500" />
-                          <span className="text-[9px] text-blue-600 mt-1">Vídeo</span>
-                        </div>
-                      )}
-                      <button type="button" onClick={() => setPendingAnexos(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <X className="h-3 w-3" />
-                      </button>
-                      <div className="text-[9px] text-gray-500 mt-0.5 truncate max-w-[80px]">{anx.nome}</div>
-                    </div>
-                  ))}
+              <div
+                className={`rounded-lg border-2 border-dashed p-3 transition-colors ${anexoDragOver ? "border-blue-400 bg-blue-50" : "border-gray-200 bg-gray-50 hover:border-gray-300"}`}
+                onDragOver={e => { e.preventDefault(); setAnexoDragOver(true); }}
+                onDragLeave={() => setAnexoDragOver(false)}
+                onDrop={e => { e.preventDefault(); setAnexoDragOver(false); if (e.dataTransfer.files?.length) handleMultipleFiles(e.dataTransfer.files); }}
+              >
+                {pendingAnexos.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {pendingAnexos.map((anx, idx) => (
+                      <div key={idx} className="relative group">
+                        {anx.tipo === "imagem" && anx.preview ? (
+                          <img src={anx.preview} alt={anx.nome} className="h-20 w-20 rounded-lg border border-gray-200 object-cover" />
+                        ) : anx.tipo === "pdf" ? (
+                          <div className="h-20 w-20 rounded-lg border border-gray-200 bg-red-50 flex flex-col items-center justify-center">
+                            <FileText className="h-6 w-6 text-red-500" />
+                            <span className="text-[9px] text-red-600 mt-1">PDF</span>
+                          </div>
+                        ) : (
+                          <div className="h-20 w-20 rounded-lg border border-gray-200 bg-blue-50 flex flex-col items-center justify-center">
+                            <Film className="h-6 w-6 text-blue-500" />
+                            <span className="text-[9px] text-blue-600 mt-1">Vídeo</span>
+                          </div>
+                        )}
+                        <button type="button" onClick={() => setPendingAnexos(prev => prev.filter((_, i) => i !== idx))} className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <X className="h-3 w-3" />
+                        </button>
+                        <div className="text-[9px] text-gray-500 mt-0.5 truncate max-w-[80px]">{anx.nome}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+                    <Paperclip className="h-3.5 w-3.5" /> Anexar Arquivo
+                  </button>
+                  <button type="button" onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+                    <Camera className="h-3.5 w-3.5" /> Câmera
+                  </button>
+                  <span className="text-xs text-gray-400">ou arraste arquivos aqui</span>
                 </div>
-              )}
-              <div className="flex gap-2">
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
-                  <Paperclip className="h-3.5 w-3.5" /> Anexar Arquivo
-                </button>
-                <button type="button" onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
-                  <Camera className="h-3.5 w-3.5" /> Câmera
-                </button>
               </div>
               {uploadingImagem && <div className="text-xs text-blue-600 mt-1">Enviando anexos...</div>}
             </div>

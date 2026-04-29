@@ -680,6 +680,7 @@ export default function Cotacoes() {
   const [novaCondicao, setNovaCondicao] = useState("");
   const [anexoUrl, setAnexoUrl] = useState<Record<number, string>>({});
   const [showAnexoInput, setShowAnexoInput] = useState<number | null>(null);
+  const [anexoDragForn, setAnexoDragForn] = useState<number | null>(null);
   const [showRealocacao, setShowRealocacao] = useState(false);
   const [cobertoPorRisco, setCobertoPorRisco] = useState(false);
   const [agruparItens, setAgruparItens] = useState(false);
@@ -3439,9 +3440,26 @@ export default function Cotacoes() {
                                             {/* Upload de arquivo */}
                                             <div>
                                               <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Arquivo (JPG ou PDF)</p>
-                                              <label className="flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-blue-200 rounded-lg p-3 cursor-pointer hover:bg-blue-50 transition-colors">
+                                              <label
+                                                className={`flex flex-col items-center justify-center gap-1.5 border-2 border-dashed rounded-lg p-3 cursor-pointer transition-colors ${anexoDragForn === p.fornecedorId ? "border-blue-400 bg-blue-100" : "border-blue-200 hover:bg-blue-50"}`}
+                                                onDragOver={e => { e.preventDefault(); setAnexoDragForn(p.fornecedorId); }}
+                                                onDragLeave={() => setAnexoDragForn(null)}
+                                                onDrop={e => {
+                                                  e.preventDefault();
+                                                  setAnexoDragForn(null);
+                                                  const file = e.dataTransfer.files?.[0];
+                                                  if (!file) return;
+                                                  const reader = new FileReader();
+                                                  reader.onload = ev => {
+                                                    const base64 = (ev.target?.result as string).split(',')[1];
+                                                    setIaFileBuffer({ fornecedorId: p.fornecedorId, base64, fileName: file.name, mimeType: file.type });
+                                                    uploadAnexo.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, companyId, fileBase64: base64, fileName: file.name, mimeType: file.type });
+                                                  };
+                                                  reader.readAsDataURL(file);
+                                                }}
+                                              >
                                                 <Paperclip className="h-5 w-5 text-blue-400" />
-                                                <span className="text-xs text-blue-600 font-medium">Clique para selecionar</span>
+                                                <span className="text-xs text-blue-600 font-medium">{anexoDragForn === p.fornecedorId ? "Solte o arquivo aqui" : "Clique ou arraste o arquivo"}</span>
                                                 <span className="text-[10px] text-gray-400">JPG, JPEG ou PDF</span>
                                                 <input
                                                   type="file"
