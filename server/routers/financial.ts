@@ -3163,9 +3163,13 @@ export const financialRouter = router({
     //    • Denominador = peso_financeiro de TODAS as atividades (diretas + indiretas)
     const avancoFisicoRes = await dbExecute(db, `
       WITH
-      -- Peso total correto: inclui diretas e indiretas (igual ao calcPesoTotal do frontend)
-      total_pesos AS (
+      -- Configuração por projeto: sem_peso=true quando nenhuma atividade tem peso_financeiro>0
+      -- (fallback: peso igual para todas as atividades, igual ao frontend)
+      proj_cfg AS (
         SELECT projeto_id,
+               CASE WHEN SUM(COALESCE(peso_financeiro::numeric, 0)) > 0
+                    THEN FALSE ELSE TRUE
+               END AS sem_peso,
                CASE WHEN SUM(COALESCE(peso_financeiro::numeric, 0)) > 0
                     THEN SUM(COALESCE(peso_financeiro::numeric, 0))
                     ELSE COUNT(*)::numeric
@@ -3179,28 +3183,34 @@ export const financialRouter = router({
       diretas AS (
         SELECT DISTINCT ON (av.atividade_id)
           a.projeto_id,
-          COALESCE(a.peso_financeiro::numeric, 0) AS peso,
-          av.percentual_acumulado::numeric         AS val
+          CASE WHEN pc.sem_peso THEN 1::numeric
+               ELSE COALESCE(a.peso_financeiro::numeric, 0)
+          END AS peso,
+          av.percentual_acumulado::numeric AS val
         FROM planejamento_atividades a
         JOIN planejamento_avancos av ON av.atividade_id = a.id
+        JOIN proj_cfg pc ON pc.projeto_id = a.projeto_id
         WHERE a.projeto_id IN (${idsStr})
           AND NOT a.is_grupo
           AND NOT a.is_indireta
         ORDER BY av.atividade_id, av.semana DESC
       ),
-      -- Indiretas: previsto proporcional ao prazo (referência = fim da semana atual = hoje + 6 dias)
+      -- Indiretas: previsto proporcional ao prazo (ref = próxima segunda-feira = início semana seguinte)
       indiretas AS (
         SELECT
           a.projeto_id,
-          COALESCE(a.peso_financeiro::numeric, 0) AS peso,
+          CASE WHEN pc.sem_peso THEN 1::numeric
+               ELSE COALESCE(a.peso_financeiro::numeric, 0)
+          END AS peso,
           CASE
             WHEN a.data_fim IS NULL OR a.data_inicio IS NULL THEN 0
-            WHEN (CURRENT_DATE + 6) >= a.data_fim::date THEN 100
-            WHEN (CURRENT_DATE + 6) <= a.data_inicio::date THEN 0
-            ELSE ((CURRENT_DATE + 6) - a.data_inicio::date)::numeric
+            WHEN (date_trunc('week', CURRENT_DATE)::date + 7) >= a.data_fim::date THEN 100
+            WHEN (date_trunc('week', CURRENT_DATE)::date + 7) <= a.data_inicio::date THEN 0
+            ELSE ((date_trunc('week', CURRENT_DATE)::date + 7) - a.data_inicio::date)::numeric
                  / (a.data_fim::date - a.data_inicio::date)::numeric * 100
           END AS val
         FROM planejamento_atividades a
+        JOIN proj_cfg pc ON pc.projeto_id = a.projeto_id
         WHERE a.projeto_id IN (${idsStr})
           AND NOT a.is_grupo
           AND a.is_indireta
@@ -3213,13 +3223,13 @@ export const financialRouter = router({
       SELECT
         c.projeto_id,
         ROUND(
-          CASE WHEN tp.total_peso > 0
-          THEN SUM(c.val * c.peso) / tp.total_peso
+          CASE WHEN pc.total_peso > 0
+          THEN SUM(c.val * c.peso) / pc.total_peso
           ELSE 0 END, 2
         ) AS avanco_fisico_pct
       FROM combined c
-      JOIN total_pesos tp ON tp.projeto_id = c.projeto_id
-      GROUP BY c.projeto_id, tp.total_peso
+      JOIN proj_cfg pc ON pc.projeto_id = c.projeto_id
+      GROUP BY c.projeto_id, pc.total_peso
     `, []);
     const avancoFisicoByProjId: Record<number, number> = {};
     for (const r of avancoFisicoRes.rows) {
