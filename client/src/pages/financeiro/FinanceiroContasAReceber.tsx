@@ -451,7 +451,7 @@ export default function FinanceiroContasAReceber() {
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-[#1e2d40] text-white">
-                    <th className="sticky left-0 z-30 bg-[#1e2d40] px-4 py-3 text-left text-xs font-semibold min-w-[220px] shadow-[2px_0_6px_rgba(0,0,0,0.18)]">
+                    <th className="sticky left-0 z-30 bg-[#1e2d40] px-3 py-3 text-left text-xs font-semibold min-w-[270px] shadow-[2px_0_6px_rgba(0,0,0,0.18)]">
                       Obra / Cliente
                     </th>
                     {mesesChave.map((mk, i) => (
@@ -1130,99 +1130,106 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, mesAtu
     : null;
 
   return (
-    <tr className={`border-b border-gray-100 hover:bg-blue-50/20 transition-colors ${rowBg} ${hasOverdue ? "border-l-2 border-l-red-400" : hasPartial ? "border-l-2 border-l-amber-400" : ""}`}>
+    <tr className={`border-b border-gray-100 hover:bg-blue-50/20 transition-colors ${rowBg} ${hasOverdue ? "border-l-4 border-l-red-400" : hasPartial ? "border-l-4 border-l-amber-400" : ""}`}>
       {/* Obra */}
-      <td className={`sticky left-0 z-20 px-4 py-2.5 ${rowBg} shadow-[2px_0_6px_rgba(0,0,0,0.08)]`}>
-        <div className="flex items-start gap-2">
-          <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${hasOverdue ? "bg-red-100" : hasPartial ? "bg-amber-100" : "bg-blue-100"}`}>
+      <td className={`sticky left-0 z-20 px-3 py-3 ${rowBg} shadow-[2px_0_6px_rgba(0,0,0,0.08)] min-w-[270px]`}>
+        {/* Cabeçalho: ícone + nome + badge */}
+        <div className="flex items-start gap-2 mb-2">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${hasOverdue ? "bg-red-100" : hasPartial ? "bg-amber-100" : "bg-blue-100"}`}>
             {hasOverdue
-              ? <Clock3 className="w-3.5 h-3.5 text-red-600" />
+              ? <Clock3 className="w-4 h-4 text-red-600" />
               : hasPartial
-                ? <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                : <Building2 className="w-3.5 h-3.5 text-blue-600" />}
+                ? <AlertTriangle className="w-4 h-4 text-amber-600" />
+                : <Building2 className="w-4 h-4 text-blue-600" />}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <p className="text-xs font-semibold text-gray-800 truncate max-w-[145px]">{obra.obraNome}</p>
-              {hasOverdue && (
-                <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-red-100 rounded text-[9px] font-bold text-red-700 shrink-0">
-                  <Clock3 className="w-2.5 h-2.5" />
-                  Atrasado
-                </span>
-              )}
-              {!hasOverdue && hasPartial && (
-                <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-amber-100 rounded text-[9px] font-bold text-amber-700 shrink-0">
-                  <AlertTriangle className="w-2.5 h-2.5" />
-                  Parcial
-                </span>
-              )}
-            </div>
-            <p className="text-[10px] text-gray-400 truncate max-w-[160px] mb-1">{obra.cliente || "—"}</p>
+            <p className="text-xs font-bold text-gray-800 leading-tight truncate max-w-[200px]">{obra.obraNome}</p>
+            <p className="text-[10px] text-gray-400 truncate max-w-[200px] mt-0.5">{obra.cliente || "—"}</p>
+          </div>
+          {hasOverdue && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-red-100 rounded-md text-[9px] font-bold text-red-700 shrink-0">
+              <Clock3 className="w-2.5 h-2.5" />Atrasado
+            </span>
+          )}
+          {!hasOverdue && hasPartial && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-100 rounded-md text-[9px] font-bold text-amber-700 shrink-0">
+              <AlertTriangle className="w-2.5 h-2.5" />Parcial
+            </span>
+          )}
+        </div>
 
-            {/* % Execução financeira vs Avanço Físico */}
-            {pctExecucao !== null && (
-              <div className="mb-1 space-y-0.5">
-                {/* Linha financeira */}
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] text-gray-400">Financeiro</span>
-                  <span className={`text-[9px] font-bold ${pctExecucao >= 75 ? "text-emerald-600" : pctExecucao >= 40 ? "text-blue-600" : "text-orange-500"}`}>
+        {/* Barras de progresso: Financeiro e Físico */}
+        {pctExecucao !== null && (() => {
+          const pctFisico = obra.avancoFisicoReal !== null
+            ? Math.min(100, Math.round(obra.avancoFisicoReal))
+            : null;
+          const diff = pctFisico !== null ? pctFisico - pctExecucao : null;
+          const isAtrasado = diff !== null && diff > 5;
+          const isAdiantado = diff !== null && diff < -5;
+          return (
+            <div className="space-y-1.5 mb-2">
+              {/* Financeiro */}
+              <div>
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[10px] text-gray-500 font-medium">Financeiro</span>
+                  <span className={`text-[10px] font-bold ${pctExecucao >= 75 ? "text-emerald-600" : pctExecucao >= 40 ? "text-blue-600" : "text-orange-500"}`}>
                     {pctExecucao}%
                   </span>
                 </div>
-                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    className={`h-1.5 rounded-full ${pctExecucao >= 75 ? "bg-emerald-500" : pctExecucao >= 40 ? "bg-blue-500" : "bg-orange-400"}`}
+                    className={`h-2 rounded-full transition-all ${pctExecucao >= 75 ? "bg-emerald-500" : pctExecucao >= 40 ? "bg-blue-500" : "bg-orange-400"}`}
                     style={{ width: `${pctExecucao}%` }}
                   />
                 </div>
-                {/* Linha física (quando disponível) */}
-                {obra.avancoFisicoReal !== null && obra.avancoFisicoReal > 0 && (() => {
-                  const pctFisico = Math.min(100, Math.round(obra.avancoFisicoReal));
-                  const diff = pctFisico - pctExecucao;
-                  const isAtrasado = diff > 5;   // físico avançou mais que financeiro
-                  const isAdiantado = diff < -5;  // financeiro avançou mais que físico
-                  return (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] text-gray-400">Físico (cronograma)</span>
-                        <span className={`text-[9px] font-bold flex items-center gap-0.5 ${isAtrasado ? "text-red-500" : isAdiantado ? "text-emerald-600" : "text-gray-500"}`}>
-                          {isAtrasado && <span title="Físico à frente do financeiro">↑</span>}
-                          {isAdiantado && <span title="Financeiro à frente do físico">↓</span>}
-                          {pctFisico}%
-                        </span>
-                      </div>
-                      <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-1.5 rounded-full ${isAtrasado ? "bg-red-400" : isAdiantado ? "bg-emerald-400" : "bg-gray-400"}`}
-                          style={{ width: `${pctFisico}%` }}
-                        />
-                      </div>
-                      {Math.abs(diff) > 5 && (
-                        <p className={`text-[8px] font-medium ${isAtrasado ? "text-red-500" : "text-emerald-600"}`}>
-                          {isAtrasado ? `Físico +${diff}pp à frente` : `Fin. +${Math.abs(diff)}pp à frente`}
-                        </p>
-                      )}
-                    </>
-                  );
-                })()}
               </div>
-            )}
 
-            <div className="flex flex-col gap-0.5">
-              {obra.totalRecebidoHistorico > 0 && (
-                <div className="flex items-center gap-1">
-                  <span className="text-[9px] text-gray-400 shrink-0">Recebido:</span>
-                  <span className="text-[9px] font-semibold text-emerald-700 truncate">{BRL(obra.totalRecebidoHistorico)}</span>
+              {/* Físico (cronograma) */}
+              <div>
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[10px] text-gray-500 font-medium">Físico (cronograma)</span>
+                  {pctFisico !== null ? (
+                    <span className={`text-[10px] font-bold flex items-center gap-0.5 ${isAtrasado ? "text-red-500" : isAdiantado ? "text-emerald-600" : "text-gray-600"}`}>
+                      {isAtrasado && "↑"}{isAdiantado && "↓"}{pctFisico}%
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-gray-300 italic">sem dados</span>
+                  )}
                 </div>
-              )}
-              {obra.saldoContrato > 0 && (
-                <div className="flex items-center gap-1">
-                  <span className="text-[9px] text-gray-400 shrink-0">Saldo:</span>
-                  <span className="text-[9px] font-semibold text-orange-600 truncate">{BRL(obra.saldoContrato)}</span>
+                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                  {pctFisico !== null ? (
+                    <div
+                      className={`h-2 rounded-full transition-all ${isAtrasado ? "bg-red-400" : isAdiantado ? "bg-emerald-400" : "bg-gray-400"}`}
+                      style={{ width: `${pctFisico}%` }}
+                    />
+                  ) : (
+                    <div className="h-2 rounded-full bg-gray-200 w-full opacity-40" style={{ backgroundImage: "repeating-linear-gradient(90deg,transparent,transparent 4px,#d1d5db 4px,#d1d5db 6px)" }} />
+                  )}
                 </div>
-              )}
+                {diff !== null && Math.abs(diff) > 5 && (
+                  <p className={`text-[9px] font-semibold mt-0.5 ${isAtrasado ? "text-red-500" : "text-emerald-600"}`}>
+                    {isAtrasado ? `↑ Físico +${diff}pp à frente do financeiro` : `↑ Financeiro +${Math.abs(diff)}pp à frente do físico`}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
+          );
+        })()}
+
+        {/* Valores Recebido / Saldo */}
+        <div className="flex gap-3 border-t border-gray-100 pt-1.5">
+          {obra.totalRecebidoHistorico > 0 && (
+            <div>
+              <p className="text-[9px] text-gray-400 mb-0.5">Recebido</p>
+              <p className="text-[11px] font-bold text-emerald-700 leading-none">{BRL(obra.totalRecebidoHistorico)}</p>
+            </div>
+          )}
+          {obra.saldoContrato > 0 && (
+            <div>
+              <p className="text-[9px] text-gray-400 mb-0.5">Saldo</p>
+              <p className="text-[11px] font-bold text-orange-600 leading-none">{BRL(obra.saldoContrato)}</p>
+            </div>
+          )}
         </div>
       </td>
 
