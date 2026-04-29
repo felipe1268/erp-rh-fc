@@ -6008,6 +6008,123 @@ Retorne APENAS um JSON válido neste formato:
       return { ok: true, almoxarifado: false };
     }),
 
+  estornarRecebimentoOC: protectedProcedure
+    .input(z.object({ id: z.number(), motivo: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [oc] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "Ordem não encontrada" });
+      if (!["entregue", "entregue_parcial"].includes(oc.status)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Somente OCs com status 'Entregue' podem ser estornadas." });
+      }
+
+      const usuarioNome = ctx.user?.name ?? ctx.user?.email ?? "Sistema";
+      const usuarioId = ctx.user?.id ?? null;
+
+      // 1. Reverter status da OC para "aprovada" e limpar data de entrega real
+      await db.update(comprasOrdens).set({
+        status: "aprovada",
+        dataEntregaReal: null,
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(eq(comprasOrdens.id, input.id));
+
+      // 2. Reverter entrada financeira de "a_pagar" para "previsto"
+      if ((oc as any).financialEntryId) {
+        try {
+          await db.update(financialEntries as any)
+            .set({ status: "previsto" } as any)
+            .where(eq((financialEntries as any).id, (oc as any).financialEntryId));
+        } catch (_) { /* coluna pode não existir */ }
+      }
+
+      // 3. Reverter movimentações de almoxarifado (somente material)
+      const ocTipo = (oc as any).tipo ?? "compra";
+      if (ocTipo !== "servico" && ocTipo !== "pacote") {
+        const itensOC = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
+
+        let obraNome: string | null = null;
+        if (oc.obraId) {
+          const [ob] = await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, oc.obraId));
+          obraNome = ob?.nome ?? null;
+        }
+
+        for (const item of itensOC) {
+          const qtdEntregue = n(item.quantidadeEntregue ?? item.quantidade);
+          if (qtdEntregue <= 0) continue;
+
+          // busca item no almoxarifado pelo nome e obra
+          const [almoItem] = await db.select().from(almoxarifadoItens)
+            .where(and(
+              eq(almoxarifadoItens.companyId, oc.companyId),
+              ilike(almoxarifadoItens.nome, item.descricao),
+              oc.obraId
+                ? eq(almoxarifadoItens.obraId, oc.obraId)
+                : isNull(almoxarifadoItens.obraId),
+            )).limit(1);
+
+          if (almoItem) {
+            // cria movimentação de saída (estorno)
+            await db.insert(almoxarifadoMovimentacoes).values({
+              companyId: oc.companyId,
+              itemId: almoItem.id,
+              tipo: "saida",
+              quantidade: String(qtdEntregue),
+              obraId: oc.obraId ?? null,
+              obraNome: obraNome ?? null,
+              motivo: `Estorno OC ${oc.numeroOc} — ${input.motivo}`,
+              usuarioId,
+              usuarioNome,
+              observacoes: `Estorno automático de recebimento da Ordem de Compra ${oc.numeroOc}`,
+            });
+
+            // decrementa quantidade no almoxarifado (não negativa)
+            await db.update(almoxarifadoItens).set({
+              quantidadeAtual: sql`GREATEST(0, ${almoxarifadoItens.quantidadeAtual}::numeric - ${qtdEntregue})`,
+              atualizadoEm: new Date().toISOString(),
+            }).where(eq(almoxarifadoItens.id, almoItem.id));
+          }
+
+          // limpa quantidadeEntregue no item da OC
+          await db.update(comprasOrdensItens).set({ quantidadeEntregue: "0" })
+            .where(eq(comprasOrdensItens.id, item.id));
+
+          // reverte item da SC se houver vínculo
+          if (item.solicitacaoItemId) {
+            const [scItem] = await db.select().from(comprasSolicitacoesItens)
+              .where(eq(comprasSolicitacoesItens.id, item.solicitacaoItemId));
+            if (scItem) {
+              const novaAtendida = Math.max(0, n(scItem.quantidadeAtendida) - qtdEntregue);
+              const novoStatus = novaAtendida <= 0 ? "pendente" : "parcial";
+              await db.update(comprasSolicitacoesItens).set({
+                quantidadeAtendida: String(novaAtendida),
+                statusItem: novoStatus,
+              }).where(eq(comprasSolicitacoesItens.id, item.solicitacaoItemId));
+            }
+          }
+        }
+
+        // 4. Se a SC estava "concluida" por causa desta OC, reverter para "aprovada"
+        if (oc.cotacaoId) {
+          try {
+            const [cot] = await db.select({ solicitacaoId: comprasCotacoes.solicitacaoId })
+              .from(comprasCotacoes).where(eq(comprasCotacoes.id, oc.cotacaoId));
+            if (cot?.solicitacaoId) {
+              const [sc] = await db.select({ status: comprasSolicitacoes.status })
+                .from(comprasSolicitacoes).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+              if (sc?.status === "concluida") {
+                await db.update(comprasSolicitacoes).set({
+                  status: "aprovada",
+                  atualizadoEm: new Date().toISOString(),
+                }).where(eq(comprasSolicitacoes.id, cot.solicitacaoId));
+              }
+            }
+          } catch (_) { /* SC pode não existir */ }
+        }
+      }
+
+      return { ok: true };
+    }),
+
   atualizarDadosEntregaOC: protectedProcedure
     .input(z.object({
       id: z.number(),

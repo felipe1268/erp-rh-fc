@@ -18,7 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
@@ -143,6 +143,8 @@ export default function Ordens() {
   const [confirmExcluirLote, setConfirmExcluirLote] = useState(false);
   const [showFdDialog, setShowFdDialog] = useState<any>(null);
   const [fdForm, setFdForm] = useState({ modalidade: "fd_cliente" as "fd_cliente" | "fd_terceiro", valor: "", bdiItemId: 0, contractId: 0 });
+  const [showEstornoDialog, setShowEstornoDialog] = useState(false);
+  const [estornoMotivo, setEstornoMotivo] = useState("");
 
   const [autoSwitchedForCompany, setAutoSwitchedForCompany] = useState<number | null>(null);
   const urlTabHandled = useRef(false);
@@ -250,6 +252,16 @@ export default function Ordens() {
       }
       q.refetch();
       detalheQ.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const estornarRecebimento = trpc.compras.estornarRecebimentoOC.useMutation({
+    onSuccess: () => {
+      toast.success("Recebimento estornado! A OC voltou para status Aprovada.");
+      q.refetch();
+      detalheQ.refetch();
+      setShowEstornoDialog(false);
+      setEstornoMotivo("");
     },
     onError: (e) => toast.error(e.message),
   });
@@ -1849,6 +1861,22 @@ export default function Ordens() {
                   </div>
                 )}
 
+                {/* Estornar Recebimento */}
+                {["entregue", "entregue_parcial"].includes(detalhe.status) && (
+                  <div className="space-y-2 border-t border-gray-200 pt-4">
+                    <Label className="text-gray-700 text-sm font-semibold">Recebimento</Label>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50"
+                      onClick={() => { setEstornoMotivo(""); setShowEstornoDialog(true); }}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> Estornar Recebimento
+                    </Button>
+                    <p className="text-[10px] text-gray-400">Reverte o recebimento, desfaz as entradas no estoque e volta a OC para Aprovada.</p>
+                  </div>
+                )}
+
                 {/* FD Section */}
                 {(detalhe as any).modalidadeFd && (detalhe as any).modalidadeFd !== "normal" ? (
                   <div className="space-y-2 border-t border-gray-200 pt-4">
@@ -1935,6 +1963,52 @@ export default function Ordens() {
           })() : null}
         </DialogContent>
       </Dialog>
+      {/* Dialog — Estornar Recebimento */}
+      <Dialog open={showEstornoDialog} onOpenChange={v => { if (!v) setShowEstornoDialog(false); }}>
+        <DialogContent className="border-amber-200 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+          <DialogHeader>
+            <DialogTitle className="text-amber-700 flex items-center gap-2">
+              <RotateCcw className="h-5 w-5" /> Estornar Recebimento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 space-y-1">
+              <p className="font-semibold">Esta ação irá:</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                <li>Reverter o status da OC para <strong>Aprovada</strong></li>
+                <li>Criar movimentações de saída no estoque para cada item</li>
+                <li>Reverter as quantidades entregues na Solicitação de Compra</li>
+                <li>Reverter o status financeiro de A Pagar para Previsto</li>
+              </ul>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-gray-700">Motivo do estorno <span className="text-red-500">*</span></Label>
+              <Textarea
+                placeholder="Descreva o motivo do estorno (ex: material com defeito, entrega errada...)"
+                value={estornoMotivo}
+                onChange={e => setEstornoMotivo(e.target.value)}
+                rows={3}
+                className="text-sm resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setShowEstornoDialog(false)} disabled={estornarRecebimento.isPending}>Cancelar</Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-500 text-white gap-1.5"
+              disabled={!estornoMotivo.trim() || estornarRecebimento.isPending}
+              onClick={() => {
+                if (!showDetalhe) return;
+                estornarRecebimento.mutate({ id: showDetalhe, motivo: estornoMotivo.trim() });
+              }}
+            >
+              {estornarRecebimento.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+              Confirmar Estorno
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={confirmExcluirLote} onOpenChange={setConfirmExcluirLote}>
         <DialogContent className="border-gray-200 max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
           <DialogHeader>
