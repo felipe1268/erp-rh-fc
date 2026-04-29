@@ -3157,30 +3157,69 @@ export const financialRouter = router({
 
     ]); // fim Promise.all
 
-    // 9. Avanço físico acumulado — mesma fórmula do card "REALIZADO (ACUM.)" do Avanço Semanal:
-    //    média ponderada pelo peso_financeiro, excluindo grupos e atividades indiretas,
-    //    usando o percentual_acumulado mais recente (semana DESC) por atividade.
+    // 9. Avanço físico acumulado GLOBAL — mesma fórmula do REFIS "Global (c/ Indiretas)":
+    //    • Diretas   → percentual_acumulado mais recente de planejamento_avancos
+    //    • Indiretas → previsto proporcional ao prazo: (hoje+6d - data_inicio) / (data_fim - data_inicio) × 100
+    //    • Denominador = peso_financeiro de TODAS as atividades (diretas + indiretas)
     const avancoFisicoRes = await dbExecute(db, `
-      WITH latest_av AS (
+      WITH
+      -- Peso total correto: inclui diretas e indiretas (igual ao calcPesoTotal do frontend)
+      total_pesos AS (
+        SELECT projeto_id,
+               CASE WHEN SUM(COALESCE(peso_financeiro::numeric, 0)) > 0
+                    THEN SUM(COALESCE(peso_financeiro::numeric, 0))
+                    ELSE COUNT(*)::numeric
+               END AS total_peso
+        FROM planejamento_atividades
+        WHERE projeto_id IN (${idsStr})
+          AND NOT is_grupo
+        GROUP BY projeto_id
+      ),
+      -- Diretas: valor real registrado em planejamento_avancos
+      diretas AS (
         SELECT DISTINCT ON (av.atividade_id)
           a.projeto_id,
-          COALESCE(a.peso_financeiro::numeric, 1) AS peso,
-          av.percentual_acumulado::numeric        AS pct
+          COALESCE(a.peso_financeiro::numeric, 0) AS peso,
+          av.percentual_acumulado::numeric         AS val
         FROM planejamento_atividades a
         JOIN planejamento_avancos av ON av.atividade_id = a.id
         WHERE a.projeto_id IN (${idsStr})
           AND NOT a.is_grupo
           AND NOT a.is_indireta
         ORDER BY av.atividade_id, av.semana DESC
+      ),
+      -- Indiretas: previsto proporcional ao prazo (referência = fim da semana atual = hoje + 6 dias)
+      indiretas AS (
+        SELECT
+          a.projeto_id,
+          COALESCE(a.peso_financeiro::numeric, 0) AS peso,
+          CASE
+            WHEN a.data_fim IS NULL OR a.data_inicio IS NULL THEN 0
+            WHEN (CURRENT_DATE + 6) >= a.data_fim::date THEN 100
+            WHEN (CURRENT_DATE + 6) <= a.data_inicio::date THEN 0
+            ELSE ((CURRENT_DATE + 6) - a.data_inicio::date)::numeric
+                 / (a.data_fim::date - a.data_inicio::date)::numeric * 100
+          END AS val
+        FROM planejamento_atividades a
+        WHERE a.projeto_id IN (${idsStr})
+          AND NOT a.is_grupo
+          AND a.is_indireta
+      ),
+      combined AS (
+        SELECT projeto_id, peso, val FROM diretas
+        UNION ALL
+        SELECT projeto_id, peso, val FROM indiretas
       )
-      SELECT projeto_id,
-             ROUND(
-               CASE WHEN SUM(COALESCE(peso, 1)) > 0
-               THEN SUM(COALESCE(peso, 1) * pct / 100.0) / SUM(COALESCE(peso, 1)) * 100.0
-               ELSE 0 END, 2
-             ) AS avanco_fisico_pct
-      FROM latest_av
-      GROUP BY projeto_id
+      SELECT
+        c.projeto_id,
+        ROUND(
+          CASE WHEN tp.total_peso > 0
+          THEN SUM(c.val * c.peso) / tp.total_peso
+          ELSE 0 END, 2
+        ) AS avanco_fisico_pct
+      FROM combined c
+      JOIN total_pesos tp ON tp.projeto_id = c.projeto_id
+      GROUP BY c.projeto_id, tp.total_peso
     `, []);
     const avancoFisicoByProjId: Record<number, number> = {};
     for (const r of avancoFisicoRes.rows) {
