@@ -2926,7 +2926,7 @@ export const financialRouter = router({
       WHERE pp.company_id = $1
         AND LEFT(pm.competencia::text, 4) = $2
         AND pm.status NOT IN ('cancelada','rejeitada')
-      ORDER BY pm.competencia ASC, pm.numero ASC
+      ORDER BY pm.competencia ASC, pm.numero ASC, pm.id ASC
     `, [input.companyId, String(input.ano)]),
 
     // 5. Standalone financial_revenue (Dar Baixa direto, sem medicao_id)
@@ -2986,17 +2986,30 @@ export const financialRouter = router({
     `, []),
 
     // 7. Total recebido histórico (todos os anos) para saldo de contrato
-    // GROUP BY obra_id (quando não nulo) ou obra_nome (quando obra_id é nulo),
-    // evitando dupla contagem quando a mesma obra_id tem variações de obra_nome.
+    // Usa DISTINCT ON (obra_id, competencia-mês) para evitar dupla-contagem quando
+    // um mesmo mês tem tanto FR importado da API quanto FR criado pelo "Dar Baixa".
+    // Mantém apenas o registro mais recentemente atualizado por (obra_id, mês).
     dbExecute(db, `
-      SELECT fr.obra_id,
-             CASE WHEN fr.obra_id IS NULL THEN fr.obra_nome ELSE NULL END AS obra_nome,
-             SUM(COALESCE(fr.valor_recebido, 0)) AS total_recebido
-      FROM financial_revenue fr
-      WHERE fr.company_id = $1
-        AND fr.valor_recebido > 0
-      GROUP BY fr.obra_id,
-               CASE WHEN fr.obra_id IS NULL THEN fr.obra_nome ELSE NULL END
+      SELECT sub.obra_id,
+             CASE WHEN sub.obra_id IS NULL THEN sub.obra_nome ELSE NULL END AS obra_nome,
+             SUM(COALESCE(sub.valor_recebido, 0)) AS total_recebido
+      FROM (
+        SELECT DISTINCT ON (
+          fr.obra_id,
+          TO_CHAR(COALESCE(fr.data_vencimento, fr.data_recebimento), 'YYYY-MM')
+        )
+          fr.obra_id, fr.obra_nome, fr.valor_recebido
+        FROM financial_revenue fr
+        WHERE fr.company_id = $1
+          AND fr.valor_recebido > 0
+        ORDER BY
+          fr.obra_id,
+          TO_CHAR(COALESCE(fr.data_vencimento, fr.data_recebimento), 'YYYY-MM'),
+          fr.updated_at DESC NULLS LAST,
+          fr.id DESC
+      ) sub
+      GROUP BY sub.obra_id,
+               CASE WHEN sub.obra_id IS NULL THEN sub.obra_nome ELSE NULL END
     `, [input.companyId]),
 
     // 8. Baseline: mesma distribuição mas usando a PRIMEIRA revisão aprovada
@@ -3311,10 +3324,14 @@ export const financialRouter = router({
     }
     for (const mes of meses12) {
       for (const pid of projetoIds) {
-        // Se há medição salva, usa ela; senão usa previsto calculado
+        // Se há medição salva, usa ela; senão usa previsto calculado.
+        // Usa last-wins (igual ao medByMes em projetos.map) para evitar inflação
+        // quando existem múltiplos PM records para o mesmo (projeto, mês) — ex:
+        // um criado pelo backfill e outro pelo "Dar Baixa".
         const meds = (medByProjeto[pid] ?? []).filter((m: any) => String(m.competencia).slice(0, 7) === mes);
-        const val = meds.length > 0
-          ? meds.reduce((s: number, m: any) => s + (parseFloat(m.valor_medido ?? "0") || parseFloat(m.valor_previsto ?? "0") || 0), 0)
+        const lastMed = meds.length > 0 ? meds[meds.length - 1] : null;
+        const val = lastMed
+          ? (parseFloat(lastMed.valor_medido ?? "0") || parseFloat(lastMed.valor_previsto ?? "0") || 0)
           : (prevByProjeto[pid]?.[mes] ?? 0);
         totaisMes[mes] = (totaisMes[mes] ?? 0) + val;
         totalPrevisto += val;
@@ -3382,6 +3399,21 @@ export const financialRouter = router({
               valorRecebido = parseFloat(med.valor_recebido ?? "0") || 0;
               dataVencimento = med.data_vencimento ?? null;
               nfNumero = med.nf_numero ?? null;
+              // PM confirmada mas sem FR vinculado (registrarRecebimento cria FR com
+              // medicao_id=NULL, então o LEFT JOIN não encontra). Mescla dados do FR
+              // standalone para que a célula mostre "Recebido" com o valor correto.
+              if (!med.fr_id && !med.status_financeiro && sf === "confirmado" && standaloneFr) {
+                sf = standaloneFr.status ?? "recebido_total";
+                frId = Number(standaloneFr.id);
+                dataRecebimento = standaloneFr.data_recebimento ?? null;
+                valorRecebido = parseFloat(standaloneFr.valor_recebido ?? "0") || 0;
+                dataVencimento = standaloneFr.data_vencimento ?? null;
+                nfNumero = standaloneFr.nf_numero ?? null;
+              } else if (!med.fr_id && !med.status_financeiro && sf === "confirmado") {
+                // Sem FR standalone também: trata como recebido_total para exibição correta
+                sf = "recebido_total";
+                valorRecebido = valorMedido;
+              }
             } else if (standaloneFr) {
               sf = standaloneFr.status ?? "recebido_total";
               frId = Number(standaloneFr.id);
