@@ -367,7 +367,7 @@ export default function Clientes() {
 
         {/* Modal */}
         <Dialog open={modalAberto} onOpenChange={open => { if (!open) fecharModal(); }}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" style={{ background: "#ffffff", color: "#111827" }}>
+          <DialogContent className="w-[98vw] max-w-[98vw] h-[96vh] max-h-[96vh] overflow-y-auto" style={{ background: "#ffffff", color: "#111827" }}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <UserCheck className="h-4 w-4 text-blue-600" />
