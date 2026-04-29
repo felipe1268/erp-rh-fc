@@ -2946,6 +2946,13 @@ export const financialRouter = router({
         AND LEFT(fr.data_vencimento::text, 4) = $2
       ORDER BY fr.obra_id,
                TO_CHAR(fr.data_vencimento, 'YYYY-MM'),
+               CASE fr.status
+                 WHEN 'recebido_total'   THEN 1
+                 WHEN 'recebido_parcial' THEN 2
+                 WHEN 'pendente'         THEN 3
+                 WHEN 'a_faturar'        THEN 4
+                 ELSE 5
+               END ASC,
                fr.updated_at DESC NULLS LAST,
                fr.id DESC
     `, [input.companyId, String(input.ano)]),
@@ -3409,9 +3416,10 @@ export const financialRouter = router({
               nfNumero = med.nf_numero ?? null;
               // PM confirmada mas sem FR vinculado (registrarRecebimento cria FR com
               // medicao_id=NULL, então o LEFT JOIN não encontra). Mescla dados do FR
-              // standalone para que a célula mostre "Recebido" com o valor correto.
-              if (!med.fr_id && !med.status_financeiro && sf === "confirmado" && standaloneFr) {
-                sf = standaloneFr.status ?? "recebido_total";
+              // standalone SOMENTE se o FR for 'recebido_total' — nunca 'a_faturar'.
+              if (!med.fr_id && !med.status_financeiro && sf === "confirmado" &&
+                  standaloneFr?.status === "recebido_total") {
+                sf = "recebido_total";
                 frId = Number(standaloneFr.id);
                 dataRecebimento = standaloneFr.data_recebimento ?? null;
                 valorRecebido = parseFloat(standaloneFr.valor_recebido ?? "0") || 0;
