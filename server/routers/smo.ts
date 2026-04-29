@@ -2,13 +2,14 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getEffectiveAllowedObraIds, getCurrentUserEmployeeId } from "../db";
-import { eq, and, sql, isNull, desc, inArray } from "drizzle-orm";
+import { eq, and, sql, isNull, desc, inArray, ilike, or } from "drizzle-orm";
 import { storagePut } from "../storage";
 import {
   smoSolicitacoes, smoAtividadesEap, smoOnboardingChecklist,
   obras, employees, obraFuncionarios, convencaoColetiva,
   encargosSociais, planejamentoProjetos, planejamentoAtividades,
   planejamentoRevisoes, mealBenefitConfigs,
+  clientes, employeeIntegrations,
 } from "../../drizzle/schema";
 
 function companyFilter(col: any, input: { companyId: number; companyIds?: number[] }) {
@@ -1192,5 +1193,100 @@ export const smoRouter = router({
         atualizadoEm: new Date().toISOString(),
       }).where(eq(smoSolicitacoes.id, input.id));
       return { success: true };
+    }),
+
+  verificarIntegracaoObra: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      obraId: z.number(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+
+      const [obra] = await db.select().from(obras).where(eq(obras.id, input.obraId)).limit(1);
+      if (!obra || !obra.cliente) return { exigeIntegracao: false };
+
+      const clienteNomeObra = obra.cliente.trim();
+
+      const clienteRows = await db.select().from(clientes).where(
+        and(
+          companyFilter(clientes.companyId, input),
+          or(
+            ilike(clientes.razaoSocial, clienteNomeObra),
+            ilike(clientes.nomeFantasia, clienteNomeObra),
+          ),
+          eq(clientes.tipo, "PJ"),
+        )
+      ).limit(1);
+
+      if (clienteRows.length === 0 || !clienteRows[0].integracaoRequer) {
+        return { exigeIntegracao: false };
+      }
+
+      const cfg = clienteRows[0];
+
+      const empAtivos = await db
+        .select({ id: obraFuncionarios.employeeId, nome: employees.nomeCompleto })
+        .from(obraFuncionarios)
+        .innerJoin(employees, eq(obraFuncionarios.employeeId, employees.id))
+        .where(and(
+          eq(obraFuncionarios.obraId, input.obraId),
+          eq(obraFuncionarios.isActive, 1),
+          eq(employees.status, "Ativo"),
+        ));
+
+      const hoje = new Date();
+      const alertas: { empId: number; empNome: string; status: string; vencimento: string | null }[] = [];
+
+      if (empAtivos.length > 0) {
+        const empIds = empAtivos.map(e => e.id).filter(Boolean) as number[];
+        const integracoesEmp = await db.select().from(employeeIntegrations).where(
+          and(
+            eq(employeeIntegrations.companyId, input.companyId),
+            inArray(employeeIntegrations.employeeId, empIds),
+            eq(employeeIntegrations.tipo, "externa"),
+            eq(employeeIntegrations.clienteId, cfg.id),
+          )
+        );
+
+        const mapUltima: Record<number, any> = {};
+        for (const int of integracoesEmp) {
+          const prev = mapUltima[int.employeeId];
+          if (!prev || int.dataRealizacao > prev.dataRealizacao) {
+            mapUltima[int.employeeId] = int;
+          }
+        }
+
+        for (const emp of empAtivos) {
+          if (!emp.id) continue;
+          const ultima = mapUltima[emp.id];
+          if (!ultima) {
+            alertas.push({ empId: emp.id, empNome: emp.nome || "", status: "SEM_REGISTRO", vencimento: null });
+          } else if (ultima.dataVencimento) {
+            const venc = new Date(ultima.dataVencimento);
+            const diasAteVenc = Math.ceil((venc.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+            if (diasAteVenc < 0) {
+              alertas.push({ empId: emp.id, empNome: emp.nome || "", status: "VENCIDA", vencimento: ultima.dataVencimento });
+            } else if (diasAteVenc <= 30) {
+              alertas.push({ empId: emp.id, empNome: emp.nome || "", status: "A_VENCER", vencimento: ultima.dataVencimento });
+            }
+          }
+        }
+      }
+
+      return {
+        exigeIntegracao: true,
+        clienteId: cfg.id,
+        clienteNome: cfg.razaoSocial || cfg.nomeFantasia || clienteNomeObra,
+        diasSemana: cfg.integracaoDiasSemana,
+        duracao: cfg.integracaoDuracao,
+        validadeMeses: cfg.integracaoValidadeMeses,
+        email: cfg.integracaoEmail,
+        plataforma: cfg.integracaoPlataforma,
+        procedimento: cfg.integracaoProcedimento,
+        alertas,
+        totalAlerta: alertas.length,
+      };
     }),
 });

@@ -185,6 +185,12 @@ export default function SolicitacaoMDO() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formObraId, analiseItensKey]);
 
+  const integracaoObraQ = trpc.smo.verificarIntegracaoObra.useQuery(
+    { companyId, companyIds, obraId: formObraId },
+    { enabled: viewMode === "form" && formObraId > 0 && companyId > 0, staleTime: 30000 }
+  );
+  const integracaoObra = integracaoObraQ.data;
+
   const analiseEnabled = viewMode === "form" && analiseInput.obraId > 0 && analiseInput.itens.length > 0 && companyId > 0;
   const analiseRawQ = trpc.smo.analiseComparativa.useQuery(
     { companyId, companyIds, obraId: analiseInput.obraId, itens: analiseInput.itens, lucroTerceirizacaoPerc: 20 },
@@ -516,6 +522,80 @@ export default function SolicitacaoMDO() {
                   )}
                   {selectedObra.codigo && (
                     <div className="text-xs">Código: {selectedObra.codigo}</div>
+                  )}
+                </div>
+              )}
+
+              {/* Alerta de integração obrigatória */}
+              {integracaoObra?.exigeIntegracao && (
+                <div className="mt-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-amber-800">Integração de Pessoal Obrigatória</p>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        O cliente <strong>{integracaoObra.clienteNome}</strong> exige integração antes da mobilização.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {integracaoObra.plataforma && (
+                      <div className="bg-white/70 rounded-lg px-3 py-2 border border-amber-200">
+                        <span className="text-amber-600 font-semibold block">Plataforma</span>
+                        <span className="text-slate-700">{integracaoObra.plataforma}</span>
+                      </div>
+                    )}
+                    {integracaoObra.duracao && (
+                      <div className="bg-white/70 rounded-lg px-3 py-2 border border-amber-200">
+                        <span className="text-amber-600 font-semibold block">Duração</span>
+                        <span className="text-slate-700">{integracaoObra.duracao}</span>
+                      </div>
+                    )}
+                    {integracaoObra.validadeMeses && (
+                      <div className="bg-white/70 rounded-lg px-3 py-2 border border-amber-200">
+                        <span className="text-amber-600 font-semibold block">Validade</span>
+                        <span className="text-slate-700">{integracaoObra.validadeMeses} {integracaoObra.validadeMeses === 1 ? "mês" : "meses"}</span>
+                      </div>
+                    )}
+                    {integracaoObra.diasSemana && (
+                      <div className="bg-white/70 rounded-lg px-3 py-2 border border-amber-200">
+                        <span className="text-amber-600 font-semibold block">Dias disponíveis</span>
+                        <span className="text-slate-700">{integracaoObra.diasSemana}</span>
+                      </div>
+                    )}
+                    {integracaoObra.email && (
+                      <div className="col-span-2 bg-white/70 rounded-lg px-3 py-2 border border-amber-200">
+                        <span className="text-amber-600 font-semibold block">Contato / Agendamento</span>
+                        <span className="text-slate-700">{integracaoObra.email}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {integracaoObra.procedimento && (
+                    <div className="bg-white/70 rounded-lg px-3 py-2 border border-amber-200 text-xs">
+                      <span className="text-amber-600 font-semibold block mb-1">Procedimento</span>
+                      <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{integracaoObra.procedimento}</p>
+                    </div>
+                  )}
+
+                  {integracaoObra.totalAlerta > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-red-700 flex items-center gap-1">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        {integracaoObra.totalAlerta} colaborador(es) com integração pendente/vencida nesta obra:
+                      </p>
+                      <div className="space-y-1 max-h-32 overflow-y-auto">
+                        {integracaoObra.alertas.map((a: any) => (
+                          <div key={a.empId} className="flex items-center justify-between bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
+                            <span className="text-xs font-medium text-red-800">{a.empNome}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${a.status === "VENCIDA" ? "bg-red-200 text-red-700" : a.status === "A_VENCER" ? "bg-orange-200 text-orange-700" : "bg-slate-200 text-slate-600"}`}>
+                              {a.status === "SEM_REGISTRO" ? "Sem registro" : a.status === "VENCIDA" ? `Vencida em ${a.vencimento}` : `Vence em ${a.vencimento}`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               )}

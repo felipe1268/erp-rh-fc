@@ -1,6 +1,6 @@
 {
-  "id": "8b989a12-4fb0-49a0-b277-e3c347b7ba61",
-  "prevId": "7d0be403-35e7-4ee6-afa7-6ce0a9956cbf",
+  "id": "ada9bb57-5364-4d1e-b801-401e385d7eb5",
+  "prevId": "d3653900-6f0e-4948-be64-842c20854d26",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -21041,7 +21041,7 @@
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true,
-          "default": "'Padrão'"
+          "default": "'Padr\u00e3o'"
         },
         "cafeManhaDia": {
           "name": "cafeManhaDia",
@@ -33840,7 +33840,7 @@
           "type": "varchar(200)",
           "primaryKey": false,
           "notNull": true,
-          "default": "'Contrato Padrão'"
+          "default": "'Contrato Padr\u00e3o'"
         },
         "texto": {
           "name": "texto",
@@ -36836,7 +36836,7 @@
           "type": "varchar(100)",
           "primaryKey": false,
           "notNull": false,
-          "default": "'iFood Benefícios'"
+          "default": "'iFood Benef\u00edcios'"
         },
         "observacoes": {
           "name": "observacoes",

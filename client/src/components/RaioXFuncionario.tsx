@@ -15,7 +15,7 @@ import {
   History, Zap, Scale, Car, TrendingUp, ChevronRight, Activity,
   Palmtree, Shield, FileSignature, Ban, Star, Eye, ScrollText, Wrench,
   Package, PackageX, CheckCircle, XCircle, ShoppingCart,
-  Trash2, Camera, Video, ImageIcon, Upload
+  Trash2, Camera, Video, ImageIcon, Upload, ShieldCheck, Plus, Loader2
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
@@ -183,6 +183,22 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
     { companyId: selectedCompany?.id || 0, employeeId: employeeId! },
     { enabled: !!employeeId && open && !!selectedCompany?.id }
   );
+
+  const integracoesQ = trpc.integracoes.listar.useQuery(
+    { companyId: selectedCompany?.id || 0, employeeId: employeeId! },
+    { enabled: !!employeeId && open && !!selectedCompany?.id }
+  );
+  const integracoes = integracoesQ.data || [];
+
+  const [novaIntegracaoForm, setNovaIntegracaoForm] = useState<any>(null);
+  const utils2 = trpc.useUtils();
+  const criarIntegracaoMut = trpc.integracoes.criar.useMutation({
+    onSuccess: () => { utils2.integracoes.listar.invalidate(); setNovaIntegracaoForm(null); toast.success("Integração registrada!"); },
+    onError: (e) => toast.error(e.message || "Erro ao registrar integração"),
+  });
+  const excluirIntegracaoMut = trpc.integracoes.excluir.useMutation({
+    onSuccess: () => { utils2.integracoes.listar.invalidate(); toast.success("Integração removida."); },
+  });
 
   // Estado do lightbox da foto do colaborador (declarado antes do useEffect
   // de ESC para evitar TDZ ao avaliar o array de dependências).
@@ -1011,6 +1027,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       { value: "epis", label: "EPIs", icon: HardHat, count: episEntregas.length },
                       { value: "acidentes", label: "Acidentes", icon: AlertTriangle, count: acidentes.length },
                       { value: "cipa", label: "CIPA", icon: Shield, count: cipa.length },
+                      { value: "integracoes", label: "Integrações", icon: ShieldCheck, count: integracoes.length },
                     ],
                   },
                   {
@@ -2076,6 +2093,173 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     </div>
                   </div>
                 )}
+              </TabsContent>
+
+              {/* ============ INTEGRAÇÕES ============ */}
+              <TabsContent value="integracoes" className="mt-4">
+                <div className="bg-white rounded-xl border p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                      <ShieldCheck className="h-5 w-5 text-indigo-500" />
+                      Integrações de Pessoal — {integracoes.length} registro{integracoes.length !== 1 ? "s" : ""}
+                    </h3>
+                    <Button
+                      size="sm"
+                      onClick={() => setNovaIntegracaoForm({ tipo: "externa", clienteId: "", clienteNome: "", dataRealizacao: "", dataVencimento: "", evidencia: "", observacoes: "" })}
+                      className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Registrar Integração
+                    </Button>
+                  </div>
+
+                  {/* Form de nova integração */}
+                  {novaIntegracaoForm && (
+                    <div className="mb-6 p-4 bg-indigo-50 rounded-lg border border-indigo-200 space-y-3">
+                      <p className="text-sm font-semibold text-indigo-700">Nova Integração</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs font-medium text-gray-600">Tipo</label>
+                          <div className="flex gap-2 mt-1">
+                            {["externa", "interna"].map(t => (
+                              <button
+                                key={t}
+                                type="button"
+                                onClick={() => setNovaIntegracaoForm((f: any) => ({ ...f, tipo: t }))}
+                                className={`flex-1 py-1.5 rounded-md text-xs font-semibold border-2 transition-all ${novaIntegracaoForm.tipo === t ? "border-indigo-500 bg-indigo-600 text-white" : "border-slate-200 text-slate-600 hover:border-indigo-300"}`}
+                              >
+                                {t === "externa" ? "Cliente (PJ)" : "Reciclagem Interna"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-gray-600">
+                            {novaIntegracaoForm.tipo === "externa" ? "Nome do Cliente" : "Referência"}
+                          </label>
+                          <input
+                            type="text"
+                            value={novaIntegracaoForm.clienteNome}
+                            onChange={e => setNovaIntegracaoForm((f: any) => ({ ...f, clienteNome: e.target.value }))}
+                            className="mt-1 w-full border border-gray-200 rounded-md px-2 py-1.5 text-sm"
+                            placeholder={novaIntegracaoForm.tipo === "externa" ? "Nome do cliente" : "Ex: Reciclagem Anual 2025"}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-gray-600">Data de Realização</label>
+                          <input
+                            type="date"
+                            value={novaIntegracaoForm.dataRealizacao}
+                            onChange={e => setNovaIntegracaoForm((f: any) => ({ ...f, dataRealizacao: e.target.value }))}
+                            className="mt-1 w-full border border-gray-200 rounded-md px-2 py-1.5 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-gray-600">Validade (data)</label>
+                          <input
+                            type="date"
+                            value={novaIntegracaoForm.dataVencimento}
+                            onChange={e => setNovaIntegracaoForm((f: any) => ({ ...f, dataVencimento: e.target.value }))}
+                            className="mt-1 w-full border border-gray-200 rounded-md px-2 py-1.5 text-sm"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <label className="text-xs font-medium text-gray-600">Evidência / Documento</label>
+                          <input
+                            type="text"
+                            value={novaIntegracaoForm.evidencia}
+                            onChange={e => setNovaIntegracaoForm((f: any) => ({ ...f, evidencia: e.target.value }))}
+                            className="mt-1 w-full border border-gray-200 rounded-md px-2 py-1.5 text-sm"
+                            placeholder="Número de protocolo, link, etc."
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <label className="text-xs font-medium text-gray-600">Observações</label>
+                          <textarea
+                            value={novaIntegracaoForm.observacoes}
+                            onChange={e => setNovaIntegracaoForm((f: any) => ({ ...f, observacoes: e.target.value }))}
+                            rows={2}
+                            className="mt-1 w-full border border-gray-200 rounded-md px-2 py-1.5 text-sm resize-none"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button variant="outline" size="sm" onClick={() => setNovaIntegracaoForm(null)}>Cancelar</Button>
+                        <Button
+                          size="sm"
+                          disabled={!novaIntegracaoForm.dataRealizacao || criarIntegracaoMut.isPending}
+                          onClick={() => criarIntegracaoMut.mutate({
+                            companyId: selectedCompany?.id || 0,
+                            employeeId: employeeId!,
+                            tipo:           novaIntegracaoForm.tipo,
+                            clienteNome:    novaIntegracaoForm.clienteNome || undefined,
+                            dataRealizacao: novaIntegracaoForm.dataRealizacao,
+                            dataVencimento: novaIntegracaoForm.dataVencimento || undefined,
+                            evidencia:      novaIntegracaoForm.evidencia || undefined,
+                            observacoes:    novaIntegracaoForm.observacoes || undefined,
+                          })}
+                          className="bg-indigo-600 hover:bg-indigo-700 gap-1"
+                        >
+                          {criarIntegracaoMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                          Salvar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {integracoesQ.isLoading ? (
+                    <div className="flex items-center justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-indigo-500" /></div>
+                  ) : integracoes.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground text-sm">
+                      Nenhuma integração registrada para este colaborador
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/30 text-xs">
+                            <th className="p-2 text-left">Tipo</th>
+                            <th className="p-2 text-left">Cliente / Referência</th>
+                            <th className="p-2 text-left">Realização</th>
+                            <th className="p-2 text-left">Validade</th>
+                            <th className="p-2 text-center">Status</th>
+                            <th className="p-2 text-left">Evidência</th>
+                            <th className="p-2"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(integracoes as any[]).map((i: any) => {
+                            const statusColor = i.statusCalc === "ATIVA" ? "bg-emerald-100 text-emerald-700" : i.statusCalc === "A_VENCER" ? "bg-amber-100 text-amber-700" : i.statusCalc === "VENCIDA" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500";
+                            const statusLabel = i.statusCalc === "ATIVA" ? "Ativa" : i.statusCalc === "A_VENCER" ? `Vence em ${i.diasRestantes}d` : i.statusCalc === "VENCIDA" ? "Vencida" : "Sem vencimento";
+                            return (
+                              <tr key={i.id} className="border-b last:border-0 hover:bg-gray-50">
+                                <td className="p-2">
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${i.tipo === "interna" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                                    {i.tipo === "interna" ? "Interna" : "Externa"}
+                                  </span>
+                                </td>
+                                <td className="p-2 font-medium">{i.clienteNome || "-"}</td>
+                                <td className="p-2 text-xs">{i.dataRealizacao ? i.dataRealizacao.split("-").reverse().join("/") : "-"}</td>
+                                <td className="p-2 text-xs">{i.dataVencimento ? i.dataVencimento.split("-").reverse().join("/") : "-"}</td>
+                                <td className="p-2 text-center">
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusColor}`}>{statusLabel}</span>
+                                </td>
+                                <td className="p-2 text-xs text-gray-500 max-w-[150px] truncate">{i.evidencia || "-"}</td>
+                                <td className="p-2">
+                                  <button
+                                    onClick={() => { if (confirm("Remover este registro de integração?")) excluirIntegracaoMut.mutate({ id: i.id, companyId: selectedCompany?.id || 0 }); }}
+                                    className="p-1 hover:bg-red-50 rounded text-red-400"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               </TabsContent>
 
               {/* ============ PJ ============ */}

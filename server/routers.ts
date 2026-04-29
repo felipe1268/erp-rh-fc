@@ -107,6 +107,7 @@ import { comprasRouter } from "./routers/compras";
 import { purchaseRouter } from "./routers/purchaseRouter";
 import { warehouseRouter } from "./routers/warehouse";
 import { clientesRouter } from "./routers/clientes";
+import { integracoesRouter } from "./routers/integracoes";
 import { masControleRouter } from "./routers/masControle";
 import { moAlocacaoRouter } from "./routers/moAlocacao";
 import { gestaoDocumentosRouter } from "./routers/gestaodocumentos";
@@ -164,6 +165,7 @@ export const appRouter = router({
   purchase: purchaseRouter,
   warehouse: warehouseRouter,
   clientes: clientesRouter,
+  integracoes: integracoesRouter,
   masControle: masControleRouter,
   moAlocacao: moAlocacaoRouter,
   gestaoDocumentos: gestaoDocumentosRouter,

@@ -17,7 +17,7 @@ import { nowBrasilia, todayBrasiliaLong } from "@/lib/dateUtils";
 import { removeAccents } from "@/lib/searchUtils";
 import {
   Search, FileText, AlertTriangle, ShieldAlert, GraduationCap, Stethoscope,
-  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool, Building2, BookOpen, Users, MessageSquare
+  Plus, Upload, Download, Eye, Trash2, FileUp, ClipboardList, Calendar, Pencil, Printer, FileDown, CheckSquare, Square, X, Paperclip, Clock, Shield, ExternalLink, Filter, CheckCircle2, Zap, Info, PenTool, Building2, BookOpen, Users, MessageSquare, Loader2
 } from "lucide-react";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
@@ -54,6 +54,300 @@ function formatDate(d: string | null | undefined) {
   const parts = d.split("-");
   if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
   return d;
+}
+
+// ============ PAINEL DE INTEGRAÇÕES (Componente) ============
+function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; onClickEmployee: (id: number) => void }) {
+  const [clienteFiltro, setClienteFiltro] = useState("todos");
+  const [tipoFiltro, setTipoFiltro] = useState("todos");
+  const [statusFiltro, setStatusFiltro] = useState("todos");
+  const [searchVal, setSearchVal] = useState("");
+  const [modalForm, setModalForm] = useState<any>(null);
+  const utils = trpc.useUtils();
+
+  const { data: integracoes = [], isLoading } = trpc.integracoes.listar.useQuery(
+    { companyId, clienteId: clienteFiltro !== "todos" ? parseInt(clienteFiltro) : undefined },
+    { enabled: !!companyId }
+  );
+  const { data: clientesComInt = [] } = trpc.integracoes.clientesComIntegracao.useQuery({ companyId }, { enabled: !!companyId });
+  const { data: kpis } = trpc.integracoes.kpis.useQuery({ companyId }, { enabled: !!companyId });
+  const { data: allClientes = [] } = trpc.clientes.list.useQuery({ companyId }, { enabled: !!companyId });
+  const { data: todosEmp = [] } = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId });
+  const empAtivos = useMemo(() => (todosEmp as any[]).filter((e: any) => e.status === "Ativo"), [todosEmp]);
+  const [empSearch, setEmpSearch] = useState("");
+
+  const criarMut = trpc.integracoes.criar.useMutation({
+    onSuccess: () => { utils.integracoes.listar.invalidate(); utils.integracoes.kpis.invalidate(); setModalForm(null); setEmpSearch(""); toast.success("Integração registrada!"); },
+    onError: (e) => toast.error(e.message || "Erro ao registrar"),
+  });
+  const excluirMut = trpc.integracoes.excluir.useMutation({
+    onSuccess: () => { utils.integracoes.listar.invalidate(); utils.integracoes.kpis.invalidate(); toast.success("Integração removida."); },
+  });
+
+  const filtrados = useMemo(() => {
+    let list = integracoes as any[];
+    if (tipoFiltro !== "todos") list = list.filter(i => i.tipo === tipoFiltro);
+    if (statusFiltro !== "todos") list = list.filter(i => i.statusCalc === statusFiltro);
+    if (searchVal) {
+      const s = searchVal.toLowerCase();
+      list = list.filter(i => (i.nomeCompleto || "").toLowerCase().includes(s) || (i.clienteNome || "").toLowerCase().includes(s));
+    }
+    return list;
+  }, [integracoes, tipoFiltro, statusFiltro, searchVal]);
+
+  const kpiCards = [
+    { label: "Total", value: kpis?.total ?? 0, color: "slate" },
+    { label: "Ativas", value: kpis?.ativas ?? 0, color: "emerald" },
+    { label: "A Vencer (30d)", value: kpis?.aVencer ?? 0, color: "amber" },
+    { label: "Vencidas", value: kpis?.vencidas ?? 0, color: "red" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {kpiCards.map(c => (
+          <Card key={c.label} className={`border-${c.color}-100 bg-${c.color}-50/50`}>
+            <CardContent className="p-4 flex items-center gap-3">
+              <Users className={`h-5 w-5 text-${c.color}-500 shrink-0`} />
+              <div>
+                <p className={`text-2xl font-bold text-${c.color}-700`}>{c.value}</p>
+                <p className="text-[11px] text-muted-foreground">{c.label}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Filtros */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Buscar colaborador ou cliente..." value={searchVal} onChange={e => setSearchVal(e.target.value)} className="pl-10" />
+        </div>
+        <Select value={clienteFiltro} onValueChange={setClienteFiltro}>
+          <SelectTrigger className="w-[200px]"><SelectValue placeholder="Todos os clientes" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os clientes</SelectItem>
+            {(clientesComInt as any[]).map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.razaoSocial}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={tipoFiltro} onValueChange={setTipoFiltro}>
+          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os tipos</SelectItem>
+            <SelectItem value="externa">Externa (PJ)</SelectItem>
+            <SelectItem value="interna">Interna</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={statusFiltro} onValueChange={setStatusFiltro}>
+          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os status</SelectItem>
+            <SelectItem value="ATIVA">Ativas</SelectItem>
+            <SelectItem value="A_VENCER">A Vencer</SelectItem>
+            <SelectItem value="VENCIDA">Vencidas</SelectItem>
+            <SelectItem value="SEM_VENCIMENTO">Sem Vencimento</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          onClick={() => setModalForm({ tipo: "externa", clienteId: "", clienteNome: "", employeeSearch: "", dataRealizacao: "", dataVencimento: "", evidencia: "", observacoes: "" })}
+          className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 ml-auto"
+          size="sm"
+        >
+          <Plus className="h-4 w-4" /> Registrar Integração
+        </Button>
+      </div>
+
+      {/* Tabela */}
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-indigo-500" /></div>
+          ) : filtrados.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
+              <Users className="h-10 w-10 opacity-20" />
+              <p className="text-sm">Nenhuma integração encontrada para os filtros selecionados</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30 text-xs">
+                    <th className="p-3 text-left font-medium">Colaborador</th>
+                    <th className="p-3 text-left font-medium">Tipo</th>
+                    <th className="p-3 text-left font-medium">Cliente / Referência</th>
+                    <th className="p-3 text-left font-medium">Realização</th>
+                    <th className="p-3 text-left font-medium">Validade</th>
+                    <th className="p-3 text-center font-medium">Status</th>
+                    <th className="p-3 text-left font-medium">Evidência</th>
+                    <th className="p-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtrados.map((i: any) => {
+                    const statusColor = i.statusCalc === "ATIVA" ? "bg-emerald-100 text-emerald-700" : i.statusCalc === "A_VENCER" ? "bg-amber-100 text-amber-700" : i.statusCalc === "VENCIDA" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500";
+                    const statusLabel = i.statusCalc === "ATIVA" ? "Ativa" : i.statusCalc === "A_VENCER" ? `Vence em ${i.diasRestantes}d` : i.statusCalc === "VENCIDA" ? "Vencida" : "Sem vencimento";
+                    return (
+                      <tr key={i.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                        <td className="p-3">
+                          <button onClick={() => onClickEmployee(i.employeeId)} className="font-medium text-left hover:text-indigo-600 hover:underline text-sm">
+                            {i.nomeCompleto || "-"}
+                          </button>
+                          {i.matricula && <p className="text-[10px] text-muted-foreground">{i.matricula}</p>}
+                        </td>
+                        <td className="p-3">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${i.tipo === "interna" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                            {i.tipo === "interna" ? "Interna" : "Externa (PJ)"}
+                          </span>
+                        </td>
+                        <td className="p-3 font-medium text-sm">{i.clienteNome || "-"}</td>
+                        <td className="p-3 text-xs">{i.dataRealizacao ? i.dataRealizacao.split("-").reverse().join("/") : "-"}</td>
+                        <td className="p-3 text-xs">{i.dataVencimento ? i.dataVencimento.split("-").reverse().join("/") : "-"}</td>
+                        <td className="p-3 text-center">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusColor}`}>{statusLabel}</span>
+                        </td>
+                        <td className="p-3 text-xs text-muted-foreground max-w-[140px] truncate">{i.evidencia || "-"}</td>
+                        <td className="p-3">
+                          <button
+                            onClick={() => { if (confirm(`Remover integração de "${i.nomeCompleto}"?`)) excluirMut.mutate({ id: i.id, companyId }); }}
+                            className="p-1 rounded hover:bg-red-50 text-red-400 opacity-0 group-hover:opacity-100"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Modal registrar integração */}
+      {modalForm && (
+        <Dialog open={!!modalForm} onOpenChange={open => { if (!open) setModalForm(null); }}>
+          <DialogContent className="max-w-lg" style={{ background: "#fff", color: "#111" }}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-indigo-700">
+                <Users className="h-4 w-4" /> Registrar Integração de Pessoal
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 mt-2">
+              {/* Seleção de colaborador */}
+              <div>
+                <label className="text-xs font-medium">Colaborador *</label>
+                <div className="relative mt-1">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={empSearch}
+                    onChange={e => { setEmpSearch(e.target.value); setModalForm((f: any) => ({ ...f, employeeId: null, employeeName: "" })); }}
+                    className="w-full border border-gray-200 rounded-md pl-8 pr-3 py-1.5 text-sm"
+                    placeholder="Buscar colaborador..."
+                  />
+                </div>
+                {empSearch.length >= 2 && !modalForm?.employeeId && (
+                  <div className="mt-1 border rounded-md max-h-36 overflow-y-auto bg-white shadow z-20 relative">
+                    {empAtivos.filter((e: any) => (e.nomeCompleto || "").toLowerCase().includes(empSearch.toLowerCase())).slice(0, 8).map((e: any) => (
+                      <button key={e.id} type="button"
+                        onClick={() => { setModalForm((f: any) => ({ ...f, employeeId: e.id, employeeName: e.nomeCompleto })); setEmpSearch(e.nomeCompleto); }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 transition-colors border-b last:border-b-0">
+                        <span className="font-medium">{e.nomeCompleto}</span>
+                        <span className="text-[10px] text-muted-foreground ml-2">{e.matricula} · {e.funcao}</span>
+                      </button>
+                    ))}
+                    {empAtivos.filter((e: any) => (e.nomeCompleto || "").toLowerCase().includes(empSearch.toLowerCase())).length === 0 && (
+                      <p className="text-xs text-muted-foreground p-2 text-center">Nenhum colaborador encontrado</p>
+                    )}
+                  </div>
+                )}
+                {modalForm?.employeeId && (
+                  <p className="mt-1 text-xs text-emerald-600 flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" /> {modalForm.employeeName} selecionado
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-medium">Tipo de Integração</label>
+                <div className="flex gap-2 mt-1">
+                  {["externa", "interna"].map(t => (
+                    <button key={t} type="button" onClick={() => setModalForm((f: any) => ({ ...f, tipo: t }))}
+                      className={`flex-1 py-2 rounded-lg border-2 text-xs font-semibold transition-all ${modalForm.tipo === t ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500"}`}>
+                      {t === "externa" ? "Cliente (PJ)" : "Reciclagem Interna"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="text-xs font-medium">{modalForm.tipo === "externa" ? "Cliente" : "Referência"}</label>
+                  {modalForm.tipo === "externa" ? (
+                    <Select value={modalForm.clienteId} onValueChange={v => {
+                      const c = (allClientes as any[]).find((x: any) => String(x.id) === v);
+                      setModalForm((f: any) => ({ ...f, clienteId: v, clienteNome: c?.razaoSocial || "" }));
+                    }}>
+                      <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar cliente" /></SelectTrigger>
+                      <SelectContent>
+                        {(allClientes as any[]).filter((c: any) => c.tipo === "PJ").map((c: any) => (
+                          <SelectItem key={c.id} value={String(c.id)}>{c.razaoSocial}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input value={modalForm.clienteNome} onChange={e => setModalForm((f: any) => ({ ...f, clienteNome: e.target.value }))} className="mt-1" placeholder="Ex: Reciclagem Anual 2025" />
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Data de Realização *</label>
+                  <Input type="date" value={modalForm.dataRealizacao} onChange={e => setModalForm((f: any) => ({ ...f, dataRealizacao: e.target.value }))} className="mt-1" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Data de Validade</label>
+                  <Input type="date" value={modalForm.dataVencimento} onChange={e => setModalForm((f: any) => ({ ...f, dataVencimento: e.target.value }))} className="mt-1" />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs font-medium">Evidência / Protocolo</label>
+                  <Input value={modalForm.evidencia} onChange={e => setModalForm((f: any) => ({ ...f, evidencia: e.target.value }))} className="mt-1" placeholder="Número, link ou documento" />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs font-medium">Observações</label>
+                  <Textarea value={modalForm.observacoes} onChange={e => setModalForm((f: any) => ({ ...f, observacoes: e.target.value }))} rows={2} className="mt-1" />
+                </div>
+              </div>
+            </div>
+            <DialogFooter className="mt-4">
+              <Button variant="outline" onClick={() => { setModalForm(null); setEmpSearch(""); }}>Cancelar</Button>
+              <Button
+                disabled={!modalForm.employeeId || !modalForm.dataRealizacao || criarMut.isPending}
+                onClick={() => {
+                  if (!modalForm.employeeId) { toast.error("Selecione um colaborador"); return; }
+                  if (!modalForm.dataRealizacao) { toast.error("Data de realização obrigatória"); return; }
+                  criarMut.mutate({
+                    companyId,
+                    employeeId: modalForm.employeeId,
+                    tipo:           modalForm.tipo,
+                    clienteId:      modalForm.clienteId ? parseInt(modalForm.clienteId) : undefined,
+                    clienteNome:    modalForm.clienteNome || undefined,
+                    dataRealizacao: modalForm.dataRealizacao,
+                    dataVencimento: modalForm.dataVencimento || undefined,
+                    evidencia:      modalForm.evidencia || undefined,
+                    observacoes:    modalForm.observacoes || undefined,
+                  });
+                }}
+                className="bg-indigo-600 hover:bg-indigo-700 gap-1"
+              >
+                {criarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                Registrar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
 }
 
 // ============ PAINEL DE VALIDADE (Componente) ============
@@ -1590,7 +1884,7 @@ export default function ControleDocumentos() {
 
         {/* TABS */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-7 h-auto sm:h-12 gap-1 bg-transparent p-0">
+          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-8 h-auto sm:h-12 gap-1 bg-transparent p-0">
             <TabsTrigger value="validade" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "validade" ? "border-red-500 bg-red-50 text-red-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-red-50/50 hover:text-red-600"}`}>
               <AlertTriangle className="h-4 w-4" /> Validade
             </TabsTrigger>
@@ -1611,6 +1905,9 @@ export default function ControleDocumentos() {
             </TabsTrigger>
             <TabsTrigger value="semASO" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "semASO" ? "border-rose-500 bg-rose-50 text-rose-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-rose-50/50 hover:text-rose-600"}`}>
               <ShieldAlert className="h-4 w-4" /> Sem ASO {(resumo as any)?.semASO > 0 && <Badge className="bg-rose-500 text-white text-[10px] px-1.5 py-0 ml-1">{(resumo as any)?.semASO}</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="integracoes" className={`gap-1.5 rounded-lg border-2 transition-all duration-200 font-medium ${activeTab === "integracoes" ? "border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm" : "border-transparent bg-muted/50 text-muted-foreground hover:bg-indigo-50/50 hover:text-indigo-600"}`}>
+              <Users className="h-4 w-4" /> Integrações
             </TabsTrigger>
           </TabsList>
 
@@ -2113,6 +2410,12 @@ export default function ControleDocumentos() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* ===================== ABA INTEGRAÇÕES ===================== */}
+          <TabsContent value="integracoes" className="mt-4">
+            <IntegracoesPanel companyId={companyId} onClickEmployee={setRaioXEmployeeId} />
+          </TabsContent>
+
         </Tabs>
       </div>
 

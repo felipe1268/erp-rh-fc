@@ -5379,10 +5379,33 @@ export const clientes = pgTable("clientes", {
   contatoNome:      varchar("contato_nome", { length: 255 }),
   contatoCelular:   varchar("contato_celular", { length: 20 }),
   contatoEmail:     varchar("contato_email", { length: 255 }),
-  observacoes:      text(),
-  ativo:            boolean().default(true),
-  criadoEm:         timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
-  atualizadoEm:     timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+  observacoes:                text(),
+  ativo:                      boolean().default(true),
+  integracaoRequer:           boolean("integracao_requer").default(false),
+  integracaoDiasSemana:       varchar("integracao_dias_semana", { length: 50 }),
+  integracaoDuracao:          varchar("integracao_duracao", { length: 50 }),
+  integracaoValidadeMeses:    integer("integracao_validade_meses"),
+  integracaoEmail:            varchar("integracao_email", { length: 255 }),
+  integracaoPlataforma:       varchar("integracao_plataforma", { length: 255 }),
+  integracaoProcedimento:     text("integracao_procedimento"),
+  criadoEm:                   timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm:               timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const employeeIntegrations = pgTable("employee_integrations", {
+  id:             serial().primaryKey(),
+  companyId:      integer("company_id").notNull(),
+  employeeId:     integer("employee_id").notNull(),
+  tipo:           varchar({ length: 20 }).notNull().default("externa"),
+  clienteId:      integer("cliente_id"),
+  clienteNome:    varchar("cliente_nome", { length: 255 }),
+  dataRealizacao: varchar("data_realizacao", { length: 10 }).notNull(),
+  dataVencimento: varchar("data_vencimento", { length: 10 }),
+  evidencia:      text(),
+  observacoes:    text(),
+  registradoPor:  integer("registrado_por"),
+  criadoEm:       timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm:   timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
 });
 
 export const avaliacoesFornecedor = pgTable("avaliacoes_fornecedor", {

@@ -4,6 +4,16 @@ import { getDb } from "../db";
 import { clientes } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 
+const integracaoFields = {
+  integracaoRequer:        z.boolean().optional(),
+  integracaoDiasSemana:    z.string().optional(),
+  integracaoDuracao:       z.string().optional(),
+  integracaoValidadeMeses: z.number().optional(),
+  integracaoEmail:         z.string().optional(),
+  integracaoPlataforma:    z.string().optional(),
+  integracaoProcedimento:  z.string().optional(),
+};
+
 export const clientesRouter = router({
   list: protectedProcedure
     .input(z.object({ companyId: z.number() }))
@@ -38,30 +48,38 @@ export const clientesRouter = router({
       contatoCelular:  z.string().optional(),
       contatoEmail:    z.string().optional(),
       observacoes:     z.string().optional(),
+      ...integracaoFields,
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       const [row] = await db.insert(clientes).values({
-        companyId:       input.companyId,
-        tipo:            input.tipo,
-        cnpj:            input.cnpj,
-        cpf:             input.cpf,
-        razaoSocial:     input.razaoSocial,
-        nomeFantasia:    input.nomeFantasia,
-        situacaoReceita: input.situacaoReceita,
-        endereco:        input.endereco,
-        numero:          input.numero,
-        complemento:     input.complemento,
-        bairro:          input.bairro,
-        cidade:          input.cidade,
-        estado:          input.estado,
-        cep:             input.cep,
-        telefone:        input.telefone,
-        email:           input.email,
-        contatoNome:     input.contatoNome,
-        contatoCelular:  input.contatoCelular,
-        contatoEmail:    input.contatoEmail,
-        observacoes:     input.observacoes,
+        companyId:               input.companyId,
+        tipo:                    input.tipo,
+        cnpj:                    input.cnpj,
+        cpf:                     input.cpf,
+        razaoSocial:             input.razaoSocial,
+        nomeFantasia:            input.nomeFantasia,
+        situacaoReceita:         input.situacaoReceita,
+        endereco:                input.endereco,
+        numero:                  input.numero,
+        complemento:             input.complemento,
+        bairro:                  input.bairro,
+        cidade:                  input.cidade,
+        estado:                  input.estado,
+        cep:                     input.cep,
+        telefone:                input.telefone,
+        email:                   input.email,
+        contatoNome:             input.contatoNome,
+        contatoCelular:          input.contatoCelular,
+        contatoEmail:            input.contatoEmail,
+        observacoes:             input.observacoes,
+        integracaoRequer:        input.integracaoRequer ?? false,
+        integracaoDiasSemana:    input.integracaoDiasSemana,
+        integracaoDuracao:       input.integracaoDuracao,
+        integracaoValidadeMeses: input.integracaoValidadeMeses,
+        integracaoEmail:         input.integracaoEmail,
+        integracaoPlataforma:    input.integracaoPlataforma,
+        integracaoProcedimento:  input.integracaoProcedimento,
       }).returning();
       return row;
     }),
@@ -90,6 +108,7 @@ export const clientesRouter = router({
       contatoEmail:    z.string().optional(),
       observacoes:     z.string().optional(),
       ativo:           z.boolean().optional(),
+      ...integracaoFields,
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

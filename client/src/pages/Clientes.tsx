@@ -9,8 +9,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import {
   Plus, Search, Pencil, Trash2, UserCheck, Building2, Phone, Mail,
-  MapPin, Loader2, AlertCircle, CheckCircle2, CheckCircle, User,
+  MapPin, Loader2, AlertCircle, CheckCircle2, CheckCircle, User, ShieldCheck,
 } from "lucide-react";
+
+const DIAS_SEMANA = [
+  { key: "seg", label: "Seg" },
+  { key: "ter", label: "Ter" },
+  { key: "qua", label: "Qua" },
+  { key: "qui", label: "Qui" },
+  { key: "sex", label: "Sex" },
+  { key: "sab", label: "Sáb" },
+];
 
 function formatCNPJ(v: string) {
   const d = v.replace(/\D/g, "").slice(0, 14);
@@ -37,6 +46,13 @@ const EMPTY_FORM = {
   telefone: "", email: "",
   contatoNome: "", contatoCelular: "", contatoEmail: "",
   observacoes: "",
+  integracaoRequer:        false,
+  integracaoDiasSemana:    "",
+  integracaoDuracao:       "",
+  integracaoValidadeMeses: "" as string | number,
+  integracaoEmail:         "",
+  integracaoPlataforma:    "",
+  integracaoProcedimento:  "",
 };
 
 export default function Clientes() {
@@ -139,25 +155,32 @@ export default function Clientes() {
 
   function abrirEditar(c: any) {
     setForm({
-      tipo:            c.tipo ?? "PJ",
-      cnpj:            c.cnpj ? formatCNPJ(c.cnpj) : "",
-      cpf:             c.cpf ? formatCPF(c.cpf) : "",
-      razaoSocial:     c.razaoSocial ?? "",
-      nomeFantasia:    c.nomeFantasia ?? "",
-      situacaoReceita: c.situacaoReceita ?? "",
-      endereco:        c.endereco ?? "",
-      numero:          c.numero ?? "",
-      complemento:     c.complemento ?? "",
-      bairro:          c.bairro ?? "",
-      cidade:          c.cidade ?? "",
-      estado:          c.estado ?? "",
-      cep:             c.cep ?? "",
-      telefone:        c.telefone ?? "",
-      email:           c.email ?? "",
-      contatoNome:     c.contatoNome ?? "",
-      contatoCelular:  c.contatoCelular ?? "",
-      contatoEmail:    c.contatoEmail ?? "",
-      observacoes:     c.observacoes ?? "",
+      tipo:                    c.tipo ?? "PJ",
+      cnpj:                    c.cnpj ? formatCNPJ(c.cnpj) : "",
+      cpf:                     c.cpf ? formatCPF(c.cpf) : "",
+      razaoSocial:             c.razaoSocial ?? "",
+      nomeFantasia:            c.nomeFantasia ?? "",
+      situacaoReceita:         c.situacaoReceita ?? "",
+      endereco:                c.endereco ?? "",
+      numero:                  c.numero ?? "",
+      complemento:             c.complemento ?? "",
+      bairro:                  c.bairro ?? "",
+      cidade:                  c.cidade ?? "",
+      estado:                  c.estado ?? "",
+      cep:                     c.cep ?? "",
+      telefone:                c.telefone ?? "",
+      email:                   c.email ?? "",
+      contatoNome:             c.contatoNome ?? "",
+      contatoCelular:          c.contatoCelular ?? "",
+      contatoEmail:            c.contatoEmail ?? "",
+      observacoes:             c.observacoes ?? "",
+      integracaoRequer:        c.integracaoRequer ?? false,
+      integracaoDiasSemana:    c.integracaoDiasSemana ?? "",
+      integracaoDuracao:       c.integracaoDuracao ?? "",
+      integracaoValidadeMeses: c.integracaoValidadeMeses ?? "",
+      integracaoEmail:         c.integracaoEmail ?? "",
+      integracaoPlataforma:    c.integracaoPlataforma ?? "",
+      integracaoProcedimento:  c.integracaoProcedimento ?? "",
     });
     setEditandoId(c.id);
     setCnpjPreenchido(true);
@@ -171,9 +194,10 @@ export default function Clientes() {
     if (!form.razaoSocial.trim()) { toast.error("Razão Social / Nome é obrigatório."); return; }
     const payload = {
       ...form,
-      cnpj: form.cnpj.replace(/\D/g, "") || undefined,
-      cpf:  form.cpf.replace(/\D/g, "")  || undefined,
-      cep:  form.cep.replace(/\D/g, "")  || undefined,
+      cnpj:                    form.cnpj.replace(/\D/g, "") || undefined,
+      cpf:                     form.cpf.replace(/\D/g, "")  || undefined,
+      cep:                     form.cep.replace(/\D/g, "")  || undefined,
+      integracaoValidadeMeses: form.integracaoValidadeMeses !== "" ? Number(form.integracaoValidadeMeses) : undefined,
     };
     if (editandoId) {
       atualizarMut.mutate({ id: editandoId, companyId, ...payload });
@@ -522,6 +546,112 @@ export default function Clientes() {
                   </div>
                 </div>
               </div>
+
+              {/* Integração de Pessoal — apenas PJ */}
+              {form.tipo === "PJ" && (
+                <div className="bg-indigo-50 rounded-lg p-3 space-y-3 border border-indigo-100">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wide flex items-center gap-1.5">
+                      <ShieldCheck className="h-3.5 w-3.5" /> Integração de Pessoal (PJ)
+                    </p>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <div
+                        onClick={() => setForm(f => ({ ...f, integracaoRequer: !f.integracaoRequer }))}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${form.integracaoRequer ? "bg-indigo-600" : "bg-slate-300"}`}
+                      >
+                        <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${form.integracaoRequer ? "translate-x-4" : "translate-x-0.5"}`} />
+                      </div>
+                      <span className={`text-xs font-medium ${form.integracaoRequer ? "text-indigo-700" : "text-slate-500"}`}>
+                        {form.integracaoRequer ? "Requer integração" : "Sem integração obrigatória"}
+                      </span>
+                    </label>
+                  </div>
+
+                  {form.integracaoRequer && (
+                    <div className="space-y-3">
+                      {/* Dias da semana */}
+                      <div>
+                        <Label className="text-xs font-medium text-indigo-800">Dias disponíveis para integração</Label>
+                        <div className="flex gap-1.5 mt-1 flex-wrap">
+                          {DIAS_SEMANA.map(d => {
+                            const ativo = (form.integracaoDiasSemana || "").split(",").filter(Boolean).includes(d.key);
+                            return (
+                              <button
+                                key={d.key}
+                                type="button"
+                                onClick={() => {
+                                  const dias = (form.integracaoDiasSemana || "").split(",").filter(Boolean);
+                                  const novo = ativo ? dias.filter(x => x !== d.key) : [...dias, d.key];
+                                  setForm(f => ({ ...f, integracaoDiasSemana: novo.join(",") }));
+                                }}
+                                className={`px-3 py-1 rounded-md text-xs font-semibold border transition-all ${ativo ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-300 hover:border-indigo-400"}`}
+                              >
+                                {d.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs font-medium text-indigo-800">Duração da integração</Label>
+                          <Input
+                            value={form.integracaoDuracao}
+                            onChange={e => setForm(f => ({ ...f, integracaoDuracao: e.target.value }))}
+                            className="mt-1 text-sm"
+                            placeholder="Ex: 4 horas, 1 dia"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-indigo-800">Validade (meses)</Label>
+                          <Input
+                            type="number"
+                            value={form.integracaoValidadeMeses}
+                            onChange={e => setForm(f => ({ ...f, integracaoValidadeMeses: e.target.value }))}
+                            className="mt-1 text-sm"
+                            placeholder="Ex: 12"
+                            min={1}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs font-medium text-indigo-800">E-mail para envio de docs</Label>
+                          <Input
+                            value={form.integracaoEmail}
+                            onChange={e => setForm(f => ({ ...f, integracaoEmail: e.target.value }))}
+                            className="mt-1 text-sm"
+                            type="email"
+                            placeholder="rh@cliente.com.br"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-indigo-800">Plataforma / Portal</Label>
+                          <Input
+                            value={form.integracaoPlataforma}
+                            onChange={e => setForm(f => ({ ...f, integracaoPlataforma: e.target.value }))}
+                            className="mt-1 text-sm"
+                            placeholder="Nome ou URL da plataforma"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label className="text-xs font-medium text-indigo-800">Procedimento / Instruções</Label>
+                        <textarea
+                          value={form.integracaoProcedimento}
+                          onChange={e => setForm(f => ({ ...f, integracaoProcedimento: e.target.value }))}
+                          rows={3}
+                          className="mt-1 w-full border border-indigo-200 rounded-md px-3 py-2 text-sm bg-white resize-none focus:outline-none focus:border-indigo-400"
+                          placeholder="Descreva o procedimento, documentos necessários, contato responsável..."
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Observações */}
               <div>
