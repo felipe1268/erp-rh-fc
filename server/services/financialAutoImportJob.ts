@@ -118,13 +118,82 @@ async function runStartupRetroacao(): Promise<void> {
   }
 }
 
+// Sincroniza financial_revenue (recebidos) → planejamento_medicoes
+// Garante que baixas históricas do Financeiro apareçam no módulo de Planejamento.
+async function syncFinancialToPlanejamento(): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    // Match 1: por obra_id direto
+    const r1 = await db.execute(sql`
+      INSERT INTO planejamento_medicoes (projeto_id, competencia, numero, valor_medido, status, atualizado_em)
+      SELECT sub.projeto_id, sub.competencia, 0, sub.valor_medido, 'confirmado', NOW()
+      FROM (
+        SELECT pp.id AS projeto_id,
+               TO_CHAR(COALESCE(fr.data_recebimento::date, fr.data_vencimento::date), 'YYYY-MM') AS competencia,
+               SUM(fr.valor_recebido::numeric) AS valor_medido
+        FROM financial_revenue fr
+        JOIN planejamento_projetos pp ON pp.obra_id = fr.obra_id
+        WHERE fr.status IN ('recebido_total','recebido_parcial')
+          AND COALESCE(fr.valor_recebido::numeric, 0) > 0
+          AND fr.obra_id IS NOT NULL AND pp.obra_id IS NOT NULL
+          AND COALESCE(fr.data_recebimento, fr.data_vencimento) IS NOT NULL
+        GROUP BY pp.id, TO_CHAR(COALESCE(fr.data_recebimento::date, fr.data_vencimento::date), 'YYYY-MM')
+      ) sub
+      WHERE NOT EXISTS (
+        SELECT 1 FROM planejamento_medicoes pm
+        WHERE pm.projeto_id = sub.projeto_id AND pm.competencia = sub.competencia
+          AND COALESCE(pm.valor_medido::numeric, 0) > 0 AND pm.status = 'confirmado'
+      )
+    `);
+    const n1 = (r1 as any)?.rowCount ?? 0;
+    // Match 2: por nome da obra (fallback quando obra_id não coincide entre API e local)
+    const r2 = await db.execute(sql`
+      INSERT INTO planejamento_medicoes (projeto_id, competencia, numero, valor_medido, status, atualizado_em)
+      SELECT sub.projeto_id, sub.competencia, 0, sub.valor_medido, 'confirmado', NOW()
+      FROM (
+        SELECT pp.id AS projeto_id,
+               TO_CHAR(COALESCE(fr.data_recebimento::date, fr.data_vencimento::date), 'YYYY-MM') AS competencia,
+               SUM(fr.valor_recebido::numeric) AS valor_medido
+        FROM financial_revenue fr
+        JOIN planejamento_projetos pp ON (
+          LOWER(TRIM(COALESCE(
+            (SELECT o.nome FROM obras o WHERE o.id = pp.obra_id LIMIT 1),
+            pp.nome, ''
+          ))) = LOWER(TRIM(fr.obra_nome))
+          AND (pp.obra_id IS NULL OR pp.obra_id != fr.obra_id)
+        )
+        WHERE fr.status IN ('recebido_total','recebido_parcial')
+          AND COALESCE(fr.valor_recebido::numeric, 0) > 0
+          AND fr.obra_nome IS NOT NULL AND fr.obra_nome != ''
+          AND COALESCE(fr.data_recebimento, fr.data_vencimento) IS NOT NULL
+        GROUP BY pp.id, TO_CHAR(COALESCE(fr.data_recebimento::date, fr.data_vencimento::date), 'YYYY-MM')
+      ) sub
+      WHERE NOT EXISTS (
+        SELECT 1 FROM planejamento_medicoes pm
+        WHERE pm.projeto_id = sub.projeto_id AND pm.competencia = sub.competencia
+          AND COALESCE(pm.valor_medido::numeric, 0) > 0 AND pm.status = 'confirmado'
+      )
+    `);
+    const n2 = (r2 as any)?.rowCount ?? 0;
+    if (n1 + n2 > 0)
+      console.log(`[FinancialSync] Sincronizadas ${n1 + n2} competências Financeiro→Planejamento (${n1} obra_id, ${n2} por nome)`);
+  } catch (e: any) {
+    console.warn("[FinancialSync] Sync Financeiro→Planejamento falhou (não-fatal):", e?.message);
+  }
+}
+
 export function startFinancialAutoImportJob(): void {
-  // Startup: retroação imediata (dados históricos) + job normal
+  // Startup: retroação imediata (dados históricos) + job normal + sync
   setTimeout(async () => {
     await runStartupRetroacao().catch(console.error);
     await runJob().catch(console.error);
+    await syncFinancialToPlanejamento().catch(console.error);
     // Job periódico: a cada 5 minutos como segurança (gatilhos em tempo real já cobrem a maioria)
-    jobInterval = setInterval(() => runJob().catch(console.error), 5 * 60 * 1000);
+    jobInterval = setInterval(async () => {
+      await runJob().catch(console.error);
+      await syncFinancialToPlanejamento().catch(console.error);
+    }, 5 * 60 * 1000);
   }, 5_000); // 5 segundos após o servidor subir
 
   // Alertas de vencimento: roda a cada 30 minutos

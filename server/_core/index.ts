@@ -1125,6 +1125,129 @@ async function startServer() {
         console.log("[ColFix] Financial: retencao_contratual + status granular + receita_baseline/previsto OK");
       } catch (e: any) { console.warn("[ColFix] Financial bloco:", e?.message ?? e); }
     });
+    // ─── Backfill: sincronizar baixas históricas do Financeiro → planejamento_medicoes ───
+    import("../db").then(async ({ getDb }) => {
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        // Diagnóstico: contar registros recebidos em financial_revenue
+        const diagRes = await db.execute(sql`
+          SELECT COUNT(*) AS total_fr,
+                 COUNT(CASE WHEN status IN ('recebido_total','recebido_parcial') THEN 1 END) AS recebidos,
+                 COUNT(CASE WHEN status IN ('recebido_total','recebido_parcial') AND COALESCE(valor_recebido::numeric, 0) > 0 THEN 1 END) AS recebidos_com_valor
+          FROM financial_revenue
+        `);
+        const diagRow = (diagRes as any)?.rows?.[0] ?? {};
+        console.log(`[FinancialSync] Diagnóstico FR: total=${diagRow.total_fr}, recebidos=${diagRow.recebidos}, com_valor=${diagRow.recebidos_com_valor}`);
+        // Diagnóstico adicional: verificar correspondência obra_id e obra_nome com planejamento_projetos
+        const diagMatch = await db.execute(sql`
+          SELECT
+            COUNT(CASE WHEN pp.id IS NOT NULL THEN 1 END) AS com_projeto_id,
+            COUNT(CASE WHEN ppn.id IS NOT NULL THEN 1 END) AS com_projeto_nome,
+            COUNT(CASE WHEN pm.id IS NOT NULL THEN 1 END) AS ja_em_medicoes
+          FROM financial_revenue fr
+          LEFT JOIN planejamento_projetos pp ON pp.obra_id = fr.obra_id AND fr.obra_id IS NOT NULL
+          LEFT JOIN planejamento_projetos ppn ON (
+            LOWER(TRIM(COALESCE(
+              (SELECT o.nome FROM obras o WHERE o.id = ppn.obra_id LIMIT 1),
+              ppn.nome, ''
+            ))) = LOWER(TRIM(fr.obra_nome))
+            AND (ppn.obra_id IS NULL OR ppn.obra_id != fr.obra_id)
+          ) AND fr.obra_nome IS NOT NULL
+          LEFT JOIN planejamento_medicoes pm ON pm.projeto_id = COALESCE(pp.id, ppn.id)
+            AND pm.competencia = TO_CHAR(COALESCE(fr.data_recebimento::date, fr.data_vencimento::date), 'YYYY-MM')
+            AND COALESCE(pm.valor_medido::numeric, 0) > 0
+            AND pm.status = 'confirmado'
+          WHERE fr.status IN ('recebido_total', 'recebido_parcial')
+            AND COALESCE(fr.valor_recebido::numeric, 0) > 0
+        `);
+        const dm = (diagMatch as any)?.rows?.[0] ?? {};
+        console.log(`[FinancialSync] Match: por_obra_id=${dm.com_projeto_id}, por_nome=${dm.com_projeto_nome}, já_em_medicoes=${dm.ja_em_medicoes}`);
+        // Insere registros confirmados em planejamento_medicoes para cada combinação
+        // (projeto_id, competencia) que existe em financial_revenue (status recebido)
+        // mas ainda não tem registro confirmado em planejamento_medicoes.
+        // Agrupa múltiplos pagamentos do mesmo projeto/mês somando os valores.
+        // Tentativa 1: match por obra_id direto (quando IDs coincidem)
+        const res1 = await db.execute(sql`
+          INSERT INTO planejamento_medicoes (projeto_id, competencia, numero, valor_medido, status, atualizado_em)
+          SELECT sub.projeto_id, sub.competencia, 0, sub.valor_medido, 'confirmado', NOW()
+          FROM (
+            SELECT pp.id AS projeto_id,
+                   TO_CHAR(COALESCE(fr.data_recebimento::date, fr.data_vencimento::date), 'YYYY-MM') AS competencia,
+                   SUM(fr.valor_recebido::numeric) AS valor_medido
+            FROM financial_revenue fr
+            JOIN planejamento_projetos pp ON pp.obra_id = fr.obra_id
+            WHERE fr.status IN ('recebido_total', 'recebido_parcial')
+              AND COALESCE(fr.valor_recebido::numeric, 0) > 0
+              AND fr.obra_id IS NOT NULL AND pp.obra_id IS NOT NULL
+              AND COALESCE(fr.data_recebimento, fr.data_vencimento) IS NOT NULL
+            GROUP BY pp.id,
+                     TO_CHAR(COALESCE(fr.data_recebimento::date, fr.data_vencimento::date), 'YYYY-MM')
+          ) sub
+          WHERE NOT EXISTS (
+            SELECT 1 FROM planejamento_medicoes pm
+            WHERE pm.projeto_id = sub.projeto_id AND pm.competencia = sub.competencia
+              AND COALESCE(pm.valor_medido::numeric, 0) > 0 AND pm.status = 'confirmado'
+          )
+        `);
+        const n1 = (res1 as any)?.rowCount ?? 0;
+
+        // Tentativa 2: match por nome da obra (obra_nome do FR vs nome da obra/projeto)
+        const res2 = await db.execute(sql`
+          INSERT INTO planejamento_medicoes (projeto_id, competencia, numero, valor_medido, status, atualizado_em)
+          SELECT sub.projeto_id, sub.competencia, 0, sub.valor_medido, 'confirmado', NOW()
+          FROM (
+            SELECT pp.id AS projeto_id,
+                   TO_CHAR(COALESCE(fr.data_recebimento::date, fr.data_vencimento::date), 'YYYY-MM') AS competencia,
+                   SUM(fr.valor_recebido::numeric) AS valor_medido
+            FROM financial_revenue fr
+            JOIN planejamento_projetos pp ON (
+              LOWER(TRIM(COALESCE(
+                (SELECT o.nome FROM obras o WHERE o.id = pp.obra_id LIMIT 1),
+                pp.nome, ''
+              ))) = LOWER(TRIM(fr.obra_nome))
+              AND (pp.obra_id IS NULL OR pp.obra_id != fr.obra_id)
+            )
+            WHERE fr.status IN ('recebido_total', 'recebido_parcial')
+              AND COALESCE(fr.valor_recebido::numeric, 0) > 0
+              AND fr.obra_nome IS NOT NULL AND fr.obra_nome != ''
+              AND COALESCE(fr.data_recebimento, fr.data_vencimento) IS NOT NULL
+            GROUP BY pp.id,
+                     TO_CHAR(COALESCE(fr.data_recebimento::date, fr.data_vencimento::date), 'YYYY-MM')
+          ) sub
+          WHERE NOT EXISTS (
+            SELECT 1 FROM planejamento_medicoes pm
+            WHERE pm.projeto_id = sub.projeto_id AND pm.competencia = sub.competencia
+              AND COALESCE(pm.valor_medido::numeric, 0) > 0 AND pm.status = 'confirmado'
+          )
+        `);
+        const n2 = (res2 as any)?.rowCount ?? 0;
+        const inserted = n1 + n2;
+        if (inserted > 0)
+          console.log(`[FinancialSync] Backfill: ${inserted} competência(s) sincronizada(s) (${n1} por obra_id, ${n2} por nome)`);
+        else
+          console.log("[FinancialSync] Backfill: nenhum registro novo para sincronizar");
+        // Diagnóstico final: listar todos os planejamento_medicoes confirmados
+        const diagDetail = await db.execute(sql`
+          SELECT pm.projeto_id, pm.competencia, pm.valor_medido::numeric AS valor, pm.status,
+                 pp.nome AS projeto_nome, pp.company_id
+          FROM planejamento_medicoes pm
+          JOIN planejamento_projetos pp ON pp.id = pm.projeto_id
+          WHERE pm.status = 'confirmado' AND COALESCE(pm.valor_medido::numeric, 0) > 0
+          ORDER BY pp.company_id, pm.projeto_id, pm.competencia
+        `);
+        const detRows = (diagDetail as any)?.rows ?? [];
+        if (detRows.length > 0) {
+          console.log(`[FinancialSync] Medicoes confirmadas (${detRows.length} total):`);
+          for (const r of detRows) {
+            console.log(`  company=${r.company_id} proj=${r.projeto_id}(${r.projeto_nome}) comp=${r.competencia} val=${r.valor}`);
+          }
+        } else {
+          console.log("[FinancialSync] Nenhuma medição confirmada em planejamento_medicoes!");
+        }
+      } catch (e: any) { console.warn("[FinancialSync] Backfill falhou (não-fatal):", e?.message ?? e); }
+    });
     // [REMOVIDO Rev.844] Limpeza empresas de teste (Rev.738) — já completada
     // [REMOVIDO Rev.844] Purga de orfanatos/fantasmas — já completada, limpar via deleteObra cascata
     // Iniciar job de verificação automática do DataJud

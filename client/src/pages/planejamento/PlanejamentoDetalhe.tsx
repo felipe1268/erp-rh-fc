@@ -5289,10 +5289,24 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
     const stored = JSON.parse(localStorage.getItem(baixaKey) ?? "{}") as Record<string, any>;
     let changed = false;
     const next = { ...stored };
+    // Agrupa por competência e usa o melhor registro (status=confirmado + maior valor)
+    const bestByComp: Record<string, any> = {};
     (medicoesBD as any[]).forEach((m: any) => {
-      const val = parseFloat(m.valorMedido ?? "0");
       const comp = String(m.competencia);
-      if (val > 0) {
+      const val = parseFloat(m.valorMedido ?? "0");
+      const isConf = m.status === "confirmado";
+      const existing = bestByComp[comp];
+      const existVal = existing ? parseFloat(existing.valorMedido ?? "0") : -1;
+      const existConf = existing?.status === "confirmado";
+      // Prefere: confirmado > outros; em empate, maior valor
+      if (!existing || (isConf && !existConf) || (isConf === existConf && val > existVal)) {
+        bestByComp[comp] = m;
+      }
+    });
+    Object.entries(bestByComp).forEach(([comp, m]: [string, any]) => {
+      const val = parseFloat(m.valorMedido ?? "0");
+      const isConf = m.status === "confirmado";
+      if (isConf && val > 0) {
         if (!next[comp]?.confirmado || Math.abs((next[comp].valor ?? 0) - val) > 0.01) {
           next[comp] = {
             confirmado: true,
@@ -5303,10 +5317,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
           };
           changed = true;
         }
-      } else if (next[comp]?.confirmado) {
-        delete next[comp];
-        changed = true;
       }
+      // Não apaga confirmados existentes com base em registros não-confirmados do DB
     });
     if (changed) persistBaixas(next);
   }, [medicoesBD]);
