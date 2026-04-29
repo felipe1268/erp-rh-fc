@@ -3375,14 +3375,23 @@ export const financialRouter = router({
         }
       }
     }
+    // Statuses que representam "já faturado / recebido" (não entram no A Faturar)
+    const FATURADO_SET = new Set(["faturado","a_receber","recebido_parcial","recebido_total","confirmado"]);
+    // Statuses que representam "previsto puro" (já contados como cronograma no loop acima)
+    const PREVISTO_SET = new Set(["previsto","previsao_faturamento",null,undefined]);
     for (const m of medicoes) {
       const val = parseFloat(m.valor_medido ?? "0") || parseFloat(m.valor_previsto ?? "0") || 0;
       // sf: usa status_financeiro se disponível; caso PM seja 'confirmado' trata como recebido_total
       const sf = m.status_financeiro === null && m.status_medicao === "confirmado"
         ? "recebido_total"
         : (m.status_financeiro ?? m.status_medicao);
-      if (["faturado","a_receber","recebido_parcial","recebido_total","confirmado"].includes(sf)) totalFaturado += val;
+      if (FATURADO_SET.has(sf)) totalFaturado += val;
       if (["recebido_parcial","recebido_total"].includes(sf)) totalRecebido += parseFloat(m.valor_recebido ?? "0") || val;
+      // PM pendente de faturamento (a_faturar): tem valor mas não está confirmada/recebida/previsto-puro
+      // Esses meses não foram contados no loop de cronograma (hasMedicao=true → foram pulados)
+      if (val > 0 && !FATURADO_SET.has(sf) && !PREVISTO_SET.has(sf ?? null)) {
+        totalPrevisaoFat += val;
+      }
     }
     // Standalone FRs (Dar Baixa direto, sem medicao) — só contar meses sem PM para evitar dupla contagem
     for (const [pidStr, mesMap] of Object.entries(standaloneByProjetoByMes)) {

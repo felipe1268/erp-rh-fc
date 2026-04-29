@@ -639,7 +639,6 @@ function KpiDetailPanel({
     title = "A Faturar — Pipeline de Faturamento";
     subtitle = "Meses programados + projetos com saldo sem cronograma";
     totalLabel = "Total a Faturar";
-    totalValue = kpis.totalPrevisaoFaturamento;
 
     // Seção 1: meses com valor no cronograma (previsto, previsao_faturamento, a_faturar)
     const PENDING_ST = new Set(["previsto","previsao_faturamento","a_faturar"]);
@@ -660,6 +659,9 @@ function KpiDetailPanel({
 
     // Seção 2: projetos com saldo de contrato mas sem meses agendados para faturar
     const semAgenda = obras.filter(o => !obrasComAgenda.has(o.projetoId) && (o.saldoContrato ?? 0) > 0);
+
+    // Total real = soma das linhas exibidas (garante consistência com o header)
+    totalValue = scheduled.reduce((s, r) => s + r.val, 0);
 
     content = (
       <div className="space-y-8">
