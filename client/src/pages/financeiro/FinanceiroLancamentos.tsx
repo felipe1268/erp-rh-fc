@@ -14,6 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Search, X, CheckCircle, AlertTriangle, TrendingUp, TrendingDown, Filter,
   Repeat, Pause, Play, Edit2, Calendar, Zap, ArrowUpRight, ArrowDownRight,
+  Building2, CreditCard, FileText, ChevronDown, ChevronUp, RefreshCw,
+  ArrowLeftRight, Landmark,
 } from "lucide-react";
 
 function formatBRL(v: number) {
@@ -81,6 +83,7 @@ export default function FinanceiroLancamentos() {
   const [showCancel, setShowCancel] = useState<{ id: number } | null>(null);
   const [motivo, setMotivo] = useState("");
   const [editRecId, setEditRecId] = useState<number | null>(null);
+  const [showObs, setShowObs] = useState(false);
   const [form, setForm] = useState({ ...INITIAL_FORM });
 
   const { data, isLoading, refetch } = (trpc as any).financial.getEntries.useQuery(
@@ -503,159 +506,241 @@ export default function FinanceiroLancamentos() {
         )}
 
         {/* MODAL NOVO / EDITAR LANÇAMENTO */}
-        <Dialog open={showNew} onOpenChange={(v) => { if (!v) { setShowNew(false); resetForm(); } }}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>{editRecId ? "Editar Recorrência" : "Novo Lançamento"}</DialogTitle>
-            </DialogHeader>
+        <Dialog open={showNew} onOpenChange={(v) => { if (!v) { setShowNew(false); resetForm(); setShowObs(false); } }}>
+          <DialogContent className="max-w-lg p-0 overflow-hidden">
 
-            {/* Toggle Único / Recorrente */}
-            {!editRecId && (
-              <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setForm(f => ({ ...f, modoRecorrente: false }))}
-                  className={`flex-1 py-2 text-sm font-medium transition-colors ${!form.modoRecorrente ? "bg-blue-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
-                >
-                  Único
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setForm(f => ({ ...f, modoRecorrente: true }))}
-                  className={`flex-1 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${form.modoRecorrente ? "bg-blue-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
-                >
-                  <Repeat className="w-3.5 h-3.5" />Recorrente
-                </button>
+            {/* Header colorido conforme tipo */}
+            <div className={`px-6 pt-5 pb-4 ${
+              form.tipo === "receita" ? "bg-green-50" :
+              form.tipo === "imposto" ? "bg-yellow-50" :
+              form.tipo === "transferencia" ? "bg-gray-50" :
+              "bg-red-50"
+            }`}>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-semibold text-gray-800">
+                  {editRecId ? "Editar Recorrência" : "Novo Lançamento"}
+                </h2>
+                {/* Toggle Único / Recorrente */}
+                {!editRecId && (
+                  <div className="flex rounded-full border border-gray-300 bg-white overflow-hidden text-xs">
+                    <button type="button"
+                      onClick={() => setForm(f => ({ ...f, modoRecorrente: false }))}
+                      className={`px-3 py-1 font-medium transition-colors ${!form.modoRecorrente ? "bg-gray-800 text-white" : "text-gray-500 hover:bg-gray-50"}`}>
+                      Único
+                    </button>
+                    <button type="button"
+                      onClick={() => setForm(f => ({ ...f, modoRecorrente: true }))}
+                      className={`px-3 py-1 font-medium transition-colors flex items-center gap-1 ${form.modoRecorrente ? "bg-gray-800 text-white" : "text-gray-500 hover:bg-gray-50"}`}>
+                      <RefreshCw className="w-3 h-3" />Recorrente
+                    </button>
+                  </div>
+                )}
+                {editRecId && (
+                  <Badge className="bg-purple-100 text-purple-700 text-xs">
+                    <RefreshCw className="w-3 h-3 mr-1" />Recorrente
+                  </Badge>
+                )}
               </div>
-            )}
 
-            {form.modoRecorrente && !editRecId && (
-              <p className="text-xs text-gray-400 -mt-2 text-center">
-                Será gerado automaticamente todo mês na data configurada.
-              </p>
-            )}
+              {/* Seletor de tipo visual */}
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { value: "despesa",       label: "Despesa",       icon: ArrowDownRight, color: "text-red-600",    activeBg: "bg-red-600",    activeTxt: "text-white" },
+                  { value: "receita",       label: "Receita",       icon: ArrowUpRight,   color: "text-green-600",  activeBg: "bg-green-600",  activeTxt: "text-white" },
+                  { value: "imposto",       label: "Imposto",       icon: Landmark,       color: "text-yellow-600", activeBg: "bg-yellow-500", activeTxt: "text-white" },
+                  { value: "transferencia", label: "Transferência", icon: ArrowLeftRight, color: "text-gray-600",   activeBg: "bg-gray-600",   activeTxt: "text-white" },
+                ].map(({ value, label, icon: Icon, color, activeBg, activeTxt }) => (
+                  <button key={value} type="button"
+                    onClick={() => setForm(f => ({ ...f, tipo: value }))}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all text-xs font-medium ${
+                      form.tipo === value
+                        ? `border-transparent ${activeBg} ${activeTxt}`
+                        : `border-transparent bg-white ${color} hover:border-gray-200`
+                    }`}>
+                    <Icon className="w-4 h-4" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-            <div className="space-y-3">
+            {/* Corpo do formulário */}
+            <div className="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
+
+              {/* Valor em destaque */}
               <div>
-                <Label>Descrição *</Label>
-                <Input value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Ex: Aluguel do escritório" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Tipo</Label>
-                  <Select value={form.tipo} onValueChange={v => setForm(f => ({ ...f, tipo: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="receita">Receita</SelectItem>
-                      <SelectItem value="despesa">Despesa</SelectItem>
-                      {!form.modoRecorrente && <SelectItem value="imposto">Imposto</SelectItem>}
-                      {!form.modoRecorrente && <SelectItem value="transferencia">Transferência</SelectItem>}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Valor (R$) *</Label>
-                  <Input type="number" step="0.01" value={form.valorPrevisto} onChange={e => setForm(f => ({ ...f, valorPrevisto: e.target.value }))} placeholder="0,00" />
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Valor *</label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-semibold text-gray-400">R$</span>
+                  <Input
+                    type="number" step="0.01"
+                    value={form.valorPrevisto}
+                    onChange={e => setForm(f => ({ ...f, valorPrevisto: e.target.value }))}
+                    placeholder="0,00"
+                    className="pl-10 text-lg font-semibold h-12 border-gray-200"
+                  />
                 </div>
               </div>
 
-              {/* Campos exclusivos de Recorrente */}
+              {/* Descrição */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Descrição *</label>
+                <Input
+                  value={form.descricao}
+                  onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                  placeholder={form.tipo === "receita" ? "Ex: Medição de obra, Recebimento..." : form.tipo === "imposto" ? "Ex: DARF CSLL, ISS Abril..." : "Ex: Aluguel, Energia, Fornecedor..."}
+                  className="mt-1"
+                />
+              </div>
+
+              {/* Datas (único) */}
+              {!form.modoRecorrente && (
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />Datas
+                  </label>
+                  <div className="grid grid-cols-2 gap-3 mt-1">
+                    <div>
+                      <p className="text-[11px] text-gray-400 mb-1">Competência *</p>
+                      <Input type="date" value={form.dataCompetencia} onChange={e => setForm(f => ({ ...f, dataCompetencia: e.target.value }))} className="h-9" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-400 mb-1">Vencimento</p>
+                      <Input type="date" value={form.dataVencimento} onChange={e => setForm(f => ({ ...f, dataVencimento: e.target.value }))} className="h-9" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Recorrência (recorrente) */}
               {form.modoRecorrente && (
-                <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3" />Recorrência
+                  </label>
+                  <div className="grid grid-cols-2 gap-3 mt-1">
+                    <div>
+                      <p className="text-[11px] text-gray-400 mb-1">Frequência</p>
+                      <Select value={form.frequencia} onValueChange={v => setForm(f => ({ ...f, frequencia: v }))}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="semanal">Semanal</SelectItem>
+                          <SelectItem value="quinzenal">Quinzenal</SelectItem>
+                          <SelectItem value="mensal">Mensal</SelectItem>
+                          <SelectItem value="trimestral">Trimestral</SelectItem>
+                          <SelectItem value="anual">Anual</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-400 mb-1">Todo dia</p>
+                      <div className="relative">
+                        <Input type="number" min={1} max={31} value={form.diaVencimento} onChange={e => setForm(f => ({ ...f, diaVencimento: e.target.value }))} className="h-9 pr-12" />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400">do mês</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Conta / Obra */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                  <Building2 className="w-3 h-3" />Vinculação
+                </label>
+                <div className="grid grid-cols-2 gap-3 mt-1">
                   <div>
-                    <Label>Frequência</Label>
-                    <Select value={form.frequencia} onValueChange={v => setForm(f => ({ ...f, frequencia: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <p className="text-[11px] text-gray-400 mb-1">Conta / Categoria</p>
+                    <Input value={form.contaNome} onChange={e => setForm(f => ({ ...f, contaNome: e.target.value }))} placeholder="Ex: Salários, Aluguel..." className="h-9" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-gray-400 mb-1">Obra (opcional)</p>
+                    <Input value={form.obraNome} onChange={e => setForm(f => ({ ...f, obraNome: e.target.value }))} placeholder="Nome da obra" className="h-9" />
+                  </div>
+                </div>
+                {form.modoRecorrente && (
+                  <div className="mt-3">
+                    <p className="text-[11px] text-gray-400 mb-1">Fornecedor / Pagador</p>
+                    <Input value={form.fornecedorNome} onChange={e => setForm(f => ({ ...f, fornecedorNome: e.target.value }))} placeholder="Nome do fornecedor ou pagador" className="h-9" />
+                  </div>
+                )}
+              </div>
+
+              {/* Pagamento */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                  <CreditCard className="w-3 h-3" />Pagamento
+                </label>
+                <div className="grid grid-cols-2 gap-3 mt-1">
+                  <div>
+                    <p className="text-[11px] text-gray-400 mb-1">Forma</p>
+                    <Select value={form.formaPagamento || "none"} onValueChange={v => setForm(f => ({ ...f, formaPagamento: v === "none" ? "" : v }))}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="—" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="semanal">Semanal</SelectItem>
-                        <SelectItem value="quinzenal">Quinzenal</SelectItem>
-                        <SelectItem value="mensal">Mensal</SelectItem>
-                        <SelectItem value="trimestral">Trimestral</SelectItem>
-                        <SelectItem value="anual">Anual</SelectItem>
+                        <SelectItem value="none">—</SelectItem>
+                        <SelectItem value="pix">PIX</SelectItem>
+                        <SelectItem value="ted">TED</SelectItem>
+                        <SelectItem value="boleto">Boleto</SelectItem>
+                        <SelectItem value="cheque">Cheque</SelectItem>
+                        <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                        <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
+                        <SelectItem value="debito_automatico">Débito Automático</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label>Dia de Vencimento</Label>
-                    <Input type="number" min={1} max={31} value={form.diaVencimento} onChange={e => setForm(f => ({ ...f, diaVencimento: e.target.value }))} />
+                    <p className="text-[11px] text-gray-400 mb-1">Natureza</p>
+                    <Select value={form.natureza} onValueChange={v => setForm(f => ({ ...f, natureza: v }))}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fixo">Fixo</SelectItem>
+                        <SelectItem value="variavel">Variável</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                </div>
-              )}
-
-              {/* Campos exclusivos de Único */}
-              {!form.modoRecorrente && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Data de Competência *</Label>
-                    <Input type="date" value={form.dataCompetencia} onChange={e => setForm(f => ({ ...f, dataCompetencia: e.target.value }))} />
-                  </div>
-                  <div>
-                    <Label>Data de Vencimento</Label>
-                    <Input type="date" value={form.dataVencimento} onChange={e => setForm(f => ({ ...f, dataVencimento: e.target.value }))} />
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Conta / Categoria</Label>
-                  <Input value={form.contaNome} onChange={e => setForm(f => ({ ...f, contaNome: e.target.value }))} placeholder="Ex: Salários, Aluguel..." />
-                </div>
-                <div>
-                  <Label>Obra (opcional)</Label>
-                  <Input value={form.obraNome} onChange={e => setForm(f => ({ ...f, obraNome: e.target.value }))} placeholder="Nome da obra" />
                 </div>
               </div>
 
-              {form.modoRecorrente && (
-                <div>
-                  <Label>Fornecedor / Pagador</Label>
-                  <Input value={form.fornecedorNome} onChange={e => setForm(f => ({ ...f, fornecedorNome: e.target.value }))} placeholder="Nome" />
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Natureza</Label>
-                  <Select value={form.natureza} onValueChange={v => setForm(f => ({ ...f, natureza: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fixo">Fixo</SelectItem>
-                      <SelectItem value="variavel">Variável</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Forma de Pagamento</Label>
-                  <Select value={form.formaPagamento || "none"} onValueChange={v => setForm(f => ({ ...f, formaPagamento: v === "none" ? "" : v }))}>
-                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">—</SelectItem>
-                      <SelectItem value="pix">PIX</SelectItem>
-                      <SelectItem value="ted">TED</SelectItem>
-                      <SelectItem value="boleto">Boleto</SelectItem>
-                      <SelectItem value="cheque">Cheque</SelectItem>
-                      <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                      <SelectItem value="cartao_credito">Cartão de Crédito</SelectItem>
-                      <SelectItem value="debito_automatico">Débito Automático</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
+              {/* Observações (expansível) */}
               <div>
-                <Label>Observações</Label>
-                <Textarea value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} rows={2} />
+                <button type="button" onClick={() => setShowObs(v => !v)}
+                  className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                  <FileText className="w-3.5 h-3.5" />
+                  {showObs ? "Ocultar observações" : "Adicionar observações"}
+                  {showObs ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
+                {showObs && (
+                  <Textarea
+                    value={form.observacoes}
+                    onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+                    rows={2}
+                    placeholder="Observações adicionais..."
+                    className="mt-2"
+                  />
+                )}
               </div>
             </div>
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => { setShowNew(false); resetForm(); }}>Cancelar</Button>
-              <Button onClick={handleSave} disabled={isPending} className="bg-blue-600 hover:bg-blue-700 text-white">
-                {isPending ? "Salvando..." : form.modoRecorrente ? (editRecId ? "Salvar Recorrência" : "Criar Recorrência") : "Salvar Lançamento"}
+            {/* Footer */}
+            <div className="px-6 py-4 bg-gray-50 border-t flex justify-between items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={() => { setShowNew(false); resetForm(); setShowObs(false); }}
+                className="text-gray-500">
+                Cancelar
               </Button>
-            </DialogFooter>
+              <Button onClick={handleSave} disabled={isPending}
+                className={`flex-1 max-w-[220px] font-semibold ${
+                  form.tipo === "receita" ? "bg-green-600 hover:bg-green-700" :
+                  form.tipo === "imposto" ? "bg-yellow-500 hover:bg-yellow-600" :
+                  form.tipo === "transferencia" ? "bg-gray-600 hover:bg-gray-700" :
+                  "bg-red-600 hover:bg-red-700"
+                } text-white`}>
+                {isPending ? "Salvando..." :
+                  form.modoRecorrente
+                    ? (editRecId ? "Salvar Recorrência" : `Criar Recorrência`)
+                    : `Lançar ${form.tipo === "receita" ? "Receita" : form.tipo === "imposto" ? "Imposto" : form.tipo === "transferencia" ? "Transferência" : "Despesa"}`
+                }
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
 
