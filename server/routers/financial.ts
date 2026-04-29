@@ -3236,8 +3236,6 @@ export const financialRouter = router({
       const v = parseFloat(r.avanco_fisico_pct ?? "0");
       if (!isNaN(v)) avancoFisicoByProjId[Number(r.projeto_id)] = v;
     }
-    console.log(`[ContasReceber] avancoFisico rows=${avancoFisicoRes.rows.length}`, JSON.stringify(avancoFisicoRes.rows.slice(0, 10)));
-
     console.log(`[ContasReceber] company=${input.companyId} ano=${input.ano} projetos=${projetos.length} prev_rows=${prevRes.rows.length} medicoes=${medRes.rows.length} tempo=${Date.now()-t0}ms`);
 
     const prevRows = prevRes.rows;
