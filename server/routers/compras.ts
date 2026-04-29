@@ -947,7 +947,9 @@ export const comprasRouter = router({
       const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
       if (allowed !== null) {
         if (allowed.length === 0) return [];
-        conditions.push(inArray(almoxarifadoItens.obraId, allowed));
+        // Inclui itens do estoque central (obraId IS NULL) e dos obras permitidas.
+        // Usar só inArray() excluiria os itens centrais porque NULL nunca satisfaz IN(...).
+        conditions.push(or(isNull(almoxarifadoItens.obraId), inArray(almoxarifadoItens.obraId, allowed)));
       }
 
       const rows = await db.select().from(almoxarifadoItens)
@@ -5916,9 +5918,11 @@ Retorne APENAS um JSON válido neste formato:
         const usuarioNome = ctx.user?.name ?? ctx.user?.email ?? null;
         const usuarioId   = ctx.user?.id ?? null;
 
+        let itensAdicionados = 0;
         for (const item of itensOC) {
           const qtd = n(item.quantidade);
           if (qtd <= 0) continue;
+          itensAdicionados++;
 
           // busca ou cria item no almoxarifado
           const existing = await db.select().from(almoxarifadoItens)
@@ -6002,7 +6006,7 @@ Retorne APENAS um JSON válido neste formato:
           }
         }
 
-        return { ok: true, almoxarifado: true, itens: itensOC.length };
+        return { ok: true, almoxarifado: itensAdicionados > 0, itens: itensAdicionados };
       }
 
       return { ok: true, almoxarifado: false };
