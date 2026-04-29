@@ -383,52 +383,6 @@ export default function FinanceiroContasAReceber() {
           </div>
         </div>
 
-        {/* ── Gráfico de Fluxo de Caixa ── (abaixo da legenda de visualização) */}
-        {!isLoading && obras.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-sm font-semibold text-gray-800">Fluxo de Caixa — {ano}</h2>
-                <p className="text-xs text-gray-400">Previsto vs Recebido por mês</p>
-              </div>
-              <div className="flex items-center gap-4 text-xs">
-                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-blue-200" />Previsto</span>
-                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-green-500" />Recebido</span>
-                <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-orange-400" style={{ borderTop: "2px dashed" }} />Acum. Recebido</span>
-              </div>
-            </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} />
-                <YAxis
-                  tickFormatter={(v: number) => v >= 1_000_000 ? `${(v/1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : String(v)}
-                  tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={48}
-                />
-                <RechTooltip
-                  formatter={(value: number, name: string) => [BRL(value), name === "previsto" ? "Previsto" : name === "recebido" ? "Recebido" : "Acum. Recebido"]}
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
-                />
-                {/* Highlight do mês atual */}
-                {chartData.map((d, i) => d.mesKey === mesAtual ? (
-                  <CartesianGrid key={i} horizontal={false} vertical={true} strokeDasharray="0" stroke="#dbeafe" strokeWidth={32} x={i} />
-                ) : null)}
-                <Bar dataKey="previsto" name="previsto" fill="#bfdbfe" radius={[3,3,0,0]} maxBarSize={32} />
-                <Bar dataKey="recebido" name="recebido" fill="#22c55e" radius={[3,3,0,0]} maxBarSize={32} />
-                <Line
-                  dataKey="recebido"
-                  name="acum"
-                  type="monotone"
-                  stroke="#f97316"
-                  strokeWidth={2}
-                  dot={false}
-                  strokeDasharray="4 2"
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-
         {/* KPIs — 2 linhas de 3 */}
         <div className="grid grid-cols-3 gap-3">
           <KpiCard icon={Wallet}        label="Total Contratos"       value={BRL(kpis.totalContrato)}               color="text-gray-700"   bg="bg-gray-50"     onClick={() => setKpiPanel("totalContrato")} />
@@ -602,6 +556,48 @@ export default function FinanceiroContasAReceber() {
                 <span className="text-[11px] text-gray-500">Previsão recalculada conforme avanço físico e cronograma atual</span>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ── Gráfico de Fluxo de Caixa ── (abaixo da legenda) */}
+        {!isLoading && obras.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-800">Fluxo de Caixa — {ano}</h2>
+                <p className="text-xs text-gray-400">Previsto vs Recebido por mês</p>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-gray-500">
+                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-blue-200" />Previsto</span>
+                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-green-500" />Recebido</span>
+                <span className="flex items-center gap-1.5 text-orange-400">— — Acum. Recebido</span>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} />
+                <YAxis
+                  tickFormatter={(v: number) => v >= 1_000_000 ? `${(v/1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : String(v)}
+                  tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={48}
+                />
+                <RechTooltip
+                  formatter={(value: number, name: string) => [BRL(value), name === "previsto" ? "Previsto" : name === "recebido" ? "Recebido" : "Acum. Recebido"]}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
+                />
+                <Bar dataKey="previsto" name="previsto" fill="#bfdbfe" radius={[3,3,0,0]} maxBarSize={34} />
+                <Bar dataKey="recebido" name="recebido" fill="#22c55e" radius={[3,3,0,0]} maxBarSize={34} />
+                <Line
+                  dataKey="recebido"
+                  name="acum"
+                  type="monotone"
+                  stroke="#f97316"
+                  strokeWidth={2}
+                  dot={false}
+                  strokeDasharray="5 3"
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
           </div>
         )}
       </div>
