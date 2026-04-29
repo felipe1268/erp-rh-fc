@@ -14,8 +14,12 @@ import {
   FileText, Clock, CheckCircle2, ReceiptText, Send, ThumbsUp, AlertCircle,
   TrendingUp, Wallet, BadgeCheck, CalendarClock, DollarSign, ChevronDown, ChevronUp,
   Pencil, Trash2, AlertTriangle, ArrowRight, BookOpen, BarChart2, Info,
-  X, ExternalLink,
+  X, ExternalLink, Download, Search, Clock3,
 } from "lucide-react";
+import {
+  ResponsiveContainer, ComposedChart, Bar, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip as RechTooltip, Legend,
+} from "recharts";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -147,6 +151,11 @@ export default function FinanceiroContasAReceber() {
   const [viewMode, setViewMode] = useState<"cronograma" | "contrato">("cronograma");
   const [optimisticCells, setOptimisticCells] = useState<Record<string, Partial<MedicaoCell>>>({});
   const [kpiPanel, setKpiPanel] = useState<string | null>(null);
+  const [filterProjeto, setFilterProjeto] = useState("");
+
+  // Mês corrente para highlight e alertas de atraso
+  const hoje = new Date();
+  const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
 
   // ─── Query ─────────────────────────────────────────────────────────────────
   const { data, isLoading, refetch } = (trpc as any).financial.getContasReceberMatrix.useQuery(
@@ -195,6 +204,45 @@ export default function FinanceiroContasAReceber() {
 
   const kpis = data?.kpis ?? { totalContrato: 0, totalPrevisto: 0, totalPrevisaoFaturamento: 0, totalFaturado: 0, totalAReceber: 0, totalRecebido: 0 };
   const totaisMes: Record<string, number> = data?.totaisMes ?? {};
+
+  // ─── Dados do Gráfico de Fluxo de Caixa ─────────────────────────────────────
+  const chartData = mesesChave.map((mes, i) => {
+    const previsto = obras.reduce((s, o) => {
+      const cell = o.byMes[mes];
+      return cell ? s + cell.valor : s;
+    }, 0);
+    const recebido = obras.reduce((s, o) => {
+      const cell = o.byMes[mes];
+      return cell && cell.valorRecebido > 0 ? s + cell.valorRecebido : s;
+    }, 0);
+    return { mes: MESES_CURTOS[i], previsto, recebido, mesKey: mes };
+  });
+
+  // ─── Export CSV ──────────────────────────────────────────────────────────────
+  function exportToCSV() {
+    const headers = ["Projeto", "Cliente", ...MESES_CURTOS, "Total Ano"];
+    const rows = obras.map(o => {
+      const mesesVals = mesesChave.map(mk => {
+        const cell = o.byMes[mk];
+        return cell ? cell.valor.toFixed(2).replace(".", ",") : "0,00";
+      });
+      return [o.obraNome, o.cliente || "", ...mesesVals, o.totalAno.toFixed(2).replace(".", ",")];
+    });
+    const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(";")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `contas-receber-${ano}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ─── Obras filtradas ──────────────────────────────────────────────────────────
+  const obrasFiltradas = filterProjeto.trim()
+    ? obras.filter(o => o.obraNome.toLowerCase().includes(filterProjeto.toLowerCase()) ||
+        (o.cliente || "").toLowerCase().includes(filterProjeto.toLowerCase()))
+    : obras;
 
   // Recalcular "A Faturar" diretamente dos dados de obras (mesma lógica do painel)
   // para garantir que o card KPI bata com o total do painel de detalhes.
@@ -301,6 +349,9 @@ export default function FinanceiroContasAReceber() {
                 <ChevronRight className="w-4 h-4 text-gray-600" />
               </button>
             </div>
+            <Button variant="outline" onClick={exportToCSV} className="h-9 border-gray-200 text-gray-600 hover:text-gray-900" title="Exportar CSV">
+              <Download className="w-4 h-4 mr-1.5" />CSV
+            </Button>
             <Button onClick={() => setShowNew(true)} className="bg-blue-600 hover:bg-blue-700 text-white h-9">
               <Plus className="w-4 h-4 mr-1.5" />Nova Medição
             </Button>
@@ -332,6 +383,52 @@ export default function FinanceiroContasAReceber() {
           </div>
         </div>
 
+        {/* ── Gráfico de Fluxo de Caixa ── (abaixo da legenda de visualização) */}
+        {!isLoading && obras.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-800">Fluxo de Caixa — {ano}</h2>
+                <p className="text-xs text-gray-400">Previsto vs Recebido por mês</p>
+              </div>
+              <div className="flex items-center gap-4 text-xs">
+                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-blue-200" />Previsto</span>
+                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-green-500" />Recebido</span>
+                <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-orange-400" style={{ borderTop: "2px dashed" }} />Acum. Recebido</span>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} />
+                <YAxis
+                  tickFormatter={(v: number) => v >= 1_000_000 ? `${(v/1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : String(v)}
+                  tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={48}
+                />
+                <RechTooltip
+                  formatter={(value: number, name: string) => [BRL(value), name === "previsto" ? "Previsto" : name === "recebido" ? "Recebido" : "Acum. Recebido"]}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
+                />
+                {/* Highlight do mês atual */}
+                {chartData.map((d, i) => d.mesKey === mesAtual ? (
+                  <CartesianGrid key={i} horizontal={false} vertical={true} strokeDasharray="0" stroke="#dbeafe" strokeWidth={32} x={i} />
+                ) : null)}
+                <Bar dataKey="previsto" name="previsto" fill="#bfdbfe" radius={[3,3,0,0]} maxBarSize={32} />
+                <Bar dataKey="recebido" name="recebido" fill="#22c55e" radius={[3,3,0,0]} maxBarSize={32} />
+                <Line
+                  dataKey="recebido"
+                  name="acum"
+                  type="monotone"
+                  stroke="#f97316"
+                  strokeWidth={2}
+                  dot={false}
+                  strokeDasharray="4 2"
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
         {/* KPIs — 2 linhas de 3 */}
         <div className="grid grid-cols-3 gap-3">
           <KpiCard icon={Wallet}        label="Total Contratos"       value={BRL(kpis.totalContrato)}               color="text-gray-700"   bg="bg-gray-50"     onClick={() => setKpiPanel("totalContrato")} />
@@ -356,7 +453,32 @@ export default function FinanceiroContasAReceber() {
           />
         )}
 
-        {/* Matriz */}
+        {/* Filtro + Matriz */}
+        <div className="space-y-2">
+          {/* Barra de busca rápida */}
+          {obras.length > 0 && (
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1 max-w-xs">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Filtrar por projeto ou cliente..."
+                  value={filterProjeto}
+                  onChange={e => setFilterProjeto(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+                />
+              </div>
+              {filterProjeto && (
+                <button onClick={() => setFilterProjeto("")} className="text-xs text-gray-400 hover:text-gray-600">
+                  Limpar
+                </button>
+              )}
+              <span className="text-xs text-gray-400 ml-auto">
+                {obrasFiltradas.length} de {obras.length} projeto(s)
+              </span>
+            </div>
+          )}
+
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           {isLoading ? (
             <div className="p-16 text-center text-gray-400 text-sm">Carregando cronograma...</div>
@@ -375,8 +497,9 @@ export default function FinanceiroContasAReceber() {
                       Obra / Cliente
                     </th>
                     {mesesChave.map((mk, i) => (
-                      <th key={mk} className="px-2 py-3 text-center text-xs font-semibold min-w-[110px]">
+                      <th key={mk} className={`px-2 py-3 text-center text-xs font-semibold min-w-[110px] relative ${mk === mesAtual ? "bg-blue-700" : ""}`}>
                         {MESES_CURTOS[i]}
+                        {mk === mesAtual && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[8px] text-blue-200 font-normal">Atual</span>}
                       </th>
                     ))}
                     <th className="px-3 py-3 text-right text-xs font-semibold min-w-[160px] bg-[#162130]">
@@ -385,7 +508,7 @@ export default function FinanceiroContasAReceber() {
                   </tr>
                 </thead>
                 <tbody>
-                  {obras.map((obra, idx) => (
+                  {obrasFiltradas.map((obra, idx) => (
                     <ObraTableRow
                       key={obra.projetoId}
                       obra={obra}
@@ -393,6 +516,7 @@ export default function FinanceiroContasAReceber() {
                       zebra={idx % 2 === 0}
                       viewMode={viewMode}
                       cellOverrides={optimisticCells}
+                      mesAtual={mesAtual}
                       onCellClick={(mes, cell) => {
                         setBaixa({ obra, mes, cell });
                       }}
@@ -426,6 +550,7 @@ export default function FinanceiroContasAReceber() {
             </div>
           )}
         </div>
+        </div>{/* end filtro + matriz space-y-2 */}
 
         {/* Legenda */}
         {obras.length > 0 && (
@@ -941,12 +1066,13 @@ function KpiDetailPanel({
   );
 }
 
-function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, onCellClick, onDetalheClick }: {
+function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, mesAtual, onCellClick, onDetalheClick }: {
   obra: ObraRow;
   mesesChave: string[];
   zebra: boolean;
   viewMode: "cronograma" | "contrato";
   cellOverrides: Record<string, Partial<MedicaoCell>>;
+  mesAtual: string;
   onCellClick: (mes: string, cell: MedicaoCell) => void;
   onDetalheClick: (mes: string, cell: MedicaoCell) => void;
 }) {
@@ -957,20 +1083,45 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, onCell
     const c = ov ? { ...rawC, ...ov } : rawC;
     return c && resolveStatus(c) === "recebido_parcial";
   });
+
+  // Alertas: meses passados com status que ainda precisam faturar
+  const hasOverdue = mesesChave.some(mk => {
+    if (mk >= mesAtual) return false;
+    const rawC = obra.byMes[mk];
+    const ov = cellOverrides[`${obra.projetoId}_${mk}`];
+    const c = ov ? { ...rawC, ...ov } : rawC;
+    if (!c || c.valor <= 0) return false;
+    const s = resolveStatus(c);
+    return s === "a_faturar" || s === "previsto" || s === "previsao_faturamento";
+  });
+
+  // % de execução financeira
+  const pctExecucao = obra.valorContrato > 0
+    ? Math.min(100, Math.round((obra.totalRecebidoHistorico / obra.valorContrato) * 100))
+    : null;
+
   return (
-    <tr className={`border-b border-gray-100 hover:bg-blue-50/20 transition-colors ${rowBg} ${hasPartial ? "border-l-2 border-l-amber-400" : ""}`}>
+    <tr className={`border-b border-gray-100 hover:bg-blue-50/20 transition-colors ${rowBg} ${hasOverdue ? "border-l-2 border-l-red-400" : hasPartial ? "border-l-2 border-l-amber-400" : ""}`}>
       {/* Obra */}
       <td className={`sticky left-0 z-20 px-4 py-2.5 ${rowBg} shadow-[2px_0_6px_rgba(0,0,0,0.08)]`}>
         <div className="flex items-start gap-2">
-          <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${hasPartial ? "bg-amber-100" : "bg-blue-100"}`}>
-            {hasPartial
-              ? <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-              : <Building2 className="w-3.5 h-3.5 text-blue-600" />}
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${hasOverdue ? "bg-red-100" : hasPartial ? "bg-amber-100" : "bg-blue-100"}`}>
+            {hasOverdue
+              ? <Clock3 className="w-3.5 h-3.5 text-red-600" />
+              : hasPartial
+                ? <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                : <Building2 className="w-3.5 h-3.5 text-blue-600" />}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               <p className="text-xs font-semibold text-gray-800 truncate max-w-[145px]">{obra.obraNome}</p>
-              {hasPartial && (
+              {hasOverdue && (
+                <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-red-100 rounded text-[9px] font-bold text-red-700 shrink-0">
+                  <Clock3 className="w-2.5 h-2.5" />
+                  Atrasado
+                </span>
+              )}
+              {!hasOverdue && hasPartial && (
                 <span className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-amber-100 rounded text-[9px] font-bold text-amber-700 shrink-0">
                   <AlertTriangle className="w-2.5 h-2.5" />
                   Parcial
@@ -978,6 +1129,25 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, onCell
               )}
             </div>
             <p className="text-[10px] text-gray-400 truncate max-w-[160px] mb-1">{obra.cliente || "—"}</p>
+
+            {/* % Execução financeira */}
+            {pctExecucao !== null && (
+              <div className="mb-1">
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[9px] text-gray-400">Execução</span>
+                  <span className={`text-[9px] font-bold ${pctExecucao >= 75 ? "text-emerald-600" : pctExecucao >= 40 ? "text-blue-600" : "text-orange-500"}`}>
+                    {pctExecucao}%
+                  </span>
+                </div>
+                <div className="w-full h-1 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className={`h-1 rounded-full ${pctExecucao >= 75 ? "bg-emerald-500" : pctExecucao >= 40 ? "bg-blue-500" : "bg-orange-400"}`}
+                    style={{ width: `${pctExecucao}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-col gap-0.5">
               {obra.totalRecebidoHistorico > 0 && (
                 <div className="flex items-center gap-1">
@@ -1001,9 +1171,11 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, onCell
         const rawCell = obra.byMes[mk];
         const ov = cellOverrides[`${obra.projetoId}_${mk}`];
         const cell = (rawCell && ov) ? { ...rawCell, ...ov } : rawCell;
+
+        const isCurrentMes = mk === mesAtual;
         if (!cell || cell.valor === 0) {
           return (
-            <td key={mk} className="px-2 py-2.5 text-center">
+            <td key={mk} className={`px-2 py-2.5 text-center ${isCurrentMes ? "bg-blue-50/60" : ""}`}>
               <span className="text-gray-200 text-xs">—</span>
             </td>
           );
@@ -1012,6 +1184,9 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, onCell
         const cfg = STATUS_CFG[status] ?? STATUS_CFG.pendente;
         const Icon = cfg.icon;
         const isRecebido = status === "recebido_total" || status === "recebido_parcial";
+
+        // Alertas de atraso: mês passado + status pendente
+        const isOverdueCell = mk < mesAtual && (status === "a_faturar" || status === "previsto" || status === "previsao_faturamento");
 
         // Modo de visualização: contrato (baseline) vs cronograma (revisão atual)
         const noMedicao = status === "previsto" || status === "previsao_faturamento";
@@ -1028,12 +1203,34 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, onCell
         const isParcial = status === "recebido_parcial";
         const diferenca = cell.valorRecebido > 0 ? valorExibido - cell.valorRecebido : 0;
 
+        // Tooltip content (usando apenas campos existentes no MedicaoCell)
+        const tooltipLines: string[] = [];
+        if (cell.nfNumero) tooltipLines.push(`NF: ${cell.nfNumero}`);
+        if (cell.dataVencimento) tooltipLines.push(`Venc.: ${new Date(cell.dataVencimento).toLocaleDateString("pt-BR")}`);
+        if (cell.dataRecebimento) tooltipLines.push(`Recebido em: ${new Date(cell.dataRecebimento).toLocaleDateString("pt-BR")}`);
+        if (cell.valorRecebido > 0 && cell.valorRecebido < cell.valor) tooltipLines.push(`Recebido: ${BRL(cell.valorRecebido)} / ${BRL(cell.valor)}`);
+        if (cell.valorMedido > 0 && cell.valorMedido !== cell.valorPrevisto) tooltipLines.push(`Medido: ${BRL(cell.valorMedido)}`);
+
         return (
-          <td key={mk} className="px-1 py-1 text-center">
+          <td key={mk} className={`px-1 py-1 text-center relative ${isCurrentMes ? "bg-blue-50/40" : ""} ${isOverdueCell ? "bg-red-50/40" : ""}`}>
+            {isOverdueCell && (
+              <div className="absolute top-1 right-1 z-10">
+                <Clock3 className="w-2.5 h-2.5 text-red-400" />
+              </div>
+            )}
             <div className="relative group">
+              {/* Tooltip */}
+              {tooltipLines.length > 0 && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:block pointer-events-none">
+                  <div className="bg-gray-900 text-white text-[10px] rounded-lg px-2.5 py-2 shadow-xl min-w-[140px] text-left space-y-0.5 whitespace-nowrap">
+                    {tooltipLines.map((l, li) => <div key={li}>{l}</div>)}
+                  </div>
+                  <div className="w-2 h-2 bg-gray-900 rotate-45 mx-auto -mt-1" />
+                </div>
+              )}
               <button
                 onClick={() => onCellClick(mk, cell)}
-                className="w-full flex flex-col gap-0.5 transition-all hover:opacity-90 cursor-pointer"
+                className={`w-full flex flex-col gap-0.5 transition-all hover:opacity-90 cursor-pointer ${isOverdueCell ? "ring-1 ring-red-300 rounded-md" : ""}`}
               >
                 {/* ── Balão 1: Status + Previsto — cor neutra fixa ── */}
                 <div className={`w-full rounded-md px-2 py-1 border ${viewMode === "contrato" ? "bg-indigo-50 border-indigo-200" : "bg-slate-50 border-slate-200"}`}>
