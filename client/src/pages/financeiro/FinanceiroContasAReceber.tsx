@@ -636,43 +636,106 @@ function KpiDetailPanel({
   }
 
   else if (kpiKey === "totalPrevisaoFaturamento") {
-    title = "A Faturar — Previsto no Cronograma";
-    subtitle = "Meses com saldo previsto que ainda não foram faturados";
+    title = "A Faturar — Pipeline de Faturamento";
+    subtitle = "Meses programados + projetos com saldo sem cronograma";
     totalLabel = "Total a Faturar";
     totalValue = kpis.totalPrevisaoFaturamento;
-    const rows: { obra: string; mes: string; val: number }[] = [];
+
+    // Seção 1: meses com valor no cronograma (previsto, previsao_faturamento, a_faturar)
+    const PENDING_ST = new Set(["previsto","previsao_faturamento","a_faturar"]);
+    type PendRow = { obra: string; mes: string; val: number; status: string };
+    const scheduled: PendRow[] = [];
+    const obrasComAgenda = new Set<number>();
     for (const o of obras) {
       for (const mes of mesesChave) {
         const cell = o.byMes[mes];
         if (!cell) continue;
         const st = resolveStatus(cell);
-        if (st === "previsto" || st === "previsao_faturamento") {
-          rows.push({ obra: o.obraNome, mes, val: cell.valor });
+        if (PENDING_ST.has(st) && cell.valor > 0) {
+          scheduled.push({ obra: o.obraNome, mes, val: cell.valor, status: st });
+          obrasComAgenda.add(o.projetoId);
         }
       }
     }
+
+    // Seção 2: projetos com saldo de contrato mas sem meses agendados para faturar
+    const semAgenda = obras.filter(o => !obrasComAgenda.has(o.projetoId) && (o.saldoContrato ?? 0) > 0);
+
     content = (
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wider">
-            <th className="py-2 pr-4 font-medium">Projeto</th>
-            <th className="py-2 pr-4 font-medium">Mês</th>
-            <th className="py-2 font-medium text-right">Valor Previsto</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 && (
-            <tr><td colSpan={3} className="py-8 text-center text-gray-400">Nenhum mês pendente de faturamento.</td></tr>
-          )}
-          {rows.map((r, i) => (
-            <tr key={i} className={`border-b border-gray-50 ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
-              <td className="py-3 pr-4 font-medium text-gray-900">{r.obra}</td>
-              <td className="py-3 pr-4 text-gray-600">{mesLabel(r.mes)}</td>
-              <td className="py-3 text-right font-semibold text-orange-700">{BRL(r.val)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="space-y-8">
+        {/* Seção 1 — Meses com cronograma */}
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+            <CalendarClock className="w-4 h-4 text-orange-500" />
+            Meses programados no cronograma
+            <span className="ml-auto text-xs font-normal text-gray-400">{scheduled.length} entrada(s)</span>
+          </h3>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-left text-xs text-gray-400 uppercase tracking-wider">
+                <th className="py-2 pr-4 font-medium">Projeto</th>
+                <th className="py-2 pr-4 font-medium">Mês</th>
+                <th className="py-2 pr-4 font-medium">Tipo</th>
+                <th className="py-2 font-medium text-right">Valor Previsto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {scheduled.length === 0 && (
+                <tr><td colSpan={4} className="py-6 text-center text-gray-400 text-sm">Nenhum mês programado no cronograma.</td></tr>
+              )}
+              {scheduled.map((r, i) => (
+                <tr key={i} className={`border-b border-gray-50 ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
+                  <td className="py-3 pr-4 font-medium text-gray-900">{r.obra}</td>
+                  <td className="py-3 pr-4 text-gray-600">{mesLabel(r.mes)}</td>
+                  <td className="py-3 pr-4">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      r.status === "a_faturar" ? "bg-yellow-100 text-yellow-700"
+                      : r.status === "previsao_faturamento" ? "bg-orange-100 text-orange-700"
+                      : "bg-indigo-100 text-indigo-700"
+                    }`}>
+                      {r.status === "a_faturar" ? "Med. Pendente" : r.status === "previsao_faturamento" ? "Avanço Físico" : "Cronograma"}
+                    </span>
+                  </td>
+                  <td className="py-3 text-right font-semibold text-orange-700">{BRL(r.val)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Seção 2 — Projetos com saldo sem agenda */}
+        {semAgenda.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              Projetos com saldo sem cronograma futuro
+            </h3>
+            <p className="text-xs text-gray-400 mb-3">Estes projetos têm valor contratual a receber mas sem meses programados. Cadastre o cronograma no módulo de Planejamento.</p>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-amber-100 text-left text-xs text-gray-400 uppercase tracking-wider">
+                  <th className="py-2 pr-4 font-medium">Projeto</th>
+                  <th className="py-2 pr-4 font-medium">Cliente</th>
+                  <th className="py-2 pr-4 font-medium text-right">Valor Contrato</th>
+                  <th className="py-2 pr-4 font-medium text-right">Já Recebido</th>
+                  <th className="py-2 font-medium text-right">Saldo a Faturar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {semAgenda.map((o, i) => (
+                  <tr key={o.projetoId} className={`border-b border-amber-50 ${i % 2 === 0 ? "" : "bg-amber-50/30"}`}>
+                    <td className="py-3 pr-4 font-medium text-gray-900">{o.obraNome}</td>
+                    <td className="py-3 pr-4 text-gray-500">{o.cliente || "—"}</td>
+                    <td className="py-3 pr-4 text-right text-gray-700">{BRL(o.valorContrato ?? 0)}</td>
+                    <td className="py-3 pr-4 text-right text-green-700">{BRL(o.totalRecebidoHistorico ?? 0)}</td>
+                    <td className="py-3 text-right font-bold text-amber-700">{BRL(o.saldoContrato ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     );
   }
 
