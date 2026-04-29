@@ -2923,6 +2923,7 @@ export const financialRouter = router({
       FROM planejamento_medicoes pm
       JOIN planejamento_projetos pp ON pp.id = pm.projeto_id
       LEFT JOIN financial_revenue fr ON fr.medicao_id = pm.id
+        AND fr.status NOT IN ('a_faturar','cancelado')
       WHERE pp.company_id = $1
         AND LEFT(pm.competencia::text, 4) = $2
         AND pm.status NOT IN ('cancelada','rejeitada')

@@ -2349,8 +2349,9 @@ export async function importAllMedicoesPrevistaToRevenue(companyId: number): Pro
 
       const mes        = String(r.competencia).substring(0, 7);
       const dataVenc   = mes + "-28";
-      const statusRev  = r.status === "faturada" ? "faturado"
-                       : r.status === "aprovada"  ? "a_receber"
+      const statusRev  = r.status === "faturada"   ? "faturado"
+                       : r.status === "aprovada"   ? "a_receber"
+                       : r.status === "confirmado" ? "recebido_total"
                        : "a_faturar";
       const pct        = parseFloat(r.percentual_previsto ?? "0");
       const obraNome   = r.obra_nome ?? r.projeto_nome ?? null;
@@ -2362,13 +2363,14 @@ export async function importAllMedicoesPrevistaToRevenue(companyId: number): Pro
       );
 
       if (existing.length === 0) {
+        const vrIns = statusRev === "recebido_total" ? valor.toFixed(2) : null;
         await dbExecute(db,
           `INSERT INTO financial_revenue
            (company_id, obra_id, obra_nome, cliente_nome,
             valor_contrato, medicao_id, medicao_numero, percentual_medicao,
-            valor_medicao, valor_liquido_receber,
+            valor_medicao, valor_liquido_receber, valor_recebido,
             data_vencimento, status, observacoes, created_at, updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'cronograma_financeiro',NOW(),NOW())`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'cronograma_financeiro',NOW(),NOW())`,
           [
             companyId,
             r.obra_id ?? null,
@@ -2380,19 +2382,23 @@ export async function importAllMedicoesPrevistaToRevenue(companyId: number): Pro
             pct.toFixed(4),
             valor.toFixed(2),
             valor.toFixed(2),
+            vrIns,
             dataVenc,
             statusRev,
           ]
         );
         imported++;
       } else {
-        // Atualizar valor e status se mudou
+        // Atualizar valor e status se mudou.
+        // Para 'confirmado' também salva valor_recebido = valor_medido da PM.
         await dbExecute(db,
           `UPDATE financial_revenue
-           SET status=$1, valor_medicao=$2, valor_liquido_receber=$3, updated_at=NOW()
+           SET status=$1, valor_medicao=$2, valor_liquido_receber=$3,
+               valor_recebido = CASE WHEN $6 = 'recebido_total' THEN $2 ELSE valor_recebido END,
+               updated_at=NOW()
            WHERE company_id=$4 AND medicao_id=$5
              AND status NOT IN ('recebido_total','cancelado')`,
-          [statusRev, valor.toFixed(2), valor.toFixed(2), companyId, r.id]
+          [statusRev, valor.toFixed(2), valor.toFixed(2), companyId, r.id, statusRev]
         );
       }
     }
