@@ -568,8 +568,8 @@ export default function FinanceiroContasAReceber() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-sm font-semibold text-gray-800">Fluxo de Caixa — {ano}</h2>
-                <p className="text-xs text-gray-400">Previsto vs Recebido por mês · clique na legenda para ativar/desativar</p>
+                <h2 className="text-sm font-semibold text-gray-800">Previsão de Recebimentos — {ano}</h2>
+                <p className="text-xs text-gray-400">Previsto a receber vs Efetivamente recebido por mês · clique na legenda para ativar/desativar</p>
               </div>
               {/* Legenda interativa — cada item é um toggle */}
               <div className="flex items-center gap-2 text-xs">
