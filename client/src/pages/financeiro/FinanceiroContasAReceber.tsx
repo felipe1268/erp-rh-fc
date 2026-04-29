@@ -153,6 +153,9 @@ export default function FinanceiroContasAReceber() {
   const [optimisticCells, setOptimisticCells] = useState<Record<string, Partial<MedicaoCell>>>({});
   const [kpiPanel, setKpiPanel] = useState<string | null>(null);
   const [filterProjeto, setFilterProjeto] = useState("");
+  const [chartSeries, setChartSeries] = useState({ previsto: true, recebido: true, acum: true });
+  const toggleSerie = (key: keyof typeof chartSeries) =>
+    setChartSeries(prev => ({ ...prev, [key]: !prev[key] }));
 
   // Mês corrente para highlight e alertas de atraso
   const hoje = new Date();
@@ -566,12 +569,31 @@ export default function FinanceiroContasAReceber() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-sm font-semibold text-gray-800">Fluxo de Caixa — {ano}</h2>
-                <p className="text-xs text-gray-400">Previsto vs Recebido por mês</p>
+                <p className="text-xs text-gray-400">Previsto vs Recebido por mês · clique na legenda para ativar/desativar</p>
               </div>
-              <div className="flex items-center gap-4 text-xs text-gray-500">
-                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-blue-200" />Previsto</span>
-                <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm bg-green-500" />Recebido</span>
-                <span className="flex items-center gap-1.5 text-orange-400">— — Acum. Recebido</span>
+              {/* Legenda interativa — cada item é um toggle */}
+              <div className="flex items-center gap-2 text-xs">
+                <button
+                  onClick={() => toggleSerie("previsto")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all select-none ${chartSeries.previsto ? "border-blue-200 bg-blue-50 text-blue-700" : "border-gray-200 bg-gray-50 text-gray-400 line-through"}`}
+                >
+                  <span className={`inline-block w-3 h-3 rounded-sm transition-colors ${chartSeries.previsto ? "bg-blue-300" : "bg-gray-300"}`} />
+                  Previsto
+                </button>
+                <button
+                  onClick={() => toggleSerie("recebido")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all select-none ${chartSeries.recebido ? "border-green-200 bg-green-50 text-green-700" : "border-gray-200 bg-gray-50 text-gray-400 line-through"}`}
+                >
+                  <span className={`inline-block w-3 h-3 rounded-sm transition-colors ${chartSeries.recebido ? "bg-green-500" : "bg-gray-300"}`} />
+                  Recebido
+                </button>
+                <button
+                  onClick={() => toggleSerie("acum")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all select-none ${chartSeries.acum ? "border-orange-200 bg-orange-50 text-orange-600" : "border-gray-200 bg-gray-50 text-gray-400 line-through"}`}
+                >
+                  <span className={`inline-block w-5 border-t-2 transition-colors ${chartSeries.acum ? "border-orange-400 border-dashed" : "border-gray-300"}`} />
+                  Acum. Recebido
+                </button>
               </div>
             </div>
             <ResponsiveContainer width="100%" height={220}>
@@ -583,20 +605,30 @@ export default function FinanceiroContasAReceber() {
                   tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={48}
                 />
                 <RechTooltip
-                  formatter={(value: number, name: string) => [BRL(value), name === "previsto" ? "Previsto" : name === "recebido" ? "Recebido" : "Acum. Recebido"]}
+                  formatter={(value: number, name: string) => {
+                    if (!chartSeries.previsto && name === "previsto") return [null, null] as any;
+                    if (!chartSeries.recebido && name === "recebido") return [null, null] as any;
+                    return [BRL(value as number), name === "previsto" ? "Previsto" : name === "recebido" ? "Recebido" : "Acum. Recebido"];
+                  }}
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
                 />
-                <Bar dataKey="previsto" name="previsto" fill="#bfdbfe" radius={[3,3,0,0]} maxBarSize={34} />
-                <Bar dataKey="recebido" name="recebido" fill="#22c55e" radius={[3,3,0,0]} maxBarSize={34} />
-                <Line
-                  dataKey="recebido"
-                  name="acum"
-                  type="monotone"
-                  stroke="#f97316"
-                  strokeWidth={2}
-                  dot={false}
-                  strokeDasharray="5 3"
-                />
+                {chartSeries.previsto && (
+                  <Bar dataKey="previsto" name="previsto" fill="#bfdbfe" radius={[3,3,0,0]} maxBarSize={34} />
+                )}
+                {chartSeries.recebido && (
+                  <Bar dataKey="recebido" name="recebido" fill="#22c55e" radius={[3,3,0,0]} maxBarSize={34} />
+                )}
+                {chartSeries.acum && (
+                  <Line
+                    dataKey="recebido"
+                    name="acum"
+                    type="monotone"
+                    stroke="#f97316"
+                    strokeWidth={2}
+                    dot={false}
+                    strokeDasharray="5 3"
+                  />
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
