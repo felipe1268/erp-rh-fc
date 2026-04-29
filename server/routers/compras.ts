@@ -3134,12 +3134,12 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const pValorFrete = pFreteTipo === "fob" ? n((p as any).valorFrete) : 0;
         totaisPorFornecedor[p.fornecedorId] = totalItens + pValorFrete;
       }
-      // Quais itens da cotação já têm OC gerada (não rascunho)
+      // Quais itens da cotação já têm OC gerada (exceto canceladas)
       const itensJaEmOC: number[] = [];
       try {
         const ocsAtivas = await db.select({ id: comprasOrdens.id })
           .from(comprasOrdens)
-          .where(and(eq(comprasOrdens.cotacaoId, input.cotacaoId), sql`${comprasOrdens.status} != 'rascunho'`));
+          .where(and(eq(comprasOrdens.cotacaoId, input.cotacaoId), sql`${comprasOrdens.status} != 'cancelada'`));
         if (ocsAtivas.length > 0) {
           const ocItensAtivos = await db.select({ cotacaoItemId: comprasOrdensItens.cotacaoItemId })
             .from(comprasOrdensItens)

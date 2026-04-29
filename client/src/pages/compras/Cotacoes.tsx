@@ -681,6 +681,8 @@ export default function Cotacoes() {
   const [anexoUrl, setAnexoUrl] = useState<Record<number, string>>({});
   const [showAnexoInput, setShowAnexoInput] = useState<number | null>(null);
   const [anexoDragForn, setAnexoDragForn] = useState<number | null>(null);
+  const [localItensEmOC, setLocalItensEmOC] = useState<number[]>([]);
+  const itensPendentesOCRef = useRef<number[]>([]);
   const [showRealocacao, setShowRealocacao] = useState(false);
   const [cobertoPorRisco, setCobertoPorRisco] = useState(false);
   const [agruparItens, setAgruparItens] = useState(false);
@@ -859,6 +861,8 @@ export default function Cotacoes() {
       setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 2 } : p), 1200);
     },
     onSuccess: (data) => {
+      setLocalItensEmOC(prev => [...new Set([...prev, ...itensPendentesOCRef.current])]);
+      itensPendentesOCRef.current = [];
       q.refetch(); detalheQ.refetch(); mapaQ.refetch(); setSemVerbaAutorizado(null);
       setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 3 } : p), 400);
       setTimeout(() => setAprovacaoProgress(p => p ? { ...p, step: 4 } : p), 1000);
@@ -1118,6 +1122,8 @@ export default function Cotacoes() {
       setAnexoUrl(anexoInicial);
     }
   }, [mapaQ.data, abaAtiva]);
+
+  useEffect(() => { setLocalItensEmOC([]); itensPendentesOCRef.current = []; }, [showDetalhe]);
 
   function resetForm() {
     setForm({ descricao: "", obraId: "", solicitacaoId: "", fornecedorId: "", dataValidade: "", condicaoPagamento: "", tipoPagamento: "", numeroParcelas: "", prazoEntregaDias: "", observacoes: "", tipo: "material" });
@@ -1966,7 +1972,7 @@ export default function Cotacoes() {
         return;
       }
 
-      const itensJaEmOC: number[] = mapa?.itensJaEmOC ?? [];
+      const itensJaEmOC: number[] = [...new Set([...(mapa?.itensJaEmOC ?? []), ...localItensEmOC])];
       const itensPendentes = itensDoMapa.filter((it: any) => !itensJaEmOC.includes(it.id));
 
       if (itensPendentes.length === 0) {
@@ -5017,7 +5023,7 @@ export default function Cotacoes() {
           <button
             onClick={() => {
               setShowConfirmarTipoCotDialog(false);
-              const _jaEmOC: number[] = mapa?.itensJaEmOC ?? [];
+              const _jaEmOC: number[] = [...new Set([...(mapa?.itensJaEmOC ?? []), ...localItensEmOC])];
               const _itensDoMapa: any[] = (mapa?.itens ?? []).filter((it: any) => !_jaEmOC.includes(it.id));
               const _participantes: any[] = mapa?.participantes ?? [];
               const _itensParaFechamento = _itensDoMapa.map((it: any) => {
@@ -5063,7 +5069,7 @@ export default function Cotacoes() {
           </DialogTitle>
         </DialogHeader>
         {(() => {
-          const jaEmOC = mapa?.itensJaEmOC ?? [];
+          const jaEmOC = [...new Set([...(mapa?.itensJaEmOC ?? []), ...localItensEmOC])];
           const itensProcessados = (mapa?.itens ?? []).filter((it: any) => jaEmOC.includes(it.id));
           if (itensProcessados.length === 0) return null;
           return (
@@ -5194,6 +5200,7 @@ export default function Cotacoes() {
                       if (!grupos[fi.fornecedorId]) grupos[fi.fornecedorId] = [];
                       grupos[fi.fornecedorId].push(fi.itemId);
                     }
+                    itensPendentesOCRef.current = itensSelecionados.map(fi => fi.itemId);
                     gerarOCsParciais.mutate({
                       companyId,
                       cotacaoId: pendingGerarOCParams.cotacaoId,
@@ -5219,6 +5226,7 @@ export default function Cotacoes() {
                       if (!grupos[fi.fornecedorId]) grupos[fi.fornecedorId] = [];
                       grupos[fi.fornecedorId].push(fi.itemId);
                     }
+                    itensPendentesOCRef.current = itensSelecionados.map(fi => fi.itemId);
                     gerarOCsParciais.mutate({
                       companyId,
                       cotacaoId: pendingGerarOCParams.cotacaoId,
