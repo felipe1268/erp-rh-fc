@@ -805,8 +805,12 @@ export default function Ordens() {
                       )}
                     </div>
                     {(oc as any).modalidadeFd && (oc as any).modalidadeFd !== "normal" && (
-                      <span className={`px-1.5 py-0.5 text-[9px] font-sans font-semibold rounded ${(oc as any).fdStatus === "aprovado" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                        FD {(oc as any).modalidadeFd === "fd_cliente" ? "CLIENTE" : "TERCEIRO"}
+                      <span className={`px-1.5 py-0.5 text-[9px] font-sans font-semibold rounded ${
+                        (oc as any).modalidadeFd === "fd_cliente" ? "bg-blue-100 text-blue-700"
+                        : (oc as any).modalidadeFd === "fd_fc" ? "bg-amber-100 text-amber-700"
+                        : "bg-amber-100 text-amber-700"
+                      }`}>
+                        {(oc as any).modalidadeFd === "fd_cliente" ? "PAG. CLIENTE" : "FAT. DIRETO"}
                       </span>
                     )}
                     {oc.status === "entregue" && <span className="block text-[10px] font-sans font-normal text-emerald-500">OC concluída</span>}
@@ -1533,6 +1537,18 @@ export default function Ordens() {
                   <div><span className="text-gray-400 text-xs">{["servico", "pacote"].includes((detalhe as any)?.tipo) ? "Mobilização real" : "Entrega real"}</span><p className="text-gray-900 font-medium">{detalhe.dataEntregaReal ? new Date(detalhe.dataEntregaReal + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p></div>
                   <div><span className="text-gray-400 text-xs">Origem</span><p className="text-gray-900 font-medium">{detalhe.cotacaoId ? `Cotação #${detalhe.cotacaoId}` : "Manual"}</p></div>
                   <div><span className="text-gray-400 text-xs">Criado em</span><p className="text-gray-900 font-medium">{new Date(detalhe.criadoEm).toLocaleDateString("pt-BR")}</p></div>
+                  <div className="col-span-2">
+                    <span className="text-gray-400 text-xs">Tipo de Faturamento</span>
+                    <p className="mt-0.5">
+                      {(detalhe as any).modalidadeFd === "fd_cliente" ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold border bg-blue-50 text-blue-700 border-blue-200"><DollarSign className="h-3 w-3" /> Pagamento Cliente</span>
+                      ) : (detalhe as any).modalidadeFd === "fd_fc" ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold border bg-amber-50 text-amber-700 border-amber-200"><DollarSign className="h-3 w-3" /> Faturamento Direto</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200"><DollarSign className="h-3 w-3" /> Empresa FC</span>
+                      )}
+                    </p>
+                  </div>
                   {((detalhe as any).freteTipo || (detalhe as any).transportadora || (detalhe as any).codigoRastreamento) && (
                     <>
                       <div>

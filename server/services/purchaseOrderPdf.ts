@@ -296,10 +296,17 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
     ["Forma de Pagamento", oc.formaPagamento ?? "—"],
   ], y, col3);
 
+  const tipoFatLabel = (oc as any).modalidadeFd === "fd_cliente"
+    ? "Pagamento Cliente"
+    : (oc as any).modalidadeFd === "fd_fc"
+    ? "Faturamento Direto"
+    : "Empresa FC";
+
   const prazoVal = fmtDate(oc.dataEntregaPrevista) !== "—" ? fmtDate(oc.dataEntregaPrevista) : "—";
   const row2: [string, string][] = [
     ["Prazo de Entrega", prazoVal],
     ["Vencimento", fmtDate(oc.dataVencimento)],
+    ["Tipo de Faturamento", tipoFatLabel],
   ];
   if (oc.observacoes) row2.push(["Observações", oc.observacoes]);
   y = infoRow(row2, y, col3);
