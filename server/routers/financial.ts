@@ -2930,8 +2930,12 @@ export const financialRouter = router({
     `, [input.companyId, String(input.ano)]),
 
     // 5. Standalone financial_revenue (Dar Baixa direto, sem medicao_id)
+    //    DISTINCT ON (obra_id, mês) → vence o registro mais recentemente atualizado,
+    //    garantindo que um "Dar Baixa" manual sobreponha qualquer FR antigo importado
+    //    pela API com valor divergente para o mesmo mês.
     dbExecute(db, `
-      SELECT fr.id, fr.obra_id, fr.obra_nome,
+      SELECT DISTINCT ON (fr.obra_id, TO_CHAR(fr.data_vencimento, 'YYYY-MM'))
+             fr.id, fr.obra_id, fr.obra_nome,
              TO_CHAR(fr.data_vencimento, 'YYYY-MM') AS competencia,
              fr.status, fr.data_recebimento, fr.valor_recebido,
              fr.valor_medicao, fr.forma_pagamento, fr.nf_numero, fr.data_vencimento
@@ -2940,6 +2944,10 @@ export const financialRouter = router({
         AND fr.medicao_id IS NULL
         AND fr.data_vencimento IS NOT NULL
         AND LEFT(fr.data_vencimento::text, 4) = $2
+      ORDER BY fr.obra_id,
+               TO_CHAR(fr.data_vencimento, 'YYYY-MM'),
+               fr.updated_at DESC NULLS LAST,
+               fr.id DESC
     `, [input.companyId, String(input.ano)]),
 
     // 6. Avanço físico mensal por projeto (Camada 2 - Previsão de Faturamento)
