@@ -2871,9 +2871,7 @@ export default function Cotacoes() {
 
               {/* ── ABA: MAPA DE COTAÇÃO ── */}
               {abaAtiva === "mapa" && (
-                <div className="flex gap-4" style={{ height: "calc(100vh - 200px)" }}>
-                  {/* ── Coluna esquerda: fornecedores + condições ── */}
-                  <div className="w-[340px] flex-shrink-0 overflow-y-auto space-y-4 pb-4">
+                <div className="space-y-5">
                   {/* Adicionar fornecedor */}
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Fornecedores Participantes</p>
@@ -3217,10 +3215,6 @@ export default function Cotacoes() {
                       </div>
                     </div>
                   )}
-                  </div>
-
-                  {/* ── Coluna direita: matriz de preços ── */}
-                  <div className="flex-1 min-w-0 overflow-y-auto space-y-4 pb-4">
                   {cobertura && (
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Cobertura do Orçamento</p>
@@ -4364,7 +4358,6 @@ export default function Cotacoes() {
                       )}
                     </div>
                   )}
-                  </div>
                 </div>
               )}
             </>
