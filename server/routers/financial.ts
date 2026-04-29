@@ -3158,50 +3158,93 @@ export const financialRouter = router({
     ]); // fim Promise.all
 
     // 9. Avanço físico acumulado GLOBAL — mesma fórmula do REFIS "Global (c/ Indiretas)":
-    //    • Diretas   → percentual_acumulado mais recente de planejamento_avancos
-    //    • Indiretas → previsto proporcional ao prazo: (hoje+6d - data_inicio) / (data_fim - data_inicio) × 100
-    //    • Denominador = peso_financeiro de TODAS as atividades (diretas + indiretas)
+    //    Detecta automaticamente o modo de ponderação por projeto:
+    //    • Modo financeiro (peso_financeiro): quando as atividades COM avanço positivo têm peso_financeiro>0
+    //    • Modo duração (duracao_dias):       quando as atividades COM avanço positivo têm peso_financeiro=0
+    //    Indiretas → previsto proporcional ao prazo: (próxima seg - data_inicio) / (data_fim - data_inicio) × 100
     const avancoFisicoRes = await dbExecute(db, `
       WITH
-      -- Configuração por projeto: sem_peso=true quando nenhuma atividade tem peso_financeiro>0
-      -- (fallback: peso igual para todas as atividades, igual ao frontend)
-      proj_cfg AS (
-        SELECT projeto_id,
-               CASE WHEN SUM(COALESCE(peso_financeiro::numeric, 0)) > 0
-                    THEN FALSE ELSE TRUE
-               END AS sem_peso,
-               CASE WHEN SUM(COALESCE(peso_financeiro::numeric, 0)) > 0
-                    THEN SUM(COALESCE(peso_financeiro::numeric, 0))
-                    ELSE COUNT(*)::numeric
-               END AS total_peso
-        FROM planejamento_atividades
+      -- Revisão ativa por projeto: última revisão com status='aprovada' (igual ao frontend)
+      rev_ativa AS (
+        SELECT DISTINCT ON (projeto_id)
+          projeto_id, id AS revisao_id
+        FROM planejamento_revisoes
         WHERE projeto_id IN (${idsStr})
-          AND NOT COALESCE(is_grupo, false)
-        GROUP BY projeto_id
+          AND status = 'aprovada'
+        ORDER BY projeto_id, numero DESC
       ),
-      -- Diretas: valor real registrado em planejamento_avancos
+      -- Detecta soma de peso_financeiro das atividades DIRETAS com avanço positivo
+      -- Se = 0 → projeto usa ponderação por duração (ex: QIU 2 importado do MS Project)
+      -- Se > 0 → projeto usa ponderação financeira (ex: HOTEL DO PAPA com orçamento)
+      proj_mode AS (
+        SELECT pa.projeto_id,
+               COALESCE((
+                 SELECT SUM(a2.peso_financeiro::numeric)
+                 FROM planejamento_avancos av2
+                 JOIN planejamento_atividades a2 ON a2.id = av2.atividade_id
+                 JOIN rev_ativa ra2 ON ra2.projeto_id = a2.projeto_id AND ra2.revisao_id = a2.revisao_id
+                 WHERE a2.projeto_id = pa.projeto_id
+                   AND NOT COALESCE(a2.is_grupo, false)
+                   AND NOT COALESCE(a2.is_indireta, false)
+                   AND av2.percentual_acumulado::numeric > 0
+               ), 0) AS peso_diretas_avanco
+        FROM planejamento_atividades pa
+        JOIN rev_ativa ra ON ra.projeto_id = pa.projeto_id AND ra.revisao_id = pa.revisao_id
+        WHERE pa.projeto_id IN (${idsStr})
+          AND NOT COALESCE(pa.is_grupo, false)
+        GROUP BY pa.projeto_id
+      ),
+      -- Configuração por projeto: modo de ponderação e denominador total
+      -- Somente atividades da revisão ativa
+      proj_cfg AS (
+        SELECT pa.projeto_id,
+               (pm.peso_diretas_avanco = 0) AS usar_duracao,
+               CASE
+                 WHEN pm.peso_diretas_avanco > 0 THEN
+                   -- Modo financeiro: denominador = soma de peso_financeiro (ou contagem se todos zero)
+                   CASE WHEN SUM(COALESCE(pa.peso_financeiro::numeric, 0)) > 0
+                        THEN SUM(COALESCE(pa.peso_financeiro::numeric, 0))
+                        ELSE COUNT(*)::numeric
+                   END
+                 ELSE
+                   -- Modo duração: denominador = soma de duracao_dias
+                   NULLIF(SUM(COALESCE(pa.duracao_dias::numeric, 0)), 0)
+               END AS total_peso
+        FROM planejamento_atividades pa
+        JOIN rev_ativa ra ON ra.projeto_id = pa.projeto_id AND ra.revisao_id = pa.revisao_id
+        JOIN proj_mode pm ON pm.projeto_id = pa.projeto_id
+        WHERE pa.projeto_id IN (${idsStr})
+          AND NOT COALESCE(pa.is_grupo, false)
+        GROUP BY pa.projeto_id, pm.peso_diretas_avanco
+      ),
+      -- Diretas: valor real registrado em planejamento_avancos (percentual mais recente)
       -- NULL em is_indireta é tratado como FALSE (atividade direta)
       diretas AS (
         SELECT DISTINCT ON (av.atividade_id)
           a.projeto_id,
-          CASE WHEN pc.sem_peso THEN 1::numeric
-               ELSE COALESCE(a.peso_financeiro::numeric, 0)
+          CASE
+            WHEN pc.usar_duracao THEN COALESCE(a.duracao_dias::numeric, 0)
+            WHEN COALESCE(a.peso_financeiro::numeric, 0) > 0 THEN a.peso_financeiro::numeric
+            ELSE 1::numeric
           END AS peso,
           av.percentual_acumulado::numeric AS val
         FROM planejamento_atividades a
         JOIN planejamento_avancos av ON av.atividade_id = a.id
+        JOIN rev_ativa ra ON ra.projeto_id = a.projeto_id AND ra.revisao_id = a.revisao_id
         JOIN proj_cfg pc ON pc.projeto_id = a.projeto_id
         WHERE a.projeto_id IN (${idsStr})
           AND NOT COALESCE(a.is_grupo, false)
           AND NOT COALESCE(a.is_indireta, false)
         ORDER BY av.atividade_id, av.semana DESC
       ),
-      -- Indiretas: previsto proporcional ao prazo (ref = próxima segunda-feira = início semana seguinte)
+      -- Indiretas: previsto proporcional ao prazo (ref = próxima segunda-feira)
       indiretas AS (
         SELECT
           a.projeto_id,
-          CASE WHEN pc.sem_peso THEN 1::numeric
-               ELSE COALESCE(a.peso_financeiro::numeric, 0)
+          CASE
+            WHEN pc.usar_duracao THEN COALESCE(a.duracao_dias::numeric, 0)
+            WHEN COALESCE(a.peso_financeiro::numeric, 0) > 0 THEN a.peso_financeiro::numeric
+            ELSE 1::numeric
           END AS peso,
           CASE
             WHEN a.data_fim IS NULL OR a.data_inicio IS NULL THEN 0
@@ -3211,6 +3254,7 @@ export const financialRouter = router({
                  / (a.data_fim::date - a.data_inicio::date)::numeric * 100
           END AS val
         FROM planejamento_atividades a
+        JOIN rev_ativa ra ON ra.projeto_id = a.projeto_id AND ra.revisao_id = a.revisao_id
         JOIN proj_cfg pc ON pc.projeto_id = a.projeto_id
         WHERE a.projeto_id IN (${idsStr})
           AND NOT COALESCE(a.is_grupo, false)
