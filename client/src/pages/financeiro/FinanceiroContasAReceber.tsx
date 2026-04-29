@@ -196,6 +196,18 @@ export default function FinanceiroContasAReceber() {
   const kpis = data?.kpis ?? { totalContrato: 0, totalPrevisto: 0, totalPrevisaoFaturamento: 0, totalFaturado: 0, totalAReceber: 0, totalRecebido: 0 };
   const totaisMes: Record<string, number> = data?.totaisMes ?? {};
 
+  // Recalcular "A Faturar" diretamente dos dados de obras (mesma lógica do painel)
+  // para garantir que o card KPI bata com o total do painel de detalhes.
+  const PENDING_STATUSES = new Set(["previsto","previsao_faturamento","a_faturar"]);
+  const totalPrevisaoFaturamentoReal = obras.reduce((total, o) => {
+    return total + mesesChave.reduce((s, mes) => {
+      const cell = o.byMes[mes];
+      if (!cell || cell.valor <= 0) return s;
+      const st = resolveStatus(cell);
+      return PENDING_STATUSES.has(st) ? s + cell.valor : s;
+    }, 0);
+  }, 0);
+
   // Mutations
   const updateMut = (trpc as any).financial.updateRevenueStatus.useMutation({
     onSuccess: () => { toast({ title: "Status atualizado!" }); setDetalhe(null); refetch(); },
@@ -324,7 +336,7 @@ export default function FinanceiroContasAReceber() {
         <div className="grid grid-cols-3 gap-3">
           <KpiCard icon={Wallet}        label="Total Contratos"       value={BRL(kpis.totalContrato)}               color="text-gray-700"   bg="bg-gray-50"     onClick={() => setKpiPanel("totalContrato")} />
           <KpiCard icon={CalendarClock} label="Previsto no Ano"       value={BRL(kpis.totalPrevisto)}               color="text-blue-700"   bg="bg-blue-50"     onClick={() => setKpiPanel("totalPrevisto")} />
-          <KpiCard icon={TrendingUp}    label="A Faturar (Previsto)"  value={BRL(kpis.totalPrevisaoFaturamento)}    color="text-orange-600" bg="bg-orange-50"   onClick={() => setKpiPanel("totalPrevisaoFaturamento")}
+          <KpiCard icon={TrendingUp}    label="A Faturar (Previsto)"  value={BRL(totalPrevisaoFaturamentoReal)}      color="text-orange-600" bg="bg-orange-50"   onClick={() => setKpiPanel("totalPrevisaoFaturamento")}
             sub="Meses ainda não faturados no cronograma" />
           <KpiCard icon={FileText}      label="Já Faturado"           value={BRL(kpis.totalFaturado)}               color="text-blue-700"   bg="bg-blue-50"     onClick={() => setKpiPanel("totalFaturado")} />
           <KpiCard icon={ReceiptText}   label="A Receber"             value={BRL(kpis.totalAReceber)}               color="text-purple-700" bg="bg-purple-50"   onClick={() => setKpiPanel("totalAReceber")}
