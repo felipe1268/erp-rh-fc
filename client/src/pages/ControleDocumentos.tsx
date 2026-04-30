@@ -1241,6 +1241,10 @@ export default function ControleDocumentos() {
   // ============ FORM STATES ============
   const [asoForm, setAsoForm] = useState<any>({});
   const [treinForm, setTreinForm] = useState<any>({});
+  const [nrSearch, setNrSearch] = useState("");
+  const [nrDropdownOpen, setNrDropdownOpen] = useState(false);
+  const nrContainerRef = useRef<HTMLDivElement>(null);
+  const nrInputRef = useRef<HTMLInputElement>(null);
   const [atestForm, setAtestForm] = useState<any>({});
   const [advForm, setAdvForm] = useState<any>({});
 
@@ -1344,6 +1348,25 @@ export default function ControleDocumentos() {
     else if (statusFilter === "substituido") list = list.filter((a: any) => a.status === "SUBSTITUÍDO");
     return list;
   }, [asoList, search, statusFilter]);
+
+  const filteredNrRules = useMemo(() => {
+    if (!nrSearch.trim()) return null;
+    const q = removeAccents(nrSearch.trim().toLowerCase());
+    return TRAINING_RULES.filter(r =>
+      removeAccents(r.nome.toLowerCase()).includes(q) ||
+      (r.norma && removeAccents(r.norma.toLowerCase()).includes(q))
+    );
+  }, [nrSearch]);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (nrContainerRef.current && !nrContainerRef.current.contains(e.target as Node)) {
+        setNrDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   const filteredTrein = useMemo(() => {
     let list = treinList as any[];
@@ -2591,58 +2614,112 @@ export default function ControleDocumentos() {
               <h3 className="text-sm font-semibold text-amber-900">Preenchimento Rápido por NR</h3>
               <span className="text-xs text-amber-600 font-normal">(selecione para preencher automaticamente)</span>
             </div>
-            <Select
-              value={treinForm._selectedRule || ""}
-              onValueChange={(val) => {
-                if (val === "_custom") {
-                  setTreinForm({ ...treinForm, _selectedRule: "", nome: "", norma: "", cargaHoraria: "", _autoValidade: false });
-                  return;
-                }
-                const idx = parseInt(val);
-                const rule = TRAINING_RULES[idx];
-                if (!rule) return;
-                const updates: any = {
-                  ...treinForm,
-                  _selectedRule: val,
-                  nome: rule.nome,
-                  norma: rule.norma,
-                  cargaHoraria: rule.cargaHorariaInicial,
-                  _autoValidade: !!rule.validadeMeses,
-                  _validadeMeses: rule.validadeMeses,
-                };
-                if (treinForm.dataRealizacao && rule.validadeMeses) {
-                  updates.dataValidade = calcularDataValidade(treinForm.dataRealizacao, rule.validadeMeses);
-                }
-                setTreinForm(updates);
-                toast.success(`Preenchido: ${rule.nome} (${rule.norma || "Sem NR"})${rule.validadeMeses ? ` — Validade: ${rule.validadeMeses} meses` : ""}`);
-              }}
-            >
-              <SelectTrigger className="bg-white border-amber-200">
-                <SelectValue placeholder="Selecione um treinamento padrão ou preencha manualmente abaixo..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_custom">✏️ Preencher manualmente</SelectItem>
-                {Object.entries(TRAINING_CATEGORIES).map(([key, label]) => {
-                  const rules = TRAINING_RULES.filter(r => r.categoria === key);
-                  if (rules.length === 0) return null;
-                  return [
-                    <div key={`cat-${key}`} className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-t mt-1">{label}</div>,
-                    ...rules.map((rule) => {
-                      const globalIdx = TRAINING_RULES.indexOf(rule);
+            {/* Combobox com busca */}
+            <div className="relative" ref={nrContainerRef}>
+              <div
+                className="flex items-center bg-white border border-amber-200 rounded-lg px-3 py-2 gap-2 cursor-text"
+                onClick={() => { setNrDropdownOpen(true); nrInputRef.current?.focus(); }}
+              >
+                <Search className="h-4 w-4 text-amber-400 shrink-0" />
+                <input
+                  ref={nrInputRef}
+                  value={nrSearch}
+                  onChange={e => { setNrSearch(e.target.value); setNrDropdownOpen(true); }}
+                  onFocus={() => setNrDropdownOpen(true)}
+                  placeholder={
+                    treinForm._selectedRule && treinForm._selectedRule !== "" && treinForm._selectedRule !== "_custom"
+                      ? `✓ ${TRAINING_RULES[parseInt(treinForm._selectedRule)]?.nome || ""}`
+                      : treinForm._selectedRule === "_custom"
+                      ? "✏️ Preenchimento manual ativo"
+                      : "Buscar por nome ou NR (ex: NR-35, Trabalho em Altura)..."
+                  }
+                  className="flex-1 text-sm outline-none bg-transparent min-w-0 placeholder:text-gray-500"
+                />
+                {(nrSearch || treinForm._selectedRule) && (
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); setNrSearch(""); setNrDropdownOpen(false); setTreinForm({ ...treinForm, _selectedRule: "", nome: "", norma: "", cargaHoraria: "", _autoValidade: false }); }}
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              {nrDropdownOpen && (
+                <div className="absolute z-50 w-full bg-white border rounded-xl shadow-lg mt-1 max-h-72 overflow-y-auto">
+                  {/* Preencher manualmente */}
+                  <button
+                    type="button"
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-accent/60 flex items-center gap-2 border-b"
+                    onMouseDown={e => { e.preventDefault(); setTreinForm({ ...treinForm, _selectedRule: "_custom", nome: "", norma: "", cargaHoraria: "", _autoValidade: false }); setNrSearch(""); setNrDropdownOpen(false); }}
+                  >
+                    ✏️ <span className="font-medium">Preencher manualmente</span>
+                  </button>
+
+                  {filteredNrRules !== null ? (
+                    /* Lista filtrada pela busca */
+                    filteredNrRules.length === 0 ? (
+                      <p className="text-center text-sm text-muted-foreground py-6">Nenhum resultado para "{nrSearch}"</p>
+                    ) : filteredNrRules.map(rule => {
+                      const idx = TRAINING_RULES.indexOf(rule);
                       return (
-                        <SelectItem key={globalIdx} value={String(globalIdx)}>
-                          <span className="flex items-center gap-2">
-                            <span className="font-medium">{rule.nome}</span>
-                            {rule.norma && <span className="text-xs text-muted-foreground">({rule.norma})</span>}
-                            {rule.validadeMeses && <span className="text-xs text-amber-600">• {rule.validadeMeses}m</span>}
-                          </span>
-                        </SelectItem>
+                        <button
+                          key={idx}
+                          type="button"
+                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-accent/60 flex items-center gap-2"
+                          onMouseDown={e => {
+                            e.preventDefault();
+                            const updates: any = { ...treinForm, _selectedRule: String(idx), nome: rule.nome, norma: rule.norma, cargaHoraria: rule.cargaHorariaInicial, _autoValidade: !!rule.validadeMeses, _validadeMeses: rule.validadeMeses };
+                            if (treinForm.dataRealizacao && rule.validadeMeses) updates.dataValidade = calcularDataValidade(treinForm.dataRealizacao, rule.validadeMeses);
+                            setTreinForm(updates);
+                            toast.success(`Preenchido: ${rule.nome} (${rule.norma || "Sem NR"})${rule.validadeMeses ? ` — Validade: ${rule.validadeMeses} meses` : ""}`);
+                            setNrSearch(""); setNrDropdownOpen(false);
+                          }}
+                        >
+                          <span className="font-medium flex-1">{rule.nome}</span>
+                          {rule.norma && <span className="text-xs text-muted-foreground">({rule.norma})</span>}
+                          {rule.validadeMeses && <span className="text-xs text-amber-600 shrink-0">• {rule.validadeMeses}m</span>}
+                        </button>
                       );
                     })
-                  ];
-                })}
-              </SelectContent>
-            </Select>
+                  ) : (
+                    /* Lista agrupada por categoria (sem busca) */
+                    Object.entries(TRAINING_CATEGORIES).map(([key, label]) => {
+                      const rules = TRAINING_RULES.filter(r => r.categoria === key);
+                      if (rules.length === 0) return null;
+                      return (
+                        <div key={key}>
+                          <div className="px-4 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-t mt-1 bg-gray-50">{label}</div>
+                          {rules.map(rule => {
+                            const idx = TRAINING_RULES.indexOf(rule);
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                className="w-full text-left px-4 py-2.5 text-sm hover:bg-accent/60 flex items-center gap-2"
+                                onMouseDown={e => {
+                                  e.preventDefault();
+                                  const updates: any = { ...treinForm, _selectedRule: String(idx), nome: rule.nome, norma: rule.norma, cargaHoraria: rule.cargaHorariaInicial, _autoValidade: !!rule.validadeMeses, _validadeMeses: rule.validadeMeses };
+                                  if (treinForm.dataRealizacao && rule.validadeMeses) updates.dataValidade = calcularDataValidade(treinForm.dataRealizacao, rule.validadeMeses);
+                                  setTreinForm(updates);
+                                  toast.success(`Preenchido: ${rule.nome} (${rule.norma || "Sem NR"})${rule.validadeMeses ? ` — Validade: ${rule.validadeMeses} meses` : ""}`);
+                                  setNrSearch(""); setNrDropdownOpen(false);
+                                }}
+                              >
+                                <span className="font-medium flex-1">{rule.nome}</span>
+                                {rule.norma && <span className="text-xs text-muted-foreground">({rule.norma})</span>}
+                                {rule.validadeMeses && <span className="text-xs text-amber-600 shrink-0">• {rule.validadeMeses}m</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="rounded-xl border bg-white p-4">
