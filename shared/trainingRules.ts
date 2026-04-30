@@ -440,8 +440,17 @@ export const TRAINING_RULES: TrainingRule[] = [
   // ===== GERAL =====
   {
     norma: "NR-01",
+    nome: "Ordem de Serviço",
+    descricao: "Treinamento sobre ordens de serviço e disposições gerais de segurança",
+    validadeMeses: 12,
+    cargaHorariaInicial: "2h",
+    cargaHorariaReciclagem: "1h",
+    categoria: "geral",
+  },
+  {
+    norma: "NR-18",
     nome: "Integração de Segurança",
-    descricao: "Treinamento de integração e segurança do trabalho",
+    descricao: "Treinamento de integração e segurança do trabalho na construção civil",
     validadeMeses: 12,
     cargaHorariaInicial: "6h",
     cargaHorariaReciclagem: "4h",
