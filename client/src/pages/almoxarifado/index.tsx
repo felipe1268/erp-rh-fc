@@ -481,6 +481,10 @@ export default function AlmoxarifadoPage() {
   const [empSubmitting, setEmpSubmitting] = useState(false);
   const [empOk, setEmpOk] = useState<null | { nome: string; total?: number }>(null);
   const [empErr, setEmpErr] = useState<string | null>(null);
+  // Tipo: mão de obra direta vs terceiros
+  const [empTipo, setEmpTipo] = useState<"mao_obra" | "terceiro">("mao_obra");
+  const [empTerceiroNome, setEmpTerceiroNome] = useState("");
+  const [empTerceiroEmpresa, setEmpTerceiroEmpresa] = useState("");
   const { data: empFuncionario } = trpc.warehouse.getFuncionarioByCodigo.useQuery(
     { companyId, codigo: empCodigo },
     { enabled: empCodigo.length >= 5 }
@@ -597,7 +601,7 @@ export default function AlmoxarifadoPage() {
 
   function resetEntrada() { setEntradaItemId(0); setEntradaQtd(""); setEntradaMotivo(""); setEntradaOk(null); }
   function resetSaida() { setSaidaItemId(0); setSaidaQtd(""); setSaidaObraId(typeof obraContexto === "number" ? obraContexto : 0); setSaidaOk(null); }
-  function resetEmprestimo() { setEmpCodigo(""); setEmpSearch(""); setEmpSelecionado(null); setEmpShowSug(false); setEmpItemId(0); setEmpQtd("1"); setEmpItens([]); setEmpSubmitting(false); setEmpOk(null); setEmpErr(null); }
+  function resetEmprestimo() { setEmpCodigo(""); setEmpSearch(""); setEmpSelecionado(null); setEmpShowSug(false); setEmpItemId(0); setEmpQtd("1"); setEmpItens([]); setEmpSubmitting(false); setEmpOk(null); setEmpErr(null); setEmpTipo("mao_obra"); setEmpTerceiroNome(""); setEmpTerceiroEmpresa(""); }
 
   // ── Abrir modal via URL param (?modal=X) ──────────────────────
   useEffect(() => {
@@ -1847,7 +1851,26 @@ export default function AlmoxarifadoPage() {
                   <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Wrench className="w-5 h-5 text-blue-500" /> 🔧 Ferramentas — Empréstimo</h2>
                   <button onClick={() => setModalEmprestimo(false)}><X className="w-6 h-6 text-gray-400" /></button>
                 </div>
-                <div className="p-4 space-y-4">
+                <div className="p-4 space-y-4 overflow-y-auto" style={{ maxHeight: "calc(85vh - 64px)" }}>
+                  {/* Toggle Mão de Obra / Terceiros */}
+                  <div className="flex rounded-xl overflow-hidden border-2 border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => { setEmpTipo("mao_obra"); setEmpTerceiroNome(""); setEmpTerceiroEmpresa(""); }}
+                      className={`flex-1 py-2.5 text-sm font-semibold transition ${empTipo === "mao_obra" ? "bg-blue-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      👷 Mão de Obra Direta
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEmpTipo("terceiro"); setEmpSelecionado(null); setEmpSearch(""); setEmpCodigo(""); }}
+                      className={`flex-1 py-2.5 text-sm font-semibold transition ${empTipo === "terceiro" ? "bg-orange-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      🏢 Terceiros
+                    </button>
+                  </div>
+
+                  {empTipo === "mao_obra" ? (
                   <div className="relative">
                     <label className="text-sm font-semibold text-gray-700 block mb-1">Funcionário *</label>
                     <input
@@ -1909,6 +1932,30 @@ export default function AlmoxarifadoPage() {
                       <p className="text-xs text-red-500 mt-1">Nenhum funcionário encontrado</p>
                     )}
                   </div>
+                  ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700 block mb-1">Nome do responsável *</label>
+                      <input
+                        type="text"
+                        className="w-full border-2 rounded-xl p-3 text-base"
+                        placeholder="Nome completo da pessoa..."
+                        value={empTerceiroNome}
+                        onChange={e => setEmpTerceiroNome(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700 block mb-1">Empresa (opcional)</label>
+                      <input
+                        type="text"
+                        className="w-full border-2 rounded-xl p-3 text-base"
+                        placeholder="Nome da empresa ou prestadora..."
+                        value={empTerceiroEmpresa}
+                        onChange={e => setEmpTerceiroEmpresa(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  )}
                   {(() => {
                     const fonteItens = obraContexto === "todos" ? itensTodos : itens;
                     const ferramentasList = (fonteItens as any[]).filter((i: any) => {
@@ -1961,7 +2008,7 @@ export default function AlmoxarifadoPage() {
                         {empErr && <p className="text-sm text-red-600 bg-red-50 rounded-lg p-2">{empErr}</p>}
                         <button
                           className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
-                          disabled={!empSelecionado || (empItens.length === 0 && !podeAdicionar) || empSubmitting}
+                          disabled={(empTipo === "mao_obra" ? !empSelecionado : !empTerceiroNome.trim()) || (empItens.length === 0 && !podeAdicionar) || empSubmitting}
                           onClick={async () => {
                             // Junta o item "em digitação" + a lista
                             const lista = [...empItens];
@@ -1975,7 +2022,10 @@ export default function AlmoxarifadoPage() {
                             let okCount = 0; let lastNome = "";
                             try {
                               for (const it of lista) {
-                                const r = await registerLoan.mutateAsync({ companyId, itemId: it.itemId, quantidade: parseFloat(it.qtd), funcionarioCodigo: codFunc, obraId: obraIdParam });
+                                const params = empTipo === "terceiro"
+                                  ? { companyId, itemId: it.itemId, quantidade: parseFloat(it.qtd), obraId: obraIdParam, terceiroNome: empTerceiroNome.trim(), terceiroEmpresa: empTerceiroEmpresa.trim() || undefined }
+                                  : { companyId, itemId: it.itemId, quantidade: parseFloat(it.qtd), funcionarioCodigo: codFunc, obraId: obraIdParam };
+                                const r = await registerLoan.mutateAsync(params);
                                 lastNome = r.funcionarioNome || lastNome;
                                 okCount++;
                               }

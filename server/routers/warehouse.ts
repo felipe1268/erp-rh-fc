@@ -252,26 +252,43 @@ export const warehouseRouter = router({
         itemId: z.number(),
         obraId: z.number().optional(),
         quantidade: z.number().positive().default(1),
-        funcionarioCodigo: z.string(),
+        funcionarioCodigo: z.string().optional(),
+        terceiroNome: z.string().optional(),
+        terceiroEmpresa: z.string().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      const [funcionario] = await db
-        .select()
-        .from(employees)
-        .where(
-          and(
-            eq(employees.companyId, input.companyId),
-            eq(employees.codigoInterno, input.funcionarioCodigo)
-          )
-        )
-        .limit(1);
+      let funcionarioId: number | null = null;
+      let funcionarioNome: string;
+      let funcionarioCodigo: string | null = null;
 
-      if (!funcionario)
-        throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado pelo código" });
+      if (input.terceiroNome) {
+        funcionarioNome = input.terceiroNome;
+      } else {
+        if (!input.funcionarioCodigo) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Informe o funcionário ou o nome do terceiro" });
+        }
+        const [funcionario] = await db
+          .select()
+          .from(employees)
+          .where(
+            and(
+              eq(employees.companyId, input.companyId),
+              eq(employees.codigoInterno, input.funcionarioCodigo)
+            )
+          )
+          .limit(1);
+
+        if (!funcionario)
+          throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado pelo código" });
+
+        funcionarioId = funcionario.id;
+        funcionarioNome = funcionario.nomeCompleto;
+        funcionarioCodigo = input.funcionarioCodigo;
+      }
 
       const [item] = await db
         .select()
@@ -286,20 +303,25 @@ export const warehouseRouter = router({
       const hoje = new Date().toISOString().split("T")[0];
       const hora = new Date().toTimeString().slice(0, 5);
 
+      const observacoes = input.terceiroEmpresa
+        ? `Empresa: ${input.terceiroEmpresa}`
+        : null;
+
       await db.insert(warehouseLoans).values({
         companyId: input.companyId,
         obraId: input.obraId || null,
         itemId: input.itemId,
         itemNome: item.nome,
         quantidade: String(input.quantidade),
-        funcionarioId: funcionario.id,
-        funcionarioCodigo: input.funcionarioCodigo,
-        funcionarioNome: funcionario.nomeCompleto,
+        funcionarioId,
+        funcionarioCodigo,
+        funcionarioNome,
         dataEmprestimo: hoje,
         horaEmprestimo: hora,
         almoxarifeId: ctx.user.id,
         almoxarifeNome: ctx.user.name || "",
         status: "emprestado",
+        observacoes,
       } as any);
 
       await db
@@ -314,12 +336,14 @@ export const warehouseRouter = router({
         itemId: input.itemId,
         tipo: "saida",
         quantidade: String(input.quantidade),
-        motivo: `Empréstimo para ${funcionario.nomeCompleto}`,
+        motivo: input.terceiroNome
+          ? `Empréstimo para ${input.terceiroNome}${input.terceiroEmpresa ? ` (${input.terceiroEmpresa})` : ""}`
+          : `Empréstimo para ${funcionarioNome}`,
         usuarioId: ctx.user.id,
         usuarioNome: ctx.user.name || "",
       } as any);
 
-      return { success: true, funcionarioNome: funcionario.nomeCompleto };
+      return { success: true, funcionarioNome };
     }),
 
   // Listar empréstimos do dia
