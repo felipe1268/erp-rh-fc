@@ -1836,22 +1836,21 @@ export default function AlmoxarifadoPage() {
 
       {/* ══ MODAL EMPRÉSTIMO ══════════════════════════════════════════ */}
       {modalEmprestimo && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden" style={{ background: "#ffffff", color: "#111827" }}>
-            {empOk ? (
-              <div className="p-8 text-center space-y-4">
-                <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto" />
-                <p className="text-xl font-bold text-emerald-700">Empréstimo registrado!</p>
-                <p className="text-gray-600">{empOk.nome}</p>
-                <button className="w-full bg-emerald-500 text-white font-bold py-4 rounded-xl text-lg" onClick={() => { setModalEmprestimo(false); resetEmprestimo(); }}>Fechar</button>
+        <div className="fixed inset-0 z-50 flex flex-col bg-white" style={{ color: "#111827" }}>
+          {empOk ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
+              <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto" />
+              <p className="text-xl font-bold text-emerald-700">Empréstimo registrado!</p>
+              <p className="text-gray-600">{empOk.nome}</p>
+              <button className="w-full max-w-sm bg-emerald-500 text-white font-bold py-4 rounded-xl text-lg" onClick={() => { setModalEmprestimo(false); resetEmprestimo(); }}>Fechar</button>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between p-4 border-b shrink-0">
+                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Wrench className="w-5 h-5 text-blue-500" /> 🔧 Ferramentas — Empréstimo</h2>
+                <button onClick={() => setModalEmprestimo(false)}><X className="w-6 h-6 text-gray-400" /></button>
               </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between p-4 border-b">
-                  <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Wrench className="w-5 h-5 text-blue-500" /> 🔧 Ferramentas — Empréstimo</h2>
-                  <button onClick={() => setModalEmprestimo(false)}><X className="w-6 h-6 text-gray-400" /></button>
-                </div>
-                <div className="p-4 space-y-4 overflow-y-auto" style={{ maxHeight: "calc(85vh - 64px)" }}>
+              <div className="p-4 space-y-4 overflow-y-auto flex-1">
                   {/* Toggle Mão de Obra / Terceiros */}
                   <div className="flex rounded-xl overflow-hidden border-2 border-gray-200">
                     <button
@@ -2043,9 +2042,8 @@ export default function AlmoxarifadoPage() {
                     );
                   })()}
                 </div>
-              </>
-            )}
-          </div>
+            </>
+          )}
         </div>
       )}
 
