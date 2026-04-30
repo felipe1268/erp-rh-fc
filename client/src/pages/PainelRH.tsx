@@ -73,6 +73,12 @@ export default function PainelRH() {
   );
   const s = homeData?.stats;
 
+  const [kpiExpand, setKpiExpand] = useState<{ title: string; items: { nome: string; funcao?: string; extra?: string; urgencia?: string; status?: string | null }[] } | null>(null);
+  const [aniversariosFullOpen, setAniversariosFullOpen] = useState(false);
+  const [cardExpand, setCardExpand] = useState<string | null>(null);
+  const [anivMes, setAnivMes] = useState<number>(new Date().getMonth() + 1);
+  const [alertaTab, setAlertaTab] = useState('todos');
+
   const { data: anivMesData, isLoading: anivMesLoading } = trpc.home.getAniversariantesMes.useQuery(
     { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}), mes: anivMes },
     { enabled: hasValidCompany }
@@ -83,11 +89,6 @@ export default function PainelRH() {
     { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: hasValidCompany, refetchInterval: 60_000 }
   );
-  const [kpiExpand, setKpiExpand] = useState<{ title: string; items: { nome: string; funcao?: string; extra?: string; urgencia?: string; status?: string | null }[] } | null>(null);
-  const [aniversariosFullOpen, setAniversariosFullOpen] = useState(false);
-  const [cardExpand, setCardExpand] = useState<string | null>(null);
-  const [anivMes, setAnivMes] = useState<number>(new Date().getMonth() + 1);
-  const [alertaTab, setAlertaTab] = useState('todos');
   const totalAlertas = (s?.asosVencidos ?? 0) + (s?.asosVencendo ?? 0) + (s?.semAso ?? 0) + (s?.feriasAlerta ?? 0) + (s?.experienciasVencidas ?? 0) + (s?.experienciasUrgentes ?? 0) + (s?.avisosPreviosVencendo ?? 0);
 
   // Montar lista de alertas para o Dialog
