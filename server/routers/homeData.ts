@@ -615,4 +615,62 @@ export const homeDataRouter = router({
         avisosPrevios,
       };
     }),
+
+  /**
+   * Aniversariantes de um mês específico (para navegação na tela cheia)
+   */
+  getAniversariantesMes: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      mes: z.number().min(1).max(12),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const hoje = new Date();
+      const brasilFormatter = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' });
+      const brasilParts = brasilFormatter.formatToParts(hoje);
+      const brasilDay = parseInt(brasilParts.find(p => p.type === 'day')!.value);
+      const brasilMonth = parseInt(brasilParts.find(p => p.type === 'month')!.value);
+
+      const allEmps = await db.select().from(employees)
+        .where(and(companyFilter(employees.companyId, input), sql`${employees.deletedAt} IS NULL`));
+      const todosNaoDesligados = allEmps.filter(e => e.status !== "Desligado");
+
+      const allObras = await db.select().from(obras).where(companyFilter(obras.companyId, input));
+      const obraMap = new Map(allObras.map(o => [o.id, o.nome]));
+      const homeAlocs = await db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
+        .from(obraFuncionarios).where(and(companyFilter(obraFuncionarios.companyId, input), eq(obraFuncionarios.isActive, 1)));
+      const homeEmpObraMap = new Map(homeAlocs.map(a => [a.employeeId, a.obraId]));
+
+      const isMesAtual = input.mes === brasilMonth;
+
+      const lista = todosNaoDesligados
+        .filter(e => {
+          if (!e.dataNascimento) return false;
+          const dn = toDateStr(e.dataNascimento);
+          const parts = dn.split("-");
+          if (parts.length < 3) return false;
+          return parseInt(parts[1]) === input.mes;
+        })
+        .map(e => {
+          const parts = toDateStr(e.dataNascimento!).split("-");
+          const dia = parseInt(parts[2]);
+          const isHoje = isMesAtual && dia === brasilDay;
+          const jaPassou = isMesAtual ? dia < brasilDay : false;
+          return {
+            id: e.id,
+            nome: e.nomeCompleto,
+            funcao: e.funcao,
+            status: e.status,
+            obra: homeEmpObraMap.has(e.id) ? obraMap.get(homeEmpObraMap.get(e.id)!) || null : null,
+            dia,
+            isHoje,
+            jaPassou,
+          };
+        })
+        .sort((a, b) => a.dia - b.dia);
+
+      return lista;
+    }),
 });

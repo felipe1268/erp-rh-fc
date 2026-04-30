@@ -20,7 +20,7 @@ import {
   Printer, Plane, DollarSign, ClipboardCheck, UserPlus, Ban, RefreshCw,
   Bell, FileText, CheckCircle2, XCircle, User, Calendar, TrendingDown, Info,
   BarChart2, ArrowRight, TrendingUp, Minus, GitCompareArrows, Award, Trophy, Star,
-  Maximize2, Save, X
+  Maximize2, Save, X, ChevronLeft
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -73,6 +73,11 @@ export default function PainelRH() {
   );
   const s = homeData?.stats;
 
+  const { data: anivMesData, isLoading: anivMesLoading } = trpc.home.getAniversariantesMes.useQuery(
+    { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}), mes: anivMes },
+    { enabled: hasValidCompany }
+  );
+
   // Rev. 1271 — Solicitações pendentes de HE/MO para a Central de Alertas
   const requestsAlertsQ = trpc.notifications.pendingRequestCounts.useQuery(
     { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
@@ -81,6 +86,7 @@ export default function PainelRH() {
   const [kpiExpand, setKpiExpand] = useState<{ title: string; items: { nome: string; funcao?: string; extra?: string; urgencia?: string; status?: string | null }[] } | null>(null);
   const [aniversariosFullOpen, setAniversariosFullOpen] = useState(false);
   const [cardExpand, setCardExpand] = useState<string | null>(null);
+  const [anivMes, setAnivMes] = useState<number>(new Date().getMonth() + 1);
   const [alertaTab, setAlertaTab] = useState('todos');
   const totalAlertas = (s?.asosVencidos ?? 0) + (s?.asosVencendo ?? 0) + (s?.semAso ?? 0) + (s?.feriasAlerta ?? 0) + (s?.experienciasVencidas ?? 0) + (s?.experienciasUrgentes ?? 0) + (s?.avisosPreviosVencendo ?? 0);
 
@@ -394,7 +400,7 @@ export default function PainelRH() {
                           Aniversariantes do Mês
                           {s?.aniversariantesHoje ? <Badge className="bg-pink-100 text-pink-700 text-[10px]">{s.aniversariantesHoje} hoje!</Badge> : null}
                         </CardTitle>
-                        <button onClick={() => setCardExpand('aniversariantes')} className="p-1 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors" title="Expandir em tela cheia"><Maximize2 className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => { setAnivMes(new Date().getMonth() + 1); setCardExpand('aniversariantes'); }} className="p-1 rounded hover:bg-accent/60 text-muted-foreground/40 hover:text-muted-foreground transition-colors" title="Expandir em tela cheia"><Maximize2 className="h-3.5 w-3.5" /></button>
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -700,7 +706,7 @@ export default function PainelRH() {
         open={!!cardExpand}
         onClose={() => setCardExpand(null)}
         title={
-          cardExpand === 'aniversariantes' ? 'Aniversariantes do Mês' :
+          cardExpand === 'aniversariantes' ? `Aniversariantes — ${['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][anivMes - 1]}` :
           cardExpand === 'ferias-painel' ? 'Férias — Painel Rápido' :
           cardExpand === 'asos' ? 'ASOs — Atenção Necessária' :
           cardExpand === 'ferias-periodo' ? 'Férias — Período Aquisitivo' :
@@ -718,7 +724,16 @@ export default function PainelRH() {
           <ShieldAlert className="h-5 w-5" />
         }
         headerActions={
-          cardExpand === 'asos' ? (
+          cardExpand === 'aniversariantes' ? (
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" className="text-white border-white/30 hover:bg-white/10 h-8 w-8 p-0" onClick={() => setAnivMes(m => m === 1 ? 12 : m - 1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="sm" className="text-white border-white/30 hover:bg-white/10 h-8 w-8 p-0" onClick={() => setAnivMes(m => m === 12 ? 1 : m + 1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : cardExpand === 'asos' ? (
             <Button variant="outline" size="sm" className="text-white border-white/30 hover:bg-white/10 gap-1" onClick={() => { setCardExpand(null); navigate('/controle-documentos'); }}>
               <ExternalLink className="h-4 w-4" /> Ver Controle de Documentos
             </Button>
@@ -733,9 +748,11 @@ export default function PainelRH() {
           {/* ── ANIVERSARIANTES DO MÊS ── */}
           {cardExpand === 'aniversariantes' && (
             <div className="space-y-2">
-              {!homeData?.aniversariantes?.length ? (
-                <p className="text-center text-muted-foreground py-12">Nenhum aniversariante este mês</p>
-              ) : homeData.aniversariantes.map((a: any, i: number) => (
+              {anivMesLoading ? (
+                <p className="text-center text-muted-foreground py-12">Carregando...</p>
+              ) : !anivMesData?.length ? (
+                <p className="text-center text-muted-foreground py-12">Nenhum aniversariante em {['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][anivMes - 1]}</p>
+              ) : anivMesData.map((a: any, i: number) => (
                 <div key={a.id} onClick={() => { setCardExpand(null); navigate('/colaboradores'); }}
                   className={`flex items-center gap-4 px-4 py-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${a.isHoje ? 'border-pink-300 bg-pink-50 hover:bg-pink-100' : a.jaPassou ? 'border-border bg-muted/30 opacity-60' : 'border-border bg-card hover:bg-accent/50'}`}>
                   <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${a.isHoje ? 'bg-pink-200 text-pink-800' : 'bg-slate-100 text-slate-500'}`}>
