@@ -132,6 +132,7 @@ const ImportData = lazy(() => import("./pages/ImportData"));
 
 // Relatórios
 const RaioXPage = lazy(() => import("./pages/relatorios/RaioXPage"));
+const RaioXDirectPage = lazy(() => import("./pages/relatorios/RaioXDirectPage"));
 const RelatorioPonto = lazy(() => import("./pages/relatorios/RelatorioPonto"));
 const RelatorioFolha = lazy(() => import("./pages/relatorios/RelatorioFolha"));
 const RelatorioDivergencias = lazy(() => import("./pages/relatorios/RelatorioDivergencias"));
@@ -376,6 +377,7 @@ function Router() {
         {/* Biblioteca de Conhecimento */}
         <Route path={"/ajuda"} component={() => <RouteGuard component={BibliotecaConhecimento} route="/colaboradores" />} />
         {/* Relatórios */}
+        <Route path={"/raio-x/:id"} component={() => <RouteGuard component={RaioXDirectPage} route="/relatorios/raio-x" />} />
         <Route path={"/relatorios/raio-x"} component={() => <RouteGuard component={RaioXPage} route="/relatorios/raio-x" />} />
         <Route path={"/relatorios/ponto"} component={() => <RouteGuard component={RelatorioPonto} route="/relatorios/ponto" />} />
         <Route path={"/relatorios/folha"} component={() => <RouteGuard component={RelatorioFolha} route="/relatorios/folha" />} />
