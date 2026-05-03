@@ -49,6 +49,7 @@ import { eq, and, sql, or, ilike, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
 import { dashboardsRouter } from "./routers/dashboards";
+import { oraculoRouter } from "./routers/oraculo";
 import { validateCNPJ } from "../shared/cnpj";
 import { TRPCError } from "@trpc/server";
 import { importExcelRouter } from "./routers/importExcel";
@@ -1029,6 +1030,11 @@ export const appRouter = router({
       return { success: true, deleted: input.ids.length };
     }),
   }),
+
+  // ============================================================
+  // ORÁCULO — Assistente IA Analítico (admin_master only)
+  // ============================================================
+  oraculo: oraculoRouter,
 
   // ============================================================
   // DASHBOARDS INTERATIVOS

@@ -64,6 +64,7 @@ import NotFound from "@/pages/NotFound";
 
 // Todas as outras páginas são lazy-loaded
 const Home = lazy(() => import("./pages/Home"));
+const Oraculo = lazy(() => import("./pages/Oraculo"));
 const Empresas = lazy(() => import("./pages/Empresas"));
 const Colaboradores = lazy(() => import("./pages/Colaboradores"));
 const Usuarios = lazy(() => import("./pages/Usuarios"));
@@ -326,6 +327,7 @@ function Router() {
         <Route path={"/processos-tributarios"} component={() => <RouteGuard component={ProcessosTributarios} route="/processos-tributarios" />} />
         <Route path={"/processos-civis"} component={() => <RouteGuard component={ProcessosCivis} route="/processos-civis" />} />
         <Route path={"/epis"} component={() => <RouteGuard component={Epis} route="/epis" />} />
+        <Route path={"/oraculo"} component={() => <MasterOnlyGuard component={Oraculo} />} />
         <Route path={"/usuarios"} component={() => <MasterOnlyGuard component={Usuarios} />} />
         <Route path={"/grupos-usuarios"} component={() => <MasterOnlyGuard component={GruposUsuarios} />} />
         <Route path={"/auditoria"} component={() => <MasterOnlyGuard component={Auditoria} />} />

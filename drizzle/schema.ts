@@ -7552,6 +7552,33 @@ export const seguroVidaImportacoes = pgTable("seguro_vida_importacoes", {
   index("idx_svimport_competencia").on(t.competencia),
 ]);
 
+// ============================================================
+// ORÁCULO — Assistente IA Analítico (admin_master only)
+// ============================================================
+export const oraculoSessions = pgTable("oraculo_sessions", {
+  id:           serial().primaryKey(),
+  userId:       integer("user_id").notNull(),
+  userName:     varchar("user_name", { length: 255 }),
+  companyId:    integer("company_id"),
+  title:        varchar("title", { length: 500 }).default("Nova conversa"),
+  messageCount: integer("message_count").default(0),
+  createdAt:    timestamp("created_at", { mode: "string" }).defaultNow(),
+  updatedAt:    timestamp("updated_at", { mode: "string" }).defaultNow(),
+}, (t) => [
+  index("idx_oraculo_sessions_user").on(t.userId),
+  index("idx_oraculo_sessions_updated").on(t.updatedAt),
+]);
+
+export const oraculoMessages = pgTable("oraculo_messages", {
+  id:        serial().primaryKey(),
+  sessionId: integer("session_id").notNull(),
+  role:      varchar("role", { length: 20 }).notNull(),
+  content:   text("content").notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow(),
+}, (t) => [
+  index("idx_oraculo_messages_session").on(t.sessionId),
+]);
+
 export const recycleBin = pgTable("recycle_bin", {
   id:               serial().primaryKey(),
   entityType:       varchar("entity_type", { length: 80 }).notNull(),

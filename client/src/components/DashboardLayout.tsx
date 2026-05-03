@@ -1685,6 +1685,22 @@ function DashboardLayoutContent({
             })}
           </SidebarContent>
 
+          {isMasterUser && (
+            <div className="px-3 py-2 border-t border-sidebar-border/50">
+              <button
+                onClick={() => setLocation("/oraculo")}
+                className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl transition-all border group ${
+                  location === "/oraculo"
+                    ? "bg-violet-700/40 border-violet-600/60 text-violet-100 shadow-lg shadow-violet-900/30"
+                    : "bg-violet-600/10 hover:bg-violet-600/25 border-violet-700/30 hover:border-violet-600/50 text-violet-300 hover:text-violet-100"
+                }`}
+              >
+                <span className="text-base shrink-0">🔮</span>
+                <span className="text-sm font-semibold tracking-wide group-data-[collapsible=icon]:hidden">ORÁCULO</span>
+                <span className="ml-auto text-[10px] bg-violet-500/25 border border-violet-600/30 px-1.5 py-0.5 rounded-full text-violet-400 group-data-[collapsible=icon]:hidden">IA</span>
+              </button>
+            </div>
+          )}
           <SidebarFooter className="p-3">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
