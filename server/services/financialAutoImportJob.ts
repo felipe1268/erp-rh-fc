@@ -19,23 +19,44 @@ import { retroacaoStartup } from "./financialEventTrigger";
 
 let jobInterval: ReturnType<typeof setInterval> | null = null;
 let alertInterval: ReturnType<typeof setInterval> | null = null;
+let jobRunning = false;
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 async function getAllActiveCompanyIds(): Promise<number[]> {
   const db = await getDb();
   if (!db) return [];
   try {
-    // Usar sql template — db.execute(string) ignora parâmetros e retorna resultado incorreto
-    const res = await db.execute(sql`SELECT id FROM companies WHERE "isActive" = 1 LIMIT 500`);
+    // Filtra apenas empresas ativas e NÃO deletadas
+    const res = await db.execute(sql`SELECT id FROM companies WHERE "isActive" = 1 AND "deletedAt" IS NULL LIMIT 100`);
     const rows = (res as any)?.rows ?? (Array.isArray(res) ? res : []);
     const ids = rows.map((r: any) => Number(r.id)).filter((n: number) => n > 0 && Number.isFinite(n));
     if (ids.length > 0) return ids;
-
-    // Fallback: qualquer empresa cadastrada
-    const res2 = await db.execute(sql`SELECT id FROM companies LIMIT 50`);
+    const res2 = await db.execute(sql`SELECT id FROM companies WHERE "deletedAt" IS NULL LIMIT 20`);
     const rows2 = (res2 as any)?.rows ?? (Array.isArray(res2) ? res2 : []);
     return rows2.map((r: any) => Number(r.id)).filter((n: number) => n > 0 && Number.isFinite(n));
   } catch {
     return [];
+  }
+}
+
+// Retorna apenas empresas que possuem funcionários cadastrados — evita processar centenas
+// de empresas vazias e economiza milhares de queries desnecessárias por ciclo.
+async function getCompanyIdsWithEmployees(): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    const res = await db.execute(sql`
+      SELECT DISTINCT e.company_id
+      FROM employees e
+      WHERE e.deleted_at IS NULL
+        AND e.company_id IS NOT NULL
+      ORDER BY e.company_id
+    `);
+    const rows = (res as any)?.rows ?? (Array.isArray(res) ? res : []);
+    return rows.map((r: any) => Number(r.company_id)).filter((n: number) => n > 0 && Number.isFinite(n));
+  } catch {
+    return getAllActiveCompanyIds();
   }
 }
 
@@ -184,25 +205,37 @@ async function syncFinancialToPlanejamento(): Promise<void> {
 }
 
 export function startFinancialAutoImportJob(): void {
-  // Startup: retroação imediata (dados históricos) + job normal + sync
+  // Startup: retroação após 90 segundos (dá tempo para o servidor estabilizar e atender usuários)
   setTimeout(async () => {
-    await runStartupRetroacao().catch(console.error);
-    await runJob().catch(console.error);
-    await syncFinancialToPlanejamento().catch(console.error);
-    // Job periódico: a cada 5 minutos como segurança (gatilhos em tempo real já cobrem a maioria)
-    jobInterval = setInterval(async () => {
+    if (jobRunning) return;
+    jobRunning = true;
+    try {
+      await runStartupRetroacao().catch(console.error);
       await runJob().catch(console.error);
       await syncFinancialToPlanejamento().catch(console.error);
-    }, 5 * 60 * 1000);
-  }, 5_000); // 5 segundos após o servidor subir
+    } finally {
+      jobRunning = false;
+    }
+    // Job periódico: a cada 30 minutos (gatilhos em tempo real cobrem mudanças imediatas)
+    jobInterval = setInterval(async () => {
+      if (jobRunning) { console.log("[FinancialJob] Já em execução, pulando ciclo."); return; }
+      jobRunning = true;
+      try {
+        await runJob().catch(console.error);
+        await syncFinancialToPlanejamento().catch(console.error);
+      } finally {
+        jobRunning = false;
+      }
+    }, 30 * 60 * 1000);
+  }, 90_000); // 90 segundos após o servidor subir
 
-  // Alertas de vencimento: roda a cada 30 minutos
+  // Alertas de vencimento: roda a cada 60 minutos, com delay inicial de 3 minutos
   setTimeout(async () => {
     await runAlertasJob().catch(console.error);
-    alertInterval = setInterval(() => runAlertasJob().catch(console.error), 30 * 60 * 1000);
-  }, 15_000);
+    alertInterval = setInterval(() => runAlertasJob().catch(console.error), 60 * 60 * 1000);
+  }, 3 * 60 * 1000);
 
-  console.log("[FinancialJob] Integração em tempo real ativa · Retroação no startup · Job de segurança: 5 min · Alertas: 30 min.");
+  console.log("[FinancialJob] Integração ativa · Startup em 90s · Job de segurança: 30 min · Alertas: 60 min.");
 }
 
 export function stopFinancialAutoImportJob(): void {

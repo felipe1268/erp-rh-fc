@@ -37,8 +37,18 @@ let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
 
 export async function getDb() {
-  const dbUrl = ENV.databaseUrl;
-  if (!_db && dbUrl) {
+  // Garante que SEMPRE usamos o Neon — nunca o banco local do Replit
+  const dbUrl = ENV.databaseUrl; // = NEON_DATABASE_URL apenas (ver env.ts)
+  if (!dbUrl) {
+    console.error("[Database] NEON_DATABASE_URL não definido — sem conexão com banco.");
+    return null;
+  }
+  // Proteção extra: rejeita explicitamente qualquer URL que não seja Neon
+  if (dbUrl.includes("@helium") || dbUrl.includes("localhost") || dbUrl.includes("127.0.0.1")) {
+    console.error("[Database] BLOQUEADO: URL de banco local detectada. Configure NEON_DATABASE_URL corretamente.");
+    return null;
+  }
+  if (!_db) {
     try {
       _pool = new Pool({
         connectionString: dbUrl,
@@ -52,6 +62,7 @@ export async function getDb() {
         console.warn('[Database] Pool error (idle client):', err.message);
       });
       _db = drizzle(_pool);
+      console.log("[Database] Conectado ao Neon com sucesso.");
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;

@@ -19,7 +19,7 @@ export function startPurchaseJobs() {
       await checkCotacoesVencendo();
       await checkPJContractAlerts();
     } catch (e) { console.error("[PurchaseJobs] Erro inicial:", e); }
-  }, 30000);
+  }, 5 * 60 * 1000); // 5 minutos após startup
 
   setInterval(async () => {
     try {
