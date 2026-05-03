@@ -1268,24 +1268,52 @@ async function startServer() {
     });
     // [REMOVIDO Rev.844] Limpeza empresas de teste (Rev.738) — já completada
     // [REMOVIDO Rev.844] Purga de orfanatos/fantasmas — já completada, limpar via deleteObra cascata
-    // Iniciar job de verificação automática do DataJud
+    // Jobs escalonados: delay de 15s entre cada um para evitar pico de conexões no startup.
+    // Ordem: jobs leves/urgentes primeiro, jobs pesados por último.
+    const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+    // t=0s — AutoCheck (leve, só agenda cron)
     import("../routers/datajudAutoCheck").then(m => m.startAutoCheckJob()).catch(e => console.error("[AutoCheck] Falha ao iniciar:", e));
-    // Iniciar job de verificação de prazos de rescisão (Art. 477 §6º CLT)
-    import("../routers/rescisaoNotification").then(m => m.startRescisaoCheckJob()).catch(e => console.error("[RescisaoCheck] Falha ao iniciar:", e));
-    // Iniciar job de backup diário automático (03:00 Brasília)
-    import("../services/backupService").then(m => m.startBackupJob()).catch(e => console.error("[Backup] Falha ao iniciar job:", e));
-    // Iniciar job de sincronização automática de status de funcionários (a cada 1h)
-    import("../services/statusSyncJob").then(m => m.startStatusSyncJob()).catch(e => console.error("[StatusSync] Falha ao iniciar job:", e));
-    // Job de inventário semanal do almoxarifado
-    import("../services/warehouseInventoryJob").then(m => m.startInventoryJob()).catch(e => console.error("[InventoryJob] Erro:", e));
-    // Job de auto-importação financeira (a cada 1h)
-    import("../services/financialAutoImportJob").then(m => m.startFinancialAutoImportJob()).catch(e => console.error("[FinancialJob] Erro:", e));
-    // Jobs de compras: vencimentos de OC, expiração de cotações, alertas de contratos
-    import("../services/purchaseAutoJobs").then(m => m.startPurchaseJobs()).catch(e => console.error("[PurchaseJobs] Erro:", e));
-    // Jobs do módulo operacional: auto-criar RDO, alertas 18h/20h, clima automático
-    import("../services/operacionalJobs").then(m => m.startOperacionalJobs()).catch(e => console.error("[OperacionalJobs] Erro:", e));
-    // Job de coleta automática de km diário da frota (a cada 30 min)
-    import("../services/fleetKmJob").then(m => m.startFleetKmJob()).catch(e => console.error("[FleetKmJob] Erro:", e));
+
+    // t=15s — RescisaoCheck
+    delay(15_000).then(() =>
+      import("../routers/rescisaoNotification").then(m => m.startRescisaoCheckJob()).catch(e => console.error("[RescisaoCheck] Falha ao iniciar:", e))
+    );
+
+    // t=30s — Backup (só agenda cron para 03h)
+    delay(30_000).then(() =>
+      import("../services/backupService").then(m => m.startBackupJob()).catch(e => console.error("[Backup] Falha ao iniciar job:", e))
+    );
+
+    // t=45s — StatusSync
+    delay(45_000).then(() =>
+      import("../services/statusSyncJob").then(m => m.startStatusSyncJob()).catch(e => console.error("[StatusSync] Falha ao iniciar job:", e))
+    );
+
+    // t=60s — InventoryJob
+    delay(60_000).then(() =>
+      import("../services/warehouseInventoryJob").then(m => m.startInventoryJob()).catch(e => console.error("[InventoryJob] Erro:", e))
+    );
+
+    // t=75s — PurchaseJobs
+    delay(75_000).then(() =>
+      import("../services/purchaseAutoJobs").then(m => m.startPurchaseJobs()).catch(e => console.error("[PurchaseJobs] Erro:", e))
+    );
+
+    // t=90s — OperacionalJobs
+    delay(90_000).then(() =>
+      import("../services/operacionalJobs").then(m => m.startOperacionalJobs()).catch(e => console.error("[OperacionalJobs] Erro:", e))
+    );
+
+    // t=105s — FleetKmJob
+    delay(105_000).then(() =>
+      import("../services/fleetKmJob").then(m => m.startFleetKmJob()).catch(e => console.error("[FleetKmJob] Erro:", e))
+    );
+
+    // t=120s — FinancialJob (mais pesado — já tinha delay de 90s internamente, agora começa em 120s)
+    delay(120_000).then(() =>
+      import("../services/financialAutoImportJob").then(m => m.startFinancialAutoImportJob()).catch(e => console.error("[FinancialJob] Erro:", e))
+    );
   });
 }
 

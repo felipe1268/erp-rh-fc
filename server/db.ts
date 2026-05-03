@@ -52,10 +52,10 @@ export async function getDb() {
     try {
       _pool = new Pool({
         connectionString: dbUrl,
-        max: 15,
-        min: 0,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 30000,
+        max: 10,
+        min: 1,
+        idleTimeoutMillis: 60000,
+        connectionTimeoutMillis: 5000,  // falha rápido em vez de bloquear 30s
         allowExitOnIdle: false,
       });
       _pool.on('error', (err) => {
@@ -63,6 +63,16 @@ export async function getDb() {
       });
       _db = drizzle(_pool);
       console.log("[Database] Conectado ao Neon com sucesso.");
+
+      // Keep-alive: ping a cada 4 min para impedir o Neon de hibernar
+      // O Neon entra em sleep após ~5 min de inatividade — o ping mantém vivo
+      setInterval(async () => {
+        try {
+          await _pool!.query('SELECT 1');
+        } catch {
+          // silencioso — se falhar, resetDbPool cuidará na próxima query real
+        }
+      }, 4 * 60 * 1000);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
