@@ -35,13 +35,16 @@ class ErrorBoundary extends Component<Props, State> {
                          error.name === 'ChunkLoadError';
 
     if (isChunkError) {
-      const reloadKey = '__erp_chunk_reload';
-      const lastReload = sessionStorage.getItem(reloadKey);
-      const now = Date.now();
-      if (!lastReload || now - Number(lastReload) > 10000) {
-        sessionStorage.setItem(reloadKey, String(now));
-        window.location.reload();
-      }
+      // sessionStorage pode lançar exceção no modo privado do iOS — sempre em try/catch
+      try {
+        const reloadKey = '__erp_chunk_reload';
+        const lastReload = sessionStorage.getItem(reloadKey);
+        const now = Date.now();
+        if (!lastReload || now - Number(lastReload) > 10000) {
+          sessionStorage.setItem(reloadKey, String(now));
+          window.location.reload();
+        }
+      } catch { /* modo privado iOS: ignora e mostra erro normalmente */ }
       return { hasError: true, error };
     }
     

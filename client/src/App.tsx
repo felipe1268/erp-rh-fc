@@ -8,19 +8,34 @@ import { CompanyProvider } from "./contexts/CompanyContext";
 import { ModuleProvider } from "./contexts/ModuleContext";
 import { ModuleConfigProvider } from "./contexts/ModuleConfigContext";
 import { PermissionsProvider, usePermissions } from "./contexts/PermissionsContext";
-import { lazy, Suspense, ComponentType } from "react";
+import { lazy, Suspense, ComponentType, useEffect } from "react";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { useAuth } from "./_core/hooks/useAuth";
 import DashboardLayout from "./components/DashboardLayout";
 
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="flex flex-col items-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Carregando...</p>
+      </div>
+    </div>
+  );
+}
+
 function MasterOnlyGuard({ component: Component }: { component: ComponentType }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [, setLocation] = useLocation();
-  if (!user) return null;
-  if (user.role !== 'admin_master') {
-    setLocation("/");
-    return null;
-  }
+  // Redirecionar via useEffect — nunca durante o render (causa warning do React)
+  useEffect(() => {
+    if (loading) return;
+    if (!user) { setLocation("/login"); return; }
+    if (user.role !== 'admin_master') { setLocation("/"); }
+  }, [user, loading, setLocation]);
+
+  if (loading) return <PageLoader />;
+  if (!user || user.role !== 'admin_master') return <PageLoader />;
   return <Component />;
 }
 
@@ -285,19 +300,6 @@ const PortalTrocarSenha = lazy(() => import("./pages/portal/PortalTrocarSenha"))
 const PortalDashboard = lazy(() => import("./pages/portal/PortalDashboard"));
 
 // ============================================================
-// LOADING FALLBACK - Exibido enquanto a página carrega
-// ============================================================
-function PageLoader() {
-  return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="flex flex-col items-center gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Carregando...</p>
-      </div>
-    </div>
-  );
-}
-
 function Router() {
   return (
     <Suspense fallback={<PageLoader />}>
