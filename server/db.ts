@@ -818,42 +818,82 @@ export async function permanentDeleteEmployee(id: number, companyId: number) {
 
 export async function getEmployeeStats(companyId: number, companyIds?: number[]) {
   const db = await getDb();
-  if (!db) return { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, clt: 0, pj: 0, porStatus: {} as Record<string, number> };
+  if (!db) return { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, aviso: 0, blacklist: 0, clt: 0, pj: 0, porStatus: {} as Record<string, number> };
   const ids = companyIds && companyIds.length > 0 ? companyIds : [companyId];
-  const result = await db.select({
-    status: employees.status,
-    count: sql<number>`count(*)`,
-  }).from(employees).where(and(inArray(employees.companyId, ids), isNull(employees.deletedAt))).groupBy(employees.status);
-  // CLT e PJ contam apenas quem tem status='Ativo' — mesmo critério que o badge "Ativos".
-  // Assim: Ativos (103) = CLT ativo (90) + PJ ativo (10) + Sócio (3), evitando coincidências confusas.
-  const tipoResult = ((await db.execute(
-    sql`SELECT "tipoContrato", COUNT(*) as cnt FROM employees WHERE "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)}) AND "deletedAt" IS NULL AND status = 'Ativo' GROUP BY "tipoContrato"`
-  )) as any).rows || [];
-  let clt = 0, pj = 0;
-  tipoResult.forEach((r: any) => {
-    if (r.tipoContrato === 'CLT') clt = Number(r.cnt);
-    else if (r.tipoContrato === 'PJ') pj = Number(r.cnt);
-  });
-  // Blacklist usa status='Lista_Negra' (exclusivo) para a soma bater com o Total.
-  // O flag listaNegra=1 pode existir em Desligados (histórico), o que causaria dupla contagem.
-  const blResult = ((await db.execute(
-    sql`SELECT COUNT(*) as cnt FROM employees WHERE "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)}) AND "deletedAt" IS NULL AND status = 'Lista_Negra'`
-  )) as any).rows || [];
-  const blacklist = Number(blResult[0]?.cnt || 0);
-  const stats = { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, aviso: 0, blacklist, clt, pj, porStatus: {} as Record<string, number> };
-  result.forEach(r => {
-    const c = Number(r.count);
-    const s = r.status || 'Sem Status';
-    stats.total += c;
-    stats.porStatus[s] = c;
-    if (s === "Ativo") stats.ativos = c;
-    else if (s === "Ferias") stats.ferias = c;
-    else if (s === "Afastado") stats.afastados = c;
-    else if (s === "Licenca") stats.licenca = c;
-    else if (s === "Desligado") stats.desligados = c;
-    else if (s === "Recluso") stats.reclusos = c;
-    else if (s === "Aviso") stats.aviso = c;
-  });
+
+  // Query única agrupada por (status, listaNegra) — fonte de verdade para todos os badges.
+  // Isso garante que cada número exibido vem de uma contagem real do banco, sem estimativas.
+  const [rawResult, tipoResult] = await Promise.all([
+    db.execute(
+      sql`SELECT status, "listaNegra", COUNT(*) as cnt
+          FROM employees
+          WHERE "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+            AND "deletedAt" IS NULL
+          GROUP BY status, "listaNegra"`
+    ),
+    db.execute(
+      // CLT/PJ: apenas quem está Ativo (mesmo critério do badge "Ativos")
+      sql`SELECT "tipoContrato", COUNT(*) as cnt
+          FROM employees
+          WHERE "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+            AND "deletedAt" IS NULL
+            AND status = 'Ativo'
+          GROUP BY "tipoContrato"`
+    ),
+  ]);
+
+  const rows: Array<{ status: string; listaNegra: number; cnt: number }> =
+    ((rawResult as any).rows || []).map((r: any) => ({
+      status: r.status || 'Sem Status',
+      listaNegra: Number(r.listaNegra ?? 0),
+      cnt: Number(r.cnt),
+    }));
+
+  const stats = {
+    total: 0,
+    ativos: 0,
+    ferias: 0,
+    afastados: 0,
+    licenca: 0,
+    desligados: 0,  // Desligado SEM flag listaNegra
+    reclusos: 0,
+    aviso: 0,
+    blacklist: 0,   // TODOS com listaNegra=1, qualquer status
+    clt: 0,
+    pj: 0,
+    porStatus: {} as Record<string, number>,
+  };
+
+  for (const r of rows) {
+    stats.total += r.cnt;
+    // porStatus agrega sem distinção de listaNegra (para uso interno)
+    stats.porStatus[r.status] = (stats.porStatus[r.status] ?? 0) + r.cnt;
+
+    // Blacklist = qualquer funcionário com flag listaNegra=1
+    if (r.listaNegra === 1) {
+      stats.blacklist += r.cnt;
+      // Desligados com flag listaNegra NÃO entram no badge "Desligados" para evitar dupla contagem
+      continue;
+    }
+
+    // A partir daqui: listaNegra = 0 (funcionários normais)
+    if (r.status === "Ativo")       stats.ativos    += r.cnt;
+    else if (r.status === "Ferias") stats.ferias    += r.cnt;
+    else if (r.status === "Afastado") stats.afastados += r.cnt;
+    else if (r.status === "Licenca")  stats.licenca   += r.cnt;
+    else if (r.status === "Desligado") stats.desligados += r.cnt;
+    else if (r.status === "Recluso")   stats.reclusos  += r.cnt;
+    else if (r.status === "Aviso")     stats.aviso     += r.cnt;
+  }
+
+  // CLT e PJ: contagem por tipo de contrato (apenas ativos)
+  const tipoRows: Array<{ tipoContrato: string; cnt: number }> =
+    ((tipoResult as any).rows || []).map((r: any) => ({ tipoContrato: r.tipoContrato, cnt: Number(r.cnt) }));
+  for (const r of tipoRows) {
+    if (r.tipoContrato === 'CLT') stats.clt = r.cnt;
+    else if (r.tipoContrato === 'PJ') stats.pj = r.cnt;
+  }
+
   return stats;
 }
 
