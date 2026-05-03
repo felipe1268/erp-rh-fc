@@ -2842,6 +2842,8 @@ export default function ControleDocumentos() {
                     <SelectItem value="Atestado Odontológico">Atestado Odontológico</SelectItem>
                     <SelectItem value="Declaração de Comparecimento">Declaração de Comparecimento</SelectItem>
                     <SelectItem value="Atestado de Acompanhamento">Atestado de Acompanhamento</SelectItem>
+                    <SelectItem value="Acidente de Trabalho">Acidente de Trabalho</SelectItem>
+                    <SelectItem value="Acidente de Trajeto">Acidente de Trajeto</SelectItem>
                     <SelectItem value="Licença Maternidade">Licença Maternidade</SelectItem>
                     <SelectItem value="Licença Paternidade">Licença Paternidade</SelectItem>
                     <SelectItem value="Outros">Outros</SelectItem>
