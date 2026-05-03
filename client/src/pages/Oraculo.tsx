@@ -104,6 +104,8 @@ export default function Oraculo() {
   const orbStateRef    = useRef<OrbState>("idle");
   const sendingRef     = useRef(false);
   const audioRef       = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef    = useRef<AudioContext | null>(null);
+  const audioSrcRef    = useRef<AudioBufferSourceNode | null>(null);
   const recRef         = useRef<any>(null);
   const chatEndRef     = useRef<HTMLDivElement>(null);
 
@@ -138,24 +140,54 @@ export default function Oraculo() {
   useEffect(() => { if (listQ.data) setSessions(listQ.data as Session[]); }, [listQ.data]);
   useEffect(() => { if (sessionQ.data) setMessages((sessionQ.data.messages ?? []) as Msg[]); }, [sessionQ.data]);
 
+  // ─── Desbloquear áudio iOS (chamar em gesto do usuário) ──
+  function unlockAudio() {
+    try {
+      const AC = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AC) return;
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AC();
+      }
+      if (audioCtxRef.current.state === "suspended") {
+        audioCtxRef.current.resume();
+      }
+      // Toca buffer vazio para liberar permissão no iOS
+      const buf = audioCtxRef.current.createBuffer(1, 1, 22050);
+      const src = audioCtxRef.current.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioCtxRef.current.destination);
+      src.start(0);
+    } catch {}
+  }
+
   // ─── TTS ─────────────────────────────────────────────────
   function stopAudio() {
+    try { audioSrcRef.current?.stop(); } catch {}
+    audioSrcRef.current = null;
     if (audioRef.current) { try { audioRef.current.pause(); } catch {} audioRef.current = null; }
     try { window.speechSynthesis?.cancel(); } catch {}
   }
 
   function speakFallback(text: string, onDone?: () => void) {
     try {
-      if (!window.speechSynthesis) { onDone?.(); return; }
+      if (!window.speechSynthesis) { setOrbState("idle"); setStatus("Pronto"); onDone?.(); return; }
       window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(text.slice(0, 400));
       utter.lang = "pt-BR"; utter.rate = 1.05;
-      const voices = window.speechSynthesis.getVoices();
-      const v = voices.find(v => v.lang.startsWith("pt-BR")) ?? voices.find(v => v.lang.startsWith("pt"));
-      if (v) utter.voice = v;
-      utter.onend  = () => { setOrbState("idle"); setStatus("Pronto"); onDone?.(); };
-      utter.onerror = () => { setOrbState("idle"); setStatus("Pronto"); onDone?.(); };
-      window.speechSynthesis.speak(utter);
+      // carregar vozes (async no Chrome, sync no Safari)
+      const trySpeak = () => {
+        const voices = window.speechSynthesis.getVoices();
+        const v = voices.find(v => v.lang.startsWith("pt-BR")) ?? voices.find(v => v.lang.startsWith("pt"));
+        if (v) utter.voice = v;
+        utter.onend  = () => { setOrbState("idle"); setStatus("Pronto"); onDone?.(); };
+        utter.onerror = () => { setOrbState("idle"); setStatus("Pronto"); onDone?.(); };
+        window.speechSynthesis.speak(utter);
+      };
+      if (window.speechSynthesis.getVoices().length > 0) {
+        trySpeak();
+      } else {
+        window.speechSynthesis.onvoiceschanged = trySpeak;
+      }
     } catch { setOrbState("idle"); setStatus("Pronto"); onDone?.(); }
   }
 
@@ -164,12 +196,32 @@ export default function Oraculo() {
     setOrbState("speaking"); setStatus("Respondendo...");
     try {
       const res = await ttsM.mutateAsync({ text: text.slice(0, 4800) });
-      if (res.audio) {
+      if (res.audio && audioCtxRef.current) {
+        // Usar AudioContext (compatível com iOS após unlock no gesto)
+        const ctx = audioCtxRef.current;
+        if (ctx.state === "suspended") await ctx.resume();
+
+        // Converter base64 → ArrayBuffer
+        const binary = atob(res.audio);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+        ctx.decodeAudioData(bytes.buffer, (decoded) => {
+          try { audioSrcRef.current?.stop(); } catch {}
+          const src = ctx.createBufferSource();
+          src.buffer = decoded;
+          src.connect(ctx.destination);
+          audioSrcRef.current = src;
+          src.onended = () => { setOrbState("idle"); setStatus("Pronto"); onDone?.(); };
+          src.start(0);
+        }, () => speakFallback(text, onDone));
+      } else if (res.audio) {
+        // Fallback: HTMLAudio (funciona no desktop)
         const audio = new Audio(`data:audio/mp3;base64,${res.audio}`);
         audioRef.current = audio;
         audio.onended = () => { setOrbState("idle"); setStatus("Pronto"); onDone?.(); };
         audio.onerror = () => speakFallback(text, onDone);
-        await audio.play();
+        audio.play().catch(() => speakFallback(text, onDone));
       } else {
         speakFallback(text, onDone);
       }
@@ -281,6 +333,7 @@ export default function Oraculo() {
 
   // ─── Clique no orbe ──────────────────────────────────────
   function handleOrb() {
+    unlockAudio(); // desbloqueia áudio no iOS (gesto do usuário)
     if (orbState === "listening") { stopListening(); return; }
     if (orbState === "thinking" || orbState === "speaking") {
       stopAudio();
@@ -397,7 +450,7 @@ export default function Oraculo() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-md w-full mt-2">
               {["Como está o headcount das 3 empresas?", "Existe alguma anomalia nos dados?", "Qual o custo da folha este mês?", "Quantas obras em andamento?"].map((s, i) => (
-                <button key={i} onClick={() => doSend(s)} className="text-left p-2.5 rounded-xl bg-violet-900/20 border border-violet-800/25 text-violet-400/80 text-xs hover:bg-violet-800/30 hover:text-violet-200 transition-all">
+                <button key={i} onClick={() => { unlockAudio(); doSend(s); }} className="text-left p-2.5 rounded-xl bg-violet-900/20 border border-violet-800/25 text-violet-400/80 text-xs hover:bg-violet-800/30 hover:text-violet-200 transition-all">
                   {s}
                 </button>
               ))}
@@ -441,20 +494,20 @@ export default function Oraculo() {
         {/* Input de texto */}
         <div className="shrink-0 px-3 py-3 border-t border-violet-900/30 bg-[#0a0614]/90">
           <div className="flex gap-2 items-end max-w-3xl mx-auto">
-            <button onClick={listening ? stopListening : startListening} disabled={sending}
+            <button onClick={() => { unlockAudio(); listening ? stopListening() : startListening(); }} disabled={sending}
               className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all ${listening ? "bg-pink-600 shadow-lg shadow-pink-900/50 animate-pulse" : "bg-violet-800/50 border border-violet-700/40 hover:bg-violet-700/60"} disabled:opacity-30`}>
               {listening ? <MicOff className="w-4 h-4 text-white" /> : <Mic className="w-4 h-4 text-violet-300" />}
             </button>
             <Textarea
               value={input}
               onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); doSend(input); } }}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); unlockAudio(); doSend(input); } }}
               placeholder="Digite ou fale... (Enter para enviar)"
               rows={1}
               className="flex-1 min-h-[40px] max-h-28 resize-none bg-violet-950/40 border-violet-800/50 text-violet-100 placeholder:text-violet-700 focus:border-violet-600 rounded-xl text-sm"
               disabled={sending}
             />
-            <button onClick={() => doSend(input)} disabled={!input.trim() || sending}
+            <button onClick={() => { unlockAudio(); doSend(input); }} disabled={!input.trim() || sending}
               className="shrink-0 w-10 h-10 rounded-full bg-violet-600 hover:bg-violet-500 disabled:opacity-30 flex items-center justify-center transition-all shadow-lg shadow-violet-900/50">
               {sending ? <Loader2 className="w-4 h-4 text-white animate-spin" /> : <Send className="w-4 h-4 text-white" />}
             </button>
