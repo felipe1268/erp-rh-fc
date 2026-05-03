@@ -192,14 +192,14 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
     db.select({ tipo: warnings.tipoAdvertencia, count: sql<number>`count(*)` })
       .from(warnings).where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt))).groupBy(warnings.tipoAdvertencia),
 
-    // 21. Todas as funções (sem limite, para o seletor)
+    // 21. Todas as funções (sem limite, para o seletor) — inclui todos os status
     db.select({ funcao: employees.funcao, count: sql<number>`count(*)` })
-      .from(employees).where(activeWhere).groupBy(employees.funcao)
+      .from(employees).where(baseWhere).groupBy(employees.funcao)
       .orderBy(sql`count(*) desc`),
 
-    // 22. Distribuição por função × status (para gráfico de análise)
+    // 22. Distribuição por função × status (para gráfico de análise) — inclui todos os status
     db.select({ funcao: employees.funcao, status: employees.status, count: sql<number>`count(*)` })
-      .from(employees).where(activeWhere).groupBy(employees.funcao, employees.status),
+      .from(employees).where(baseWhere).groupBy(employees.funcao, employees.status),
     ]);
   } catch (err: any) {
     console.error('[getDashFuncionarios] Erro nas queries:', err?.message || err);
