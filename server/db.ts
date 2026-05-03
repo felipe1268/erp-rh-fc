@@ -832,8 +832,10 @@ export async function getEmployeeStats(companyId: number, companyIds?: number[])
     if (r.tipoContrato === 'CLT') clt = Number(r.cnt);
     else if (r.tipoContrato === 'PJ') pj = Number(r.cnt);
   });
+  // Blacklist usa status='Lista_Negra' (exclusivo) para a soma bater com o Total.
+  // O flag listaNegra=1 pode existir em Desligados (histórico), o que causaria dupla contagem.
   const blResult = ((await db.execute(
-    sql`SELECT COUNT(*) as cnt FROM employees WHERE "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)}) AND "deletedAt" IS NULL AND "listaNegra" = 1`
+    sql`SELECT COUNT(*) as cnt FROM employees WHERE "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)}) AND "deletedAt" IS NULL AND status = 'Lista_Negra'`
   )) as any).rows || [];
   const blacklist = Number(blResult[0]?.cnt || 0);
   const stats = { total: 0, ativos: 0, ferias: 0, afastados: 0, licenca: 0, desligados: 0, reclusos: 0, aviso: 0, blacklist, clt, pj, porStatus: {} as Record<string, number> };
