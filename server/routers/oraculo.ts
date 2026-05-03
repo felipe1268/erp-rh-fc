@@ -34,6 +34,8 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
   const mesAtual = now.toISOString().slice(0, 7);
   const trintaDias = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
+  console.log("[ORÁCULO] buildContext rodando para empresas:", ids);
+
   const [empRes, obrasRes, processosRes, warnRes, atesRes, folhaRes, frotaRes, epiRes] = await Promise.allSettled([
     db.execute(sql`
       SELECT status, COUNT(*)::int as total
@@ -44,9 +46,9 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
     db.execute(sql`
       SELECT
         COUNT(*)::int as total,
-        COUNT(CASE WHEN status = 'Em andamento' THEN 1 END)::int as em_andamento,
-        COUNT(CASE WHEN status = 'Concluída' THEN 1 END)::int as concluidas,
-        COUNT(CASE WHEN status = 'Paralisada' THEN 1 END)::int as paralisadas
+        COUNT(CASE WHEN status ILIKE 'em%andamento' THEN 1 END)::int as em_andamento,
+        COUNT(CASE WHEN status ILIKE 'conclu%' THEN 1 END)::int as concluidas,
+        COUNT(CASE WHEN status ILIKE 'paralis%' THEN 1 END)::int as paralisadas
       FROM obras
       WHERE "companyId" = ANY(${ids}::int[]) AND "deletedAt" IS NULL
     `),
@@ -78,9 +80,9 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
     `),
     db.execute(sql`
       SELECT COUNT(*)::int as total_veiculos,
-        COUNT(CASE WHEN status = 'Ativo' THEN 1 END)::int as ativos
-      FROM frota_veiculos
-      WHERE "companyId" = ANY(${ids}::int[]) AND "deletedAt" IS NULL
+        COUNT(CASE WHEN "statusVeiculo" ILIKE 'ativo%' THEN 1 END)::int as ativos
+      FROM vehicles
+      WHERE "companyId" = ANY(${ids}::int[])
     `),
     db.execute(sql`
       SELECT COUNT(*)::int as pendentes
@@ -89,9 +91,19 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
     `),
   ]);
 
+  // Diagnóstico: logar qualquer query que tenha falhado
+  const queryNames = ["employees", "obras", "processos", "warnings", "atestados", "folha", "frota", "epi"];
+  const allResults = [empRes, obrasRes, processosRes, warnRes, atesRes, folhaRes, frotaRes, epiRes];
+  allResults.forEach((r, i) => {
+    if (r.status === "rejected") {
+      console.error(`[ORÁCULO] Query "${queryNames[i]}" FALHOU:`, (r.reason as any)?.message ?? r.reason);
+    }
+  });
+
   const ctx: Record<string, any> = {
     data_consulta: now.toLocaleDateString("pt-BR", { weekday: "long", year: "numeric", month: "long", day: "numeric" }),
     mes_referencia: mesAtual,
+    empresas_consultadas: ids,
   };
 
   if (empRes.status === "fulfilled") {
@@ -144,9 +156,9 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
 }
 
 // ============================================================
-// SYSTEM PROMPT
+// SYSTEM PROMPT (base — empresas anexadas dinamicamente)
 // ============================================================
-const SYSTEM_PROMPT = `Você é o ORÁCULO — assistente analítica de inteligência artificial integrada ao ERP/RH da FC Engenharia.
+const SYSTEM_PROMPT_BASE = `Você é o ORÁCULO — assistente analítica de inteligência artificial integrada ao ERP/RH da FC Engenharia.
 
 Você é especialista em análise de dados de RH, folha de pagamento, obras, financeiro, processos jurídicos, frota, compras, EPI e segurança do trabalho.
 
@@ -163,12 +175,26 @@ Regras absolutas:
 - Quando detectar algo preocupante nos dados, aponte proativamente
 - Se os dados forem insuficientes, diga isso e oriente como obter a informação
 - NUNCA invente dados que não estejam no contexto
-- Mantenha respostas concisas mas completas
+- Mantenha respostas concisas mas completas`;
+
+async function getSystemPrompt(): Promise<string> {
+  try {
+    const db = await getDb();
+    if (!db) return SYSTEM_PROMPT_BASE;
+    const res = await db.execute(sql`
+      SELECT id, "nomeFantasia" FROM companies WHERE "deletedAt" IS NULL ORDER BY id
+    `);
+    const rows = (res as any).rows ?? res ?? [];
+    if (rows.length === 0) return SYSTEM_PROMPT_BASE;
+    const lista = rows.map((r: any) => `- ${r.nomeFantasia} (id=${r.id})`).join("\n");
+    return `${SYSTEM_PROMPT_BASE}
 
 Empresas do grupo no sistema:
-- FC ENGENHARIA (60002) — Construção civil
-- HOTEL CONSAGRADO (60004) — Hotelaria
-- LOCNOW (90001) — Locação de equipamentos`;
+${lista}`;
+  } catch {
+    return SYSTEM_PROMPT_BASE;
+  }
+}
 
 // ============================================================
 // ROUTER
@@ -270,38 +296,44 @@ export const oraculoRouter = router({
         content: input.message,
       });
 
-      // Build context snapshot
-      const contextSnapshot = await buildContext(input.companyId ?? 0, input.companyIds);
+      // Build context snapshot + system prompt dinâmico em paralelo
+      const [contextSnapshot, basePrompt] = await Promise.all([
+        buildContext(input.companyId ?? 0, input.companyIds),
+        getSystemPrompt(),
+      ]);
+      console.log("[ORÁCULO] Snapshot size:", contextSnapshot.length, "chars | preview:", contextSnapshot.slice(0, 200));
 
-      // Build messages for LLM
+      // System prompt COM o snapshot de dados — vai como `system` no Anthropic (não como user)
+      const systemWithContext = `${basePrompt}
+
+═══════════════════════════════════════════════════════════
+SNAPSHOT DE DADOS REAIS DO SISTEMA (atualizado agora):
+═══════════════════════════════════════════════════════════
+${contextSnapshot}
+═══════════════════════════════════════════════════════════
+
+IMPORTANTE: Você TEM acesso completo aos dados acima. Use-os para responder. Nunca diga que "não tem acesso" — os dados estão aí. Quando o usuário perguntar, analise o snapshot e responda com os números reais.`;
+
+      // Histórico anterior
       const historyMessages = history.map(m => ({
         role: m.role as "user" | "assistant",
         content: m.content,
       }));
 
-      const systemWithContext = `${SYSTEM_PROMPT}
-
-SNAPSHOT DE DADOS EM TEMPO REAL:
-\`\`\`json
-${contextSnapshot}
-\`\`\``;
-
       let aiResponse = "";
       try {
         const result = await invokeLLM({
           messages: [
-            { role: "user", content: `[CONTEXTO DO SISTEMA]\n${systemWithContext}\n[/CONTEXTO]\n\n${history.length === 0 ? input.message : ""}` },
-            ...(history.length === 0 ? [] : [
-              { role: "assistant" as const, content: "Entendido. Estou pronta para analisar os dados da FC Engenharia." },
-              ...historyMessages,
-              { role: "user" as const, content: input.message },
-            ]),
+            { role: "system", content: systemWithContext },
+            ...historyMessages,
+            { role: "user", content: input.message },
           ],
           maxTokens: 2000,
         });
 
         const content = result?.choices?.[0]?.message?.content;
         aiResponse = typeof content === "string" ? content : (Array.isArray(content) ? (content[0] as any)?.text ?? "" : "");
+        console.log("[ORÁCULO] AI response length:", aiResponse.length);
       } catch (e: any) {
         console.error("[ORÁCULO] LLM error:", e?.message);
         aiResponse = "Desculpe, tive um problema ao processar sua solicitação. Tente novamente em instantes.";
