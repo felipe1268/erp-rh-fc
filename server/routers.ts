@@ -1,6 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
+import { memCache, TTL } from "./services/memCache";
 import { fechamentoPontoRouter } from "./routers/fechamentoPonto";
 import { syncEmployeeStatus } from "./services/statusSyncJob";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
@@ -386,9 +387,15 @@ export const appRouter = router({
   // EMPLOYEES
   // ============================================================
   employees: router({
-    list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), search: z.string().optional(), status: z.string().optional(), excludeTerminated: z.boolean().optional(), includeTerminatedInMonth: z.string().optional() })).query(({ input }) => getEmployees(input.companyId, input.search, input.status, input.companyIds, input.excludeTerminated, input.includeTerminatedInMonth)),
+    list: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), search: z.string().optional(), status: z.string().optional(), excludeTerminated: z.boolean().optional(), includeTerminatedInMonth: z.string().optional() })).query(({ input }) => {
+      const cacheKey = `emp:list:${input.companyId}:${(input.companyIds ?? []).join(',')}:${input.search ?? ''}:${input.status ?? ''}:${input.excludeTerminated ?? ''}:${input.includeTerminatedInMonth ?? ''}`;
+      return memCache.getOrFetch(cacheKey, TTL.SHORT, () => getEmployees(input.companyId, input.search, input.status, input.companyIds, input.excludeTerminated, input.includeTerminatedInMonth));
+    }),
     getById: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number() })).query(({ input }) => getEmployeeById(input.id, input.companyId)),
-    stats: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getEmployeeStats(input.companyId, input.companyIds)),
+    stats: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => {
+      const cacheKey = `emp:stats:${input.companyId}:${(input.companyIds ?? []).join(',')}`;
+      return memCache.getOrFetch(cacheKey, TTL.MEDIUM, () => getEmployeeStats(input.companyId, input.companyIds));
+    }),
     create: protectedProcedure.input(z.any()).mutation(async ({ input, ctx }) => {
       // === UNICIDADE POR EMPRESA ===
       // CPF e RG são únicos por empresa. O mesmo CPF pode existir em empresas diferentes.
@@ -464,6 +471,8 @@ export const appRouter = router({
           } catch (e) { console.error("[Notificação] Erro ao disparar contratação:", e); }
         })();
       }
+      memCache.invalidatePrefix('emp:');
+      memCache.invalidatePrefix('dash:func:');
       return result;
     }),
     update: protectedProcedure.input(z.any()).mutation(async ({ input, ctx }: any) => {
@@ -601,6 +610,8 @@ export const appRouter = router({
           })();
         }
       }
+      memCache.invalidatePrefix('emp:');
+      memCache.invalidatePrefix('dash:func:');
       return { success: true };
     }),
     delete: protectedProcedure.input(z.object({ id: z.number(), companyId: z.number(), reason: z.string().optional() })).mutation(async ({ input, ctx }) => {
@@ -609,6 +620,8 @@ export const appRouter = router({
       const empNome = emp?.nomeCompleto || `#${input.id}`;
       await softDeleteEmployee(input.id, input.companyId, ctx.user.id, ctx.user.name ?? "Sistema", input.reason);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "colaboradores", entityType: "employee", entityId: input.id, details: `Colaborador excluído (lixeira): ${empNome}${input.reason ? ` — Motivo: ${input.reason}` : ""}` });
+      memCache.invalidatePrefix('emp:');
+      memCache.invalidatePrefix('dash:func:');
       return { success: true };
     }),
     // Lixeira - listar excluídos
@@ -619,6 +632,8 @@ export const appRouter = router({
       const empNome = emp?.nomeCompleto || `#${input.id}`;
       await restoreEmployee(input.id, input.companyId);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "RESTORE", module: "colaboradores", entityType: "employee", entityId: input.id, details: `Colaborador restaurado da lixeira: ${empNome}` });
+      memCache.invalidatePrefix('emp:');
+      memCache.invalidatePrefix('dash:func:');
       return { success: true };
     }),
     // Exclusão permanente
@@ -627,6 +642,8 @@ export const appRouter = router({
       const empNome = emp?.nomeCompleto || `#${input.id}`;
       await permanentDeleteEmployee(input.id, input.companyId);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "PERMANENT_DELETE", module: "colaboradores", entityType: "employee", entityId: input.id, details: `Colaborador excluído permanentemente: ${empNome}` });
+      memCache.invalidatePrefix('emp:');
+      memCache.invalidatePrefix('dash:func:');
       return { success: true };
     }),
     history: router({

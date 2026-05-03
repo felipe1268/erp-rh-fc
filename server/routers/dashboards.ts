@@ -1,6 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, getConstrutorasIds } from "../db";
+import { memCache, TTL } from "../services/memCache";
 import {
   employees, extraPayments, payroll, timeRecords, warnings, atestados,
   epis, epiDeliveries, processosTrabalhistas, processosAndamentos,
@@ -3071,7 +3072,10 @@ async function getFuncionariosParaMapa(companyId: number, companyIds?: number[],
 }
 
 export const dashboardsRouter = router({
-  funcionarios: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFuncionarios(input.companyId, input.companyIds)),
+  funcionarios: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => {
+    const cacheKey = `dash:func:${input.companyId}:${(input.companyIds ?? []).join(',')}`;
+    return memCache.getOrFetch(cacheKey, TTL.MEDIUM, () => getDashFuncionarios(input.companyId, input.companyIds));
+  }),
   drillDown: protectedProcedure.input(z.object({ companyId: z.number(), filterType: z.string(), filterValue: z.string(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDrillDown(input.companyId, input.filterType, input.filterValue, input.companyIds)),
   cartaoPonto: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashCartaoPonto(input.companyId, input.mesReferencia, input.companyIds)),
   folhaPagamento: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFolhaPagamento(input.companyId, input.mesReferencia, input.companyIds)),
