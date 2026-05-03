@@ -1056,7 +1056,7 @@ export default function SolicitacaoHE() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <Badge className={STATUS_COLORS.pendente + " text-[10px] md:text-xs"}>Pendente</Badge>
                               <span className="text-xs md:text-sm text-muted-foreground">
-                                #{sol.id} — {new Date(sol.dataSolicitacao + "T12:00:00").toLocaleDateString("pt-BR")}
+                                HE-{String(sol.id).padStart(5, '0')} · {new Date(sol.dataSolicitacao + "T12:00:00").toLocaleDateString("pt-BR")}
                               </span>
                               {sol.obraNome && (
                                 <span className="text-xs flex items-center gap-1">
@@ -1126,7 +1126,7 @@ export default function SolicitacaoHE() {
                                   {STATUS_LABELS[sol.status] || sol.status}
                                 </Badge>
                                 <span className="text-xs md:text-sm font-medium">
-                                  #{sol.id} — {new Date(sol.dataSolicitacao + "T12:00:00").toLocaleDateString("pt-BR")}
+                                  HE-{String(sol.id).padStart(5, '0')} · {new Date(sol.dataSolicitacao + "T12:00:00").toLocaleDateString("pt-BR")}
                                 </span>
                                 {sol.obraNome && (
                                   <span className="text-xs flex items-center gap-1 text-muted-foreground">
@@ -1250,7 +1250,7 @@ export default function SolicitacaoHE() {
                                 {STATUS_LABELS[sol.status] || sol.status}
                               </Badge>
                               <span className="text-xs md:text-sm font-medium">
-                                #{sol.id} — {new Date(sol.dataSolicitacao + "T12:00:00").toLocaleDateString("pt-BR")}
+                                HE-{String(sol.id).padStart(5, '0')} · {new Date(sol.dataSolicitacao + "T12:00:00").toLocaleDateString("pt-BR")}
                               </span>
                               {sol.obraNome && (
                                 <span className="text-xs flex items-center gap-1 text-muted-foreground">
@@ -1327,7 +1327,7 @@ export default function SolicitacaoHE() {
       <FullScreenDialog
         open={!!detailSolId}
         onClose={() => { setDetailSolId(null); setAdminObs(""); setRejectReason(""); setShowRejectForm(false); }}
-        title={`Análise da Solicitação #${detailSolId || ""}`}
+        title={`Análise da Solicitação HE-${String(detailSolId || "").padStart(5, '0')}`}
       >
         {detailQuery.isLoading ? (
           <div className="flex items-center justify-center py-20">
@@ -1345,7 +1345,7 @@ export default function SolicitacaoHE() {
                   <Badge className={`text-sm px-3 py-1 ${STATUS_COLORS[sol.status] || STATUS_COLORS.pendente}`}>
                     {STATUS_LABELS[sol.status] || sol.status}
                   </Badge>
-                  <span className="text-lg font-semibold">Solicitação #{sol.id}</span>
+                  <span className="text-lg font-semibold">HE-{String(sol.id).padStart(5, '0')}</span>
                 </div>
                 {sol.status !== "pendente" && sol.status !== "cancelada" && isAdminMaster && (
                   <Badge variant="outline" className="text-xs flex items-center gap-1">
