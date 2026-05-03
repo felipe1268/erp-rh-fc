@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -45,24 +45,45 @@ function MD({ text }: { text: string }) {
 // ─── Orbe central ────────────────────────────────────────────
 type OrbState = "idle" | "listening" | "thinking" | "speaking";
 
-function Orb({ state, onClick }: { state: OrbState; onClick: () => void }) {
-  const grad = { idle: "from-violet-800 via-purple-900 to-indigo-950", listening: "from-pink-500 via-violet-500 to-purple-700", thinking: "from-indigo-500 via-violet-600 to-purple-800", speaking: "from-violet-400 via-fuchsia-500 to-purple-700" }[state];
-  const ring = { idle: "ring-violet-800/40", listening: "ring-pink-400/60", thinking: "ring-indigo-400/60", speaking: "ring-fuchsia-400/60" }[state];
+const Orb = memo(function Orb({ state, onClick }: { state: OrbState; onClick: () => void }) {
+  const grad = {
+    idle:      "from-violet-800 via-purple-900 to-indigo-950",
+    listening: "from-pink-500 via-violet-500 to-purple-700",
+    thinking:  "from-indigo-500 via-violet-600 to-purple-800",
+    speaking:  "from-violet-400 via-fuchsia-500 to-purple-700",
+  }[state];
+  const shadow = {
+    idle:      "shadow-violet-900/60",
+    listening: "shadow-pink-500/50",
+    thinking:  "shadow-indigo-500/50",
+    speaking:  "shadow-fuchsia-500/50",
+  }[state];
   const icon = { idle: "🔮", listening: "👂", thinking: "⏳", speaking: "🔊" }[state];
+  // Usa CSS transition suave em vez de animate-ping/animate-pulse (mais leve em mobile)
+  const scale = state !== "idle" ? "scale-105" : "scale-100";
   return (
-    <button onClick={onClick} className={`relative w-36 h-36 rounded-full bg-gradient-to-br ${grad} ring-4 ${ring} shadow-2xl shadow-violet-900/70 flex items-center justify-center transition-all duration-500 hover:scale-105 active:scale-95 ${state !== "idle" ? "animate-pulse" : ""}`}>
+    <button
+      onClick={onClick}
+      className={`relative w-36 h-36 rounded-full bg-gradient-to-br ${grad} shadow-2xl ${shadow} flex items-center justify-center transition-all duration-500 hover:scale-105 active:scale-95 ${scale}`}
+      style={{ willChange: "transform" }}
+    >
       <div className="absolute inset-2 rounded-full bg-gradient-to-br from-white/10 to-transparent" />
       <span className="text-5xl relative z-10 drop-shadow-lg">{icon}</span>
-      {state === "listening" && <>
-        <div className="absolute inset-0 rounded-full border-2 border-pink-400/40 animate-ping" style={{ animationDuration: "1.2s" }} />
-        <div className="absolute -inset-4 rounded-full border border-pink-400/20 animate-ping" style={{ animationDuration: "1.8s" }} />
-      </>}
-      {state === "speaking" && <div className="absolute -inset-2 rounded-full border-2 border-fuchsia-400/30 animate-ping" style={{ animationDuration: "1.5s" }} />}
+      {/* Anel de glow simples — CSS box-shadow não causa repaint */}
+      {state === "listening" && (
+        <div className="absolute inset-0 rounded-full ring-4 ring-pink-400/50 transition-all duration-300" />
+      )}
+      {state === "speaking" && (
+        <div className="absolute inset-0 rounded-full ring-4 ring-fuchsia-400/50 transition-all duration-300" />
+      )}
+      {state === "thinking" && (
+        <div className="absolute inset-0 rounded-full ring-4 ring-indigo-400/40 transition-all duration-300" />
+      )}
     </button>
   );
-}
+});
 
-function Bubble({ msg, onSpeak }: { msg: Msg; onSpeak: (t: string) => void }) {
+const Bubble = memo(function Bubble({ msg, onSpeak }: { msg: Msg; onSpeak: (t: string) => void }) {
   const isUser = msg.role === "user";
   return (
     <div className={`flex gap-2 ${isUser ? "flex-row-reverse" : "flex-row"} mb-3`}>
@@ -76,7 +97,7 @@ function Bubble({ msg, onSpeak }: { msg: Msg; onSpeak: (t: string) => void }) {
       </div>
     </div>
   );
-}
+});
 
 // ─── Componente principal ─────────────────────────────────────
 export default function Oraculo() {
@@ -195,33 +216,39 @@ export default function Oraculo() {
     if (!voiceOnRef.current) { onDone?.(); return; }
     setOrbState("speaking"); setStatus("Respondendo...");
     try {
-      const res = await ttsM.mutateAsync({ text: text.slice(0, 4800) });
-      if (res.audio && audioCtxRef.current) {
-        // Usar AudioContext (compatível com iOS após unlock no gesto)
-        const ctx = audioCtxRef.current;
-        if (ctx.state === "suspended") await ctx.resume();
+      const res = await ttsM.mutateAsync({ text: text.slice(0, 1800) });
+      if (res.audio) {
+        const dataUrl = `data:audio/mp3;base64,${res.audio}`;
 
-        // Converter base64 → ArrayBuffer
-        const binary = atob(res.audio);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        // Tentar AudioContext (melhor para iOS após unlock)
+        if (audioCtxRef.current) {
+          const ctx = audioCtxRef.current;
+          try {
+            if (ctx.state === "suspended") await ctx.resume();
+            // fetch com data: URL — assíncrono, não bloqueia a UI
+            const fetchRes = await fetch(dataUrl);
+            const arrayBuffer = await fetchRes.arrayBuffer();
+            ctx.decodeAudioData(arrayBuffer, (decoded) => {
+              try { audioSrcRef.current?.stop(); } catch {}
+              const src = ctx.createBufferSource();
+              src.buffer = decoded;
+              src.connect(ctx.destination);
+              audioSrcRef.current = src;
+              src.onended = () => { setOrbState("idle"); setStatus("Pronto"); onDone?.(); };
+              src.start(0);
+            }, () => speakFallback(text, onDone));
+            return; // saiu com sucesso
+          } catch { /* cai no fallback abaixo */ }
+        }
 
-        ctx.decodeAudioData(bytes.buffer, (decoded) => {
-          try { audioSrcRef.current?.stop(); } catch {}
-          const src = ctx.createBufferSource();
-          src.buffer = decoded;
-          src.connect(ctx.destination);
-          audioSrcRef.current = src;
-          src.onended = () => { setOrbState("idle"); setStatus("Pronto"); onDone?.(); };
-          src.start(0);
-        }, () => speakFallback(text, onDone));
-      } else if (res.audio) {
-        // Fallback: HTMLAudio (funciona no desktop)
-        const audio = new Audio(`data:audio/mp3;base64,${res.audio}`);
-        audioRef.current = audio;
-        audio.onended = () => { setOrbState("idle"); setStatus("Pronto"); onDone?.(); };
-        audio.onerror = () => speakFallback(text, onDone);
-        audio.play().catch(() => speakFallback(text, onDone));
+        // Fallback: HTMLAudio (desktop / sem AudioContext)
+        try {
+          const audio = new Audio(dataUrl);
+          audioRef.current = audio;
+          audio.onended = () => { setOrbState("idle"); setStatus("Pronto"); onDone?.(); };
+          audio.onerror = () => speakFallback(text, onDone);
+          await audio.play();
+        } catch { speakFallback(text, onDone); }
       } else {
         speakFallback(text, onDone);
       }

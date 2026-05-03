@@ -7,6 +7,12 @@ import { invokeLLM } from "../_core/llm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================
+// CACHE de contexto — evita 8 queries por mensagem
+// ============================================================
+const ctxCache = new Map<string, { data: string; ts: number }>();
+const CTX_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
+// ============================================================
 // CONTEXT BUILDER — snapshot de dados de todos os módulos
 // ============================================================
 async function buildContext(companyId: number, companyIds?: number[]): Promise<string> {
@@ -15,6 +21,14 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
 
   const ids = companyIds && companyIds.length > 0 ? companyIds : (companyId ? [companyId] : []);
   if (ids.length === 0) return "{}";
+
+  // Verificar cache
+  const cacheKey = ids.sort().join(",");
+  const cached = ctxCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < CTX_TTL_MS) {
+    console.log("[ORÁCULO] buildContext cache hit —", cacheKey);
+    return cached.data;
+  }
 
   const now = new Date();
   const mesAtual = now.toISOString().slice(0, 7);
@@ -124,7 +138,9 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
     ctx.epi_alertas_pendentes = Number(r.pendentes) || 0;
   }
 
-  return JSON.stringify(ctx, null, 2);
+  const result = JSON.stringify(ctx, null, 2);
+  ctxCache.set(cacheKey, { data: result, ts: Date.now() });
+  return result;
 }
 
 // ============================================================
@@ -315,7 +331,7 @@ ${contextSnapshot}
     }),
 
   tts: protectedProcedure
-    .input(z.object({ text: z.string().max(5000) }))
+    .input(z.object({ text: z.string().max(2000) }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN" });
 
