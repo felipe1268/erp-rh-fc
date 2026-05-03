@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -11,32 +11,20 @@ import {
 } from "lucide-react";
 
 // ─── Tipos ───────────────────────────────────────────────────
-interface Message {
-  id: number;
-  role: "user" | "assistant";
-  content: string;
-  createdAt: string;
-}
-interface Session {
-  id: number;
-  title: string;
-  messageCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
+interface Msg { id: number; role: "user" | "assistant"; content: string; createdAt: string; }
+interface Session { id: number; title: string; messageCount: number; createdAt: string; updatedAt: string; }
 
-function formatDate(iso: string) {
+function fmt(iso: string) {
   try {
     const d = new Date(iso);
-    const now = new Date();
-    const diff = (now.getTime() - d.getTime()) / 1000;
+    const diff = (Date.now() - d.getTime()) / 1000;
     if (diff < 86400) return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     if (diff < 7 * 86400) return d.toLocaleDateString("pt-BR", { weekday: "short" });
     return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
   } catch { return ""; }
 }
 
-function MarkdownText({ text }: { text: string }) {
+function MD({ text }: { text: string }) {
   return (
     <div className="space-y-1 text-sm leading-relaxed">
       {text.split("\n").map((line, i) => {
@@ -55,169 +43,132 @@ function MarkdownText({ text }: { text: string }) {
 }
 
 // ─── Orbe central ────────────────────────────────────────────
-function Orb({
-  state, activeMode, onClick,
-}: {
-  state: "idle" | "listening" | "thinking" | "speaking";
-  activeMode: boolean;
-  onClick: () => void;
-}) {
-  const gradients: Record<string, string> = {
-    idle:      "from-violet-800 via-purple-900 to-indigo-950",
-    listening: "from-pink-500 via-violet-500 to-purple-700",
-    thinking:  "from-indigo-500 via-violet-600 to-purple-800",
-    speaking:  "from-violet-400 via-fuchsia-500 to-purple-700",
-  };
-  const rings: Record<string, string> = {
-    idle:      "ring-violet-800/40",
-    listening: "ring-pink-400/60",
-    thinking:  "ring-indigo-400/60",
-    speaking:  "ring-fuchsia-400/60",
-  };
-  const emoji: Record<string, string> = {
-    idle: "🔮", listening: "👂", thinking: "⏳", speaking: "🔊",
-  };
-  const isPulsing = state !== "idle" || activeMode;
+type OrbState = "idle" | "listening" | "thinking" | "speaking";
 
+function Orb({ state, onClick }: { state: OrbState; onClick: () => void }) {
+  const grad = { idle: "from-violet-800 via-purple-900 to-indigo-950", listening: "from-pink-500 via-violet-500 to-purple-700", thinking: "from-indigo-500 via-violet-600 to-purple-800", speaking: "from-violet-400 via-fuchsia-500 to-purple-700" }[state];
+  const ring = { idle: "ring-violet-800/40", listening: "ring-pink-400/60", thinking: "ring-indigo-400/60", speaking: "ring-fuchsia-400/60" }[state];
+  const icon = { idle: "🔮", listening: "👂", thinking: "⏳", speaking: "🔊" }[state];
   return (
-    <button
-      onClick={onClick}
-      className={`relative w-36 h-36 rounded-full bg-gradient-to-br ${gradients[state]}
-        ring-4 ${rings[state]} shadow-2xl shadow-violet-900/70
-        flex items-center justify-center transition-all duration-500
-        hover:scale-105 active:scale-95 cursor-pointer select-none
-        ${isPulsing ? "animate-pulse" : ""}
-      `}
-      title={state === "listening" ? "Clique para parar" : "Clique para falar"}
-    >
-      {/* Inner glow */}
+    <button onClick={onClick} className={`relative w-36 h-36 rounded-full bg-gradient-to-br ${grad} ring-4 ${ring} shadow-2xl shadow-violet-900/70 flex items-center justify-center transition-all duration-500 hover:scale-105 active:scale-95 ${state !== "idle" ? "animate-pulse" : ""}`}>
       <div className="absolute inset-2 rounded-full bg-gradient-to-br from-white/10 to-transparent" />
-      <span className="text-5xl relative z-10 drop-shadow-lg">{emoji[state]}</span>
-
-      {/* Ripple rings when listening */}
-      {state === "listening" && (
-        <>
-          <div className="absolute inset-0 rounded-full border-2 border-pink-400/40 animate-ping" style={{ animationDuration: "1.2s" }} />
-          <div className="absolute -inset-4 rounded-full border border-pink-400/20 animate-ping" style={{ animationDuration: "1.8s" }} />
-        </>
-      )}
-      {state === "speaking" && (
-        <div className="absolute -inset-2 rounded-full border-2 border-fuchsia-400/30 animate-ping" style={{ animationDuration: "1.5s" }} />
-      )}
+      <span className="text-5xl relative z-10 drop-shadow-lg">{icon}</span>
+      {state === "listening" && <>
+        <div className="absolute inset-0 rounded-full border-2 border-pink-400/40 animate-ping" style={{ animationDuration: "1.2s" }} />
+        <div className="absolute -inset-4 rounded-full border border-pink-400/20 animate-ping" style={{ animationDuration: "1.8s" }} />
+      </>}
+      {state === "speaking" && <div className="absolute -inset-2 rounded-full border-2 border-fuchsia-400/30 animate-ping" style={{ animationDuration: "1.5s" }} />}
     </button>
   );
 }
 
-// ─── Bubble de mensagem ───────────────────────────────────────
-function MessageBubble({ msg, onSpeak }: { msg: Message; onSpeak: (t: string) => void }) {
+function Bubble({ msg, onSpeak }: { msg: Msg; onSpeak: (t: string) => void }) {
   const isUser = msg.role === "user";
   return (
     <div className={`flex gap-2 ${isUser ? "flex-row-reverse" : "flex-row"} mb-3`}>
-      {!isUser && (
-        <div className="shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-purple-800 flex items-center justify-center mt-1">
-          <span className="text-xs">🔮</span>
-        </div>
-      )}
-      <div className={`max-w-[85%] rounded-2xl px-3 py-2.5 text-sm leading-relaxed ${
-        isUser
-          ? "bg-slate-700/80 text-slate-100 rounded-tr-sm"
-          : "bg-violet-900/60 text-violet-50 border border-violet-700/40 rounded-tl-sm"
-      }`}>
-        {isUser ? <p className="whitespace-pre-wrap">{msg.content}</p> : <MarkdownText text={msg.content} />}
+      {!isUser && <div className="shrink-0 w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-purple-800 flex items-center justify-center mt-1"><span className="text-xs">🔮</span></div>}
+      <div className={`max-w-[85%] rounded-2xl px-3 py-2.5 text-sm leading-relaxed ${isUser ? "bg-slate-700/80 text-slate-100 rounded-tr-sm" : "bg-violet-900/60 text-violet-50 border border-violet-700/40 rounded-tl-sm"}`}>
+        {isUser ? <p className="whitespace-pre-wrap">{msg.content}</p> : <MD text={msg.content} />}
         <div className={`flex items-center gap-1.5 mt-1.5 ${isUser ? "justify-end" : "justify-between"}`}>
-          <span className="text-[9px] opacity-30">{formatDate(msg.createdAt)}</span>
-          {!isUser && (
-            <button onClick={() => onSpeak(msg.content)} className="text-violet-500 hover:text-violet-300 transition-colors" title="Ouvir">
-              <Volume2 className="w-3 h-3" />
-            </button>
-          )}
+          <span className="text-[9px] opacity-30">{fmt(msg.createdAt)}</span>
+          {!isUser && <button onClick={() => onSpeak(msg.content)} className="text-violet-500 hover:text-violet-300 transition-colors"><Volume2 className="w-3 h-3" /></button>}
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Página principal ─────────────────────────────────────────
+// ─── Componente principal ─────────────────────────────────────
 export default function Oraculo() {
   const { user } = useAuth();
-  const { selectedCompanyId: selectedCompanyIdStr, getCompanyIdsForQuery } = useCompany();
-  const selectedCompanyId = parseInt(selectedCompanyIdStr) || undefined;
-  const companyIdsAll = getCompanyIdsForQuery();
+  const { selectedCompanyId: selStr, getCompanyIdsForQuery } = useCompany();
   const [, setLocation] = useLocation();
 
-  // Sessões e mensagens
-  const [sessions, setSessions]           = useState<Session[]>([]);
-  const [activeSession, setActiveSession] = useState<number | null>(null);
-  const [messages, setMessages]           = useState<Message[]>([]);
-  const [sidebarOpen, setSidebarOpen]     = useState(false); // fechado por padrão no modo ativo
+  // estado da UI
+  const [sessions, setSessions]         = useState<Session[]>([]);
+  const [sessionId, setSessionId]       = useState<number | null>(null);
+  const [messages, setMessages]         = useState<Msg[]>([]);
+  const [sidebarOpen, setSidebarOpen]   = useState(false);
+  const [orbState, setOrbState]         = useState<OrbState>("idle");
+  const [activeMode, setActiveMode]     = useState(true);
+  const [voiceOn, setVoiceOn]           = useState(true);
+  const [listening, setListening]       = useState(false);
+  const [input, setInput]               = useState("");
+  const [status, setStatus]             = useState("Toque no orbe para começar");
+  const [sending, setSending]           = useState(false);
 
-  // Estado do assistente
-  const [orbState, setOrbState]     = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
-  const [activeMode, setActiveMode] = useState(true); // modo ativo por padrão
-  const [isListening, setIsListening] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [input, setInput]           = useState("");
-  const [statusText, setStatusText] = useState("Toque no orbe para começar");
+  // refs para não criar circular deps em useCallback
+  const sessionIdRef   = useRef<number | null>(null);
+  const activeModeRef  = useRef(true);
+  const voiceOnRef     = useRef(true);
+  const orbStateRef    = useRef<OrbState>("idle");
+  const sendingRef     = useRef(false);
+  const audioRef       = useRef<HTMLAudioElement | null>(null);
+  const recRef         = useRef<any>(null);
+  const chatEndRef     = useRef<HTMLDivElement>(null);
 
-  const chatEndRef      = useRef<HTMLDivElement>(null);
-  const textareaRef     = useRef<HTMLTextAreaElement>(null);
-  const audioRef        = useRef<HTMLAudioElement | null>(null);
-  const recognitionRef  = useRef<any>(null);
-  const activeModeRef   = useRef(activeMode);
-  const sessionIdRef    = useRef<number | null>(null);
-  const isSendingRef    = useRef(false);
-
-  // Sincronizar refs
+  // sincronizar refs
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
   useEffect(() => { activeModeRef.current = activeMode; }, [activeMode]);
-  useEffect(() => { sessionIdRef.current = activeSession; }, [activeSession]);
+  useEffect(() => { voiceOnRef.current = voiceOn; }, [voiceOn]);
+  useEffect(() => { orbStateRef.current = orbState; }, [orbState]);
+  useEffect(() => { sendingRef.current = sending; }, [sending]);
 
-  // Redirecionar se não for admin_master
-  useEffect(() => {
-    if (user && user.role !== "admin_master") setLocation("/");
-  }, [user, setLocation]);
-
-  // tRPC
-  const listSessions  = trpc.oraculo.listSessions.useQuery({}, { enabled: !!user });
-  const createSession = trpc.oraculo.createSession.useMutation();
-  const deleteSession = trpc.oraculo.deleteSession.useMutation();
-  const getSession    = trpc.oraculo.getSession.useQuery(
-    { sessionId: activeSession! },
-    { enabled: activeSession !== null }
-  );
-  const sendMessageMut = trpc.oraculo.sendMessage.useMutation();
-  const tts            = trpc.oraculo.tts.useMutation();
-
-  useEffect(() => { if (listSessions.data) setSessions(listSessions.data as Session[]); }, [listSessions.data]);
-  useEffect(() => { if (getSession.data) setMessages((getSession.data.messages ?? []) as Message[]); }, [getSession.data]);
+  // scroll
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // ─── TTS e fallback ───────────────────────────────────────
-  const speakFallback = useCallback((text: string, onDone?: () => void) => {
-    if (!window.speechSynthesis) { setOrbState("idle"); setStatusText("Pronto"); onDone?.(); return; }
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text.slice(0, 500));
-    utter.lang = "pt-BR"; utter.rate = 1.05; utter.pitch = 1.1;
-    const voices = window.speechSynthesis.getVoices();
-    const ptVoice = voices.find(v => v.lang.startsWith("pt-BR") && v.name.toLowerCase().includes("female"))
-      ?? voices.find(v => v.lang.startsWith("pt"));
-    if (ptVoice) utter.voice = ptVoice;
-    utter.onend = () => { setOrbState("idle"); setStatusText("Pronto"); onDone?.(); };
-    utter.onerror = () => { setOrbState("idle"); setStatusText("Pronto"); onDone?.(); };
-    window.speechSynthesis.speak(utter);
-  }, []);
+  // redirect
+  useEffect(() => { if (user && user.role !== "admin_master") setLocation("/"); }, [user, setLocation]);
 
-  const speak = useCallback(async (text: string, onDone?: () => void) => {
-    if (!voiceEnabled) { onDone?.(); return; }
+  // tRPC
+  const selectedCompanyId = parseInt(selStr) || undefined;
+  const companyIds = (() => { try { return getCompanyIdsForQuery(); } catch { return []; } })();
+
+  const listQ   = trpc.oraculo.listSessions.useQuery({}, { enabled: !!user });
+  const createM = trpc.oraculo.createSession.useMutation();
+  const deleteM = trpc.oraculo.deleteSession.useMutation();
+  // Usar sessionId ?? -1 como fallback (enabled: false garante que -1 nunca é enviado)
+  const sessionQ = trpc.oraculo.getSession.useQuery(
+    { sessionId: sessionId ?? -1 },
+    { enabled: sessionId !== null && sessionId > 0 }
+  );
+  const sendM = trpc.oraculo.sendMessage.useMutation();
+  const ttsM  = trpc.oraculo.tts.useMutation();
+
+  useEffect(() => { if (listQ.data) setSessions(listQ.data as Session[]); }, [listQ.data]);
+  useEffect(() => { if (sessionQ.data) setMessages((sessionQ.data.messages ?? []) as Msg[]); }, [sessionQ.data]);
+
+  // ─── TTS ─────────────────────────────────────────────────
+  function stopAudio() {
+    if (audioRef.current) { try { audioRef.current.pause(); } catch {} audioRef.current = null; }
+    try { window.speechSynthesis?.cancel(); } catch {}
+  }
+
+  function speakFallback(text: string, onDone?: () => void) {
     try {
-      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-      setOrbState("speaking");
-      setStatusText("Respondendo...");
-      const result = await tts.mutateAsync({ text: text.slice(0, 4800) });
-      if (result.audio) {
-        const audio = new Audio(`data:audio/mp3;base64,${result.audio}`);
+      if (!window.speechSynthesis) { onDone?.(); return; }
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text.slice(0, 400));
+      utter.lang = "pt-BR"; utter.rate = 1.05;
+      const voices = window.speechSynthesis.getVoices();
+      const v = voices.find(v => v.lang.startsWith("pt-BR")) ?? voices.find(v => v.lang.startsWith("pt"));
+      if (v) utter.voice = v;
+      utter.onend  = () => { setOrbState("idle"); setStatus("Pronto"); onDone?.(); };
+      utter.onerror = () => { setOrbState("idle"); setStatus("Pronto"); onDone?.(); };
+      window.speechSynthesis.speak(utter);
+    } catch { setOrbState("idle"); setStatus("Pronto"); onDone?.(); }
+  }
+
+  async function speak(text: string, onDone?: () => void) {
+    if (!voiceOnRef.current) { onDone?.(); return; }
+    setOrbState("speaking"); setStatus("Respondendo...");
+    try {
+      const res = await ttsM.mutateAsync({ text: text.slice(0, 4800) });
+      if (res.audio) {
+        const audio = new Audio(`data:audio/mp3;base64,${res.audio}`);
         audioRef.current = audio;
-        audio.onended = () => { setOrbState("idle"); setStatusText("Pronto"); onDone?.(); };
-        audio.onerror = () => { speakFallback(text, onDone); };
+        audio.onended = () => { setOrbState("idle"); setStatus("Pronto"); onDone?.(); };
+        audio.onerror = () => speakFallback(text, onDone);
         await audio.play();
       } else {
         speakFallback(text, onDone);
@@ -225,187 +176,147 @@ export default function Oraculo() {
     } catch {
       speakFallback(text, onDone);
     }
-  }, [voiceEnabled, tts, speakFallback]);
+  }
 
   // ─── STT ─────────────────────────────────────────────────
-  const startListening = useCallback(() => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { setStatusText("Voz não suportada — use o teclado"); return; }
-
-    recognitionRef.current?.stop();
-    const rec = new SR();
-    recognitionRef.current = rec;
-    rec.lang = "pt-BR";
-    rec.continuous = false;
-    rec.interimResults = false;
-
-    rec.onstart = () => {
-      setIsListening(true);
-      setOrbState("listening");
-      setStatusText("Ouvindo... fale agora");
-    };
-
-    rec.onresult = (e: any) => {
-      const transcript = e.results[0][0].transcript.trim();
-      if (transcript) {
-        setInput(transcript);
-        // No modo ativo envia automaticamente
-        if (activeModeRef.current) {
-          setIsListening(false);
-          setOrbState("thinking");
-          setStatusText("Analisando...");
-          // Timeout mínimo para garantir que setInput se propagou
-          setTimeout(() => sendText(transcript), 50);
-        }
-      }
-    };
-
-    rec.onerror = () => {
-      setIsListening(false);
-      setOrbState("idle");
-      setStatusText("Não entendi. Toque para falar novamente.");
-    };
-
-    rec.onend = () => {
-      setIsListening(false);
-      if (orbState === "listening") {
-        setOrbState("idle");
-        setStatusText("Pronto");
-      }
-    };
-
-    rec.start();
-  }, [orbState]);
-
-  const stopListening = useCallback(() => {
-    recognitionRef.current?.stop();
-    setIsListening(false);
-    setOrbState("idle");
-    setStatusText("Pronto");
-  }, []);
-
-  // ─── Criar / obter sessão ─────────────────────────────────
-  const ensureSession = useCallback(async (): Promise<number | null> => {
-    if (sessionIdRef.current) return sessionIdRef.current;
+  function startListening() {
     try {
-      const session = await createSession.mutateAsync({ companyId: selectedCompanyId });
-      setActiveSession(session.id);
-      await listSessions.refetch();
-      return session.id;
+      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SR) { setStatus("Voz não suportada — use o teclado"); return; }
+      if (recRef.current) { try { recRef.current.stop(); } catch {} }
+      const rec = new SR();
+      recRef.current = rec;
+      rec.lang = "pt-BR";
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.onstart = () => { setListening(true); setOrbState("listening"); setStatus("Ouvindo... fale agora"); };
+      rec.onresult = (e: any) => {
+        try {
+          const t = e.results[0][0].transcript.trim();
+          if (t && activeModeRef.current) {
+            setListening(false);
+            setOrbState("thinking");
+            setStatus("Analisando...");
+            setInput(t);
+            // pequeno delay para garantir que o estado commitou
+            setTimeout(() => doSend(t), 80);
+          } else if (t) {
+            setInput(t);
+          }
+        } catch {}
+      };
+      rec.onerror = () => { setListening(false); setOrbState("idle"); setStatus("Não entendi. Toque para tentar novamente."); };
+      rec.onend = () => { setListening(false); if (orbStateRef.current === "listening") { setOrbState("idle"); setStatus("Pronto"); } };
+      rec.start();
+    } catch { setStatus("Erro ao iniciar microfone"); }
+  }
+
+  function stopListening() {
+    try { recRef.current?.stop(); } catch {}
+    setListening(false);
+    setOrbState("idle");
+    setStatus("Pronto");
+  }
+
+  // ─── Garantir sessão ──────────────────────────────────────
+  async function ensureSession(): Promise<number | null> {
+    if (sessionIdRef.current && sessionIdRef.current > 0) return sessionIdRef.current;
+    try {
+      const s = await createM.mutateAsync({ companyId: selectedCompanyId });
+      setSessionId(s.id);
+      listQ.refetch().catch(() => {});
+      return s.id;
     } catch {
-      toast.error("Erro ao iniciar sessão");
+      toast.error("Erro ao criar sessão");
       return null;
     }
-  }, [selectedCompanyId, createSession, listSessions]);
+  }
 
-  // ─── Enviar texto (shared entre voz e teclado) ────────────
-  const sendText = useCallback(async (text: string) => {
-    if (!text.trim() || isSendingRef.current) return;
-    isSendingRef.current = true;
+  // ─── Enviar mensagem ──────────────────────────────────────
+  async function doSend(text: string) {
+    const trimmed = (text || input).trim();
+    if (!trimmed || sendingRef.current) return;
+    setSending(true);
+    sendingRef.current = true;
 
-    const sessionId = await ensureSession();
-    if (!sessionId) { isSendingRef.current = false; return; }
+    const sid = await ensureSession();
+    if (!sid) { setSending(false); sendingRef.current = false; return; }
 
-    const optimistic: Message = { id: Date.now(), role: "user", content: text, createdAt: new Date().toISOString() };
+    const optimistic: Msg = { id: Date.now(), role: "user", content: trimmed, createdAt: new Date().toISOString() };
     setMessages(prev => [...prev, optimistic]);
     setInput("");
     setOrbState("thinking");
-    setStatusText("Analisando dados...");
+    setStatus("Analisando dados...");
 
     try {
-      const result = await sendMessageMut.mutateAsync({
-        sessionId,
-        message: text,
+      const res = await sendM.mutateAsync({
+        sessionId: sid,
+        message: trimmed,
         companyId: selectedCompanyId,
-        companyIds: companyIdsAll.length > 0 ? companyIdsAll : undefined,
+        companyIds: companyIds.length > 0 ? companyIds : undefined,
       });
-
-      const aiMsg: Message = { id: Date.now() + 1, role: "assistant", content: result.response, createdAt: new Date().toISOString() };
+      const aiMsg: Msg = { id: Date.now() + 1, role: "assistant", content: res.response, createdAt: new Date().toISOString() };
       setMessages(prev => [...prev, aiMsg]);
-      await listSessions.refetch();
+      listQ.refetch().catch(() => {});
 
-      // Falar resposta e depois voltar a ouvir no modo ativo
-      await speak(result.response, () => {
-        isSendingRef.current = false;
+      await speak(res.response, () => {
+        setSending(false);
+        sendingRef.current = false;
         if (activeModeRef.current) {
-          setTimeout(() => startListening(), 800);
+          setTimeout(() => startListening(), 700);
         } else {
-          setStatusText("Pronto");
+          setStatus("Pronto");
         }
       });
     } catch (e: any) {
       setOrbState("idle");
-      setStatusText("Erro — tente novamente");
-      toast.error("Erro: " + (e?.message ?? "falha ao enviar"));
+      setStatus("Erro — tente novamente");
+      toast.error(e?.message ?? "Falha ao enviar");
       setMessages(prev => prev.filter(m => m.id !== optimistic.id));
-      isSendingRef.current = false;
+      setSending(false);
+      sendingRef.current = false;
     }
-  }, [ensureSession, selectedCompanyId, companyIdsAll, sendMessageMut, speak, startListening]);
+  }
 
   // ─── Clique no orbe ──────────────────────────────────────
-  const handleOrbClick = useCallback(() => {
-    if (orbState === "listening") {
-      stopListening();
-    } else if (orbState === "thinking" || orbState === "speaking") {
-      // Para áudio se estiver falando
-      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-      window.speechSynthesis?.cancel();
-      setOrbState("idle");
-      setStatusText("Parado");
-      isSendingRef.current = false;
-    } else {
-      startListening();
+  function handleOrb() {
+    if (orbState === "listening") { stopListening(); return; }
+    if (orbState === "thinking" || orbState === "speaking") {
+      stopAudio();
+      setSending(false); sendingRef.current = false;
+      setOrbState("idle"); setStatus("Parado");
+      return;
     }
-  }, [orbState, startListening, stopListening]);
+    startListening();
+  }
 
-  // ─── Auto-iniciar no modo ativo ───────────────────────────
-  useEffect(() => {
-    if (!user || user.role !== "admin_master") return;
-    if (activeMode) {
-      setStatusText("Iniciando...");
-      const timer = setTimeout(() => {
-        startListening();
-      }, 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [user]); // só na montagem
-
-  // ─── Gerenciamento de sessões ─────────────────────────────
-  const handleNewSession = async () => {
+  // ─── Sessões ──────────────────────────────────────────────
+  async function handleNewSession() {
     try {
-      const session = await createSession.mutateAsync({ companyId: selectedCompanyId });
-      setActiveSession(session.id);
-      setMessages([]);
-      await listSessions.refetch();
+      const s = await createM.mutateAsync({ companyId: selectedCompanyId });
+      setSessionId(s.id); setMessages([]);
+      listQ.refetch().catch(() => {});
     } catch { toast.error("Erro ao criar sessão"); }
-  };
+  }
 
-  const handleDeleteSession = async (id: number, e: React.MouseEvent) => {
+  async function handleDelete(id: number, e: React.MouseEvent) {
     e.stopPropagation();
     try {
-      await deleteSession.mutateAsync({ sessionId: id });
-      if (activeSession === id) { setActiveSession(null); setMessages([]); }
-      await listSessions.refetch();
-    } catch { toast.error("Erro ao deletar sessão"); }
-  };
+      await deleteM.mutateAsync({ sessionId: id });
+      if (sessionId === id) { setSessionId(null); setMessages([]); }
+      listQ.refetch().catch(() => {});
+    } catch { toast.error("Erro ao deletar"); }
+  }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(input); }
-  };
-
-  const toggleActiveMode = () => {
+  function toggleActive() {
     const next = !activeMode;
     setActiveMode(next);
-    if (!next) {
-      stopListening();
-      setStatusText("Modo manual — pressione o orbe ou envie pelo teclado");
-    } else {
-      setStatusText("Modo ativo ligado — ouvindo em breve...");
-      setTimeout(() => startListening(), 800);
-    }
-  };
+    activeModeRef.current = next;
+    if (!next) { stopListening(); setStatus("Modo manual"); }
+    else { setStatus("Modo ativo — toque no orbe para começar"); }
+  }
 
-  // Loading
+  // ─── Loading enquanto auth não carrega ────────────────────
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0a0614]">
@@ -414,34 +325,31 @@ export default function Oraculo() {
     );
   }
 
-  const companyIds = companyIdsAll.length > 0 ? companyIdsAll : (selectedCompanyId ? [selectedCompanyId] : []);
+  const statusColor = orbState === "listening" ? "text-pink-400" : orbState === "thinking" ? "text-indigo-400" : orbState === "speaking" ? "text-fuchsia-400" : "text-violet-500";
+  const companyDisplay = companyIds.map((id: number) => id === 60002 ? "FC" : id === 60004 ? "HOTEL" : id === 90001 ? "LOC" : `#${id}`);
 
   return (
     <div className="flex h-screen bg-[#0a0614] text-white overflow-hidden">
 
-      {/* ══ SIDEBAR ══════════════════════════════════════════ */}
+      {/* ═══ SIDEBAR ══════════════════════════════════════ */}
       <div className={`${sidebarOpen ? "w-60" : "w-0"} shrink-0 transition-all duration-300 overflow-hidden border-r border-violet-900/30 bg-[#0f0820] flex flex-col`}>
         <div className="p-3 border-b border-violet-900/30">
-          <button onClick={handleNewSession} disabled={createSession.isPending}
+          <button onClick={handleNewSession} disabled={createM.isPending}
             className="w-full flex items-center gap-2 justify-center bg-violet-700 hover:bg-violet-600 text-white rounded-lg h-9 text-sm transition-colors disabled:opacity-50">
             <Plus className="w-4 h-4" /> Nova conversa
           </button>
         </div>
         <div className="flex-1 overflow-y-auto py-2 px-2 space-y-1">
-          {sessions.length === 0 && (
-            <p className="text-xs text-violet-500/50 text-center py-6 px-3">Nenhuma conversa ainda.</p>
-          )}
+          {sessions.length === 0 && <p className="text-xs text-violet-500/50 text-center py-6">Nenhuma conversa ainda.</p>}
           {sessions.map(s => (
-            <button key={s.id} onClick={() => { setActiveSession(s.id); setMessages([]); }}
-              className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-start gap-1.5 group transition-all ${
-                activeSession === s.id ? "bg-violet-700/40 border border-violet-600/50 text-violet-100" : "hover:bg-violet-900/30 text-violet-400/70 border border-transparent"
-              }`}>
+            <button key={s.id} onClick={() => { setSessionId(s.id); setMessages([]); }}
+              className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-start gap-1.5 group transition-all ${sessionId === s.id ? "bg-violet-700/40 border border-violet-600/50 text-violet-100" : "hover:bg-violet-900/30 text-violet-400/70 border border-transparent"}`}>
               <MessageSquare className="w-3 h-3 mt-0.5 shrink-0 text-violet-500" />
               <div className="flex-1 min-w-0">
                 <p className="truncate font-medium">{s.title}</p>
-                <p className="text-[9px] text-violet-600/60 mt-0.5">{formatDate(s.updatedAt)} · {s.messageCount} msgs</p>
+                <p className="text-[9px] text-violet-600/60 mt-0.5">{fmt(s.updatedAt)} · {s.messageCount} msgs</p>
               </div>
-              <button onClick={e => handleDeleteSession(s.id, e)} className="opacity-0 group-hover:opacity-100 text-violet-600 hover:text-red-400 transition-all">
+              <button onClick={e => handleDelete(s.id, e)} className="opacity-0 group-hover:opacity-100 text-violet-600 hover:text-red-400 transition-all">
                 <Trash2 className="w-3 h-3" />
               </button>
             </button>
@@ -449,110 +357,77 @@ export default function Oraculo() {
         </div>
       </div>
 
-      {/* ══ ÁREA PRINCIPAL ═══════════════════════════════════ */}
-      <div className="flex-1 flex flex-col min-w-0 relative">
+      {/* ═══ ÁREA PRINCIPAL ════════════════════════════════ */}
+      <div className="flex-1 flex flex-col min-w-0">
 
-        {/* Header compacto */}
+        {/* Header */}
         <div className="flex items-center gap-2 px-3 h-11 border-b border-violet-900/30 shrink-0">
           <button onClick={() => setSidebarOpen(v => !v)} className="text-violet-500 hover:text-violet-300 transition-colors">
             <ChevronLeft className={`w-4 h-4 transition-transform ${sidebarOpen ? "" : "rotate-180"}`} />
           </button>
-          <span className="text-sm font-bold text-violet-300 tracking-wide flex-1">🔮 ORÁCULO <span className="text-[9px] bg-violet-700/40 border border-violet-700/50 text-violet-400 px-1.5 py-0.5 rounded-full ml-1">IA</span></span>
-
-          {/* Empresas */}
+          <span className="text-sm font-bold text-violet-300 tracking-wide flex-1">
+            🔮 ORÁCULO <span className="text-[9px] bg-violet-700/40 border border-violet-700/50 text-violet-400 px-1.5 py-0.5 rounded-full ml-1">IA</span>
+          </span>
           <div className="flex items-center gap-1">
-            {companyIds.map((id: number) => (
-              <span key={id} className="text-[9px] bg-violet-900/60 text-violet-500 px-1.5 py-0.5 rounded-full border border-violet-800/40">
-                {id === 60002 ? "FC" : id === 60004 ? "HOTEL" : id === 90001 ? "LOC" : `#${id}`}
-              </span>
+            {companyDisplay.map((name: string, i: number) => (
+              <span key={i} className="text-[9px] bg-violet-900/60 text-violet-500 px-1.5 py-0.5 rounded-full border border-violet-800/40">{name}</span>
             ))}
           </div>
-
-          {/* Toggle modo ativo */}
-          <button onClick={toggleActiveMode} title={activeMode ? "Desligar modo ativo" : "Ligar modo ativo"}
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all border ${
-              activeMode ? "bg-violet-700/40 border-violet-600/50 text-violet-200" : "bg-transparent border-violet-800/30 text-violet-600 hover:text-violet-400"
-            }`}>
+          <button onClick={toggleActive} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all border ${activeMode ? "bg-violet-700/40 border-violet-600/50 text-violet-200" : "bg-transparent border-violet-800/30 text-violet-600 hover:text-violet-400"}`}>
             {activeMode ? <Zap className="w-3 h-3" /> : <ZapOff className="w-3 h-3" />}
             <span className="hidden sm:inline">{activeMode ? "Ativo" : "Manual"}</span>
           </button>
-
-          {/* Voz */}
-          <button onClick={() => setVoiceEnabled(v => !v)} title={voiceEnabled ? "Silenciar" : "Ativar voz"}
-            className="text-violet-600 hover:text-violet-300 transition-colors">
-            {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          <button onClick={() => setVoiceOn(v => !v)} className="text-violet-600 hover:text-violet-300 transition-colors">
+            {voiceOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
-
-          {/* Voltar */}
-          <button onClick={() => setLocation("/")} title="Voltar" className="text-violet-700 hover:text-violet-400 transition-colors">
+          <button onClick={() => setLocation("/")} className="text-violet-700 hover:text-violet-400 transition-colors">
             <ArrowLeft className="w-4 h-4" />
           </button>
         </div>
 
-        {/* ── ORBE + STATUS (centro quando sem mensagens) ─── */}
+        {/* Conteúdo */}
         {messages.length === 0 ? (
+          /* ─ Tela inicial com orbe grande ─ */
           <div className="flex-1 flex flex-col items-center justify-center gap-6 pb-8 px-4">
-            {/* Orbe grande */}
-            <Orb state={orbState} activeMode={activeMode} onClick={handleOrbClick} />
-
-            {/* Status */}
+            <Orb state={orbState} onClick={handleOrb} />
             <div className="text-center">
-              <p className={`text-sm font-medium transition-colors ${
-                orbState === "listening" ? "text-pink-400" :
-                orbState === "thinking" ? "text-indigo-400" :
-                orbState === "speaking" ? "text-fuchsia-400" : "text-violet-400"
-              }`}>{statusText}</p>
-              {activeMode && orbState === "idle" && (
-                <p className="text-[10px] text-violet-700 mt-1">Modo ativo · ela ouve automaticamente</p>
-              )}
+              <p className={`text-sm font-medium transition-colors ${statusColor}`}>{status}</p>
+              {activeMode && orbState === "idle" && <p className="text-[10px] text-violet-700 mt-1">Modo ativo · toque no orbe e fale</p>}
             </div>
-
-            {/* Sugestões rápidas */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-md w-full mt-2">
-              {["Como está o headcount das 3 empresas?", "Anomalias nos dados?", "Custo da folha este mês?", "Obras em andamento?"].map((s, i) => (
-                <button key={i} onClick={() => sendText(s)}
-                  className="text-left p-2.5 rounded-xl bg-violet-900/20 border border-violet-800/25 text-violet-400/80 text-xs hover:bg-violet-800/30 hover:text-violet-200 transition-all">
+              {["Como está o headcount das 3 empresas?", "Existe alguma anomalia nos dados?", "Qual o custo da folha este mês?", "Quantas obras em andamento?"].map((s, i) => (
+                <button key={i} onClick={() => doSend(s)} className="text-left p-2.5 rounded-xl bg-violet-900/20 border border-violet-800/25 text-violet-400/80 text-xs hover:bg-violet-800/30 hover:text-violet-200 transition-all">
                   {s}
                 </button>
               ))}
             </div>
           </div>
         ) : (
-          /* ── CHAT COM ORBE FLUTUANTE ─── */
+          /* ─ Chat com orbe compacto ─ */
           <div className="flex-1 flex flex-col min-h-0">
-            {/* Orbe compacto + status */}
             <div className="flex items-center gap-3 px-4 py-2 border-b border-violet-900/20 shrink-0">
-              <button onClick={handleOrbClick}
-                className={`relative w-10 h-10 rounded-full bg-gradient-to-br flex items-center justify-center transition-all hover:scale-105 ${
-                  orbState === "listening" ? "from-pink-500 to-violet-600 animate-pulse ring-2 ring-pink-400/50" :
-                  orbState === "thinking" ? "from-indigo-500 to-violet-700 animate-pulse ring-2 ring-indigo-400/50" :
-                  orbState === "speaking" ? "from-violet-400 to-fuchsia-600 animate-pulse ring-2 ring-fuchsia-400/50" :
-                  "from-violet-800 to-purple-900 ring-1 ring-violet-700/40"
-                }`}>
+              <button onClick={handleOrb} className={`relative w-10 h-10 rounded-full bg-gradient-to-br flex items-center justify-center transition-all hover:scale-105 ${
+                orbState === "listening" ? "from-pink-500 to-violet-600 animate-pulse ring-2 ring-pink-400/50" :
+                orbState === "thinking"  ? "from-indigo-500 to-violet-700 animate-pulse ring-2 ring-indigo-400/50" :
+                orbState === "speaking"  ? "from-violet-400 to-fuchsia-600 animate-pulse ring-2 ring-fuchsia-400/50" :
+                "from-violet-800 to-purple-900 ring-1 ring-violet-700/40"
+              }`}>
                 <span className="text-lg">{orbState === "listening" ? "👂" : orbState === "thinking" ? "⏳" : orbState === "speaking" ? "🔊" : "🔮"}</span>
               </button>
-              <p className={`text-xs font-medium ${
-                orbState === "listening" ? "text-pink-400" :
-                orbState === "thinking" ? "text-indigo-400" :
-                orbState === "speaking" ? "text-fuchsia-400" : "text-violet-500"
-              }`}>{statusText}</p>
+              <p className={`text-xs font-medium ${statusColor}`}>{status}</p>
+              <button onClick={handleNewSession} disabled={createM.isPending}
+                className="ml-auto flex items-center gap-1 px-2 py-1 rounded-lg bg-violet-900/40 border border-violet-800/40 text-violet-400 hover:text-violet-200 text-[10px] transition-colors disabled:opacity-40">
+                <Plus className="w-3 h-3" /> Nova
+              </button>
             </div>
-
-            {/* Mensagens */}
             <div className="flex-1 overflow-y-auto px-4 py-3">
-              {messages.map(msg => (
-                <MessageBubble key={msg.id} msg={msg} onSpeak={(t) => speak(t)} />
-              ))}
-              {sendMessageMut.isPending && (
+              {messages.map(m => <Bubble key={m.id} msg={m} onSpeak={t => speak(t)} />)}
+              {sending && (
                 <div className="flex gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-purple-800 flex items-center justify-center mt-0.5">
-                    <span className="text-xs">🔮</span>
-                  </div>
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-purple-800 flex items-center justify-center mt-0.5 shrink-0"><span className="text-xs">🔮</span></div>
                   <div className="bg-violet-900/50 border border-violet-700/40 rounded-2xl rounded-tl-sm px-3 py-2">
                     <div className="flex gap-1 items-center h-4">
-                      {[0, 1, 2].map(i => (
-                        <div key={i} className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-                      ))}
+                      {[0,1,2].map(i => <div key={i} className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce" style={{ animationDelay: `${i*0.15}s` }} />)}
                     </div>
                   </div>
                 </div>
@@ -562,34 +437,25 @@ export default function Oraculo() {
           </div>
         )}
 
-        {/* ── INPUT DE TEXTO ─── */}
+        {/* Input de texto */}
         <div className="shrink-0 px-3 py-3 border-t border-violet-900/30 bg-[#0a0614]/90">
           <div className="flex gap-2 items-end max-w-3xl mx-auto">
-            {/* Mic */}
-            <button onClick={isListening ? stopListening : startListening} disabled={sendMessageMut.isPending}
-              className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                isListening ? "bg-pink-600 shadow-lg shadow-pink-900/50 animate-pulse" : "bg-violet-800/50 border border-violet-700/40 hover:bg-violet-700/60"
-              } disabled:opacity-30`}
-              title={isListening ? "Parar" : "Falar"}>
-              {isListening ? <MicOff className="w-4 h-4 text-white" /> : <Mic className="w-4 h-4 text-violet-300" />}
+            <button onClick={listening ? stopListening : startListening} disabled={sending}
+              className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all ${listening ? "bg-pink-600 shadow-lg shadow-pink-900/50 animate-pulse" : "bg-violet-800/50 border border-violet-700/40 hover:bg-violet-700/60"} disabled:opacity-30`}>
+              {listening ? <MicOff className="w-4 h-4 text-white" /> : <Mic className="w-4 h-4 text-violet-300" />}
             </button>
-
-            {/* Textarea */}
             <Textarea
-              ref={textareaRef}
               value={input}
               onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); doSend(input); } }}
               placeholder="Digite ou fale... (Enter para enviar)"
               rows={1}
               className="flex-1 min-h-[40px] max-h-28 resize-none bg-violet-950/40 border-violet-800/50 text-violet-100 placeholder:text-violet-700 focus:border-violet-600 rounded-xl text-sm"
-              disabled={sendMessageMut.isPending}
+              disabled={sending}
             />
-
-            {/* Send */}
-            <button onClick={() => sendText(input)} disabled={!input.trim() || sendMessageMut.isPending}
+            <button onClick={() => doSend(input)} disabled={!input.trim() || sending}
               className="shrink-0 w-10 h-10 rounded-full bg-violet-600 hover:bg-violet-500 disabled:opacity-30 flex items-center justify-center transition-all shadow-lg shadow-violet-900/50">
-              {sendMessageMut.isPending ? <Loader2 className="w-4 h-4 text-white animate-spin" /> : <Send className="w-4 h-4 text-white" />}
+              {sending ? <Loader2 className="w-4 h-4 text-white animate-spin" /> : <Send className="w-4 h-4 text-white" />}
             </button>
           </div>
         </div>
