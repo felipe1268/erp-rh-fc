@@ -190,6 +190,7 @@ export default function Colaboradores() {
   const [desligDe, setDesligDe] = useState("");
   const [desligAte, setDesligAte] = useState("");
   const [idadeFilter, setIdadeFilter] = useState<string>("Todas");
+  const [funcaoFilter, setFuncaoFilter] = useState<string>("Todas");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -262,6 +263,13 @@ export default function Colaboradores() {
     return new Set((employeesBySkillQ.data ?? []).map((r: any) => r.employeeId));
   }, [skillFilterId, employeesBySkillQ.data]);
 
+  // Lista de funções únicas derivada dos colaboradores carregados
+  const funcaoOptions = useMemo(() => {
+    const set = new Set<string>();
+    (employees ?? []).forEach(e => { const f = (e as any).funcao; if (f) set.add(f); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [employees]);
+
   // Apply skill filter to employees
   const displayEmployees = useMemo(() => {
     let list = employees ?? [];
@@ -301,8 +309,11 @@ export default function Colaboradores() {
         return idade >= min && idade <= max;
       });
     }
+    if (funcaoFilter && funcaoFilter !== "Todas") {
+      list = list.filter(e => (e as any).funcao === funcaoFilter);
+    }
     return list;
-  }, [employees, skillEmployeeIds, statusFilter, desligDe, desligAte, idadeFilter]);
+  }, [employees, skillEmployeeIds, statusFilter, desligDe, desligAte, idadeFilter, funcaoFilter]);
 
   const createMut = trpc.employees.create.useMutation({
     onSuccess: (result: any) => {
@@ -787,6 +798,17 @@ export default function Colaboradores() {
                 <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
               ))}
               {isAdminMaster && <SelectItem value="ListaNegra">Blacklist</SelectItem>}
+            </SelectContent>
+          </Select>
+          <Select value={funcaoFilter} onValueChange={setFuncaoFilter}>
+            <SelectTrigger className="w-full sm:w-48 bg-card border-border" title="Filtrar por função">
+              <SelectValue placeholder="Todas as funções" />
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              <SelectItem value="Todas">Todas as funções</SelectItem>
+              {funcaoOptions.map(f => (
+                <SelectItem key={f} value={f}>{f}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={idadeFilter} onValueChange={setIdadeFilter}>
