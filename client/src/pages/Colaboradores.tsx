@@ -735,7 +735,7 @@ export default function Colaboradores() {
           <div className="space-y-2 print:hidden">
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-9 gap-2.5">
               {[
-                { label: "Total", value: statsQ.data.total - statsQ.data.desligados, icon: Users, color: "text-slate-700", bg: "bg-slate-50 border-slate-200", filter: "Todos" },
+                { label: "Total", value: statsQ.data.total, icon: Users, color: "text-slate-700", bg: "bg-slate-50 border-slate-200", filter: "Todos" },
                 { label: "Ativos", value: statsQ.data.ativos, icon: UserCheck, color: "text-green-700", bg: "bg-green-50 border-green-200", filter: "Ativo" },
                 { label: "CLT", value: statsQ.data.clt, icon: FileText, color: "text-sky-700", bg: "bg-sky-50 border-sky-200", filter: "CLT" },
                 { label: "PJ", value: statsQ.data.pj, icon: Building2, color: "text-indigo-700", bg: "bg-indigo-50 border-indigo-200", filter: "PJ" },
