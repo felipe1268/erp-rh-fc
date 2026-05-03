@@ -310,7 +310,22 @@ export const iaModulosRouter = router({
         }),
       ];
 
-      const result = await invokeLLM({ messages: llmMessages, maxTokens: 4096 });
+      let result;
+      try {
+        result = await invokeLLM({ messages: llmMessages, maxTokens: 4096 });
+      } catch (err: any) {
+        console.error("[IAModulos.chat] invokeLLM falhou:", {
+          modulo: input.modulo,
+          name: err?.name,
+          message: err?.message,
+          status: err?.status,
+          cause: err?.cause?.message,
+          stack: err?.stack?.split("\n").slice(0, 6).join("\n"),
+        });
+        throw new Error(
+          `Falha ao consultar IA (${input.modulo}): ${err?.message ?? "erro desconhecido"}`
+        );
+      }
       const resposta = typeof result.choices?.[0]?.message?.content === "string"
         ? result.choices[0].message.content
         : Array.isArray(result.choices?.[0]?.message?.content)
