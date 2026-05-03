@@ -226,8 +226,9 @@ export default function Oraculo() {
       setSessionId(s.id);
       listQ.refetch().catch(() => {});
       return s.id;
-    } catch {
-      toast.error("Erro ao criar sessão");
+    } catch (e: any) {
+      const msg = e?.message ?? e?.data?.message ?? "Falha na conexão";
+      toast.error("Erro ao criar sessão: " + msg);
       return null;
     }
   }

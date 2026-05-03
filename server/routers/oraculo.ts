@@ -190,17 +190,24 @@ export const oraculoRouter = router({
   createSession: protectedProcedure
     .input(z.object({ companyId: z.number().optional() }))
     .mutation(async ({ ctx, input }) => {
+      console.log("[ORÁCULO] createSession called — user:", ctx.user.id, "role:", ctx.user.role, "companyId:", input.companyId);
       if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [session] = await db.insert(oraculoSessions).values({
-        userId: ctx.user.id,
-        userName: ctx.user.name ?? "Admin",
-        companyId: input.companyId ?? null,
-        title: "Nova conversa",
-        messageCount: 0,
-      }).returning();
-      return session;
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      try {
+        const [session] = await db.insert(oraculoSessions).values({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? "Admin",
+          companyId: input.companyId ?? null,
+          title: "Nova conversa",
+          messageCount: 0,
+        }).returning();
+        console.log("[ORÁCULO] createSession OK — id:", session?.id);
+        return session;
+      } catch (e: any) {
+        console.error("[ORÁCULO] createSession DB error:", e?.message, e?.code);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "Erro ao inserir sessão" });
+      }
     }),
 
   deleteSession: protectedProcedure
