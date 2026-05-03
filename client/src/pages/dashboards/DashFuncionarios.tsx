@@ -347,12 +347,12 @@ export default function DashFuncionarios() {
                       <p className="text-sm text-muted-foreground py-4 text-center">Nenhum dado disponível para esta função.</p>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                        {/* Donut de status */}
+                        {/* Barras de status */}
                         <DashChart
                           title={`Status — ${selectedFuncao}`}
-                          type="doughnut"
+                          type="horizontalBar"
                           labels={statusLabels}
-                          datasets={[{ data: statusValues, backgroundColor: statusBgColors }]}
+                          datasets={[{ label: "Funcionários", data: statusValues, backgroundColor: statusBgColors }]}
                           height={220}
                           onChartClick={(info) => openDrillDown(`${selectedFuncao} · ${info.label}`, "funcaoStatus", `${selectedFuncao}|${info.label}`)}
                         />
@@ -367,7 +367,7 @@ export default function DashFuncionarios() {
                               <div
                                 key={f.label}
                                 className={`flex items-center gap-2 cursor-pointer rounded px-1 py-0.5 transition-colors ${isSelected ? "bg-primary/10" : "hover:bg-muted/50"}`}
-                                onClick={() => { setSelectedFuncao(f.label); }}
+                                onClick={() => { setSelectedFuncao(f.label); openDrillDown(`Função: ${f.label}`, "funcao", f.label); }}
                               >
                                 <span className={`text-xs w-5 text-right shrink-0 ${isSelected ? "font-bold text-primary" : "text-muted-foreground"}`}>{i + 1}</span>
                                 <div className="flex-1 min-w-0">
@@ -404,7 +404,7 @@ export default function DashFuncionarios() {
                           <div
                             key={f.label}
                             className="flex items-center gap-2 cursor-pointer rounded px-1 py-0.5 hover:bg-muted/50 transition-colors"
-                            onClick={() => setSelectedFuncao(f.label)}
+                            onClick={() => { setSelectedFuncao(f.label); openDrillDown(`Função: ${f.label}`, "funcao", f.label); }}
                           >
                             <span className="text-xs w-5 text-right text-muted-foreground shrink-0">{i + 1}</span>
                             <div className="flex-1 min-w-0">
