@@ -824,8 +824,10 @@ export async function getEmployeeStats(companyId: number, companyIds?: number[])
     status: employees.status,
     count: sql<number>`count(*)`,
   }).from(employees).where(and(inArray(employees.companyId, ids), isNull(employees.deletedAt))).groupBy(employees.status);
+  // CLT e PJ contam apenas quem tem status='Ativo' — mesmo critério que o badge "Ativos".
+  // Assim: Ativos (103) = CLT ativo (90) + PJ ativo (10) + Sócio (3), evitando coincidências confusas.
   const tipoResult = ((await db.execute(
-    sql`SELECT "tipoContrato", COUNT(*) as cnt FROM employees WHERE "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)}) AND "deletedAt" IS NULL AND status NOT IN ('Desligado', 'Lista_Negra') AND "listaNegra" != 1 GROUP BY "tipoContrato"`
+    sql`SELECT "tipoContrato", COUNT(*) as cnt FROM employees WHERE "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)}) AND "deletedAt" IS NULL AND status = 'Ativo' GROUP BY "tipoContrato"`
   )) as any).rows || [];
   let clt = 0, pj = 0;
   tipoResult.forEach((r: any) => {
