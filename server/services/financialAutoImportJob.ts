@@ -123,6 +123,12 @@ async function runAlertasJob(): Promise<void> {
 }
 
 async function runStartupRetroacao(): Promise<void> {
+  const { isRecentCache, setCache } = await import("./startupCache");
+  const SIX_HOURS = 6 * 60 * 60 * 1000;
+  if (await isRecentCache("financial_retroacao_ts", SIX_HOURS)) {
+    console.log("[FinancialJob] Retroação de startup: pulada (executada há menos de 6h).");
+    return;
+  }
   try {
     const companyIds = await getAllActiveCompanyIds();
     if (!companyIds.length) return;
@@ -134,6 +140,7 @@ async function runStartupRetroacao(): Promise<void> {
       if (total > 0) console.log(`[FinancialJob] Startup: company=${companyId} → ${total} lançamentos históricos importados`);
     }
     console.log("[FinancialJob] Retroação de startup concluída.");
+    await setCache("financial_retroacao_ts", new Date().toISOString());
   } catch (e: any) {
     console.error("[FinancialJob] Erro na retroação de startup:", e?.message);
   }

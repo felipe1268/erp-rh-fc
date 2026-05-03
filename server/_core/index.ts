@@ -374,7 +374,14 @@ async function startServer() {
     // Sincronizar colunas do schema Drizzle → banco Neon (ADD COLUMN IF NOT EXISTS)
     import("../syncSchema").then(m => m.syncSchema()).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
+    // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
+    const COLFIX_VERSION = "v1325-2026-05-03";
+    const colFixSkipPromise = import("../services/startupCache")
+      .then(({ getCache }) => getCache("colfix_version"))
+      .then(v => v === COLFIX_VERSION)
+      .catch(() => false);
     import("../db").then(async ({ getDb }) => {
+      if (await colFixSkipPromise) { console.log("[ColFix] Versão ok, pulando migrations."); return; }
       try {
         const db = await getDb();
         if (!db) return;
@@ -771,6 +778,7 @@ async function startServer() {
       } catch (e: any) { console.warn("[ColFix] Aviso:", e?.message ?? e); }
     });
     import("../db").then(async ({ getDb }) => {
+      if (await colFixSkipPromise) return;
       try {
         const db = await getDb();
         if (!db) return;
@@ -830,6 +838,7 @@ async function startServer() {
     // Rev.650: Limpeza automática de batidas duplicadas (mesmo employeeId+obraId+data)
     // Mantém o registro com mais horas trabalhadas (ou com ajusteManual=1)
     import("../db").then(async ({ getDb }) => {
+      if (await colFixSkipPromise) return;
       try {
         const db = await getDb();
         if (!db) return;
@@ -866,6 +875,7 @@ async function startServer() {
     });
 
     import("../db").then(async ({ getDb }) => {
+      if (await colFixSkipPromise) return;
       try {
         const db = await getDb();
         if (!db) return;
@@ -916,6 +926,7 @@ async function startServer() {
       } catch (e: any) { console.warn("[ColFix] Bloco2:", e?.message ?? e); }
     });
     import("../db").then(async ({ getDb }) => {
+      if (await colFixSkipPromise) return;
       try {
         const db = await getDb();
         if (!db) return;
@@ -1016,6 +1027,7 @@ async function startServer() {
       } catch (e: any) { console.warn("[ColFix] Tables bloco3:", e?.message ?? e); }
     });
     import("../db").then(async ({ getDb }) => {
+      if (await colFixSkipPromise) return;
       try {
         const db = await getDb();
         if (!db) return;
@@ -1080,6 +1092,7 @@ async function startServer() {
     });
     // ─── Bloco financeiro: retenção contratual + status granular + tabelas de previsão ───
     import("../db").then(async ({ getDb }) => {
+      if (await colFixSkipPromise) return;
       try {
         const db = await getDb();
         if (!db) return;
@@ -1127,6 +1140,7 @@ async function startServer() {
     });
     // ─── Backfill: sincronizar baixas históricas do Financeiro → planejamento_medicoes ───
     import("../db").then(async ({ getDb }) => {
+      if (await colFixSkipPromise) return;
       try {
         const db = await getDb();
         if (!db) return;
@@ -1247,6 +1261,10 @@ async function startServer() {
           console.log("[FinancialSync] Nenhuma medição confirmada em planejamento_medicoes!");
         }
       } catch (e: any) { console.warn("[FinancialSync] Backfill falhou (não-fatal):", e?.message ?? e); }
+      // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
+      import("../services/startupCache").then(({ setCache }) =>
+        setCache("colfix_version", COLFIX_VERSION)
+      ).catch(() => {});
     });
     // [REMOVIDO Rev.844] Limpeza empresas de teste (Rev.738) — já completada
     // [REMOVIDO Rev.844] Purga de orfanatos/fantasmas — já completada, limpar via deleteObra cascata
