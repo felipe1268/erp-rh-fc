@@ -99,7 +99,9 @@ export type ActiveModuleId =
   | "almoxarifado"
   | "gestao-documentos"
   | "operacional"
-  | "frotas";
+  | "frotas"
+  | "comunicados-internos"
+  | "curriculos";
 
 export interface ModuleFeature {
   key: string;
@@ -176,6 +178,9 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "comparativo-convencoes", label: "Comparativo Convenções (IA)", route: "/comparativo-convencoes", icon: "Scale" },
       // === Dixi Ponto (legado) ===
       { key: "dixi-ponto", label: "Dixi Ponto", route: "/dixi-ponto", icon: "Wifi" },
+      // === Comunicação Interna e Recrutamento ===
+      { key: "comunicados-internos", label: "Comunicados Internos", route: "/comunicados-internos", icon: "Megaphone" },
+      { key: "curriculos", label: "Currículos", route: "/curriculos", icon: "Briefcase" },
     ],
   },
   {
@@ -432,6 +437,26 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "frotas-seguros",        label: "Seguros",            route: "/frotas/seguros",        icon: "Shield" },
       { key: "frotas-rastreamento",   label: "Rastreamento",       route: "/frotas/rastreamento",   icon: "MapPin" },
       { key: "frotas-analitico",     label: "Analítico",          route: "/frotas/analitico",      icon: "BarChart3" },
+    ],
+  },
+  {
+    id: "comunicados-internos",
+    label: "Comunicados Internos",
+    description: "Avisos oficiais da empresa com numeração automática anual",
+    color: "blue",
+    icon: "Megaphone",
+    features: [
+      { key: "comunicados-internos", label: "Comunicados Internos", route: "/comunicados-internos", icon: "Megaphone" },
+    ],
+  },
+  {
+    id: "curriculos",
+    label: "Currículos",
+    description: "Banco de currículos recebidos organizado por função",
+    color: "amber",
+    icon: "Briefcase",
+    features: [
+      { key: "curriculos", label: "Currículos", route: "/curriculos", icon: "Briefcase" },
     ],
   },
 ];
