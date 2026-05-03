@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { SEMANTIC_COLORS, CHART_PALETTE, CHART_FILL, getChartColors } from "@/lib/chartColors";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
@@ -9,7 +9,7 @@ import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, UserCheck, UserX, Trophy, AlertTriangle, Calendar, MapPin, Briefcase, Heart, TrendingUp, TrendingDown, Clock, ArrowLeft } from "lucide-react";
+import { Users, UserCheck, UserX, Trophy, AlertTriangle, Calendar, MapPin, Briefcase, Heart, TrendingUp, TrendingDown, Clock, ArrowLeft, Search, ChevronDown, X } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -49,6 +49,19 @@ export default function DashFuncionarios() {
 
   const openDrillDown = useCallback((title: string, filterType: string, filterValue: string) => {
     setDrillDown({ open: true, title, filterType, filterValue });
+  }, []);
+
+  // Análise por função — combobox state
+  const [selectedFuncao, setSelectedFuncao] = useState<string | null>(null);
+  const [funcaoSearch, setFuncaoSearch] = useState("");
+  const [funcaoDropOpen, setFuncaoDropOpen] = useState(false);
+  const funcaoRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (funcaoRef.current && !funcaoRef.current.contains(e.target as Node)) setFuncaoDropOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   if (isLoading) return (
@@ -217,6 +230,202 @@ export default function DashFuncionarios() {
             onChartClick={(info) => openDrillDown(`Setor: ${info.label}`, "setor", info.label)}
           />
         </div>
+
+        {/* ── Análise por Função ── */}
+        {(() => {
+          const allFuncoes = (data as any).funcaoAll as { label: string; value: number }[] || [];
+          const funcaoStatusRaw = (data as any).funcaoStatusDist as { funcao: string; status: string; count: number }[] || [];
+
+          const filteredFuncoes = allFuncoes.filter(f =>
+            f.label.toLowerCase().includes(funcaoSearch.toLowerCase())
+          );
+
+          // Dados do status para a função selecionada
+          const statusRows = selectedFuncao
+            ? funcaoStatusRaw.filter(r => r.funcao === selectedFuncao)
+            : [];
+          const totalFuncao = statusRows.reduce((s, r) => s + r.count, 0);
+
+          // Merge Ferias_em_gozo → Ferias, Lista_Negra → Desligado para exibição
+          const statusMerged: Record<string, number> = {};
+          for (const r of statusRows) {
+            const label = r.status === 'Lista_Negra' ? 'Desligado' : r.status;
+            statusMerged[label] = (statusMerged[label] || 0) + r.count;
+          }
+          const statusLabels = Object.keys(statusMerged);
+          const statusValues = statusLabels.map(l => statusMerged[l]);
+          const statusBgColors = statusLabels.map(l => STATUS_COLORS[l] || SEMANTIC_COLORS.neutro);
+
+          return (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-primary" />
+                  Análise por Função
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col gap-4">
+                  {/* Combobox seletor */}
+                  <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                    <div className="relative w-full sm:w-80" ref={funcaoRef}>
+                      <button
+                        type="button"
+                        onClick={() => setFuncaoDropOpen(v => !v)}
+                        className="w-full flex items-center justify-between gap-2 border border-input rounded-md px-3 py-2 text-sm bg-background hover:bg-accent transition-colors"
+                      >
+                        <span className={selectedFuncao ? "text-foreground" : "text-muted-foreground"}>
+                          {selectedFuncao || "Selecione uma função…"}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {selectedFuncao && (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => { e.stopPropagation(); setSelectedFuncao(null); setFuncaoSearch(""); }}
+                              onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setSelectedFuncao(null); setFuncaoSearch(""); }}}
+                              className="text-muted-foreground hover:text-foreground"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </span>
+                          )}
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      </button>
+                      {funcaoDropOpen && (
+                        <div className="absolute z-50 mt-1 w-full bg-popover border border-border rounded-md shadow-lg">
+                          <div className="p-2 border-b border-border">
+                            <div className="flex items-center gap-2 px-2 py-1 rounded bg-muted/50">
+                              <Search className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                              <input
+                                autoFocus
+                                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                                placeholder="Buscar função…"
+                                value={funcaoSearch}
+                                onChange={e => setFuncaoSearch(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          <div className="max-h-56 overflow-y-auto py-1">
+                            {filteredFuncoes.length === 0 ? (
+                              <p className="text-xs text-muted-foreground px-3 py-2">Nenhuma função encontrada</p>
+                            ) : filteredFuncoes.map(f => (
+                              <button
+                                key={f.label}
+                                type="button"
+                                onClick={() => { setSelectedFuncao(f.label); setFuncaoSearch(""); setFuncaoDropOpen(false); }}
+                                className={`w-full flex items-center justify-between px-3 py-1.5 text-sm hover:bg-accent transition-colors ${selectedFuncao === f.label ? "bg-primary/10 font-medium" : ""}`}
+                              >
+                                <span className="truncate text-left">{f.label}</span>
+                                <span className="ml-2 text-xs text-muted-foreground shrink-0">{f.value}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {selectedFuncao && (
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary text-sm font-semibold px-3 py-1.5 rounded-full">
+                          <Users className="h-3.5 w-3.5" />
+                          {totalFuncao} {totalFuncao === 1 ? "funcionário" : "funcionários"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openDrillDown(`Função: ${selectedFuncao}`, "funcao", selectedFuncao)}
+                          className="text-xs text-primary underline underline-offset-2 hover:no-underline"
+                        >
+                          Ver lista
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Conteúdo quando função selecionada */}
+                  {selectedFuncao ? (
+                    statusLabels.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-4 text-center">Nenhum dado disponível para esta função.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                        {/* Donut de status */}
+                        <DashChart
+                          title={`Status — ${selectedFuncao}`}
+                          type="doughnut"
+                          labels={statusLabels}
+                          datasets={[{ data: statusValues, backgroundColor: statusBgColors }]}
+                          height={220}
+                          onChartClick={(info) => openDrillDown(`${selectedFuncao} · ${info.label}`, "funcaoStatus", `${selectedFuncao}|${info.label}`)}
+                        />
+                        {/* Barras horizontais — ranking de funções com destaque */}
+                        <div className="space-y-1.5">
+                          <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Posição no ranking geral</p>
+                          {allFuncoes.slice(0, 12).map((f, i) => {
+                            const maxVal = allFuncoes[0]?.value || 1;
+                            const pct = Math.round((f.value / maxVal) * 100);
+                            const isSelected = f.label === selectedFuncao;
+                            return (
+                              <div
+                                key={f.label}
+                                className={`flex items-center gap-2 cursor-pointer rounded px-1 py-0.5 transition-colors ${isSelected ? "bg-primary/10" : "hover:bg-muted/50"}`}
+                                onClick={() => { setSelectedFuncao(f.label); }}
+                              >
+                                <span className={`text-xs w-5 text-right shrink-0 ${isSelected ? "font-bold text-primary" : "text-muted-foreground"}`}>{i + 1}</span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between mb-0.5">
+                                    <span className={`text-xs truncate ${isSelected ? "font-semibold text-primary" : ""}`}>{f.label}</span>
+                                    <span className={`text-xs ml-1 shrink-0 ${isSelected ? "font-bold text-primary" : "text-muted-foreground"}`}>{f.value}</span>
+                                  </div>
+                                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full transition-all ${isSelected ? "bg-primary" : "bg-primary/30"}`}
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {allFuncoes.length > 12 && !allFuncoes.slice(0, 12).find(f => f.label === selectedFuncao) && (
+                            <p className="text-xs text-muted-foreground pt-1">
+                              "{selectedFuncao}" está na posição #{allFuncoes.findIndex(f => f.label === selectedFuncao) + 1} de {allFuncoes.length}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  ) : (
+                    /* Estado vazio — mostra top 8 funções como barras clicáveis */
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground mb-3">Selecione uma função acima ou clique em uma barra para analisar</p>
+                      {allFuncoes.slice(0, 8).map((f, i) => {
+                        const maxVal = allFuncoes[0]?.value || 1;
+                        const pct = Math.round((f.value / maxVal) * 100);
+                        return (
+                          <div
+                            key={f.label}
+                            className="flex items-center gap-2 cursor-pointer rounded px-1 py-0.5 hover:bg-muted/50 transition-colors"
+                            onClick={() => setSelectedFuncao(f.label)}
+                          >
+                            <span className="text-xs w-5 text-right text-muted-foreground shrink-0">{i + 1}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-0.5">
+                                <span className="text-xs truncate">{f.label}</span>
+                                <span className="text-xs text-muted-foreground ml-1 shrink-0">{f.value}</span>
+                              </div>
+                              <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div className="h-full rounded-full bg-primary/40 transition-all" style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* Tempo de empresa e Cidade */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

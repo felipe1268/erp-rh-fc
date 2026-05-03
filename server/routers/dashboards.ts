@@ -191,6 +191,15 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
     // 20. Advertências por tipo
     db.select({ tipo: warnings.tipoAdvertencia, count: sql<number>`count(*)` })
       .from(warnings).where(and(companyWhere(warnings, companyId, companyIds), isNull(warnings.deletedAt))).groupBy(warnings.tipoAdvertencia),
+
+    // 21. Todas as funções (sem limite, para o seletor)
+    db.select({ funcao: employees.funcao, count: sql<number>`count(*)` })
+      .from(employees).where(activeWhere).groupBy(employees.funcao)
+      .orderBy(sql`count(*) desc`),
+
+    // 22. Distribuição por função × status (para gráfico de análise)
+    db.select({ funcao: employees.funcao, status: employees.status, count: sql<number>`count(*)` })
+      .from(employees).where(activeWhere).groupBy(employees.funcao, employees.status),
     ]);
   } catch (err: any) {
     console.error('[getDashFuncionarios] Erro nas queries:', err?.message || err);
@@ -203,6 +212,7 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
     admissoesMensal, demissoesMensal,
     oldestArr, youngestArr, longestTenureArr, shortestTenureArr,
     rankingAdvertencias, rankingAtestados, advertenciasTipo,
+    funcaoAll, funcaoStatusDist,
   ] = queryResults;
 
   const [oldest] = oldestArr;
@@ -263,6 +273,8 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
     rankingAdvertencias: rankingAdvertencias.map(r => ({ nome: r.nome, funcao: r.funcao, total: Number(r.total) })),
     rankingAtestados: rankingAtestados.map(r => ({ nome: r.nome, funcao: r.funcao, totalAtestados: Number(r.totalAtestados), totalDias: Number(r.totalDias) })),
     advertenciasTipo: advertenciasTipo.map(r => ({ label: r.tipo, value: Number(r.count) })),
+    funcaoAll: funcaoAll.map(r => ({ label: r.funcao || "Não informado", value: Number(r.count) })),
+    funcaoStatusDist: funcaoStatusDist.map(r => ({ funcao: r.funcao || "Não informado", status: r.status || "Desconhecido", count: Number(r.count) })),
   };
 }
 
