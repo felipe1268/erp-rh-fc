@@ -1,4 +1,4 @@
-import { pgTable, pgSchema, AnyPgColumn, integer, serial, date, varchar, text, timestamp, smallint, index, numeric, json, jsonb, boolean, real, primaryKey } from "drizzle-orm/pg-core"
+import { pgTable, pgSchema, AnyPgColumn, integer, serial, date, varchar, text, timestamp, smallint, index, uniqueIndex, numeric, json, jsonb, boolean, real, primaryKey } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 export const accidents = pgTable("accidents", {
@@ -7577,6 +7577,64 @@ export const oraculoMessages = pgTable("oraculo_messages", {
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow(),
 }, (t) => [
   index("idx_oraculo_messages_session").on(t.sessionId),
+]);
+
+export const comunicadosInternos = pgTable("comunicados_internos", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  numero: varchar({ length: 20 }).notNull(),
+  ano: integer().notNull(),
+  sequencia: integer().notNull(),
+  titulo: varchar({ length: 255 }).notNull(),
+  dataEmissao: date("data_emissao", { mode: "string" }).notNull(),
+  conteudo: text(),
+  documentoUrl: text("documento_url"),
+  fileName: varchar("file_name", { length: 255 }),
+  criadoPor: varchar("criado_por", { length: 255 }),
+  criadoPorUserId: integer("criado_por_user_id"),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at", { mode: "string" }),
+  deletedBy: varchar("deleted_by", { length: 255 }),
+  deletedByUserId: integer("deleted_by_user_id"),
+}, (t) => [
+  index("idx_comunicados_company").on(t.companyId),
+  index("idx_comunicados_ano").on(t.companyId, t.ano),
+  uniqueIndex("uq_comunicados_company_ano_seq").on(t.companyId, t.ano, t.sequencia),
+]);
+
+export const curriculoFuncoes = pgTable("curriculo_funcoes", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  nome: varchar({ length: 120 }).notNull(),
+  ativo: smallint().default(1),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at", { mode: "string" }),
+}, (t) => [
+  index("idx_curriculo_funcoes_company").on(t.companyId),
+]);
+
+export const curriculos = pgTable("curriculos", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  funcaoId: integer("funcao_id"),
+  funcaoNome: varchar("funcao_nome", { length: 120 }).notNull(),
+  nomeCandidato: varchar("nome_candidato", { length: 255 }).notNull(),
+  telefone: varchar({ length: 30 }),
+  email: varchar({ length: 255 }),
+  observacoes: text(),
+  documentoUrl: text("documento_url"),
+  fileName: varchar("file_name", { length: 255 }),
+  criadoPor: varchar("criado_por", { length: 255 }),
+  criadoPorUserId: integer("criado_por_user_id"),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at", { mode: "string" }),
+  deletedBy: varchar("deleted_by", { length: 255 }),
+  deletedByUserId: integer("deleted_by_user_id"),
+}, (t) => [
+  index("idx_curriculos_company").on(t.companyId),
+  index("idx_curriculos_funcao").on(t.companyId, t.funcaoId),
 ]);
 
 export const recycleBin = pgTable("recycle_bin", {

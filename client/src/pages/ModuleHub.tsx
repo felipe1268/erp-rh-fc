@@ -12,6 +12,7 @@ import {
   Handshake, Home, Ruler, BookOpen,
   HardHat, Warehouse, BarChart3, FolderOpen, Hammer, Truck,
   Settings, FileText, Trash2, GitBranch, Receipt, Scale, Sparkles,
+  Megaphone, Briefcase,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -197,6 +198,18 @@ const MODULES: Module[] = [
     description: "Veículos, manutenções, combustível, multas, IPVA, licenciamento, seguros com análise IA e rastreamento.",
     icon: Truck, accentFrom: "#0891B2", accentTo: "#0E7490", accentGlow: "rgba(8,145,178,0.35)", iconBg: "rgba(8,145,178,0.12)", path: "/frotas/painel", active: true,
     features: ["Veículos", "Manutenções", "Combustível", "Multas", "IPVA", "Licenciamento", "Seguros IA", "Rastreamento"],
+  },
+  {
+    id: "comunicados-internos", title: "Comunicados Internos", subtitle: "Avisos Oficiais da Empresa",
+    description: "Cadastro e arquivo de comunicados internos com numeração automática anual (001/2026, 002/2026...).",
+    icon: Megaphone, accentFrom: "#3B82F6", accentTo: "#1D4ED8", accentGlow: "rgba(59,130,246,0.35)", iconBg: "rgba(59,130,246,0.12)", path: "/comunicados-internos", active: true,
+    features: ["Numeração Automática", "Anexos PDF/DOC", "Histórico Anual"],
+  },
+  {
+    id: "curriculos", title: "Currículos", subtitle: "Banco de Currículos",
+    description: "Banco de currículos recebidos organizado por função, com cadastro de novas funções.",
+    icon: Briefcase, accentFrom: "#F59E0B", accentTo: "#D97706", accentGlow: "rgba(245,158,11,0.35)", iconBg: "rgba(245,158,11,0.12)", path: "/curriculos", active: true,
+    features: ["Por Função", "Anexo de Currículo", "Funções Customizáveis"],
   },
 ];
 

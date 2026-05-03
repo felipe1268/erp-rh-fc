@@ -78,6 +78,8 @@ import { heSolicitacoesRouter } from "./routers/heSolicitacoes";
 import { financialRouter } from "./routers/financial";
 import { pontoDescontosRouter } from "./routers/pontoDescontos";
 import { feriadosRouter } from "./routers/feriados";
+import { comunicadosInternosRouter } from "./routers/comunicadosInternos";
+import { curriculosRouter } from "./routers/curriculos";
 import { employeeDocumentsRouter } from "./routers/employeeDocuments";
 import { pjMedicoesRouter } from "./routers/pjMedicoes";
 import { dissidioRouter } from "./routers/dissidio";
@@ -2305,6 +2307,8 @@ export const appRouter = router({
   cipa: cipaRouter,
   pj: pjContractsRouter,
   feriados: feriadosRouter,
+  comunicadosInternos: comunicadosInternosRouter,
+  curriculos: curriculosRouter,
   employeeDocuments: employeeDocumentsRouter,
   pjMedicoes: pjMedicoesRouter,
   dissidio: dissidioRouter,

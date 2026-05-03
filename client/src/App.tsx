@@ -131,6 +131,8 @@ const FinanceiroRecorrentes  = lazy(() => import("./pages/financeiro/FinanceiroR
 const FinanceiroCronograma   = lazy(() => import("./pages/financeiro/FinanceiroCronograma"));
 const ApontamentosCampo = lazy(() => import("./pages/ApontamentosCampo"));
 const Feriados = lazy(() => import("./pages/Feriados"));
+const ComunicadosInternos = lazy(() => import("./pages/ComunicadosInternos"));
+const Curriculos = lazy(() => import("./pages/Curriculos"));
 const Dissidio = lazy(() => import("./pages/Dissidio"));
 const PJMedicoes = lazy(() => import("./pages/PJMedicoes"));
 const PainelRH = lazy(() => import("./pages/PainelRH"));
@@ -524,6 +526,8 @@ function Router() {
         <Route path="/verificar/terceiro/:id" component={VerificarAptidao} />
         {/* Importação de Dados */}
         <Route path="/import-data" component={() => <RouteGuard component={ImportData} route="/colaboradores" />} />
+        <Route path="/comunicados-internos" component={() => <RouteGuard component={ComunicadosInternos} route="/comunicados-internos" />} />
+        <Route path="/curriculos" component={() => <RouteGuard component={Curriculos} route="/curriculos" />} />
         <Route path={"404"} component={NotFound} />
         <Route component={NotFound} />
       </Switch>
