@@ -119,7 +119,9 @@ function OrbAnimated({ state }: { state: "idle" | "listening" | "thinking" | "sp
 // ─── Página principal ─────────────────────────────────────────
 export default function Oraculo() {
   const { user } = useAuth();
-  const { selectedCompanyId, companiesForUser } = useCompany();
+  const { selectedCompanyId: selectedCompanyIdStr, companies, getCompanyIdsForQuery } = useCompany();
+  const selectedCompanyId = parseInt(selectedCompanyIdStr) || undefined;
+  const companyIdsAll = getCompanyIdsForQuery();
   const [, setLocation] = useLocation();
 
   const [sessions, setSessions]       = useState<Session[]>([]);
@@ -236,8 +238,7 @@ export default function Oraculo() {
   // ─── Nova sessão ─────────────────────────────────────────────
   const handleNewSession = async () => {
     try {
-      const companyIds = companiesForUser?.map((c: any) => c.id) ?? [selectedCompanyId];
-      const session = await createSession.mutateAsync({ companyId: selectedCompanyId ?? undefined });
+      const session = await createSession.mutateAsync({ companyId: selectedCompanyId });
       setActiveSession(session.id);
       setMessages([]);
       await listSessions.refetch();
@@ -268,7 +269,7 @@ export default function Oraculo() {
     // Criar sessão automaticamente se não houver
     if (!sessionId) {
       try {
-        const s = await createSession.mutateAsync({ companyId: selectedCompanyId ?? undefined });
+        const s = await createSession.mutateAsync({ companyId: selectedCompanyId });
         sessionId = s.id;
         setActiveSession(s.id);
       } catch {
@@ -288,14 +289,12 @@ export default function Oraculo() {
     setInput("");
     setOrbState("thinking");
 
-    const companyIds = companiesForUser?.map((c: any) => c.id) ?? (selectedCompanyId ? [selectedCompanyId] : []);
-
     try {
       const result = await sendMessage.mutateAsync({
         sessionId,
         message: text,
-        companyId: selectedCompanyId ?? undefined,
-        companyIds: companyIds.length > 0 ? companyIds : undefined,
+        companyId: selectedCompanyId,
+        companyIds: companyIdsAll.length > 0 ? companyIdsAll : undefined,
       });
 
       const aiMsg: Message = {
@@ -320,7 +319,7 @@ export default function Oraculo() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  const companyIds = (companiesForUser?.map((c: any) => c.id) ?? [selectedCompanyId]).filter(Boolean);
+  const companyIds = companyIdsAll.length > 0 ? companyIdsAll : (selectedCompanyId ? [selectedCompanyId] : []);
 
   // ─── Sugestões rápidas ───────────────────────────────────────
   const suggestions = [
