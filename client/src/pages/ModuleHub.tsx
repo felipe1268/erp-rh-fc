@@ -11,7 +11,7 @@ import {
   Bell, Clock, Zap, Layers, ArrowUpRight, ClipboardCheck,
   Handshake, Home, Ruler, BookOpen,
   HardHat, Warehouse, BarChart3, FolderOpen, Hammer, Truck,
-  Settings, FileText, Trash2, GitBranch, Receipt, Scale,
+  Settings, FileText, Trash2, GitBranch, Receipt, Scale, Sparkles,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -670,6 +670,31 @@ export default function ModuleHub() {
                     </div>
                   );
                 })}
+
+                {/* ── ORÁCULO tile — admin_master only ── */}
+                {isAdminMaster && (
+                  <div
+                    onClick={() => navigate("/oraculo")}
+                    className={`group relative flex flex-col items-center justify-center text-center rounded-2xl p-3 cursor-pointer ${mounted ? 'hub-animate-up' : 'opacity-0'} transition-all duration-200 hover:scale-[1.04] select-none`}
+                    style={{
+                      animationDelay: `${0.3 + sortedActiveModules.length * 0.07}s`,
+                      width: '115px',
+                      minHeight: '96px',
+                      background: 'linear-gradient(145deg, rgba(124,58,237,0.14), rgba(91,33,182,0.06))',
+                      border: '1.5px solid rgba(124,58,237,0.40)',
+                      boxShadow: '0 4px 20px -6px rgba(124,58,237,0.30)',
+                    }}
+                  >
+                    <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                      style={{ background: 'radial-gradient(ellipse at 50% 60%, rgba(124,58,237,0.22) 0%, transparent 70%)' }} />
+                    <div className="h-11 w-11 rounded-xl flex items-center justify-center mb-2 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5"
+                      style={{ background: 'linear-gradient(135deg, #7C3AED, #5B21B6)', boxShadow: '0 4px 12px -3px rgba(124,58,237,0.55)' }}>
+                      <Sparkles className="h-5 w-5 text-white" />
+                    </div>
+                    <p className="text-[12px] font-extrabold leading-tight text-[#1B2A4A] tracking-tight w-full truncate">ORÁCULO</p>
+                    <p className="text-[9.5px] text-violet-500 leading-tight mt-0.5 w-full truncate">Assistente IA</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
