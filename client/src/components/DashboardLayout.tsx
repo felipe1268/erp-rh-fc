@@ -28,7 +28,7 @@ import {
   Clock, Star, Lock, Building2, FileText,
   ChevronDown, ChevronRight,
   BarChart3, Settings, Grid2X2,
-  Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase,
+  Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase, Megaphone,
   ClipboardList, ClipboardCheck, UserSearch, UserCheck, Gavel, Wifi, HardHat, Trash2,
   AlertTriangle, Palmtree, Shield, FileSignature, GitBranch,
   CalendarDays, TrendingUp, FileSpreadsheet, BookOpen, ShieldCheck,
@@ -137,6 +137,13 @@ const menuSectionsRHDP: MenuSection[] = [
       { icon: ShieldCheck, label: "Controle de Documentos", path: "/dashboards/controle-documentos" },
       { icon: ClipboardList, label: "Apontamentos de Campo", path: "/dashboards/apontamentos" },
       { icon: Wrench, label: "Habilidades", path: "/dashboards/habilidades" },
+    ],
+  },
+  {
+    title: "Comunicação e Recrutamento",
+    items: [
+      { icon: Megaphone, label: "Comunicados Internos", path: "/comunicados-internos" },
+      { icon: Briefcase, label: "Currículos", path: "/curriculos" },
     ],
   },
   {
@@ -1800,7 +1807,7 @@ const ROUTE_TO_MODULO: [RegExp, IAModulo][] = [
   [/^\/planejamento/, "planejamento"],
   [/^\/orcamento/, "orcamento"],
   [/^\/(compras|almoxarifado)/, "compras"],
-  [/^\/(painel\/rh|funcionarios|colaboradores|folha-pagamento|folha|ferias|seguro-vida|ponto|fechamento-ponto|espelho-ponto|rescisao|admissao|banco-horas|aviso-previo|pedido-demissao|hora-extra|solicitacao-he|solicitacao-mdo|gestao-competencias|controle-documentos|vale-alimentacao|dissidio|feriados|modulo-pj|contrato-pj|apontamentos-campo)/, "rh"],
+  [/^\/(painel\/rh|funcionarios|colaboradores|folha-pagamento|folha|ferias|seguro-vida|ponto|fechamento-ponto|espelho-ponto|rescisao|admissao|banco-horas|aviso-previo|pedido-demissao|hora-extra|solicitacao-he|solicitacao-mdo|gestao-competencias|controle-documentos|vale-alimentacao|dissidio|feriados|modulo-pj|contrato-pj|apontamentos-campo|comunicados-internos|curriculos)/, "rh"],
   [/^\/financeiro/, "financeiro"],
   [/^\/(painel\/sst|sst|epis?|aso|cipa|treinamento)/, "sst"],
   [/^\/medicao/, "medicao"],
