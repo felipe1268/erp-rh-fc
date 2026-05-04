@@ -27,7 +27,7 @@ export default function Curriculos() {
   const companyId = selectedCompanyId ? Number(selectedCompanyId) : 0;
   const utils = trpc.useUtils();
 
-  const [funcaoSelecionadaId, setFuncaoSelecionadaId] = useState<number | null>(null);
+  const [funcoesSelecionadas, setFuncoesSelecionadas] = useState<number[]>([]);
   const [search, setSearch] = useState("");
   const [showCurDialog, setShowCurDialog] = useState(false);
   const [showFuncDialog, setShowFuncDialog] = useState(false);
@@ -49,7 +49,7 @@ export default function Curriculos() {
     { enabled: companyId > 0 }
   );
   const { data: curriculosList = [], isLoading } = trpc.curriculos.listar.useQuery(
-    { companyId, funcaoId: funcaoSelecionadaId || undefined },
+    { companyId, funcaoIds: funcoesSelecionadas.length > 0 ? funcoesSelecionadas : undefined },
     { enabled: companyId > 0 }
   );
 
@@ -58,7 +58,7 @@ export default function Curriculos() {
     onError: (e) => toast.error(e.message),
   });
   const excluirFuncaoMut = trpc.curriculos.excluirFuncao.useMutation({
-    onSuccess: () => { utils.curriculos.listarFuncoes.invalidate(); utils.curriculos.listar.invalidate(); toast.success("Função excluída"); if (funcaoSelecionadaId) setFuncaoSelecionadaId(null); },
+    onSuccess: (_, vars) => { utils.curriculos.listarFuncoes.invalidate(); utils.curriculos.listar.invalidate(); toast.success("Função excluída"); setFuncoesSelecionadas(prev => prev.filter(id => id !== vars.id)); },
     onError: (e) => toast.error(e.message),
   });
   const criarMut = trpc.curriculos.criar.useMutation({
@@ -216,22 +216,33 @@ export default function Curriculos() {
                 <Button size="sm" variant="outline" onClick={() => setShowFuncDialog(true)} className="h-7 text-xs"><FolderPlus className="h-3 w-3 mr-1" /> Nova</Button>
               </div>
               <div className="space-y-1">
-                <button onClick={() => setFuncaoSelecionadaId(null)}
-                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition ${funcaoSelecionadaId === null ? "bg-amber-100 text-amber-900 font-semibold" : "hover:bg-slate-100 text-slate-700"}`}>
+                <button onClick={() => setFuncoesSelecionadas([])}
+                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition ${funcoesSelecionadas.length === 0 ? "bg-amber-100 text-amber-900 font-semibold" : "hover:bg-slate-100 text-slate-700"}`}>
                   Todas as funções
                 </button>
-                {funcoes.map((f: any) => (
-                  <div key={f.id} className="group flex items-center gap-1">
-                    <button onClick={() => setFuncaoSelecionadaId(f.id)}
-                      className={`flex-1 text-left px-3 py-2 rounded-md text-sm transition ${funcaoSelecionadaId === f.id ? "bg-amber-100 text-amber-900 font-semibold" : "hover:bg-slate-100 text-slate-700"}`}>
-                      {f.nome}
-                    </button>
-                    <button onClick={() => { if (confirm(`Excluir função "${f.nome}"? Os currículos não serão excluídos.`)) excluirFuncaoMut.mutate({ id: f.id, companyId }); }}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:bg-red-50 rounded">
-                      <Trash2 className="h-3 w-3" />
-                    </button>
+                {funcoes.map((f: any) => {
+                  const checked = funcoesSelecionadas.includes(f.id);
+                  return (
+                    <div key={f.id} className="group flex items-center gap-1">
+                      <button onClick={() => setFuncoesSelecionadas(prev => checked ? prev.filter(id => id !== f.id) : [...prev, f.id])}
+                        className={`flex-1 text-left px-3 py-2 rounded-md text-sm transition flex items-center gap-2 ${checked ? "bg-amber-100 text-amber-900 font-semibold" : "hover:bg-slate-100 text-slate-700"}`}>
+                        <span className={`inline-flex items-center justify-center w-4 h-4 rounded border text-xs flex-shrink-0 ${checked ? "bg-amber-600 border-amber-600 text-white" : "border-slate-300"}`}>
+                          {checked && "✓"}
+                        </span>
+                        {f.nome}
+                      </button>
+                      <button onClick={() => { if (confirm(`Excluir função "${f.nome}"? Os currículos não serão excluídos.`)) excluirFuncaoMut.mutate({ id: f.id, companyId }); }}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:bg-red-50 rounded">
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+                {funcoesSelecionadas.length > 1 && (
+                  <div className="pt-2 border-t mt-2">
+                    <p className="text-xs text-slate-500 px-3">{funcoesSelecionadas.length} funções selecionadas</p>
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>
@@ -255,7 +266,7 @@ export default function Curriculos() {
                   <Button onClick={() => {
                     if (!funcoes.length) { toast.error("Crie uma função primeiro"); return; }
                     setEditingId(null);
-                    setDialogFuncaoId(funcaoSelecionadaId);
+                    setDialogFuncaoId(funcoesSelecionadas.length === 1 ? funcoesSelecionadas[0] : null);
                     setForm({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", dataNascimento: "", observacoes: "" });
                     setPendingFile(null);
                     setShowCurDialog(true);
@@ -270,7 +281,7 @@ export default function Curriculos() {
               ) : filtrados.length === 0 ? (
                 <div className="p-12 text-center">
                   <Briefcase className="h-12 w-12 mx-auto text-slate-300 mb-3" />
-                  <p className="text-slate-500">Nenhum currículo {funcaoSelecionadaId ? "para esta função" : "cadastrado"}</p>
+                  <p className="text-slate-500">Nenhum currículo {funcoesSelecionadas.length > 0 ? "para esta(s) função(ões)" : "cadastrado"}</p>
                 </div>
               ) : (
                 <table className="w-full text-sm">

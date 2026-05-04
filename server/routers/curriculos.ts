@@ -108,12 +108,20 @@ export const curriculosRouter = router({
     }),
 
   listar: protectedProcedure
-    .input(z.object({ companyId: z.number().int().positive(), funcaoId: z.number().int().positive().optional() }))
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      funcaoId: z.number().int().positive().optional(),
+      funcaoIds: z.array(z.number().int().positive()).optional(),
+    }))
     .query(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const conds = [eq(curriculos.companyId, input.companyId), isNull(curriculos.deletedAt)];
-      if (input.funcaoId) conds.push(eq(curriculos.funcaoId, input.funcaoId));
+      if (input.funcaoIds && input.funcaoIds.length > 0) {
+        conds.push(sql`${curriculos.funcaoId} IN (${sql.join(input.funcaoIds.map(id => sql`${id}`), sql`, `)})`);
+      } else if (input.funcaoId) {
+        conds.push(eq(curriculos.funcaoId, input.funcaoId));
+      }
       return await db.select().from(curriculos)
         .where(and(...conds))
         .orderBy(desc(curriculos.createdAt));
