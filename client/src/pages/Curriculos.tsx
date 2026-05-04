@@ -13,7 +13,7 @@ import { useLocation } from "wouter";
 type IAResultado = {
   fileName: string;
   status: "ok" | "erro" | "duplicado" | "blacklist" | "desligado";
-  dados: { nome: string; telefone: string; email: string; funcaoDetectada: string; experiencia: string } | null;
+  dados: { nome: string; telefone: string; email: string; endereco: string; cidade: string; estado: string; funcaoDetectada: string; experiencia: string } | null;
   alertas: { tipo: "duplicado" | "desligado" | "blacklist"; mensagem: string; detalhes?: string }[];
   curriculoId: number | null;
   funcaoId: number | null;
@@ -32,7 +32,7 @@ export default function Curriculos() {
   const [showCurDialog, setShowCurDialog] = useState(false);
   const [showFuncDialog, setShowFuncDialog] = useState(false);
   const [novaFuncao, setNovaFuncao] = useState("");
-  const [form, setForm] = useState({ nomeCandidato: "", telefone: "", email: "", observacoes: "" });
+  const [form, setForm] = useState({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", observacoes: "" });
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
@@ -67,7 +67,7 @@ export default function Curriculos() {
       utils.curriculos.listar.invalidate();
       toast.success("Currículo cadastrado");
       setShowCurDialog(false);
-      setForm({ nomeCandidato: "", telefone: "", email: "", observacoes: "" });
+      setForm({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", observacoes: "" });
       setPendingFile(null);
     },
     onError: (e) => toast.error(e.message),
@@ -140,7 +140,10 @@ export default function Curriculos() {
     return curriculosList.filter((c: any) =>
       (c.nomeCandidato || "").toLowerCase().includes(q) ||
       (c.email || "").toLowerCase().includes(q) ||
-      (c.telefone || "").toLowerCase().includes(q)
+      (c.telefone || "").toLowerCase().includes(q) ||
+      (c.cidade || "").toLowerCase().includes(q) ||
+      (c.endereco || "").toLowerCase().includes(q) ||
+      (c.estado || "").toLowerCase().includes(q)
     );
   }, [curriculosList, search]);
 
@@ -191,7 +194,7 @@ export default function Curriculos() {
               <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input className="pl-9" placeholder="Buscar por nome, telefone ou e-mail..." value={search} onChange={e => setSearch(e.target.value)} />
+                  <Input className="pl-9" placeholder="Buscar por nome, telefone, cidade ou região..." value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
                 <div className="flex gap-2">
                   <Button onClick={() => {
@@ -225,8 +228,9 @@ export default function Curriculos() {
                       <th className="text-left px-4 py-3 font-semibold text-slate-600">Candidato</th>
                       <th className="text-left px-4 py-3 font-semibold text-slate-600">Função</th>
                       <th className="text-left px-4 py-3 font-semibold text-slate-600">Contato</th>
-                      <th className="text-left px-4 py-3 font-semibold text-slate-600 w-40">Currículo</th>
-                      <th className="text-right px-4 py-3 font-semibold text-slate-600 w-32">Ações</th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-600">Cidade/Região</th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-600 w-36">Currículo</th>
+                      <th className="text-right px-4 py-3 font-semibold text-slate-600 w-20">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -242,6 +246,14 @@ export default function Curriculos() {
                         <td className="px-4 py-3 text-xs text-slate-600">
                           {c.telefone && <div>{c.telefone}</div>}
                           {c.email && <div className="text-slate-500">{c.email}</div>}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-600">
+                          {c.cidade ? (
+                            <div className="font-medium">{c.cidade}{c.estado ? ` - ${c.estado}` : ""}</div>
+                          ) : c.estado ? (
+                            <div className="font-medium">{c.estado}</div>
+                          ) : null}
+                          {c.endereco && <div className="text-slate-400 line-clamp-1">{c.endereco}</div>}
                         </td>
                         <td className="px-4 py-3">
                           {c.documentoUrl ? (
@@ -324,6 +336,18 @@ export default function Curriculos() {
                 <Label>E-mail</Label>
                 <Input className="mt-1" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
               </div>
+              <div className="col-span-2">
+                <Label>Endereço</Label>
+                <Input className="mt-1" placeholder="Rua, número, bairro" value={form.endereco} onChange={e => setForm({ ...form, endereco: e.target.value })} />
+              </div>
+              <div>
+                <Label>Cidade</Label>
+                <Input className="mt-1" placeholder="Ex: Guaratinguetá" value={form.cidade} onChange={e => setForm({ ...form, cidade: e.target.value })} />
+              </div>
+              <div>
+                <Label>Estado (UF)</Label>
+                <Input className="mt-1" placeholder="SP" maxLength={2} value={form.estado} onChange={e => setForm({ ...form, estado: e.target.value.toUpperCase() })} />
+              </div>
             </div>
             <div>
               <Label>Observações</Label>
@@ -345,6 +369,9 @@ export default function Curriculos() {
                 nomeCandidato: form.nomeCandidato.trim() || undefined,
                 telefone: form.telefone || undefined,
                 email: form.email || undefined,
+                endereco: form.endereco || undefined,
+                cidade: form.cidade || undefined,
+                estado: form.estado || undefined,
                 observacoes: form.observacoes || undefined,
               });
             }} disabled={criarMut.isPending || uploadMut.isPending} className="bg-amber-600 hover:bg-amber-700">
@@ -437,6 +464,8 @@ export default function Curriculos() {
                       <div><span className="text-slate-500">Função:</span> <span className="font-medium">{r.funcaoNome || r.dados.funcaoDetectada || "-"}</span></div>
                       <div><span className="text-slate-500">Telefone:</span> <span>{r.dados.telefone || "-"}</span></div>
                       <div><span className="text-slate-500">E-mail:</span> <span>{r.dados.email || "-"}</span></div>
+                      <div><span className="text-slate-500">Cidade:</span> <span>{r.dados.cidade ? `${r.dados.cidade}${r.dados.estado ? ` - ${r.dados.estado}` : ""}` : "-"}</span></div>
+                      <div><span className="text-slate-500">Endereço:</span> <span>{r.dados.endereco || "-"}</span></div>
                       {r.dados.experiencia && (
                         <div className="col-span-2"><span className="text-slate-500">Experiência:</span> <span>{r.dados.experiencia}</span></div>
                       )}
