@@ -44,8 +44,8 @@ export default function AlmoxarifadoMovimentacoes() {
   }, [movs, busca, filtroTipo]);
 
   const resumo = useMemo(() => {
-    const entradas = movs.filter(m => m.tipo === "entrada").reduce((s, m) => s + n(m.quantidade), 0);
-    const saidas   = movs.filter(m => m.tipo === "saida").reduce((s, m) => s + n(m.quantidade), 0);
+    const entradas = movs.filter(m => m.tipo === "entrada").length;
+    const saidas   = movs.filter(m => m.tipo === "saida").length;
     return { entradas, saidas, total: movs.length };
   }, [movs]);
 
@@ -65,11 +65,11 @@ export default function AlmoxarifadoMovimentacoes() {
             <p className="text-xs text-gray-500 mt-1">Total registros</p>
           </div>
           <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-3 text-center">
-            <p className="text-2xl font-bold text-emerald-700">{fmt(resumo.entradas)}</p>
+            <p className="text-2xl font-bold text-emerald-700">{resumo.entradas}</p>
             <p className="text-xs text-emerald-600 mt-1">Entradas</p>
           </div>
           <div className="bg-red-50 rounded-xl border border-red-200 p-3 text-center">
-            <p className="text-2xl font-bold text-red-700">{fmt(resumo.saidas)}</p>
+            <p className="text-2xl font-bold text-red-700">{resumo.saidas}</p>
             <p className="text-xs text-red-600 mt-1">Saídas</p>
           </div>
         </div>
