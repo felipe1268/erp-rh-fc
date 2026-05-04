@@ -301,34 +301,34 @@ export default function Curriculos() {
     return lower.includes(".jpg") || lower.includes(".jpeg") || lower.includes(".png") || lower.includes(".webp");
   }
 
-  const fichaContent = fichaAberta && (
-    <Dialog open={!!fichaAberta} onOpenChange={(open) => { if (!open) setFichaAberta(null); }}>
-      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-0">
-        <div className="sticky top-0 z-10 bg-white border-b px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold text-lg">
-              {(fichaAberta.nomeCandidato || "?")[0]?.toUpperCase()}
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-800">{fichaAberta.nomeCandidato || "(sem nome)"}</h2>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-medium">{fichaAberta.funcaoNome}</span>
-                {statusBadge(fichaAberta.statusCandidato, fichaAberta.motivoReprovacao)}
-                {(() => { const idade = calcularIdade(fichaAberta.dataNascimento); return idade !== null ? <span className="text-xs text-slate-500">{idade} anos</span> : null; })()}
+  if (fichaAberta) {
+    return (
+      <div className="fixed inset-0 z-50 bg-gradient-to-br from-slate-50 to-amber-50/30 overflow-y-auto">
+        <div className="sticky top-0 z-10 bg-white border-b shadow-sm px-4 sm:px-8 py-4">
+          <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <Button size="sm" variant="ghost" onClick={() => setFichaAberta(null)} className="flex-shrink-0">
+                <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+              </Button>
+              <div className="h-11 w-11 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
+                {(fichaAberta.nomeCandidato || "?")[0]?.toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-slate-800 truncate">{fichaAberta.nomeCandidato || "(sem nome)"}</h2>
+                <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                  <span className="inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-medium">{fichaAberta.funcaoNome}</span>
+                  {statusBadge(fichaAberta.statusCandidato, fichaAberta.motivoReprovacao)}
+                  {(() => { const idade = calcularIdade(fichaAberta.dataNascimento); return idade !== null ? <span className="text-xs text-slate-500">{idade} anos</span> : null; })()}
+                </div>
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => { setFichaAberta(null); openEditDialog(fichaAberta); }}>
+            <Button size="sm" variant="outline" onClick={() => { setFichaAberta(null); openEditDialog(fichaAberta); }} className="flex-shrink-0">
               <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setFichaAberta(null)}>
-              <X className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="max-w-5xl mx-auto px-4 sm:px-8 py-6 space-y-6">
           {fichaAberta.statusCandidato === "reprovado" && fichaAberta.motivoReprovacao && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-1">
@@ -343,11 +343,11 @@ export default function Curriculos() {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
               <h3 className="font-semibold text-slate-700 text-sm border-b pb-2 flex items-center gap-2">
                 <Phone className="h-4 w-4 text-amber-600" /> Dados Pessoais
               </h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-xs text-slate-500">Nome Completo</p>
                   <p className="font-medium text-slate-800">{fichaAberta.nomeCandidato || "-"}</p>
@@ -365,7 +365,7 @@ export default function Curriculos() {
                 </div>
                 <div>
                   <p className="text-xs text-slate-500">E-mail</p>
-                  <p className="font-medium text-slate-800">{fichaAberta.email ? <a href={`mailto:${fichaAberta.email}`} className="text-blue-600 hover:underline break-all">{fichaAberta.email}</a> : "-"}</p>
+                  <p className="font-medium text-slate-800 break-all">{fichaAberta.email ? <a href={`mailto:${fichaAberta.email}`} className="text-blue-600 hover:underline">{fichaAberta.email}</a> : "-"}</p>
                 </div>
               </div>
               <div className="text-sm">
@@ -378,7 +378,7 @@ export default function Curriculos() {
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
               <h3 className="font-semibold text-slate-700 text-sm border-b pb-2 flex items-center gap-2">
                 <GraduationCap className="h-4 w-4 text-amber-600" /> Formação e Qualificações
               </h3>
@@ -396,7 +396,7 @@ export default function Curriculos() {
                   {fichaAberta.habilidades ? (
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       {fichaAberta.habilidades.split(";").map((h: string, i: number) => h.trim() && (
-                        <span key={i} className="inline-block px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs">{h.trim()}</span>
+                        <span key={i} className="inline-block px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs">{h.trim()}</span>
                       ))}
                     </div>
                   ) : <p className="font-medium text-slate-800">-</p>}
@@ -409,7 +409,7 @@ export default function Curriculos() {
             const exps = parseExperiencias(fichaAberta.experienciasJson);
             if (exps.length === 0 && !fichaAberta.observacoes) return null;
             return (
-              <div className="space-y-3">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
                 <h3 className="font-semibold text-slate-700 text-sm border-b pb-2 flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-amber-600" /> Experiência Profissional
                 </h3>
@@ -417,14 +417,14 @@ export default function Curriculos() {
                   <div className="space-y-3">
                     {exps.map((exp, i) => (
                       <div key={i} className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                        <div className="flex items-start justify-between">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1">
                           <div>
                             <p className="font-semibold text-slate-800 text-sm">{exp.cargo || "Cargo não informado"}</p>
                             <p className="text-sm text-slate-600">{exp.empresa || "Empresa não informada"}</p>
                           </div>
-                          <div className="text-right text-xs text-slate-500">
-                            {exp.periodo && <div className="flex items-center gap-1 justify-end"><Calendar className="h-3 w-3" /> {exp.periodo}</div>}
-                            {exp.duracao && <div className="flex items-center gap-1 justify-end mt-0.5"><Clock className="h-3 w-3" /> {exp.duracao}</div>}
+                          <div className="sm:text-right text-xs text-slate-500 flex-shrink-0">
+                            {exp.periodo && <div className="flex items-center gap-1 sm:justify-end"><Calendar className="h-3 w-3" /> {exp.periodo}</div>}
+                            {exp.duracao && <div className="flex items-center gap-1 sm:justify-end mt-0.5"><Clock className="h-3 w-3" /> {exp.duracao}</div>}
                           </div>
                         </div>
                         {exp.descricao && <p className="text-xs text-slate-600 mt-2">{exp.descricao}</p>}
@@ -446,40 +446,40 @@ export default function Curriculos() {
             );
           })()}
 
-          <div className="space-y-3">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
             <h3 className="font-semibold text-slate-700 text-sm border-b pb-2 flex items-center gap-2">
               <FileText className="h-4 w-4 text-amber-600" /> Currículo Anexado
             </h3>
             {fichaAberta.documentoUrl ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-3">
                   <a href={fichaAberta.documentoUrl} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 hover:bg-blue-100 transition text-sm font-medium">
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 hover:bg-blue-100 transition text-sm font-medium">
                     <Eye className="h-4 w-4" />
                     {fichaAberta.fileName || "Abrir Currículo"}
                   </a>
-                  <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 transition text-xs">
+                  <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 transition text-xs">
                     <Upload className="h-3.5 w-3.5" /> Substituir arquivo
                     <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                       onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(fichaAberta.id, f); }} />
                   </label>
                 </div>
                 {isImageFile(fichaAberta.documentoUrl) && (
-                  <div className="border rounded-xl overflow-hidden bg-slate-100 max-h-[500px]">
-                    <img src={fichaAberta.documentoUrl} alt="Currículo" className="w-full h-auto object-contain max-h-[500px]" />
+                  <div className="border rounded-xl overflow-hidden bg-slate-100">
+                    <img src={fichaAberta.documentoUrl} alt="Currículo" className="w-full h-auto object-contain max-h-[70vh]" />
                   </div>
                 )}
                 {fichaAberta.documentoUrl.toLowerCase().includes(".pdf") && (
-                  <div className="border rounded-xl overflow-hidden bg-slate-100" style={{ height: "600px" }}>
+                  <div className="border rounded-xl overflow-hidden bg-slate-100" style={{ height: "70vh" }}>
                     <iframe src={fichaAberta.documentoUrl} className="w-full h-full" title="Currículo PDF" />
                   </div>
                 )}
               </div>
             ) : (
-              <div className="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-8 text-center">
-                <FileText className="h-10 w-10 mx-auto text-slate-300 mb-2" />
-                <p className="text-sm text-slate-500 mb-3">Nenhum currículo anexado</p>
-                <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 hover:bg-amber-100 transition text-sm font-medium">
+              <div className="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-10 text-center">
+                <FileText className="h-12 w-12 mx-auto text-slate-300 mb-3" />
+                <p className="text-sm text-slate-500 mb-4">Nenhum currículo anexado</p>
+                <label className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 hover:bg-amber-100 transition text-sm font-medium">
                   <Upload className="h-4 w-4" /> Anexar Currículo
                   <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                     onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(fichaAberta.id, f); }} />
@@ -488,14 +488,14 @@ export default function Curriculos() {
             )}
           </div>
 
-          <div className="border-t pt-4 text-xs text-slate-400 flex items-center justify-between">
+          <div className="text-xs text-slate-400 flex items-center justify-between pb-6">
             <span>Cadastrado por: {fichaAberta.criadoPor || "-"} em {fichaAberta.createdAt ? new Date(fichaAberta.createdAt).toLocaleDateString("pt-BR") : "-"}</span>
             <span>ID: #{fichaAberta.id}</span>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
-  );
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-amber-50/30 p-6">
@@ -705,8 +705,6 @@ export default function Curriculos() {
           </div>
         </div>
       </div>
-
-      {fichaContent}
 
       <Dialog open={showFuncDialog} onOpenChange={setShowFuncDialog}>
         <DialogContent className="max-w-md">
