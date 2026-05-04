@@ -17,7 +17,7 @@ import GoldenRulesPanel from "@/components/GoldenRulesPanel";
 import BeneficiosAlimentacaoTab from "@/components/BeneficiosAlimentacaoTab";
 import { ComprasConfigSection } from "@/pages/configuracoes/ComprasConfigSection";
 import { FinanceiroConfigSection } from "@/pages/configuracoes/FinanceiroConfigSection";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer, Truck } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer, Truck, Megaphone, Briefcase, Brain } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { removeAccents } from "@/lib/searchUtils";
@@ -2370,6 +2370,15 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Relatórios", label: "Checklist Veicular", path: "/frotas/checklist" },
     { section: "Rastreamento", label: "Mapa e Trajetos", path: "/frotas/rastreamento" },
   ],
+  "comunicados-internos": [
+    { section: "Comunicados", label: "Comunicados Internos", path: "/comunicados-internos" },
+  ],
+  curriculos: [
+    { section: "Currículos", label: "Banco de Currículos", path: "/curriculos" },
+  ],
+  oraculo: [
+    { section: "Oráculo", label: "Assistente IA", path: "/oraculo" },
+  ],
 };
 
 function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: boolean }) {
@@ -2418,6 +2427,9 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
     "gestao-documentos": { label: "Proj./Doc. Técnicos", subtitle: "Projetos e Documentos Técnicos", icon: FolderOpen, color: "text-indigo-600", bgColor: "bg-indigo-50", borderColor: "border-indigo-200", description: "Controle de documentos técnicos, revisões com aprovação, disciplinas, ARTs/RRTs e distribuição." },
     operacional: { label: "Operacional", subtitle: "Gestão Operacional de Obras", icon: Hammer, color: "text-orange-600", bgColor: "bg-orange-50", borderColor: "border-orange-200", description: "RDO, checklists de qualidade, mapa de concretagem, não conformidades, registro fotográfico e dashboard operacional." },
     frotas: { label: "Frotas", subtitle: "Controle de Frotas", icon: Truck, color: "text-cyan-600", bgColor: "bg-cyan-50", borderColor: "border-cyan-200", description: "Veículos, manutenções, combustível, multas, IPVA, licenciamento, seguros com análise IA e rastreamento." },
+    "comunicados-internos": { label: "Comunicados Internos", subtitle: "Avisos Oficiais da Empresa", icon: Megaphone, color: "text-blue-600", bgColor: "bg-blue-50", borderColor: "border-blue-200", description: "Cadastro e arquivo de comunicados internos com numeração automática anual e anexos." },
+    curriculos: { label: "Currículos", subtitle: "Banco de Currículos", icon: Briefcase, color: "text-amber-600", bgColor: "bg-amber-50", borderColor: "border-amber-200", description: "Banco de currículos recebidos organizado por função, com cadastro de novas funções e anexos." },
+    oraculo: { label: "Oráculo", subtitle: "Assistente IA do Sistema", icon: Brain, color: "text-violet-600", bgColor: "bg-violet-50", borderColor: "border-violet-200", description: "Assistente inteligente com IA para consultas, análises e orientações sobre dados do sistema." },
   };
 
   if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;

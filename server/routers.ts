@@ -2742,7 +2742,7 @@ export const appRouter = router({
       const { eq } = await import("drizzle-orm");
       const rows = await db.select().from(moduleConfig).where(companyFilter(moduleConfig.companyId, input));
       // Módulos padrão - todos habilitados por default
-      const ALL_MODULES = ["rh", "sst", "juridico", "avaliacao", "terceiros", "parceiros", "orcamento", "planejamento", "medicao", "cadastro", "compras", "almoxarifado", "financeiro", "gestao-documentos", "operacional", "frotas"];
+      const ALL_MODULES = ["rh", "sst", "juridico", "avaliacao", "terceiros", "parceiros", "orcamento", "planejamento", "medicao", "cadastro", "compras", "almoxarifado", "financeiro", "gestao-documentos", "operacional", "frotas", "comunicados-internos", "curriculos", "oraculo"];
       const moduleMap: Record<string, any> = {};
       for (const row of rows) moduleMap[row.moduleKey] = row;
       return ALL_MODULES.map(key => ({
