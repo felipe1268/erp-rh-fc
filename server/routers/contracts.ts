@@ -566,8 +566,8 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
         observacoes: input.observacoes || null,
         criadoPor: ctx.user.name || ctx.user.email,
         criadoPorUserId: ctx.user.id,
-      });
-      return { id: result[0].id };
+      }).returning();
+      return { id: result.id };
     }),
 
   // Listar contratos de um funcionário
