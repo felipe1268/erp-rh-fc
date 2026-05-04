@@ -2821,6 +2821,8 @@ export const payrollEngineRouter = router({
         bancoPix: employees.bancoPix,
         cpf: employees.cpf,
         status: employees.status,
+        jornadaTrabalho: employees.jornadaTrabalho,
+        companyId: employees.companyId,
       }).from(employees).where(
         and(
           companyFilter(employees.companyId, input),
@@ -2902,6 +2904,154 @@ export const payrollEngineRouter = router({
         GROUP BY "statusDia"
       `)) as any).rows || [];
       console.log(`[SimPag DIAG] timecardDailyCount(registrado)=${timecardDailyCount}, pontoProcessado=${pontoProcessado}, allStatusCounts=${JSON.stringify(timecardAllRows)}`);
+
+      if (!pontoProcessado) {
+        console.log(`[SimPag AUTO-PONTO] Nenhum registro em timecard_daily para ${input.mesReferencia}. Auto-processando ponto...`);
+        const prevMonthAP = month === 1 ? 12 : month - 1;
+        const prevYearAP = month === 1 ? year - 1 : year;
+        const diaCorteAP = criteria.diaCorte;
+        const pontoInicioAP = `${prevYearAP}-${String(prevMonthAP).padStart(2, '0')}-${String(diaCorteAP).padStart(2, '0')}`;
+        const pontoFimAP = `${year}-${String(month).padStart(2, '0')}-${String(diaCorteAP).padStart(2, '0')}`;
+        const lastDayAP = new Date(year, month, 0).getDate();
+
+        const autoRecords = ((await db.execute(sql`
+          SELECT * FROM time_records
+          WHERE "companyId" IN (${allCompanyIdsSql})
+            AND data >= ${pontoInicioAP} AND data <= ${pontoFimAP}
+        `)) as any).rows || [];
+
+        if (autoRecords.length === 0) {
+          console.log(`[SimPag AUTO-PONTO] SKIP: nenhum time_record encontrado para ${pontoInicioAP} → ${pontoFimAP}. Ponto não importado?`);
+        } else {
+          const fmtDate = (d: any): string => {
+            if (typeof d === 'string') return d.substring(0, 10);
+            if (d instanceof Date) {
+              return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+            }
+            return String(d);
+          };
+          const autoRecordMap = new Map<string, any[]>();
+          for (const r of autoRecords) {
+            const key = `${r.employeeId}-${fmtDate(r.data)}`;
+            if (!autoRecordMap.has(key)) autoRecordMap.set(key, []);
+            autoRecordMap.get(key)!.push(r);
+          }
+
+          await db.execute(sql`
+            DELETE FROM timecard_daily WHERE "companyId" IN (${allCompanyIdsSql}) AND "mesCompetencia" = ${input.mesReferencia}
+          `);
+
+          let autoFaltas = 0, autoAtrasos = 0;
+          const insertVals: any[] = [];
+
+          for (const emp of empList) {
+            const pontoDatesAP = getDateRange(pontoInicioAP, pontoFimAP);
+            for (const dateStr of pontoDatesAP) {
+              const dow = new Date(dateStr + 'T12:00:00Z').getUTCDay();
+              if (dow === 0) continue;
+              let tipoDia = 'util';
+              if (dow === 6) tipoDia = criteria.jornadaSabadoTipo === 'compensado' ? 'compensado' : 'sabado';
+
+              const key = `${emp.id}-${dateStr}`;
+              const recs = autoRecordMap.get(key) || [];
+              let isFalta = 0, isAtraso = 0, minutosAtraso = 0;
+              let horasTrabalhadas = '0:00', horasExtras = '0:00', horasNoturnas = '0:00';
+              let numBatidas = 0;
+              let timeRecordId: number | null = null;
+              let obraId: number | null = null;
+
+              if (recs.length > 0) {
+                const rec = recs[0];
+                timeRecordId = rec.id;
+                obraId = rec.obraId || null;
+                horasNoturnas = rec.horasNoturnas || '0:00';
+
+                if (recs.length > 1) {
+                  let totalMins = 0;
+                  for (const r of recs) totalMins += parseTime(r.horasTrabalhadas) || 0;
+                  horasTrabalhadas = minutesToHHMM(totalMins);
+                  numBatidas = recs.reduce((s: number, r: any) => s + [r.entrada1, r.saida1, r.entrada2, r.saida2, r.entrada3, r.saida3].filter(Boolean).length, 0);
+                } else {
+                  horasTrabalhadas = rec.horasTrabalhadas || '0:00';
+                  numBatidas = [rec.entrada1, rec.saida1, rec.entrada2, rec.saida2, rec.entrada3, rec.saida3].filter(Boolean).length;
+                }
+
+                if (numBatidas === 0) {
+                  if (tipoDia === 'util') { isFalta = 1; autoFaltas++; }
+                }
+
+                const entrada = parseTime(rec.entrada1);
+                if (entrada !== null && tipoDia === 'util') {
+                  const jornadaEntrada = getExpectedEntrada(emp.jornadaTrabalho, dateStr);
+                  const atraso = entrada - jornadaEntrada;
+                  if (atraso > criteria.pontoFaltaAposAtraso) {
+                    isFalta = 1; autoFaltas++;
+                  } else if (atraso > criteria.pontoToleranciaLegal) {
+                    isAtraso = 1; minutosAtraso = atraso; autoAtrasos++;
+                  }
+                }
+
+                const expectedMins = getExpectedMins(emp.jornadaTrabalho, dateStr, criteria.cargaHorariaDiaria);
+                const actualMins = parseTime(horasTrabalhadas) || 0;
+                const heMins = Math.max(0, actualMins - expectedMins);
+                horasExtras = heMins > 0 ? minutesToHHMM(heMins) : '0:00';
+              } else {
+                if (tipoDia === 'util') { isFalta = 1; autoFaltas++; }
+              }
+
+              insertVals.push(sql`(${emp.companyId}, ${emp.id}, ${dateStr}, ${input.mesReferencia}, 'registrado',
+                ${recs[0]?.entrada1 || null}, ${recs[0]?.saida1 || null}, ${recs[0]?.entrada2 || null}, ${recs[0]?.saida2 || null},
+                ${horasTrabalhadas}, ${horasExtras}, ${horasNoturnas},
+                ${isFalta}, ${isAtraso}, 0, ${minutosAtraso}, 0,
+                ${tipoDia}, ${timeRecordId}, ${obraId},
+                'auto', ${numBatidas}, 0)`);
+            }
+
+            if (criteria.fecharNoEscuro) {
+              for (let d = diaCorteAP + 1; d <= lastDayAP; d++) {
+                const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const dow = new Date(dateStr + 'T12:00:00Z').getUTCDay();
+                if (dow === 0) continue;
+                let tipoDia = 'util';
+                if (dow === 6) tipoDia = criteria.jornadaSabadoTipo === 'compensado' ? 'compensado' : 'sabado';
+
+                insertVals.push(sql`(${emp.companyId}, ${emp.id}, ${dateStr}, ${input.mesReferencia}, 'escuro',
+                  ${null}, ${null}, ${null}, ${null},
+                  ${minutesToHHMM(criteria.cargaHorariaDiaria * 60)}, '0:00', '0:00',
+                  0, 0, 0, 0, 0,
+                  ${tipoDia}, ${null}, ${null},
+                  'escuro', 0, 0)`);
+              }
+            }
+          }
+
+          if (insertVals.length > 0) {
+            const BATCH = 100;
+            for (let i = 0; i < insertVals.length; i += BATCH) {
+              const chunk = insertVals.slice(i, i + BATCH);
+              await db.execute(sql`
+                INSERT INTO timecard_daily ("companyId", "employeeId", "data", "mesCompetencia", "statusDia",
+                  "entrada1", "saida1", "entrada2", "saida2",
+                  "horasTrabalhadas", "horasExtras", "horasNoturnas",
+                  "isFalta", "isAtraso", "isSaidaAntecipada", "minutosAtraso", "minutosSaidaAntecipada",
+                  "tipoDia", "timeRecordId", "obraId",
+                  "origemRegistro", "numBatidas", "isInconsistente")
+                VALUES ${sql.join(chunk, sql`, `)}
+              `);
+            }
+          }
+
+          console.log(`[SimPag AUTO-PONTO] Concluído: ${empList.length} func, ${insertVals.length} registros, ${autoFaltas} faltas, ${autoAtrasos} atrasos`);
+
+          await db.execute(sql`
+            UPDATE payroll_periods SET
+              status = CASE WHEN status = 'aberta' THEN 'ponto_importado' ELSE status END,
+              "pontoImportadoEm" = COALESCE("pontoImportadoEm", NOW()),
+              "pontoImportadoPor" = COALESCE("pontoImportadoPor", 'Auto-SimPag')
+            WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+          `);
+        }
+      }
 
       // Get faltas from timecard_daily for the ponto period (registrado only)
       const faltasRows2 = ((await db.execute(sql`
