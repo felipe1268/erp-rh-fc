@@ -101,55 +101,57 @@ export default function ComunicadosInternos() {
               <p className="text-slate-500">Nenhum comunicado encontrado</p>
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b">
-                <tr>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600 w-32">Nº</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600">Título</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600 w-32">Data</th>
-                  <th className="text-left px-4 py-3 font-semibold text-slate-600 w-40">Documento</th>
-                  <th className="text-right px-4 py-3 font-semibold text-slate-600 w-32">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtrados.map((c: any) => (
-                  <tr key={c.id} className="border-b hover:bg-slate-50">
-                    <td className="px-4 py-3 font-mono font-bold text-blue-700">{c.numero}</td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-slate-800">{c.titulo}</div>
-                      {c.conteudo && <div className="text-xs text-slate-500 line-clamp-1">{c.conteudo}</div>}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{new Date(c.dataEmissao + "T12:00:00").toLocaleDateString("pt-BR")}</td>
-                    <td className="px-4 py-3">
-                      {c.documentoUrl ? (
-                        <a href={c.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs flex items-center gap-1">
-                          <FileText className="h-3 w-3" /> {c.fileName || "Ver"}
-                        </a>
-                      ) : (
-                        <label className="cursor-pointer inline-flex items-center gap-1 text-xs text-slate-500 hover:text-blue-600">
-                          {uploadingId === c.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-                          {uploadingId === c.id ? "Enviando..." : "Anexar"}
-                          <input type="file" className="hidden" accept=".pdf,.doc,.docx" disabled={uploadingId === c.id}
-                            onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(c.id, f); }} />
-                        </label>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {c.documentoUrl && (
-                        <label className="cursor-pointer inline-block mr-1">
-                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0" asChild><span><Upload className="h-3.5 w-3.5" /></span></Button>
-                          <input type="file" className="hidden" accept=".pdf,.doc,.docx" disabled={uploadingId === c.id}
-                            onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(c.id, f); }} />
-                        </label>
-                      )}
-                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50" onClick={() => { if (confirm(`Excluir comunicado ${c.numero}?`)) excluirMut.mutate({ id: c.id, companyId }); }}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </td>
+            <div className="overflow-auto max-h-[calc(100vh-220px)]">
+              <table className="w-full text-sm table-fixed">
+                <thead className="bg-slate-50 border-b sticky top-0 z-10">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-semibold text-slate-600 w-28">Nº</th>
+                    <th className="text-left px-4 py-3 font-semibold text-slate-600">Título</th>
+                    <th className="text-left px-4 py-3 font-semibold text-slate-600 w-28">Data</th>
+                    <th className="text-left px-4 py-3 font-semibold text-slate-600 w-36">Documento</th>
+                    <th className="text-right px-4 py-3 font-semibold text-slate-600 w-28">Ações</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filtrados.map((c: any) => (
+                    <tr key={c.id} className="border-b hover:bg-slate-50">
+                      <td className="px-4 py-3 font-mono font-bold text-blue-700">{c.numero}</td>
+                      <td className="px-4 py-3 overflow-hidden">
+                        <div className="font-medium text-slate-800 truncate">{c.titulo}</div>
+                        {c.conteudo && <div className="text-xs text-slate-500 truncate">{c.conteudo}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{new Date(c.dataEmissao + "T12:00:00").toLocaleDateString("pt-BR")}</td>
+                      <td className="px-4 py-3">
+                        {c.documentoUrl ? (
+                          <a href={c.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs flex items-center gap-1">
+                            <FileText className="h-3 w-3 flex-shrink-0" /> <span className="truncate">{c.fileName || "Ver"}</span>
+                          </a>
+                        ) : (
+                          <label className="cursor-pointer inline-flex items-center gap-1 text-xs text-slate-500 hover:text-blue-600">
+                            {uploadingId === c.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                            {uploadingId === c.id ? "Enviando..." : "Anexar"}
+                            <input type="file" className="hidden" accept=".pdf,.doc,.docx" disabled={uploadingId === c.id}
+                              onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(c.id, f); }} />
+                          </label>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {c.documentoUrl && (
+                          <label className="cursor-pointer inline-block mr-1">
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" asChild><span><Upload className="h-3.5 w-3.5" /></span></Button>
+                            <input type="file" className="hidden" accept=".pdf,.doc,.docx" disabled={uploadingId === c.id}
+                              onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(c.id, f); }} />
+                          </label>
+                        )}
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50" onClick={() => { if (confirm(`Excluir comunicado ${c.numero}?`)) excluirMut.mutate({ id: c.id, companyId }); }}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
