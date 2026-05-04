@@ -4653,8 +4653,8 @@ export const fechamentoPontoRouter = router({
         }
       }
 
-      // Ordena por mais faltas injustificadas primeiro
-      result.sort((a, b) => (b.injustificadas - a.injustificadas) || (b.atrasos - a.atrasos) || a.nomeCompleto.localeCompare(b.nomeCompleto));
+      // Ordena por nome em ordem alfabética
+      result.sort((a, b) => a.nomeCompleto.localeCompare(b.nomeCompleto, "pt-BR"));
 
       return { funcionarios: result, totais };
     }),
