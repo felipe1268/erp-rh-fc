@@ -729,6 +729,20 @@ export default function Ferias() {
     },
     onError: (e: any) => toast.error(e.message),
   });
+  const [showReverterEmGozoDialog, setShowReverterEmGozoDialog] = useState(false);
+  const [reverterEmGozoItem, setReverterEmGozoItem] = useState<any>(null);
+  const [reverterEmGozoMotivo, setReverterEmGozoMotivo] = useState("");
+  const reverterEmGozo = trpc.avisoPrevio.ferias.reverterEmGozo.useMutation({
+    onSuccess: (data: any) => {
+      refetch(); refetchVencidas();
+      utils.employees.list.invalidate();
+      setShowReverterEmGozoDialog(false);
+      setReverterEmGozoItem(null);
+      setReverterEmGozoMotivo("");
+      toast.success(`Férias revertidas! Status voltou para: ${data.novoStatus === 'agendada' ? 'Agendada' : 'Pendente'}`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   // Employee search
   const [empSearch, setEmpSearch] = useState("");
@@ -1037,6 +1051,15 @@ export default function Ferias() {
                                     }
                                   }}>
                                     <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Concluir
+                                  </Button>
+                                )}
+                                {f.status === "em_gozo" && (
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-red-600 hover:bg-red-50 font-medium text-xs" title="Reverter Em Gozo (cancelar / erro)" onClick={() => {
+                                    setReverterEmGozoItem(f);
+                                    setReverterEmGozoMotivo("");
+                                    setShowReverterEmGozoDialog(true);
+                                  }}>
+                                    <Undo2 className="h-3.5 w-3.5 mr-1" /> Reverter
                                   </Button>
                                 )}
                                 {f.status === "concluida" && (
@@ -2658,6 +2681,52 @@ export default function Ferias() {
             >
               {reverterParaEmGozo.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Undo2 className="h-4 w-4 mr-2" />}
               Reverter para Em Gozo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== DIALOG: REVERTER FÉRIAS EM GOZO → AGENDADA/PENDENTE ===== */}
+      <Dialog open={showReverterEmGozoDialog} onOpenChange={(open) => { if (!open) { setShowReverterEmGozoDialog(false); setReverterEmGozoItem(null); setReverterEmGozoMotivo(""); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Undo2 className="h-5 w-5" /> Reverter Férias Em Gozo
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-sm font-medium text-red-800">As férias serão revertidas e o colaborador voltará ao status "Ativo".</p>
+              <p className="text-xs text-red-600 mt-1">Use esta opção em caso de preenchimento errado ou cancelamento das férias.</p>
+            </div>
+            {reverterEmGozoItem && (
+              <div className="bg-muted/30 rounded-lg p-3">
+                <p className="text-sm font-medium">{reverterEmGozoItem.employeeName}</p>
+                <p className="text-xs text-muted-foreground">Período: {formatDate(reverterEmGozoItem.periodoAquisitivoInicio)} a {formatDate(reverterEmGozoItem.periodoAquisitivoFim)}</p>
+                {reverterEmGozoItem.dataInicio && <p className="text-xs text-muted-foreground">Gozo: {formatDate(reverterEmGozoItem.dataInicio)} a {formatDate(reverterEmGozoItem.dataFim)}</p>}
+                {reverterEmGozoItem.valorTotal && <p className="text-sm text-muted-foreground mt-1">Valor: {formatMoeda(parseFloat(reverterEmGozoItem.valorTotal || '0'))}</p>}
+              </div>
+            )}
+            <div>
+              <label className="text-sm font-medium">Motivo da reversão <span className="text-red-500">*</span></label>
+              <Textarea
+                placeholder="Ex: Preenchimento errado, férias canceladas pelo colaborador..."
+                value={reverterEmGozoMotivo}
+                onChange={(e) => setReverterEmGozoMotivo(e.target.value)}
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setShowReverterEmGozoDialog(false); setReverterEmGozoItem(null); setReverterEmGozoMotivo(""); }}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={!reverterEmGozoMotivo.trim() || reverterEmGozo.isPending}
+              onClick={() => { if (reverterEmGozoItem) reverterEmGozo.mutate({ id: reverterEmGozoItem.id, motivo: reverterEmGozoMotivo.trim() }); }}
+            >
+              {reverterEmGozo.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Undo2 className="h-4 w-4 mr-2" />}
+              Reverter
             </Button>
           </DialogFooter>
         </DialogContent>

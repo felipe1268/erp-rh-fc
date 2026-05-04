@@ -2815,6 +2815,65 @@ export const avisoPrevioFeriasRouter = router({
       }),
 
     // ============================================================
+    // REVERTER FÉRIAS EM GOZO → AGENDADA (cancelamento / erro de preenchimento)
+    // ============================================================
+    reverterEmGozo: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        motivo: z.string().min(1, 'Motivo é obrigatório'),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [periodo] = await db.select().from(vacationPeriods).where(eq(vacationPeriods.id, input.id));
+        if (!periodo) throw new TRPCError({ code: 'NOT_FOUND', message: 'Período de férias não encontrado.' });
+        if (periodo.status !== 'em_gozo') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas férias com status "Em Gozo" podem ser revertidas.' });
+        }
+        const obsAnterior = periodo.observacoes || '';
+        const novaObs = `[REVERTIDA DE EM GOZO] por ${ctx.user.name} em ${new Date().toLocaleDateString('pt-BR')}. Motivo: ${input.motivo}${obsAnterior ? '\n---\n' + obsAnterior : ''}`;
+        const novoStatus = periodo.dataInicio ? 'agendada' : 'pendente';
+        await db.update(vacationPeriods).set({
+          status: novoStatus,
+          observacoes: novaObs,
+        } as any).where(eq(vacationPeriods.id, input.id));
+
+        const outrasEmGozo = await db.select({ id: vacationPeriods.id })
+          .from(vacationPeriods)
+          .where(and(
+            eq(vacationPeriods.employeeId, periodo.employeeId),
+            eq(vacationPeriods.status, 'em_gozo'),
+            isNull(vacationPeriods.deletedAt),
+          ));
+        if (outrasEmGozo.length === 0) {
+          const [empAnt] = await db.select({ status: employees.status, nomeCompleto: employees.nomeCompleto })
+            .from(employees).where(eq(employees.id, periodo.employeeId));
+          if (empAnt && empAnt.status === 'Ferias') {
+            await db.update(employees).set({ status: 'Ativo' } as any)
+              .where(and(eq(employees.id, periodo.employeeId), eq(employees.status, 'Ferias')));
+            await logStatusChange({
+              db, companyId: periodo.companyId, employeeId: periodo.employeeId,
+              nomeCompleto: empAnt.nomeCompleto, statusAnterior: 'Ferias',
+              statusNovo: 'Ativo', alteradoPor: ctx.user?.name ?? 'Sistema',
+              alteradoPorUserId: ctx.user?.id, motivo: `Férias revertidas de Em Gozo: ${input.motivo}`,
+              origemModulo: 'ferias.reverterEmGozo',
+            });
+          }
+        }
+
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? 'Sistema',
+          action: 'REVERTER_FERIAS_EM_GOZO',
+          module: 'ferias',
+          entityType: 'vacationPeriods',
+          entityId: input.id,
+          details: `Férias revertidas de Em Gozo para ${novoStatus}. Motivo: ${input.motivo}`,
+        });
+
+        return { success: true, novoStatus };
+      }),
+
+    // ============================================================
     // REVERTER FÉRIAS CONCLUÍDA → EM GOZO (disponível a todos)
     // ============================================================
     reverterParaEmGozo: protectedProcedure
