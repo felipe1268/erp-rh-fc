@@ -441,7 +441,15 @@ Regras:
     // Sincronizar revisões do changelog com o banco de dados
     import("../syncRevisions").then(m => m.syncRevisions()).catch(e => console.error("[SyncRevisions] Falha ao iniciar:", e));
     // Sincronizar colunas do schema Drizzle → banco Neon (ADD COLUMN IF NOT EXISTS)
-    import("../syncSchema").then(m => m.syncSchema()).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
+    import("../syncSchema").then(m => m.syncSchema()).then(async () => {
+      try {
+        const { getDb } = await import("../db");
+        const db = (await getDb())!;
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`ALTER TABLE curriculos ADD COLUMN IF NOT EXISTS historico_status_json TEXT`);
+        console.log(`[SyncSchema+] Coluna historico_status_json garantida na tabela curriculos.`);
+      } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
+    }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
     const COLFIX_VERSION = "v1325-2026-05-03";
