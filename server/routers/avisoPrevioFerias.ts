@@ -340,6 +340,14 @@ export const avisoPrevioFeriasRouter = router({
           descontarAvisoNaoCumprido: terminationNotices.descontarAvisoNaoCumprido,
           novoEmpregoComunicadoEm: terminationNotices.novoEmpregoComunicadoEm,
           novoEmpregoCartaUrl: terminationNotices.novoEmpregoCartaUrl,
+          baixaRescisaoValor: terminationNotices.baixaRescisaoValor,
+          baixaRescisaoData: terminationNotices.baixaRescisaoData,
+          baixaRescisaoPor: terminationNotices.baixaRescisaoPor,
+          baixaRescisaoObs: terminationNotices.baixaRescisaoObs,
+          baixaFgtsValor: terminationNotices.baixaFgtsValor,
+          baixaFgtsData: terminationNotices.baixaFgtsData,
+          baixaFgtsPor: terminationNotices.baixaFgtsPor,
+          baixaFgtsObs: terminationNotices.baixaFgtsObs,
           motivoCancelamento: terminationNotices.motivoCancelamento,
           canceladoPorNome: sql<string>`"termination_notices"."canceladoPorNome"`.as("canceladoPorNome"),
           canceladoPorId: sql<number>`"termination_notices"."canceladoPorId"`.as("canceladoPorId"),
@@ -1487,8 +1495,9 @@ export const avisoPrevioFeriasRouter = router({
     darBaixa: protectedProcedure
       .input(z.object({
         id: z.number(),
+        tipo: z.enum(['rescisao', 'fgts']),
+        valor: z.string(),
         observacoes: z.string().optional(),
-        // Desligamento integrado
         desligarFuncionario: z.boolean().optional(),
         categoriaDesligamento: z.string().optional(),
         motivoDesligamento: z.string().optional(),
@@ -1502,7 +1511,20 @@ export const avisoPrevioFeriasRouter = router({
         if (aviso.status !== 'aguardando_pagamento')
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Apenas avisos "Aguardando Pagamento" podem receber baixa' });
 
-        // Validar campos de desligamento
+        if (input.tipo === 'rescisao' && (aviso as any).baixaRescisaoData)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'A baixa da rescisão já foi registrada.' });
+        if (input.tipo === 'fgts' && (aviso as any).baixaFgtsData)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'A baixa do FGTS já foi registrada.' });
+
+        const isPedidoDemissao = aviso.tipo === 'empregado_trabalhado' || aviso.tipo === 'empregado_indenizado';
+        const fgtsNaoAplica = isPedidoDemissao;
+        if (input.tipo === 'fgts' && fgtsNaoAplica)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Multa FGTS não se aplica a pedido de demissão.' });
+
+        const valorNum = parseFloat(input.valor);
+        if (isNaN(valorNum) || valorNum < 0)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Valor inválido. Informe um valor numérico positivo.' });
+
         if (input.desligarFuncionario) {
           if (!input.categoriaDesligamento?.trim())
             throw new TRPCError({ code: 'BAD_REQUEST', message: 'A categoria do desligamento é obrigatória.' });
@@ -1510,23 +1532,12 @@ export const avisoPrevioFeriasRouter = router({
             throw new TRPCError({ code: 'BAD_REQUEST', message: 'O motivo da inclusão na blacklist é obrigatório.' });
         }
 
-        const hoje = new Date().toISOString().split('T')[0];
-        const obs = input.observacoes
-          ? `${aviso.observacoes ? aviso.observacoes + '\n' : ''}[Baixa em ${hoje} por ${ctx.user.name}]: ${input.observacoes}`
-          : aviso.observacoes ?? null;
+        const outraBaixaJaFeita = input.tipo === 'rescisao'
+          ? !!(aviso as any).baixaFgtsData
+          : !!(aviso as any).baixaRescisaoData;
+        const deveConcluir = outraBaixaJaFeita || fgtsNaoAplica;
 
-        // 1. Marcar aviso como concluído
-        await db.update(terminationNotices).set({
-          status: 'concluido',
-          dataConclusao: hoje,
-          dataBaixa: hoje,
-          observacoes: obs,
-          updatedAt: sql`NOW()`,
-        } as any).where(eq(terminationNotices.id, input.id));
-
-        // 2. Verificar checklist de desligamento antes de permitir
-        let desligouFuncionario = false;
-        if (input.desligarFuncionario && aviso.employeeId) {
+        if (deveConcluir && input.desligarFuncionario && aviso.employeeId) {
           const checklistItems = await db.select().from(employeeTerminationChecklist)
             .where(and(eq(employeeTerminationChecklist.companyId, aviso.companyId), eq(employeeTerminationChecklist.employeeId, aviso.employeeId)));
           if (checklistItems.length > 0) {
@@ -1536,7 +1547,37 @@ export const avisoPrevioFeriasRouter = router({
             }
           }
         }
-        if (input.desligarFuncionario && aviso.employeeId) {
+
+        const hoje = new Date().toISOString().split('T')[0];
+        const tipoLabel = input.tipo === 'rescisao' ? 'Rescisão' : 'Multa FGTS';
+        const obsAppend = input.observacoes
+          ? `\n[Baixa ${tipoLabel} em ${hoje} por ${ctx.user.name}]: ${input.observacoes}`
+          : '';
+        const obsNovo = (aviso.observacoes || '') + obsAppend || null;
+
+        const updateData: any = { observacoes: obsNovo, updatedAt: sql`NOW()` };
+        if (input.tipo === 'rescisao') {
+          updateData.baixaRescisaoValor = input.valor;
+          updateData.baixaRescisaoData = hoje;
+          updateData.baixaRescisaoPor = ctx.user.name ?? 'Sistema';
+          updateData.baixaRescisaoObs = input.observacoes || null;
+        } else {
+          updateData.baixaFgtsValor = input.valor;
+          updateData.baixaFgtsData = hoje;
+          updateData.baixaFgtsPor = ctx.user.name ?? 'Sistema';
+          updateData.baixaFgtsObs = input.observacoes || null;
+        }
+
+        if (deveConcluir) {
+          updateData.status = 'concluido';
+          updateData.dataConclusao = hoje;
+          updateData.dataBaixa = hoje;
+        }
+
+        await db.update(terminationNotices).set(updateData).where(eq(terminationNotices.id, input.id));
+
+        let desligouFuncionario = false;
+        if (deveConcluir && input.desligarFuncionario && aviso.employeeId) {
           const novoStatus = input.incluirListaNegra ? 'Lista_Negra' : 'Desligado';
           const empUpdate: any = {
             status: novoStatus,
@@ -1564,7 +1605,6 @@ export const avisoPrevioFeriasRouter = router({
             origemModulo: 'avisoPrevio.darBaixa',
           });
 
-          // Auto-desalocação de obra
           try {
             const [aloc] = await db.select({ id: obraFuncionarios.id })
               .from(obraFuncionarios)
@@ -1595,10 +1635,10 @@ export const avisoPrevioFeriasRouter = router({
           module: 'aviso_previo',
           entityType: 'terminationNotices',
           entityId: input.id,
-          details: `Baixa dada por ${ctx.user.name} em ${hoje}.${desligouFuncionario ? ` Funcionário desligado (${input.incluirListaNegra ? 'Lista Negra' : 'Desligado'}).` : ''} Enviado ao financeiro.`,
+          details: `Baixa ${tipoLabel} (R$ ${input.valor}) por ${ctx.user.name} em ${hoje}.${deveConcluir ? ' Processo concluído.' : ' Aguardando baixa complementar.'}${desligouFuncionario ? ` Funcionário desligado.` : ''}`,
         });
 
-        return { success: true, desligouFuncionario };
+        return { success: true, desligouFuncionario, concluido: deveConcluir };
       }),
 
     /** Reverter status de Aguardando Pagamento ou Concluído de volta para Em Andamento */
@@ -1614,7 +1654,16 @@ export const avisoPrevioFeriasRouter = router({
         await db.update(terminationNotices).set({
           status: 'em_andamento',
           dataConclusao: null,
+          dataBaixa: null,
           revertidoManualmente: 1,
+          baixaRescisaoValor: null,
+          baixaRescisaoData: null,
+          baixaRescisaoPor: null,
+          baixaRescisaoObs: null,
+          baixaFgtsValor: null,
+          baixaFgtsData: null,
+          baixaFgtsPor: null,
+          baixaFgtsObs: null,
           updatedAt: sql`NOW()`,
         } as any).where(eq(terminationNotices.id, input.id));
         
@@ -1639,6 +1688,15 @@ export const avisoPrevioFeriasRouter = router({
         const result = await db.update(terminationNotices).set({
           status: 'aguardando_pagamento',
           dataConclusao: null,
+          dataBaixa: null,
+          baixaRescisaoValor: null,
+          baixaRescisaoData: null,
+          baixaRescisaoPor: null,
+          baixaRescisaoObs: null,
+          baixaFgtsValor: null,
+          baixaFgtsData: null,
+          baixaFgtsPor: null,
+          baixaFgtsObs: null,
           updatedAt: sql`NOW()`,
         } as any).where(and(
           eq(terminationNotices.companyId, input.companyId),

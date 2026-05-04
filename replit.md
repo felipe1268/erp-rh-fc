@@ -259,6 +259,16 @@ When creating a new module, ALWAYS register it in ALL 3 places:
 2. **`client/src/pages/Configuracoes.tsx`** → `MODULE_INFO` object (label, subtitle, icon, colors, description) AND `MODULE_PAGES` object (sub-features with section/label/path)
 3. **`client/src/pages/ModuleHub.tsx`** → `MODULES` array (icon, label, path, theme colors)
 
+## Dar Baixa — Aviso Prévio (Rescisão + FGTS separados)
+- Fluxo de baixa agora é **duplo**: Rescisão (pago ao colaborador) e Multa FGTS (pago à Caixa Econômica Federal) são registradas separadamente
+- 8 colunas em `termination_notices`: `baixa_rescisao_valor`, `baixa_rescisao_data`, `baixa_rescisao_por`, `baixa_rescisao_obs`, `baixa_fgts_valor`, `baixa_fgts_data`, `baixa_fgts_por`, `baixa_fgts_obs`
+- Status só muda para `concluido` quando **ambas** as baixas estão registradas (ou FGTS N/A para pedido de demissão)
+- Modal com seletor de tipo (cards Rescisão vs Multa FGTS), valor editável com botão "Usar Estimado", observações por baixa
+- Detalhe mostra registro de baixas com valores/datas/responsável
+- Tabela mostra badges "Rescisão OK" / "FGTS OK" para baixas parciais
+- `revertConcluido` limpa todos os 8 campos de baixa ao reverter
+- Desligamento do funcionário só ocorre na **última** baixa (quando processo conclui)
+
 ## Auditoria de Status de Funcionários (Rev. 1104)
 - Tabela: `employee_status_log` — registra toda alteração de status com quem/quando/motivo/módulo
 - Helper: `server/lib/employeeStatusHelper.ts` — `updateEmployeeStatus()` e `logStatusChange()`
