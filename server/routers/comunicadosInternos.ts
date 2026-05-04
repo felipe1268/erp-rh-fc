@@ -6,6 +6,24 @@ import { eq, and, sql, desc, isNull } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { TRPCError } from "@trpc/server";
 
+async function extractTextFromBuffer(buffer: Buffer, ext: string): Promise<string | null> {
+  try {
+    if (ext === "pdf") {
+      const pdfParse = (await import("pdf-parse")).default;
+      const data = await pdfParse(buffer);
+      return data.text?.trim() || null;
+    }
+    if (ext === "docx") {
+      const mammoth = await import("mammoth");
+      const result = await mammoth.extractRawText({ buffer });
+      return result.value?.trim() || null;
+    }
+  } catch (e: any) {
+    console.error(`[ComunicadosInternos] Erro ao extrair texto (${ext}):`, e.message);
+  }
+  return null;
+}
+
 function formatNumero(seq: number, ano: number): string {
   return `${String(seq).padStart(3, "0")}/${ano}`;
 }
@@ -152,8 +170,16 @@ export const comunicadosInternosRouter = router({
       if (row.status === "concluido") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Comunicado concluído não pode ser alterado. Reverta o status primeiro." });
       }
+      const ext = (input.fileName.split(".").pop() || "").toLowerCase();
+      const allowedExts = ["pdf", "doc", "docx"];
+      if (!allowedExts.includes(ext)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Formato não permitido. Use PDF, DOC ou DOCX." });
+      }
       const buffer = Buffer.from(input.fileBase64, "base64");
-      const ext = (input.fileName.split(".").pop() || "pdf").toLowerCase();
+      const maxSize = 10 * 1024 * 1024;
+      if (buffer.length > maxSize) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo muito grande. Tamanho máximo: 10 MB." });
+      }
       const ct = ext === "pdf" ? "application/pdf"
         : ext === "doc" ? "application/msword"
         : ext === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -163,7 +189,26 @@ export const comunicadosInternosRouter = router({
       await db.update(comunicadosInternos)
         .set({ documentoUrl: url, fileName: input.fileName, updatedAt: sql`NOW()` })
         .where(eq(comunicadosInternos.id, input.id));
-      return { url };
+
+      const extractedText = await extractTextFromBuffer(buffer, ext);
+      return { url, extractedText };
+    }),
+
+  removerAnexo: protectedProcedure
+    .input(z.object({
+      id: z.number().int().positive(),
+      companyId: z.number().int().positive(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const row = await ensureOwnership(db, input.id, input.companyId);
+      if (row.status === "concluido") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Comunicado concluído não pode ser alterado. Reverta o status primeiro." });
+      }
+      await db.update(comunicadosInternos)
+        .set({ documentoUrl: null, fileName: null, updatedAt: sql`NOW()` })
+        .where(eq(comunicadosInternos.id, input.id));
+      return { success: true };
     }),
 
   excluir: protectedProcedure

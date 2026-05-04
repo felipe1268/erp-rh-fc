@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft, Pencil, CheckCircle2, RotateCcw, Lock } from "lucide-react";
+import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft, Pencil, CheckCircle2, RotateCcw, Lock, X } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -32,6 +32,7 @@ export default function ComunicadosInternos() {
   const [viewComunicadoId, setViewComunicadoId] = useState<number | null>(null);
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ titulo: "", conteudo: "" });
+  const [pendingText, setPendingText] = useState<{ id: number; text: string } | null>(null);
 
   const { data: comunicados = [], isLoading } = trpc.comunicadosInternos.listar.useQuery(
     { companyId },
@@ -48,8 +49,26 @@ export default function ComunicadosInternos() {
     onError: (e) => toast.error(e.message),
   });
   const uploadMut = trpc.comunicadosInternos.uploadDoc.useMutation({
-    onSuccess: () => { utils.comunicadosInternos.listar.invalidate(); toast.success("Documento anexado"); setUploadingId(null); },
+    onSuccess: (data, variables) => {
+      utils.comunicadosInternos.listar.invalidate();
+      toast.success("Documento anexado");
+      setUploadingId(null);
+      if (data.extractedText) {
+        const currentCom = comunicados.find((c: any) => c.id === variables.id);
+        const currentText = currentCom?.conteudo?.trim();
+        if (!currentText) {
+          atualizarMut.mutate({ id: variables.id, companyId, conteudo: data.extractedText });
+          toast.success("Texto do documento preenchido automaticamente");
+        } else {
+          setPendingText({ id: variables.id, text: data.extractedText });
+        }
+      }
+    },
     onError: (e) => { toast.error(e.message); setUploadingId(null); },
+  });
+  const removerAnexoMut = trpc.comunicadosInternos.removerAnexo.useMutation({
+    onSuccess: () => { utils.comunicadosInternos.listar.invalidate(); toast.success("Anexo removido"); },
+    onError: (e) => toast.error(e.message),
   });
   const atualizarMut = trpc.comunicadosInternos.atualizar.useMutation({
     onSuccess: () => { utils.comunicadosInternos.listar.invalidate(); toast.success("Comunicado atualizado"); setEditId(null); },
@@ -144,9 +163,18 @@ export default function ComunicadosInternos() {
               <Printer className="h-4 w-4 mr-1" /> Imprimir
             </Button>
             {c.documentoUrl && (
-              <Button variant="outline" size="sm" onClick={() => window.open(c.documentoUrl, '_blank')}>
-                <FileText className="h-4 w-4 mr-1" /> Ver Anexo
-              </Button>
+              <>
+                <Button variant="outline" size="sm" onClick={() => window.open(c.documentoUrl, '_blank')}>
+                  <FileText className="h-4 w-4 mr-1" /> Ver Anexo
+                </Button>
+                {!isConcluido && (
+                  <Button variant="outline" size="sm" className="border-red-200 text-red-600 hover:bg-red-50" disabled={removerAnexoMut.isPending}
+                    onClick={() => { if (confirm("Remover o anexo deste comunicado?")) removerAnexoMut.mutate({ id: c.id, companyId }); }}>
+                    {removerAnexoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <X className="h-4 w-4 mr-1" />}
+                    Remover Anexo
+                  </Button>
+                )}
+              </>
             )}
             {!c.documentoUrl && !isConcluido && (
               <label className="cursor-pointer">
@@ -306,9 +334,18 @@ export default function ComunicadosInternos() {
                         <td className="px-4 py-3 text-slate-600">{new Date(c.dataEmissao + "T12:00:00").toLocaleDateString("pt-BR")}</td>
                         <td className="px-4 py-3">
                           {c.documentoUrl ? (
-                            <a href={c.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs flex items-center gap-1">
-                              <FileText className="h-3 w-3 flex-shrink-0" /> <span className="truncate">{c.fileName || "Ver"}</span>
-                            </a>
+                            <div className="flex items-center gap-1">
+                              <a href={c.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs flex items-center gap-1">
+                                <FileText className="h-3 w-3 flex-shrink-0" /> <span className="truncate">{c.fileName || "Ver"}</span>
+                              </a>
+                              {!isConcluido && (
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500 hover:bg-red-50" title="Remover anexo"
+                                  disabled={removerAnexoMut.isPending}
+                                  onClick={() => { if (confirm("Remover o anexo?")) removerAnexoMut.mutate({ id: c.id, companyId }); }}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
                           ) : !isConcluido ? (
                             <label className="cursor-pointer inline-flex items-center gap-1 text-xs text-slate-500 hover:text-blue-600">
                               {uploadingId === c.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
@@ -406,6 +443,32 @@ export default function ComunicadosInternos() {
             }} disabled={atualizarMut.isPending} className="bg-amber-600 hover:bg-amber-700">
               {atualizarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Pencil className="h-4 w-4 mr-1" />}
               Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pendingText !== null} onOpenChange={(open) => { if (!open) setPendingText(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Substituir texto do comunicado?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-600">
+            Este comunicado já possui texto. Deseja substituí-lo pelo conteúdo extraído do documento anexado?
+          </p>
+          <div className="max-h-32 overflow-y-auto border rounded p-3 bg-slate-50 text-xs text-slate-700 whitespace-pre-wrap">
+            {pendingText?.text.substring(0, 500)}{(pendingText?.text.length ?? 0) > 500 ? "..." : ""}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingText(null)}>Manter texto atual</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => {
+              if (pendingText) {
+                atualizarMut.mutate({ id: pendingText.id, companyId, conteudo: pendingText.text });
+                toast.success("Texto substituído pelo conteúdo do documento");
+              }
+              setPendingText(null);
+            }}>
+              Substituir texto
             </Button>
           </DialogFooter>
         </DialogContent>
