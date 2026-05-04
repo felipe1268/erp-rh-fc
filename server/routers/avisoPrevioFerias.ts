@@ -2154,6 +2154,9 @@ export const avisoPrevioFeriasRouter = router({
         const db = (await getDb())!;
         const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
         if (!emp || !emp.dataAdmissao) throw new TRPCError({ code: "BAD_REQUEST", message: "Funcionário sem data de admissão" });
+        if (emp.tipoContrato && emp.tipoContrato.toLowerCase() === 'pj') {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Prestadores de serviço (PJ) não têm direito a férias" });
+        }
         
         const periodos = calcularPeriodosFerias(emp.dataAdmissao);
         
@@ -2201,6 +2204,7 @@ export const avisoPrevioFeriasRouter = router({
           salario: employees.salarioBase,
           cargo: employees.cargo,
           status: employees.status,
+          tipoContrato: employees.tipoContrato,
         })
         .from(employees)
         .where(and(
@@ -2240,6 +2244,7 @@ export const avisoPrevioFeriasRouter = router({
           
           for (const func of funcs) {
             if (!func.dataAdmissao) continue;
+            if (func.tipoContrato && func.tipoContrato.toLowerCase() === 'pj') continue;
             const periodos = calcularPeriodosFerias(func.dataAdmissao);
             
             for (let pi = 0; pi < periodos.length; pi++) {
@@ -2559,6 +2564,7 @@ export const avisoPrevioFeriasRouter = router({
           nome: employees.nomeCompleto,
           dataAdmissao: employees.dataAdmissao,
           salario: employees.salarioBase,
+          tipoContrato: employees.tipoContrato,
         })
         .from(employees)
         .where(and(
@@ -2572,6 +2578,7 @@ export const avisoPrevioFeriasRouter = router({
         let funcionariosSemAdmissao = 0;
 
         for (const emp of ativos) {
+          if (emp.tipoContrato && emp.tipoContrato.toLowerCase() === 'pj') continue;
           if (!emp.dataAdmissao) {
             funcionariosSemAdmissao++;
             continue;
