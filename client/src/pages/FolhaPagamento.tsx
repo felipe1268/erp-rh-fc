@@ -3503,6 +3503,23 @@ export default function FolhaPagamento() {
             </div>
           </div>
 
+          {pagamentoResult.pontoProcessado === false && (
+            <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 print:hidden">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-semibold text-amber-800 text-sm">
+                    Ponto não processado para {formatMesAno(mesAno)}
+                  </p>
+                  <p className="text-amber-700 text-xs mt-1">
+                    Faltas, atrasos e DSR não serão computados porque o ponto ainda não foi processado nesta competência.
+                    Volte à etapa de Ponto, importe os registros e processe antes de simular o pagamento.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {(() => {
             const div = divergenciasFolha.data;
             const simDiv = pagamentoResult.divergencias;

@@ -2776,10 +2776,13 @@ export const payrollEngineRouter = router({
         return true;
       });
 
+      const allCompanyIds = resolveCompanyIds(input);
+      const allCompanyIdsSql = sql.join(allCompanyIds.map(id => sql`${id}`), sql`,`);
+
       // Get advances for this month
       const advRows = ((await db.execute(sql`
         SELECT * FROM payroll_advances 
-        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+        WHERE "companyId" IN (${allCompanyIdsSql}) AND "mesReferencia" = ${input.mesReferencia}
       `)) as any).rows || [];
       const advMap = new Map<number, any>();
       for (const a of (advRows || [])) {
@@ -2799,7 +2802,7 @@ export const payrollEngineRouter = router({
       const escuroFimSim = `${year}-${String(month).padStart(2, "0")}-${String(diaCorteSim).padStart(2, "0")}`;
       const adjRows = ((await db.execute(sql`
         SELECT * FROM payroll_adjustments 
-        WHERE "companyId" = ${input.companyId} 
+        WHERE "companyId" IN (${allCompanyIdsSql}) 
           AND "mesDesconto" = ${input.mesReferencia} 
           AND status IN ('pendente', 'aplicado')
           AND data >= ${escuroInicioSim}
@@ -2811,6 +2814,16 @@ export const payrollEngineRouter = router({
         adjMap.get(a.employeeId)!.push(a);
       }
 
+      // Check if timecard_daily has ANY records for this month (diagnostic)
+      const timecardCountRows = ((await db.execute(sql`
+        SELECT COUNT(*) as cnt FROM timecard_daily
+        WHERE "companyId" IN (${allCompanyIdsSql})
+          AND "mesCompetencia" = ${input.mesReferencia}
+          AND "statusDia" = 'registrado'
+      `)) as any).rows || [];
+      const timecardDailyCount = Number(timecardCountRows[0]?.cnt) || 0;
+      const pontoProcessado = timecardDailyCount > 0;
+
       // Get faltas from timecard_daily for the ponto period (registrado only)
       const faltasRows2 = ((await db.execute(sql`
         SELECT "employeeId", 
@@ -2820,7 +2833,7 @@ export const payrollEngineRouter = router({
           ARRAY_AGG(CASE WHEN "isFalta" = 1 THEN to_char(data, 'DD/MM/YYYY') END ORDER BY data) FILTER (WHERE "isFalta" = 1) as "diasFalta",
           ARRAY_AGG(CASE WHEN "isAtraso" = 1 THEN to_char(data, 'DD/MM/YYYY') || ' (' || "minutosAtraso" || ' min)' END ORDER BY data) FILTER (WHERE "isAtraso" = 1) as "diasAtraso"
         FROM timecard_daily 
-        WHERE "companyId" = ${input.companyId} 
+        WHERE "companyId" IN (${allCompanyIdsSql}) 
         AND "mesCompetencia" = ${input.mesReferencia}
         AND "statusDia" = 'registrado'
         GROUP BY "employeeId"
@@ -2838,7 +2851,7 @@ export const payrollEngineRouter = router({
                COALESCE("totalDsrFalta", 0)        AS "qtdFalta",
                COALESCE("valorTotalDsrFalta",  '0') AS "valorFalta"
         FROM ponto_descontos_resumo
-        WHERE "companyId" = ${input.companyId}
+        WHERE "companyId" IN (${allCompanyIdsSql})
           AND "mesReferencia" = ${input.mesReferencia}
       `)) as any).rows || [];
       const dsrMap = new Map<number, { qtdFalta: number; valorFalta: number }>();
@@ -2901,7 +2914,7 @@ export const payrollEngineRouter = router({
       await db.execute(sql`
         UPDATE payroll_adjustments 
         SET status = 'pendente', "paymentId" = NULL, "updatedAt" = NOW()
-        WHERE "companyId" = ${input.companyId} 
+        WHERE "companyId" IN (${allCompanyIdsSql}) 
           AND "mesDesconto" = ${input.mesReferencia} 
           AND status = 'aplicado'
       `);
@@ -2916,13 +2929,12 @@ export const payrollEngineRouter = router({
 
       const empIds = empList.map(e => e.id);
       const empIdsSql = sql.join(empIds.map(id => sql`${id}`), sql`,`);
-      const allCompanyIds = resolveCompanyIds(input);
 
       // PRE-FETCH: VR diário for all employees in one query
       const vrBatchRows = ((await db.execute(sql`
         SELECT DISTINCT ON ("employeeId") "employeeId", "valorDiario"
         FROM vr_benefits
-        WHERE "companyId" = ${input.companyId} AND "employeeId" IN (${empIdsSql})
+        WHERE "companyId" IN (${allCompanyIdsSql}) AND "employeeId" IN (${empIdsSql})
         ORDER BY "employeeId", "mesReferencia" DESC
       `)) as any).rows || [];
       const vrDiarioMap = new Map<number, number>();
@@ -2931,7 +2943,7 @@ export const payrollEngineRouter = router({
       // PRE-FETCH: VA (vr_benefits valorTotal) for this competência
       const vaBatchRows = ((await db.execute(sql`
         SELECT "employeeId", "valorTotal" FROM vr_benefits
-        WHERE "companyId" = ${input.companyId} AND "employeeId" IN (${empIdsSql}) AND "mesReferencia" = ${input.mesReferencia}
+        WHERE "companyId" IN (${allCompanyIdsSql}) AND "employeeId" IN (${empIdsSql}) AND "mesReferencia" = ${input.mesReferencia}
       `)) as any).rows || [];
       const vaMap = new Map<number, number>();
       for (const r of vaBatchRows) vaMap.set(Number(r.employeeId), parseBRL(r.valorTotal));
@@ -2942,7 +2954,7 @@ export const payrollEngineRouter = router({
         FROM timecard_daily td
         LEFT JOIN obras o ON td."obraId" = o.id
         WHERE td."employeeId" IN (${empIdsSql})
-          AND td."companyId" IN (${sql.join(allCompanyIds.map(id => sql`${id}`), sql`,`)})
+          AND td."companyId" IN (${allCompanyIdsSql})
           AND td."mesCompetencia" = ${input.mesReferencia}
           AND td."statusDia" = 'registrado'
           AND td."obraId" IS NOT NULL
@@ -2958,7 +2970,7 @@ export const payrollEngineRouter = router({
       const convenioBatchRows = ((await db.execute(sql`
         SELECT lp."employeeId" as employee_id, COALESCE(SUM(CAST(lp.valor AS DECIMAL(15,2))), 0) as "totalConvenio"
         FROM lancamentos_parceiros lp
-        WHERE lp."employeeId" IN (${empIdsSql}) AND lp."companyId" = ${input.companyId}
+        WHERE lp."employeeId" IN (${empIdsSql}) AND lp."companyId" IN (${allCompanyIdsSql})
           AND lp.competencia_desconto = ${input.mesReferencia}
           AND lp.status = 'aprovado'
         GROUP BY lp."employeeId"
@@ -2970,7 +2982,7 @@ export const payrollEngineRouter = router({
       const adjBatchRows = ((await db.execute(sql`
         SELECT "employeeId", tipo, "valorDesconto", "aprovadoRh", id, descricao, data
         FROM payroll_adjustments
-        WHERE "companyId" = ${input.companyId}
+        WHERE "companyId" IN (${allCompanyIdsSql})
           AND "employeeId" IN (${empIdsSql})
           AND "mesDesconto" = ${input.mesReferencia}
           AND status IN ('pendente','aplicado')
@@ -2988,7 +3000,7 @@ export const payrollEngineRouter = router({
         SELECT hpe."employeeId", COALESCE(SUM(CAST(hpe."valorHETotal" AS DECIMAL(15,2))), 0) as "totalHE"
         FROM he_period_employees hpe
         JOIN he_periods hp ON hp.id = hpe."hePeriodId"
-        WHERE hpe."companyId" = ${input.companyId}
+        WHERE hpe."companyId" IN (${allCompanyIdsSql})
           AND hpe."employeeId" IN (${empIdsSql})
           AND hp."mesReferencia" = ${input.mesReferencia}
           AND hp.status IN ('aprovado','pago')
@@ -3009,7 +3021,7 @@ export const payrollEngineRouter = router({
       const epiBatchRows = ((await db.execute(sql`
         SELECT "employeeId", status, valor_total, epi_nome, id
         FROM epi_discount_alerts
-        WHERE "companyId" = ${input.companyId}
+        WHERE "companyId" IN (${allCompanyIdsSql})
           AND "employeeId" IN (${empIdsSql})
           AND mes_referencia = ${input.mesReferencia}
       `)) as any).rows || [];
@@ -3326,6 +3338,8 @@ export const payrollEngineRouter = router({
         valeForaDaFolha,
         totalValeForaDaFolha: Math.round(totalValeForaDaFolhaBruto * 100) / 100,
         totalValeForaDaFolhaLiquido: Math.round(totalValeForaDaFolhaLiquido * 100) / 100,
+        pontoProcessado,
+        timecardDailyCount,
         message: divergencias.length > 0
           ? `Simulação concluída: ${empList.length} de ${allCltAtivos.length} CLTs ativos processados. ATENÇÃO: ${divergencias.length} funcionário(s) excluído(s) da folha — verifique as divergências.`
           : `Simulação concluída: ${empList.length} funcionários, líquido total R$ ${formatMoney(grandTotalLiquido)}`,

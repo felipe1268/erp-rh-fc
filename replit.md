@@ -139,6 +139,14 @@ SyncSchema + SyncRevisions run on every cold start → Neon DB kept up to date a
 - `VITE_APP_ID` — OAuth App ID (optional)
 - `OWNER_OPEN_ID` — Owner user OpenID (optional)
 
+## Payroll Multi-Company Architecture
+- **Consolidated payroll model**: Parent company (`input.companyId`) owns the payroll period and all payment records
+- **READ queries** (faltas, DSR, convênios, adjustments, advances, VR, VA, EPI, HE, timecard) use `allCompanyIds` IN clause to find data stored under subsidiary company IDs (60002, 60004, 90001)
+- **WRITE queries** (INSERT payments, DELETE old payments, UPDATE period) correctly use `input.companyId` since all output is consolidated under the parent company
+- `resolveCompanyIds(input)` from `server/companyHelper.ts` returns all company IDs for the group
+- `pontoProcessado` boolean + `timecardDailyCount` diagnostic fields added to simulation result payload
+- Frontend shows yellow warning banner when ponto not processed for the competência
+
 ## Golden Rules
 - **#0**: Verificar comportamento real no banco ANTES de declarar bug.
 - **#1**: Toda mudança = `APP_VERSION_NUMBER` em `shared/version.ts` + entrada em `shared/changelog.ts`.
