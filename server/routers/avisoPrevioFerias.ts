@@ -1641,6 +1641,110 @@ export const avisoPrevioFeriasRouter = router({
         return { success: true, desligouFuncionario, concluido: deveConcluir };
       }),
 
+    editarBaixa: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        tipo: z.enum(['rescisao', 'fgts']),
+        valor: z.string(),
+        observacoes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user.role !== 'admin_master')
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas o ADM Master pode editar baixas.' });
+        const valorNum = parseFloat(input.valor);
+        if (isNaN(valorNum) || valorNum < 0)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Valor inválido.' });
+        const db = (await getDb())!;
+        const [aviso] = await db.select().from(terminationNotices).where(eq(terminationNotices.id, input.id));
+        if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
+        if (input.tipo === 'rescisao' && !(aviso as any).baixaRescisaoData)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Não há baixa de rescisão registrada para editar.' });
+        if (input.tipo === 'fgts' && !(aviso as any).baixaFgtsData)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Não há baixa de FGTS registrada para editar.' });
+
+        const hoje = new Date().toISOString().split('T')[0];
+        const tipoLabel = input.tipo === 'rescisao' ? 'Rescisão' : 'Multa FGTS';
+        const updateData: any = { updatedAt: sql`NOW()` };
+        const valorAnterior = input.tipo === 'rescisao' ? (aviso as any).baixaRescisaoValor : (aviso as any).baixaFgtsValor;
+        if (input.tipo === 'rescisao') {
+          updateData.baixaRescisaoValor = input.valor;
+          updateData.baixaRescisaoObs = input.observacoes || (aviso as any).baixaRescisaoObs;
+        } else {
+          updateData.baixaFgtsValor = input.valor;
+          updateData.baixaFgtsObs = input.observacoes || (aviso as any).baixaFgtsObs;
+        }
+        const obsAppend = `\n[EDIÇÃO ${tipoLabel}] por ${ctx.user.name} em ${hoje}: R$ ${valorAnterior} → R$ ${input.valor}${input.observacoes ? '. Motivo: ' + input.observacoes : ''}`;
+        updateData.observacoes = (aviso.observacoes || '') + obsAppend;
+
+        await db.update(terminationNotices).set(updateData).where(eq(terminationNotices.id, input.id));
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? 'Sistema',
+          action: 'EDITAR_BAIXA_AVISO_PREVIO',
+          module: 'aviso_previo',
+          entityType: 'terminationNotices',
+          entityId: input.id,
+          details: `Baixa ${tipoLabel} editada: R$ ${valorAnterior} → R$ ${input.valor} por ${ctx.user.name}.${input.observacoes ? ' Motivo: ' + input.observacoes : ''}`,
+        });
+        return { success: true };
+      }),
+
+    estornarBaixa: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        tipo: z.enum(['rescisao', 'fgts']),
+        motivo: z.string().min(1, 'Motivo é obrigatório'),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user.role !== 'admin_master')
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas o ADM Master pode estornar baixas.' });
+        const db = (await getDb())!;
+        const [aviso] = await db.select().from(terminationNotices).where(eq(terminationNotices.id, input.id));
+        if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
+        if (input.tipo === 'rescisao' && !(aviso as any).baixaRescisaoData)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Não há baixa de rescisão para estornar.' });
+        if (input.tipo === 'fgts' && !(aviso as any).baixaFgtsData)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Não há baixa de FGTS para estornar.' });
+
+        const hoje = new Date().toISOString().split('T')[0];
+        const tipoLabel = input.tipo === 'rescisao' ? 'Rescisão' : 'Multa FGTS';
+        const valorEstornado = input.tipo === 'rescisao' ? (aviso as any).baixaRescisaoValor : (aviso as any).baixaFgtsValor;
+
+        const updateData: any = { updatedAt: sql`NOW()` };
+        if (input.tipo === 'rescisao') {
+          updateData.baixaRescisaoValor = null;
+          updateData.baixaRescisaoData = null;
+          updateData.baixaRescisaoPor = null;
+          updateData.baixaRescisaoObs = null;
+        } else {
+          updateData.baixaFgtsValor = null;
+          updateData.baixaFgtsData = null;
+          updateData.baixaFgtsPor = null;
+          updateData.baixaFgtsObs = null;
+        }
+
+        if (aviso.status === 'concluido') {
+          updateData.status = 'aguardando_pagamento';
+          updateData.dataConclusao = null;
+          updateData.dataBaixa = null;
+        }
+
+        const obsAppend = `\n[ESTORNO ${tipoLabel}] por ${ctx.user.name} em ${hoje}: R$ ${valorEstornado} estornado. Motivo: ${input.motivo}`;
+        updateData.observacoes = (aviso.observacoes || '') + obsAppend;
+
+        await db.update(terminationNotices).set(updateData).where(eq(terminationNotices.id, input.id));
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? 'Sistema',
+          action: 'ESTORNAR_BAIXA_AVISO_PREVIO',
+          module: 'aviso_previo',
+          entityType: 'terminationNotices',
+          entityId: input.id,
+          details: `Baixa ${tipoLabel} estornada (R$ ${valorEstornado}) por ${ctx.user.name}. Motivo: ${input.motivo}. ${aviso.status === 'concluido' ? 'Status revertido para Aguardando Pagamento.' : ''}`,
+        });
+        return { success: true, reabriu: aviso.status === 'concluido' };
+      }),
+
     /** Reverter status de Aguardando Pagamento ou Concluído de volta para Em Andamento */
     revertConcluido: protectedProcedure
       .input(z.object({ id: z.number() }))

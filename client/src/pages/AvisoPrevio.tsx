@@ -93,6 +93,11 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     motivoListaNegra: '',
   });
 
+  const isMaster = user?.role === 'admin_master';
+
+  const [editarBaixaDialog, setEditarBaixaDialog] = useState<{ open: boolean; avisoId: number | null; tipo: 'rescisao' | 'fgts'; valorAtual: string; obs: string }>({ open: false, avisoId: null, tipo: 'rescisao', valorAtual: '', obs: '' });
+  const [estornarBaixaDialog, setEstornarBaixaDialog] = useState<{ open: boolean; avisoId: number | null; tipo: 'rescisao' | 'fgts'; valor: string; motivo: string }>({ open: false, avisoId: null, tipo: 'rescisao', valor: '', motivo: '' });
+
   // Form state
   const [form, setForm] = useState<any>({});
   const [calculoPreview, setCalculoPreview] = useState<any>(null);
@@ -157,6 +162,26 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
       setStatusFilter("aguardando_pagamento");
     },
     onError: (err) => { toast.error(err.message || "Erro ao reativar avisos"); },
+  });
+  const editarBaixa = trpc.avisoPrevio.avisoPrevio.editarBaixa.useMutation({
+    onSuccess: () => {
+      refetch();
+      setEditarBaixaDialog({ open: false, avisoId: null, tipo: 'rescisao', valorAtual: '', obs: '' });
+      setShowDetailDialog(false);
+      setSelectedItem(null);
+      toast.success("Valor da baixa atualizado!");
+    },
+    onError: (err) => toast.error(err.message || "Erro ao editar baixa"),
+  });
+  const estornarBaixa = trpc.avisoPrevio.avisoPrevio.estornarBaixa.useMutation({
+    onSuccess: (res: any) => {
+      refetch();
+      setEstornarBaixaDialog({ open: false, avisoId: null, tipo: 'rescisao', valor: '', motivo: '' });
+      setShowDetailDialog(false);
+      setSelectedItem(null);
+      toast.success(res?.reabriu ? "Baixa estornada! Status voltou para Aguardando Pagamento." : "Baixa estornada com sucesso!");
+    },
+    onError: (err) => toast.error(err.message || "Erro ao estornar baixa"),
   });
   const darBaixa = trpc.avisoPrevio.avisoPrevio.darBaixa.useMutation({
     onSuccess: (res: any) => {
@@ -1221,7 +1246,19 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                                 <span className="text-[10px] text-green-600 ml-2">em {formatDate((selectedItem as any).baixaRescisaoData)} por {(selectedItem as any).baixaRescisaoPor}</span>
                               </div>
                             </div>
-                            <span className="text-sm font-bold text-green-700">{formatMoeda((selectedItem as any).baixaRescisaoValor)}</span>
+                            <div className="flex items-center gap-1">
+                              <span className="text-sm font-bold text-green-700">{formatMoeda((selectedItem as any).baixaRescisaoValor)}</span>
+                              {isMaster && (
+                                <>
+                                  <Button size="icon" variant="ghost" className="h-6 w-6 text-green-700 hover:bg-green-100" title="Editar valor" onClick={() => setEditarBaixaDialog({ open: true, avisoId: selectedItem.id, tipo: 'rescisao', valorAtual: (selectedItem as any).baixaRescisaoValor || '', obs: '' })}>
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500 hover:bg-red-100" title="Estornar baixa" onClick={() => setEstornarBaixaDialog({ open: true, avisoId: selectedItem.id, tipo: 'rescisao', valor: (selectedItem as any).baixaRescisaoValor || '', motivo: '' })}>
+                                    <RotateCcw className="h-3 w-3" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
                           </div>
                         )}
                         {(selectedItem as any).baixaFgtsData && (
@@ -1233,7 +1270,19 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                                 <span className="text-[10px] text-amber-600 ml-2">em {formatDate((selectedItem as any).baixaFgtsData)} por {(selectedItem as any).baixaFgtsPor}</span>
                               </div>
                             </div>
-                            <span className="text-sm font-bold text-amber-700">{formatMoeda((selectedItem as any).baixaFgtsValor)}</span>
+                            <div className="flex items-center gap-1">
+                              <span className="text-sm font-bold text-amber-700">{formatMoeda((selectedItem as any).baixaFgtsValor)}</span>
+                              {isMaster && (
+                                <>
+                                  <Button size="icon" variant="ghost" className="h-6 w-6 text-amber-700 hover:bg-amber-100" title="Editar valor" onClick={() => setEditarBaixaDialog({ open: true, avisoId: selectedItem.id, tipo: 'fgts', valorAtual: (selectedItem as any).baixaFgtsValor || '', obs: '' })}>
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500 hover:bg-red-100" title="Estornar baixa" onClick={() => setEstornarBaixaDialog({ open: true, avisoId: selectedItem.id, tipo: 'fgts', valor: (selectedItem as any).baixaFgtsValor || '', motivo: '' })}>
+                                    <RotateCcw className="h-3 w-3" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
                           </div>
                         )}
                         {selectedItem.status === 'aguardando_pagamento' && !(selectedItem as any).baixaRescisaoData && (
@@ -2786,6 +2835,99 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
               disabled={darBaixa.isPending}
             >
               {darBaixa.isPending ? "Processando..." : `Confirmar Baixa ${darBaixaForm.tipo === 'rescisao' ? 'Rescisão' : 'Multa FGTS'}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== DIALOG: EDITAR VALOR DA BAIXA (ADM Master) ===== */}
+      <Dialog open={editarBaixaDialog.open} onOpenChange={(v) => { if (!editarBaixa.isPending) setEditarBaixaDialog(s => ({ ...s, open: v })); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-blue-700">
+              <Pencil className="h-5 w-5" /> Editar Valor da Baixa — {editarBaixaDialog.tipo === 'rescisao' ? 'Rescisão' : 'Multa FGTS'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-sm font-medium text-blue-800">Alterar o valor registrado da baixa. O valor anterior será preservado no histórico.</p>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700">Novo valor (R$) *</label>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-sm font-semibold text-slate-500">R$</span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0,00"
+                  value={editarBaixaDialog.valorAtual}
+                  onChange={e => setEditarBaixaDialog(s => ({ ...s, valorAtual: e.target.value }))}
+                  className="h-9 text-sm flex-1"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700">Motivo da edição <span className="text-slate-400">(opcional)</span></label>
+              <Textarea
+                className="mt-1 text-sm"
+                rows={2}
+                placeholder="Ex: Correção de valor, desconto adicional..."
+                value={editarBaixaDialog.obs}
+                onChange={e => setEditarBaixaDialog(s => ({ ...s, obs: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditarBaixaDialog(s => ({ ...s, open: false }))} disabled={editarBaixa.isPending}>Cancelar</Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={!editarBaixaDialog.valorAtual.trim() || editarBaixa.isPending}
+              onClick={() => editarBaixa.mutate({ id: editarBaixaDialog.avisoId!, tipo: editarBaixaDialog.tipo, valor: editarBaixaDialog.valorAtual, observacoes: editarBaixaDialog.obs || undefined })}
+            >
+              {editarBaixa.isPending ? "Salvando..." : "Salvar Alteração"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== DIALOG: ESTORNAR BAIXA (ADM Master) ===== */}
+      <Dialog open={estornarBaixaDialog.open} onOpenChange={(v) => { if (!estornarBaixa.isPending) setEstornarBaixaDialog(s => ({ ...s, open: v })); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <RotateCcw className="h-5 w-5" /> Estornar Baixa — {estornarBaixaDialog.tipo === 'rescisao' ? 'Rescisão' : 'Multa FGTS'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-sm font-medium text-red-800">A baixa será completamente removida e o valor estornado.</p>
+              <p className="text-xs text-red-600 mt-1">Se o processo estiver concluído, ele voltará para "Aguardando Pagamento".</p>
+            </div>
+            {estornarBaixaDialog.valor && (
+              <div className="bg-muted/30 rounded-lg p-3">
+                <p className="text-sm text-muted-foreground">Valor a estornar: <span className="font-bold text-red-700">{formatMoeda(estornarBaixaDialog.valor)}</span></p>
+              </div>
+            )}
+            <div>
+              <label className="text-sm font-medium">Motivo do estorno <span className="text-red-500">*</span></label>
+              <Textarea
+                placeholder="Ex: Valor incorreto, pagamento não realizado, duplicidade..."
+                value={estornarBaixaDialog.motivo}
+                onChange={e => setEstornarBaixaDialog(s => ({ ...s, motivo: e.target.value }))}
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEstornarBaixaDialog(s => ({ ...s, open: false }))} disabled={estornarBaixa.isPending}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={!estornarBaixaDialog.motivo.trim() || estornarBaixa.isPending}
+              onClick={() => estornarBaixa.mutate({ id: estornarBaixaDialog.avisoId!, tipo: estornarBaixaDialog.tipo, motivo: estornarBaixaDialog.motivo.trim() })}
+            >
+              {estornarBaixa.isPending ? "Processando..." : "Confirmar Estorno"}
             </Button>
           </DialogFooter>
         </DialogContent>
