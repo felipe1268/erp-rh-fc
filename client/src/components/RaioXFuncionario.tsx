@@ -15,12 +15,15 @@ import {
   History, Zap, Scale, Car, TrendingUp, ChevronRight, Activity,
   Palmtree, Shield, FileSignature, Ban, Star, Eye, ScrollText, Wrench,
   Package, PackageX, CheckCircle, XCircle, ShoppingCart,
-  Trash2, Camera, Video, ImageIcon, Upload, ShieldCheck, Plus, Loader2
+  Trash2, Camera, Video, ImageIcon, Upload, ShieldCheck, Plus, Loader2, Pencil, RotateCcw
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import DocumentPreviewDialog, { canPreviewFile } from "@/components/DocumentPreviewDialog";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 function formatDate(d: string | null | undefined) {
   if (!d) return "-";
@@ -3255,6 +3258,64 @@ function ContratosTab({ employeeId, companyId, empNome }: { employeeId: number; 
         </Button>
       </div>
 
+      <Dialog open={editingContrato !== null} onOpenChange={(open) => { if (!open) setEditingContrato(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Contrato</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {editingContrato?.tipo === "experiencia" && (
+              <>
+                <div>
+                  <Label>Prazo de Experiência (dias)</Label>
+                  <Input type="number" className="mt-1" value={editContratoForm.prazoExperienciaDias}
+                    onChange={e => setEditContratoForm({ ...editContratoForm, prazoExperienciaDias: parseInt(e.target.value) || 0 })} />
+                </div>
+                <div>
+                  <Label>Prazo de Prorrogação (dias)</Label>
+                  <Input type="number" className="mt-1" value={editContratoForm.prazoProrrogacaoDias}
+                    onChange={e => setEditContratoForm({ ...editContratoForm, prazoProrrogacaoDias: parseInt(e.target.value) || 0 })} />
+                </div>
+              </>
+            )}
+            <div>
+              <Label>Função</Label>
+              <Input className="mt-1" value={editContratoForm.funcao}
+                onChange={e => setEditContratoForm({ ...editContratoForm, funcao: e.target.value })} />
+            </div>
+            <div>
+              <Label>Observações</Label>
+              <Input className="mt-1" value={editContratoForm.observacoes}
+                onChange={e => setEditContratoForm({ ...editContratoForm, observacoes: e.target.value })} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingContrato(null)}>Cancelar</Button>
+            <Button className="bg-amber-600 hover:bg-amber-700" disabled={editarMutation.isPending}
+              onClick={async () => {
+                if (!editingContrato) return;
+                try {
+                  await editarMutation.mutateAsync({
+                    id: editingContrato.id, companyId,
+                    ...(editingContrato.tipo === "experiencia" ? {
+                      prazoExperienciaDias: editContratoForm.prazoExperienciaDias,
+                      prazoProrrogacaoDias: editContratoForm.prazoProrrogacaoDias,
+                    } : {}),
+                    funcao: editContratoForm.funcao,
+                    observacoes: editContratoForm.observacoes || null,
+                  });
+                  utils.contracts.listarContratos.invalidate();
+                  setEditingContrato(null);
+                  toast.success("Contrato atualizado");
+                } catch (e: any) { alert("Erro: " + (e.message || "Erro")); }
+              }}>
+              {editarMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Pencil className="h-4 w-4 mr-1" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {contratos.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <ScrollText className="h-12 w-12 mx-auto mb-3 opacity-30" />
@@ -3283,11 +3344,34 @@ function ContratosTab({ employeeId, companyId, empNome }: { employeeId: number; 
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button variant="outline" size="sm" onClick={() => setViewingHtml(c.conteudoGerado)}>
+                  <Button variant="outline" size="sm" onClick={() => setViewingHtml(c.conteudoGerado)} title="Visualizar">
                     <Eye className="h-3.5 w-3.5" />
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleImprimir(c.conteudoGerado)}>
+                  <Button variant="outline" size="sm" onClick={() => handleImprimir(c.conteudoGerado)} title="Imprimir">
                     <Printer className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="outline" size="sm" title="Editar" className="text-amber-600 hover:bg-amber-50"
+                    onClick={() => {
+                      setEditingContrato(c);
+                      setEditContratoForm({
+                        prazoExperienciaDias: c.prazoExperienciaDias || 0,
+                        prazoProrrogacaoDias: c.prazoProrrogacaoDias || 0,
+                        funcao: c.funcao || "",
+                        observacoes: c.observacoes || "",
+                      });
+                    }}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="outline" size="sm" title="Excluir" className="text-red-600 hover:bg-red-50"
+                    disabled={excluirMutation.isPending}
+                    onClick={async () => {
+                      if (!confirm(`Excluir este contrato de ${tipoLabel[c.tipo] || c.tipo}? Esta ação não pode ser desfeita.`)) return;
+                      try {
+                        await excluirMutation.mutateAsync({ id: c.id, companyId });
+                        utils.contracts.listarContratos.invalidate();
+                      } catch (e: any) { alert("Erro ao excluir: " + (e.message || "Erro")); }
+                    }}>
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </div>
@@ -3336,6 +3420,21 @@ function ContratosTab({ employeeId, companyId, empNome }: { employeeId: number; 
                   <Button variant="outline" size="sm" className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
                     onClick={() => handleEfetivar(c)}>
                     Efetivar
+                  </Button>
+                )}
+
+                {/* Reverter efetivação (somente admin_master) */}
+                {c.status === "efetivado" && isAdminMaster && (
+                  <Button variant="outline" size="sm" className="text-amber-700 border-amber-300 hover:bg-amber-50"
+                    disabled={reverterMutation.isPending}
+                    onClick={async () => {
+                      if (!confirm("Reverter a efetivação deste contrato? O status voltará ao anterior.")) return;
+                      try {
+                        await reverterMutation.mutateAsync({ id: c.id, companyId });
+                        utils.contracts.listarContratos.invalidate();
+                      } catch (e: any) { alert("Erro: " + (e.message || "Erro")); }
+                    }}>
+                    <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reverter
                   </Button>
                 )}
               </div>

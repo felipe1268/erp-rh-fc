@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, getCompaniesForUser } from "../db";
 import { contractTemplates, employeeContracts, employees, companies } from "../../drizzle/schema";
 import { eq, and, desc, inArray, sql, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -587,11 +587,21 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
 
   excluirContrato: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const [contrato] = await db.select().from(employeeContracts).where(eq(employeeContracts.id, input.id));
       if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado" });
-      if (contrato.companyId !== input.companyId) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = allowedCompanies.map((c: any) => c.id);
+      if (!allowedIds.includes(contrato.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+      }
+      const linked = await db.select({ id: employeeContracts.id })
+        .from(employeeContracts)
+        .where(eq(employeeContracts.contratoAnteriorId, input.id));
+      if (linked.length > 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Este contrato possui contratos vinculados. Exclua-os primeiro." });
+      }
       await db.delete(employeeContracts).where(eq(employeeContracts.id, input.id));
       return { success: true };
     }),
@@ -602,31 +612,33 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
       companyId: z.number(),
       prazoExperienciaDias: z.number().optional(),
       prazoProrrogacaoDias: z.number().optional(),
-      dataInicio: z.string().optional(),
-      dataFim: z.string().optional(),
       funcao: z.string().optional(),
-      salarioBase: z.string().optional(),
-      valorHora: z.string().optional(),
-      jornadaTrabalho: z.string().optional(),
-      localTrabalho: z.string().optional(),
       observacoes: z.string().optional().nullable(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const [contrato] = await db.select().from(employeeContracts).where(eq(employeeContracts.id, input.id));
       if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado" });
-      if (contrato.companyId !== input.companyId) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = allowedCompanies.map((c: any) => c.id);
+      if (!allowedIds.includes(contrato.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+      }
       const data: any = { updatedAt: sql`NOW()` };
-      if (input.prazoExperienciaDias !== undefined) data.prazoExperienciaDias = input.prazoExperienciaDias;
-      if (input.prazoProrrogacaoDias !== undefined) data.prazoProrrogacaoDias = input.prazoProrrogacaoDias;
-      if (input.dataInicio !== undefined) data.dataInicio = input.dataInicio;
-      if (input.dataFim !== undefined) data.dataFim = input.dataFim;
       if (input.funcao !== undefined) data.funcao = input.funcao;
-      if (input.salarioBase !== undefined) data.salarioBase = input.salarioBase;
-      if (input.valorHora !== undefined) data.valorHora = input.valorHora;
-      if (input.jornadaTrabalho !== undefined) data.jornadaTrabalho = input.jornadaTrabalho;
-      if (input.localTrabalho !== undefined) data.localTrabalho = input.localTrabalho;
       if (input.observacoes !== undefined) data.observacoes = input.observacoes;
+      if (contrato.tipo === "experiencia") {
+        if (input.prazoExperienciaDias !== undefined) {
+          data.prazoExperienciaDias = input.prazoExperienciaDias;
+          if (contrato.dataInicio && input.prazoExperienciaDias > 0) {
+            const inicio = new Date(contrato.dataInicio + "T12:00:00");
+            const fim = new Date(inicio);
+            fim.setDate(fim.getDate() + input.prazoExperienciaDias - 1);
+            data.dataFim = fim.toISOString().split("T")[0];
+          }
+        }
+        if (input.prazoProrrogacaoDias !== undefined) data.prazoProrrogacaoDias = input.prazoProrrogacaoDias;
+      }
       await db.update(employeeContracts).set(data).where(eq(employeeContracts.id, input.id));
       return { success: true };
     }),
@@ -640,9 +652,24 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
       const db = await getDb();
       const [contrato] = await db.select().from(employeeContracts).where(eq(employeeContracts.id, input.id));
       if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado" });
-      if (contrato.companyId !== input.companyId) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+      const allowedCompanies3 = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds3 = allowedCompanies3.map((c: any) => c.id);
+      if (!allowedIds3.includes(contrato.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+      }
       if (contrato.status !== "efetivado") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Contrato não está efetivado." });
+      }
+      const linkedContracts = await db.select({ id: employeeContracts.id })
+        .from(employeeContracts)
+        .where(and(
+          eq(employeeContracts.contratoAnteriorId, input.id),
+          eq(employeeContracts.tipo, "indeterminado"),
+        ));
+      if (linkedContracts.length > 0) {
+        for (const lc of linkedContracts) {
+          await db.delete(employeeContracts).where(eq(employeeContracts.id, lc.id));
+        }
       }
       const previousStatus = contrato.dataProrrogacao ? "prorrogado" : "vigente";
       await db.update(employeeContracts).set({
