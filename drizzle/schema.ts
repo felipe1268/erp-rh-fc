@@ -7709,3 +7709,118 @@ export const sstDocuments = pgTable("sst_documents", {
   index("idx_sstdoc_tipo").on(t.tipo),
   index("idx_sstdoc_obra").on(t.obraId),
 ]);
+
+// ============================================================
+// MÓDULO SST — Integração de Segurança (Treinamento de Novos Colaboradores)
+// ============================================================
+
+export const sstIntegracaoConfig = pgTable("sst_integracao_config", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  obraId: integer("obra_id"),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  titulo: varchar({ length: 255 }).notNull(),
+  descricao: text(),
+  notaMinima: integer("nota_minima").default(70).notNull(),
+  validadeMeses: integer("validade_meses").default(12).notNull(),
+  ativo: boolean().default(true).notNull(),
+  criadoPor: varchar("criado_por", { length: 255 }),
+  criadoPorUserId: integer("criado_por_user_id"),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at", { mode: "string" }),
+});
+
+export const sstIntegracaoModulos = pgTable("sst_integracao_modulos", {
+  id: serial().primaryKey(),
+  configId: integer("config_id").notNull(),
+  companyId: integer("company_id").notNull(),
+  titulo: varchar({ length: 255 }).notNull(),
+  descricao: text(),
+  videoUrl: text("video_url"),
+  videoTipo: varchar("video_tipo", { length: 30 }).default("youtube"),
+  ordem: integer().default(1).notNull(),
+  obrigatorio: boolean().default(true).notNull(),
+  funcoesJson: text("funcoes_json"),
+  duracaoMinutos: integer("duracao_minutos"),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at", { mode: "string" }),
+});
+
+export const sstIntegracaoPerguntas = pgTable("sst_integracao_perguntas", {
+  id: serial().primaryKey(),
+  moduloId: integer("modulo_id").notNull(),
+  companyId: integer("company_id").notNull(),
+  texto: text().notNull(),
+  tipo: varchar({ length: 30 }).default("multipla_escolha").notNull(),
+  ordem: integer().default(1).notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const sstIntegracaoAlternativas = pgTable("sst_integracao_alternativas", {
+  id: serial().primaryKey(),
+  perguntaId: integer("pergunta_id").notNull(),
+  texto: text().notNull(),
+  correta: boolean().default(false).notNull(),
+  ordem: integer().default(1).notNull(),
+});
+
+export const sstIntegracaoRegistros = pgTable("sst_integracao_registros", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  employeeId: integer("employee_id").notNull(),
+  employeeNome: varchar("employee_nome", { length: 255 }),
+  employeeCpf: varchar("employee_cpf", { length: 14 }),
+  employeeFuncao: varchar("employee_funcao", { length: 255 }),
+  configId: integer("config_id"),
+  obraId: integer("obra_id"),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  status: varchar({ length: 30 }).default("pendente").notNull(),
+  origem: varchar({ length: 30 }).default("manual").notNull(),
+  smoId: integer("smo_id"),
+  nota: numeric({ precision: 5, scale: 2 }),
+  tentativas: integer().default(0).notNull(),
+  dataRealizacao: timestamp("data_realizacao", { mode: "string" }),
+  dataValidade: timestamp("data_validade", { mode: "string" }),
+  certificadoUrl: text("certificado_url"),
+  envelopeId: integer("envelope_id"),
+  token: varchar({ length: 100 }),
+  sessaoId: integer("sessao_id"),
+  responsavel: varchar({ length: 255 }),
+  responsavelId: integer("responsavel_id"),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at", { mode: "string" }),
+}, (t) => [
+  index("idx_sst_integ_reg_company").on(t.companyId),
+  index("idx_sst_integ_reg_employee").on(t.employeeId),
+  index("idx_sst_integ_reg_token").on(t.token),
+  index("idx_sst_integ_reg_status").on(t.status),
+]);
+
+export const sstIntegracaoRespostas = pgTable("sst_integracao_respostas", {
+  id: serial().primaryKey(),
+  registroId: integer("registro_id").notNull(),
+  perguntaId: integer("pergunta_id").notNull(),
+  alternativaId: integer("alternativa_id"),
+  correta: boolean().default(false).notNull(),
+  tentativa: integer().default(1).notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const sstIntegracaoSessoes = pgTable("sst_integracao_sessoes", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  obraId: integer("obra_id"),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  titulo: varchar({ length: 255 }),
+  dataSessao: timestamp("data_sessao", { mode: "string" }),
+  responsavel: varchar({ length: 255 }),
+  responsavelId: integer("responsavel_id"),
+  tipo: varchar({ length: 30 }).default("individual").notNull(),
+  status: varchar({ length: 30 }).default("agendada").notNull(),
+  observacoes: text(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+});

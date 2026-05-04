@@ -124,6 +124,7 @@ import { frotasRouter } from "./routers/frotas";
 import { diarioObraRouter } from "./routers/diarioObra";
 import { smoRouter } from "./routers/smo";
 import { sstDocumentsRouter } from "./routers/sstDocuments";
+import { integracaoSSTRouter } from "./routers/integracaoSST";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -192,6 +193,7 @@ export const appRouter = router({
   diarioObra: diarioObraRouter,
   smo: smoRouter,
   sstDocuments: sstDocumentsRouter,
+  integracaoSST: integracaoSSTRouter,
   auth: router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;

@@ -138,6 +138,8 @@ const PJMedicoes = lazy(() => import("./pages/PJMedicoes"));
 const PainelRH = lazy(() => import("./pages/PainelRH"));
 const PainelSST = lazy(() => import("./pages/PainelSST"));
 const ProgramasSST = lazy(() => import("./pages/ProgramasSST"));
+const IntegracaoSST = lazy(() => import("./pages/sst/IntegracaoSST"));
+const IntegracaoPublica = lazy(() => import("./pages/sst/IntegracaoPublica"));
 const PainelJuridico = lazy(() => import("./pages/PainelJuridico"));
 const PainelTrabalhista = lazy(() => import("./pages/PainelTrabalhista"));
 const PainelTributario = lazy(() => import("./pages/PainelTributario"));
@@ -353,6 +355,7 @@ function Router() {
         <Route path={"/seguro-vida"} component={() => <RouteGuard component={SeguroVida} route="/seguro-vida" />} />
         <Route path={"/cipa"} component={() => <RouteGuard component={CipaCompleta} route="/cipa" />} />
         <Route path={"/programas-sst"} component={() => <RouteGuard component={ProgramasSST} route="/programas-sst" />} />
+        <Route path={"/sst/integracao"} component={() => <RouteGuard component={IntegracaoSST} route="/sst/integracao" />} />
         <Route path={"/modulo-pj"} component={() => <RouteGuard component={ModuloPJ} route="/modulo-pj" />} />
         <Route path={"/contrato-pj/:id"} component={() => <RouteGuard component={ContratoPJView} route="/modulo-pj" />} />
         <Route path={"/contrato-pj/:contractId/aditivo/:aditivoId"} component={() => <RouteGuard component={AditivoPJView} route="/modulo-pj" />} />
@@ -480,6 +483,7 @@ function Router() {
         <Route path="/compras/painel-fd"         component={() => <RouteGuard component={PainelFd} route="/compras/painel" />} />
         <Route path="/integrasign" component={() => <RouteGuard component={IntegraSignDashboard} route="/compras/painel" />} />
         <Route path="/integrasign/assinar/:token" component={IntegraSignAssinar} />
+        <Route path="/integracao/:token" component={IntegracaoPublica} />
         <Route path="/portal/cotacao/:token"     component={PortalCotacaoPage} />
         <Route path="/portal/servico/:token"    component={PortalServicoPage} />
         <Route path="/compras/medicoes-servico" component={() => <RouteGuard component={MedicoesServicoPage} route="/compras/painel" />} />

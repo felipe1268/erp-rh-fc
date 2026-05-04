@@ -448,6 +448,57 @@ Regras:
         const { sql } = await import("drizzle-orm");
         await db.execute(sql`ALTER TABLE curriculos ADD COLUMN IF NOT EXISTS historico_status_json TEXT`);
         console.log(`[SyncSchema+] Coluna historico_status_json garantida na tabela curriculos.`);
+
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS sst_integracao_config (
+          id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, obra_id INTEGER, obra_nome VARCHAR(255),
+          titulo VARCHAR(255) NOT NULL, descricao TEXT, nota_minima INTEGER NOT NULL DEFAULT 70,
+          validade_meses INTEGER NOT NULL DEFAULT 12, ativo BOOLEAN NOT NULL DEFAULT true,
+          criado_por VARCHAR(255), criado_por_user_id INTEGER,
+          created_at TIMESTAMP DEFAULT NOW() NOT NULL, updated_at TIMESTAMP DEFAULT NOW() NOT NULL, deleted_at TIMESTAMP
+        )`);
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS sst_integracao_modulos (
+          id SERIAL PRIMARY KEY, config_id INTEGER NOT NULL, company_id INTEGER NOT NULL,
+          titulo VARCHAR(255) NOT NULL, descricao TEXT, video_url TEXT, video_tipo VARCHAR(30) DEFAULT 'youtube',
+          ordem INTEGER NOT NULL DEFAULT 1, obrigatorio BOOLEAN NOT NULL DEFAULT true,
+          funcoes_json TEXT, duracao_minutos INTEGER,
+          created_at TIMESTAMP DEFAULT NOW() NOT NULL, updated_at TIMESTAMP DEFAULT NOW() NOT NULL, deleted_at TIMESTAMP
+        )`);
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS sst_integracao_perguntas (
+          id SERIAL PRIMARY KEY, modulo_id INTEGER NOT NULL, company_id INTEGER NOT NULL,
+          texto TEXT NOT NULL, tipo VARCHAR(30) NOT NULL DEFAULT 'multipla_escolha', ordem INTEGER NOT NULL DEFAULT 1,
+          created_at TIMESTAMP DEFAULT NOW() NOT NULL
+        )`);
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS sst_integracao_alternativas (
+          id SERIAL PRIMARY KEY, pergunta_id INTEGER NOT NULL,
+          texto TEXT NOT NULL, correta BOOLEAN NOT NULL DEFAULT false, ordem INTEGER NOT NULL DEFAULT 1
+        )`);
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS sst_integracao_registros (
+          id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, employee_id INTEGER NOT NULL,
+          employee_nome VARCHAR(255), employee_cpf VARCHAR(14), employee_funcao VARCHAR(255),
+          config_id INTEGER, obra_id INTEGER, obra_nome VARCHAR(255),
+          status VARCHAR(30) NOT NULL DEFAULT 'pendente', origem VARCHAR(30) NOT NULL DEFAULT 'manual',
+          smo_id INTEGER, nota NUMERIC(5,2), tentativas INTEGER NOT NULL DEFAULT 0,
+          data_realizacao TIMESTAMP, data_validade TIMESTAMP, certificado_url TEXT,
+          envelope_id INTEGER, token VARCHAR(100), sessao_id INTEGER,
+          responsavel VARCHAR(255), responsavel_id INTEGER,
+          created_at TIMESTAMP DEFAULT NOW() NOT NULL, updated_at TIMESTAMP DEFAULT NOW() NOT NULL, deleted_at TIMESTAMP
+        )`);
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS sst_integracao_respostas (
+          id SERIAL PRIMARY KEY, registro_id INTEGER NOT NULL, pergunta_id INTEGER NOT NULL,
+          alternativa_id INTEGER, correta BOOLEAN NOT NULL DEFAULT false, tentativa INTEGER NOT NULL DEFAULT 1,
+          created_at TIMESTAMP DEFAULT NOW() NOT NULL
+        )`);
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS sst_integracao_sessoes (
+          id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, obra_id INTEGER, obra_nome VARCHAR(255),
+          titulo VARCHAR(255), data_sessao TIMESTAMP, responsavel VARCHAR(255), responsavel_id INTEGER,
+          tipo VARCHAR(30) NOT NULL DEFAULT 'individual', status VARCHAR(30) NOT NULL DEFAULT 'agendada',
+          observacoes TEXT, created_at TIMESTAMP DEFAULT NOW() NOT NULL, updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+        )`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_sst_integ_reg_company ON sst_integracao_registros(company_id)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_sst_integ_reg_employee ON sst_integracao_registros(employee_id)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_sst_integ_reg_token ON sst_integracao_registros(token)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_sst_integ_reg_status ON sst_integracao_registros(status)`);
+        console.log(`[SyncSchema+] Tabelas SST Integração garantidas.`);
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

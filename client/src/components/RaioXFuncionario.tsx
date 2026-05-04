@@ -193,6 +193,12 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   );
   const integracoes = integracoesQ.data || [];
 
+  const integracoesSSTQ = trpc.integracaoSST.historicoColaborador.useQuery(
+    { companyId: selectedCompany?.id || 0, employeeId: employeeId! },
+    { enabled: !!employeeId && open && !!selectedCompany?.id }
+  );
+  const integracoesSST = integracoesSSTQ.data || [];
+
   const [novaIntegracaoForm, setNovaIntegracaoForm] = useState<any>(null);
   const utils2 = trpc.useUtils();
   const criarIntegracaoMut = trpc.integracoes.criar.useMutation({
@@ -1030,7 +1036,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       { value: "epis", label: "EPIs", icon: HardHat, count: episEntregas.length },
                       { value: "acidentes", label: "Acidentes", icon: AlertTriangle, count: acidentes.length },
                       { value: "cipa", label: "CIPA", icon: Shield, count: cipa.length },
-                      { value: "integracoes", label: "Integrações", icon: ShieldCheck, count: integracoes.length },
+                      { value: "integracoes", label: "Integrações", icon: ShieldCheck, count: integracoes.length + integracoesSST.length },
                     ],
                   },
                   {
@@ -2263,6 +2269,48 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     </div>
                   )}
                 </div>
+
+                {integracoesSST.length > 0 && (
+                  <div className="bg-white rounded-xl border p-6 mt-4">
+                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2 mb-4">
+                      <GraduationCap className="h-5 w-5 text-emerald-500" />
+                      Integração de Segurança (SST) — {integracoesSST.length} registro{integracoesSST.length !== 1 ? "s" : ""}
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/30 text-xs">
+                            <th className="p-2 text-left">Status</th>
+                            <th className="p-2 text-left">Obra</th>
+                            <th className="p-2 text-left">Origem</th>
+                            <th className="p-2 text-center">Nota</th>
+                            <th className="p-2 text-left">Realização</th>
+                            <th className="p-2 text-left">Validade</th>
+                            <th className="p-2 text-left">Certificado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {integracoesSST.map((r: any) => {
+                            const stColor = r.status === "aprovado" ? "bg-emerald-100 text-emerald-700" : r.status === "reprovado" ? "bg-red-100 text-red-700" : r.status === "pendente" ? "bg-yellow-100 text-yellow-700" : r.status === "vencido" ? "bg-gray-100 text-gray-600" : "bg-blue-100 text-blue-700";
+                            const stLabel = r.status === "aprovado" ? "Aprovado" : r.status === "reprovado" ? "Reprovado" : r.status === "pendente" ? "Pendente" : r.status === "em_andamento" ? "Em Andamento" : r.status === "vencido" ? "Vencido" : r.status;
+                            const origemLabel = r.origem === "manual" ? "Manual" : r.origem === "smo" ? "SMO" : r.origem === "reciclagem" ? "Reciclagem" : r.origem === "advertencia" ? "Advertência" : r.origem;
+                            return (
+                              <tr key={r.id} className="border-b last:border-0 hover:bg-gray-50">
+                                <td className="p-2"><span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${stColor}`}>{stLabel}</span></td>
+                                <td className="p-2 text-xs">{r.obraNome || "-"}</td>
+                                <td className="p-2"><span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-600">{origemLabel}</span></td>
+                                <td className="p-2 text-center font-bold">{r.nota ? `${r.nota}%` : "-"}</td>
+                                <td className="p-2 text-xs">{r.dataRealizacao ? new Date(r.dataRealizacao).toLocaleDateString("pt-BR") : "-"}</td>
+                                <td className="p-2 text-xs">{r.dataValidade ? new Date(r.dataValidade).toLocaleDateString("pt-BR") : "-"}</td>
+                                <td className="p-2 text-xs">{r.certificadoUrl ? <a href={r.certificadoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Ver</a> : "-"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </TabsContent>
 
               {/* ============ PJ ============ */}

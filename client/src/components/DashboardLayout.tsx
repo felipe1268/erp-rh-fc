@@ -38,7 +38,7 @@ import {
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft, Gauge,
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine,
   Camera, Blocks, CheckSquare, FileCheck2, Milestone,
-  UserMinus, Search, X,
+  UserMinus, Search, X, GraduationCap,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -188,6 +188,12 @@ const menuSectionsSST: MenuSection[] = [
       { icon: FileText, label: "PGR", path: "/programas-sst?tab=PGR" },
       { icon: FileText, label: "PCMSO", path: "/programas-sst?tab=PCMSO" },
       { icon: FileText, label: "LTCAT", path: "/programas-sst?tab=LTCAT" },
+    ],
+  },
+  {
+    title: "Integração",
+    items: [
+      { icon: GraduationCap, label: "Integração SST", path: "/sst/integracao" },
     ],
   },
   {
@@ -1068,6 +1074,7 @@ function DashboardLayoutContent({
     // Painéis de módulo (não precisam de permissão granular, seguem o módulo)
     map.set('/painel/rh', { moduleId: 'rh-dp', featureKey: 'colaboradores' });
     map.set('/painel/sst', { moduleId: 'sst', featureKey: 'epis' });
+    map.set('/sst/integracao', { moduleId: 'sst', featureKey: 'epis' });
     map.set('/painel/juridico', { moduleId: 'juridico', featureKey: 'processos-trabalhistas' });
     map.set('/painel/tributario', { moduleId: 'juridico', featureKey: 'processos-tributarios' });
     map.set('/painel/civil', { moduleId: 'juridico', featureKey: 'processos-civis' });
@@ -1817,7 +1824,7 @@ const ROUTE_TO_MODULO: [RegExp, IAModulo][] = [
   [/^\/(compras|almoxarifado)/, "compras"],
   [/^\/(painel\/rh|funcionarios|colaboradores|folha-pagamento|folha|ferias|seguro-vida|ponto|fechamento-ponto|espelho-ponto|rescisao|admissao|banco-horas|aviso-previo|pedido-demissao|hora-extra|solicitacao-he|solicitacao-mdo|gestao-competencias|controle-documentos|vale-alimentacao|dissidio|feriados|modulo-pj|contrato-pj|apontamentos-campo|comunicados-internos|curriculos)/, "rh"],
   [/^\/financeiro/, "financeiro"],
-  [/^\/(painel\/sst|sst|epis?|aso|cipa|treinamento)/, "sst"],
+  [/^\/(painel\/sst|sst|epis?|aso|cipa|treinamento|integracao)/, "sst"],
   [/^\/medicao/, "medicao"],
 ];
 
