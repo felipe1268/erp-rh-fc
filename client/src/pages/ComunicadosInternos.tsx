@@ -1,12 +1,13 @@
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { usePermissions } from "@/contexts/PermissionsContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft, Pencil } from "lucide-react";
+import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft, Pencil, CheckCircle2, RotateCcw, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -20,6 +21,7 @@ function formatDateBR(dateStr: string): string {
 export default function ComunicadosInternos() {
   const [, navigate] = useLocation();
   const { selectedCompanyId, selectedCompany } = useCompany();
+  const { isAdminMaster } = usePermissions();
   const companyId = selectedCompanyId ? Number(selectedCompanyId) : 0;
   const utils = trpc.useUtils();
   const [search, setSearch] = useState("");
@@ -37,7 +39,7 @@ export default function ComunicadosInternos() {
   );
 
   const criarMut = trpc.comunicadosInternos.criar.useMutation({
-    onSuccess: (_data) => {
+    onSuccess: () => {
       utils.comunicadosInternos.listar.invalidate();
       toast.success("Comunicado criado");
       setShowDialog(false);
@@ -51,6 +53,14 @@ export default function ComunicadosInternos() {
   });
   const atualizarMut = trpc.comunicadosInternos.atualizar.useMutation({
     onSuccess: () => { utils.comunicadosInternos.listar.invalidate(); toast.success("Comunicado atualizado"); setEditId(null); },
+    onError: (e) => toast.error(e.message),
+  });
+  const concluirMut = trpc.comunicadosInternos.concluir.useMutation({
+    onSuccess: () => { utils.comunicadosInternos.listar.invalidate(); toast.success("Comunicado concluído com sucesso"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const reverterMut = trpc.comunicadosInternos.reverter.useMutation({
+    onSuccess: () => { utils.comunicadosInternos.listar.invalidate(); toast.success("Comunicado revertido para rascunho"); },
     onError: (e) => toast.error(e.message),
   });
   const excluirMut = trpc.comunicadosInternos.excluir.useMutation({
@@ -90,6 +100,7 @@ export default function ComunicadosInternos() {
 
   if (viewComunicado) {
     const c = viewComunicado;
+    const isConcluido = c.status === "concluido";
     const nomeEmpresa = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "FC ENGENHARIA PROJETOS E CONSULTORIA LTDA";
     const cnpj = selectedCompany?.cnpj || "";
     const logoUrl = selectedCompany?.logoUrl;
@@ -100,11 +111,30 @@ export default function ComunicadosInternos() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-6">
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-center gap-3 mb-4 print:hidden">
+          <div className="flex items-center gap-3 mb-4 print:hidden flex-wrap">
             <Button variant="ghost" size="sm" onClick={() => setViewComunicadoId(null)}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Voltar
             </Button>
+            {isConcluido && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700 border border-green-200">
+                <Lock className="h-3 w-3" /> Concluído
+              </span>
+            )}
             <div className="flex-1" />
+            {!isConcluido && (
+              <Button size="sm" className="bg-green-600 hover:bg-green-700" disabled={concluirMut.isPending}
+                onClick={() => { if (confirm("Concluir este comunicado? Após concluído, ele não poderá ser editado ou excluído.")) concluirMut.mutate({ id: c.id, companyId }); }}>
+                {concluirMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+                Concluir
+              </Button>
+            )}
+            {isConcluido && isAdminMaster && (
+              <Button size="sm" variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50" disabled={reverterMut.isPending}
+                onClick={() => { if (confirm("Reverter este comunicado para rascunho? Ele poderá ser editado novamente.")) reverterMut.mutate({ id: c.id, companyId }); }}>
+                {reverterMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RotateCcw className="h-4 w-4 mr-1" />}
+                Reverter
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => {
               const oldTitle = document.title;
               document.title = `Comunicado ${c.numero} - ${c.titulo}`;
@@ -118,7 +148,7 @@ export default function ComunicadosInternos() {
                 <FileText className="h-4 w-4 mr-1" /> Ver Anexo
               </Button>
             )}
-            {!c.documentoUrl && (
+            {!c.documentoUrl && !isConcluido && (
               <label className="cursor-pointer">
                 <Button variant="outline" size="sm" asChild>
                   <span><Upload className="h-4 w-4 mr-1" /> Anexar Arquivo</span>
@@ -246,56 +276,71 @@ export default function ComunicadosInternos() {
                   <tr>
                     <th className="text-left px-4 py-3 font-semibold text-slate-600 w-28">Nº</th>
                     <th className="text-left px-4 py-3 font-semibold text-slate-600">Título</th>
+                    <th className="text-left px-4 py-3 font-semibold text-slate-600 w-24">Status</th>
                     <th className="text-left px-4 py-3 font-semibold text-slate-600 w-28">Data</th>
                     <th className="text-left px-4 py-3 font-semibold text-slate-600 w-36">Documento</th>
                     <th className="text-right px-4 py-3 font-semibold text-slate-600 w-36">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtrados.map((c: any) => (
-                    <tr key={c.id} className="border-b hover:bg-slate-50">
-                      <td className="px-4 py-3 font-mono font-bold text-blue-700">{c.numero}</td>
-                      <td className="px-4 py-3 overflow-hidden max-w-0">
-                        <div className="font-medium text-slate-800 truncate">{c.titulo}</div>
-                        {c.conteudo && <div className="text-xs text-slate-500 truncate">{c.conteudo.length > 100 ? c.conteudo.substring(0, 100) + "..." : c.conteudo}</div>}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{new Date(c.dataEmissao + "T12:00:00").toLocaleDateString("pt-BR")}</td>
-                      <td className="px-4 py-3">
-                        {c.documentoUrl ? (
-                          <a href={c.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs flex items-center gap-1">
-                            <FileText className="h-3 w-3 flex-shrink-0" /> <span className="truncate">{c.fileName || "Ver"}</span>
-                          </a>
-                        ) : (
-                          <label className="cursor-pointer inline-flex items-center gap-1 text-xs text-slate-500 hover:text-blue-600">
-                            {uploadingId === c.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-                            {uploadingId === c.id ? "Enviando..." : "Anexar"}
-                            <input type="file" className="hidden" accept=".pdf,.doc,.docx" disabled={uploadingId === c.id}
-                              onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(c.id, f); }} />
-                          </label>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50" title="Visualizar / Imprimir"
-                          onClick={() => setViewComunicadoId(c.id)}>
-                          <Eye className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-amber-600 hover:bg-amber-50" title="Editar"
-                          onClick={() => { setEditId(c.id); setEditForm({ titulo: c.titulo, conteudo: c.conteudo || "" }); }}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        {c.documentoUrl && (
-                          <label className="cursor-pointer inline-block">
-                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" asChild><span><Upload className="h-3.5 w-3.5" /></span></Button>
-                            <input type="file" className="hidden" accept=".pdf,.doc,.docx" disabled={uploadingId === c.id}
-                              onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(c.id, f); }} />
-                          </label>
-                        )}
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50" onClick={() => { if (confirm(`Excluir comunicado ${c.numero}?`)) excluirMut.mutate({ id: c.id, companyId }); }}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filtrados.map((c: any) => {
+                    const isConcluido = c.status === "concluido";
+                    return (
+                      <tr key={c.id} className={`border-b hover:bg-slate-50 ${isConcluido ? "bg-green-50/30" : ""}`}>
+                        <td className="px-4 py-3 font-mono font-bold text-blue-700">{c.numero}</td>
+                        <td className="px-4 py-3 overflow-hidden max-w-0">
+                          <div className="font-medium text-slate-800 truncate">{c.titulo}</div>
+                          {c.conteudo && <div className="text-xs text-slate-500 truncate">{c.conteudo.length > 100 ? c.conteudo.substring(0, 100) + "..." : c.conteudo}</div>}
+                        </td>
+                        <td className="px-4 py-3">
+                          {isConcluido ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
+                              <Lock className="h-2.5 w-2.5" /> Concluído
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">
+                              Rascunho
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">{new Date(c.dataEmissao + "T12:00:00").toLocaleDateString("pt-BR")}</td>
+                        <td className="px-4 py-3">
+                          {c.documentoUrl ? (
+                            <a href={c.documentoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs flex items-center gap-1">
+                              <FileText className="h-3 w-3 flex-shrink-0" /> <span className="truncate">{c.fileName || "Ver"}</span>
+                            </a>
+                          ) : !isConcluido ? (
+                            <label className="cursor-pointer inline-flex items-center gap-1 text-xs text-slate-500 hover:text-blue-600">
+                              {uploadingId === c.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                              {uploadingId === c.id ? "Enviando..." : "Anexar"}
+                              <input type="file" className="hidden" accept=".pdf,.doc,.docx" disabled={uploadingId === c.id}
+                                onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(c.id, f); }} />
+                            </label>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50" title="Visualizar / Imprimir"
+                            onClick={() => setViewComunicadoId(c.id)}>
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                          {!isConcluido && (
+                            <>
+                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-amber-600 hover:bg-amber-50" title="Editar"
+                                onClick={() => { setEditId(c.id); setEditForm({ titulo: c.titulo, conteudo: c.conteudo || "" }); }}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50" title="Excluir"
+                                onClick={() => { if (confirm(`Excluir comunicado ${c.numero}?`)) excluirMut.mutate({ id: c.id, companyId }); }}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -11,10 +11,11 @@ function formatNumero(seq: number, ano: number): string {
 }
 
 async function ensureOwnership(db: any, id: number, companyId: number) {
-  const [row] = await db.select({ id: comunicadosInternos.id, companyId: comunicadosInternos.companyId })
+  const [row] = await db.select({ id: comunicadosInternos.id, companyId: comunicadosInternos.companyId, status: comunicadosInternos.status })
     .from(comunicadosInternos).where(eq(comunicadosInternos.id, id));
   if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Comunicado não encontrado" });
   if (row.companyId !== companyId) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+  return row;
 }
 
 export const comunicadosInternosRouter = router({
@@ -41,7 +42,6 @@ export const comunicadosInternosRouter = router({
       const ano = new Date(input.dataEmissao + "T12:00:00Z").getUTCFullYear();
       if (!ano || isNaN(ano)) throw new TRPCError({ code: "BAD_REQUEST", message: "Data inválida" });
 
-      // Transação + advisory lock por (companyId, ano) para garantir numeração atômica
       const lockKey1 = input.companyId;
       const lockKey2 = ano;
 
@@ -67,6 +67,7 @@ export const comunicadosInternosRouter = router({
           conteudo: input.conteudo || null,
           criadoPor: ctx.user.name ?? "Sistema",
           criadoPorUserId: ctx.user.id,
+          status: "rascunho",
         }).returning();
 
         return row;
@@ -82,12 +83,59 @@ export const comunicadosInternosRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      await ensureOwnership(db, input.id, input.companyId);
+      const row = await ensureOwnership(db, input.id, input.companyId);
+      if (row.status === "concluido") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Comunicado concluído não pode ser editado. Reverta o status primeiro." });
+      }
       const data: any = { updatedAt: sql`NOW()` };
       if (input.titulo !== undefined) data.titulo = input.titulo;
       if (input.conteudo !== undefined) data.conteudo = input.conteudo;
-      // Nota: dataEmissao NÃO pode ser alterada após criação para manter integridade da numeração
       await db.update(comunicadosInternos).set(data).where(eq(comunicadosInternos.id, input.id));
+      return { success: true };
+    }),
+
+  concluir: protectedProcedure
+    .input(z.object({
+      id: z.number().int().positive(),
+      companyId: z.number().int().positive(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const row = await ensureOwnership(db, input.id, input.companyId);
+      if (row.status === "concluido") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Comunicado já está concluído" });
+      }
+      await db.update(comunicadosInternos).set({
+        status: "concluido",
+        concluidoPor: ctx.user.name ?? "Sistema",
+        concluidoPorUserId: ctx.user.id,
+        concluidoEm: sql`NOW()`,
+        updatedAt: sql`NOW()`,
+      }).where(eq(comunicadosInternos.id, input.id));
+      return { success: true };
+    }),
+
+  reverter: protectedProcedure
+    .input(z.object({
+      id: z.number().int().positive(),
+      companyId: z.number().int().positive(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas usuários Admin Master podem reverter um comunicado concluído" });
+      }
+      const db = (await getDb())!;
+      const row = await ensureOwnership(db, input.id, input.companyId);
+      if (row.status !== "concluido") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Comunicado não está concluído" });
+      }
+      await db.update(comunicadosInternos).set({
+        status: "rascunho",
+        concluidoPor: null,
+        concluidoPorUserId: null,
+        concluidoEm: null,
+        updatedAt: sql`NOW()`,
+      }).where(eq(comunicadosInternos.id, input.id));
       return { success: true };
     }),
 
@@ -100,7 +148,10 @@ export const comunicadosInternosRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
-      await ensureOwnership(db, input.id, input.companyId);
+      const row = await ensureOwnership(db, input.id, input.companyId);
+      if (row.status === "concluido") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Comunicado concluído não pode ser alterado. Reverta o status primeiro." });
+      }
       const buffer = Buffer.from(input.fileBase64, "base64");
       const ext = (input.fileName.split(".").pop() || "pdf").toLowerCase();
       const ct = ext === "pdf" ? "application/pdf"
@@ -119,7 +170,10 @@ export const comunicadosInternosRouter = router({
     .input(z.object({ id: z.number().int().positive(), companyId: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      await ensureOwnership(db, input.id, input.companyId);
+      const row = await ensureOwnership(db, input.id, input.companyId);
+      if (row.status === "concluido") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Comunicado concluído não pode ser excluído. Reverta o status primeiro." });
+      }
       await db.update(comunicadosInternos).set({
         deletedAt: sql`NOW()`,
         deletedBy: ctx.user.name ?? "Sistema",
