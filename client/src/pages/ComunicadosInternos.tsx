@@ -6,13 +6,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft } from "lucide-react";
+import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
+function formatDateBR(dateStr: string): string {
+  if (!dateStr) return "-";
+  const parts = dateStr.split("-");
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return dateStr;
+}
+
 export default function ComunicadosInternos() {
   const [, navigate] = useLocation();
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, selectedCompany } = useCompany();
   const companyId = selectedCompanyId ? Number(selectedCompanyId) : 0;
   const utils = trpc.useUtils();
   const [search, setSearch] = useState("");
@@ -20,6 +27,7 @@ export default function ComunicadosInternos() {
   const [showDialog, setShowDialog] = useState(false);
   const [form, setForm] = useState({ titulo: "", dataEmissao: new Date().toISOString().slice(0, 10), conteudo: "" });
   const [uploadingId, setUploadingId] = useState<number | null>(null);
+  const [viewComunicadoId, setViewComunicadoId] = useState<number | null>(null);
 
   const { data: comunicados = [], isLoading } = trpc.comunicadosInternos.listar.useQuery(
     { companyId },
@@ -27,7 +35,12 @@ export default function ComunicadosInternos() {
   );
 
   const criarMut = trpc.comunicadosInternos.criar.useMutation({
-    onSuccess: () => { utils.comunicadosInternos.listar.invalidate(); toast.success("Comunicado criado"); setShowDialog(false); setForm({ titulo: "", dataEmissao: new Date().toISOString().slice(0, 10), conteudo: "" }); },
+    onSuccess: (_data) => {
+      utils.comunicadosInternos.listar.invalidate();
+      toast.success("Comunicado criado");
+      setShowDialog(false);
+      setForm({ titulo: "", dataEmissao: new Date().toISOString().slice(0, 10), conteudo: "" });
+    },
     onError: (e) => toast.error(e.message),
   });
   const uploadMut = trpc.comunicadosInternos.uploadDoc.useMutation({
@@ -38,6 +51,11 @@ export default function ComunicadosInternos() {
     onSuccess: () => { utils.comunicadosInternos.listar.invalidate(); toast.success("Comunicado excluído"); },
     onError: (e) => toast.error(e.message),
   });
+
+  const viewComunicado = useMemo(() => {
+    if (viewComunicadoId === null) return null;
+    return comunicados.find((c: any) => c.id === viewComunicadoId) || null;
+  }, [comunicados, viewComunicadoId]);
 
   const anos = useMemo(() => {
     const set = new Set<number>(comunicados.map((c: any) => c.ano));
@@ -62,6 +80,121 @@ export default function ComunicadosInternos() {
     };
     reader.onerror = () => { toast.error("Erro ao ler arquivo"); setUploadingId(null); };
     reader.readAsDataURL(file);
+  }
+
+  if (viewComunicado) {
+    const c = viewComunicado;
+    const nomeEmpresa = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "FC ENGENHARIA PROJETOS E CONSULTORIA LTDA";
+    const cnpj = selectedCompany?.cnpj || "";
+    const logoUrl = selectedCompany?.logoUrl;
+    const endereco = selectedCompany?.endereco || "";
+    const cidade = selectedCompany?.cidade || "";
+    const estado = selectedCompany?.estado || "";
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center gap-3 mb-4 print:hidden">
+            <Button variant="ghost" size="sm" onClick={() => setViewComunicadoId(null)}>
+              <ChevronLeft className="h-4 w-4 mr-1" /> Voltar
+            </Button>
+            <div className="flex-1" />
+            <Button variant="outline" size="sm" onClick={() => {
+              const oldTitle = document.title;
+              document.title = `Comunicado ${c.numero} - ${c.titulo}`;
+              window.print();
+              setTimeout(() => { document.title = oldTitle; }, 500);
+            }}>
+              <Printer className="h-4 w-4 mr-1" /> Imprimir
+            </Button>
+            {c.documentoUrl && (
+              <Button variant="outline" size="sm" onClick={() => window.open(c.documentoUrl, '_blank')}>
+                <FileText className="h-4 w-4 mr-1" /> Ver Anexo
+              </Button>
+            )}
+            {!c.documentoUrl && (
+              <label className="cursor-pointer">
+                <Button variant="outline" size="sm" asChild>
+                  <span><Upload className="h-4 w-4 mr-1" /> Anexar Arquivo</span>
+                </Button>
+                <input type="file" className="hidden" accept=".pdf,.doc,.docx"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(c.id, f); }} />
+              </label>
+            )}
+          </div>
+
+          <div className="bg-white border rounded-lg p-8 max-w-3xl mx-auto print:border-0 print:shadow-none print:p-4 print:max-w-none">
+            <div className="mb-6">
+              <div className="flex flex-col items-center justify-center mb-4">
+                {logoUrl ? (
+                  <img src={logoUrl} alt={nomeEmpresa} className="h-16 mb-2 object-contain" onError={(e: any) => e.target.style.display = 'none'} />
+                ) : (
+                  <img src="/fc-logo.png" alt="FC Engenharia" className="h-16 mb-2 object-contain" onError={(e: any) => e.target.style.display = 'none'} />
+                )}
+                <h2 className="text-lg font-bold text-[#1B2A4A] tracking-wide text-center">
+                  {nomeEmpresa}
+                </h2>
+                {cnpj && <p className="text-[10px] text-gray-500">CNPJ: {cnpj}</p>}
+                {(endereco || cidade) && (
+                  <p className="text-[10px] text-gray-400">
+                    {[endereco, cidade, estado].filter(Boolean).join(" - ")}
+                  </p>
+                )}
+              </div>
+
+              <div className="bg-[#1B2A4A] text-white py-2.5 px-4 text-center rounded-sm">
+                <span className="text-sm font-bold tracking-wider">COMUNICADO INTERNO</span>
+              </div>
+
+              <div className="flex justify-between mt-3 text-[11px] text-gray-600 px-1">
+                <div>
+                  <span className="font-semibold text-[#1B2A4A]">Nº {c.numero}</span>
+                </div>
+                <div className="text-right">
+                  <span>Data de Emissão: {formatDateBR(c.dataEmissao)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="border border-gray-300 rounded p-4 mb-6">
+              <div className="mb-3">
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider">Assunto:</span>
+                <h3 className="text-base font-bold text-[#1B2A4A] mt-0.5">{c.titulo}</h3>
+              </div>
+            </div>
+
+            <div className="border border-gray-200 rounded p-6 mb-6 min-h-[200px]">
+              <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
+                {c.conteudo || ""}
+              </div>
+            </div>
+
+            <div className="mt-12 pt-6">
+              <div className="flex justify-between gap-12">
+                <div className="flex-1 text-center">
+                  <div className="border-t border-gray-400 pt-2 mx-4">
+                    <p className="text-[10px] text-gray-500">Departamento de Recursos Humanos</p>
+                  </div>
+                </div>
+                <div className="flex-1 text-center">
+                  <div className="border-t border-gray-400 pt-2 mx-4">
+                    <p className="text-[10px] text-gray-500">Direção</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between text-[9px] text-gray-400">
+              <span>Documento gerado pelo ERP - Gestão Integrada</span>
+              <span>
+                Emitido em: {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' })}
+                {c.criadoPor ? ` | Por: ${c.criadoPor}` : ""}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -109,7 +242,7 @@ export default function ComunicadosInternos() {
                     <th className="text-left px-4 py-3 font-semibold text-slate-600">Título</th>
                     <th className="text-left px-4 py-3 font-semibold text-slate-600 w-28">Data</th>
                     <th className="text-left px-4 py-3 font-semibold text-slate-600 w-36">Documento</th>
-                    <th className="text-right px-4 py-3 font-semibold text-slate-600 w-28">Ações</th>
+                    <th className="text-right px-4 py-3 font-semibold text-slate-600 w-36">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -135,9 +268,13 @@ export default function ComunicadosInternos() {
                           </label>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50" title="Visualizar / Imprimir"
+                          onClick={() => setViewComunicadoId(c.id)}>
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
                         {c.documentoUrl && (
-                          <label className="cursor-pointer inline-block mr-1">
+                          <label className="cursor-pointer inline-block">
                             <Button size="sm" variant="ghost" className="h-8 w-8 p-0" asChild><span><Upload className="h-3.5 w-3.5" /></span></Button>
                             <input type="file" className="hidden" accept=".pdf,.doc,.docx" disabled={uploadingId === c.id}
                               onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(c.id, f); }} />
@@ -172,9 +309,8 @@ export default function ComunicadosInternos() {
               <p className="text-xs text-slate-500 mt-1">A numeração ({String((comunicados.filter((c:any)=>c.ano===new Date(form.dataEmissao+"T12:00:00").getFullYear()).length)+1).padStart(3,"0")}/{new Date(form.dataEmissao+"T12:00:00").getFullYear()}) é gerada automaticamente.</p>
             </div>
             <div>
-              <Label>Conteúdo (resumo)</Label>
-              <Textarea className="mt-1 min-h-[120px] max-h-[250px] resize-y" placeholder="Resumo do comunicado..." value={form.conteudo} onChange={e => setForm({ ...form, conteudo: e.target.value })} />
-              <p className="text-xs text-slate-500 mt-1">Após criar, você poderá anexar o arquivo (PDF/DOC) na lista.</p>
+              <Label>Conteúdo</Label>
+              <Textarea className="mt-1 min-h-[120px] max-h-[250px] resize-y" placeholder="Texto do comunicado..." value={form.conteudo} onChange={e => setForm({ ...form, conteudo: e.target.value })} />
             </div>
           </div>
           <DialogFooter className="flex-shrink-0">
