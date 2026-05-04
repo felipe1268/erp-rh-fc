@@ -7638,6 +7638,7 @@ export const curriculos = pgTable("curriculos", {
   endereco: varchar({ length: 500 }),
   cidade: varchar({ length: 150 }),
   estado: varchar({ length: 2 }),
+  dataNascimento: date("data_nascimento", { mode: "string" }),
   observacoes: text(),
   documentoUrl: text("documento_url"),
   fileName: varchar("file_name", { length: 255 }),

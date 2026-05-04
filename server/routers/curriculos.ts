@@ -129,6 +129,7 @@ export const curriculosRouter = router({
       endereco: z.string().max(500).optional(),
       cidade: z.string().max(150).optional(),
       estado: z.string().max(2).optional(),
+      dataNascimento: z.string().optional(),
       observacoes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -149,6 +150,7 @@ export const curriculosRouter = router({
         endereco: input.endereco?.trim() || null,
         cidade: input.cidade?.trim() || null,
         estado: input.estado?.trim().toUpperCase().substring(0, 2) || null,
+        dataNascimento: input.dataNascimento || null,
         observacoes: input.observacoes || null,
         criadoPor: ctx.user.name ?? "Sistema",
         criadoPorUserId: ctx.user.id,
@@ -189,6 +191,7 @@ export const curriculosRouter = router({
       endereco: z.string().max(500).optional(),
       cidade: z.string().max(150).optional(),
       estado: z.string().max(2).optional(),
+      dataNascimento: z.string().nullable().optional(),
       observacoes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -203,6 +206,7 @@ export const curriculosRouter = router({
       if (input.endereco !== undefined) updates.endereco = input.endereco.trim() || null;
       if (input.cidade !== undefined) updates.cidade = input.cidade.trim() || null;
       if (input.estado !== undefined) updates.estado = input.estado.trim().toUpperCase().substring(0, 2) || null;
+      if (input.dataNascimento !== undefined) updates.dataNascimento = input.dataNascimento || null;
       if (input.observacoes !== undefined) updates.observacoes = input.observacoes || null;
 
       if (input.funcaoId) {
@@ -252,7 +256,7 @@ export const curriculosRouter = router({
       type ResultItem = {
         fileName: string;
         status: "ok" | "erro" | "duplicado" | "blacklist" | "desligado";
-        dados: { nome: string; telefone: string; email: string; endereco: string; cidade: string; estado: string; funcaoDetectada: string; experiencia: string } | null;
+        dados: { nome: string; telefone: string; email: string; dataNascimento: string | null; endereco: string; cidade: string; estado: string; funcaoDetectada: string; experiencia: string } | null;
         alertas: { tipo: "duplicado" | "desligado" | "blacklist"; mensagem: string; detalhes?: string }[];
         curriculoId: number | null;
         funcaoId: number | null;
@@ -289,6 +293,7 @@ export const curriculosRouter = router({
   "nome": "nome completo do candidato",
   "telefone": "telefone com DDD",
   "email": "email do candidato",
+  "dataNascimento": "data de nascimento no formato AAAA-MM-DD (ex: 1990-05-15)",
   "endereco": "endereço completo (rua, número, bairro)",
   "cidade": "cidade onde mora",
   "estado": "sigla do estado com 2 letras (ex: SP, RJ, MG)",
@@ -323,6 +328,8 @@ IMPORTANTE: Retorne APENAS o JSON, sem nenhum texto adicional.`;
           const nome = (dados.nome || "").trim();
           const telefone = (dados.telefone || "").trim();
           const email = (dados.email || "").trim().toLowerCase();
+          const dataNascimentoRaw = (dados.dataNascimento || "").trim();
+          const dataNascimento = /^\d{4}-\d{2}-\d{2}$/.test(dataNascimentoRaw) ? dataNascimentoRaw : null;
           const endereco = (dados.endereco || "").trim();
           const cidade = (dados.cidade || "").trim();
           const estado = (dados.estado || "").trim().toUpperCase().substring(0, 2);
@@ -486,6 +493,7 @@ IMPORTANTE: Retorne APENAS o JSON, sem nenhum texto adicional.`;
                 endereco: endereco || null,
                 cidade: cidade || null,
                 estado: estado || null,
+                dataNascimento: dataNascimento || null,
                 observacoes: experiencia || null,
                 criadoPor: ctx.user.name ?? "IA",
                 criadoPorUserId: ctx.user.id,
@@ -510,7 +518,7 @@ IMPORTANTE: Retorne APENAS o JSON, sem nenhum texto adicional.`;
           resultados.push({
             fileName: arq.fileName,
             status: statusFinal,
-            dados: { nome, telefone, email, endereco, cidade, estado, funcaoDetectada, experiencia },
+            dados: { nome, telefone, email, dataNascimento, endereco, cidade, estado, funcaoDetectada, experiencia },
             alertas,
             curriculoId,
             funcaoId,

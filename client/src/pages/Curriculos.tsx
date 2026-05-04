@@ -13,7 +13,7 @@ import { useLocation } from "wouter";
 type IAResultado = {
   fileName: string;
   status: "ok" | "erro" | "duplicado" | "blacklist" | "desligado";
-  dados: { nome: string; telefone: string; email: string; endereco: string; cidade: string; estado: string; funcaoDetectada: string; experiencia: string } | null;
+  dados: { nome: string; telefone: string; email: string; dataNascimento: string | null; endereco: string; cidade: string; estado: string; funcaoDetectada: string; experiencia: string } | null;
   alertas: { tipo: "duplicado" | "desligado" | "blacklist"; mensagem: string; detalhes?: string }[];
   curriculoId: number | null;
   funcaoId: number | null;
@@ -32,7 +32,7 @@ export default function Curriculos() {
   const [showCurDialog, setShowCurDialog] = useState(false);
   const [showFuncDialog, setShowFuncDialog] = useState(false);
   const [novaFuncao, setNovaFuncao] = useState("");
-  const [form, setForm] = useState({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", observacoes: "" });
+  const [form, setForm] = useState({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", dataNascimento: "", observacoes: "" });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [dialogFuncaoId, setDialogFuncaoId] = useState<number | null>(null);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
@@ -80,7 +80,7 @@ export default function Curriculos() {
     setShowCurDialog(false);
     setEditingId(null);
     setDialogFuncaoId(null);
-    setForm({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", observacoes: "" });
+    setForm({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", dataNascimento: "", observacoes: "" });
     setPendingFile(null);
   }
 
@@ -98,6 +98,20 @@ export default function Curriculos() {
   });
   const processarIAMut = trpc.curriculos.processarArquivosIA.useMutation();
 
+  function calcularIdade(dataNasc: string | null | undefined): number | null {
+    if (!dataNasc) return null;
+    const nascimento = new Date(dataNasc + "T00:00:00");
+    if (isNaN(nascimento.getTime())) return null;
+    const hoje = new Date();
+    let idade = hoje.getFullYear() - nascimento.getFullYear();
+    const mesAtual = hoje.getMonth();
+    const mesNasc = nascimento.getMonth();
+    if (mesAtual < mesNasc || (mesAtual === mesNasc && hoje.getDate() < nascimento.getDate())) {
+      idade--;
+    }
+    return idade >= 0 ? idade : null;
+  }
+
   function openEditDialog(c: any) {
     setEditingId(c.id);
     setDialogFuncaoId(c.funcaoId);
@@ -108,6 +122,7 @@ export default function Curriculos() {
       endereco: c.endereco || "",
       cidade: c.cidade || "",
       estado: c.estado || "",
+      dataNascimento: c.dataNascimento || "",
       observacoes: c.observacoes || "",
     });
     setPendingFile(null);
@@ -241,7 +256,7 @@ export default function Curriculos() {
                     if (!funcoes.length) { toast.error("Crie uma função primeiro"); return; }
                     setEditingId(null);
                     setDialogFuncaoId(funcaoSelecionadaId);
-                    setForm({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", observacoes: "" });
+                    setForm({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", dataNascimento: "", observacoes: "" });
                     setPendingFile(null);
                     setShowCurDialog(true);
                   }} className="bg-amber-600 hover:bg-amber-700"><UserPlus className="h-4 w-4 mr-1" /> Novo Currículo</Button>
@@ -273,7 +288,10 @@ export default function Curriculos() {
                     {filtrados.map((c: any) => (
                       <tr key={c.id} className="border-b hover:bg-slate-50">
                         <td className="px-4 py-3">
-                          <div className="font-medium text-slate-800">{c.nomeCandidato || "(sem nome)"}</div>
+                          <div className="font-medium text-slate-800">
+                            {c.nomeCandidato || "(sem nome)"}
+                            {(() => { const idade = calcularIdade(c.dataNascimento); return idade !== null ? <span className="ml-2 text-xs font-normal text-slate-500">{idade} anos</span> : null; })()}
+                          </div>
                           {c.observacoes && <div className="text-xs text-slate-500 line-clamp-1">{c.observacoes}</div>}
                         </td>
                         <td className="px-4 py-3">
@@ -377,6 +395,11 @@ export default function Curriculos() {
                 <Input className="mt-1" placeholder="(00) 00000-0000" value={form.telefone} onChange={e => setForm({ ...form, telefone: e.target.value })} />
               </div>
               <div>
+                <Label>Data de Nascimento</Label>
+                <Input className="mt-1" type="date" value={form.dataNascimento} onChange={e => setForm({ ...form, dataNascimento: e.target.value })} />
+                {form.dataNascimento && (() => { const idade = calcularIdade(form.dataNascimento); return idade !== null ? <p className="text-xs text-slate-500 mt-1">{idade} anos</p> : null; })()}
+              </div>
+              <div>
                 <Label>E-mail</Label>
                 <Input className="mt-1" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
               </div>
@@ -418,6 +441,7 @@ export default function Curriculos() {
                   endereco: form.endereco,
                   cidade: form.cidade,
                   estado: form.estado,
+                  dataNascimento: form.dataNascimento || null,
                   observacoes: form.observacoes,
                 });
               }} disabled={atualizarMut.isPending} className="bg-blue-600 hover:bg-blue-700">
@@ -436,6 +460,7 @@ export default function Curriculos() {
                   endereco: form.endereco || undefined,
                   cidade: form.cidade || undefined,
                   estado: form.estado || undefined,
+                  dataNascimento: form.dataNascimento || undefined,
                   observacoes: form.observacoes || undefined,
                 });
               }} disabled={criarMut.isPending || uploadMut.isPending} className="bg-amber-600 hover:bg-amber-700">
@@ -529,6 +554,7 @@ export default function Curriculos() {
                       <div><span className="text-slate-500">Função:</span> <span className="font-medium">{r.funcaoNome || r.dados.funcaoDetectada || "-"}</span></div>
                       <div><span className="text-slate-500">Telefone:</span> <span>{r.dados.telefone || "-"}</span></div>
                       <div><span className="text-slate-500">E-mail:</span> <span>{r.dados.email || "-"}</span></div>
+                      <div><span className="text-slate-500">Nascimento:</span> <span>{r.dados.dataNascimento ? `${r.dados.dataNascimento.split("-").reverse().join("/")}${(() => { const i = calcularIdade(r.dados.dataNascimento); return i !== null ? ` (${i} anos)` : ""; })()}` : "-"}</span></div>
                       <div><span className="text-slate-500">Cidade:</span> <span>{r.dados.cidade ? `${r.dados.cidade}${r.dados.estado ? ` - ${r.dados.estado}` : ""}` : "-"}</span></div>
                       <div><span className="text-slate-500">Endereço:</span> <span>{r.dados.endereco || "-"}</span></div>
                       {r.dados.experiencia && (
