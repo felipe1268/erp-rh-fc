@@ -11,7 +11,7 @@ import {
   HardHat, Building2, Calendar, TrendingUp, DollarSign,
   ArrowRight, RefreshCw, ClipboardList, Award, Briefcase,
   Shield, Package, UserCheck, Trash2, X, Upload, FileText, Phone, User, Pencil, MoreVertical, SquarePen,
-  Scale, ThumbsUp, ThumbsDown, BarChart3, Wallet, Printer,
+  Scale, ThumbsUp, ThumbsDown, BarChart3, Wallet, Printer, RotateCcw, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -392,6 +392,14 @@ export default function SolicitacaoMDO() {
   const concluirMut = trpc.smo.concluir.useMutation({
     onSuccess: () => { toast.success("Solicitação concluída!"); selectedDetail.refetch(); list.refetch(); dashQ.refetch(); },
   });
+  const reverterMut = trpc.smo.reverterAprovacao.useMutation({
+    onSuccess: (data) => { toast.success(`Aprovação da etapa "${data.etapa}" revertida!`); selectedDetail.refetch(); list.refetch(); dashQ.refetch(); setShowRevertSmoDialog(false); setRevertSmoMotivo(""); setRevertSmoEtapa(null); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const [showRevertSmoDialog, setShowRevertSmoDialog] = useState(false);
+  const [revertSmoMotivo, setRevertSmoMotivo] = useState("");
+  const [revertSmoEtapa, setRevertSmoEtapa] = useState<"rh" | "diretoria" | null>(null);
+
   const updateMut = trpc.smo.update.useMutation({
     onSuccess: () => { toast.success("Atualizado!"); selectedDetail.refetch(); list.refetch(); dashQ.refetch(); if (viewMode === "form") { setSelectedId(null); setViewMode("list"); } },
     onError: (e: any) => toast.error(e.message),
@@ -1248,9 +1256,31 @@ export default function SolicitacaoMDO() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <ApprovalStep label="Enviada" done={d.status !== "rascunho"} date={d.criadoEm} by={d.solicitanteNome} />
                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <ApprovalStep label="RH" done={!!d.aprovadoPorRh} date={d.aprovadoPorRhEm} by={d.aprovadoPorRh} />
+                    <div className="flex items-center gap-1">
+                      <ApprovalStep label="RH" done={!!d.aprovadoPorRh} date={d.aprovadoPorRhEm} by={d.aprovadoPorRh} />
+                      {!!d.aprovadoPorRh && canAprovarDiretoria && d.status !== "rejeitada" && d.status !== "concluida" && d.status !== "em_recrutamento" && (
+                        <button
+                          onClick={() => { setRevertSmoEtapa("rh"); setRevertSmoMotivo(""); setShowRevertSmoDialog(true); }}
+                          className="text-orange-500 hover:text-orange-700 hover:bg-orange-50 rounded p-0.5 transition-colors"
+                          title="Reverter aprovação do RH"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <ApprovalStep label="Diretoria" done={!!d.aprovadoPorDiretoria} date={d.aprovadoPorDiretoriaEm} by={d.aprovadoPorDiretoria} />
+                    <div className="flex items-center gap-1">
+                      <ApprovalStep label="Diretoria" done={!!d.aprovadoPorDiretoria} date={d.aprovadoPorDiretoriaEm} by={d.aprovadoPorDiretoria} />
+                      {!!d.aprovadoPorDiretoria && canAprovarDiretoria && d.status !== "rejeitada" && d.status !== "concluida" && d.status !== "em_recrutamento" && (
+                        <button
+                          onClick={() => { setRevertSmoEtapa("diretoria"); setRevertSmoMotivo(""); setShowRevertSmoDialog(true); }}
+                          className="text-orange-500 hover:text-orange-700 hover:bg-orange-50 rounded p-0.5 transition-colors"
+                          title="Reverter aprovação da Diretoria"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1482,6 +1512,45 @@ export default function SolicitacaoMDO() {
               <Button variant="destructive" disabled={!rejectMotivo.trim() || rejeitarMut.isPending}
                 onClick={() => { if (rejectingId) rejeitarMut.mutate({ id: rejectingId, companyId, companyIds, rejeitadoPor: user?.name || "Aprovador", motivoRejeicao: rejectMotivo }); }}>
                 Confirmar Rejeição
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Revert Approval Dialog */}
+      <Dialog open={showRevertSmoDialog} onOpenChange={(v) => { if (!v) { setShowRevertSmoDialog(false); setRevertSmoMotivo(""); setRevertSmoEtapa(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-orange-600" />
+              Reverter Aprovação — {revertSmoEtapa === "rh" ? "RH" : "Diretoria"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {revertSmoEtapa === "rh"
+                ? "A aprovação do RH (e da Diretoria, se houver) será desfeita. A solicitação voltará ao status \"Enviada\"."
+                : "A aprovação da Diretoria será desfeita. A solicitação voltará ao status \"Aprovada RH\"."
+              }
+            </p>
+            <Label>Motivo da Reversão *</Label>
+            <Textarea
+              value={revertSmoMotivo}
+              onChange={e => setRevertSmoMotivo(e.target.value)}
+              placeholder="Informe o motivo da reversão (mínimo 5 caracteres)..."
+              rows={3}
+              className="border-orange-300 focus:border-orange-500"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setShowRevertSmoDialog(false); setRevertSmoMotivo(""); setRevertSmoEtapa(null); }}>Cancelar</Button>
+              <Button
+                className="bg-orange-600 hover:bg-orange-700"
+                disabled={revertSmoMotivo.trim().length < 5 || reverterMut.isPending}
+                onClick={() => { if (selectedId && revertSmoEtapa) reverterMut.mutate({ id: selectedId, companyId, companyIds, etapa: revertSmoEtapa, motivo: revertSmoMotivo.trim() }); }}
+              >
+                {reverterMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RotateCcw className="h-4 w-4 mr-2" />}
+                Confirmar Reversão
               </Button>
             </div>
           </div>

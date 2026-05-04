@@ -1068,6 +1068,67 @@ export const smoRouter = router({
       return { success: true };
     }),
 
+  reverterAprovacao: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      etapa: z.enum(["rh", "diretoria"]),
+      motivo: z.string().min(5, "Informe o motivo da reversão (mínimo 5 caracteres)"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode reverter aprovações" });
+      }
+      const db = (await getDb())!;
+      await assertOwnership(db, input.id, input);
+
+      const [sol] = await db.select().from(smoSolicitacoes).where(eq(smoSolicitacoes.id, input.id));
+      if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+
+      if (sol.status === "rejeitada") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Solicitação rejeitada — use outra ação para alterar" });
+      }
+      if (sol.status === "concluida") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Solicitação já concluída — não pode ser revertida" });
+      }
+      if (sol.status === "em_recrutamento") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Solicitação já em recrutamento — não é possível reverter aprovações nesta fase" });
+      }
+
+      const agora = new Date().toISOString();
+      const obsReversao = `[REVERSÃO ${agora.replace("T", " ").substring(0, 19)}] Etapa "${input.etapa}" revertida por ${ctx.user.name || "Admin"}: ${input.motivo}`;
+      const obsAtual = sol.observacao ? `${sol.observacao}\n${obsReversao}` : obsReversao;
+
+      if (input.etapa === "diretoria") {
+        if (!sol.aprovadoPorDiretoria) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Aprovação da Diretoria não encontrada — nada a reverter" });
+        }
+        await db.update(smoSolicitacoes).set({
+          aprovadoPorDiretoria: null,
+          aprovadoPorDiretoriaEm: null,
+          status: sol.aprovadoPorRh ? "aprovada_rh" : "enviada",
+          observacao: obsAtual,
+          atualizadoEm: agora,
+        }).where(eq(smoSolicitacoes.id, input.id));
+      } else {
+        if (!sol.aprovadoPorRh) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Aprovação do RH não encontrada — nada a reverter" });
+        }
+        await db.update(smoSolicitacoes).set({
+          aprovadoPorRh: null,
+          aprovadoPorRhEm: null,
+          aprovadoPorDiretoria: null,
+          aprovadoPorDiretoriaEm: null,
+          status: "enviada",
+          observacao: obsAtual,
+          atualizadoEm: agora,
+        }).where(eq(smoSolicitacoes.id, input.id));
+      }
+
+      return { success: true, etapa: input.etapa };
+    }),
+
   iniciarRecrutamento: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input }) => {

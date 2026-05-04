@@ -384,6 +384,20 @@ export default function SolicitacaoHE() {
     onError: (err) => toast.error(err.message),
   });
 
+  const reverterMut = trpc.heSolicitacoes.reverterAprovacao.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Aprovação revertida! Status anterior: ${data.statusAnterior}`);
+      utils.heSolicitacoes.list.invalidate();
+      utils.heSolicitacoes.counts.invalidate();
+      utils.heSolicitacoes.getById.invalidate();
+      setShowRevertDialog(false);
+      setRevertMotivo("");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const [showRevertDialog, setShowRevertDialog] = useState(false);
+  const [revertMotivo, setRevertMotivo] = useState("");
+
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [buscaFunc, setBuscaFunc] = useState("");
   const [verTodosFuncionarios, setVerTodosFuncionarios] = useState(false);
@@ -1440,9 +1454,9 @@ export default function SolicitacaoHE() {
                     </Button>
                   )}
                   {sol.status !== "pendente" && sol.status !== "cancelada" && isAdminMaster && (
-                    <Badge variant="outline" className="text-xs flex items-center gap-1">
-                      <RotateCcw className="h-3 w-3" /> Reversível
-                    </Badge>
+                    <Button size="sm" variant="outline" className="text-xs text-orange-600 border-orange-300 hover:bg-orange-50" onClick={() => { setShowRevertDialog(true); setRevertMotivo(""); }}>
+                      <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reverter para Pendente
+                    </Button>
                   )}
                 </div>
               </div>
@@ -2235,6 +2249,42 @@ export default function SolicitacaoHE() {
           <div className="text-center py-12 text-muted-foreground">Solicitação não encontrada</div>
         )}
       </FullScreenDialog>
+
+      {/* Dialog de Reversão de Aprovação */}
+      <AlertDialog open={showRevertDialog} onOpenChange={(v) => { if (!v) { setShowRevertDialog(false); setRevertMotivo(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-orange-600" />
+              Reverter Aprovação
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              A solicitação HE-{String(detailSolId || "").padStart(5, "0")} voltará ao status <strong>"Pendente"</strong> e poderá ser reavaliada.
+              Informe o motivo da reversão:
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3 py-2">
+            <Textarea
+              value={revertMotivo}
+              onChange={e => setRevertMotivo(e.target.value)}
+              placeholder="Motivo da reversão (mínimo 5 caracteres)..."
+              rows={3}
+              className="border-orange-300 focus:border-orange-500"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <Button
+              className="bg-orange-600 hover:bg-orange-700"
+              disabled={revertMotivo.trim().length < 5 || reverterMut.isPending}
+              onClick={() => { if (detailSolId) reverterMut.mutate({ id: detailSolId, motivo: revertMotivo.trim() }); }}
+            >
+              {reverterMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RotateCcw className="h-4 w-4 mr-2" />}
+              Confirmar Reversão
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {assinaturaEmployeeId && detailSolId && detailQuery.data && (
         <SignatureModal

@@ -260,6 +260,7 @@ export const heSolicitacoesRouter = router({
     }
 
     const isReversao = sol.status === "rejeitada";
+    const jaFoiAprovadaAntes = !!(sol.observacaoAdmin && sol.observacaoAdmin.includes("[REVERSÃO"));
 
     await db.update(heSolicitacoes).set({
       status: "aprovada",
@@ -270,7 +271,8 @@ export const heSolicitacoesRouter = router({
     }).where(eq(heSolicitacoes.id, input.id));
 
     // === ACUMULAR CUSTO NO REFI quando HE está vinculada a atividades ===
-    if (!isReversao) {
+    // Pula se é reversão de rejeição OU se já foi aprovada antes (evita double-counting após reverter)
+    if (!isReversao && !jaFoiAprovadaAntes) {
       try {
         // Buscar todas as atividades vinculadas (join table + legada)
         const atvsRaw = await db.execute(sql`
@@ -423,6 +425,56 @@ export const heSolicitacoesRouter = router({
     });
 
     return { success: true, reversao: isReversao };
+  }),
+
+  // ===================== REVERTER APROVAÇÃO (Admin Master, com motivo obrigatório) =====================
+  reverterAprovacao: protectedProcedure.input(z.object({
+    id: z.number(),
+    motivo: z.string().min(5, "Informe o motivo da reversão (mínimo 5 caracteres)"),
+  })).mutation(async ({ input, ctx }) => {
+    if (ctx.user.role !== "admin_master") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode reverter aprovações de HE" });
+    }
+
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+    const [sol] = await db.select().from(heSolicitacoes).where(eq(heSolicitacoes.id, input.id));
+    if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+
+    if (sol.status === "pendente") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Solicitação já está pendente — nada a reverter" });
+    }
+    if (sol.status === "cancelada") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Não é possível reverter uma solicitação cancelada" });
+    }
+
+    const statusAnterior = sol.status;
+    const agora = new Date().toISOString().replace("T", " ").substring(0, 19);
+    const obsReversao = `[REVERSÃO ${agora}] De "${statusAnterior}" para "pendente" por ${ctx.user.name || "Admin"}: ${input.motivo}`;
+    const obsAtual = sol.observacaoAdmin ? `${sol.observacaoAdmin}\n${obsReversao}` : obsReversao;
+
+    await db.update(heSolicitacoes).set({
+      status: "pendente",
+      aprovadoPor: null,
+      aprovadoPorId: null,
+      aprovadoEm: null,
+      motivoRejeicao: null,
+      observacaoAdmin: obsAtual,
+    }).where(eq(heSolicitacoes.id, input.id));
+
+    await createAuditLog({
+      userId: ctx.user.id,
+      userName: ctx.user.name || "Sistema",
+      companyId: sol.companyId,
+      action: "REVERT",
+      module: "he_solicitacoes",
+      entityType: "he_solicitacao",
+      entityId: input.id,
+      details: `Solicitação de HE #${input.id} REVERTIDA de "${statusAnterior}" → "pendente". Motivo: ${input.motivo}`,
+    });
+
+    return { success: true, statusAnterior };
   }),
 
   // ===================== EDITAR SOLICITAÇÃO (pelo solicitante, enquanto pendente) =====================
