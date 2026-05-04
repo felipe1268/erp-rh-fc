@@ -501,6 +501,7 @@ export const payrollEngineRouter = router({
       await db.execute(sql`
         DELETE FROM timecard_daily WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia}
       `);
+      try { await db.execute(sql.raw(`DELETE FROM timecard_daily WHERE companyid = ${Number(input.companyId)} AND mescompetencia = '${input.mesReferencia.replace(/'/g, "''")}'`)); } catch {}
 
       let totalInserted = 0;
       let totalFaltas = 0;
@@ -641,8 +642,8 @@ export const payrollEngineRouter = router({
           }
 
           await db.execute(sql`
-            INSERT INTO timecard_daily (companyId, employeeId, data, mesCompetencia, statusDia, 
-              entrada1, saida1, entrada2, saida2, entrada3, saida3,
+            INSERT INTO timecard_daily ("companyId", "employeeId", "data", "mesCompetencia", "statusDia", 
+              "entrada1", "saida1", "entrada2", "saida2", "entrada3", "saida3",
               "horasTrabalhadas", "horasExtras", "horasNoturnas",
               "isFalta", "isAtraso", "isSaidaAntecipada", "minutosAtraso", "minutosSaidaAntecipada",
               "tipoDia", "timeRecordId", "obraId",
@@ -731,14 +732,14 @@ export const payrollEngineRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const rows = ((await db.execute(sql`
-        SELECT td.*, e.nomeCompleto, e.funcao, e.codigoInterno, o.nome as obraNome
+        SELECT td.*, e."nomeCompleto", e.funcao, e."codigoInterno", o.nome as "obraNome"
         FROM timecard_daily td
-        LEFT JOIN employees e ON td.employeeId = e.id
-        LEFT JOIN obras o ON td.obraId = o.id
-        WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) 
-        AND td.mesCompetencia = ${input.mesReferencia}
-        AND td.is_inconsistente = 1
-        ORDER BY td.data, e.nomeCompleto
+        LEFT JOIN employees e ON td."employeeId" = e.id
+        LEFT JOIN obras o ON td."obraId" = o.id
+        WHERE td."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) 
+        AND td."mesCompetencia" = ${input.mesReferencia}
+        AND td."isInconsistente" = 1
+        ORDER BY td."data", e."nomeCompleto"
       `)) as any).rows || [];
       return rows || [];
     }),
@@ -822,12 +823,12 @@ export const payrollEngineRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const rows = ((await db.execute(sql`
         SELECT 
-          SUM(CASE WHEN is_inconsistente = 1 THEN 1 ELSE 0 END) as pendentes,
-          SUM(CASE WHEN inconsistencia_resolvida = 1 THEN 1 ELSE 0 END) as resolvidas,
-          SUM(CASE WHEN inconsistencia_tipo = 'batida_impar' AND is_inconsistente = 1 THEN 1 ELSE 0 END) as batidasImpares,
-          SUM(CASE WHEN inconsistencia_tipo = 'sobreposicao_horario' AND is_inconsistente = 1 THEN 1 ELSE 0 END) as sobreposicoes,
-          SUM(CASE WHEN inconsistencia_tipo = 'entrada_faltando' AND is_inconsistente = 1 THEN 1 ELSE 0 END) as entradasFaltando,
-          SUM(CASE WHEN inconsistencia_tipo = 'saida_faltando' AND is_inconsistente = 1 THEN 1 ELSE 0 END) as saidasFaltando
+          SUM(CASE WHEN "isInconsistente" = 1 THEN 1 ELSE 0 END) as pendentes,
+          SUM(CASE WHEN "inconsistenciaResolvida" = 1 THEN 1 ELSE 0 END) as resolvidas,
+          SUM(CASE WHEN "inconsistenciaTipo" = 'batida_impar' AND "isInconsistente" = 1 THEN 1 ELSE 0 END) as "batidasImpares",
+          SUM(CASE WHEN "inconsistenciaTipo" = 'sobreposicao_horario' AND "isInconsistente" = 1 THEN 1 ELSE 0 END) as sobreposicoes,
+          SUM(CASE WHEN "inconsistenciaTipo" = 'entrada_faltando' AND "isInconsistente" = 1 THEN 1 ELSE 0 END) as "entradasFaltando",
+          SUM(CASE WHEN "inconsistenciaTipo" = 'saida_faltando' AND "isInconsistente" = 1 THEN 1 ELSE 0 END) as "saidasFaltando"
         FROM timecard_daily 
         WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia}
       `)) as any).rows || [];
@@ -3921,22 +3922,22 @@ export const payrollEngineRouter = router({
       let baseQuery;
       if (input.employeeId) {
         baseQuery = sql`
-          SELECT td.*, e.nomeCompleto, e.funcao, e.codigoInterno, o.nome as obraNome
+          SELECT td.*, e."nomeCompleto", e.funcao, e."codigoInterno", o.nome as "obraNome"
           FROM timecard_daily td
-          LEFT JOIN employees e ON td.employeeId = e.id
-          LEFT JOIN obras o ON td.obraId = o.id
-          WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td.mesCompetencia = ${input.mesReferencia}
-          AND td.employeeId = ${input.employeeId}
-          ORDER BY td.data, e.nomeCompleto
+          LEFT JOIN employees e ON td."employeeId" = e.id
+          LEFT JOIN obras o ON td."obraId" = o.id
+          WHERE td."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td."mesCompetencia" = ${input.mesReferencia}
+          AND td."employeeId" = ${input.employeeId}
+          ORDER BY td."data", e."nomeCompleto"
         `;
       } else {
         baseQuery = sql`
-          SELECT td.*, e.nomeCompleto, e.funcao, e.codigoInterno, o.nome as obraNome
+          SELECT td.*, e."nomeCompleto", e.funcao, e."codigoInterno", o.nome as "obraNome"
           FROM timecard_daily td
-          LEFT JOIN employees e ON td.employeeId = e.id
-          LEFT JOIN obras o ON td.obraId = o.id
-          WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td.mesCompetencia = ${input.mesReferencia}
-          ORDER BY td.data, e.nomeCompleto
+          LEFT JOIN employees e ON td."employeeId" = e.id
+          LEFT JOIN obras o ON td."obraId" = o.id
+          WHERE td."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td."mesCompetencia" = ${input.mesReferencia}
+          ORDER BY td."data", e."nomeCompleto"
         `;
       }
       const rows = ((await db.execute(baseQuery)) as any).rows || [];
@@ -4084,15 +4085,15 @@ export const payrollEngineRouter = router({
       
       // Get timecard_daily grouped by obra
       const obraRows = ((await db.execute(sql`
-        SELECT td.obraId, o.nome as obraNome,
-          COUNT(DISTINCT td.employeeId) as totalFuncionarios,
-          SUM(CASE WHEN td.isFalta = 1 THEN 1 ELSE 0 END) as totalFaltas,
-          COUNT(*) as totalDias
+        SELECT td."obraId", o.nome as "obraNome",
+          COUNT(DISTINCT td."employeeId") as "totalFuncionarios",
+          SUM(CASE WHEN td."isFalta" = 1 THEN 1 ELSE 0 END) as "totalFaltas",
+          COUNT(*) as "totalDias"
         FROM timecard_daily td
-        LEFT JOIN obras o ON td.obraId = o.id
-        WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td.mesCompetencia = ${input.mesReferencia}
-        GROUP BY td.obraId, o.nome
-        ORDER BY totalFuncionarios DESC
+        LEFT JOIN obras o ON td."obraId" = o.id
+        WHERE td."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td."mesCompetencia" = ${input.mesReferencia}
+        GROUP BY td."obraId", o.nome
+        ORDER BY "totalFuncionarios" DESC
       `)) as any).rows || [];
 
       // Get payment totals by obra (via employee allocation)
@@ -4391,11 +4392,11 @@ export const payrollEngineRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       // Get the inconsistent record with employee details
       const rows = ((await db.execute(sql`
-        SELECT td.*, e.nomeCompleto, e.funcao, e.codigoInterno, e.dataAdmissao, e.status as empStatus,
-          o.nome as obraNome
+        SELECT td.*, e."nomeCompleto", e.funcao, e."codigoInterno", e."dataAdmissao", e.status as "empStatus",
+          o.nome as "obraNome"
         FROM timecard_daily td
-        LEFT JOIN employees e ON td.employeeId = e.id
-        LEFT JOIN obras o ON td.obraId = o.id
+        LEFT JOIN employees e ON td."employeeId" = e.id
+        LEFT JOIN obras o ON td."obraId" = o.id
         WHERE td.id = ${input.timecardDailyId}
         LIMIT 1
       `)) as any).rows || [];
@@ -4403,12 +4404,12 @@ export const payrollEngineRouter = router({
       if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Registro não encontrado" });
       // Get recent history for this employee (last 30 days)
       const histRows = ((await db.execute(sql`
-        SELECT data, statusDia, isFalta, isAtraso, is_inconsistente, inconsistencia_tipo,
-          entrada1, saida1, entrada2, saida2, horasTrabalhadas
+        SELECT "data", "statusDia", "isFalta", "isAtraso", "isInconsistente", "inconsistenciaTipo",
+          "entrada1", "saida1", "entrada2", "saida2", "horasTrabalhadas"
         FROM timecard_daily
         WHERE "employeeId" = ${record.employeeId} AND "companyId" = ${input.companyId}
           AND "mesCompetencia" = ${input.mesReferencia}
-        ORDER BY data DESC LIMIT 30
+        ORDER BY "data" DESC LIMIT 30
       `)) as any).rows || [];
       // Get golden rules for context
       const rulesRows = ((await db.execute(sql`
@@ -4583,6 +4584,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       const deleteFromTable = async (table: string) => {
         if (table === "timecard_daily") {
           await db.execute(sql`DELETE FROM timecard_daily WHERE "companyId" = ${companyId} AND "mesCompetencia" = ${mesReferencia}`);
+          try { await db.execute(sql.raw(`DELETE FROM timecard_daily WHERE companyid = ${Number(companyId)} AND mescompetencia = '${String(mesReferencia).replace(/'/g, "''")}'`)); } catch {}
         } else if (table === "payroll_adjustments") {
           await db.execute(sql`DELETE FROM payroll_adjustments WHERE "companyId" = ${companyId} AND ("mesOrigem" = ${mesReferencia} OR "mesDesconto" = ${mesReferencia})`);
         } else if (table === "payroll_uploads") {
@@ -4643,6 +4645,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
 
       // Delete ALL data for this competência (each table has different column names)
       await db.execute(sql`DELETE FROM timecard_daily WHERE "companyId" = ${companyId} AND "mesCompetencia" = ${mesReferencia}`);
+      try { await db.execute(sql.raw(`DELETE FROM timecard_daily WHERE companyid = ${Number(companyId)} AND mescompetencia = '${String(mesReferencia).replace(/'/g, "''")}'`)); } catch {}
       await db.execute(sql`DELETE FROM time_records WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}`);
       await db.execute(sql`DELETE FROM time_inconsistencies WHERE "companyId" = ${companyId} AND "mesReferencia" = ${mesReferencia}`);
       await db.execute(sql`DELETE FROM payroll_uploads WHERE "companyId" = ${companyId} AND month = ${mesReferencia}`);
@@ -4679,31 +4682,31 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const rows = ((await db.execute(sql`
         SELECT 
-          td.employeeId,
-          e.nomeCompleto as employeeName,
-          e.cpf as employeeCpf,
-          e.funcao as employeeFuncao,
-          e.funcao as employeeRole,
-          e.codigoInterno,
-          e.codigoInterno as employeeCode,
-          COUNT(DISTINCT td.data) as totalDias,
-          SUM(CASE WHEN td.isFalta = 1 AND td.tipoDia = 'util' THEN 1 ELSE 0 END) as totalFaltas,
-          SUM(CASE WHEN td.isAtraso = 1 THEN 1 ELSE 0 END) as totalAtrasos,
-          SUM(td.minutosAtraso) as totalMinutosAtraso,
-          SUM(CASE WHEN td.isSaidaAntecipada = 1 THEN 1 ELSE 0 END) as saidasAntecipadas,
-          SUM(CASE WHEN td.is_inconsistente = 1 AND td.inconsistencia_resolvida = 0 THEN 1 ELSE 0 END) as inconsistenciasPendentes,
-          SUM(CASE WHEN td.is_inconsistente = 1 THEN 1 ELSE 0 END) as totalInconsistencias,
-          SUM(CASE WHEN td.statusDia = 'escuro' THEN 1 ELSE 0 END) as diasEscuro,
-          SUM(CASE WHEN td.statusDia = 'registrado' THEN 1 ELSE 0 END) as diasRegistrados,
-          SEC_TO_TIME(SUM(TIME_TO_SEC(CONCAT(td.horasTrabalhadas, ':00')))) as horasTrabalhadas,
-          SEC_TO_TIME(SUM(TIME_TO_SEC(CONCAT(td.horasExtras, ':00')))) as horasExtras,
-          STRING_AGG(DISTINCT td."obraId"::text, ',') as obraIds,
-          STRING_AGG(DISTINCT o.nome, ',') as obraNomes
+          td."employeeId",
+          e."nomeCompleto" as "employeeName",
+          e.cpf as "employeeCpf",
+          e.funcao as "employeeFuncao",
+          e.funcao as "employeeRole",
+          e."codigoInterno",
+          e."codigoInterno" as "employeeCode",
+          COUNT(DISTINCT td."data") as "totalDias",
+          SUM(CASE WHEN td."isFalta" = 1 AND td."tipoDia" = 'util' THEN 1 ELSE 0 END) as "totalFaltas",
+          SUM(CASE WHEN td."isAtraso" = 1 THEN 1 ELSE 0 END) as "totalAtrasos",
+          SUM(td."minutosAtraso") as "totalMinutosAtraso",
+          SUM(CASE WHEN td."isSaidaAntecipada" = 1 THEN 1 ELSE 0 END) as "saidasAntecipadas",
+          SUM(CASE WHEN td."isInconsistente" = 1 AND td."inconsistenciaResolvida" = 0 THEN 1 ELSE 0 END) as "inconsistenciasPendentes",
+          SUM(CASE WHEN td."isInconsistente" = 1 THEN 1 ELSE 0 END) as "totalInconsistencias",
+          SUM(CASE WHEN td."statusDia" = 'escuro' THEN 1 ELSE 0 END) as "diasEscuro",
+          SUM(CASE WHEN td."statusDia" = 'registrado' THEN 1 ELSE 0 END) as "diasRegistrados",
+          SUM(EXTRACT(EPOCH FROM td."horasTrabalhadas"::interval)) as "horasTrabalhadasSec",
+          SUM(EXTRACT(EPOCH FROM td."horasExtras"::interval)) as "horasExtrasSec",
+          STRING_AGG(DISTINCT td."obraId"::text, ',') as "obraIds",
+          STRING_AGG(DISTINCT o.nome, ',') as "obraNomes"
         FROM timecard_daily td
-        LEFT JOIN employees e ON td.employeeId = e.id
-        LEFT JOIN obras o ON td.obraId = o.id
-        WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td.mesCompetencia = ${input.mesReferencia}
-        GROUP BY td.employeeId, e.nomeCompleto, e.cpf, e.funcao, e.codigoInterno, e.funcao, e.codigoInterno
+        LEFT JOIN employees e ON td."employeeId" = e.id
+        LEFT JOIN obras o ON td."obraId" = o.id
+        WHERE td."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td."mesCompetencia" = ${input.mesReferencia}
+        GROUP BY td."employeeId", e."nomeCompleto", e.cpf, e.funcao, e."codigoInterno"
         ORDER BY e.nomeCompleto
       `)) as any).rows || [];
       
@@ -4725,15 +4728,15 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const rows = ((await db.execute(sql`
-        SELECT td.*, e.nomeCompleto, e.funcao, e.codigoInterno, e.cpf, e.salarioBase,
-               o.nome as obraNome
+        SELECT td.*, e."nomeCompleto", e.funcao, e."codigoInterno", e.cpf, e."salarioBase",
+               o.nome as "obraNome"
         FROM timecard_daily td
-        LEFT JOIN employees e ON td.employeeId = e.id
-        LEFT JOIN obras o ON td.obraId = o.id
-        WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) 
-          AND td.mesCompetencia = ${input.mesReferencia}
-          AND td.employeeId = ${input.employeeId}
-        ORDER BY td.data ASC
+        LEFT JOIN employees e ON td."employeeId" = e.id
+        LEFT JOIN obras o ON td."obraId" = o.id
+        WHERE td."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) 
+          AND td."mesCompetencia" = ${input.mesReferencia}
+          AND td."employeeId" = ${input.employeeId}
+        ORDER BY td."data" ASC
       `)) as any).rows || [];
       return rows || [];
     }),
@@ -4748,20 +4751,20 @@ Responda EXATAMENTE no formato JSON abaixo:`;
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const rows = ((await db.execute(sql`
         SELECT 
-          td.employeeId,
-          e.nomeCompleto as employeeName,
-          td.data,
-          STRING_AGG(DISTINCT td."obraId"::text, ',') as obraIds,
-          STRING_AGG(DISTINCT o.nome, ',') as obraNomes,
+          td."employeeId",
+          e."nomeCompleto" as "employeeName",
+          td."data",
+          STRING_AGG(DISTINCT td."obraId"::text, ',') as "obraIds",
+          STRING_AGG(DISTINCT o.nome, ',') as "obraNomes",
           STRING_AGG(CONCAT(COALESCE(td."entrada1",''), '|', COALESCE(td."saida1",''), '|', COALESCE(o.nome,'')), ',') as detalhes
         FROM timecard_daily td
-        LEFT JOIN employees e ON td.employeeId = e.id
-        LEFT JOIN obras o ON td.obraId = o.id
-        WHERE td.companyId IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td.mesCompetencia = ${input.mesReferencia}
-          AND td.obraId IS NOT NULL
-        GROUP BY td.employeeId, e.nomeCompleto, td.data
-        HAVING COUNT(DISTINCT td.obraId) > 1
-        ORDER BY td.data, e.nomeCompleto
+        LEFT JOIN employees e ON td."employeeId" = e.id
+        LEFT JOIN obras o ON td."obraId" = o.id
+        WHERE td."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND td."mesCompetencia" = ${input.mesReferencia}
+          AND td."obraId" IS NOT NULL
+        GROUP BY td."employeeId", e."nomeCompleto", td."data"
+        HAVING COUNT(DISTINCT td."obraId") > 1
+        ORDER BY td."data", e."nomeCompleto"
       `)) as any).rows || [];
       return (rows || []).map((r: any) => ({
         ...r,

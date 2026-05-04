@@ -2482,7 +2482,8 @@ export const fechamentoPontoRouter = router({
         }
 
         // Clear existing timecard_daily
-        await db.execute(sql`DELETE FROM timecard_daily WHERE companyId = ${input.companyId} AND mesCompetencia = ${input.mesReferencia}`);
+        await db.execute(sql`DELETE FROM timecard_daily WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia}`);
+        try { await db.execute(sql.raw(`DELETE FROM timecard_daily WHERE companyid = ${Number(input.companyId)} AND mescompetencia = '${input.mesReferencia.replace(/'/g, "''")}'`)); } catch {}
         
         let totalInserted = 0, totalFaltas = 0, totalAtrasos = 0;
         const _minutesToHHMM = (mins: number) => { const h = Math.floor(Math.abs(mins) / 60); const m = Math.abs(mins) % 60; return `${mins < 0 ? '-' : ''}${h}:${String(m).padStart(2, '0')}`; };
@@ -2498,12 +2499,12 @@ export const fechamentoPontoRouter = router({
         
         const flushBatch = async () => {
           if (batchRows.length === 0) return;
-          const insertSql = `INSERT INTO timecard_daily (companyId, employeeId, data, mesCompetencia, statusDia,
-            entrada1, saida1, entrada2, saida2, entrada3, saida3,
-            horasTrabalhadas, horasExtras, horasNoturnas,
-            isFalta, isAtraso, isSaidaAntecipada, minutosAtraso, minutosSaidaAntecipada,
-            tipoDia, timeRecordId, obraId, origem_registro, num_batidas, is_inconsistente, inconsistencia_tipo,
-            obra_secundaria_id, rateio_percentual, "atestadoId") VALUES ${batchRows.join(',')}`;
+          const insertSql = `INSERT INTO timecard_daily ("companyId", "employeeId", "data", "mesCompetencia", "statusDia",
+            "entrada1", "saida1", "entrada2", "saida2", "entrada3", "saida3",
+            "horasTrabalhadas", "horasExtras", "horasNoturnas",
+            "isFalta", "isAtraso", "isSaidaAntecipada", "minutosAtraso", "minutosSaidaAntecipada",
+            "tipoDia", "timeRecordId", "obraId", "origemRegistro", "numBatidas", "isInconsistente", "inconsistenciaTipo",
+            "obraSecundariaId", "rateioPercentual", "atestadoId") VALUES ${batchRows.join(',')}`;
           await db.execute(sql.raw(insertSql));
           batchRows.length = 0;
         };
@@ -2584,7 +2585,7 @@ export const fechamentoPontoRouter = router({
                 ${_esc(_minutesToHHMM(cargaHorariaDiaria * 60))}, '0:00', '0:00',
                 0, 0, 0, 0, 0,
                 ${_esc(tipoDia)}, NULL, NULL, 'escuro', 0, 0, NULL,
-                NULL, NULL)`);
+                NULL, NULL, NULL)`);
               totalInserted++;
               
               if (batchRows.length >= BATCH_SIZE) await flushBatch();

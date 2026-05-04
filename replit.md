@@ -306,7 +306,8 @@ When creating a new module, ALWAYS register it in ALL 3 places:
 ## Critical DB Patterns (PostgreSQL/Neon)
 - **REGRA DE OURO — EMPRESAS DELETADAS**: NUNCA considerar empresas com `companies."deletedAt" IS NOT NULL`. Toda query, agregação, listagem, contagem, dropdown, relatório e job DEVE filtrar `WHERE c."deletedAt" IS NULL`. Empresas são soft-deleted, não removidas — mantê-las visíveis polui dados, contagens e UI.
 - `db.execute()` returns QueryResult object, NOT array. Use: `((await db.execute(sql`...`)) as any).rows || []`
-- All camelCase column names in raw SQL MUST be quoted: `"companyId"`, `"deletedAt"`, `"nomeCompleto"`, etc.
+- All camelCase column names in raw SQL MUST be quoted: `"companyId"`, `"deletedAt"`, `"nomeCompleto"`, etc. **CRITICAL**: PostgreSQL lowercases unquoted identifiers — `companyId` (unquoted) becomes `companyid`, which does NOT match the Drizzle-created column `"companyId"`. This caused the April 2026 payroll bug where `processarPonto` INSERT wrote to wrong columns and `simularPagamento` SELECT found zero records. Always quote camelCase columns in INSERT, SELECT, WHERE, GROUP BY, ORDER BY.
+- **timecard_daily column fix (May 2026)**: Fixed unquoted INSERT column names in `payrollEngine.ts:processarPonto` and `fechamentoPonto.ts:processarPontoV2`. Startup `[TimecardFix]` detects/repairs dual-column situations. All raw SQL for `timecard_daily` now uses quoted camelCase consistently.
 - MySQL → PG conversions: `CURDATE()` → `CURRENT_DATE`; `DATE_FORMAT(c,'%Y-%m')` → `TO_CHAR(c,'YYYY-MM')`; `TIMESTAMPDIFF(YEAR,c,CURRENT_DATE)` → `EXTRACT(YEAR FROM AGE(CURRENT_DATE,"c"))`; `IFNULL(a,b)` → `COALESCE(a,b)`; `GROUP_CONCAT(x)` → `STRING_AGG(x,',')`; boolean: `= 1` → `= true`
 - Schema changes via raw SQL only (db:push broken); use `json()` not `jsonb()`
 - Login: `felipe@fcengenhariacivil.com.br` / `asdf1020` (role: admin_master, userId: 601043)

@@ -499,6 +499,48 @@ Regras:
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_sst_integ_reg_token ON sst_integracao_registros(token)`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_sst_integ_reg_status ON sst_integracao_registros(status)`);
         console.log(`[SyncSchema+] Tabelas SST Integração garantidas.`);
+
+        try {
+          const colRows = await db.execute(sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'timecard_daily' AND table_schema = 'public' ORDER BY column_name`);
+          const colNames: string[] = ((colRows as any).rows ?? colRows ?? []).map((r: any) => r.column_name);
+          const hasDualCompany = colNames.includes('companyid') && colNames.includes('companyId');
+          const hasDualEmployee = colNames.includes('employeeid') && colNames.includes('employeeId');
+          const hasDualMes = colNames.includes('mescompetencia') && colNames.includes('mesCompetencia');
+          const hasDualStatus = colNames.includes('statusdia') && colNames.includes('statusDia');
+          if (hasDualCompany || hasDualEmployee || hasDualMes || hasDualStatus) {
+            console.log(`[TimecardFix] Dual columns detected! companyid/companyId:${hasDualCompany} employeeid/employeeId:${hasDualEmployee} mescompetencia/mesCompetencia:${hasDualMes} statusdia/statusDia:${hasDualStatus}`);
+            const updates: string[] = [];
+            if (hasDualCompany) updates.push(`"companyId" = COALESCE("companyId", companyid)`);
+            if (hasDualEmployee) updates.push(`"employeeId" = COALESCE("employeeId", employeeid)`);
+            if (hasDualMes) updates.push(`"mesCompetencia" = COALESCE("mesCompetencia", mescompetencia)`);
+            if (hasDualStatus) updates.push(`"statusDia" = COALESCE("statusDia", statusdia)`);
+            const snakeDuals = [
+              ['horastrabalhadas', 'horasTrabalhadas'], ['horasextras', 'horasExtras'], ['horasnoturnas', 'horasNoturnas'],
+              ['isfalta', 'isFalta'], ['isatraso', 'isAtraso'], ['issaidaantecipada', 'isSaidaAntecipada'],
+              ['minutosatraso', 'minutosAtraso'], ['minutossaidaantecipada', 'minutosSaidaAntecipada'],
+              ['tipodia', 'tipoDia'], ['timerecordid', 'timeRecordId'], ['obraid', 'obraId'],
+              ['origemregistro', 'origemRegistro'], ['origem_registro', 'origemRegistro'],
+              ['numbatidas', 'numBatidas'], ['num_batidas', 'numBatidas'],
+              ['isinconsistente', 'isInconsistente'], ['is_inconsistente', 'isInconsistente'],
+              ['inconsistenciatipo', 'inconsistenciaTipo'], ['inconsistencia_tipo', 'inconsistenciaTipo'],
+              ['obrasecundariaid', 'obraSecundariaId'], ['obra_secundaria_id', 'obraSecundariaId'],
+              ['rateiopercentual', 'rateioPercentual'], ['rateio_percentual', 'rateioPercentual'],
+            ];
+            for (const [lc, cc] of snakeDuals) {
+              if (colNames.includes(lc) && colNames.includes(cc)) {
+                updates.push(`"${cc}" = COALESCE("${cc}", "${lc}")`);
+              }
+            }
+            if (updates.length > 0) {
+              const updateSql = `UPDATE timecard_daily SET ${updates.join(', ')} WHERE "companyId" IS NULL AND companyid IS NOT NULL`;
+              await db.execute(sql.raw(updateSql));
+              console.log(`[TimecardFix] Migrated data from lowercase to camelCase columns (${updates.length} columns)`);
+            }
+          } else {
+            console.log(`[TimecardFix] No dual columns detected in timecard_daily — OK`);
+          }
+        } catch (e: any) { console.log(`[TimecardFix] Skipped:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
