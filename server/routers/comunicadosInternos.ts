@@ -18,6 +18,12 @@ async function extractTextFromBuffer(buffer: Buffer, ext: string): Promise<strin
       const result = await mammoth.extractRawText({ buffer });
       return result.value?.trim() || null;
     }
+    if (ext === "doc") {
+      const WordExtractor = (await import("word-extractor")).default;
+      const extractor = new WordExtractor();
+      const doc = await extractor.extract(buffer);
+      return doc.getBody()?.trim() || null;
+    }
   } catch (e: any) {
     console.error(`[ComunicadosInternos] Erro ao extrair texto (${ext}):`, e.message);
   }

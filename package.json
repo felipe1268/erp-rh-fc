@@ -125,6 +125,7 @@
     "topojson-client": "^3.1.0",
     "vaul": "^1.1.2",
     "web-ifc": "^0.0.77",
+    "word-extractor": "^1.0.4",
     "wouter": "^3.3.5",
     "xlsx": "^0.18.5",
     "zod": "^4.3.6",
