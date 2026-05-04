@@ -1,15 +1,22 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { curriculos, curriculoFuncoes } from "../../drizzle/schema";
-import { eq, and, sql, desc, isNull } from "drizzle-orm";
+import { curriculos, curriculoFuncoes, employees } from "../../drizzle/schema";
+import { eq, and, sql, desc, isNull, or } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { TRPCError } from "@trpc/server";
+import { invokeAnthropicVision } from "../_core/llm";
 
 const FUNCOES_PADRAO = [
   "SERVENTE", "PEDREIRO", "CARPINTEIRO", "ARMADOR",
   "ENGENHEIRO", "PINTOR", "AUX. ADMINISTRATIVO",
 ];
+
+function assertCompanyAccess(ctx: any, companyId: number) {
+  if (ctx.user?.companyId && String(ctx.user.companyId) !== String(companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado a esta empresa" });
+  }
+}
 
 async function ensureFuncoesPadrao(db: any, companyId: number) {
   const existing = await db.select({ nome: curriculoFuncoes.nome })
@@ -42,11 +49,24 @@ async function ensureCurriculoOwnership(db: any, id: number, companyId: number) 
   if (row.companyId !== companyId) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
 }
 
+function getMimeType(fileName: string): string {
+  const ext = (fileName.split(".").pop() || "").toLowerCase();
+  if (ext === "pdf") return "application/pdf";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  return "application/octet-stream";
+}
+
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, "").replace(/^0+/, "");
+}
+
 export const curriculosRouter = router({
-  // ───── Funções ─────
   listarFuncoes: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       await ensureFuncoesPadrao(db, input.companyId);
       return await db.select().from(curriculoFuncoes)
@@ -59,7 +79,8 @@ export const curriculosRouter = router({
 
   criarFuncao: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive(), nome: z.string().min(1).max(120) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const nome = input.nome.trim().toUpperCase();
       const existing = await db.select({ id: curriculoFuncoes.id }).from(curriculoFuncoes)
@@ -77,7 +98,8 @@ export const curriculosRouter = router({
 
   excluirFuncao: protectedProcedure
     .input(z.object({ id: z.number().int().positive(), companyId: z.number().int().positive() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       await ensureFuncaoOwnership(db, input.id, input.companyId);
       await db.update(curriculoFuncoes).set({ deletedAt: sql`NOW()` } as any)
@@ -85,10 +107,10 @@ export const curriculosRouter = router({
       return { success: true };
     }),
 
-  // ───── Currículos ─────
   listar: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive(), funcaoId: z.number().int().positive().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const conds = [eq(curriculos.companyId, input.companyId), isNull(curriculos.deletedAt)];
       if (input.funcaoId) conds.push(eq(curriculos.funcaoId, input.funcaoId));
@@ -107,6 +129,7 @@ export const curriculosRouter = router({
       observacoes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       await ensureFuncaoOwnership(db, input.funcaoId, input.companyId);
       const [funcRow] = await db.select({ nome: curriculoFuncoes.nome })
@@ -134,17 +157,13 @@ export const curriculosRouter = router({
       fileBase64: z.string(),
       fileName: z.string(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       await ensureCurriculoOwnership(db, input.id, input.companyId);
       const buffer = Buffer.from(input.fileBase64, "base64");
       const ext = (input.fileName.split(".").pop() || "pdf").toLowerCase();
-      const ct = ext === "pdf" ? "application/pdf"
-        : ext === "doc" ? "application/msword"
-        : ext === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        : ext === "jpg" || ext === "jpeg" ? "image/jpeg"
-        : ext === "png" ? "image/png"
-        : "application/octet-stream";
+      const ct = getMimeType(input.fileName);
       const key = `documentos/curriculos/c${input.companyId}/${input.id}-${Date.now()}.${ext}`;
       const { url } = await storagePut(key, buffer, ct);
       await db.update(curriculos)
@@ -156,6 +175,7 @@ export const curriculosRouter = router({
   excluir: protectedProcedure
     .input(z.object({ id: z.number().int().positive(), companyId: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       await ensureCurriculoOwnership(db, input.id, input.companyId);
       await db.update(curriculos).set({
@@ -164,5 +184,294 @@ export const curriculosRouter = router({
         deletedByUserId: ctx.user.id,
       } as any).where(eq(curriculos.id, input.id));
       return { success: true };
+    }),
+
+  processarArquivosIA: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      arquivos: z.array(z.object({
+        fileBase64: z.string(),
+        fileName: z.string(),
+      })).min(1).max(20),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      const funcoesDb = await db.select().from(curriculoFuncoes)
+        .where(and(
+          eq(curriculoFuncoes.companyId, input.companyId),
+          isNull(curriculoFuncoes.deletedAt),
+        ));
+
+      type ResultItem = {
+        fileName: string;
+        status: "ok" | "erro" | "duplicado" | "blacklist" | "desligado";
+        dados: { nome: string; telefone: string; email: string; funcaoDetectada: string; experiencia: string } | null;
+        alertas: { tipo: "duplicado" | "desligado" | "blacklist"; mensagem: string; detalhes?: string }[];
+        curriculoId: number | null;
+        funcaoId: number | null;
+        funcaoNome: string | null;
+        erro: string | null;
+      };
+
+      const resultados: ResultItem[] = [];
+
+      for (const arq of input.arquivos) {
+        try {
+          const maxBase64Size = 10 * 1024 * 1024 * 1.37;
+          if (arq.fileBase64.length > maxBase64Size) {
+            resultados.push({
+              fileName: arq.fileName, status: "erro", dados: null, alertas: [],
+              curriculoId: null, funcaoId: null, funcaoNome: null,
+              erro: "Arquivo muito grande (máx 10MB).",
+            });
+            continue;
+          }
+
+          const mimeType = getMimeType(arq.fileName);
+          if (mimeType !== "application/pdf" && !mimeType.startsWith("image/")) {
+            resultados.push({
+              fileName: arq.fileName, status: "erro", dados: null, alertas: [],
+              curriculoId: null, funcaoId: null, funcaoNome: null,
+              erro: "Formato não suportado pela IA. Use PDF, JPG ou PNG.",
+            });
+            continue;
+          }
+
+          const prompt = `Analise este currículo/CV e extraia as seguintes informações em JSON puro (sem markdown, sem \`\`\`):
+{
+  "nome": "nome completo do candidato",
+  "telefone": "telefone com DDD",
+  "email": "email do candidato",
+  "funcao": "função/cargo pretendido ou área de atuação principal (ex: PEDREIRO, SERVENTE, ENGENHEIRO, CARPINTEIRO, ARMADOR, PINTOR, AUXILIAR ADMINISTRATIVO, SOLDADOR, ELETRICISTA, ENCANADOR, MOTORISTA, OPERADOR, etc)",
+  "experiencia": "resumo breve das experiências (máx 200 caracteres)"
+}
+Se não conseguir identificar algum campo, use string vazia "".
+Para o campo "funcao", analise a experiência profissional e o objetivo do candidato para inferir a função mais adequada na construção civil ou área administrativa.
+IMPORTANTE: Retorne APENAS o JSON, sem nenhum texto adicional.`;
+
+          const resposta = await invokeAnthropicVision({
+            prompt,
+            base64: arq.fileBase64,
+            mimeType,
+            systemPrompt: "Você é um especialista em RH que analisa currículos para a construção civil. Extraia dados de forma precisa e objetiva. Retorne apenas JSON válido.",
+            maxTokens: 1024,
+          });
+
+          let dados: any;
+          try {
+            const jsonStr = resposta.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+            dados = JSON.parse(jsonStr);
+          } catch {
+            resultados.push({
+              fileName: arq.fileName, status: "erro", dados: null, alertas: [],
+              curriculoId: null, funcaoId: null, funcaoNome: null,
+              erro: "IA não conseguiu extrair dados deste arquivo. Verifique se é um currículo legível.",
+            });
+            continue;
+          }
+
+          const nome = (dados.nome || "").trim();
+          const telefone = (dados.telefone || "").trim();
+          const email = (dados.email || "").trim().toLowerCase();
+          const funcaoDetectada = (dados.funcao || "").trim().toUpperCase();
+          const experiencia = (dados.experiencia || "").trim().substring(0, 300);
+
+          const alertas: ResultItem["alertas"] = [];
+
+          const dupConds: any[] = [];
+          if (nome) {
+            dupConds.push(
+              sql`LOWER(${curriculos.nomeCandidato}) = ${nome.toLowerCase()}`
+            );
+          }
+          if (telefone) {
+            const telNorm = normalizePhone(telefone);
+            if (telNorm.length >= 8) {
+              dupConds.push(
+                sql`REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${curriculos.telefone},' ',''),'-',''),'(',''),')',''),'+','') LIKE ${"%" + telNorm.slice(-8)}`
+              );
+            }
+          }
+          if (email) {
+            dupConds.push(
+              sql`LOWER(${curriculos.email}) = ${email}`
+            );
+          }
+
+          if (dupConds.length > 0) {
+            const duplicados = await db.select({ id: curriculos.id, nomeCandidato: curriculos.nomeCandidato, funcaoNome: curriculos.funcaoNome, telefone: curriculos.telefone, email: curriculos.email })
+              .from(curriculos)
+              .where(and(
+                eq(curriculos.companyId, input.companyId),
+                isNull(curriculos.deletedAt),
+                or(...dupConds),
+              ))
+              .limit(5);
+            if (duplicados.length > 0) {
+              const nomes = duplicados.map((d: any) => `${d.nomeCandidato || "(sem nome)"} (${d.funcaoNome})`).join(", ");
+              alertas.push({
+                tipo: "duplicado",
+                mensagem: `Possível duplicidade: candidato similar já cadastrado`,
+                detalhes: nomes,
+              });
+            }
+          }
+
+          const empConds: any[] = [];
+          if (nome) {
+            const nomeParts = nome.split(/\s+/);
+            if (nomeParts.length >= 2) {
+              empConds.push(
+                sql`LOWER(${employees.nomeCompleto}) = ${nome.toLowerCase()}`
+              );
+              const firstName = nomeParts[0];
+              const lastName = nomeParts[nomeParts.length - 1];
+              empConds.push(
+                sql`(LOWER(${employees.nomeCompleto}) LIKE ${firstName.toLowerCase() + "%"} AND LOWER(${employees.nomeCompleto}) LIKE ${"%" + lastName.toLowerCase()})`
+              );
+            }
+          }
+          if (telefone) {
+            const telNorm = normalizePhone(telefone);
+            if (telNorm.length >= 8) {
+              empConds.push(
+                sql`REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${employees.celular},' ',''),'-',''),'(',''),')',''),'+','') LIKE ${"%" + telNorm.slice(-8)}`
+              );
+              empConds.push(
+                sql`REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${employees.telefone},' ',''),'-',''),'(',''),')',''),'+','') LIKE ${"%" + telNorm.slice(-8)}`
+              );
+            }
+          }
+          if (email) {
+            empConds.push(
+              sql`LOWER(${employees.email}) = ${email}`
+            );
+          }
+
+          if (empConds.length > 0) {
+            const empResults = await db.select({
+              id: employees.id,
+              nomeCompleto: employees.nomeCompleto,
+              status: employees.status,
+              listaNegra: employees.listaNegra,
+              motivoListaNegra: employees.motivoListaNegra,
+              funcao: employees.funcao,
+              dataDemissao: employees.dataDemissao,
+            })
+              .from(employees)
+              .where(and(
+                eq(employees.companyId, input.companyId),
+                isNull(employees.deletedAt),
+                or(...empConds),
+              ))
+              .limit(10);
+
+            for (const emp of empResults) {
+              if ((emp as any).listaNegra === 1) {
+                alertas.push({
+                  tipo: "blacklist",
+                  mensagem: `LISTA NEGRA: ${(emp as any).nomeCompleto}`,
+                  detalhes: (emp as any).motivoListaNegra || "Sem motivo registrado",
+                });
+              } else if ((emp as any).status === "Desligado" || (emp as any).dataDemissao) {
+                alertas.push({
+                  tipo: "desligado",
+                  mensagem: `Ex-funcionário desligado: ${(emp as any).nomeCompleto}`,
+                  detalhes: `Função: ${(emp as any).funcao || "N/A"} | Demissão: ${(emp as any).dataDemissao || "N/A"}`,
+                });
+              }
+            }
+          }
+
+          let funcaoId: number | null = null;
+          let funcaoNome: string | null = null;
+
+          if (funcaoDetectada) {
+            const match = funcoesDb.find((f: any) => {
+              const fn = f.nome.toUpperCase();
+              return fn === funcaoDetectada || funcaoDetectada.includes(fn) || fn.includes(funcaoDetectada);
+            });
+            if (match) {
+              funcaoId = (match as any).id;
+              funcaoNome = (match as any).nome;
+            } else {
+              const [newFunc] = await db.insert(curriculoFuncoes).values({
+                companyId: input.companyId, nome: funcaoDetectada, ativo: 1,
+              }).returning();
+              funcaoId = newFunc.id;
+              funcaoNome = funcaoDetectada;
+              funcoesDb.push(newFunc);
+            }
+          }
+
+          const hasBlacklist = alertas.some(a => a.tipo === "blacklist");
+
+          const statusFinal = hasBlacklist ? "blacklist" as const
+            : alertas.some(a => a.tipo === "duplicado") ? "duplicado" as const
+            : alertas.some(a => a.tipo === "desligado") ? "desligado" as const
+            : "ok" as const;
+
+          let curriculoId: number | null = null;
+
+          if (!hasBlacklist) {
+            if (!funcaoId) {
+              const defaultFunc = funcoesDb[0];
+              if (defaultFunc) {
+                funcaoId = (defaultFunc as any).id;
+                funcaoNome = (defaultFunc as any).nome;
+              }
+            }
+
+            if (funcaoId) {
+              const [row] = await db.insert(curriculos).values({
+                companyId: input.companyId,
+                funcaoId,
+                funcaoNome: funcaoNome || "Sem função",
+                nomeCandidato: nome || "",
+                telefone: telefone || null,
+                email: email || null,
+                observacoes: experiencia || null,
+                criadoPor: ctx.user.name ?? "IA",
+                criadoPorUserId: ctx.user.id,
+              }).returning();
+              curriculoId = row.id;
+
+              try {
+                const buffer = Buffer.from(arq.fileBase64, "base64");
+                const ext = (arq.fileName.split(".").pop() || "pdf").toLowerCase();
+                const ct = getMimeType(arq.fileName);
+                const key = `documentos/curriculos/c${input.companyId}/${row.id}-${Date.now()}.${ext}`;
+                const { url } = await storagePut(key, buffer, ct);
+                await db.update(curriculos)
+                  .set({ documentoUrl: url, fileName: arq.fileName, updatedAt: sql`NOW()` })
+                  .where(eq(curriculos.id, row.id));
+              } catch (storageErr: any) {
+                console.warn(`[Curriculos IA] Falha no storage para ${arq.fileName}, registro ${row.id} criado sem anexo:`, storageErr.message);
+              }
+            }
+          }
+
+          resultados.push({
+            fileName: arq.fileName,
+            status: statusFinal,
+            dados: { nome, telefone, email, funcaoDetectada, experiencia },
+            alertas,
+            curriculoId,
+            funcaoId,
+            funcaoNome,
+            erro: null,
+          });
+        } catch (err: any) {
+          console.error(`[Curriculos IA] Erro ao processar ${arq.fileName}:`, err.message);
+          resultados.push({
+            fileName: arq.fileName, status: "erro", dados: null, alertas: [],
+            curriculoId: null, funcaoId: null, funcaoNome: null,
+            erro: err.message || "Erro ao processar arquivo",
+          });
+        }
+      }
+
+      return { resultados };
     }),
 });
