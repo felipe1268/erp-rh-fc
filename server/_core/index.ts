@@ -15,6 +15,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { securityHeaders, apiRateLimit, authRateLimit } from "../security";
+import { sdk } from "./sdk";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -281,7 +282,12 @@ async function startServer() {
   app.post("/api/upload/sst-document", sstUpload.single("file"), async (req: any, res: any) => {
     try {
       let user;
-      try { user = await sdk.authenticateRequest(req); } catch { return res.status(401).json({ error: "Não autenticado" }); }
+      try {
+        user = await sdk.authenticateRequest(req);
+      } catch (authErr: any) {
+        console.error("[SST Upload] Auth falhou:", authErr?.message, "| Cookie header presente:", !!req.headers?.cookie);
+        return res.status(401).json({ error: "Não autenticado" });
+      }
       const file = req.file;
       if (!file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
       const tipo = (req.body.tipo || "sst").toLowerCase();
