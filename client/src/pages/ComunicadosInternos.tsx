@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft } from "lucide-react";
+import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -28,6 +28,8 @@ export default function ComunicadosInternos() {
   const [form, setForm] = useState({ titulo: "", dataEmissao: new Date().toISOString().slice(0, 10), conteudo: "" });
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [viewComunicadoId, setViewComunicadoId] = useState<number | null>(null);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ titulo: "", conteudo: "" });
 
   const { data: comunicados = [], isLoading } = trpc.comunicadosInternos.listar.useQuery(
     { companyId },
@@ -46,6 +48,10 @@ export default function ComunicadosInternos() {
   const uploadMut = trpc.comunicadosInternos.uploadDoc.useMutation({
     onSuccess: () => { utils.comunicadosInternos.listar.invalidate(); toast.success("Documento anexado"); setUploadingId(null); },
     onError: (e) => { toast.error(e.message); setUploadingId(null); },
+  });
+  const atualizarMut = trpc.comunicadosInternos.atualizar.useMutation({
+    onSuccess: () => { utils.comunicadosInternos.listar.invalidate(); toast.success("Comunicado atualizado"); setEditId(null); },
+    onError: (e) => toast.error(e.message),
   });
   const excluirMut = trpc.comunicadosInternos.excluir.useMutation({
     onSuccess: () => { utils.comunicadosInternos.listar.invalidate(); toast.success("Comunicado excluído"); },
@@ -273,6 +279,10 @@ export default function ComunicadosInternos() {
                           onClick={() => setViewComunicadoId(c.id)}>
                           <Eye className="h-3.5 w-3.5" />
                         </Button>
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-amber-600 hover:bg-amber-50" title="Editar"
+                          onClick={() => { setEditId(c.id); setEditForm({ titulo: c.titulo, conteudo: c.conteudo || "" }); }}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
                         {c.documentoUrl && (
                           <label className="cursor-pointer inline-block">
                             <Button size="sm" variant="ghost" className="h-8 w-8 p-0" asChild><span><Upload className="h-3.5 w-3.5" /></span></Button>
@@ -322,6 +332,35 @@ export default function ComunicadosInternos() {
             }} disabled={criarMut.isPending} className="bg-blue-600 hover:bg-blue-700">
               {criarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
               Criar Comunicado
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editId !== null} onOpenChange={(open) => { if (!open) setEditId(null); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2"><Pencil className="h-5 w-5 text-amber-600" /> Editar Comunicado</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2 overflow-y-auto flex-1 min-h-0">
+            <div>
+              <Label>Título *</Label>
+              <Input className="mt-1" value={editForm.titulo} onChange={e => setEditForm({ ...editForm, titulo: e.target.value })} />
+            </div>
+            <div>
+              <Label>Conteúdo</Label>
+              <Textarea className="mt-1 min-h-[120px] max-h-[250px] resize-y" placeholder="Texto do comunicado..." value={editForm.conteudo} onChange={e => setEditForm({ ...editForm, conteudo: e.target.value })} />
+            </div>
+          </div>
+          <DialogFooter className="flex-shrink-0">
+            <Button variant="outline" onClick={() => setEditId(null)}>Cancelar</Button>
+            <Button onClick={() => {
+              if (!editForm.titulo.trim()) { toast.error("Informe o título"); return; }
+              if (!editId) return;
+              atualizarMut.mutate({ id: editId, companyId, titulo: editForm.titulo.trim(), conteudo: editForm.conteudo || null });
+            }} disabled={atualizarMut.isPending} className="bg-amber-600 hover:bg-amber-700">
+              {atualizarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Pencil className="h-4 w-4 mr-1" />}
+              Salvar Alterações
             </Button>
           </DialogFooter>
         </DialogContent>
