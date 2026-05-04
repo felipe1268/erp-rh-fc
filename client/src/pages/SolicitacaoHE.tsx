@@ -1254,6 +1254,11 @@ export default function SolicitacaoHE() {
                                   <SquarePen className="h-3.5 w-3.5 mr-1" /> Editar
                                 </Button>
                               )}
+                              {sol.status !== "pendente" && sol.status !== "cancelada" && isAdminMaster && (
+                                <Button size="sm" variant="outline" className="text-xs md:text-sm text-orange-600 border-orange-300 hover:bg-orange-50" onClick={() => { setDetailSolId(sol.id); setShowRevertDialog(true); setRevertMotivo(""); }}>
+                                  <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reverter
+                                </Button>
+                              )}
                               {(isAdminMaster || (sol.canEdit && sol.status === "pendente")) && (
                                 confirmDeleteId === sol.id ? (
                                   <div className="flex items-center gap-1">
@@ -1391,6 +1396,11 @@ export default function SolicitacaoHE() {
                             {sol.canEdit && sol.status === "pendente" && (
                               <Button size="sm" variant="outline" className="text-xs md:text-sm text-amber-600 border-amber-300" onClick={() => handleStartEdit(sol)}>
                                 <SquarePen className="h-3.5 w-3.5 mr-1" /> Editar
+                              </Button>
+                            )}
+                            {sol.status !== "pendente" && sol.status !== "cancelada" && isAdminMaster && (
+                              <Button size="sm" variant="outline" className="text-xs md:text-sm text-orange-600 border-orange-300 hover:bg-orange-50" onClick={() => { setDetailSolId(sol.id); setShowRevertDialog(true); setRevertMotivo(""); }}>
+                                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reverter
                               </Button>
                             )}
                             {sol.status === "pendente" && (
