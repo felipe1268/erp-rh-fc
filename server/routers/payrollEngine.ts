@@ -497,6 +497,25 @@ export const payrollEngineRouter = router({
         recordMap.get(key)!.push(r);
       }
 
+      // Preserve existing treatments (resoluções, aferições, abonos) before deleting
+      const savedTreatments = ((await db.execute(sql`
+        SELECT "employeeId", "data", "resolucaoTipo", "resolucaoObs", "resolucaoPor", "resolucaoEm",
+               "inconsistenciaResolvida", "isFalta", "isInconsistente", "isAtraso", "isSaidaAntecipada",
+               "statusDia", "statusAnterior", "afericaoResultado", "afericaoObs", "afericaoEm",
+               "atestadoId", "advertenciaId",
+               "entrada1", "saida1", "entrada2", "saida2"
+        FROM timecard_daily
+        WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia}
+          AND ("resolucaoTipo" IS NOT NULL OR "afericaoResultado" IS NOT NULL)
+      `)) as any).rows || [];
+      const treatmentMap = new Map<string, any>();
+      for (const t of savedTreatments) {
+        treatmentMap.set(`${t.employeeId}-${t.data}`, t);
+      }
+      if (savedTreatments.length > 0) {
+        console.log(`[processarPonto] Preservando ${savedTreatments.length} tratamentos existentes para reaplicar após reprocessamento`);
+      }
+
       // Clear existing timecard_daily for this competencia
       await db.execute(sql`
         DELETE FROM timecard_daily WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia}
@@ -700,6 +719,52 @@ export const payrollEngineRouter = router({
         `);
       }
 
+      // Re-apply preserved treatments to newly inserted records
+      let totalTreatmentsRestored = 0;
+      if (treatmentMap.size > 0) {
+        for (const [key, t] of treatmentMap) {
+          try {
+            const updates: string[] = [];
+            if (t.resolucaoTipo) {
+              updates.push(`"resolucaoTipo" = '${String(t.resolucaoTipo).replace(/'/g, "''")}'`);
+              updates.push(`"resolucaoObs" = '${String(t.resolucaoObs || '').replace(/'/g, "''")}'`);
+              updates.push(`"resolucaoPor" = '${String(t.resolucaoPor || 'Sistema').replace(/'/g, "''")}'`);
+              updates.push(`"resolucaoEm" = ${t.resolucaoEm ? `'${t.resolucaoEm}'` : 'NOW()'}`);
+              updates.push(`"inconsistenciaResolvida" = 1`);
+              updates.push(`"isInconsistente" = 0`);
+              if (t.resolucaoTipo === 'atestado' || t.resolucaoTipo === 'justificar' || t.resolucaoTipo === 'abonar') {
+                updates.push(`"isFalta" = 0`);
+              }
+              if (t.resolucaoTipo === 'ajustar_horario') {
+                if (t.entrada1) updates.push(`"entrada1" = '${t.entrada1}'`);
+                if (t.saida1) updates.push(`"saida1" = '${t.saida1}'`);
+                if (t.entrada2) updates.push(`"entrada2" = '${t.entrada2}'`);
+                if (t.saida2) updates.push(`"saida2" = '${t.saida2}'`);
+              }
+            }
+            if (t.afericaoResultado) {
+              updates.push(`"afericaoResultado" = '${String(t.afericaoResultado).replace(/'/g, "''")}'`);
+              if (t.afericaoObs) updates.push(`"afericaoObs" = '${String(t.afericaoObs).replace(/'/g, "''")}'`);
+              if (t.afericaoEm) updates.push(`"afericaoEm" = '${t.afericaoEm}'`);
+              if (t.statusDia && t.statusDia !== 'registrado') updates.push(`"statusDia" = '${t.statusDia}'`);
+              if (t.statusAnterior) updates.push(`"statusAnterior" = '${t.statusAnterior}'`);
+            }
+            if (t.atestadoId) updates.push(`"atestadoId" = ${Number(t.atestadoId)}`);
+            if (t.advertenciaId) updates.push(`"advertenciaId" = ${Number(t.advertenciaId)}`);
+
+            if (updates.length > 0) {
+              await db.execute(sql.raw(
+                `UPDATE timecard_daily SET ${updates.join(', ')} WHERE "companyId" = ${Number(input.companyId)} AND "employeeId" = ${Number(t.employeeId)} AND "data" = '${t.data}' AND "mesCompetencia" = '${input.mesReferencia.replace(/'/g, "''")}'`
+              ));
+              totalTreatmentsRestored++;
+            }
+          } catch (e: any) {
+            console.warn(`[processarPonto] Falha ao restaurar tratamento ${key}:`, e?.message);
+          }
+        }
+        console.log(`[processarPonto] ${totalTreatmentsRestored}/${treatmentMap.size} tratamentos restaurados com sucesso`);
+      }
+
       // Update period status
       await db.execute(sql`
         UPDATE payroll_periods SET 
@@ -708,13 +773,15 @@ export const payrollEngineRouter = router({
           "pontoImportadoPor" = ${ctx.user.name || "Sistema"}
         WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
       `);
+      const treatmentMsg = totalTreatmentsRestored > 0 ? ` (${totalTreatmentsRestored} tratamento(s) preservado(s))` : '';
       return {
         totalFuncionarios: empList.length,
         totalRegistros: totalInserted,
         totalFaltas,
         totalAtrasos,
         totalInconsistencias,
-        message: `Ponto processado: ${empList.length} funcionários, ${totalInserted} registros, ${totalInconsistencias} inconsistências`,
+        totalTreatmentsRestored,
+        message: `Ponto processado: ${empList.length} funcionários, ${totalInserted} registros, ${totalInconsistencias} inconsistências${treatmentMsg}`,
       };
       } catch (err: any) {
         console.error("[processarPonto] Error:", err);
