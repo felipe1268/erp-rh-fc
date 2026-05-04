@@ -2398,8 +2398,11 @@ export const fechamentoPontoRouter = router({
           const year = parseInt(yearStr), month = parseInt(monthStr);
           const prevMonth = month === 1 ? 12 : month - 1;
           const prevYear = month === 1 ? year - 1 : year;
-          const diaCorte = 15; // default, could read from criteria
-          const pontoInicio = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(diaCorte).padStart(2, '0')}`;
+          const criteriaForPeriod = await getDiaCorte(db, input.companyId);
+          const diaCorte = criteriaForPeriod;
+          const pontoInicioDate = new Date(Date.UTC(prevYear, prevMonth - 1, diaCorte));
+          pontoInicioDate.setUTCDate(pontoInicioDate.getUTCDate() + 1);
+          const pontoInicio = pontoInicioDate.toISOString().slice(0, 10);
           const pontoFim = `${year}-${String(month).padStart(2, '0')}-${String(diaCorte).padStart(2, '0')}`;
           const lastDay = new Date(year, month, 0).getDate();
           const escuroInicio = `${year}-${String(month).padStart(2, '0')}-${String(diaCorte + 1).padStart(2, '0')}`;
@@ -2441,7 +2444,9 @@ export const fechamentoPontoRouter = router({
         const year2 = parseInt(yearStr2), month2 = parseInt(monthStr2);
         const prevMonth2 = month2 === 1 ? 12 : month2 - 1;
         const prevYear2 = month2 === 1 ? year2 - 1 : year2;
-        const pontoInicio2 = `${prevYear2}-${String(prevMonth2).padStart(2, '0')}-${String(diaCorte).padStart(2, '0')}`;
+        const pontoInicio2Date = new Date(Date.UTC(prevYear2, prevMonth2 - 1, diaCorte));
+        pontoInicio2Date.setUTCDate(pontoInicio2Date.getUTCDate() + 1);
+        const pontoInicio2 = pontoInicio2Date.toISOString().slice(0, 10);
         const pontoFim2 = `${year2}-${String(month2).padStart(2, '0')}-${String(diaCorte).padStart(2, '0')}`;
         const lastDay2 = new Date(year2, month2, 0).getDate();
         

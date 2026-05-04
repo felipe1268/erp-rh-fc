@@ -403,7 +403,9 @@ export const payrollEngineRouter = router({
       const prevMonth = month === 1 ? 12 : month - 1;
       const prevYear = month === 1 ? year - 1 : year;
       const diaCorte = criteria.diaCorte;
-      const pontoInicio = `${prevYear}-${String(prevMonth).padStart(2, "0")}-${String(diaCorte).padStart(2, "0")}`;
+      const pontoInicioDate = new Date(Date.UTC(prevYear, prevMonth - 1, diaCorte));
+      pontoInicioDate.setUTCDate(pontoInicioDate.getUTCDate() + 1);
+      const pontoInicio = pontoInicioDate.toISOString().slice(0, 10);
       const pontoFim = `${year}-${String(month).padStart(2, "0")}-${String(diaCorte).padStart(2, "0")}`;
       const lastDay = new Date(year, month, 0).getDate();
       const escuroInicio = `${year}-${String(month).padStart(2, "0")}-${String(diaCorte + 1).padStart(2, "0")}`;
@@ -460,7 +462,9 @@ export const payrollEngineRouter = router({
       const prevMonth = month === 1 ? 12 : month - 1;
       const prevYear = month === 1 ? year - 1 : year;
       const diaCorte = criteria.diaCorte;
-      const pontoInicio = `${prevYear}-${String(prevMonth).padStart(2, "0")}-${String(diaCorte).padStart(2, "0")}`;
+      const pontoInicioDate = new Date(Date.UTC(prevYear, prevMonth - 1, diaCorte));
+      pontoInicioDate.setUTCDate(pontoInicioDate.getUTCDate() + 1);
+      const pontoInicio = pontoInicioDate.toISOString().slice(0, 10);
       const pontoFim = `${year}-${String(month).padStart(2, "0")}-${String(diaCorte).padStart(2, "0")}`;
       const lastDay = new Date(year, month, 0).getDate();
 
@@ -2765,6 +2769,8 @@ export const payrollEngineRouter = router({
       manterOverrides: z.boolean().optional(),
       descartarOverrides: z.boolean().optional(),
       aplicarDsrFalta: z.boolean().optional(),
+      pontoInicioManual: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      pontoFimManual: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -2772,7 +2778,7 @@ export const payrollEngineRouter = router({
 
       // --- GUARD: block re-simulation if pagamento is consolidated ---
       const ppPagGuard = ((await db.execute(sql`
-        SELECT "pagamentoConsolidadoEm" FROM payroll_periods
+        SELECT "pagamentoConsolidadoEm", "pontoInicio", "pontoFim" FROM payroll_periods
         WHERE "companyId" = ${input.companyId}
           AND "mesReferencia" = ${input.mesReferencia}
         LIMIT 1
@@ -2783,6 +2789,8 @@ export const payrollEngineRouter = router({
           message: "Pagamento consolidado — desconsolide primeiro para resimular.",
         });
       }
+      const storedPontoInicio = ppPagGuard[0]?.pontoInicio ? String(ppPagGuard[0].pontoInicio).slice(0, 10) : null;
+      const storedPontoFim = ppPagGuard[0]?.pontoFim ? String(ppPagGuard[0].pontoFim).slice(0, 10) : null;
 
       const criteria = await getPayrollCriteria(db, input.companyId);
       const { year, month } = parseMesRef(input.mesReferencia);
@@ -2905,13 +2913,28 @@ export const payrollEngineRouter = router({
       `)) as any).rows || [];
       console.log(`[SimPag DIAG] timecardDailyCount(registrado)=${timecardDailyCount}, pontoProcessado=${pontoProcessado}, allStatusCounts=${JSON.stringify(timecardAllRows)}`);
 
-      if (!pontoProcessado) {
-        console.log(`[SimPag AUTO-PONTO] Nenhum registro em timecard_daily para ${input.mesReferencia}. Auto-processando ponto...`);
+      const periodoDiferente = !!(input.pontoInicioManual && input.pontoFimManual) && (input.pontoInicioManual !== storedPontoInicio || input.pontoFimManual !== storedPontoFim);
+      const forcarReprocessamento = periodoDiferente && pontoProcessado;
+      if (forcarReprocessamento) {
+        console.log(`[SimPag AUTO-PONTO] Período manual diferente do armazenado (${input.pontoInicioManual} → ${input.pontoFimManual} vs ${storedPontoInicio} → ${storedPontoFim}). Reprocessando...`);
+      }
+      if (!pontoProcessado || forcarReprocessamento) {
+        console.log(`[SimPag AUTO-PONTO] ${forcarReprocessamento ? 'Reprocessando' : 'Nenhum registro em timecard_daily para'} ${input.mesReferencia}. Auto-processando ponto...`);
         const prevMonthAP = month === 1 ? 12 : month - 1;
         const prevYearAP = month === 1 ? year - 1 : year;
         const diaCorteAP = criteria.diaCorte;
-        const pontoInicioAP = `${prevYearAP}-${String(prevMonthAP).padStart(2, '0')}-${String(diaCorteAP).padStart(2, '0')}`;
-        const pontoFimAP = `${year}-${String(month).padStart(2, '0')}-${String(diaCorteAP).padStart(2, '0')}`;
+        let pontoInicioAP: string;
+        let pontoFimAP: string;
+        if (input.pontoInicioManual && input.pontoFimManual) {
+          pontoInicioAP = input.pontoInicioManual;
+          pontoFimAP = input.pontoFimManual;
+          console.log(`[SimPag AUTO-PONTO] Período manual: ${pontoInicioAP} → ${pontoFimAP}`);
+        } else {
+          const pontoInicioDateAP = new Date(Date.UTC(prevYearAP, prevMonthAP - 1, diaCorteAP));
+          pontoInicioDateAP.setUTCDate(pontoInicioDateAP.getUTCDate() + 1);
+          pontoInicioAP = pontoInicioDateAP.toISOString().slice(0, 10);
+          pontoFimAP = `${year}-${String(month).padStart(2, '0')}-${String(diaCorteAP).padStart(2, '0')}`;
+        }
         const lastDayAP = new Date(year, month, 0).getDate();
 
         const autoRecords = ((await db.execute(sql`
@@ -3589,6 +3612,8 @@ export const payrollEngineRouter = router({
           "aplicarDsrFalta"  = ${aplicarDsrFalta  ? 1 : 0},
           "aplicarDsrAtraso" = 0,
           "pagamentoResultJson" = ${pagJson}
+          ${input.pontoInicioManual ? sql`, "pontoInicio" = ${input.pontoInicioManual}` : sql``}
+          ${input.pontoFimManual ? sql`, "pontoFim" = ${input.pontoFimManual}` : sql``}
         WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
       `);
 

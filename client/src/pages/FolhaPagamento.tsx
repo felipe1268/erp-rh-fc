@@ -565,6 +565,32 @@ export default function FolhaPagamento() {
   });
   const [overridesPrompt, setOverridesPrompt] = useState<{ open: boolean; count: number }>({ open: false, count: 0 });
   const [aplicarDsrFalta, setAplicarDsrFalta] = useState<boolean>(true);
+  const calcPeriodoPadrao = useCallback((ref: string) => {
+    const [y, m] = ref.split('-').map(Number);
+    const diaCorte = 15;
+    const prevM = m === 1 ? 12 : m - 1;
+    const prevY = m === 1 ? y - 1 : y;
+    const inicioDate = new Date(Date.UTC(prevY, prevM - 1, diaCorte));
+    inicioDate.setUTCDate(inicioDate.getUTCDate() + 1);
+    const inicio = inicioDate.toISOString().slice(0, 10);
+    const fim = `${y}-${String(m).padStart(2, '0')}-${String(diaCorte).padStart(2, '0')}`;
+    return { inicio, fim };
+  }, []);
+  const periodoPadrao = useMemo(() => calcPeriodoPadrao(mesAno), [mesAno, calcPeriodoPadrao]);
+  const [periodoInicio, setPeriodoInicio] = useState(() => calcPeriodoPadrao(mesAno).inicio);
+  const [periodoFim, setPeriodoFim] = useState(() => calcPeriodoPadrao(mesAno).fim);
+  useEffect(() => {
+    const pd = payrollPeriod.data as any;
+    if (pd?.pontoInicio && pd?.pontoFim) {
+      setPeriodoInicio(String(pd.pontoInicio).slice(0, 10));
+      setPeriodoFim(String(pd.pontoFim).slice(0, 10));
+    } else {
+      const p = calcPeriodoPadrao(mesAno);
+      setPeriodoInicio(p.inicio);
+      setPeriodoFim(p.fim);
+    }
+  }, [mesAno, payrollPeriod.data, calcPeriodoPadrao]);
+  const periodoCustomizado = periodoInicio !== periodoPadrao.inicio || periodoFim !== periodoPadrao.fim;
   const simularPagamentoMut = trpc.payrollEngine.simularPagamento.useMutation({
     onMutate: () => startProgress('pagamento'),
     onSuccess: (data) => {
@@ -3633,7 +3659,7 @@ export default function FolhaPagamento() {
                     setAplicarDsrFalta(v);
                     if (pagamentoConsolidado) return;
                     setCalcType("pagamento");
-                    simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, aplicarDsrFalta: v, manterOverrides: true });
+                    simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, aplicarDsrFalta: v, manterOverrides: true, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim });
                   }}
                   disabled={simularPagamentoMut.isPending || pagamentoConsolidado}
                 />
@@ -4019,12 +4045,12 @@ export default function FolhaPagamento() {
               <Button variant="destructive" onClick={() => {
                 setOverridesPrompt({ open: false, count: 0 });
                 setCalcType("pagamento");
-                simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, descartarOverrides: true });
+                simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, descartarOverrides: true, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim });
               }}>Descartar e recalcular do zero</Button>
               <Button onClick={() => {
                 setOverridesPrompt({ open: false, count: 0 });
                 setCalcType("pagamento");
-                simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, manterOverrides: true });
+                simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, manterOverrides: true, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim });
               }}>Manter alterações manuais</Button>
             </DialogFooter>
           </DialogContent>
@@ -5683,7 +5709,29 @@ export default function FolhaPagamento() {
                     </div>
                   );
                 })()}
-                <p className="text-xs text-muted-foreground mb-2 flex-1">100% salário − adiantamento − faltas − INSS − descontos</p>
+                <p className="text-xs text-muted-foreground mb-1">100% salário − adiantamento − faltas − INSS − descontos</p>
+                <div className="mb-2 border rounded-md p-2 bg-slate-50">
+                  <div className="flex items-center gap-1 mb-1.5">
+                    <CalendarDays className="h-3 w-3 text-slate-500" />
+                    <span className="text-[10px] font-semibold text-slate-600">Período do Ponto</span>
+                    {periodoCustomizado && <Badge variant="outline" className="text-[8px] px-1 py-0 h-3.5 border-amber-400 text-amber-700 bg-amber-50">Personalizado</Badge>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[9px] text-slate-500 block mb-0.5">Início</label>
+                      <input type="date" className="w-full text-[11px] px-1.5 py-1 border rounded bg-white" value={periodoInicio} onChange={e => setPeriodoInicio(e.target.value)} disabled={pagamentoConsolidado} />
+                    </div>
+                    <div>
+                      <label className="text-[9px] text-slate-500 block mb-0.5">Fim</label>
+                      <input type="date" className="w-full text-[11px] px-1.5 py-1 border rounded bg-white" value={periodoFim} onChange={e => setPeriodoFim(e.target.value)} disabled={pagamentoConsolidado} />
+                    </div>
+                  </div>
+                  {periodoCustomizado && (
+                    <button className="text-[9px] text-blue-600 hover:underline mt-1" onClick={() => { setPeriodoInicio(periodoPadrao.inicio); setPeriodoFim(periodoPadrao.fim); }}>
+                      Restaurar padrão ({fmtDateBR(periodoPadrao.inicio)} a {fmtDateBR(periodoPadrao.fim)})
+                    </button>
+                  )}
+                </div>
                 {pagOk && pagamentoResult && (
                   <div className="mb-2 bg-green-50 border border-green-200 rounded-lg p-2">
                     <div className="grid grid-cols-3 gap-1">
@@ -5714,7 +5762,7 @@ export default function FolhaPagamento() {
                 <Button size="sm" className={`w-full mt-auto ${pagamentoConsolidado ? 'bg-gray-400 cursor-not-allowed' : pagOk ? 'bg-slate-500 hover:bg-slate-600' : 'bg-green-600 hover:bg-green-700'}`}
                   disabled={simularPagamentoMut.isPending || !step4Ready || pagamentoConsolidado}
                   title={pagamentoConsolidado ? "Pagamento consolidado — desconsolide primeiro para resimular" : ""}
-                  onClick={() => { setCalcType("pagamento"); simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno }); }}>
+                  onClick={() => { setCalcType("pagamento"); simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim }); }}>
                   {simularPagamentoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Simulando...</> : pagamentoConsolidado ? <><Lock className="h-3 w-3 mr-1" /> Consolidado</> : pagOk ? <><RefreshCw className="h-3 w-3 mr-1" /> Resimular</> : <><Zap className="h-3 w-3 mr-1" /> Simular Pagamento</>}
                 </Button>
                 {pagamentoResult && (
