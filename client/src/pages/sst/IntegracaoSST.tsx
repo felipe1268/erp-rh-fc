@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import {
   LayoutDashboard, Settings, Clock, History, Users, Plus, Trash2, Edit, Copy,
   CheckCircle, XCircle, AlertTriangle, TrendingUp, GraduationCap, Eye, Video,
   ChevronDown, ChevronRight, Loader2, ClipboardList, BarChart3, RefreshCw, Search,
-  Play, ExternalLink, Save, X, Film,
+  Play, ExternalLink, Save, X, Film, UserPlus, Send, Link, Share2, MessageSquare,
 } from "lucide-react";
 
 function formatDate(d: string | null | undefined) {
@@ -637,10 +637,106 @@ function ModulosEditor({ configId, companyId }: { configId: number; companyId: n
 function PendentesTab({ companyId }: { companyId: number }) {
   const registros = trpc.integracaoSST.listarRegistros.useQuery({ companyId, status: "pendente" }, { enabled: companyId > 0 });
   const emAndamento = trpc.integracaoSST.listarRegistros.useQuery({ companyId, status: "em_andamento" }, { enabled: companyId > 0 });
-  const criarRegistro = trpc.integracaoSST.criarRegistro.useMutation({ onSuccess: () => { registros.refetch(); setShowNew(false); toast.success("Integração criada"); } });
+  const empList = trpc.employees.list.useQuery({ companyId, status: "Ativo" }, { enabled: companyId > 0 });
+  const obras = trpc.obras.listActive.useQuery({ companyId }, { enabled: companyId > 0 });
+  const configs = trpc.integracaoSST.listarConfigs.useQuery({ companyId }, { enabled: companyId > 0 });
+  const criarRegistro = trpc.integracaoSST.criarRegistro.useMutation({
+    onSuccess: (data) => {
+      registros.refetch();
+      emAndamento.refetch();
+      const link = `${window.location.origin}/integracao/${data.token}`;
+      setCreatedLink(link);
+      setCreatedEmployee(data.employeeNome || "");
+      toast.success("Integração criada com sucesso!");
+    }
+  });
+  const criarLote = trpc.integracaoSST.criarRegistrosEmLote.useMutation({
+    onSuccess: (data) => {
+      registros.refetch();
+      emAndamento.refetch();
+      setShowNew(false);
+      resetForm();
+      toast.success(`${data.count} integração(ões) criada(s) com sucesso!`);
+    }
+  });
+
   const [showNew, setShowNew] = useState(false);
-  const [employeeId, setEmployeeId] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [empSearchTerm, setEmpSearchTerm] = useState("");
+  const [selectedEmps, setSelectedEmps] = useState<{ id: number; nome: string; cpf: string; funcao: string }[]>([]);
+  const [selectedObraId, setSelectedObraId] = useState("");
+  const [selectedConfigId, setSelectedConfigId] = useState("");
+  const [createdLink, setCreatedLink] = useState("");
+  const [createdEmployee, setCreatedEmployee] = useState("");
+
+  const resetForm = () => {
+    setEmpSearchTerm("");
+    setSelectedEmps([]);
+    setSelectedObraId("");
+    setSelectedConfigId("");
+    setCreatedLink("");
+    setCreatedEmployee("");
+  };
+
+  const filteredEmps = useMemo(() => {
+    if (!empSearchTerm || empSearchTerm.length < 2) return [];
+    const term = empSearchTerm.toLowerCase();
+    const selectedIds = new Set(selectedEmps.map(e => e.id));
+    return (empList.data || [])
+      .filter((e: any) => !selectedIds.has(e.id) && (
+        e.nomeCompleto?.toLowerCase().includes(term) ||
+        e.nome?.toLowerCase().includes(term) ||
+        e.cpf?.includes(empSearchTerm.replace(/\D/g, ""))
+      ))
+      .slice(0, 10);
+  }, [empSearchTerm, empList.data, selectedEmps]);
+
+  const addEmployee = (emp: any) => {
+    setSelectedEmps([...selectedEmps, { id: emp.id, nome: emp.nomeCompleto || emp.nome, cpf: emp.cpf || "", funcao: emp.funcao || "" }]);
+    setEmpSearchTerm("");
+  };
+
+  const removeEmployee = (id: number) => {
+    setSelectedEmps(selectedEmps.filter(e => e.id !== id));
+  };
+
+  const handleCriar = () => {
+    if (selectedEmps.length === 0) { toast.error("Selecione pelo menos um colaborador"); return; }
+
+    const obraId = selectedObraId && selectedObraId !== "none" ? Number(selectedObraId) : undefined;
+    const obraNome = obraId ? (obras.data as any[])?.find((o: any) => o.id === obraId)?.nome : undefined;
+    const configId = selectedConfigId && selectedConfigId !== "auto" ? Number(selectedConfigId) : undefined;
+
+    if (selectedEmps.length === 1) {
+      criarRegistro.mutate({
+        companyId,
+        employeeId: selectedEmps[0].id,
+        configId,
+        obraId,
+        obraNome,
+      });
+    } else {
+      criarLote.mutate({
+        companyId,
+        employeeIds: selectedEmps.map(e => e.id),
+        configId,
+        obraId,
+        obraNome,
+      });
+    }
+  };
+
+  const copyLink = (token: string) => {
+    const link = `${window.location.origin}/integracao/${token}`;
+    navigator.clipboard.writeText(link);
+    toast.success("Link copiado!");
+  };
+
+  const shareWhatsApp = (token: string, nome: string) => {
+    const link = `${window.location.origin}/integracao/${token}`;
+    const msg = encodeURIComponent(`Olá ${nome}! Segue o link para realizar sua Integração de Segurança:\n\n${link}\n\nAcesse o link e siga as instruções.`);
+    window.open(`https://wa.me/?text=${msg}`, "_blank");
+  };
 
   const allPending = [...(registros.data || []), ...(emAndamento.data || [])];
   const filtered = searchTerm ? allPending.filter(r => r.employeeNome?.toLowerCase().includes(searchTerm.toLowerCase()) || r.employeeCpf?.includes(searchTerm)) : allPending;
@@ -650,67 +746,202 @@ function PendentesTab({ companyId }: { companyId: number }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center flex-wrap gap-2">
-        <h3 className="font-semibold">Integrações Pendentes</h3>
+        <div>
+          <h3 className="font-semibold">Integrações Pendentes</h3>
+          <p className="text-xs text-muted-foreground">{allPending.length} colaborador(es) aguardando integração</p>
+        </div>
         <div className="flex gap-2">
           <div className="relative">
             <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
-            <Input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar..." className="pl-8 w-48" />
+            <Input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar pendente..." className="pl-8 w-48" />
           </div>
-          <Button size="sm" onClick={() => setShowNew(true)}><Plus className="h-4 w-4 mr-1" />Criar Integração</Button>
+          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { resetForm(); setShowNew(true); }}>
+            <UserPlus className="h-4 w-4 mr-1" />Iniciar Integração
+          </Button>
         </div>
       </div>
 
-      {registros.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
-        <div className="rounded-md border">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b bg-muted/50">
-              <th className="p-2 text-left">Colaborador</th>
-              <th className="p-2 text-left">CPF</th>
-              <th className="p-2 text-left">Função</th>
-              <th className="p-2 text-left">Obra</th>
-              <th className="p-2 text-left">Status</th>
-              <th className="p-2 text-left">Origem</th>
-              <th className="p-2 text-left">Criado em</th>
-              <th className="p-2 text-left">Link</th>
-            </tr></thead>
-            <tbody>
-              {filtered.length === 0 && <tr><td colSpan={8} className="p-4 text-center text-muted-foreground">Nenhum registro pendente</td></tr>}
-              {filtered.map(r => (
-                <tr key={r.id} className="border-b hover:bg-muted/20">
-                  <td className="p-2 font-medium">{r.employeeNome || "-"}</td>
-                  <td className="p-2 text-xs">{r.employeeCpf || "-"}</td>
-                  <td className="p-2 text-xs">{r.employeeFuncao || "-"}</td>
-                  <td className="p-2 text-xs">{r.obraNome || "-"}</td>
-                  <td className="p-2"><Badge className={statusColors[r.status] || ""}>{statusLabels[r.status] || r.status}</Badge></td>
-                  <td className="p-2"><Badge variant="outline" className="text-xs">{origemLabels[r.origem] || r.origem}</Badge></td>
-                  <td className="p-2 text-xs">{formatDate(r.createdAt)}</td>
-                  <td className="p-2">
+      {registros.isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : filtered.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="p-8 text-center">
+            <Clock className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-muted-foreground">Nenhuma integração pendente</p>
+            <p className="text-xs text-muted-foreground mt-1">Clique em "Iniciar Integração" para criar uma nova</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map(r => (
+            <Card key={r.id} className="hover:shadow-sm transition-shadow">
+              <CardContent className="p-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                      <GraduationCap className="h-4 w-4 text-emerald-700" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{r.employeeNome || "-"}</p>
+                      <p className="text-xs text-muted-foreground">{r.employeeFuncao || "-"} · CPF: {r.employeeCpf || "-"}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {r.obraNome && <Badge variant="outline" className="text-xs">{r.obraNome}</Badge>}
+                    <Badge className={statusColors[r.status] || ""}>{statusLabels[r.status] || r.status}</Badge>
+                    <Badge variant="outline" className="text-xs">{origemLabels[r.origem] || r.origem}</Badge>
+                    <span className="text-xs text-muted-foreground">{formatDate(r.createdAt)}</span>
                     {r.token && (
-                      <Button size="sm" variant="ghost" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/integracao/${r.token}`); toast.success("Link copiado!"); }}>
-                        <Copy className="h-3 w-3 mr-1" />Copiar
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => copyLink(r.token!)}>
+                          <Link className="h-3 w-3 mr-1" />Link
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 text-xs text-green-700 border-green-300 hover:bg-green-50" onClick={() => shareWhatsApp(r.token!, r.employeeNome || "")}>
+                          <MessageSquare className="h-3 w-3 mr-1" />WhatsApp
+                        </Button>
+                      </div>
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
-      <Dialog open={showNew} onOpenChange={setShowNew}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Criar Integração</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>ID do Colaborador</Label><Input type="number" value={employeeId} onChange={e => setEmployeeId(e.target.value)} placeholder="ID do colaborador" /></div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNew(false)}>Cancelar</Button>
-            <Button disabled={!employeeId || criarRegistro.isPending}
-              onClick={() => criarRegistro.mutate({ companyId, employeeId: Number(employeeId) })}>
-              {criarRegistro.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}Criar
-            </Button>
-          </DialogFooter>
+      <Dialog open={showNew} onOpenChange={(v) => { if (!v) { setShowNew(false); resetForm(); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-emerald-600" />
+              Iniciar Integração de Segurança
+            </DialogTitle>
+          </DialogHeader>
+
+          {createdLink ? (
+            <div className="space-y-4">
+              <div className="text-center p-4">
+                <div className="w-16 h-16 rounded-full bg-emerald-100 mx-auto mb-3 flex items-center justify-center">
+                  <CheckCircle className="h-8 w-8 text-emerald-600" />
+                </div>
+                <h3 className="font-semibold text-lg">Integração Criada!</h3>
+                <p className="text-sm text-muted-foreground mt-1">Envie o link abaixo para <strong>{createdEmployee}</strong> realizar a integração</p>
+              </div>
+
+              <div className="bg-muted rounded-lg p-3">
+                <Label className="text-xs text-muted-foreground mb-1 block">Link da Integração</Label>
+                <div className="flex gap-2">
+                  <Input value={createdLink} readOnly className="text-xs bg-white" />
+                  <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(createdLink); toast.success("Link copiado!"); }}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" className="text-green-700 border-green-300 hover:bg-green-50" onClick={() => {
+                  const msg = encodeURIComponent(`Olá ${createdEmployee}! Segue o link para realizar sua Integração de Segurança:\n\n${createdLink}\n\nAcesse o link e siga as instruções.`);
+                  window.open(`https://wa.me/?text=${msg}`, "_blank");
+                }}>
+                  <MessageSquare className="h-4 w-4 mr-2" />Enviar WhatsApp
+                </Button>
+                <Button variant="outline" onClick={() => { resetForm(); }}>
+                  <Plus className="h-4 w-4 mr-2" />Nova Integração
+                </Button>
+              </div>
+
+              <DialogFooter>
+                <Button onClick={() => { setShowNew(false); resetForm(); }}>Fechar</Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <Label>Buscar Colaborador *</Label>
+                <div className="relative">
+                  <Search className="h-4 w-4 absolute left-2.5 top-2.5 text-muted-foreground" />
+                  <Input
+                    value={empSearchTerm}
+                    onChange={e => setEmpSearchTerm(e.target.value)}
+                    placeholder="Digite o nome ou CPF do colaborador..."
+                    className="pl-8"
+                  />
+                </div>
+                {filteredEmps.length > 0 && (
+                  <div className="border rounded-md mt-1 max-h-40 overflow-y-auto bg-white shadow-lg">
+                    {filteredEmps.map((emp: any) => (
+                      <div key={emp.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 cursor-pointer border-b last:border-0" onClick={() => addEmployee(emp)}>
+                        <div>
+                          <p className="text-sm font-medium">{emp.nomeCompleto || emp.nome}</p>
+                          <p className="text-xs text-muted-foreground">{emp.funcao || "-"} · CPF: {emp.cpf || "-"}</p>
+                        </div>
+                        <Plus className="h-4 w-4 text-emerald-600" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {empSearchTerm.length >= 2 && filteredEmps.length === 0 && !empList.isLoading && (
+                  <p className="text-xs text-muted-foreground mt-1">Nenhum colaborador encontrado</p>
+                )}
+              </div>
+
+              {selectedEmps.length > 0 && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">{selectedEmps.length} colaborador(es) selecionado(s)</Label>
+                  <div className="space-y-1 mt-1 max-h-32 overflow-y-auto">
+                    {selectedEmps.map(emp => (
+                      <div key={emp.id} className="flex items-center justify-between bg-emerald-50 rounded px-3 py-1.5 border border-emerald-200">
+                        <div>
+                          <span className="text-sm font-medium">{emp.nome}</span>
+                          <span className="text-xs text-muted-foreground ml-2">{emp.funcao}</span>
+                        </div>
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => removeEmployee(emp.id)}>
+                          <X className="h-3 w-3 text-red-500" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Obra (opcional)</Label>
+                  <Select value={selectedObraId} onValueChange={setSelectedObraId}>
+                    <SelectTrigger><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem obra específica</SelectItem>
+                      {(obras.data as any[])?.map((o: any) => (
+                        <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Configuração</Label>
+                  <Select value={selectedConfigId} onValueChange={setSelectedConfigId}>
+                    <SelectTrigger><SelectValue placeholder="Automática" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Automática (padrão)</SelectItem>
+                      {configs.data?.map(c => (
+                        <SelectItem key={c.id} value={String(c.id)}>{c.titulo}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { setShowNew(false); resetForm(); }}>Cancelar</Button>
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  disabled={selectedEmps.length === 0 || criarRegistro.isPending || criarLote.isPending}
+                  onClick={handleCriar}
+                >
+                  {(criarRegistro.isPending || criarLote.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
+                  {selectedEmps.length > 1 ? `Criar ${selectedEmps.length} Integrações` : "Criar Integração"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
