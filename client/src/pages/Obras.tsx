@@ -135,8 +135,8 @@ export default function Obras() {
   const [newSn, setNewSn] = useState("");
   const [newSnApelido, setNewSnApelido] = useState("");
   const [snValidation, setSnValidation] = useState<{ checking: boolean; available?: boolean; usedByObra?: string }>({ checking: false });
-  // SNs pendentes para vincular na criação (antes de salvar)
   const [pendingSns, setPendingSns] = useState<{ sn: string; apelido?: string }[]>([]);
+  const [snShareConfirm, setSnShareConfirm] = useState<{ open: boolean; sn: string; apelido?: string; usedByObra: string; mode: "add" | "pending" }>({ open: false, sn: "", usedByObra: "", mode: "add" });
 
   // Query SNs da obra sendo editada
   const obraSnQ = trpc.obras.listSns.useQuery({ obraId: editingId || 0 }, { enabled: !!editingId });
@@ -332,10 +332,14 @@ export default function Obras() {
     }
   };
 
-  const handleAddSn = () => {
+  const handleAddSn = (forceShare?: boolean) => {
     if (!newSn.trim()) { toast.error("Informe o número do SN"); return; }
     if (!editingId) { toast.error("Salve a obra primeiro para vincular SNs"); return; }
-    addSnMut.mutate({ companyId, obraId: editingId, sn: newSn.trim(), apelido: newSnApelido.trim() || undefined });
+    if (!forceShare && checkSnQ.data && !checkSnQ.data.available) {
+      setSnShareConfirm({ open: true, sn: newSn.trim(), apelido: newSnApelido.trim() || undefined, usedByObra: checkSnQ.data.usedByObra || "outra obra", mode: "add" });
+      return;
+    }
+    addSnMut.mutate({ companyId, obraId: editingId, sn: newSn.trim(), apelido: newSnApelido.trim() || undefined, forceShare: forceShare || false });
   };
 
   const handleRemoveSn = (id: number) => {
@@ -932,14 +936,15 @@ export default function Obras() {
                             {checkSnQ.data.available ? (
                               <CheckCircle className="h-4 w-4 text-green-500" />
                             ) : (
-                              <AlertCircle className="h-4 w-4 text-red-500" />
+                              <AlertCircle className="h-4 w-4 text-amber-500" />
                             )}
                           </div>
                         )}
                       </div>
                       {newSn.trim().length >= 2 && checkSnQ.data && !checkSnQ.data.available && (
-                        <p className="text-xs text-red-600 mt-1">
-                          SN já em uso na obra "{checkSnQ.data.usedByObra}"
+                        <p className="text-xs text-amber-600 mt-1">
+                          <AlertCircle className="h-3 w-3 inline mr-1" />
+                          SN em uso na obra "{checkSnQ.data.usedByObra}" — será compartilhado
                         </p>
                       )}
                     </div>
@@ -956,11 +961,15 @@ export default function Obras() {
                       onClick={() => {
                         if (!newSn.trim()) { toast.error("Informe o número do SN"); return; }
                         if (pendingSns.some(p => p.sn === newSn.trim())) { toast.error("SN já adicionado"); return; }
+                        if (checkSnQ.data && !checkSnQ.data.available) {
+                          setSnShareConfirm({ open: true, sn: newSn.trim(), apelido: newSnApelido.trim() || undefined, usedByObra: checkSnQ.data.usedByObra || "outra obra", mode: "pending" });
+                          return;
+                        }
                         setPendingSns(prev => [...prev, { sn: newSn.trim(), apelido: newSnApelido.trim() || undefined }]);
                         setNewSn(""); setNewSnApelido("");
                         toast.success("SN adicionado à lista");
                       }}
-                      disabled={!newSn.trim() || (checkSnQ.data && !checkSnQ.data.available) || pendingSns.some(p => p.sn === newSn.trim())}
+                      disabled={!newSn.trim() || pendingSns.some(p => p.sn === newSn.trim())}
                       className="bg-emerald-600 hover:bg-emerald-700 shrink-0"
                     >
                       <Plus className="h-4 w-4 mr-1" />
@@ -1035,14 +1044,15 @@ export default function Obras() {
                               {checkSnQ.data.available ? (
                                 <CheckCircle className="h-4 w-4 text-green-500" />
                               ) : (
-                                <AlertCircle className="h-4 w-4 text-red-500" />
+                                <AlertCircle className="h-4 w-4 text-amber-500" />
                               )}
                             </div>
                           )}
                         </div>
                         {newSn.trim().length >= 2 && checkSnQ.data && !checkSnQ.data.available && (
-                          <p className="text-xs text-red-600 mt-1">
-                            SN já em uso na obra "{checkSnQ.data.usedByObra}"
+                          <p className="text-xs text-amber-600 mt-1">
+                            <AlertCircle className="h-3 w-3 inline mr-1" />
+                            SN em uso na obra "{checkSnQ.data.usedByObra}" — será compartilhado
                           </p>
                         )}
                       </div>
@@ -1056,8 +1066,8 @@ export default function Obras() {
                       </div>
                       <Button
                         size="sm"
-                        onClick={handleAddSn}
-                        disabled={addSnMut.isPending || !newSn.trim() || (checkSnQ.data && !checkSnQ.data.available)}
+                        onClick={() => handleAddSn()}
+                        disabled={addSnMut.isPending || !newSn.trim()}
                         className="bg-emerald-600 hover:bg-emerald-700 shrink-0"
                       >
                         {addSnMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
@@ -1332,6 +1342,47 @@ export default function Obras() {
               }}
             >
               {mesclarMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Mesclando...</> : "Confirmar Mesclagem"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={snShareConfirm.open} onOpenChange={(v) => { if (!v) setSnShareConfirm(s => ({ ...s, open: false })); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <AlertCircle className="h-5 w-5" />
+              Relógio Compartilhado
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-slate-700">
+              O relógio <strong className="font-mono">{snShareConfirm.sn}</strong> já está vinculado à obra:
+            </p>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-sm font-semibold text-amber-800">{snShareConfirm.usedByObra}</p>
+            </div>
+            <p className="text-sm text-slate-600">
+              Deseja compartilhar este relógio entre as duas obras? O mesmo equipamento atenderá ambas simultaneamente.
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setSnShareConfirm(s => ({ ...s, open: false }))}>Cancelar</Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700"
+              onClick={() => {
+                const { sn, apelido, mode } = snShareConfirm;
+                setSnShareConfirm(s => ({ ...s, open: false }));
+                if (mode === "pending") {
+                  setPendingSns(prev => [...prev, { sn, apelido }]);
+                  setNewSn(""); setNewSnApelido("");
+                  toast.success("SN adicionado (compartilhado)");
+                } else {
+                  addSnMut.mutate({ companyId, obraId: editingId!, sn, apelido, forceShare: true });
+                }
+              }}
+            >
+              Sim, Compartilhar
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1522,10 +1522,10 @@ export const appRouter = router({
     addSn: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number().optional(),
       sn: z.string().min(1),
       apelido: z.string().optional(),
+      forceShare: z.boolean().optional(),
     })).mutation(async ({ input }) => {
-      // Validar unicidade antes de adicionar
       const check = await checkSnAvailability(input.companyId, input.sn, input.obraId);
-      if (!check.available) {
+      if (!check.available && !input.forceShare) {
         throw new Error(`SN "${input.sn}" já está em uso na obra "${check.usedByObra}". Libere-o primeiro.`);
       }
       return addSnToObra(input);
