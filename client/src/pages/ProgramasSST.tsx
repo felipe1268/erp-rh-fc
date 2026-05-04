@@ -158,6 +158,7 @@ export default function ProgramasSST() {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/upload/sst-document");
+      xhr.withCredentials = true;
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
       };
