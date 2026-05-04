@@ -183,6 +183,14 @@ const menuSectionsSST: MenuSection[] = [
     ],
   },
   {
+    title: "Programas Legais",
+    items: [
+      { icon: FileText, label: "PGR", path: "/programas-sst?tab=PGR" },
+      { icon: FileText, label: "PCMSO", path: "/programas-sst?tab=PCMSO" },
+      { icon: FileText, label: "LTCAT", path: "/programas-sst?tab=LTCAT" },
+    ],
+  },
+  {
     title: "Dashboards",
     items: [
       { icon: HardHat, label: "EPIs", path: "/dashboards/epis" },

@@ -274,6 +274,29 @@ async function startServer() {
   // Download de arquivos SST em ZIP
   registerDownloadSSTRoute(app);
   registerDownloadOCRoute(app);
+
+  // Upload multipart para documentos SST grandes (PGR/PCMSO/LTCAT — até 150MB)
+  const multer = (await import("multer")).default;
+  const sstUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 150 * 1024 * 1024 } });
+  app.post("/api/upload/sst-document", sstUpload.single("file"), async (req: any, res: any) => {
+    try {
+      let user;
+      try { user = await sdk.authenticateRequest(req); } catch { return res.status(401).json({ error: "Não autenticado" }); }
+      const file = req.file;
+      if (!file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
+      const tipo = (req.body.tipo || "sst").toLowerCase();
+      const companyId = req.body.companyId || "0";
+      const ext = file.originalname.split(".").pop() || "pdf";
+      const key = `documentos/sst/${tipo}/${companyId}-${Date.now()}.${ext}`;
+      const ct = ext === "pdf" ? "application/pdf" : file.mimetype || "application/octet-stream";
+      const { storagePut: sPut } = await import("../storage");
+      const { url } = await sPut(key, file.buffer, ct);
+      res.json({ url, fileName: file.originalname });
+    } catch (err: any) {
+      console.error("[SST Upload] Erro:", err);
+      res.status(500).json({ error: err?.message || "Erro ao fazer upload" });
+    }
+  });
   app.get("/api/diario-obra/foto/:id", async (req: any, res: any) => {
     try {
       const db = await (await import("../db")).getDb();

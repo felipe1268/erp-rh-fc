@@ -7669,3 +7669,30 @@ export const recycleBin = pgTable("recycle_bin", {
   index("idx_recycle_entity").on(t.entityType, t.entityId),
   index("idx_recycle_deleted_at").on(t.deletedAt),
 ]);
+
+export const sstDocuments = pgTable("sst_documents", {
+  id: serial().primaryKey().notNull(),
+  companyId: integer("company_id").notNull(),
+  obraId: integer("obra_id"),
+  tipo: varchar({ length: 20 }).notNull(),
+  descricao: varchar({ length: 255 }),
+  dataElaboracao: date("data_elaboracao", { mode: "string" }),
+  dataValidade: date("data_validade", { mode: "string" }),
+  responsavelElaboracao: varchar("responsavel_elaboracao", { length: 255 }),
+  registroProfissional: varchar("registro_profissional", { length: 100 }),
+  empresaElaboradora: varchar("empresa_elaboradora", { length: 255 }),
+  arquivoUrl: text("arquivo_url"),
+  arquivoNome: varchar("arquivo_nome", { length: 255 }),
+  observacoes: text(),
+  criadoPor: varchar("criado_por", { length: 255 }),
+  criadoPorUserId: integer("criado_por_user_id"),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at", { mode: "string" }),
+  deletedBy: varchar("deleted_by", { length: 255 }),
+  deletedByUserId: integer("deleted_by_user_id"),
+}, (t) => [
+  index("idx_sstdoc_company").on(t.companyId),
+  index("idx_sstdoc_tipo").on(t.tipo),
+  index("idx_sstdoc_obra").on(t.obraId),
+]);
