@@ -1064,6 +1064,7 @@ export default function Curriculos() {
         </DialogContent>
       </Dialog>
     </div>
+    </div>
     </>
   );
 }
