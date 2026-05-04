@@ -116,9 +116,9 @@ export default function ComunicadosInternos() {
                   {filtrados.map((c: any) => (
                     <tr key={c.id} className="border-b hover:bg-slate-50">
                       <td className="px-4 py-3 font-mono font-bold text-blue-700">{c.numero}</td>
-                      <td className="px-4 py-3 overflow-hidden">
+                      <td className="px-4 py-3 overflow-hidden max-w-0">
                         <div className="font-medium text-slate-800 truncate">{c.titulo}</div>
-                        {c.conteudo && <div className="text-xs text-slate-500 truncate">{c.conteudo}</div>}
+                        {c.conteudo && <div className="text-xs text-slate-500 truncate">{c.conteudo.length > 100 ? c.conteudo.substring(0, 100) + "..." : c.conteudo}</div>}
                       </td>
                       <td className="px-4 py-3 text-slate-600">{new Date(c.dataEmissao + "T12:00:00").toLocaleDateString("pt-BR")}</td>
                       <td className="px-4 py-3">
@@ -157,11 +157,11 @@ export default function ComunicadosInternos() {
       </div>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2"><Megaphone className="h-5 w-5 text-blue-600" /> Novo Comunicado Interno</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 py-2 overflow-y-auto flex-1 min-h-0">
             <div>
               <Label>Título *</Label>
               <Input className="mt-1" placeholder="Ex: Registro de Ponto" value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} />
@@ -173,11 +173,11 @@ export default function ComunicadosInternos() {
             </div>
             <div>
               <Label>Conteúdo (resumo)</Label>
-              <Textarea className="mt-1 min-h-[120px]" placeholder="Resumo do comunicado..." value={form.conteudo} onChange={e => setForm({ ...form, conteudo: e.target.value })} />
+              <Textarea className="mt-1 min-h-[120px] max-h-[250px] resize-y" placeholder="Resumo do comunicado..." value={form.conteudo} onChange={e => setForm({ ...form, conteudo: e.target.value })} />
               <p className="text-xs text-slate-500 mt-1">Após criar, você poderá anexar o arquivo (PDF/DOC) na lista.</p>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0">
             <Button variant="outline" onClick={() => setShowDialog(false)}>Cancelar</Button>
             <Button onClick={() => {
               if (!form.titulo.trim()) { toast.error("Informe o título"); return; }
