@@ -178,6 +178,46 @@ export const curriculosRouter = router({
       return { url };
     }),
 
+  atualizar: protectedProcedure
+    .input(z.object({
+      id: z.number().int().positive(),
+      companyId: z.number().int().positive(),
+      funcaoId: z.number().int().positive().optional(),
+      nomeCandidato: z.string().max(255).optional(),
+      telefone: z.string().optional(),
+      email: z.string().optional(),
+      endereco: z.string().max(500).optional(),
+      cidade: z.string().max(150).optional(),
+      estado: z.string().max(2).optional(),
+      observacoes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      await ensureCurriculoOwnership(db, input.id, input.companyId);
+
+      const updates: any = { updatedAt: sql`NOW()` };
+      if (input.nomeCandidato !== undefined) updates.nomeCandidato = input.nomeCandidato.trim();
+      if (input.telefone !== undefined) updates.telefone = input.telefone.trim() || null;
+      if (input.email !== undefined) updates.email = input.email.trim().toLowerCase() || null;
+      if (input.endereco !== undefined) updates.endereco = input.endereco.trim() || null;
+      if (input.cidade !== undefined) updates.cidade = input.cidade.trim() || null;
+      if (input.estado !== undefined) updates.estado = input.estado.trim().toUpperCase().substring(0, 2) || null;
+      if (input.observacoes !== undefined) updates.observacoes = input.observacoes || null;
+
+      if (input.funcaoId) {
+        await ensureFuncaoOwnership(db, input.funcaoId, input.companyId);
+        const [funcRow] = await db.select({ nome: curriculoFuncoes.nome })
+          .from(curriculoFuncoes).where(eq(curriculoFuncoes.id, input.funcaoId));
+        updates.funcaoId = input.funcaoId;
+        updates.funcaoNome = funcRow?.nome || "Sem função";
+      }
+
+      const [row] = await db.update(curriculos).set(updates)
+        .where(eq(curriculos.id, input.id)).returning();
+      return row;
+    }),
+
   excluir: protectedProcedure
     .input(z.object({ id: z.number().int().positive(), companyId: z.number().int().positive() }))
     .mutation(async ({ input, ctx }) => {

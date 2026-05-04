@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Briefcase, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, UserPlus, FolderPlus, Sparkles, AlertTriangle, ShieldAlert, Ban, CheckCircle, XCircle, Info } from "lucide-react";
+import { Briefcase, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, UserPlus, FolderPlus, Sparkles, AlertTriangle, ShieldAlert, Ban, CheckCircle, XCircle, Info, Pencil, Save } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -33,6 +33,8 @@ export default function Curriculos() {
   const [showFuncDialog, setShowFuncDialog] = useState(false);
   const [novaFuncao, setNovaFuncao] = useState("");
   const [form, setForm] = useState({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", observacoes: "" });
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [dialogFuncaoId, setDialogFuncaoId] = useState<number | null>(null);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
@@ -66,9 +68,7 @@ export default function Curriculos() {
       }
       utils.curriculos.listar.invalidate();
       toast.success("Currículo cadastrado");
-      setShowCurDialog(false);
-      setForm({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", observacoes: "" });
-      setPendingFile(null);
+      closeDialog();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -76,11 +76,43 @@ export default function Curriculos() {
     onSuccess: () => { utils.curriculos.listar.invalidate(); toast.success("Currículo anexado"); setUploadingId(null); },
     onError: (e) => { toast.error(e.message); setUploadingId(null); },
   });
+  function closeDialog() {
+    setShowCurDialog(false);
+    setEditingId(null);
+    setDialogFuncaoId(null);
+    setForm({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", observacoes: "" });
+    setPendingFile(null);
+  }
+
+  const atualizarMut = trpc.curriculos.atualizar.useMutation({
+    onSuccess: () => {
+      utils.curriculos.listar.invalidate();
+      toast.success("Currículo atualizado");
+      closeDialog();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const excluirMut = trpc.curriculos.excluir.useMutation({
     onSuccess: () => { utils.curriculos.listar.invalidate(); toast.success("Currículo excluído"); },
     onError: (e) => toast.error(e.message),
   });
   const processarIAMut = trpc.curriculos.processarArquivosIA.useMutation();
+
+  function openEditDialog(c: any) {
+    setEditingId(c.id);
+    setDialogFuncaoId(c.funcaoId);
+    setForm({
+      nomeCandidato: c.nomeCandidato || "",
+      telefone: c.telefone || "",
+      email: c.email || "",
+      endereco: c.endereco || "",
+      cidade: c.cidade || "",
+      estado: c.estado || "",
+      observacoes: c.observacoes || "",
+    });
+    setPendingFile(null);
+    setShowCurDialog(true);
+  }
 
   function uploadFile(id: number, file: File): Promise<void> {
     return new Promise((resolve) => {
@@ -207,6 +239,10 @@ export default function Curriculos() {
                   </Button>
                   <Button onClick={() => {
                     if (!funcoes.length) { toast.error("Crie uma função primeiro"); return; }
+                    setEditingId(null);
+                    setDialogFuncaoId(funcaoSelecionadaId);
+                    setForm({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", observacoes: "" });
+                    setPendingFile(null);
                     setShowCurDialog(true);
                   }} className="bg-amber-600 hover:bg-amber-700"><UserPlus className="h-4 w-4 mr-1" /> Novo Currículo</Button>
                 </div>
@@ -270,9 +306,14 @@ export default function Curriculos() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50" onClick={() => { if (confirm(`Excluir currículo de ${c.nomeCandidato || "este candidato"}?`)) excluirMut.mutate({ id: c.id, companyId }); }}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50" title="Editar" onClick={() => openEditDialog(c)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50" title="Excluir" onClick={() => { if (confirm(`Excluir currículo de ${c.nomeCandidato || "este candidato"}?`)) excluirMut.mutate({ id: c.id, companyId }); }}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -307,11 +348,14 @@ export default function Curriculos() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Novo Currículo (manual) */}
-      <Dialog open={showCurDialog} onOpenChange={setShowCurDialog}>
+      {/* Dialog Novo / Editar Currículo */}
+      <Dialog open={showCurDialog} onOpenChange={(open) => { if (!open) closeDialog(); }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><UserPlus className="h-5 w-5 text-amber-600" /> Novo Currículo</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {editingId ? <Pencil className="h-5 w-5 text-blue-600" /> : <UserPlus className="h-5 w-5 text-amber-600" />}
+              {editingId ? "Editar Currículo" : "Novo Currículo"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
@@ -322,8 +366,8 @@ export default function Curriculos() {
               <div>
                 <Label>Função *</Label>
                 <select className="mt-1 w-full border rounded-md px-3 py-2 text-sm h-10"
-                  value={funcaoSelecionadaId || ""}
-                  onChange={e => setFuncaoSelecionadaId(Number(e.target.value) || null)}>
+                  value={dialogFuncaoId || ""}
+                  onChange={e => setDialogFuncaoId(Number(e.target.value) || null)}>
                   <option value="">Selecione a função</option>
                   {funcoes.map((f: any) => <option key={f.id} value={f.id}>{f.nome}</option>)}
                 </select>
@@ -353,31 +397,52 @@ export default function Curriculos() {
               <Label>Observações</Label>
               <Textarea className="mt-1" placeholder="Indicação, experiência relevante, etc." value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
             </div>
-            <div>
-              <Label>Anexar Currículo (PDF/DOC/Imagem)</Label>
-              <Input type="file" className="mt-1" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={e => setPendingFile(e.target.files?.[0] || null)} />
-              {pendingFile && <p className="text-xs text-slate-500 mt-1">{pendingFile.name}</p>}
-            </div>
+            {!editingId && (
+              <div>
+                <Label>Anexar Currículo (PDF/DOC/Imagem)</Label>
+                <Input type="file" className="mt-1" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={e => setPendingFile(e.target.files?.[0] || null)} />
+                {pendingFile && <p className="text-xs text-slate-500 mt-1">{pendingFile.name}</p>}
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCurDialog(false); setPendingFile(null); }}>Cancelar</Button>
-            <Button onClick={() => {
-              if (!funcaoSelecionadaId) { toast.error("Selecione a função"); return; }
-              if (!companyId) { toast.error("Selecione a empresa"); return; }
-              criarMut.mutate({
-                companyId, funcaoId: funcaoSelecionadaId,
-                nomeCandidato: form.nomeCandidato.trim() || undefined,
-                telefone: form.telefone || undefined,
-                email: form.email || undefined,
-                endereco: form.endereco || undefined,
-                cidade: form.cidade || undefined,
-                estado: form.estado || undefined,
-                observacoes: form.observacoes || undefined,
-              });
-            }} disabled={criarMut.isPending || uploadMut.isPending} className="bg-amber-600 hover:bg-amber-700">
-              {(criarMut.isPending || uploadMut.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
-              Cadastrar
-            </Button>
+            <Button variant="outline" onClick={() => closeDialog()}>Cancelar</Button>
+            {editingId ? (
+              <Button onClick={() => {
+                if (!dialogFuncaoId) { toast.error("Selecione a função"); return; }
+                atualizarMut.mutate({
+                  id: editingId, companyId, funcaoId: dialogFuncaoId,
+                  nomeCandidato: form.nomeCandidato.trim(),
+                  telefone: form.telefone,
+                  email: form.email,
+                  endereco: form.endereco,
+                  cidade: form.cidade,
+                  estado: form.estado,
+                  observacoes: form.observacoes,
+                });
+              }} disabled={atualizarMut.isPending} className="bg-blue-600 hover:bg-blue-700">
+                {atualizarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+                Salvar
+              </Button>
+            ) : (
+              <Button onClick={() => {
+                if (!dialogFuncaoId) { toast.error("Selecione a função"); return; }
+                if (!companyId) { toast.error("Selecione a empresa"); return; }
+                criarMut.mutate({
+                  companyId, funcaoId: dialogFuncaoId,
+                  nomeCandidato: form.nomeCandidato.trim() || undefined,
+                  telefone: form.telefone || undefined,
+                  email: form.email || undefined,
+                  endereco: form.endereco || undefined,
+                  cidade: form.cidade || undefined,
+                  estado: form.estado || undefined,
+                  observacoes: form.observacoes || undefined,
+                });
+              }} disabled={criarMut.isPending || uploadMut.isPending} className="bg-amber-600 hover:bg-amber-700">
+                {(criarMut.isPending || uploadMut.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+                Cadastrar
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
