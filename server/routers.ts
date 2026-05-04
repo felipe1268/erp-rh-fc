@@ -1190,7 +1190,7 @@ export const appRouter = router({
       responsavel: z.string().optional(),
       responsavelId: z.number().nullable().optional(),
       endereco: z.string().optional(),
-      cidade: z.string().min(2, "Cidade é obrigatória para cálculo correto do VA"),
+      cidade: z.string().optional(),
       estado: z.string().optional(),
       cep: z.string().optional(),
       dataInicio: z.string().optional(),
