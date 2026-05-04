@@ -7646,6 +7646,7 @@ export const curriculos = pgTable("curriculos", {
   habilidades: text(),
   escolaridade: varchar({ length: 255 }),
   cursoFormacao: text("curso_formacao"),
+  historicoStatusJson: text("historico_status_json"),
   experienciasJson: text("experiencias_json"),
   observacoes: text(),
   documentoUrl: text("documento_url"),

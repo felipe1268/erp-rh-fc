@@ -112,7 +112,7 @@ export const curriculosRouter = router({
       companyId: z.number().int().positive(),
       funcaoId: z.number().int().positive().optional(),
       funcaoIds: z.array(z.number().int().positive()).optional(),
-      statusCandidato: z.enum(["ativo", "reprovado", "todos"]).optional(),
+      statusCandidato: z.enum(["ativo", "em_analise", "entrevista", "aprovado", "contratado", "reprovado", "desistiu", "blacklist", "todos"]).optional(),
     }))
     .query(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
@@ -129,6 +129,41 @@ export const curriculosRouter = router({
       return await db.select().from(curriculos)
         .where(and(...conds))
         .orderBy(desc(curriculos.createdAt));
+    }),
+
+  contagens: protectedProcedure
+    .input(z.object({ companyId: z.number().int().positive() }))
+    .query(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      const statusRows = await db.select({
+        status: curriculos.statusCandidato,
+        count: sql<number>`count(*)::int`,
+      }).from(curriculos)
+        .where(and(eq(curriculos.companyId, input.companyId), isNull(curriculos.deletedAt)))
+        .groupBy(curriculos.statusCandidato);
+
+      const funcaoRows = await db.select({
+        funcaoId: curriculos.funcaoId,
+        count: sql<number>`count(*)::int`,
+      }).from(curriculos)
+        .where(and(eq(curriculos.companyId, input.companyId), isNull(curriculos.deletedAt)))
+        .groupBy(curriculos.funcaoId);
+
+      const porStatus: Record<string, number> = {};
+      let total = 0;
+      for (const r of statusRows) {
+        porStatus[r.status] = r.count;
+        total += r.count;
+      }
+      porStatus["todos"] = total;
+
+      const porFuncao: Record<number, number> = {};
+      for (const r of funcaoRows) {
+        if (r.funcaoId) porFuncao[r.funcaoId] = r.count;
+      }
+
+      return { porStatus, porFuncao };
     }),
 
   criar: protectedProcedure
@@ -288,30 +323,59 @@ export const curriculosRouter = router({
     .input(z.object({
       ids: z.array(z.number().int().positive()).min(1).max(200),
       companyId: z.number().int().positive(),
-      statusCandidato: z.enum(["ativo", "reprovado"]),
+      statusCandidato: z.enum(["ativo", "em_analise", "entrevista", "aprovado", "contratado", "reprovado", "desistiu", "blacklist"]),
       motivoReprovacao: z.string().max(1000).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
-      const updates: any = {
-        statusCandidato: input.statusCandidato,
-        statusAtualizadoEm: sql`NOW()`,
-        statusAtualizadoPor: ctx.user.name ?? "Sistema",
-        updatedAt: sql`NOW()`,
-      };
-      if (input.statusCandidato === "reprovado" && input.motivoReprovacao) {
-        updates.motivoReprovacao = input.motivoReprovacao.trim();
-      }
-      if (input.statusCandidato === "ativo") {
-        updates.motivoReprovacao = null;
-      }
-      await db.update(curriculos).set(updates).where(and(
+
+      const rows = await db.select({
+        id: curriculos.id,
+        statusCandidato: curriculos.statusCandidato,
+        historicoStatusJson: curriculos.historicoStatusJson,
+      }).from(curriculos).where(and(
         sql`${curriculos.id} IN (${sql.join(input.ids.map(id => sql`${id}`), sql`, `)})`,
         eq(curriculos.companyId, input.companyId),
         isNull(curriculos.deletedAt),
       ));
-      return { success: true, count: input.ids.length };
+
+      const agora = new Date().toISOString();
+      const usuario = ctx.user.name ?? "Sistema";
+
+      let changed = 0;
+      for (const row of rows) {
+        if (row.statusCandidato === input.statusCandidato) continue;
+
+        let historico: any[] = [];
+        try { historico = JSON.parse(row.historicoStatusJson || "[]"); } catch {}
+        historico.push({
+          de: row.statusCandidato,
+          para: input.statusCandidato,
+          data: agora,
+          usuario,
+          motivo: input.motivoReprovacao?.trim() || null,
+        });
+
+        const updates: any = {
+          statusCandidato: input.statusCandidato,
+          statusAtualizadoEm: sql`NOW()`,
+          statusAtualizadoPor: usuario,
+          historicoStatusJson: JSON.stringify(historico),
+          updatedAt: sql`NOW()`,
+        };
+        if (input.statusCandidato === "reprovado" && input.motivoReprovacao) {
+          updates.motivoReprovacao = input.motivoReprovacao.trim();
+        }
+        if (input.statusCandidato !== "reprovado") {
+          updates.motivoReprovacao = null;
+        }
+
+        await db.update(curriculos).set(updates).where(eq(curriculos.id, row.id));
+        changed++;
+      }
+
+      return { success: true, count: changed };
     }),
 
   processarArquivosIA: protectedProcedure

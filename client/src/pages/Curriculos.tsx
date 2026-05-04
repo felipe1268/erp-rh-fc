@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Briefcase, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, UserPlus, FolderPlus, Sparkles, AlertTriangle, ShieldAlert, Ban, CheckCircle, XCircle, Info, Pencil, Save, ThumbsDown, RotateCcw, X, Phone, Mail, MapPin, GraduationCap, Wrench, Calendar, Clock, Building2, Eye } from "lucide-react";
+import { Briefcase, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, UserPlus, FolderPlus, Sparkles, AlertTriangle, ShieldAlert, Ban, CheckCircle, XCircle, Info, Pencil, Save, ThumbsDown, RotateCcw, X, Phone, Mail, MapPin, GraduationCap, Wrench, Calendar, Clock, Building2, Eye, ArrowUpDown, UserCheck, Handshake, CircleDot, UserX, History } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -30,7 +30,20 @@ type Experiencia = {
   descricao: string;
 };
 
-type StatusTab = "ativo" | "reprovado" | "todos";
+type StatusTab = "ativo" | "em_analise" | "entrevista" | "aprovado" | "contratado" | "reprovado" | "desistiu" | "blacklist" | "todos";
+
+type SortBy = "recente" | "antigo" | "nome_az" | "nome_za";
+
+const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string; bg: string; text: string }> = {
+  ativo: { label: "Ativo", icon: <CheckCircle className="h-3.5 w-3.5" />, color: "text-green-700", bg: "bg-green-100", text: "text-green-700" },
+  em_analise: { label: "Em Análise", icon: <Search className="h-3.5 w-3.5" />, color: "text-blue-600", bg: "bg-blue-100", text: "text-blue-700" },
+  entrevista: { label: "Entrevista", icon: <Handshake className="h-3.5 w-3.5" />, color: "text-purple-600", bg: "bg-purple-100", text: "text-purple-700" },
+  aprovado: { label: "Aprovado", icon: <UserCheck className="h-3.5 w-3.5" />, color: "text-emerald-600", bg: "bg-emerald-100", text: "text-emerald-700" },
+  contratado: { label: "Contratado", icon: <Briefcase className="h-3.5 w-3.5" />, color: "text-sky-600", bg: "bg-sky-100", text: "text-sky-700" },
+  reprovado: { label: "Reprovado", icon: <ThumbsDown className="h-3.5 w-3.5" />, color: "text-red-600", bg: "bg-red-100", text: "text-red-700" },
+  desistiu: { label: "Desistiu", icon: <UserX className="h-3.5 w-3.5" />, color: "text-orange-600", bg: "bg-orange-100", text: "text-orange-700" },
+  blacklist: { label: "Blacklist", icon: <Ban className="h-3.5 w-3.5" />, color: "text-slate-600", bg: "bg-slate-200", text: "text-slate-800" },
+};
 
 export default function Curriculos() {
   const [, navigate] = useLocation();
@@ -53,6 +66,9 @@ export default function Curriculos() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [showReprovDialog, setShowReprovDialog] = useState(false);
   const [motivoReprovacao, setMotivoReprovacao] = useState("");
+  const [sortBy, setSortBy] = useState<SortBy>("recente");
+  const [showStatusDialog, setShowStatusDialog] = useState(false);
+  const [statusDialogTarget, setStatusDialogTarget] = useState<StatusTab>("ativo");
 
   const [fichaAberta, setFichaAberta] = useState<any | null>(null);
 
@@ -68,6 +84,10 @@ export default function Curriculos() {
   );
   const { data: curriculosList = [], isLoading } = trpc.curriculos.listar.useQuery(
     { companyId, funcaoIds: funcoesSelecionadas.length > 0 ? funcoesSelecionadas : undefined, statusCandidato: statusTab },
+    { enabled: companyId > 0 }
+  );
+  const { data: contagens } = trpc.curriculos.contagens.useQuery(
+    { companyId },
     { enabled: companyId > 0 }
   );
 
@@ -94,6 +114,7 @@ export default function Curriculos() {
         await uploadFile(row.id, pendingFile);
       }
       utils.curriculos.listar.invalidate();
+      utils.curriculos.contagens.invalidate();
       toast.success("Currículo cadastrado");
       closeDialog();
     },
@@ -114,18 +135,20 @@ export default function Curriculos() {
   const atualizarMut = trpc.curriculos.atualizar.useMutation({
     onSuccess: () => {
       utils.curriculos.listar.invalidate();
+      utils.curriculos.contagens.invalidate();
       toast.success("Currículo atualizado");
       closeDialog();
     },
     onError: (e) => toast.error(e.message),
   });
   const excluirMut = trpc.curriculos.excluir.useMutation({
-    onSuccess: () => { utils.curriculos.listar.invalidate(); toast.success("Currículo excluído"); },
+    onSuccess: () => { utils.curriculos.listar.invalidate(); utils.curriculos.contagens.invalidate(); toast.success("Currículo excluído"); },
     onError: (e) => toast.error(e.message),
   });
   const excluirVariosMut = trpc.curriculos.excluirVarios.useMutation({
     onSuccess: (data) => {
       utils.curriculos.listar.invalidate();
+      utils.curriculos.contagens.invalidate();
       toast.success(`${data.count} currículo(s) excluído(s)`);
       setSelectedIds([]);
     },
@@ -134,9 +157,15 @@ export default function Curriculos() {
   const atualizarStatusMut = trpc.curriculos.atualizarStatus.useMutation({
     onSuccess: (data) => {
       utils.curriculos.listar.invalidate();
-      toast.success(`Status atualizado para ${data.count} candidato(s)`);
+      utils.curriculos.contagens.invalidate();
+      if (data.count === 0) {
+        toast.info("Nenhum candidato alterado — todos já estavam nesse status");
+      } else {
+        toast.success(`Status atualizado para ${data.count} candidato(s)`);
+      }
       setSelectedIds([]);
       setShowReprovDialog(false);
+      setShowStatusDialog(false);
       setMotivoReprovacao("");
     },
     onError: (e) => toast.error(e.message),
@@ -232,6 +261,7 @@ export default function Curriculos() {
       setIAResults(result.resultados as IAResultado[]);
       utils.curriculos.listar.invalidate();
       utils.curriculos.listarFuncoes.invalidate();
+      utils.curriculos.contagens.invalidate();
 
       const ok = result.resultados.filter((r: any) => r.status === "ok").length;
       const alertas = result.resultados.filter((r: any) => r.status !== "ok" && r.status !== "erro").length;
@@ -266,32 +296,55 @@ export default function Curriculos() {
     if (selectedIds.length === 0) return;
     atualizarStatusMut.mutate({ ids: selectedIds, companyId, statusCandidato: "ativo" });
   }
+  function handleBulkStatusChange(target: StatusTab) {
+    if (selectedIds.length === 0) return;
+    if (target === "reprovado") { handleBulkReprovar(); return; }
+    if (target === "todos") return;
+    atualizarStatusMut.mutate({ ids: selectedIds, companyId, statusCandidato: target as any });
+  }
+  function openStatusDialog() {
+    if (selectedIds.length === 0) return;
+    setStatusDialogTarget("ativo");
+    setMotivoReprovacao("");
+    setShowStatusDialog(true);
+  }
 
   const filtrados = useMemo(() => {
+    let list = curriculosList;
     const q = search.toLowerCase().trim();
-    if (!q) return curriculosList;
-    return curriculosList.filter((c: any) =>
-      (c.nomeCandidato || "").toLowerCase().includes(q) ||
-      (c.email || "").toLowerCase().includes(q) ||
-      (c.telefone || "").toLowerCase().includes(q) ||
-      (c.cidade || "").toLowerCase().includes(q) ||
-      (c.endereco || "").toLowerCase().includes(q) ||
-      (c.estado || "").toLowerCase().includes(q) ||
-      (c.habilidades || "").toLowerCase().includes(q)
-    );
-  }, [curriculosList, search]);
+    if (q) {
+      list = list.filter((c: any) =>
+        (c.nomeCandidato || "").toLowerCase().includes(q) ||
+        (c.email || "").toLowerCase().includes(q) ||
+        (c.telefone || "").toLowerCase().includes(q) ||
+        (c.cidade || "").toLowerCase().includes(q) ||
+        (c.endereco || "").toLowerCase().includes(q) ||
+        (c.estado || "").toLowerCase().includes(q) ||
+        (c.habilidades || "").toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "nome_az") {
+      list = [...list].sort((a: any, b: any) => (a.nomeCandidato || "").localeCompare(b.nomeCandidato || ""));
+    } else if (sortBy === "nome_za") {
+      list = [...list].sort((a: any, b: any) => (b.nomeCandidato || "").localeCompare(a.nomeCandidato || ""));
+    } else if (sortBy === "antigo") {
+      list = [...list].sort((a: any, b: any) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+    }
+    return list;
+  }, [curriculosList, search, sortBy]);
 
   const statusBadge = (status: string, motivo?: string | null) => {
-    if (status === "reprovado") {
+    const cfg = STATUS_CONFIG[status];
+    if (!cfg) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-medium" title={motivo || ""}>
-          <ThumbsDown className="h-3 w-3" /> Reprovado
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-medium">
+          <CircleDot className="h-3 w-3" /> {status}
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">
-        <CheckCircle className="h-3 w-3" /> Ativo
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.text} text-xs font-medium`} title={motivo || ""}>
+        {cfg.icon} {cfg.label}
       </span>
     );
   };
@@ -449,6 +502,42 @@ export default function Curriculos() {
             );
           })()}
 
+          {(() => {
+            let historico: any[] = [];
+            try { historico = JSON.parse(fichaAberta.historicoStatusJson || "[]"); } catch {}
+            if (historico.length === 0) return null;
+            return (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <History className="h-5 w-5 text-primary" />
+                  <h4 className="text-base font-semibold text-primary">Histórico de Status</h4>
+                </div>
+                <div className="space-y-2">
+                  {historico.slice().reverse().map((h: any, i: number) => {
+                    const cfgDe = STATUS_CONFIG[h.de];
+                    const cfgPara = STATUS_CONFIG[h.para];
+                    return (
+                      <div key={i} className="flex items-start gap-3 bg-card rounded-lg p-3 border text-sm">
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {cfgDe && <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${cfgDe.bg} ${cfgDe.text} text-xs`}>{cfgDe.icon} {cfgDe.label}</span>}
+                          <span className="text-muted-foreground text-xs">→</span>
+                          {cfgPara && <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${cfgPara.bg} ${cfgPara.text} text-xs font-medium`}>{cfgPara.icon} {cfgPara.label}</span>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          {h.motivo && <p className="text-xs text-muted-foreground truncate">{h.motivo}</p>}
+                        </div>
+                        <div className="text-xs text-muted-foreground flex-shrink-0 text-right">
+                          <div>{h.data ? new Date(h.data).toLocaleDateString("pt-BR") : ""}</div>
+                          <div>{h.usuario || ""}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
           <div>
             <div className="flex items-center gap-2 mb-3">
               <FileText className="h-5 w-5 text-primary" />
@@ -536,6 +625,7 @@ export default function Curriculos() {
                           {checked && "✓"}
                         </span>
                         {f.nome}
+                        {contagens?.porFuncao?.[f.id] > 0 && <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-1.5 py-0.5 min-w-[20px] text-center ml-auto">{contagens.porFuncao[f.id]}</span>}
                       </button>
                       <button onClick={() => { if (confirm(`Excluir função "${f.nome}"? Os currículos não serão excluídos.`)) excluirFuncaoMut.mutate({ id: f.id, companyId }); }}
                         className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:bg-red-50 rounded">
@@ -555,16 +645,21 @@ export default function Curriculos() {
               <h3 className="font-semibold text-slate-700 text-sm mb-3">Status</h3>
               <div className="space-y-1">
                 {([
-                  { key: "ativo" as StatusTab, label: "Ativos", icon: <CheckCircle className="h-3.5 w-3.5" />, color: "text-green-700" },
-                  { key: "reprovado" as StatusTab, label: "Reprovados", icon: <ThumbsDown className="h-3.5 w-3.5" />, color: "text-red-600" },
                   { key: "todos" as StatusTab, label: "Todos", icon: <Briefcase className="h-3.5 w-3.5" />, color: "text-slate-600" },
-                ]).map(tab => (
-                  <button key={tab.key} onClick={() => { setStatusTab(tab.key); setSelectedIds([]); }}
-                    className={`w-full text-left px-3 py-2 rounded-md text-sm transition flex items-center gap-2 ${statusTab === tab.key ? "bg-amber-100 text-amber-900 font-semibold" : "hover:bg-slate-100 text-slate-700"}`}>
-                    <span className={statusTab === tab.key ? "text-amber-700" : tab.color}>{tab.icon}</span>
-                    {tab.label}
-                  </button>
-                ))}
+                  ...Object.entries(STATUS_CONFIG).map(([key, cfg]) => ({
+                    key: key as StatusTab, label: cfg.label, icon: cfg.icon, color: cfg.color,
+                  })),
+                ]).map(tab => {
+                  const count = contagens?.porStatus?.[tab.key] ?? 0;
+                  return (
+                    <button key={tab.key} onClick={() => { setStatusTab(tab.key); setSelectedIds([]); }}
+                      className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition flex items-center gap-2 ${statusTab === tab.key ? "bg-amber-100 text-amber-900 font-semibold" : "hover:bg-slate-100 text-slate-700"}`}>
+                      <span className={statusTab === tab.key ? "text-amber-700" : tab.color}>{tab.icon}</span>
+                      <span className="flex-1">{tab.label}</span>
+                      {count > 0 && <span className={`text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center ${statusTab === tab.key ? "bg-amber-200 text-amber-800" : "bg-slate-100 text-slate-500"}`}>{count}</span>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -597,19 +692,11 @@ export default function Curriculos() {
             {selectedIds.length > 0 && (
               <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 mb-4 flex flex-wrap items-center gap-3">
                 <span className="text-sm font-medium text-blue-800">{selectedIds.length} selecionado(s)</span>
-                <div className="flex gap-2 ml-auto">
-                  {(statusTab === "ativo" || statusTab === "todos") && (
-                    <Button size="sm" variant="outline" onClick={handleBulkReprovar} disabled={atualizarStatusMut.isPending}
-                      className="border-red-300 text-red-700 hover:bg-red-50 h-8 text-xs">
-                      <ThumbsDown className="h-3.5 w-3.5 mr-1" /> Reprovar
-                    </Button>
-                  )}
-                  {(statusTab === "reprovado" || statusTab === "todos") && (
-                    <Button size="sm" variant="outline" onClick={handleBulkReativar} disabled={atualizarStatusMut.isPending}
-                      className="border-green-300 text-green-700 hover:bg-green-50 h-8 text-xs">
-                      <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reativar
-                    </Button>
-                  )}
+                <div className="flex flex-wrap gap-2 ml-auto">
+                  <Button size="sm" variant="outline" onClick={openStatusDialog} disabled={atualizarStatusMut.isPending}
+                    className="border-blue-300 text-blue-700 hover:bg-blue-50 h-8 text-xs">
+                    <ArrowUpDown className="h-3.5 w-3.5 mr-1" /> Alterar Status
+                  </Button>
                   <Button size="sm" variant="outline" onClick={handleBulkDelete} disabled={excluirVariosMut.isPending}
                     className="border-red-400 text-red-700 hover:bg-red-100 h-8 text-xs">
                     {excluirVariosMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Trash2 className="h-3.5 w-3.5 mr-1" />}
@@ -621,13 +708,26 @@ export default function Curriculos() {
             )}
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2 border-b bg-slate-50/50">
+                <span className="text-xs text-slate-500">{filtrados.length} candidato(s)</span>
+                <div className="flex items-center gap-2">
+                  <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+                  <select className="text-xs border-0 bg-transparent text-slate-600 cursor-pointer focus:ring-0 pr-6"
+                    value={sortBy} onChange={e => setSortBy(e.target.value as SortBy)}>
+                    <option value="recente">Mais recentes</option>
+                    <option value="antigo">Mais antigos</option>
+                    <option value="nome_az">Nome A→Z</option>
+                    <option value="nome_za">Nome Z→A</option>
+                  </select>
+                </div>
+              </div>
               {isLoading ? (
                 <div className="p-12 text-center text-slate-400"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
               ) : filtrados.length === 0 ? (
                 <div className="p-12 text-center">
                   <Briefcase className="h-12 w-12 mx-auto text-slate-300 mb-3" />
                   <p className="text-slate-500">
-                    {statusTab === "reprovado" ? "Nenhum candidato reprovado" :
+                    {statusTab !== "ativo" && statusTab !== "todos" ? `Nenhum candidato com status "${STATUS_CONFIG[statusTab]?.label || statusTab}"` :
                      funcoesSelecionadas.length > 0 ? "Nenhum currículo para esta(s) função(ões)" : "Nenhum currículo cadastrado"}
                   </p>
                 </div>
@@ -928,6 +1028,53 @@ export default function Curriculos() {
             }} disabled={atualizarStatusMut.isPending} className="bg-red-600 hover:bg-red-700">
               {atualizarStatusMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ThumbsDown className="h-4 w-4 mr-1" />}
               Confirmar Reprovação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showStatusDialog} onOpenChange={(open) => { if (!open) { setShowStatusDialog(false); setMotivoReprovacao(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowUpDown className="h-5 w-5 text-blue-600" />
+              Alterar Status — {selectedIds.length} candidato(s)
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-3">
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground mb-2 block">Novo status</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                  <button key={key} onClick={() => setStatusDialogTarget(key as StatusTab)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition ${statusDialogTarget === key ? "border-blue-500 bg-blue-50 ring-1 ring-blue-300 font-semibold" : "border-slate-200 hover:bg-slate-50"}`}>
+                    <span className={cfg.color}>{cfg.icon}</span>
+                    {cfg.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {statusDialogTarget === "reprovado" && (
+              <div>
+                <Label>Motivo da reprovação</Label>
+                <Textarea className="mt-1" placeholder="Motivo..." value={motivoReprovacao}
+                  onChange={e => setMotivoReprovacao(e.target.value)} rows={2} />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowStatusDialog(false); setMotivoReprovacao(""); }}>Cancelar</Button>
+            <Button onClick={() => {
+              if (statusDialogTarget === "reprovado" && !motivoReprovacao.trim()) { toast.error("Informe o motivo da reprovação"); return; }
+              if (statusDialogTarget === "todos") return;
+              atualizarStatusMut.mutate({
+                ids: selectedIds, companyId,
+                statusCandidato: statusDialogTarget as any,
+                motivoReprovacao: statusDialogTarget === "reprovado" ? motivoReprovacao.trim() : undefined,
+              });
+            }} disabled={atualizarStatusMut.isPending}>
+              {atualizarStatusMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+              Confirmar
             </Button>
           </DialogFooter>
         </DialogContent>
