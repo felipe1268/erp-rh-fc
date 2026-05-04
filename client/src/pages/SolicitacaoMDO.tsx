@@ -11,7 +11,7 @@ import {
   HardHat, Building2, Calendar, TrendingUp, DollarSign,
   ArrowRight, RefreshCw, ClipboardList, Award, Briefcase,
   Shield, Package, UserCheck, Trash2, X, Upload, FileText, Phone, User, Pencil, MoreVertical,
-  Scale, ThumbsUp, ThumbsDown, BarChart3, Wallet,
+  Scale, ThumbsUp, ThumbsDown, BarChart3, Wallet, Printer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +62,10 @@ function fileToBase64(file: File): Promise<string> {
 type ViewMode = "list" | "form" | "detail";
 type FormItem = { id: string; funcao: string; quantidade: number; duracaoMeses: number };
 
+function removeAccentsMDO(str: string) {
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
 function ChecklistOnboarding({ checklist, companyId, companyIds, userName, checklistMut }: {
   checklist: any[];
   companyId: number;
@@ -70,6 +74,29 @@ function ChecklistOnboarding({ checklist, companyId, companyIds, userName, check
   checklistMut: any;
 }) {
   const [localState, setLocalState] = React.useState<Record<number, boolean>>({});
+  const [cartaEmpId, setCartaEmpId] = React.useState<number | null>(null);
+  const [cartaBusca, setCartaBusca] = React.useState("");
+  const [cartaOpen, setCartaOpen] = React.useState(false);
+
+  const empList = trpc.employees.list.useQuery(
+    { companyId, companyIds, status: "Ativo" },
+    { enabled: cartaOpen }
+  );
+
+  const cartaQ = trpc.smo.gerarCartaBanco.useQuery(
+    { companyId, companyIds, employeeId: cartaEmpId! },
+    { enabled: !!cartaEmpId }
+  );
+
+  const empsFiltrados = React.useMemo(() => {
+    const list = empList.data || [];
+    if (!cartaBusca.trim()) return list.slice(0, 20);
+    const q = removeAccentsMDO(cartaBusca.trim().toLowerCase());
+    return list.filter((e: any) =>
+      removeAccentsMDO(String(e.nomeCompleto || "").toLowerCase()).includes(q)
+      || String(e.matricula || "").toLowerCase().includes(q)
+    ).slice(0, 20);
+  }, [empList.data, cartaBusca]);
 
   React.useEffect(() => {
     const m: Record<number, boolean> = {};
@@ -82,17 +109,129 @@ function ChecklistOnboarding({ checklist, companyId, companyIds, userName, check
     checklistMut.mutate({ id, companyId, companyIds, concluido: checked, concluidoPor: userName });
   };
 
+  function escHtml(s: string) {
+    const el = document.createElement("span");
+    el.textContent = s;
+    return el.innerHTML;
+  }
+
+  function imprimirCarta() {
+    const d = cartaQ.data;
+    if (!d) return;
+    const e = {
+      nomeEmpresa: escHtml(d.nomeEmpresa),
+      cnpj: escHtml(d.cnpj),
+      enderecoEmpresa: escHtml(d.enderecoEmpresa || "___________________________"),
+      telefoneEmpresa: d.telefoneEmpresa ? escHtml(d.telefoneEmpresa) : "",
+      emailEmpresa: d.emailEmpresa ? escHtml(d.emailEmpresa) : "",
+      nomeColaborador: escHtml(d.nomeColaborador),
+      cpf: escHtml(d.cpf),
+      rg: escHtml(d.rg || "_______________"),
+      cargo: escHtml(d.cargo),
+      dataAdmissao: escHtml(d.dataAdmissao),
+      responsavelNome: escHtml(d.responsavelNome),
+      cidadeData: escHtml(d.cidadeData),
+    };
+    const w = window.open("", "_blank");
+    if (!w) { toast.error("Bloqueador de popup ativo."); return; }
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Carta de Encaminhamento — ${e.nomeColaborador}</title>
+      <style>
+        body{font-family:'Times New Roman',serif;padding:60px 80px;color:#111;line-height:1.8;font-size:14px}
+        h1{font-size:16px;text-align:center;text-transform:uppercase;letter-spacing:1px;margin-bottom:40px;font-weight:bold}
+        .field{margin-bottom:6px}
+        .label{font-weight:bold}
+        .separator{border-top:1px solid #ccc;margin:30px 0}
+        .signature{margin-top:60px;text-align:center}
+        .signature-line{border-top:1px solid #333;width:300px;margin:0 auto 5px}
+        @media print {body{padding:40px 60px}}
+      </style></head><body>
+      <h1>Carta de Encaminhamento para Abertura de Conta Salário</h1>
+      <p>À Instituição Financeira: _______________________________</p>
+      <p>Prezados,</p>
+      <p>A empresa <strong>${e.nomeEmpresa}</strong>, inscrita no CNPJ sob o nº <strong>${e.cnpj}</strong>, com sede à <strong>${e.enderecoEmpresa}</strong>, vem por meio desta encaminhar o(a) colaborador(a) abaixo identificado(a) para fins de abertura de conta salário, conforme previsto na legislação vigente.</p>
+      <div class="separator"></div>
+      <p><strong>Dados do(a) Colaborador(a):</strong></p>
+      <div class="field"><span class="label">Nome completo:</span> ${e.nomeColaborador}</div>
+      <div class="field"><span class="label">CPF:</span> ${e.cpf}</div>
+      <div class="field"><span class="label">RG:</span> ${e.rg}</div>
+      <div class="field"><span class="label">Cargo:</span> ${e.cargo}</div>
+      <div class="field"><span class="label">Data de admissão:</span> ${e.dataAdmissao}</div>
+      <div class="separator"></div>
+      <p>Informamos que o(a) referido(a) colaborador(a) mantém vínculo empregatício ativo com esta empresa, sendo necessária a abertura da conta salário para recebimento de sua remuneração mensal.</p>
+      <p>Solicitamos, portanto, a gentileza de proceder com a abertura da conta salário, nos termos aplicáveis.</p>
+      <p>Sem mais para o momento, colocamo-nos à disposição para quaisquer esclarecimentos adicionais.</p>
+      <p style="margin-top:10px">Atenciosamente,</p>
+      <div class="signature">
+        <div class="signature-line"></div>
+        <div><strong>${e.responsavelNome}</strong></div>
+        <div>${e.nomeEmpresa}</div>
+        ${e.telefoneEmpresa ? `<div>Telefone: ${e.telefoneEmpresa}</div>` : ""}
+        ${e.emailEmpresa ? `<div>E-mail: ${e.emailEmpresa}</div>` : ""}
+      </div>
+      <p style="margin-top:40px">Local e data: ${e.cidadeData}</p>
+      <script>setTimeout(()=>window.print(),500)<\/script>
+      </body></html>`);
+    w.document.close();
+  }
+
   return (
     <div className="bg-white rounded-xl border p-5">
       <h4 className="font-semibold text-sm text-[#1B2A4A] mb-3 flex items-center gap-2"><Package className="h-4 w-4" /> Checklist de Onboarding</h4>
       <div className="space-y-2">
         {checklist.map((c: any) => {
           const checked = localState[c.id] ?? !!c.concluido;
+          const isContaSalario = c.item === "Abertura de Conta Salário";
           return (
-            <div key={c.id} className={`flex items-center gap-3 p-2 rounded-lg transition-all cursor-pointer ${checked ? "bg-green-50" : "hover:bg-slate-50"}`} onClick={() => toggle(c.id, !checked)}>
-              <Checkbox checked={checked} onCheckedChange={(v) => toggle(c.id, !!v)} />
-              <span className={`text-sm flex-1 ${checked ? "line-through text-muted-foreground" : ""}`}>{c.item}</span>
-              {checked && <span className="text-[10px] text-green-600">{c.concluidoPor || userName}</span>}
+            <div key={c.id}>
+              <div className={`flex items-center gap-3 p-2 rounded-lg transition-all cursor-pointer ${checked ? "bg-green-50" : "hover:bg-slate-50"}`} onClick={() => toggle(c.id, !checked)}>
+                <Checkbox checked={checked} onCheckedChange={(v) => toggle(c.id, !!v)} />
+                <span className={`text-sm flex-1 ${checked ? "line-through text-muted-foreground" : ""}`}>{c.item}</span>
+                {checked && <span className="text-[10px] text-green-600">{c.concluidoPor || userName}</span>}
+                {isContaSalario && (
+                  <Button variant="outline" size="sm" className="text-blue-700 border-blue-300 hover:bg-blue-50 text-xs h-7 px-2"
+                    onClick={(e) => { e.stopPropagation(); setCartaOpen(!cartaOpen); }}>
+                    <FileText className="h-3.5 w-3.5 mr-1" /> Gerar Carta
+                  </Button>
+                )}
+              </div>
+              {isContaSalario && cartaOpen && (
+                <div className="ml-8 mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Search className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar funcionário por nome ou matrícula..."
+                      className="h-8 text-sm flex-1 bg-white"
+                      value={cartaBusca}
+                      onChange={(e) => setCartaBusca(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                  {empList.isLoading && <p className="text-xs text-muted-foreground">Carregando...</p>}
+                  {empsFiltrados.length > 0 && (
+                    <div className="max-h-40 overflow-y-auto border rounded bg-white">
+                      {empsFiltrados.map((emp: any) => (
+                        <div
+                          key={emp.id}
+                          className={`flex items-center justify-between px-3 py-1.5 text-sm cursor-pointer hover:bg-blue-50 ${cartaEmpId === emp.id ? "bg-blue-100 font-semibold" : ""}`}
+                          onClick={(e) => { e.stopPropagation(); setCartaEmpId(emp.id); }}
+                        >
+                          <span>{emp.nomeCompleto}</span>
+                          <span className="text-xs text-muted-foreground">{emp.cargo || emp.funcao || ""}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {cartaEmpId && cartaQ.data && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-xs text-green-700 flex-1">Carta pronta para: <strong>{cartaQ.data.nomeColaborador}</strong></span>
+                      <Button size="sm" className="bg-blue-600 hover:bg-blue-700 h-7 text-xs gap-1" onClick={(e) => { e.stopPropagation(); imprimirCarta(); }}>
+                        <Printer className="h-3.5 w-3.5" /> Imprimir
+                      </Button>
+                    </div>
+                  )}
+                  {cartaEmpId && cartaQ.isLoading && <p className="text-xs text-muted-foreground">Gerando carta...</p>}
+                </div>
+              )}
             </div>
           );
         })}

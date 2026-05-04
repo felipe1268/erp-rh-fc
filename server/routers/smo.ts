@@ -9,7 +9,7 @@ import {
   obras, employees, obraFuncionarios, convencaoColetiva,
   encargosSociais, planejamentoProjetos, planejamentoAtividades,
   planejamentoRevisoes, mealBenefitConfigs,
-  clientes, employeeIntegrations,
+  clientes, employeeIntegrations, companies,
 } from "../../drizzle/schema";
 
 function companyFilter(col: any, input: { companyId: number; companyIds?: number[] }) {
@@ -173,7 +173,6 @@ const ONBOARDING_ITEMS = [
   "Entrega de Uniformes",
   "Cadastro no Relógio de Ponto",
   "Abertura de Conta Salário",
-  "Carta de Encaminhamento ao Banco para Abertura de Conta Salário",
   "Cadastro no Sistema (ERP)",
   "Treinamento Inicial da Função",
 ];
@@ -1092,6 +1091,52 @@ export const smoRouter = router({
         concluidoEm: input.concluido ? new Date().toISOString() : null,
       }).where(eq(smoOnboardingChecklist.id, input.id));
       return { success: true };
+    }),
+
+  gerarCartaBanco: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), employeeId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const [emp] = await db.select().from(employees).where(and(eq(employees.id, input.employeeId), companyFilter(employees.companyId, input)));
+      if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Colaborador não encontrado" });
+      const [company] = await db.select().from(companies).where(eq(companies.id, emp.companyId));
+      if (!company) throw new TRPCError({ code: "NOT_FOUND", message: "Empresa não encontrada" });
+
+      const formatCPF = (c: string) => {
+        const d = (c || "").replace(/\D/g, "");
+        if (d.length === 11) return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
+        return c || "";
+      };
+      const formatCNPJ = (c: string) => {
+        const d = (c || "").replace(/\D/g, "");
+        if (d.length === 14) return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`;
+        return c || "";
+      };
+      const fmtDate = (d: string | null) => {
+        if (!d) return "___/___/______";
+        const [y, m, day] = d.split("-");
+        return `${day}/${m}/${y}`;
+      };
+
+      const enderecoEmpresa = [company.endereco, company.cidade, company.estado].filter(Boolean).join(", ");
+      const responsavelNome = ctx.user.name || "RH";
+      const hoje = new Date();
+      const cidadeData = `${company.cidade || "___________"}, ${fmtDate(hoje.toISOString().split("T")[0])}`;
+
+      return {
+        nomeEmpresa: company.razaoSocial,
+        cnpj: formatCNPJ(company.cnpj),
+        enderecoEmpresa,
+        telefoneEmpresa: company.telefone || "",
+        emailEmpresa: company.email || "",
+        nomeColaborador: emp.nomeCompleto,
+        cpf: formatCPF(emp.cpf),
+        rg: emp.rg || "",
+        cargo: emp.cargo || emp.funcao || "",
+        dataAdmissao: fmtDate(emp.dataAdmissao),
+        responsavelNome,
+        cidadeData,
+      };
     }),
 
   atualizarQtdEmAndamento: protectedProcedure
