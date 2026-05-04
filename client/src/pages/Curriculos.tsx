@@ -176,7 +176,7 @@ export default function Curriculos() {
                     {filtrados.map((c: any) => (
                       <tr key={c.id} className="border-b hover:bg-slate-50">
                         <td className="px-4 py-3">
-                          <div className="font-medium text-slate-800">{c.nomeCandidato}</div>
+                          <div className="font-medium text-slate-800">{c.nomeCandidato || "(sem nome)"}</div>
                           {c.observacoes && <div className="text-xs text-slate-500 line-clamp-1">{c.observacoes}</div>}
                         </td>
                         <td className="px-4 py-3">
@@ -201,7 +201,7 @@ export default function Curriculos() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50" onClick={() => { if (confirm(`Excluir currículo de ${c.nomeCandidato}?`)) excluirMut.mutate({ id: c.id, companyId }); }}>
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50" onClick={() => { if (confirm(`Excluir currículo de ${c.nomeCandidato || "este candidato"}?`)) excluirMut.mutate({ id: c.id, companyId }); }}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </td>
@@ -247,7 +247,7 @@ export default function Curriculos() {
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Nome do Candidato *</Label>
+                <Label>Nome do Candidato</Label>
                 <Input className="mt-1" value={form.nomeCandidato} onChange={e => setForm({ ...form, nomeCandidato: e.target.value })} />
               </div>
               <div>
@@ -281,12 +281,11 @@ export default function Curriculos() {
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowCurDialog(false); setPendingFile(null); }}>Cancelar</Button>
             <Button onClick={() => {
-              if (!form.nomeCandidato.trim()) { toast.error("Informe o nome do candidato"); return; }
               if (!funcaoSelecionadaId) { toast.error("Selecione a função"); return; }
               if (!companyId) { toast.error("Selecione a empresa"); return; }
               criarMut.mutate({
                 companyId, funcaoId: funcaoSelecionadaId,
-                nomeCandidato: form.nomeCandidato.trim(),
+                nomeCandidato: form.nomeCandidato.trim() || undefined,
                 telefone: form.telefone || undefined,
                 email: form.email || undefined,
                 observacoes: form.observacoes || undefined,

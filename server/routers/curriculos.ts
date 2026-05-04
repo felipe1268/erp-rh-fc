@@ -101,7 +101,7 @@ export const curriculosRouter = router({
     .input(z.object({
       companyId: z.number().int().positive(),
       funcaoId: z.number().int().positive(),
-      nomeCandidato: z.string().min(1).max(255),
+      nomeCandidato: z.string().max(255).optional(),
       telefone: z.string().optional(),
       email: z.string().optional(),
       observacoes: z.string().optional(),
@@ -117,7 +117,7 @@ export const curriculosRouter = router({
         companyId: input.companyId,
         funcaoId: input.funcaoId,
         funcaoNome,
-        nomeCandidato: input.nomeCandidato,
+        nomeCandidato: input.nomeCandidato || "",
         telefone: input.telefone || null,
         email: input.email || null,
         observacoes: input.observacoes || null,

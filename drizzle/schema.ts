@@ -7619,7 +7619,7 @@ export const curriculos = pgTable("curriculos", {
   companyId: integer("company_id").notNull(),
   funcaoId: integer("funcao_id"),
   funcaoNome: varchar("funcao_nome", { length: 120 }).notNull(),
-  nomeCandidato: varchar("nome_candidato", { length: 255 }).notNull(),
+  nomeCandidato: varchar("nome_candidato", { length: 255 }).default(""),
   telefone: varchar({ length: 30 }),
   email: varchar({ length: 255 }),
   observacoes: text(),
