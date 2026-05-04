@@ -75,6 +75,7 @@ export default function ProgramasSST() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [extracting, setExtracting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceFileRef = useRef<HTMLInputElement>(null);
   const [replacingDocId, setReplacingDocId] = useState<number | null>(null);
@@ -147,11 +148,12 @@ export default function ProgramasSST() {
     setShowDialog(true);
   };
 
-  async function uploadFileMultipart(file: File, tipo: string): Promise<{ url: string; fileName: string }> {
+  async function uploadFileMultipart(file: File, tipo: string, extract = false): Promise<{ url: string; fileName: string; extracted?: any }> {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("tipo", tipo);
     formData.append("companyId", String(companyId || 0));
+    if (extract) formData.append("extract", "true");
 
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -171,6 +173,54 @@ export default function ProgramasSST() {
     });
   }
 
+  const handleFileSelect = async (file: File) => {
+    if (file.size > 150 * 1024 * 1024) {
+      toast.error("Arquivo muito grande! Limite: 150MB");
+      return;
+    }
+    setSelectedFile(file);
+
+    const isPdfOrImage = file.type === "application/pdf" || file.type.startsWith("image/");
+    if (!isPdfOrImage) return;
+
+    try {
+      setExtracting(true);
+      toast.info("Lendo documento com IA...", { duration: 5000 });
+      const result = await uploadFileMultipart(file, form.tipo || activeTab, true);
+
+      if (result.extracted) {
+        const ext = result.extracted;
+        const updated: any = { ...form };
+        let fieldsFound = 0;
+        if (ext.descricao && !form.descricao) { updated.descricao = ext.descricao; fieldsFound++; }
+        if (ext.dataElaboracao && !form.dataElaboracao) { updated.dataElaboracao = ext.dataElaboracao; fieldsFound++; }
+        if (ext.dataValidade && !form.dataValidade) { updated.dataValidade = ext.dataValidade; fieldsFound++; }
+        if (ext.responsavelElaboracao && !form.responsavelElaboracao) { updated.responsavelElaboracao = ext.responsavelElaboracao; fieldsFound++; }
+        if (ext.registroProfissional && !form.registroProfissional) { updated.registroProfissional = ext.registroProfissional; fieldsFound++; }
+        if (ext.empresaElaboradora && !form.empresaElaboradora) { updated.empresaElaboradora = ext.empresaElaboradora; fieldsFound++; }
+        if (ext.observacoes && !form.observacoes) { updated.observacoes = ext.observacoes; fieldsFound++; }
+
+        updated._preUploadedUrl = result.url;
+        updated._preUploadedName = result.fileName;
+        setForm(updated);
+
+        if (fieldsFound > 0) {
+          toast.success(`IA preencheu ${fieldsFound} campo(s) automaticamente!`);
+        } else {
+          toast.info("IA não encontrou dados adicionais no documento.");
+        }
+      } else {
+        setForm({ ...form, _preUploadedUrl: result.url, _preUploadedName: result.fileName });
+        toast.info("Documento enviado. IA não conseguiu extrair dados.");
+      }
+    } catch (err: any) {
+      console.error("Erro na extração IA:", err);
+      toast.warning("Arquivo selecionado, mas a leitura automática falhou. Preencha os campos manualmente.");
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!companyId) return;
     try {
@@ -180,7 +230,10 @@ export default function ProgramasSST() {
       let arquivoUrl: string | undefined;
       let arquivoNome: string | undefined;
 
-      if (selectedFile) {
+      if (form._preUploadedUrl) {
+        arquivoUrl = form._preUploadedUrl;
+        arquivoNome = form._preUploadedName;
+      } else if (selectedFile) {
         const result = await uploadFileMultipart(selectedFile, form.tipo || activeTab);
         arquivoUrl = result.url;
         arquivoNome = result.fileName;
@@ -555,11 +608,18 @@ export default function ProgramasSST() {
               <Label>Arquivo (até 150MB)</Label>
               <div
                 className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                  extracting ? "border-blue-400 bg-blue-50/50 animate-pulse" :
                   selectedFile ? "border-emerald-300 bg-emerald-50" : "border-gray-300 hover:border-blue-400 hover:bg-blue-50/30"
                 }`}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => !extracting && fileInputRef.current?.click()}
               >
-                {selectedFile ? (
+                {extracting ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                    <p className="text-sm font-medium text-blue-700">Lendo documento com IA...</p>
+                    <p className="text-xs text-muted-foreground">Extraindo validade, responsável, empresa e mais</p>
+                  </div>
+                ) : selectedFile ? (
                   <div className="flex items-center justify-center gap-2">
                     <FileText className="h-5 w-5 text-emerald-600" />
                     <span className="text-sm font-medium text-emerald-700">{selectedFile.name}</span>
@@ -574,6 +634,7 @@ export default function ProgramasSST() {
                       {editingId ? "Clique para substituir o arquivo" : "Clique para selecionar o arquivo"}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, ZIP — até 150MB</p>
+                    <p className="text-xs text-blue-500 mt-1">A IA lerá o documento e preencherá os campos automaticamente</p>
                   </div>
                 )}
               </div>
@@ -584,13 +645,7 @@ export default function ProgramasSST() {
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f) {
-                    if (f.size > 150 * 1024 * 1024) {
-                      toast.error("Arquivo muito grande! Limite: 150MB");
-                      return;
-                    }
-                    setSelectedFile(f);
-                  }
+                  if (f) handleFileSelect(f);
                 }}
               />
             </div>
@@ -607,10 +662,10 @@ export default function ProgramasSST() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)} disabled={uploading}>
+            <Button variant="outline" onClick={() => setShowDialog(false)} disabled={uploading || extracting}>
               Cancelar
             </Button>
-            <Button onClick={handleSave} disabled={uploading || createDoc.isPending || updateDoc.isPending}>
+            <Button onClick={handleSave} disabled={uploading || extracting || createDoc.isPending || updateDoc.isPending}>
               {uploading ? (
                 <span className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />

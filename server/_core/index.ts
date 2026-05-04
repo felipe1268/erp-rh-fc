@@ -291,7 +291,47 @@ async function startServer() {
       const ct = ext === "pdf" ? "application/pdf" : file.mimetype || "application/octet-stream";
       const { storagePut: sPut } = await import("../storage");
       const { url } = await sPut(key, file.buffer, ct);
-      res.json({ url, fileName: file.originalname });
+
+      let extracted: any = null;
+      const doExtract = req.body.extract === "true" || req.body.extract === "1";
+      if (doExtract && (ct === "application/pdf" || ct.startsWith("image/"))) {
+        try {
+          const { invokeAnthropicVision } = await import("../_core/llm");
+          const base64 = file.buffer.toString("base64");
+          const tipoDoc = (req.body.tipo || "SST").toUpperCase();
+          const prompt = `Analise este documento de SST (tipo: ${tipoDoc}) e extraia as seguintes informações. Retorne APENAS um JSON válido, sem markdown, sem texto adicional:
+{
+  "descricao": "título ou descrição do documento (ex: PGR 2026 - Sede)",
+  "dataElaboracao": "data de elaboração no formato YYYY-MM-DD ou null",
+  "dataValidade": "data de validade no formato YYYY-MM-DD ou null",
+  "responsavelElaboracao": "nome do responsável técnico pela elaboração ou null",
+  "registroProfissional": "registro profissional CREA/CRM/CRQ do responsável ou null",
+  "empresaElaboradora": "nome da empresa que elaborou o documento ou null",
+  "observacoes": "informações adicionais relevantes encontradas no documento ou null"
+}
+Regras:
+- Se a data de validade não estiver explícita, tente inferir (PGR/PCMSO geralmente valem 1 ano, LTCAT não tem validade fixa)
+- Se não encontrar uma informação, use null
+- Datas DEVEM estar no formato YYYY-MM-DD
+- Procure por ART, registro no CREA, CRM, nome do engenheiro/médico/profissional responsável
+- A descrição deve ser curta e identificar o documento (ex: "PGR 2026 - Sede Rio de Janeiro")`;
+
+          const raw = await invokeAnthropicVision({
+            prompt,
+            base64,
+            mimeType: ct,
+            maxTokens: 1024,
+          });
+          const jsonMatch = raw.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            extracted = JSON.parse(jsonMatch[0]);
+          }
+        } catch (aiErr: any) {
+          console.error("[SST AI Extract] Erro na extração IA:", aiErr?.message);
+        }
+      }
+
+      res.json({ url, fileName: file.originalname, extracted });
     } catch (err: any) {
       console.error("[SST Upload] Erro:", err);
       res.status(500).json({ error: err?.message || "Erro ao fazer upload" });
