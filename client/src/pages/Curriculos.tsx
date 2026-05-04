@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Briefcase, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, UserPlus, FolderPlus, Sparkles, AlertTriangle, ShieldAlert, Ban, CheckCircle, XCircle, Info, Pencil, Save } from "lucide-react";
+import { Briefcase, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, UserPlus, FolderPlus, Sparkles, AlertTriangle, ShieldAlert, Ban, CheckCircle, XCircle, Info, Pencil, Save, ThumbsDown, ThumbsUp, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -21,6 +21,8 @@ type IAResultado = {
   erro: string | null;
 };
 
+type StatusTab = "ativo" | "reprovado" | "todos";
+
 export default function Curriculos() {
   const [, navigate] = useLocation();
   const { selectedCompanyId } = useCompany();
@@ -28,6 +30,7 @@ export default function Curriculos() {
   const utils = trpc.useUtils();
 
   const [funcoesSelecionadas, setFuncoesSelecionadas] = useState<number[]>([]);
+  const [statusTab, setStatusTab] = useState<StatusTab>("ativo");
   const [search, setSearch] = useState("");
   const [showCurDialog, setShowCurDialog] = useState(false);
   const [showFuncDialog, setShowFuncDialog] = useState(false);
@@ -37,6 +40,10 @@ export default function Curriculos() {
   const [dialogFuncaoId, setDialogFuncaoId] = useState<number | null>(null);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [showReprovDialog, setShowReprovDialog] = useState(false);
+  const [motivoReprovacao, setMotivoReprovacao] = useState("");
 
   const [showIADialog, setShowIADialog] = useState(false);
   const [iaFiles, setIAFiles] = useState<File[]>([]);
@@ -49,7 +56,7 @@ export default function Curriculos() {
     { enabled: companyId > 0 }
   );
   const { data: curriculosList = [], isLoading } = trpc.curriculos.listar.useQuery(
-    { companyId, funcaoIds: funcoesSelecionadas.length > 0 ? funcoesSelecionadas : undefined },
+    { companyId, funcaoIds: funcoesSelecionadas.length > 0 ? funcoesSelecionadas : undefined, statusCandidato: statusTab },
     { enabled: companyId > 0 }
   );
 
@@ -94,6 +101,24 @@ export default function Curriculos() {
   });
   const excluirMut = trpc.curriculos.excluir.useMutation({
     onSuccess: () => { utils.curriculos.listar.invalidate(); toast.success("Currículo excluído"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const excluirVariosMut = trpc.curriculos.excluirVarios.useMutation({
+    onSuccess: (data) => {
+      utils.curriculos.listar.invalidate();
+      toast.success(`${data.count} currículo(s) excluído(s)`);
+      setSelectedIds([]);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const atualizarStatusMut = trpc.curriculos.atualizarStatus.useMutation({
+    onSuccess: (data) => {
+      utils.curriculos.listar.invalidate();
+      toast.success(`Status atualizado para ${data.count} candidato(s)`);
+      setSelectedIds([]);
+      setShowReprovDialog(false);
+      setMotivoReprovacao("");
+    },
     onError: (e) => toast.error(e.message),
   });
   const processarIAMut = trpc.curriculos.processarArquivosIA.useMutation();
@@ -181,6 +206,35 @@ export default function Curriculos() {
     }
   }
 
+  function toggleSelect(id: number) {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.length === filtrados.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filtrados.map((c: any) => c.id));
+    }
+  }
+
+  function handleBulkDelete() {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Excluir ${selectedIds.length} currículo(s) selecionado(s)?`)) return;
+    excluirVariosMut.mutate({ ids: selectedIds, companyId });
+  }
+
+  function handleBulkReprovar() {
+    if (selectedIds.length === 0) return;
+    setMotivoReprovacao("");
+    setShowReprovDialog(true);
+  }
+
+  function handleBulkReativar() {
+    if (selectedIds.length === 0) return;
+    atualizarStatusMut.mutate({ ids: selectedIds, companyId, statusCandidato: "ativo" });
+  }
+
   const filtrados = useMemo(() => {
     const q = search.toLowerCase().trim();
     if (!q) return curriculosList;
@@ -193,6 +247,21 @@ export default function Curriculos() {
       (c.estado || "").toLowerCase().includes(q)
     );
   }, [curriculosList, search]);
+
+  const statusBadge = (status: string, motivo?: string | null) => {
+    if (status === "reprovado") {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-medium" title={motivo || ""}>
+          <ThumbsDown className="h-3 w-3" /> Reprovado
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">
+        <CheckCircle className="h-3 w-3" /> Ativo
+      </span>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-amber-50/30 p-6">
@@ -224,7 +293,7 @@ export default function Curriculos() {
                   const checked = funcoesSelecionadas.includes(f.id);
                   return (
                     <div key={f.id} className="group flex items-center gap-1">
-                      <button onClick={() => setFuncoesSelecionadas(prev => checked ? prev.filter(id => id !== f.id) : [...prev, f.id])}
+                      <button onClick={() => { setFuncoesSelecionadas(prev => checked ? prev.filter(id => id !== f.id) : [...prev, f.id]); setSelectedIds([]); }}
                         className={`flex-1 text-left px-3 py-2 rounded-md text-sm transition flex items-center gap-2 ${checked ? "bg-amber-100 text-amber-900 font-semibold" : "hover:bg-slate-100 text-slate-700"}`}>
                         <span className={`inline-flex items-center justify-center w-4 h-4 rounded border text-xs flex-shrink-0 ${checked ? "bg-amber-600 border-amber-600 text-white" : "border-slate-300"}`}>
                           {checked && "✓"}
@@ -243,6 +312,23 @@ export default function Curriculos() {
                     <p className="text-xs text-slate-500 px-3">{funcoesSelecionadas.length} funções selecionadas</p>
                   </div>
                 )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mt-4">
+              <h3 className="font-semibold text-slate-700 text-sm mb-3">Status</h3>
+              <div className="space-y-1">
+                {([
+                  { key: "ativo" as StatusTab, label: "Ativos", icon: <CheckCircle className="h-3.5 w-3.5" />, color: "text-green-700" },
+                  { key: "reprovado" as StatusTab, label: "Reprovados", icon: <ThumbsDown className="h-3.5 w-3.5" />, color: "text-red-600" },
+                  { key: "todos" as StatusTab, label: "Todos", icon: <Briefcase className="h-3.5 w-3.5" />, color: "text-slate-600" },
+                ]).map(tab => (
+                  <button key={tab.key} onClick={() => { setStatusTab(tab.key); setSelectedIds([]); }}
+                    className={`w-full text-left px-3 py-2 rounded-md text-sm transition flex items-center gap-2 ${statusTab === tab.key ? "bg-amber-100 text-amber-900 font-semibold" : "hover:bg-slate-100 text-slate-700"}`}>
+                    <span className={statusTab === tab.key ? "text-amber-700" : tab.color}>{tab.icon}</span>
+                    {tab.label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -275,29 +361,89 @@ export default function Curriculos() {
               </div>
             </div>
 
+            {selectedIds.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 mb-4 flex flex-wrap items-center gap-3">
+                <span className="text-sm font-medium text-blue-800">
+                  {selectedIds.length} selecionado(s)
+                </span>
+                <div className="flex gap-2 ml-auto">
+                  {statusTab !== "reprovado" && (
+                    <Button size="sm" variant="outline" onClick={handleBulkReprovar}
+                      disabled={atualizarStatusMut.isPending}
+                      className="border-red-300 text-red-700 hover:bg-red-50 h-8 text-xs">
+                      <ThumbsDown className="h-3.5 w-3.5 mr-1" /> Reprovar
+                    </Button>
+                  )}
+                  {statusTab === "reprovado" && (
+                    <Button size="sm" variant="outline" onClick={handleBulkReativar}
+                      disabled={atualizarStatusMut.isPending}
+                      className="border-green-300 text-green-700 hover:bg-green-50 h-8 text-xs">
+                      <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reativar
+                    </Button>
+                  )}
+                  {statusTab === "todos" && (
+                    <>
+                      <Button size="sm" variant="outline" onClick={handleBulkReprovar}
+                        disabled={atualizarStatusMut.isPending}
+                        className="border-red-300 text-red-700 hover:bg-red-50 h-8 text-xs">
+                        <ThumbsDown className="h-3.5 w-3.5 mr-1" /> Reprovar
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={handleBulkReativar}
+                        disabled={atualizarStatusMut.isPending}
+                        className="border-green-300 text-green-700 hover:bg-green-50 h-8 text-xs">
+                        <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reativar
+                      </Button>
+                    </>
+                  )}
+                  <Button size="sm" variant="outline" onClick={handleBulkDelete}
+                    disabled={excluirVariosMut.isPending}
+                    className="border-red-400 text-red-700 hover:bg-red-100 h-8 text-xs">
+                    {excluirVariosMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Trash2 className="h-3.5 w-3.5 mr-1" />}
+                    Excluir
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setSelectedIds([])} className="h-8 text-xs text-slate-500">
+                    Limpar
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               {isLoading ? (
                 <div className="p-12 text-center text-slate-400"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
               ) : filtrados.length === 0 ? (
                 <div className="p-12 text-center">
                   <Briefcase className="h-12 w-12 mx-auto text-slate-300 mb-3" />
-                  <p className="text-slate-500">Nenhum currículo {funcoesSelecionadas.length > 0 ? "para esta(s) função(ões)" : "cadastrado"}</p>
+                  <p className="text-slate-500">
+                    {statusTab === "reprovado" ? "Nenhum candidato reprovado" :
+                     funcoesSelecionadas.length > 0 ? "Nenhum currículo para esta(s) função(ões)" : "Nenhum currículo cadastrado"}
+                  </p>
                 </div>
               ) : (
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 border-b">
                     <tr>
+                      <th className="px-3 py-3 w-10">
+                        <input type="checkbox" className="rounded border-slate-300 accent-amber-600"
+                          checked={filtrados.length > 0 && selectedIds.length === filtrados.length}
+                          onChange={toggleSelectAll} />
+                      </th>
                       <th className="text-left px-4 py-3 font-semibold text-slate-600">Candidato</th>
                       <th className="text-left px-4 py-3 font-semibold text-slate-600">Função</th>
                       <th className="text-left px-4 py-3 font-semibold text-slate-600">Contato</th>
-                      <th className="text-left px-4 py-3 font-semibold text-slate-600">Cidade/Região</th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-600">Status</th>
                       <th className="text-left px-4 py-3 font-semibold text-slate-600 w-36">Currículo</th>
                       <th className="text-right px-4 py-3 font-semibold text-slate-600 w-20">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtrados.map((c: any) => (
-                      <tr key={c.id} className="border-b hover:bg-slate-50">
+                      <tr key={c.id} className={`border-b hover:bg-slate-50 ${selectedIds.includes(c.id) ? "bg-blue-50/50" : ""} ${c.statusCandidato === "reprovado" ? "opacity-75" : ""}`}>
+                        <td className="px-3 py-3">
+                          <input type="checkbox" className="rounded border-slate-300 accent-amber-600"
+                            checked={selectedIds.includes(c.id)}
+                            onChange={() => toggleSelect(c.id)} />
+                        </td>
                         <td className="px-4 py-3">
                           <div className="font-medium text-slate-800">
                             {c.nomeCandidato || "(sem nome)"}
@@ -312,13 +458,11 @@ export default function Curriculos() {
                           {c.telefone && <div>{c.telefone}</div>}
                           {c.email && <div className="text-slate-500">{c.email}</div>}
                         </td>
-                        <td className="px-4 py-3 text-xs text-slate-600">
-                          {c.cidade ? (
-                            <div className="font-medium">{c.cidade}{c.estado ? ` - ${c.estado}` : ""}</div>
-                          ) : c.estado ? (
-                            <div className="font-medium">{c.estado}</div>
-                          ) : null}
-                          {c.endereco && <div className="text-slate-400 line-clamp-1">{c.endereco}</div>}
+                        <td className="px-4 py-3">
+                          {statusBadge(c.statusCandidato, c.motivoReprovacao)}
+                          {c.statusCandidato === "reprovado" && c.motivoReprovacao && (
+                            <div className="text-xs text-red-500 mt-1 line-clamp-2" title={c.motivoReprovacao}>{c.motivoReprovacao}</div>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           {c.documentoUrl ? (
@@ -479,6 +623,54 @@ export default function Curriculos() {
                 Cadastrar
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Reprovar Candidato(s) */}
+      <Dialog open={showReprovDialog} onOpenChange={(open) => { if (!open) { setShowReprovDialog(false); setMotivoReprovacao(""); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700">
+              <ThumbsDown className="h-5 w-5" />
+              Reprovar {selectedIds.length} candidato(s)
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-3">
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+              <p className="text-sm text-red-800">
+                Os candidatos selecionados serão marcados como <strong>reprovados</strong> e ficarão em uma lista separada para evitar novas entrevistas com eles.
+              </p>
+            </div>
+            <div>
+              <Label>Motivo da reprovação *</Label>
+              <Textarea
+                className="mt-1"
+                placeholder="Ex: Não possui experiência na área, não compareceu à entrevista, não tem perfil para a vaga..."
+                value={motivoReprovacao}
+                onChange={e => setMotivoReprovacao(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowReprovDialog(false); setMotivoReprovacao(""); }}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (!motivoReprovacao.trim()) { toast.error("Informe o motivo da reprovação"); return; }
+                atualizarStatusMut.mutate({
+                  ids: selectedIds,
+                  companyId,
+                  statusCandidato: "reprovado",
+                  motivoReprovacao: motivoReprovacao.trim(),
+                });
+              }}
+              disabled={atualizarStatusMut.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {atualizarStatusMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ThumbsDown className="h-4 w-4 mr-1" />}
+              Confirmar Reprovação
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -112,6 +112,7 @@ export const curriculosRouter = router({
       companyId: z.number().int().positive(),
       funcaoId: z.number().int().positive().optional(),
       funcaoIds: z.array(z.number().int().positive()).optional(),
+      statusCandidato: z.enum(["ativo", "reprovado", "todos"]).optional(),
     }))
     .query(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
@@ -121,6 +122,9 @@ export const curriculosRouter = router({
         conds.push(sql`${curriculos.funcaoId} IN (${sql.join(input.funcaoIds.map(id => sql`${id}`), sql`, `)})`);
       } else if (input.funcaoId) {
         conds.push(eq(curriculos.funcaoId, input.funcaoId));
+      }
+      if (input.statusCandidato && input.statusCandidato !== "todos") {
+        conds.push(eq(curriculos.statusCandidato, input.statusCandidato));
       }
       return await db.select().from(curriculos)
         .where(and(...conds))
@@ -242,6 +246,56 @@ export const curriculosRouter = router({
         deletedByUserId: ctx.user.id,
       } as any).where(eq(curriculos.id, input.id));
       return { success: true };
+    }),
+
+  excluirVarios: protectedProcedure
+    .input(z.object({
+      ids: z.array(z.number().int().positive()).min(1).max(200),
+      companyId: z.number().int().positive(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      await db.update(curriculos).set({
+        deletedAt: sql`NOW()`,
+        deletedBy: ctx.user.name ?? "Sistema",
+        deletedByUserId: ctx.user.id,
+      } as any).where(and(
+        sql`${curriculos.id} IN (${sql.join(input.ids.map(id => sql`${id}`), sql`, `)})`,
+        eq(curriculos.companyId, input.companyId),
+        isNull(curriculos.deletedAt),
+      ));
+      return { success: true, count: input.ids.length };
+    }),
+
+  atualizarStatus: protectedProcedure
+    .input(z.object({
+      ids: z.array(z.number().int().positive()).min(1).max(200),
+      companyId: z.number().int().positive(),
+      statusCandidato: z.enum(["ativo", "reprovado"]),
+      motivoReprovacao: z.string().max(1000).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      const updates: any = {
+        statusCandidato: input.statusCandidato,
+        statusAtualizadoEm: sql`NOW()`,
+        statusAtualizadoPor: ctx.user.name ?? "Sistema",
+        updatedAt: sql`NOW()`,
+      };
+      if (input.statusCandidato === "reprovado" && input.motivoReprovacao) {
+        updates.motivoReprovacao = input.motivoReprovacao.trim();
+      }
+      if (input.statusCandidato === "ativo") {
+        updates.motivoReprovacao = null;
+      }
+      await db.update(curriculos).set(updates).where(and(
+        sql`${curriculos.id} IN (${sql.join(input.ids.map(id => sql`${id}`), sql`, `)})`,
+        eq(curriculos.companyId, input.companyId),
+        isNull(curriculos.deletedAt),
+      ));
+      return { success: true, count: input.ids.length };
     }),
 
   processarArquivosIA: protectedProcedure
