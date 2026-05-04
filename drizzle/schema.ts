@@ -7463,6 +7463,7 @@ export const smoSolicitacoes = pgTable("smo_solicitacoes", {
   curriculoArquivoNome: varchar("curriculo_arquivo_nome", { length: 255 }),
   curriculoArquivoKey: varchar("curriculo_arquivo_key", { length: 500 }),
   loteId:              varchar("lote_id", { length: 50 }),
+  qtdEmAndamento:      integer("qtd_em_andamento").default(0),
   deletedAt:           timestamp("deleted_at", { mode: "string" }),
 }, (t) => [
   index("idx_smo_company").on(t.companyId),

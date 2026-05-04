@@ -264,6 +264,9 @@ export default function SolicitacaoMDO() {
   const checklistMut = trpc.smo.updateChecklist.useMutation({
     onSuccess: () => selectedDetail.refetch(),
   });
+  const qtdAndamentoMut = trpc.smo.atualizarQtdEmAndamento.useMutation({
+    onSuccess: () => { toast.success("Andamento atualizado!"); selectedDetail.refetch(); list.refetch(); },
+  });
   const uploadCurriculoMut = trpc.smo.uploadCurriculo.useMutation({
     onSuccess: () => { toast.success("Currículo enviado!"); selectedDetail.refetch(); },
   });
@@ -1092,6 +1095,45 @@ export default function SolicitacaoMDO() {
                     <ApprovalStep label="Diretoria" done={!!d.aprovadoPorDiretoria} date={d.aprovadoPorDiretoriaEm} by={d.aprovadoPorDiretoria} />
                   </div>
                 </div>
+
+                {/* Andamento das Contratações */}
+                {["aprovada_diretoria", "em_recrutamento", "concluida"].includes(d.status) && canAprovarRH && (
+                  <div className="bg-white rounded-xl border p-5">
+                    <h4 className="font-semibold text-sm text-[#1B2A4A] mb-3 flex items-center gap-2"><Users className="h-4 w-4" /> Andamento das Contratações</h4>
+                    <div className="grid grid-cols-3 gap-3 text-sm">
+                      <div className="bg-blue-50 rounded-lg p-3 text-center">
+                        <div className="text-xs text-muted-foreground">Solicitadas</div>
+                        <div className="text-xl font-bold text-blue-700">{d.quantidade}</div>
+                      </div>
+                      <div className="bg-amber-50 rounded-lg p-3 text-center">
+                        <div className="text-xs text-muted-foreground">Em Andamento</div>
+                        <div className="text-xl font-bold text-amber-700">{d.qtdEmAndamento || 0}</div>
+                      </div>
+                      <div className="bg-slate-50 rounded-lg p-3 text-center">
+                        <div className="text-xs text-muted-foreground">Pendentes</div>
+                        <div className="text-xl font-bold text-slate-600">{d.quantidade - (d.qtdEmAndamento || 0)}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mt-3">
+                      <Label className="text-xs whitespace-nowrap">Em andamento:</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={d.quantidade}
+                        className="w-20 h-8 text-sm"
+                        defaultValue={d.qtdEmAndamento || 0}
+                        onBlur={(e) => {
+                          const val = Math.max(0, Math.min(d.quantidade, parseInt(e.target.value) || 0));
+                          if (val !== (d.qtdEmAndamento || 0)) {
+                            qtdAndamentoMut.mutate({ id: d.id, companyId, companyIds, qtdEmAndamento: val });
+                          }
+                        }}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                      />
+                      <span className="text-xs text-muted-foreground">de {d.quantidade} vaga(s)</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Onboarding */}
                 {d.checklist && d.checklist.length > 0 && ["aprovada_diretoria", "em_recrutamento", "concluida"].includes(d.status) && (

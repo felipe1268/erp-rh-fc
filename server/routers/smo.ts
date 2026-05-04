@@ -173,6 +173,7 @@ const ONBOARDING_ITEMS = [
   "Entrega de Uniformes",
   "Cadastro no Relógio de Ponto",
   "Abertura de Conta Salário",
+  "Carta de Encaminhamento ao Banco para Abertura de Conta Salário",
   "Cadastro no Sistema (ERP)",
   "Treinamento Inicial da Função",
 ];
@@ -1090,6 +1091,18 @@ export const smoRouter = router({
         concluidoPor: input.concluido ? input.concluidoPor : null,
         concluidoEm: input.concluido ? new Date().toISOString() : null,
       }).where(eq(smoOnboardingChecklist.id, input.id));
+      return { success: true };
+    }),
+
+  atualizarQtdEmAndamento: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number(), companyIds: z.array(z.number()).optional(), qtdEmAndamento: z.number().min(0) }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      await assertOwnership(db, input.id, input);
+      await db.update(smoSolicitacoes).set({
+        qtdEmAndamento: input.qtdEmAndamento,
+        atualizadoEm: new Date().toISOString(),
+      }).where(eq(smoSolicitacoes.id, input.id));
       return { success: true };
     }),
 
