@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Briefcase, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, UserPlus, FolderPlus, Sparkles, AlertTriangle, ShieldAlert, Ban, CheckCircle, XCircle, Info, Pencil, Save, ThumbsDown, RotateCcw, X, Phone, Mail, MapPin, GraduationCap, Wrench, Calendar, Clock, Building2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import FullScreenDialog from "@/components/FullScreenDialog";
 
 type IAResultado = {
   fileName: string;
@@ -301,34 +302,22 @@ export default function Curriculos() {
     return lower.includes(".jpg") || lower.includes(".jpeg") || lower.includes(".png") || lower.includes(".webp");
   }
 
-  if (fichaAberta) {
-    return (
-      <div className="fixed inset-0 z-50 bg-gradient-to-br from-slate-50 to-amber-50/30 overflow-y-auto">
-        <div className="sticky top-0 z-10 bg-white border-b shadow-sm px-4 sm:px-8 py-4">
-          <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <Button size="sm" variant="ghost" onClick={() => setFichaAberta(null)} className="flex-shrink-0">
-                <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
-              </Button>
-              <div className="h-11 w-11 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
-                {(fichaAberta.nomeCandidato || "?")[0]?.toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-lg font-bold text-slate-800 truncate">{fichaAberta.nomeCandidato || "(sem nome)"}</h2>
-                <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                  <span className="inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-medium">{fichaAberta.funcaoNome}</span>
-                  {statusBadge(fichaAberta.statusCandidato, fichaAberta.motivoReprovacao)}
-                  {(() => { const idade = calcularIdade(fichaAberta.dataNascimento); return idade !== null ? <span className="text-xs text-slate-500">{idade} anos</span> : null; })()}
-                </div>
-              </div>
-            </div>
-            <Button size="sm" variant="outline" onClick={() => { setFichaAberta(null); openEditDialog(fichaAberta); }} className="flex-shrink-0">
-              <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
-            </Button>
-          </div>
-        </div>
-
-        <div className="max-w-5xl mx-auto px-4 sm:px-8 py-6 space-y-6">
+  return (
+    <>
+    <FullScreenDialog
+      open={!!fichaAberta}
+      onClose={() => setFichaAberta(null)}
+      title={fichaAberta?.nomeCandidato || "Ficha do Candidato"}
+      subtitle={`${fichaAberta?.funcaoNome || ""}${(() => { const i = calcularIdade(fichaAberta?.dataNascimento); return i !== null ? ` · ${i} anos` : ""; })()}`}
+      icon={<Eye className="h-5 w-5 text-white" />}
+      headerActions={
+        <Button size="sm" variant="ghost" onClick={() => { if (fichaAberta) { setFichaAberta(null); openEditDialog(fichaAberta); } }} className="text-white hover:bg-white/20 gap-1.5 border border-white/30">
+          <Pencil className="h-4 w-4" /> Editar
+        </Button>
+      }
+    >
+      {fichaAberta && (
+        <div className="space-y-6">
           {fichaAberta.statusCandidato === "reprovado" && fichaAberta.motivoReprovacao && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-1">
@@ -342,65 +331,78 @@ export default function Curriculos() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-              <h3 className="font-semibold text-slate-700 text-sm border-b pb-2 flex items-center gap-2">
-                <Phone className="h-4 w-4 text-amber-600" /> Dados Pessoais
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-xs text-slate-500">Nome Completo</p>
-                  <p className="font-medium text-slate-800">{fichaAberta.nomeCandidato || "-"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Data de Nascimento</p>
-                  <p className="font-medium text-slate-800">
-                    {formatDate(fichaAberta.dataNascimento)}
-                    {(() => { const i = calcularIdade(fichaAberta.dataNascimento); return i !== null ? ` (${i} anos)` : ""; })()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Telefone</p>
-                  <p className="font-medium text-slate-800">{fichaAberta.telefone ? <a href={`tel:${fichaAberta.telefone}`} className="text-blue-600 hover:underline">{fichaAberta.telefone}</a> : "-"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">E-mail</p>
-                  <p className="font-medium text-slate-800 break-all">{fichaAberta.email ? <a href={`mailto:${fichaAberta.email}`} className="text-blue-600 hover:underline">{fichaAberta.email}</a> : "-"}</p>
-                </div>
+          <div className="flex items-center gap-4 pb-4 border-b border-primary/20">
+            <div className="h-16 w-16 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold text-2xl flex-shrink-0 shadow-lg">
+              {(fichaAberta.nomeCandidato || "?")[0]?.toUpperCase()}
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">{fichaAberta.nomeCandidato || "(sem nome)"}</h2>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <span className="inline-block px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">{fichaAberta.funcaoNome}</span>
+                {statusBadge(fichaAberta.statusCandidato, fichaAberta.motivoReprovacao)}
               </div>
-              <div className="text-sm">
-                <p className="text-xs text-slate-500 flex items-center gap-1"><MapPin className="h-3 w-3" /> Endereço</p>
-                <p className="font-medium text-slate-800">
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Phone className="h-5 w-5 text-primary" />
+              <h4 className="text-base font-semibold text-primary">Dados Pessoais</h4>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Nome Completo</Label>
+                <p className="text-sm font-medium mt-0.5">{fichaAberta.nomeCandidato || "-"}</p>
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Data de Nascimento</Label>
+                <p className="text-sm font-medium mt-0.5">
+                  {formatDate(fichaAberta.dataNascimento)}
+                  {(() => { const i = calcularIdade(fichaAberta.dataNascimento); return i !== null ? ` (${i} anos)` : ""; })()}
+                </p>
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Telefone</Label>
+                <p className="text-sm font-medium mt-0.5">{fichaAberta.telefone ? <a href={`tel:${fichaAberta.telefone}`} className="text-blue-600 hover:underline">{fichaAberta.telefone}</a> : "-"}</p>
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">E-mail</Label>
+                <p className="text-sm font-medium mt-0.5 break-all">{fichaAberta.email ? <a href={`mailto:${fichaAberta.email}`} className="text-blue-600 hover:underline">{fichaAberta.email}</a> : "-"}</p>
+              </div>
+              <div className="sm:col-span-2">
+                <Label className="text-xs font-medium text-muted-foreground">Endereço</Label>
+                <p className="text-sm font-medium mt-0.5">
                   {fichaAberta.endereco || "-"}
                   {fichaAberta.cidade ? ` - ${fichaAberta.cidade}` : ""}
                   {fichaAberta.estado ? `/${fichaAberta.estado}` : ""}
                 </p>
               </div>
             </div>
+          </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-              <h3 className="font-semibold text-slate-700 text-sm border-b pb-2 flex items-center gap-2">
-                <GraduationCap className="h-4 w-4 text-amber-600" /> Formação e Qualificações
-              </h3>
-              <div className="text-sm space-y-3">
-                <div>
-                  <p className="text-xs text-slate-500">Escolaridade</p>
-                  <p className="font-medium text-slate-800">{fichaAberta.escolaridade || "-"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Cursos / Formações / Certificações</p>
-                  <p className="font-medium text-slate-800">{fichaAberta.cursoFormacao || "-"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 flex items-center gap-1"><Wrench className="h-3 w-3" /> Habilidades</p>
-                  {fichaAberta.habilidades ? (
-                    <div className="flex flex-wrap gap-1.5 mt-1">
-                      {fichaAberta.habilidades.split(";").map((h: string, i: number) => h.trim() && (
-                        <span key={i} className="inline-block px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs">{h.trim()}</span>
-                      ))}
-                    </div>
-                  ) : <p className="font-medium text-slate-800">-</p>}
-                </div>
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <GraduationCap className="h-5 w-5 text-primary" />
+              <h4 className="text-base font-semibold text-primary">Formação e Qualificações</h4>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Escolaridade</Label>
+                <p className="text-sm font-medium mt-0.5">{fichaAberta.escolaridade || "-"}</p>
+              </div>
+              <div className="sm:col-span-2">
+                <Label className="text-xs font-medium text-muted-foreground">Cursos / Formações / Certificações</Label>
+                <p className="text-sm font-medium mt-0.5">{fichaAberta.cursoFormacao || "-"}</p>
+              </div>
+              <div className="sm:col-span-3">
+                <Label className="text-xs font-medium text-muted-foreground">Habilidades</Label>
+                {fichaAberta.habilidades ? (
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {fichaAberta.habilidades.split(";").map((h: string, i: number) => h.trim() && (
+                      <span key={i} className="inline-block px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">{h.trim()}</span>
+                    ))}
+                  </div>
+                ) : <p className="text-sm font-medium mt-0.5">-</p>}
               </div>
             </div>
           </div>
@@ -409,47 +411,49 @@ export default function Curriculos() {
             const exps = parseExperiencias(fichaAberta.experienciasJson);
             if (exps.length === 0 && !fichaAberta.observacoes) return null;
             return (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-                <h3 className="font-semibold text-slate-700 text-sm border-b pb-2 flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-amber-600" /> Experiência Profissional
-                </h3>
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Building2 className="h-5 w-5 text-primary" />
+                  <h4 className="text-base font-semibold text-primary">Experiência Profissional</h4>
+                </div>
                 {exps.length > 0 ? (
                   <div className="space-y-3">
                     {exps.map((exp, i) => (
-                      <div key={i} className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                      <div key={i} className="bg-card rounded-lg p-4 border">
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1">
                           <div>
-                            <p className="font-semibold text-slate-800 text-sm">{exp.cargo || "Cargo não informado"}</p>
-                            <p className="text-sm text-slate-600">{exp.empresa || "Empresa não informada"}</p>
+                            <p className="font-semibold text-sm">{exp.cargo || "Cargo não informado"}</p>
+                            <p className="text-sm text-muted-foreground">{exp.empresa || "Empresa não informada"}</p>
                           </div>
-                          <div className="sm:text-right text-xs text-slate-500 flex-shrink-0">
+                          <div className="sm:text-right text-xs text-muted-foreground flex-shrink-0">
                             {exp.periodo && <div className="flex items-center gap-1 sm:justify-end"><Calendar className="h-3 w-3" /> {exp.periodo}</div>}
                             {exp.duracao && <div className="flex items-center gap-1 sm:justify-end mt-0.5"><Clock className="h-3 w-3" /> {exp.duracao}</div>}
                           </div>
                         </div>
-                        {exp.descricao && <p className="text-xs text-slate-600 mt-2">{exp.descricao}</p>}
+                        {exp.descricao && <p className="text-xs text-muted-foreground mt-2">{exp.descricao}</p>}
                       </div>
                     ))}
                   </div>
                 ) : fichaAberta.observacoes ? (
-                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                    <p className="text-sm text-slate-700">{fichaAberta.observacoes}</p>
+                  <div className="bg-card rounded-lg p-4 border">
+                    <p className="text-sm">{fichaAberta.observacoes}</p>
                   </div>
                 ) : null}
                 {exps.length > 0 && fichaAberta.observacoes && (
-                  <div>
-                    <p className="text-xs text-slate-500 mb-1">Observações adicionais</p>
-                    <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 border">{fichaAberta.observacoes}</p>
+                  <div className="mt-3">
+                    <Label className="text-xs font-medium text-muted-foreground">Observações adicionais</Label>
+                    <p className="text-sm bg-card rounded-lg p-3 border mt-1">{fichaAberta.observacoes}</p>
                   </div>
                 )}
               </div>
             );
           })()}
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-            <h3 className="font-semibold text-slate-700 text-sm border-b pb-2 flex items-center gap-2">
-              <FileText className="h-4 w-4 text-amber-600" /> Currículo Anexado
-            </h3>
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <FileText className="h-5 w-5 text-primary" />
+              <h4 className="text-base font-semibold text-primary">Currículo Anexado</h4>
+            </div>
             {fichaAberta.documentoUrl ? (
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center gap-3">
@@ -458,28 +462,28 @@ export default function Curriculos() {
                     <Eye className="h-4 w-4" />
                     {fichaAberta.fileName || "Abrir Currículo"}
                   </a>
-                  <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 transition text-xs">
+                  <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2.5 bg-card border rounded-lg text-muted-foreground hover:bg-accent transition text-xs">
                     <Upload className="h-3.5 w-3.5" /> Substituir arquivo
                     <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                       onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(fichaAberta.id, f); }} />
                   </label>
                 </div>
                 {isImageFile(fichaAberta.documentoUrl) && (
-                  <div className="border rounded-xl overflow-hidden bg-slate-100">
+                  <div className="border rounded-lg overflow-hidden bg-muted">
                     <img src={fichaAberta.documentoUrl} alt="Currículo" className="w-full h-auto object-contain max-h-[70vh]" />
                   </div>
                 )}
                 {fichaAberta.documentoUrl.toLowerCase().includes(".pdf") && (
-                  <div className="border rounded-xl overflow-hidden bg-slate-100" style={{ height: "70vh" }}>
+                  <div className="border rounded-lg overflow-hidden bg-muted" style={{ height: "70vh" }}>
                     <iframe src={fichaAberta.documentoUrl} className="w-full h-full" title="Currículo PDF" />
                   </div>
                 )}
               </div>
             ) : (
-              <div className="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-10 text-center">
-                <FileText className="h-12 w-12 mx-auto text-slate-300 mb-3" />
-                <p className="text-sm text-slate-500 mb-4">Nenhum currículo anexado</p>
-                <label className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 hover:bg-amber-100 transition text-sm font-medium">
+              <div className="bg-muted/50 border-2 border-dashed rounded-lg p-10 text-center">
+                <FileText className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
+                <p className="text-sm text-muted-foreground mb-4">Nenhum currículo anexado</p>
+                <label className="cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 bg-primary/10 border border-primary/20 rounded-lg text-primary hover:bg-primary/20 transition text-sm font-medium">
                   <Upload className="h-4 w-4" /> Anexar Currículo
                   <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                     onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(fichaAberta.id, f); }} />
@@ -488,16 +492,15 @@ export default function Curriculos() {
             )}
           </div>
 
-          <div className="text-xs text-slate-400 flex items-center justify-between pb-6">
+          <div className="border-t pt-4 text-xs text-muted-foreground flex items-center justify-between">
             <span>Cadastrado por: {fichaAberta.criadoPor || "-"} em {fichaAberta.createdAt ? new Date(fichaAberta.createdAt).toLocaleDateString("pt-BR") : "-"}</span>
             <span>ID: #{fichaAberta.id}</span>
           </div>
         </div>
-      </div>
-    );
-  }
+      )}
+    </FullScreenDialog>
 
-  return (
+    <div className={fichaAberta ? "hidden" : ""}>
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-amber-50/30 p-6">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center gap-3 mb-6">
@@ -728,92 +731,14 @@ export default function Curriculos() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showCurDialog} onOpenChange={(open) => { if (!open) closeDialog(); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {editingId ? <Pencil className="h-5 w-5 text-blue-600" /> : <UserPlus className="h-5 w-5 text-amber-600" />}
-              {editingId ? "Editar Currículo" : "Novo Currículo"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Nome do Candidato</Label>
-                <Input className="mt-1" value={form.nomeCandidato} onChange={e => setForm({ ...form, nomeCandidato: e.target.value })} />
-              </div>
-              <div>
-                <Label>Função *</Label>
-                <select className="mt-1 w-full border rounded-md px-3 py-2 text-sm h-10"
-                  value={dialogFuncaoId || ""}
-                  onChange={e => setDialogFuncaoId(Number(e.target.value) || null)}>
-                  <option value="">Selecione a função</option>
-                  {funcoes.map((f: any) => <option key={f.id} value={f.id}>{f.nome}</option>)}
-                </select>
-              </div>
-              <div>
-                <Label>Telefone</Label>
-                <Input className="mt-1" placeholder="(00) 00000-0000" value={form.telefone} onChange={e => setForm({ ...form, telefone: e.target.value })} />
-              </div>
-              <div>
-                <Label>Data de Nascimento</Label>
-                <Input className="mt-1" type="date" value={form.dataNascimento} onChange={e => setForm({ ...form, dataNascimento: e.target.value })} />
-                {form.dataNascimento && (() => { const idade = calcularIdade(form.dataNascimento); return idade !== null ? <p className="text-xs text-slate-500 mt-1">{idade} anos</p> : null; })()}
-              </div>
-              <div>
-                <Label>E-mail</Label>
-                <Input className="mt-1" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-              </div>
-              <div>
-                <Label>Escolaridade</Label>
-                <select className="mt-1 w-full border rounded-md px-3 py-2 text-sm h-10"
-                  value={form.escolaridade}
-                  onChange={e => setForm({ ...form, escolaridade: e.target.value })}>
-                  <option value="">Selecione</option>
-                  <option value="Ensino Fundamental">Ensino Fundamental</option>
-                  <option value="Ensino Fundamental Incompleto">Ensino Fundamental Incompleto</option>
-                  <option value="Ensino Médio">Ensino Médio</option>
-                  <option value="Ensino Médio Incompleto">Ensino Médio Incompleto</option>
-                  <option value="Técnico">Técnico</option>
-                  <option value="Superior Completo">Superior Completo</option>
-                  <option value="Superior Incompleto">Superior Incompleto</option>
-                  <option value="Pós-Graduação">Pós-Graduação</option>
-                </select>
-              </div>
-              <div className="col-span-2">
-                <Label>Endereço</Label>
-                <Input className="mt-1" placeholder="Rua, número, bairro" value={form.endereco} onChange={e => setForm({ ...form, endereco: e.target.value })} />
-              </div>
-              <div>
-                <Label>Cidade</Label>
-                <Input className="mt-1" placeholder="Ex: Guaratinguetá" value={form.cidade} onChange={e => setForm({ ...form, cidade: e.target.value })} />
-              </div>
-              <div>
-                <Label>Estado (UF)</Label>
-                <Input className="mt-1" placeholder="SP" maxLength={2} value={form.estado} onChange={e => setForm({ ...form, estado: e.target.value.toUpperCase() })} />
-              </div>
-            </div>
-            <div>
-              <Label>Habilidades</Label>
-              <Textarea className="mt-1" placeholder="Separar por ponto-e-vírgula. Ex: Leitura de projetos; NR-35; Operação de betoneira" value={form.habilidades} onChange={e => setForm({ ...form, habilidades: e.target.value })} rows={2} />
-            </div>
-            <div>
-              <Label>Cursos / Formações / Certificações</Label>
-              <Textarea className="mt-1" placeholder="Cursos técnicos, NRs, treinamentos..." value={form.cursoFormacao} onChange={e => setForm({ ...form, cursoFormacao: e.target.value })} rows={2} />
-            </div>
-            <div>
-              <Label>Observações</Label>
-              <Textarea className="mt-1" placeholder="Indicação, experiência relevante, etc." value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
-            </div>
-            {!editingId && (
-              <div>
-                <Label>Anexar Currículo (PDF/DOC/Imagem)</Label>
-                <Input type="file" className="mt-1" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={e => setPendingFile(e.target.files?.[0] || null)} />
-                {pendingFile && <p className="text-xs text-slate-500 mt-1">{pendingFile.name}</p>}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
+      <FullScreenDialog
+        open={showCurDialog}
+        onClose={() => closeDialog()}
+        title={editingId ? "Editar Currículo" : "Novo Currículo"}
+        subtitle={editingId ? form.nomeCandidato : "Preencha os dados do candidato"}
+        icon={editingId ? <Pencil className="h-5 w-5 text-white" /> : <UserPlus className="h-5 w-5 text-white" />}
+        footer={
+          <>
             <Button variant="outline" onClick={() => closeDialog()}>Cancelar</Button>
             {editingId ? (
               <Button onClick={() => {
@@ -859,9 +784,118 @@ export default function Curriculos() {
                 Cadastrar
               </Button>
             )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        <div className="space-y-6">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Phone className="h-5 w-5 text-primary" />
+              <h4 className="text-base font-semibold text-primary">Dados Pessoais</h4>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Nome do Candidato</Label>
+                <Input className="mt-1 bg-input" value={form.nomeCandidato} onChange={e => setForm({ ...form, nomeCandidato: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Função *</Label>
+                <select className="mt-1 w-full border rounded-md px-3 py-2 text-sm h-10 bg-input"
+                  value={dialogFuncaoId || ""}
+                  onChange={e => setDialogFuncaoId(Number(e.target.value) || null)}>
+                  <option value="">Selecione a função</option>
+                  {funcoes.map((f: any) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Telefone</Label>
+                <Input className="mt-1 bg-input" placeholder="(00) 00000-0000" value={form.telefone} onChange={e => setForm({ ...form, telefone: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Data de Nascimento</Label>
+                <Input className="mt-1 bg-input" type="date" value={form.dataNascimento} onChange={e => setForm({ ...form, dataNascimento: e.target.value })} />
+                {form.dataNascimento && (() => { const idade = calcularIdade(form.dataNascimento); return idade !== null ? <p className="text-xs text-muted-foreground mt-1">{idade} anos</p> : null; })()}
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">E-mail</Label>
+                <Input className="mt-1 bg-input" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Escolaridade</Label>
+                <select className="mt-1 w-full border rounded-md px-3 py-2 text-sm h-10 bg-input"
+                  value={form.escolaridade}
+                  onChange={e => setForm({ ...form, escolaridade: e.target.value })}>
+                  <option value="">Selecione</option>
+                  <option value="Ensino Fundamental">Ensino Fundamental</option>
+                  <option value="Ensino Fundamental Incompleto">Ensino Fundamental Incompleto</option>
+                  <option value="Ensino Médio">Ensino Médio</option>
+                  <option value="Ensino Médio Incompleto">Ensino Médio Incompleto</option>
+                  <option value="Técnico">Técnico</option>
+                  <option value="Superior Completo">Superior Completo</option>
+                  <option value="Superior Incompleto">Superior Incompleto</option>
+                  <option value="Pós-Graduação">Pós-Graduação</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <MapPin className="h-5 w-5 text-primary" />
+              <h4 className="text-base font-semibold text-primary">Endereço</h4>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4">
+              <div className="sm:col-span-2">
+                <Label className="text-xs font-medium text-muted-foreground">Endereço</Label>
+                <Input className="mt-1 bg-input" placeholder="Rua, número, bairro" value={form.endereco} onChange={e => setForm({ ...form, endereco: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Cidade</Label>
+                <Input className="mt-1 bg-input" placeholder="Ex: Guaratinguetá" value={form.cidade} onChange={e => setForm({ ...form, cidade: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Estado (UF)</Label>
+                <Input className="mt-1 bg-input" placeholder="SP" maxLength={2} value={form.estado} onChange={e => setForm({ ...form, estado: e.target.value.toUpperCase() })} />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Wrench className="h-5 w-5 text-primary" />
+              <h4 className="text-base font-semibold text-primary">Qualificações</h4>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Habilidades</Label>
+                <Textarea className="mt-1 bg-input" placeholder="Separar por ponto-e-vírgula. Ex: Leitura de projetos; NR-35; Operação de betoneira" value={form.habilidades} onChange={e => setForm({ ...form, habilidades: e.target.value })} rows={3} />
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Cursos / Formações / Certificações</Label>
+                <Textarea className="mt-1 bg-input" placeholder="Cursos técnicos, NRs, treinamentos..." value={form.cursoFormacao} onChange={e => setForm({ ...form, cursoFormacao: e.target.value })} rows={3} />
+              </div>
+              <div className="sm:col-span-2">
+                <Label className="text-xs font-medium text-muted-foreground">Observações</Label>
+                <Textarea className="mt-1 bg-input" placeholder="Indicação, experiência relevante, etc." value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} rows={2} />
+              </div>
+            </div>
+          </div>
+
+          {!editingId && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Upload className="h-5 w-5 text-primary" />
+                <h4 className="text-base font-semibold text-primary">Anexo</h4>
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Anexar Currículo (PDF/DOC/Imagem)</Label>
+                <Input type="file" className="mt-1 bg-input" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={e => setPendingFile(e.target.files?.[0] || null)} />
+                {pendingFile && <p className="text-xs text-muted-foreground mt-1">{pendingFile.name}</p>}
+              </div>
+            </div>
+          )}
+        </div>
+      </FullScreenDialog>
 
       <Dialog open={showReprovDialog} onOpenChange={(open) => { if (!open) { setShowReprovDialog(false); setMotivoReprovacao(""); } }}>
         <DialogContent className="max-w-lg">
@@ -1030,5 +1064,6 @@ export default function Curriculos() {
         </DialogContent>
       </Dialog>
     </div>
+    </>
   );
 }
