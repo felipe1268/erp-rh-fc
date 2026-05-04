@@ -2481,6 +2481,25 @@ export const fechamentoPontoRouter = router({
           }
         }
 
+        // Preserve existing treatments before deleting
+        const savedTreatments = ((await db.execute(sql`
+          SELECT "employeeId", "data", "resolucaoTipo", "resolucaoObs", "resolucaoPor", "resolucaoEm",
+                 "inconsistenciaResolvida", "isFalta", "isInconsistente", "isAtraso", "isSaidaAntecipada",
+                 "statusDia", "statusAnterior", "afericaoResultado", "afericaoObs", "afericaoEm",
+                 "atestadoId", "advertenciaId",
+                 "entrada1", "saida1", "entrada2", "saida2"
+          FROM timecard_daily
+          WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia}
+            AND ("resolucaoTipo" IS NOT NULL OR "afericaoResultado" IS NOT NULL)
+        `)) as any).rows || [];
+        const treatmentMap = new Map<string, any>();
+        for (const t of savedTreatments) {
+          treatmentMap.set(`${t.employeeId}-${t.data}`, t);
+        }
+        if (savedTreatments.length > 0) {
+          console.log(`[consolidarMes] Preservando ${savedTreatments.length} tratamentos existentes`);
+        }
+
         // Clear existing timecard_daily
         await db.execute(sql`DELETE FROM timecard_daily WHERE "companyId" = ${input.companyId} AND "mesCompetencia" = ${input.mesReferencia}`);
         try { await db.execute(sql.raw(`DELETE FROM timecard_daily WHERE companyid = ${Number(input.companyId)} AND mescompetencia = '${input.mesReferencia.replace(/'/g, "''")}'`)); } catch {}
@@ -2596,14 +2615,60 @@ export const fechamentoPontoRouter = router({
         // Flush remaining rows
         await flushBatch();
         
+        // Re-apply preserved treatments
+        let totalTreatmentsRestored = 0;
+        if (treatmentMap.size > 0) {
+          const _escT = (v: any) => v === null || v === undefined ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`;
+          for (const [key, t] of treatmentMap) {
+            try {
+              const updates: string[] = [];
+              if (t.resolucaoTipo) {
+                updates.push(`"resolucaoTipo" = ${_escT(t.resolucaoTipo)}`);
+                updates.push(`"resolucaoObs" = ${_escT(t.resolucaoObs)}`);
+                updates.push(`"resolucaoPor" = ${_escT(t.resolucaoPor || 'Sistema')}`);
+                updates.push(`"resolucaoEm" = ${t.resolucaoEm ? _escT(t.resolucaoEm) : 'NOW()'}`);
+                updates.push(`"inconsistenciaResolvida" = 1`);
+                updates.push(`"isInconsistente" = 0`);
+                if (t.resolucaoTipo === 'atestado' || t.resolucaoTipo === 'justificar' || t.resolucaoTipo === 'abonar') {
+                  updates.push(`"isFalta" = 0`);
+                }
+                if (t.resolucaoTipo === 'ajustar_horario') {
+                  if (t.entrada1) updates.push(`"entrada1" = ${_escT(t.entrada1)}`);
+                  if (t.saida1) updates.push(`"saida1" = ${_escT(t.saida1)}`);
+                  if (t.entrada2) updates.push(`"entrada2" = ${_escT(t.entrada2)}`);
+                  if (t.saida2) updates.push(`"saida2" = ${_escT(t.saida2)}`);
+                }
+              }
+              if (t.afericaoResultado) {
+                updates.push(`"afericaoResultado" = ${_escT(t.afericaoResultado)}`);
+                if (t.afericaoObs) updates.push(`"afericaoObs" = ${_escT(t.afericaoObs)}`);
+                if (t.afericaoEm) updates.push(`"afericaoEm" = ${_escT(t.afericaoEm)}`);
+                if (t.statusDia && t.statusDia !== 'registrado') updates.push(`"statusDia" = ${_escT(t.statusDia)}`);
+                if (t.statusAnterior) updates.push(`"statusAnterior" = ${_escT(t.statusAnterior)}`);
+              }
+              if (t.atestadoId) updates.push(`"atestadoId" = ${Number(t.atestadoId)}`);
+              if (t.advertenciaId) updates.push(`"advertenciaId" = ${Number(t.advertenciaId)}`);
+              if (updates.length > 0) {
+                await db.execute(sql.raw(
+                  `UPDATE timecard_daily SET ${updates.join(', ')} WHERE "companyId" = ${Number(input.companyId)} AND "employeeId" = ${Number(t.employeeId)} AND "data" = ${_escT(t.data)} AND "mesCompetencia" = ${_escT(input.mesReferencia)}`
+                ));
+                totalTreatmentsRestored++;
+              }
+            } catch (e: any) {
+              console.warn(`[consolidarMes] Falha ao restaurar tratamento ${key}:`, e?.message);
+            }
+          }
+          console.log(`[consolidarMes] ${totalTreatmentsRestored}/${treatmentMap.size} tratamentos restaurados`);
+        }
+
         // Update payroll period status
         await db.execute(sql`
-          UPDATE payroll_periods SET status = 'ponto_importado', pontoImportadoEm = NOW(), pontoImportadoPor = ${ctx.user?.name || 'Sistema'}
-          WHERE companyId = ${input.companyId} AND mesReferencia = ${input.mesReferencia}
+          UPDATE payroll_periods SET status = 'ponto_importado', "pontoImportadoEm" = NOW(), "pontoImportadoPor" = ${ctx.user?.name || 'Sistema'}
+          WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
         `);
         
-        payrollResult = { totalFuncionarios: empList.length, totalRegistros: totalInserted, totalFaltas, totalAtrasos };
-        console.log(`[consolidarMes] PayrollEngine processarPonto: ${empList.length} funcionários, ${totalInserted} registros`);
+        payrollResult = { totalFuncionarios: empList.length, totalRegistros: totalInserted, totalFaltas, totalAtrasos, totalTreatmentsRestored };
+        console.log(`[consolidarMes] PayrollEngine processarPonto: ${empList.length} funcionários, ${totalInserted} registros, ${totalTreatmentsRestored} tratamentos restaurados`);
       } catch (payrollErr: any) {
         console.error('[consolidarMes] Erro ao processar ponto no payrollEngine:', payrollErr.message);
         // Don't fail the consolidation if payroll processing fails
