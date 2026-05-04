@@ -93,6 +93,44 @@ export const integracaoSSTRouter = router({
       return { success: true };
     }),
 
+  listarTodosModulos: protectedProcedure
+    .input(z.object({ companyId: z.number().int().positive() }))
+    .query(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      const modulos = await db.select({
+        id: sstIntegracaoModulos.id,
+        configId: sstIntegracaoModulos.configId,
+        companyId: sstIntegracaoModulos.companyId,
+        titulo: sstIntegracaoModulos.titulo,
+        descricao: sstIntegracaoModulos.descricao,
+        videoUrl: sstIntegracaoModulos.videoUrl,
+        videoTipo: sstIntegracaoModulos.videoTipo,
+        ordem: sstIntegracaoModulos.ordem,
+        obrigatorio: sstIntegracaoModulos.obrigatorio,
+        duracaoMinutos: sstIntegracaoModulos.duracaoMinutos,
+        funcoesJson: sstIntegracaoModulos.funcoesJson,
+        createdAt: sstIntegracaoModulos.createdAt,
+        configTitulo: sstIntegracaoConfig.titulo,
+      }).from(sstIntegracaoModulos)
+        .leftJoin(sstIntegracaoConfig, eq(sstIntegracaoModulos.configId, sstIntegracaoConfig.id))
+        .where(and(eq(sstIntegracaoModulos.companyId, input.companyId), isNull(sstIntegracaoModulos.deletedAt)))
+        .orderBy(asc(sstIntegracaoModulos.configId), asc(sstIntegracaoModulos.ordem));
+
+      const moduloIds = modulos.map(m => m.id);
+      let perguntaCounts: { moduloId: number; count: number }[] = [];
+      if (moduloIds.length > 0) {
+        perguntaCounts = await db.select({
+          moduloId: sstIntegracaoPerguntas.moduloId,
+          count: sql<number>`count(*)::int`,
+        }).from(sstIntegracaoPerguntas)
+          .where(inArray(sstIntegracaoPerguntas.moduloId, moduloIds))
+          .groupBy(sstIntegracaoPerguntas.moduloId);
+      }
+      const countMap = new Map(perguntaCounts.map(c => [c.moduloId, c.count]));
+      return modulos.map(m => ({ ...m, totalPerguntas: countMap.get(m.id) || 0 }));
+    }),
+
   listarModulos: protectedProcedure
     .input(z.object({ configId: z.number().int().positive(), companyId: z.number().int().positive() }))
     .query(async ({ input, ctx }) => {

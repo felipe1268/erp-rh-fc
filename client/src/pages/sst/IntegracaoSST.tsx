@@ -15,6 +15,7 @@ import {
   LayoutDashboard, Settings, Clock, History, Users, Plus, Trash2, Edit, Copy,
   CheckCircle, XCircle, AlertTriangle, TrendingUp, GraduationCap, Eye, Video,
   ChevronDown, ChevronRight, Loader2, ClipboardList, BarChart3, RefreshCw, Search,
+  Play, ExternalLink, Save, X, Film,
 } from "lucide-react";
 
 function formatDate(d: string | null | undefined) {
@@ -57,6 +58,7 @@ export default function IntegracaoSST() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="flex flex-wrap">
           <TabsTrigger value="dashboard"><LayoutDashboard className="h-4 w-4 mr-1" />Dashboard</TabsTrigger>
+          <TabsTrigger value="videos"><Film className="h-4 w-4 mr-1" />Vídeos</TabsTrigger>
           <TabsTrigger value="config"><Settings className="h-4 w-4 mr-1" />Configurações</TabsTrigger>
           <TabsTrigger value="pendentes"><Clock className="h-4 w-4 mr-1" />Pendentes</TabsTrigger>
           <TabsTrigger value="historico"><History className="h-4 w-4 mr-1" />Histórico</TabsTrigger>
@@ -64,6 +66,7 @@ export default function IntegracaoSST() {
         </TabsList>
 
         <TabsContent value="dashboard"><DashboardTab companyId={companyId} /></TabsContent>
+        <TabsContent value="videos"><VideosTab companyId={companyId} /></TabsContent>
         <TabsContent value="config"><ConfigTab companyId={companyId} /></TabsContent>
         <TabsContent value="pendentes"><PendentesTab companyId={companyId} /></TabsContent>
         <TabsContent value="historico"><HistoricoTab companyId={companyId} /></TabsContent>
@@ -131,6 +134,298 @@ function KpiCard({ label, value, icon, color }: { label: string; value: number; 
         <p className={`text-2xl font-bold ${color || ""}`}>{value}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function getYoutubeId(url: string): string | null {
+  const match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]+)/);
+  return match?.[1] || null;
+}
+
+function VideosTab({ companyId }: { companyId: number }) {
+  const modulos = trpc.integracaoSST.listarTodosModulos.useQuery({ companyId }, { enabled: companyId > 0 });
+  const configs = trpc.integracaoSST.listarConfigs.useQuery({ companyId }, { enabled: companyId > 0 });
+  const criarModulo = trpc.integracaoSST.criarModulo.useMutation({ onSuccess: () => { modulos.refetch(); resetForm(); toast.success("Vídeo cadastrado com sucesso"); } });
+  const atualizarModulo = trpc.integracaoSST.atualizarModulo.useMutation({ onSuccess: () => { modulos.refetch(); setEditingId(null); toast.success("Vídeo atualizado"); } });
+  const excluirModulo = trpc.integracaoSST.excluirModulo.useMutation({ onSuccess: () => { modulos.refetch(); toast.success("Vídeo excluído"); } });
+
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [titulo, setTitulo] = useState("");
+  const [descricao, setDescricao] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [videoTipo, setVideoTipo] = useState<"youtube" | "upload" | "vimeo" | "url">("youtube");
+  const [duracaoMinutos, setDuracaoMinutos] = useState("");
+  const [configId, setConfigId] = useState("");
+  const [ordem, setOrdem] = useState("1");
+  const [obrigatorio, setObrigatorio] = useState(true);
+  const [previewId, setPreviewId] = useState<number | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const resetForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setTitulo("");
+    setDescricao("");
+    setVideoUrl("");
+    setVideoTipo("youtube");
+    setDuracaoMinutos("");
+    setConfigId("");
+    setOrdem("1");
+    setObrigatorio(true);
+  };
+
+  const startEdit = (mod: any) => {
+    setEditingId(mod.id);
+    setTitulo(mod.titulo || "");
+    setDescricao(mod.descricao || "");
+    setVideoUrl(mod.videoUrl || "");
+    setVideoTipo(mod.videoTipo || "youtube");
+    setDuracaoMinutos(mod.duracaoMinutos ? String(mod.duracaoMinutos) : "");
+    setConfigId(String(mod.configId));
+    setOrdem(String(mod.ordem || 1));
+    setObrigatorio(mod.obrigatorio !== false);
+    setShowForm(true);
+  };
+
+  const handleSave = () => {
+    if (!titulo.trim()) { toast.error("Informe o título do vídeo"); return; }
+    if (!configId) { toast.error("Selecione a configuração de integração"); return; }
+
+    if (editingId) {
+      atualizarModulo.mutate({
+        id: editingId,
+        companyId,
+        titulo: titulo.trim(),
+        descricao: descricao.trim() || undefined,
+        videoUrl: videoUrl.trim() || undefined,
+        videoTipo,
+        duracaoMinutos: duracaoMinutos ? Number(duracaoMinutos) : null,
+        ordem: Number(ordem) || 1,
+        obrigatorio,
+      });
+    } else {
+      criarModulo.mutate({
+        configId: Number(configId),
+        companyId,
+        titulo: titulo.trim(),
+        descricao: descricao.trim() || undefined,
+        videoUrl: videoUrl.trim() || undefined,
+        videoTipo,
+        duracaoMinutos: duracaoMinutos ? Number(duracaoMinutos) : undefined,
+        ordem: Number(ordem) || (modulos.data?.filter(m => m.configId === Number(configId)).length || 0) + 1,
+        obrigatorio,
+      });
+    }
+  };
+
+  const ytPreviewUrl = videoUrl ? getYoutubeId(videoUrl) : null;
+
+  const filtered = searchTerm
+    ? (modulos.data || []).filter(m =>
+        m.titulo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        m.configTitulo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        m.videoUrl?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : (modulos.data || []);
+
+  if (!companyId) return <p className="text-muted-foreground p-4">Selecione uma empresa.</p>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center flex-wrap gap-2">
+        <div>
+          <h3 className="font-semibold">Vídeos da Integração</h3>
+          <p className="text-xs text-muted-foreground">Cadastre e gerencie os vídeos de treinamento de segurança</p>
+        </div>
+        <div className="flex gap-2">
+          <div className="relative">
+            <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
+            <Input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar vídeo..." className="pl-8 w-48" />
+          </div>
+          <Button size="sm" onClick={() => { resetForm(); setShowForm(true); }}><Plus className="h-4 w-4 mr-1" />Novo Vídeo</Button>
+        </div>
+      </div>
+
+      {(configs.data?.length ?? 0) === 0 && (
+        <Card className="border-dashed border-yellow-300 bg-yellow-50/50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-yellow-800">Nenhuma configuração criada</p>
+              <p className="text-xs text-yellow-700">Crie uma configuração na aba "Configurações" antes de cadastrar vídeos.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {modulos.isLoading ? (
+        <div className="flex items-center gap-2 p-8"><Loader2 className="h-5 w-5 animate-spin" />Carregando vídeos...</div>
+      ) : filtered.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="p-8 text-center">
+            <Film className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
+            <p className="text-muted-foreground">{searchTerm ? "Nenhum vídeo encontrado" : "Nenhum vídeo cadastrado ainda"}</p>
+            {!searchTerm && <p className="text-xs text-muted-foreground mt-1">Clique em "Novo Vídeo" para começar</p>}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map(mod => {
+            const ytId = mod.videoUrl ? getYoutubeId(mod.videoUrl) : null;
+            const isExpanded = previewId === mod.id;
+            return (
+              <Card key={mod.id} className="overflow-hidden group hover:shadow-md transition-shadow">
+                <div className="relative aspect-video bg-gray-900 cursor-pointer" onClick={() => setPreviewId(isExpanded ? null : mod.id)}>
+                  {ytId ? (
+                    isExpanded ? (
+                      <iframe
+                        src={`https://www.youtube.com/embed/${ytId}?rel=0&autoplay=1`}
+                        className="w-full h-full"
+                        allowFullScreen
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      />
+                    ) : (
+                      <>
+                        <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} alt={mod.titulo} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+                          <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                            <Play className="h-7 w-7 text-emerald-600 ml-1" />
+                          </div>
+                        </div>
+                      </>
+                    )
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="text-center">
+                        <Video className="h-10 w-10 mx-auto text-gray-500 mb-2" />
+                        <p className="text-xs text-gray-400">{mod.videoUrl ? "Vídeo externo" : "Sem vídeo"}</p>
+                      </div>
+                    </div>
+                  )}
+                  {mod.duracaoMinutos && (
+                    <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-0.5 rounded">
+                      {mod.duracaoMinutos} min
+                    </div>
+                  )}
+                </div>
+                <CardContent className="p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{mod.titulo}</p>
+                      {mod.descricao && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{mod.descricao}</p>}
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <Badge variant="outline" className="text-xs">{mod.configTitulo || "Config #" + mod.configId}</Badge>
+                        <span className="text-xs text-muted-foreground">Ordem: {mod.ordem}</span>
+                        {mod.totalPerguntas > 0 && <span className="text-xs text-muted-foreground">{mod.totalPerguntas} pergunta(s)</span>}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        {mod.obrigatorio && <Badge className="text-[10px] h-5 bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Obrigatório</Badge>}
+                        <Badge variant="outline" className="text-[10px] h-5">{mod.videoTipo === "youtube" ? "YouTube" : mod.videoTipo === "vimeo" ? "Vimeo" : mod.videoTipo === "upload" ? "Upload" : "URL"}</Badge>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1 flex-shrink-0">
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEdit(mod)} title="Editar">
+                        <Edit className="h-3.5 w-3.5" />
+                      </Button>
+                      {mod.videoUrl && (
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => window.open(mod.videoUrl!, "_blank")} title="Abrir vídeo">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { if (confirm("Excluir este vídeo?")) excluirModulo.mutate({ id: mod.id, companyId }); }} title="Excluir">
+                        <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      <Dialog open={showForm} onOpenChange={(v) => { if (!v) resetForm(); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Editar Vídeo" : "Novo Vídeo de Integração"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Configuração de Integração *</Label>
+              <Select value={configId} onValueChange={setConfigId} disabled={!!editingId}>
+                <SelectTrigger><SelectValue placeholder="Selecione a configuração" /></SelectTrigger>
+                <SelectContent>
+                  {configs.data?.map(c => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.titulo}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Título do Vídeo / Módulo *</Label>
+              <Input value={titulo} onChange={e => setTitulo(e.target.value)} placeholder="Ex: Uso de EPIs na Obra" />
+            </div>
+            <div>
+              <Label>Descrição</Label>
+              <Textarea value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Breve descrição do conteúdo do vídeo..." rows={2} />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <Label>URL do Vídeo</Label>
+                <Input value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." />
+              </div>
+              <div>
+                <Label>Tipo</Label>
+                <Select value={videoTipo} onValueChange={(v: any) => setVideoTipo(v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="youtube">YouTube</SelectItem>
+                    <SelectItem value="vimeo">Vimeo</SelectItem>
+                    <SelectItem value="url">URL Direta</SelectItem>
+                    <SelectItem value="upload">Upload</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {videoUrl && videoTipo === "youtube" && ytPreviewUrl && (
+              <div className="rounded-lg overflow-hidden border bg-black aspect-video">
+                <img src={`https://img.youtube.com/vi/${ytPreviewUrl}/mqdefault.jpg`} alt="Preview" className="w-full h-full object-cover" />
+              </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label>Duração (min)</Label>
+                <Input type="number" value={duracaoMinutos} onChange={e => setDuracaoMinutos(e.target.value)} placeholder="10" min={1} />
+              </div>
+              <div>
+                <Label>Ordem</Label>
+                <Input type="number" value={ordem} onChange={e => setOrdem(e.target.value)} placeholder="1" min={1} />
+              </div>
+              <div className="flex items-end pb-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={obrigatorio} onChange={e => setObrigatorio(e.target.checked)} className="accent-emerald-600 w-4 h-4" />
+                  <span className="text-sm">Obrigatório</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={resetForm}>Cancelar</Button>
+            <Button
+              disabled={!titulo.trim() || !configId || criarModulo.isPending || atualizarModulo.isPending}
+              onClick={handleSave}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {(criarModulo.isPending || atualizarModulo.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+              {editingId ? "Salvar Alterações" : "Cadastrar Vídeo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 
