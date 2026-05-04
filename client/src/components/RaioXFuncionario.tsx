@@ -3028,12 +3028,19 @@ function ContratosTab({ employeeId, companyId, empNome }: { employeeId: number; 
   const [uploadTipo, setUploadTipo] = useState<"contrato" | "prorrogacao">("contrato");
   const [viewingHtml, setViewingHtml] = useState("");
 
+  const { isAdminMaster } = usePermissions();
+  const [editingContrato, setEditingContrato] = useState<any>(null);
+  const [editContratoForm, setEditContratoForm] = useState({ prazoExperienciaDias: 0, prazoProrrogacaoDias: 0, funcao: "", observacoes: "" });
+
   const contratosQuery = trpc.contracts.listarContratos.useQuery({ employeeId });
   const contratos = contratosQuery.data || [];
   const gerarMutation = trpc.contracts.gerarContrato.useMutation();
   const salvarMutation = trpc.contracts.salvarContrato.useMutation();
   const uploadMutation = trpc.contracts.uploadAssinado.useMutation();
   const statusMutation = trpc.contracts.atualizarStatus.useMutation();
+  const excluirMutation = trpc.contracts.excluirContrato.useMutation();
+  const editarMutation = trpc.contracts.editarContrato.useMutation();
+  const reverterMutation = trpc.contracts.reverterEfetivacao.useMutation();
   const utils = trpc.useUtils();
 
   const handleGerar = async () => {

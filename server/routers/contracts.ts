@@ -2,9 +2,10 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { contractTemplates, employeeContracts, employees, companies } from "../../drizzle/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, sql, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
+import { TRPCError } from "@trpc/server";
 
 // ==========================================
 // Valor por extenso em pt-BR
@@ -546,6 +547,20 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+
+      if (input.tipo === "experiencia") {
+        const existing = await db.select({ id: employeeContracts.id })
+          .from(employeeContracts)
+          .where(and(
+            eq(employeeContracts.employeeId, input.employeeId),
+            eq(employeeContracts.tipo, "experiencia"),
+            sql`${employeeContracts.status} NOT IN ('encerrado', 'rescindido')`,
+          ));
+        if (existing.length > 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Já existe um contrato de experiência ativo para este colaborador." });
+        }
+      }
+
       const [result] = await db.insert(employeeContracts).values({
         companyId: input.companyId,
         employeeId: input.employeeId,
@@ -568,6 +583,74 @@ ${company.endereco ? `<div>${company.endereco}${company.cidade ? ` — ${company
         criadoPorUserId: ctx.user.id,
       }).returning();
       return { id: result.id };
+    }),
+
+  excluirContrato: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [contrato] = await db.select().from(employeeContracts).where(eq(employeeContracts.id, input.id));
+      if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado" });
+      if (contrato.companyId !== input.companyId) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+      await db.delete(employeeContracts).where(eq(employeeContracts.id, input.id));
+      return { success: true };
+    }),
+
+  editarContrato: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      prazoExperienciaDias: z.number().optional(),
+      prazoProrrogacaoDias: z.number().optional(),
+      dataInicio: z.string().optional(),
+      dataFim: z.string().optional(),
+      funcao: z.string().optional(),
+      salarioBase: z.string().optional(),
+      valorHora: z.string().optional(),
+      jornadaTrabalho: z.string().optional(),
+      localTrabalho: z.string().optional(),
+      observacoes: z.string().optional().nullable(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [contrato] = await db.select().from(employeeContracts).where(eq(employeeContracts.id, input.id));
+      if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado" });
+      if (contrato.companyId !== input.companyId) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+      const data: any = { updatedAt: sql`NOW()` };
+      if (input.prazoExperienciaDias !== undefined) data.prazoExperienciaDias = input.prazoExperienciaDias;
+      if (input.prazoProrrogacaoDias !== undefined) data.prazoProrrogacaoDias = input.prazoProrrogacaoDias;
+      if (input.dataInicio !== undefined) data.dataInicio = input.dataInicio;
+      if (input.dataFim !== undefined) data.dataFim = input.dataFim;
+      if (input.funcao !== undefined) data.funcao = input.funcao;
+      if (input.salarioBase !== undefined) data.salarioBase = input.salarioBase;
+      if (input.valorHora !== undefined) data.valorHora = input.valorHora;
+      if (input.jornadaTrabalho !== undefined) data.jornadaTrabalho = input.jornadaTrabalho;
+      if (input.localTrabalho !== undefined) data.localTrabalho = input.localTrabalho;
+      if (input.observacoes !== undefined) data.observacoes = input.observacoes;
+      await db.update(employeeContracts).set(data).where(eq(employeeContracts.id, input.id));
+      return { success: true };
+    }),
+
+  reverterEfetivacao: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas usuários Admin Master podem reverter uma efetivação." });
+      }
+      const db = await getDb();
+      const [contrato] = await db.select().from(employeeContracts).where(eq(employeeContracts.id, input.id));
+      if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado" });
+      if (contrato.companyId !== input.companyId) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+      if (contrato.status !== "efetivado") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Contrato não está efetivado." });
+      }
+      const previousStatus = contrato.dataProrrogacao ? "prorrogado" : "vigente";
+      await db.update(employeeContracts).set({
+        status: previousStatus,
+        dataEfetivacao: null,
+        updatedAt: sql`NOW()`,
+      }).where(eq(employeeContracts.id, input.id));
+      return { success: true };
     }),
 
   // Listar contratos de um funcionário
