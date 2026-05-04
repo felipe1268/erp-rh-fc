@@ -4873,12 +4873,12 @@ Responda EXATAMENTE no formato JSON abaixo:`;
 
       // 3. Buscar employeeIds que têm lançamento na folha importada (folha_itens) neste mês
       const folhaRows = ((await db.execute(sql`
-        SELECT DISTINCT fi.employeeId
+        SELECT DISTINCT fi."employeeId"
         FROM folha_itens fi
-        INNER JOIN folha_lancamentos fl ON fi.folhaLancamentoId = fl.id
-        WHERE fl.companyId IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
-          AND fl.mesReferencia = ${input.mesReferencia}
-          AND fi.employeeId IS NOT NULL
+        INNER JOIN folha_lancamentos fl ON fi."folhaLancamentoId" = fl.id
+        WHERE fl."companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})
+          AND fl."mesReferencia" = ${input.mesReferencia}
+          AND fi."employeeId" IS NOT NULL
       `)) as any).rows || [];
       const folhaSet = new Set((folhaRows || []).map((r: any) => r.employeeId));
 
