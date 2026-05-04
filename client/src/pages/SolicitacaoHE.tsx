@@ -368,6 +368,22 @@ export default function SolicitacaoHE() {
     onError: (err) => toast.error(err.message),
   });
 
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingHadAtividades, setEditingHadAtividades] = useState(false);
+
+  const updateMut = trpc.heSolicitacoes.update.useMutation({
+    onSuccess: () => {
+      toast.success("Solicitação atualizada com sucesso!");
+      utils.heSolicitacoes.list.invalidate();
+      utils.heSolicitacoes.counts.invalidate();
+      utils.heSolicitacoes.getById.invalidate();
+      setEditingId(null);
+      setFormData({ obraId: "", planejamentoAtividadeIds: [], dataSolicitacao: "", horaInicio: "", horaFim: "", motivo: "", observacoes: "", funcionarioIds: [] });
+      setActiveTab("historico");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [buscaFunc, setBuscaFunc] = useState("");
   const [verTodosFuncionarios, setVerTodosFuncionarios] = useState(false);
@@ -482,21 +498,62 @@ export default function SolicitacaoHE() {
 
   const isAdminMaster = user?.role === "admin_master";
 
+  function handleStartEdit(sol: any) {
+    const hasAtividades = Array.isArray(sol.atividadesVinculadas) && sol.atividadesVinculadas.length > 0;
+    setFormData({
+      obraId: sol.obraId ? String(sol.obraId) : "",
+      planejamentoAtividadeIds: hasAtividades ? sol.atividadesVinculadas.map((a: any) => String(a.id)) : [],
+      dataSolicitacao: sol.dataSolicitacao || "",
+      horaInicio: sol.horaInicio || "",
+      horaFim: sol.horaFim || "",
+      motivo: sol.motivo || "",
+      observacoes: sol.observacoes || "",
+      funcionarioIds: (sol.funcionarios || []).map((f: any) => f.employeeId),
+    });
+    setEditingId(sol.id);
+    setEditingHadAtividades(!hasAtividades);
+    setDetailSolId(null);
+    setActiveTab("solicitar");
+  }
+
+  function handleCancelEdit() {
+    setEditingId(null);
+    setFormData({ obraId: "", planejamentoAtividadeIds: [], dataSolicitacao: "", horaInicio: "", horaFim: "", motivo: "", observacoes: "", funcionarioIds: [] });
+  }
+
   function handleSubmit() {
     if (!companyId) return;
     if (!formData.dataSolicitacao) { toast.error("Informe a data da HE"); return; }
     if (!formData.motivo || formData.motivo.length < 5) { toast.error("Informe o motivo (mínimo 5 caracteres)"); return; }
     if (formData.funcionarioIds.length === 0) { toast.error("Selecione pelo menos 1 funcionário"); return; }
 
-    createMut.mutate({ companyId, companyIds, obraId: formData.obraId ? parseInt(formData.obraId) : undefined,
-      planejamentoAtividadeIds: formData.planejamentoAtividadeIds.length > 0 ? formData.planejamentoAtividadeIds.map(Number) : undefined,
-      dataSolicitacao: formData.dataSolicitacao,
-      horaInicio: formData.horaInicio || undefined,
-      horaFim: formData.horaFim || undefined,
-      motivo: formData.motivo,
-      observacoes: formData.observacoes || undefined,
-      funcionarioIds: formData.funcionarioIds,
-    });
+    if (editingId) {
+      const sendAtividades = editingHadAtividades && formData.planejamentoAtividadeIds.length === 0
+        ? undefined
+        : (formData.planejamentoAtividadeIds.length > 0 ? formData.planejamentoAtividadeIds.map(Number) : undefined);
+      updateMut.mutate({
+        id: editingId,
+        companyId, companyIds,
+        obraId: formData.obraId ? parseInt(formData.obraId) : undefined,
+        planejamentoAtividadeIds: sendAtividades,
+        dataSolicitacao: formData.dataSolicitacao,
+        horaInicio: formData.horaInicio || undefined,
+        horaFim: formData.horaFim || undefined,
+        motivo: formData.motivo,
+        observacoes: formData.observacoes || undefined,
+        funcionarioIds: formData.funcionarioIds,
+      });
+    } else {
+      createMut.mutate({ companyId, companyIds, obraId: formData.obraId ? parseInt(formData.obraId) : undefined,
+        planejamentoAtividadeIds: formData.planejamentoAtividadeIds.length > 0 ? formData.planejamentoAtividadeIds.map(Number) : undefined,
+        dataSolicitacao: formData.dataSolicitacao,
+        horaInicio: formData.horaInicio || undefined,
+        horaFim: formData.horaFim || undefined,
+        motivo: formData.motivo,
+        observacoes: formData.observacoes || undefined,
+        funcionarioIds: formData.funcionarioIds,
+      });
+    }
   }
 
   function handleApproveFromDialog() {
@@ -621,13 +678,20 @@ export default function SolicitacaoHE() {
 
         {/* Tab Content */}
         <div className="bg-white rounded-lg border p-3 md:p-6">
-          {/* ========== TAB: NOVA SOLICITAÇÃO ========== */}
+          {/* ========== TAB: NOVA SOLICITAÇÃO / EDITAR ========== */}
           {activeTab === "solicitar" && (
             <div className="space-y-6">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Send className="h-5 w-5 text-blue-600" />
-                Nova Solicitação de Horas Extras
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  {editingId ? <SquarePen className="h-5 w-5 text-amber-600" /> : <Send className="h-5 w-5 text-blue-600" />}
+                  {editingId ? `Editando HE-${String(editingId).padStart(5, '0')}` : "Nova Solicitação de Horas Extras"}
+                </h2>
+                {editingId && (
+                  <Button variant="outline" size="sm" className="text-xs" onClick={handleCancelEdit}>
+                    <X className="h-3.5 w-3.5 mr-1" /> Cancelar Edição
+                  </Button>
+                )}
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {/* Obra */}
@@ -965,14 +1029,19 @@ export default function SolicitacaoHE() {
                 </div>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                {editingId && (
+                  <Button variant="outline" onClick={handleCancelEdit}>
+                    Cancelar
+                  </Button>
+                )}
                 <Button
                   onClick={handleSubmit}
-                  disabled={createMut.isPending}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  disabled={createMut.isPending || updateMut.isPending}
+                  className={editingId ? "bg-amber-600 hover:bg-amber-700" : "bg-blue-600 hover:bg-blue-700"}
                 >
-                  {createMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-                  Enviar Solicitação
+                  {(createMut.isPending || updateMut.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : editingId ? <SquarePen className="h-4 w-4 mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                  {editingId ? "Salvar Alterações" : "Enviar Solicitação"}
                 </Button>
               </div>
             </div>
@@ -1084,9 +1153,16 @@ export default function SolicitacaoHE() {
                               )}
                             </div>
                           </div>
-                          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-xs md:text-sm shrink-0" onClick={() => openDetail(sol.id)}>
-                            <Eye className="h-3.5 w-3.5 mr-1" /> Analisar
-                          </Button>
+                          <div className="flex flex-wrap gap-2 shrink-0">
+                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-xs md:text-sm" onClick={() => openDetail(sol.id)}>
+                              <Eye className="h-3.5 w-3.5 mr-1" /> Analisar
+                            </Button>
+                            {sol.canEdit && (
+                              <Button size="sm" variant="outline" className="text-xs md:text-sm text-amber-600 border-amber-300" onClick={() => handleStartEdit(sol)}>
+                                <SquarePen className="h-3.5 w-3.5 mr-1" /> Editar
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -1159,7 +1235,12 @@ export default function SolicitacaoHE() {
                               <Button size="sm" variant="outline" className="text-xs md:text-sm" onClick={() => openDetail(sol.id)}>
                                 <Eye className="h-3.5 w-3.5 mr-1" /> Detalhes
                               </Button>
-                              {isAdminMaster && (
+                              {sol.canEdit && sol.status === "pendente" && (
+                                <Button size="sm" variant="outline" className="text-xs md:text-sm text-amber-600 border-amber-300" onClick={() => handleStartEdit(sol)}>
+                                  <SquarePen className="h-3.5 w-3.5 mr-1" /> Editar
+                                </Button>
+                              )}
+                              {(isAdminMaster || (sol.canEdit && sol.status === "pendente")) && (
                                 confirmDeleteId === sol.id ? (
                                   <div className="flex items-center gap-1">
                                     <Button size="sm" variant="destructive" className="text-xs" onClick={() => { deleteMut.mutate({ id: sol.id }); setConfirmDeleteId(null); }} disabled={deleteMut.isPending}>
@@ -1293,12 +1374,17 @@ export default function SolicitacaoHE() {
                             >
                               <Eye className="h-3.5 w-3.5 mr-1" /> Detalhes
                             </Button>
+                            {sol.canEdit && sol.status === "pendente" && (
+                              <Button size="sm" variant="outline" className="text-xs md:text-sm text-amber-600 border-amber-300" onClick={() => handleStartEdit(sol)}>
+                                <SquarePen className="h-3.5 w-3.5 mr-1" /> Editar
+                              </Button>
+                            )}
                             {sol.status === "pendente" && (
                               <Button size="sm" variant="outline" className="text-xs md:text-sm text-red-600" onClick={() => handleCancel(sol.id)}>
                                 Cancelar
                               </Button>
                             )}
-                            {isAdminMaster && (
+                            {(isAdminMaster || (sol.canEdit && sol.status === "pendente")) && (
                               confirmDeleteId === sol.id ? (
                                 <div className="flex items-center gap-1">
                                   <Button size="sm" variant="destructive" className="text-xs" onClick={() => { deleteMut.mutate({ id: sol.id }); setConfirmDeleteId(null); }} disabled={deleteMut.isPending}>
@@ -1347,11 +1433,18 @@ export default function SolicitacaoHE() {
                   </Badge>
                   <span className="text-lg font-semibold">HE-{String(sol.id).padStart(5, '0')}</span>
                 </div>
-                {sol.status !== "pendente" && sol.status !== "cancelada" && isAdminMaster && (
-                  <Badge variant="outline" className="text-xs flex items-center gap-1">
-                    <RotateCcw className="h-3 w-3" /> Reversível
-                  </Badge>
-                )}
+                <div className="flex items-center gap-2">
+                  {sol.status === "pendente" && (sol.solicitadoPorId === user?.id || isAdminMaster || user?.role === "admin") && (
+                    <Button size="sm" variant="outline" className="text-xs text-amber-600 border-amber-300" onClick={() => handleStartEdit(sol)}>
+                      <SquarePen className="h-3.5 w-3.5 mr-1" /> Editar
+                    </Button>
+                  )}
+                  {sol.status !== "pendente" && sol.status !== "cancelada" && isAdminMaster && (
+                    <Badge variant="outline" className="text-xs flex items-center gap-1">
+                      <RotateCcw className="h-3 w-3" /> Reversível
+                    </Badge>
+                  )}
+                </div>
               </div>
 
               {/* Info Grid */}

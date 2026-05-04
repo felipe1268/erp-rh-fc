@@ -299,7 +299,7 @@ export const smoRouter = router({
 
   getById: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number(), companyIds: z.array(z.number()).optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
       await assertOwnership(db, input.id, input);
       const [row] = await db.select({
@@ -312,7 +312,20 @@ export const smoRouter = router({
       if (!row) return null;
       const atividades = await db.select().from(smoAtividadesEap).where(eq(smoAtividadesEap.solicitacaoId, input.id));
       const checklist = await db.select().from(smoOnboardingChecklist).where(eq(smoOnboardingChecklist.solicitacaoId, input.id));
-      return { ...row.solicitacao, obraNome: row.obraNome, atividades, checklist };
+
+      const s = row.solicitacao;
+      const isMasterOrAdmin = ctx.user.role === "admin_master" || ctx.user.role === "admin";
+      let canEdit = false;
+      if (isMasterOrAdmin) {
+        canEdit = true;
+      } else {
+        const myEmployeeId = await getCurrentUserEmployeeId(ctx.user.id);
+        if (myEmployeeId != null && myEmployeeId === s.solicitanteId) {
+          canEdit = !s.aprovadoPorCoord && !s.aprovadoPorRh && !s.aprovadoPorDiretoria;
+        }
+      }
+
+      return { ...s, obraNome: row.obraNome, atividades, checklist, canEdit };
     }),
 
   obrasAtivas: protectedProcedure

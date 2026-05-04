@@ -10,7 +10,7 @@ import {
   Clock, AlertTriangle, CheckCircle, XCircle, Send, Eye,
   HardHat, Building2, Calendar, TrendingUp, DollarSign,
   ArrowRight, RefreshCw, ClipboardList, Award, Briefcase,
-  Shield, Package, UserCheck, Trash2, X, Upload, FileText, Phone, User, Pencil, MoreVertical,
+  Shield, Package, UserCheck, Trash2, X, Upload, FileText, Phone, User, Pencil, MoreVertical, SquarePen,
   Scale, ThumbsUp, ThumbsDown, BarChart3, Wallet, Printer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -393,7 +393,7 @@ export default function SolicitacaoMDO() {
     onSuccess: () => { toast.success("Solicitação concluída!"); selectedDetail.refetch(); list.refetch(); dashQ.refetch(); },
   });
   const updateMut = trpc.smo.update.useMutation({
-    onSuccess: () => { toast.success("Atualizado!"); selectedDetail.refetch(); list.refetch(); dashQ.refetch(); },
+    onSuccess: () => { toast.success("Atualizado!"); selectedDetail.refetch(); list.refetch(); dashQ.refetch(); if (viewMode === "form") { setSelectedId(null); setViewMode("list"); } },
     onError: (e: any) => toast.error(e.message),
   });
   const deleteMut = trpc.smo.delete.useMutation({
@@ -442,18 +442,35 @@ export default function SolicitacaoMDO() {
       toast.error("Preencha a obra, pelo menos uma função e a data de início.");
       return;
     }
-    createMut.mutate({
-      companyId,
-      obraId: formObraId,
-      solicitanteId: user?.id || 0,
-      solicitanteNome: user?.name || "Usuário",
-      itens: validItens.map(i => ({ funcao: i.funcao, quantidade: i.quantidade, duracaoMeses: i.duracaoMeses })),
-      dataInicioNecessidade: formDataInicio,
-      prioridade: formPrioridade as any,
-      observacao: formMotivo || undefined,
-      atividadesDescricao: formAtividades || undefined,
-      status,
-    });
+    if (selectedId && viewMode === "form") {
+      const item = validItens[0];
+      updateMut.mutate({
+        id: selectedId,
+        companyId,
+        companyIds,
+        funcaoSolicitada: item.funcao,
+        quantidade: item.quantidade,
+        duracaoMeses: item.duracaoMeses,
+        dataInicioNecessidade: formDataInicio,
+        prioridade: formPrioridade as any,
+        observacao: formMotivo || undefined,
+        qualificacoes: formAtividades || undefined,
+        status,
+      });
+    } else {
+      createMut.mutate({
+        companyId,
+        obraId: formObraId,
+        solicitanteId: user?.id || 0,
+        solicitanteNome: user?.name || "Usuário",
+        itens: validItens.map(i => ({ funcao: i.funcao, quantidade: i.quantidade, duracaoMeses: i.duracaoMeses })),
+        dataInicioNecessidade: formDataInicio,
+        prioridade: formPrioridade as any,
+        observacao: formMotivo || undefined,
+        atividadesDescricao: formAtividades || undefined,
+        status,
+      });
+    }
   }
 
   const filtered = useMemo(() => {
@@ -509,13 +526,13 @@ export default function SolicitacaoMDO() {
               <h1 className="text-lg font-bold">Solicitação de Mão de Obra</h1>
               <p className="text-white/60 text-xs">
                 {viewMode === "list" && "Gestão de contratações e realocações"}
-                {viewMode === "form" && "Nova solicitação"}
+                {viewMode === "form" && (selectedId ? `Editando SMO-${String(selectedId).padStart(4, "0")}` : "Nova solicitação")}
                 {viewMode === "detail" && d && `SMO-${String(d.id).padStart(4, "0")} — ${d.funcaoSolicitada}`}
               </p>
             </div>
           </div>
           {viewMode === "list" && (
-            <Button onClick={() => { resetForm(); setViewMode("form"); }} className="bg-[#D4A843] hover:bg-[#c49935] text-[#1B2A4A] font-semibold gap-2">
+            <Button onClick={() => { resetForm(); setSelectedId(null); setViewMode("form"); }} className="bg-[#D4A843] hover:bg-[#c49935] text-[#1B2A4A] font-semibold gap-2">
               <Plus className="h-4 w-4" /> Nova Solicitação
             </Button>
           )}
@@ -1162,15 +1179,18 @@ export default function SolicitacaoMDO() {
 
             {/* Botões */}
             <div className="flex items-center justify-between">
-              <Button variant="ghost" onClick={() => setViewMode("list")} className="text-muted-foreground">
+              <Button variant="ghost" onClick={() => { setSelectedId(null); setViewMode("list"); }} className="text-muted-foreground">
                 Cancelar
               </Button>
               <div className="flex gap-3">
-                <Button variant="outline" onClick={() => handleSubmit("rascunho")} disabled={createMut.isPending}>
-                  Salvar Rascunho
-                </Button>
-                <Button onClick={() => handleSubmit("enviada")} disabled={createMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660] gap-2 px-6">
-                  <Send className="h-4 w-4" /> Enviar para Aprovação
+                {!selectedId && (
+                  <Button variant="outline" onClick={() => handleSubmit("rascunho")} disabled={createMut.isPending || updateMut.isPending}>
+                    Salvar Rascunho
+                  </Button>
+                )}
+                <Button onClick={() => handleSubmit("enviada")} disabled={createMut.isPending || updateMut.isPending} className={selectedId ? "bg-amber-600 hover:bg-amber-700 gap-2 px-6" : "bg-[#1B2A4A] hover:bg-[#243660] gap-2 px-6"}>
+                  {selectedId ? <SquarePen className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                  {selectedId ? "Salvar Alterações" : "Enviar para Aprovação"}
                 </Button>
               </div>
             </div>
@@ -1317,6 +1337,24 @@ export default function SolicitacaoMDO() {
                       updateMut.mutate({ id: d.id, companyId, companyIds, status: "enviada" });
                     }} disabled={updateMut.isPending} className="gap-2">
                       <Send className="h-4 w-4" /> Enviar para Aprovação
+                    </Button>
+                  )}
+                  {(d as any).canEdit && (
+                    <Button variant="outline" className="text-amber-600 border-amber-300 gap-2" onClick={() => {
+                      setFormObraId(d.obraId);
+                      setFormItens(
+                        d.funcaoSolicitada
+                          ? [{ id: "1", funcao: d.funcaoSolicitada, quantidade: d.quantidade || 1, duracaoMeses: d.duracaoMeses || 1 }]
+                          : [{ id: "1", funcao: "", quantidade: 1, duracaoMeses: 1 }]
+                      );
+                      setFormDataInicio(d.dataInicioNecessidade ? d.dataInicioNecessidade.split("T")[0] : "");
+                      setFormPrioridade(d.prioridade || "normal");
+                      setFormMotivo(d.observacao || "");
+                      setFormAtividades(d.qualificacoes || "");
+                      setSelectedId(d.id);
+                      setViewMode("form");
+                    }}>
+                      <SquarePen className="h-4 w-4" /> Editar
                     </Button>
                   )}
                   {(d as any).canEdit && (
