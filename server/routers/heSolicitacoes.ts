@@ -161,7 +161,9 @@ export const heSolicitacoesRouter = router({
         obraNome = obra?.nome || null;
       }
 
-      result.push({ ...sol, obraNome, funcionarios: funcs });
+      const isAdmin = ctx.user.role === "admin_master" || ctx.user.role === "admin";
+      const canEdit = isAdmin || (sol.solicitadoPorId === ctx.user.id && sol.status === "pendente");
+      result.push({ ...sol, obraNome, funcionarios: funcs, canEdit });
     }
 
     return result;
@@ -423,6 +425,80 @@ export const heSolicitacoesRouter = router({
     return { success: true, reversao: isReversao };
   }),
 
+  // ===================== EDITAR SOLICITAÇÃO (pelo solicitante, enquanto pendente) =====================
+  update: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    obraId: z.number().optional(),
+    planejamentoAtividadeIds: z.array(z.number()).optional(),
+    dataSolicitacao: z.string().optional(),
+    horaInicio: z.string().optional(),
+    horaFim: z.string().optional(),
+    motivo: z.string().optional(),
+    observacoes: z.string().optional(),
+    funcionarioIds: z.array(z.number()).optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+    const [sol] = await db.select().from(heSolicitacoes).where(eq(heSolicitacoes.id, input.id));
+    if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+
+    if (sol.status !== "pendente") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Só é possível editar solicitações pendentes." });
+    }
+
+    if (sol.solicitadoPorId !== ctx.user.id && ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o solicitante ou Admin pode editar." });
+    }
+
+    const updateData: any = { updatedAt: new Date().toISOString() };
+    if (input.obraId !== undefined) updateData.obraId = input.obraId || null;
+    if (input.dataSolicitacao) updateData.dataSolicitacao = input.dataSolicitacao;
+    if (input.horaInicio !== undefined) updateData.horaInicio = input.horaInicio || null;
+    if (input.horaFim !== undefined) updateData.horaFim = input.horaFim || null;
+    if (input.motivo) updateData.motivo = input.motivo;
+    if (input.observacoes !== undefined) updateData.observacoes = input.observacoes || null;
+
+    await db.update(heSolicitacoes).set(updateData).where(eq(heSolicitacoes.id, input.id));
+
+    if (input.funcionarioIds && input.funcionarioIds.length > 0) {
+      await db.delete(heSolicitacaoFuncionarios).where(eq(heSolicitacaoFuncionarios.solicitacaoId, input.id));
+      await db.insert(heSolicitacaoFuncionarios).values(
+        input.funcionarioIds.map(empId => ({
+          solicitacaoId: input.id,
+          employeeId: empId,
+          status: "pendente" as const,
+        }))
+      );
+    }
+
+    if (input.planejamentoAtividadeIds !== undefined) {
+      await db.execute(sql`DELETE FROM he_solicitacao_atividades WHERE solicitacao_id = ${input.id}`);
+      if (input.planejamentoAtividadeIds.length > 0) {
+        await db.execute(sql`
+          INSERT INTO he_solicitacao_atividades (solicitacao_id, atividade_id)
+          VALUES ${sql.join(input.planejamentoAtividadeIds.map(aid => sql`(${input.id}, ${aid})`), sql`, `)}
+          ON CONFLICT DO NOTHING
+        `);
+      }
+    }
+
+    await createAuditLog({
+      userId: ctx.user.id,
+      userName: ctx.user.name || "Sistema",
+      companyId: input.companyId,
+      action: "UPDATE",
+      module: "he_solicitacoes",
+      entityType: "he_solicitacao",
+      entityId: input.id,
+      details: `Solicitação de HE #${input.id} editada pelo solicitante`,
+    });
+
+    return { success: true };
+  }),
+
   // ===================== CANCELAR SOLICITAÇÃO (pelo solicitante) =====================
   cancel: protectedProcedure.input(z.object({
     id: z.number(),
@@ -501,21 +577,25 @@ export const heSolicitacoesRouter = router({
     return { authorized: false, solicitacao: null };
   }),
 
-  // ===================== EXCLUIR SOLICITAÇÃO (Admin Master) =====================
+  // ===================== EXCLUIR SOLICITAÇÃO =====================
   delete: protectedProcedure.input(z.object({
     id: z.number(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-    // Verificar se é Admin Master
-    if (ctx.user.role !== "admin_master") {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode excluir solicitações" });
-    }
-
-    // Buscar a solicitação
     const [sol] = await db.select().from(heSolicitacoes).where(eq(heSolicitacoes.id, input.id));
     if (!sol) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitação não encontrada" });
+
+    const isCreator = sol.solicitadoPorId === ctx.user.id;
+    const isAdmin = ctx.user.role === "admin_master" || ctx.user.role === "admin";
+
+    if (!isAdmin && !isCreator) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para excluir esta solicitação." });
+    }
+    if (isCreator && !isAdmin && sol.status !== "pendente") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Só é possível excluir solicitações pendentes." });
+    }
 
     // Capturar snapshot completo (pai + filhos) antes do delete
     const funcsRows = await db.select().from(heSolicitacaoFuncionarios).where(eq(heSolicitacaoFuncionarios.solicitacaoId, input.id));
