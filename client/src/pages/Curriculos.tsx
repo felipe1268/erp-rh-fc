@@ -55,15 +55,6 @@ export default function Curriculos() {
 
   const [fichaAberta, setFichaAberta] = useState<any | null>(null);
 
-  useEffect(() => {
-    if (fichaAberta && curriculosList.length > 0) {
-      const updated = curriculosList.find((c: any) => c.id === fichaAberta.id);
-      if (updated && (updated.documentoUrl !== fichaAberta.documentoUrl || updated.fileName !== fichaAberta.fileName)) {
-        setFichaAberta({ ...updated });
-      }
-    }
-  }, [curriculosList, fichaAberta]);
-
   const [showIADialog, setShowIADialog] = useState(false);
   const [iaFiles, setIAFiles] = useState<File[]>([]);
   const [iaProcessing, setIAProcessing] = useState(false);
@@ -78,6 +69,15 @@ export default function Curriculos() {
     { companyId, funcaoIds: funcoesSelecionadas.length > 0 ? funcoesSelecionadas : undefined, statusCandidato: statusTab },
     { enabled: companyId > 0 }
   );
+
+  useEffect(() => {
+    if (fichaAberta && curriculosList.length > 0) {
+      const updated = curriculosList.find((c: any) => c.id === fichaAberta.id);
+      if (updated && (updated.documentoUrl !== fichaAberta.documentoUrl || updated.fileName !== fichaAberta.fileName)) {
+        setFichaAberta({ ...updated });
+      }
+    }
+  }, [curriculosList, fichaAberta]);
 
   const criarFuncaoMut = trpc.curriculos.criarFuncao.useMutation({
     onSuccess: () => { utils.curriculos.listarFuncoes.invalidate(); toast.success("Função criada"); setShowFuncDialog(false); setNovaFuncao(""); },
