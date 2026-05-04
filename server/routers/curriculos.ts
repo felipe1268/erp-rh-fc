@@ -142,6 +142,10 @@ export const curriculosRouter = router({
       cidade: z.string().max(150).optional(),
       estado: z.string().max(2).optional(),
       dataNascimento: z.string().optional(),
+      habilidades: z.string().optional(),
+      escolaridade: z.string().max(255).optional(),
+      cursoFormacao: z.string().optional(),
+      experienciasJson: z.string().optional(),
       observacoes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -163,6 +167,10 @@ export const curriculosRouter = router({
         cidade: input.cidade?.trim() || null,
         estado: input.estado?.trim().toUpperCase().substring(0, 2) || null,
         dataNascimento: input.dataNascimento || null,
+        habilidades: input.habilidades || null,
+        escolaridade: input.escolaridade || null,
+        cursoFormacao: input.cursoFormacao || null,
+        experienciasJson: input.experienciasJson || null,
         observacoes: input.observacoes || null,
         criadoPor: ctx.user.name ?? "Sistema",
         criadoPorUserId: ctx.user.id,
@@ -204,6 +212,10 @@ export const curriculosRouter = router({
       cidade: z.string().max(150).optional(),
       estado: z.string().max(2).optional(),
       dataNascimento: z.string().nullable().optional(),
+      habilidades: z.string().nullable().optional(),
+      escolaridade: z.string().max(255).nullable().optional(),
+      cursoFormacao: z.string().nullable().optional(),
+      experienciasJson: z.string().nullable().optional(),
       observacoes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -219,6 +231,10 @@ export const curriculosRouter = router({
       if (input.cidade !== undefined) updates.cidade = input.cidade.trim() || null;
       if (input.estado !== undefined) updates.estado = input.estado.trim().toUpperCase().substring(0, 2) || null;
       if (input.dataNascimento !== undefined) updates.dataNascimento = input.dataNascimento || null;
+      if (input.habilidades !== undefined) updates.habilidades = input.habilidades || null;
+      if (input.escolaridade !== undefined) updates.escolaridade = input.escolaridade || null;
+      if (input.cursoFormacao !== undefined) updates.cursoFormacao = input.cursoFormacao || null;
+      if (input.experienciasJson !== undefined) updates.experienciasJson = input.experienciasJson || null;
       if (input.observacoes !== undefined) updates.observacoes = input.observacoes || null;
 
       if (input.funcaoId) {
@@ -360,9 +376,21 @@ export const curriculosRouter = router({
   "cidade": "cidade onde mora",
   "estado": "sigla do estado com 2 letras (ex: SP, RJ, MG)",
   "funcao": "função/cargo pretendido ou área de atuação principal (ex: PEDREIRO, SERVENTE, ENGENHEIRO, CARPINTEIRO, ARMADOR, PINTOR, AUXILIAR ADMINISTRATIVO, SOLDADOR, ELETRICISTA, ENCANADOR, MOTORISTA, OPERADOR, etc)",
-  "experiencia": "resumo breve das experiências (máx 200 caracteres)"
+  "experiencia": "resumo breve das experiências (máx 200 caracteres)",
+  "escolaridade": "nível de escolaridade (ex: Ensino Fundamental, Ensino Médio, Técnico, Superior Completo, Superior Incompleto, Pós-Graduação)",
+  "cursoFormacao": "cursos, formações técnicas, certificações e treinamentos relevantes separados por ponto-e-vírgula",
+  "habilidades": "habilidades e competências técnicas e comportamentais separadas por ponto-e-vírgula (ex: Leitura de projetos; Operação de betoneira; NR-35; Trabalho em equipe)",
+  "experiencias": [
+    {
+      "empresa": "nome da empresa",
+      "cargo": "cargo exercido",
+      "periodo": "período (ex: 01/2020 - 12/2022 ou 2020 - 2022)",
+      "duracao": "tempo aproximado (ex: 2 anos, 6 meses)",
+      "descricao": "breve descrição das atividades (máx 150 caracteres)"
+    }
+  ]
 }
-Se não conseguir identificar algum campo, use string vazia "".
+Se não conseguir identificar algum campo, use string vazia "" (para experiencias, use array vazio []).
 Para o campo "funcao", analise a experiência profissional e o objetivo do candidato para inferir a função mais adequada na construção civil ou área administrativa.
 IMPORTANTE: Retorne APENAS o JSON, sem nenhum texto adicional.`;
 
@@ -370,8 +398,8 @@ IMPORTANTE: Retorne APENAS o JSON, sem nenhum texto adicional.`;
             prompt,
             base64: arq.fileBase64,
             mimeType,
-            systemPrompt: "Você é um especialista em RH que analisa currículos para a construção civil. Extraia dados de forma precisa e objetiva. Retorne apenas JSON válido.",
-            maxTokens: 1024,
+            systemPrompt: "Você é um especialista em RH que analisa currículos para a construção civil. Extraia dados de forma precisa, detalhada e objetiva. Liste TODAS as experiências profissionais encontradas. Retorne apenas JSON válido.",
+            maxTokens: 2048,
           });
 
           let dados: any;
@@ -397,6 +425,15 @@ IMPORTANTE: Retorne APENAS o JSON, sem nenhum texto adicional.`;
           const estado = (dados.estado || "").trim().toUpperCase().substring(0, 2);
           const funcaoDetectada = (dados.funcao || "").trim().toUpperCase();
           const experiencia = (dados.experiencia || "").trim().substring(0, 300);
+          const habilidades = (dados.habilidades || "").trim();
+          const escolaridade = (dados.escolaridade || "").trim();
+          const cursoFormacao = (dados.cursoFormacao || "").trim();
+          let experienciasJson: string | null = null;
+          try {
+            if (Array.isArray(dados.experiencias) && dados.experiencias.length > 0) {
+              experienciasJson = JSON.stringify(dados.experiencias);
+            }
+          } catch { /* ignore */ }
 
           const alertas: ResultItem["alertas"] = [];
 
@@ -556,6 +593,10 @@ IMPORTANTE: Retorne APENAS o JSON, sem nenhum texto adicional.`;
                 cidade: cidade || null,
                 estado: estado || null,
                 dataNascimento: dataNascimento || null,
+                habilidades: habilidades || null,
+                escolaridade: escolaridade || null,
+                cursoFormacao: cursoFormacao || null,
+                experienciasJson: experienciasJson,
                 observacoes: experiencia || null,
                 criadoPor: ctx.user.name ?? "IA",
                 criadoPorUserId: ctx.user.id,

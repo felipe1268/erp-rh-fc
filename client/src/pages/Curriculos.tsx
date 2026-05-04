@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Briefcase, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, UserPlus, FolderPlus, Sparkles, AlertTriangle, ShieldAlert, Ban, CheckCircle, XCircle, Info, Pencil, Save, ThumbsDown, ThumbsUp, RotateCcw } from "lucide-react";
+import { Briefcase, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, UserPlus, FolderPlus, Sparkles, AlertTriangle, ShieldAlert, Ban, CheckCircle, XCircle, Info, Pencil, Save, ThumbsDown, RotateCcw, X, Phone, Mail, MapPin, GraduationCap, Wrench, Calendar, Clock, Building2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -19,6 +19,14 @@ type IAResultado = {
   funcaoId: number | null;
   funcaoNome: string | null;
   erro: string | null;
+};
+
+type Experiencia = {
+  empresa: string;
+  cargo: string;
+  periodo: string;
+  duracao: string;
+  descricao: string;
 };
 
 type StatusTab = "ativo" | "reprovado" | "todos";
@@ -35,7 +43,7 @@ export default function Curriculos() {
   const [showCurDialog, setShowCurDialog] = useState(false);
   const [showFuncDialog, setShowFuncDialog] = useState(false);
   const [novaFuncao, setNovaFuncao] = useState("");
-  const [form, setForm] = useState({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", dataNascimento: "", observacoes: "" });
+  const [form, setForm] = useState({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", dataNascimento: "", habilidades: "", escolaridade: "", cursoFormacao: "", observacoes: "" });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [dialogFuncaoId, setDialogFuncaoId] = useState<number | null>(null);
   const [uploadingId, setUploadingId] = useState<number | null>(null);
@@ -44,6 +52,17 @@ export default function Curriculos() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [showReprovDialog, setShowReprovDialog] = useState(false);
   const [motivoReprovacao, setMotivoReprovacao] = useState("");
+
+  const [fichaAberta, setFichaAberta] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (fichaAberta && curriculosList.length > 0) {
+      const updated = curriculosList.find((c: any) => c.id === fichaAberta.id);
+      if (updated && (updated.documentoUrl !== fichaAberta.documentoUrl || updated.fileName !== fichaAberta.fileName)) {
+        setFichaAberta({ ...updated });
+      }
+    }
+  }, [curriculosList, fichaAberta]);
 
   const [showIADialog, setShowIADialog] = useState(false);
   const [iaFiles, setIAFiles] = useState<File[]>([]);
@@ -87,7 +106,7 @@ export default function Curriculos() {
     setShowCurDialog(false);
     setEditingId(null);
     setDialogFuncaoId(null);
-    setForm({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", dataNascimento: "", observacoes: "" });
+    setForm({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", dataNascimento: "", habilidades: "", escolaridade: "", cursoFormacao: "", observacoes: "" });
     setPendingFile(null);
   }
 
@@ -137,6 +156,21 @@ export default function Curriculos() {
     return idade >= 0 ? idade : null;
   }
 
+  function formatDate(d: string | null | undefined): string {
+    if (!d) return "-";
+    const parts = d.split("-");
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return d;
+  }
+
+  function parseExperiencias(json: string | null | undefined): Experiencia[] {
+    if (!json) return [];
+    try {
+      const arr = JSON.parse(json);
+      return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+  }
+
   function openEditDialog(c: any) {
     setEditingId(c.id);
     setDialogFuncaoId(c.funcaoId);
@@ -148,9 +182,13 @@ export default function Curriculos() {
       cidade: c.cidade || "",
       estado: c.estado || "",
       dataNascimento: c.dataNascimento || "",
+      habilidades: c.habilidades || "",
+      escolaridade: c.escolaridade || "",
+      cursoFormacao: c.cursoFormacao || "",
       observacoes: c.observacoes || "",
     });
     setPendingFile(null);
+    setFichaAberta(null);
     setShowCurDialog(true);
   }
 
@@ -209,27 +247,20 @@ export default function Curriculos() {
   function toggleSelect(id: number) {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
-
   function toggleSelectAll() {
-    if (selectedIds.length === filtrados.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(filtrados.map((c: any) => c.id));
-    }
+    if (selectedIds.length === filtrados.length) setSelectedIds([]);
+    else setSelectedIds(filtrados.map((c: any) => c.id));
   }
-
   function handleBulkDelete() {
     if (selectedIds.length === 0) return;
     if (!confirm(`Excluir ${selectedIds.length} currículo(s) selecionado(s)?`)) return;
     excluirVariosMut.mutate({ ids: selectedIds, companyId });
   }
-
   function handleBulkReprovar() {
     if (selectedIds.length === 0) return;
     setMotivoReprovacao("");
     setShowReprovDialog(true);
   }
-
   function handleBulkReativar() {
     if (selectedIds.length === 0) return;
     atualizarStatusMut.mutate({ ids: selectedIds, companyId, statusCandidato: "ativo" });
@@ -244,7 +275,8 @@ export default function Curriculos() {
       (c.telefone || "").toLowerCase().includes(q) ||
       (c.cidade || "").toLowerCase().includes(q) ||
       (c.endereco || "").toLowerCase().includes(q) ||
-      (c.estado || "").toLowerCase().includes(q)
+      (c.estado || "").toLowerCase().includes(q) ||
+      (c.habilidades || "").toLowerCase().includes(q)
     );
   }, [curriculosList, search]);
 
@@ -262,6 +294,208 @@ export default function Curriculos() {
       </span>
     );
   };
+
+  function isImageFile(url: string | null | undefined): boolean {
+    if (!url) return false;
+    const lower = url.toLowerCase();
+    return lower.includes(".jpg") || lower.includes(".jpeg") || lower.includes(".png") || lower.includes(".webp");
+  }
+
+  const fichaContent = fichaAberta && (
+    <Dialog open={!!fichaAberta} onOpenChange={(open) => { if (!open) setFichaAberta(null); }}>
+      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-0">
+        <div className="sticky top-0 z-10 bg-white border-b px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold text-lg">
+              {(fichaAberta.nomeCandidato || "?")[0]?.toUpperCase()}
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-800">{fichaAberta.nomeCandidato || "(sem nome)"}</h2>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-medium">{fichaAberta.funcaoNome}</span>
+                {statusBadge(fichaAberta.statusCandidato, fichaAberta.motivoReprovacao)}
+                {(() => { const idade = calcularIdade(fichaAberta.dataNascimento); return idade !== null ? <span className="text-xs text-slate-500">{idade} anos</span> : null; })()}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => { setFichaAberta(null); openEditDialog(fichaAberta); }}>
+              <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setFichaAberta(null)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {fichaAberta.statusCandidato === "reprovado" && fichaAberta.motivoReprovacao && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <ThumbsDown className="h-4 w-4 text-red-600" />
+                <span className="font-semibold text-red-800 text-sm">Candidato Reprovado</span>
+              </div>
+              <p className="text-sm text-red-700">{fichaAberta.motivoReprovacao}</p>
+              {fichaAberta.statusAtualizadoPor && (
+                <p className="text-xs text-red-500 mt-1">Por: {fichaAberta.statusAtualizadoPor}</p>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <h3 className="font-semibold text-slate-700 text-sm border-b pb-2 flex items-center gap-2">
+                <Phone className="h-4 w-4 text-amber-600" /> Dados Pessoais
+              </h3>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-slate-500">Nome Completo</p>
+                  <p className="font-medium text-slate-800">{fichaAberta.nomeCandidato || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Data de Nascimento</p>
+                  <p className="font-medium text-slate-800">
+                    {formatDate(fichaAberta.dataNascimento)}
+                    {(() => { const i = calcularIdade(fichaAberta.dataNascimento); return i !== null ? ` (${i} anos)` : ""; })()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Telefone</p>
+                  <p className="font-medium text-slate-800">{fichaAberta.telefone ? <a href={`tel:${fichaAberta.telefone}`} className="text-blue-600 hover:underline">{fichaAberta.telefone}</a> : "-"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">E-mail</p>
+                  <p className="font-medium text-slate-800">{fichaAberta.email ? <a href={`mailto:${fichaAberta.email}`} className="text-blue-600 hover:underline break-all">{fichaAberta.email}</a> : "-"}</p>
+                </div>
+              </div>
+              <div className="text-sm">
+                <p className="text-xs text-slate-500 flex items-center gap-1"><MapPin className="h-3 w-3" /> Endereço</p>
+                <p className="font-medium text-slate-800">
+                  {fichaAberta.endereco || "-"}
+                  {fichaAberta.cidade ? ` - ${fichaAberta.cidade}` : ""}
+                  {fichaAberta.estado ? `/${fichaAberta.estado}` : ""}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="font-semibold text-slate-700 text-sm border-b pb-2 flex items-center gap-2">
+                <GraduationCap className="h-4 w-4 text-amber-600" /> Formação e Qualificações
+              </h3>
+              <div className="text-sm space-y-3">
+                <div>
+                  <p className="text-xs text-slate-500">Escolaridade</p>
+                  <p className="font-medium text-slate-800">{fichaAberta.escolaridade || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Cursos / Formações / Certificações</p>
+                  <p className="font-medium text-slate-800">{fichaAberta.cursoFormacao || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 flex items-center gap-1"><Wrench className="h-3 w-3" /> Habilidades</p>
+                  {fichaAberta.habilidades ? (
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {fichaAberta.habilidades.split(";").map((h: string, i: number) => h.trim() && (
+                        <span key={i} className="inline-block px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs">{h.trim()}</span>
+                      ))}
+                    </div>
+                  ) : <p className="font-medium text-slate-800">-</p>}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {(() => {
+            const exps = parseExperiencias(fichaAberta.experienciasJson);
+            if (exps.length === 0 && !fichaAberta.observacoes) return null;
+            return (
+              <div className="space-y-3">
+                <h3 className="font-semibold text-slate-700 text-sm border-b pb-2 flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-amber-600" /> Experiência Profissional
+                </h3>
+                {exps.length > 0 ? (
+                  <div className="space-y-3">
+                    {exps.map((exp, i) => (
+                      <div key={i} className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-semibold text-slate-800 text-sm">{exp.cargo || "Cargo não informado"}</p>
+                            <p className="text-sm text-slate-600">{exp.empresa || "Empresa não informada"}</p>
+                          </div>
+                          <div className="text-right text-xs text-slate-500">
+                            {exp.periodo && <div className="flex items-center gap-1 justify-end"><Calendar className="h-3 w-3" /> {exp.periodo}</div>}
+                            {exp.duracao && <div className="flex items-center gap-1 justify-end mt-0.5"><Clock className="h-3 w-3" /> {exp.duracao}</div>}
+                          </div>
+                        </div>
+                        {exp.descricao && <p className="text-xs text-slate-600 mt-2">{exp.descricao}</p>}
+                      </div>
+                    ))}
+                  </div>
+                ) : fichaAberta.observacoes ? (
+                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                    <p className="text-sm text-slate-700">{fichaAberta.observacoes}</p>
+                  </div>
+                ) : null}
+                {exps.length > 0 && fichaAberta.observacoes && (
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Observações adicionais</p>
+                    <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 border">{fichaAberta.observacoes}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          <div className="space-y-3">
+            <h3 className="font-semibold text-slate-700 text-sm border-b pb-2 flex items-center gap-2">
+              <FileText className="h-4 w-4 text-amber-600" /> Currículo Anexado
+            </h3>
+            {fichaAberta.documentoUrl ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <a href={fichaAberta.documentoUrl} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 hover:bg-blue-100 transition text-sm font-medium">
+                    <Eye className="h-4 w-4" />
+                    {fichaAberta.fileName || "Abrir Currículo"}
+                  </a>
+                  <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-100 transition text-xs">
+                    <Upload className="h-3.5 w-3.5" /> Substituir arquivo
+                    <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(fichaAberta.id, f); }} />
+                  </label>
+                </div>
+                {isImageFile(fichaAberta.documentoUrl) && (
+                  <div className="border rounded-xl overflow-hidden bg-slate-100 max-h-[500px]">
+                    <img src={fichaAberta.documentoUrl} alt="Currículo" className="w-full h-auto object-contain max-h-[500px]" />
+                  </div>
+                )}
+                {fichaAberta.documentoUrl.toLowerCase().includes(".pdf") && (
+                  <div className="border rounded-xl overflow-hidden bg-slate-100" style={{ height: "600px" }}>
+                    <iframe src={fichaAberta.documentoUrl} className="w-full h-full" title="Currículo PDF" />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-8 text-center">
+                <FileText className="h-10 w-10 mx-auto text-slate-300 mb-2" />
+                <p className="text-sm text-slate-500 mb-3">Nenhum currículo anexado</p>
+                <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 hover:bg-amber-100 transition text-sm font-medium">
+                  <Upload className="h-4 w-4" /> Anexar Currículo
+                  <input type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(fichaAberta.id, f); }} />
+                </label>
+              </div>
+            )}
+          </div>
+
+          <div className="border-t pt-4 text-xs text-slate-400 flex items-center justify-between">
+            <span>Cadastrado por: {fichaAberta.criadoPor || "-"} em {fichaAberta.createdAt ? new Date(fichaAberta.createdAt).toLocaleDateString("pt-BR") : "-"}</span>
+            <span>ID: #{fichaAberta.id}</span>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-amber-50/30 p-6">
@@ -314,7 +548,6 @@ export default function Curriculos() {
                 )}
               </div>
             </div>
-
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 mt-4">
               <h3 className="font-semibold text-slate-700 text-sm mb-3">Status</h3>
               <div className="space-y-1">
@@ -338,14 +571,11 @@ export default function Curriculos() {
               <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input className="pl-9" placeholder="Buscar por nome, telefone, cidade ou região..." value={search} onChange={e => setSearch(e.target.value)} />
+                  <Input className="pl-9" placeholder="Buscar por nome, telefone, cidade, habilidade..." value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
                 <div className="flex gap-2">
                   <Button onClick={() => {
-                    setIAFiles([]);
-                    setIAResults(null);
-                    setIAProgress("");
-                    setShowIADialog(true);
+                    setIAFiles([]); setIAResults(null); setIAProgress(""); setShowIADialog(true);
                   }} variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50">
                     <Sparkles className="h-4 w-4 mr-1" /> Upload com IA
                   </Button>
@@ -353,7 +583,7 @@ export default function Curriculos() {
                     if (!funcoes.length) { toast.error("Crie uma função primeiro"); return; }
                     setEditingId(null);
                     setDialogFuncaoId(funcoesSelecionadas.length === 1 ? funcoesSelecionadas[0] : null);
-                    setForm({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", dataNascimento: "", observacoes: "" });
+                    setForm({ nomeCandidato: "", telefone: "", email: "", endereco: "", cidade: "", estado: "", dataNascimento: "", habilidades: "", escolaridade: "", cursoFormacao: "", observacoes: "" });
                     setPendingFile(null);
                     setShowCurDialog(true);
                   }} className="bg-amber-600 hover:bg-amber-700"><UserPlus className="h-4 w-4 mr-1" /> Novo Currículo</Button>
@@ -363,47 +593,26 @@ export default function Curriculos() {
 
             {selectedIds.length > 0 && (
               <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 mb-4 flex flex-wrap items-center gap-3">
-                <span className="text-sm font-medium text-blue-800">
-                  {selectedIds.length} selecionado(s)
-                </span>
+                <span className="text-sm font-medium text-blue-800">{selectedIds.length} selecionado(s)</span>
                 <div className="flex gap-2 ml-auto">
-                  {statusTab !== "reprovado" && (
-                    <Button size="sm" variant="outline" onClick={handleBulkReprovar}
-                      disabled={atualizarStatusMut.isPending}
+                  {(statusTab === "ativo" || statusTab === "todos") && (
+                    <Button size="sm" variant="outline" onClick={handleBulkReprovar} disabled={atualizarStatusMut.isPending}
                       className="border-red-300 text-red-700 hover:bg-red-50 h-8 text-xs">
                       <ThumbsDown className="h-3.5 w-3.5 mr-1" /> Reprovar
                     </Button>
                   )}
-                  {statusTab === "reprovado" && (
-                    <Button size="sm" variant="outline" onClick={handleBulkReativar}
-                      disabled={atualizarStatusMut.isPending}
+                  {(statusTab === "reprovado" || statusTab === "todos") && (
+                    <Button size="sm" variant="outline" onClick={handleBulkReativar} disabled={atualizarStatusMut.isPending}
                       className="border-green-300 text-green-700 hover:bg-green-50 h-8 text-xs">
                       <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reativar
                     </Button>
                   )}
-                  {statusTab === "todos" && (
-                    <>
-                      <Button size="sm" variant="outline" onClick={handleBulkReprovar}
-                        disabled={atualizarStatusMut.isPending}
-                        className="border-red-300 text-red-700 hover:bg-red-50 h-8 text-xs">
-                        <ThumbsDown className="h-3.5 w-3.5 mr-1" /> Reprovar
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={handleBulkReativar}
-                        disabled={atualizarStatusMut.isPending}
-                        className="border-green-300 text-green-700 hover:bg-green-50 h-8 text-xs">
-                        <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reativar
-                      </Button>
-                    </>
-                  )}
-                  <Button size="sm" variant="outline" onClick={handleBulkDelete}
-                    disabled={excluirVariosMut.isPending}
+                  <Button size="sm" variant="outline" onClick={handleBulkDelete} disabled={excluirVariosMut.isPending}
                     className="border-red-400 text-red-700 hover:bg-red-100 h-8 text-xs">
                     {excluirVariosMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Trash2 className="h-3.5 w-3.5 mr-1" />}
                     Excluir
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setSelectedIds([])} className="h-8 text-xs text-slate-500">
-                    Limpar
-                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setSelectedIds([])} className="h-8 text-xs text-slate-500">Limpar</Button>
                 </div>
               </div>
             )}
@@ -432,7 +641,7 @@ export default function Curriculos() {
                       <th className="text-left px-4 py-3 font-semibold text-slate-600">Função</th>
                       <th className="text-left px-4 py-3 font-semibold text-slate-600">Contato</th>
                       <th className="text-left px-4 py-3 font-semibold text-slate-600">Status</th>
-                      <th className="text-left px-4 py-3 font-semibold text-slate-600 w-36">Currículo</th>
+                      <th className="text-left px-4 py-3 font-semibold text-slate-600 w-28">Currículo</th>
                       <th className="text-right px-4 py-3 font-semibold text-slate-600 w-20">Ações</th>
                     </tr>
                   </thead>
@@ -445,10 +654,12 @@ export default function Curriculos() {
                             onChange={() => toggleSelect(c.id)} />
                         </td>
                         <td className="px-4 py-3">
-                          <div className="font-medium text-slate-800">
-                            {c.nomeCandidato || "(sem nome)"}
-                            {(() => { const idade = calcularIdade(c.dataNascimento); return idade !== null ? <span className="ml-2 text-xs font-normal text-slate-500">{idade} anos</span> : null; })()}
-                          </div>
+                          <button onClick={() => setFichaAberta(c)} className="text-left group">
+                            <div className="font-medium text-blue-700 group-hover:text-blue-900 group-hover:underline cursor-pointer">
+                              {c.nomeCandidato || "(sem nome)"}
+                              {(() => { const idade = calcularIdade(c.dataNascimento); return idade !== null ? <span className="ml-2 text-xs font-normal text-slate-500 no-underline">{idade} anos</span> : null; })()}
+                            </div>
+                          </button>
                           {c.observacoes && <div className="text-xs text-slate-500 line-clamp-1">{c.observacoes}</div>}
                         </td>
                         <td className="px-4 py-3">
@@ -460,9 +671,6 @@ export default function Curriculos() {
                         </td>
                         <td className="px-4 py-3">
                           {statusBadge(c.statusCandidato, c.motivoReprovacao)}
-                          {c.statusCandidato === "reprovado" && c.motivoReprovacao && (
-                            <div className="text-xs text-red-500 mt-1 line-clamp-2" title={c.motivoReprovacao}>{c.motivoReprovacao}</div>
-                          )}
                         </td>
                         <td className="px-4 py-3">
                           {c.documentoUrl ? (
@@ -498,7 +706,8 @@ export default function Curriculos() {
         </div>
       </div>
 
-      {/* Dialog Nova Função */}
+      {fichaContent}
+
       <Dialog open={showFuncDialog} onOpenChange={setShowFuncDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -521,9 +730,8 @@ export default function Curriculos() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Novo / Editar Currículo */}
       <Dialog open={showCurDialog} onOpenChange={(open) => { if (!open) closeDialog(); }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {editingId ? <Pencil className="h-5 w-5 text-blue-600" /> : <UserPlus className="h-5 w-5 text-amber-600" />}
@@ -558,6 +766,22 @@ export default function Curriculos() {
                 <Label>E-mail</Label>
                 <Input className="mt-1" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
               </div>
+              <div>
+                <Label>Escolaridade</Label>
+                <select className="mt-1 w-full border rounded-md px-3 py-2 text-sm h-10"
+                  value={form.escolaridade}
+                  onChange={e => setForm({ ...form, escolaridade: e.target.value })}>
+                  <option value="">Selecione</option>
+                  <option value="Ensino Fundamental">Ensino Fundamental</option>
+                  <option value="Ensino Fundamental Incompleto">Ensino Fundamental Incompleto</option>
+                  <option value="Ensino Médio">Ensino Médio</option>
+                  <option value="Ensino Médio Incompleto">Ensino Médio Incompleto</option>
+                  <option value="Técnico">Técnico</option>
+                  <option value="Superior Completo">Superior Completo</option>
+                  <option value="Superior Incompleto">Superior Incompleto</option>
+                  <option value="Pós-Graduação">Pós-Graduação</option>
+                </select>
+              </div>
               <div className="col-span-2">
                 <Label>Endereço</Label>
                 <Input className="mt-1" placeholder="Rua, número, bairro" value={form.endereco} onChange={e => setForm({ ...form, endereco: e.target.value })} />
@@ -570,6 +794,14 @@ export default function Curriculos() {
                 <Label>Estado (UF)</Label>
                 <Input className="mt-1" placeholder="SP" maxLength={2} value={form.estado} onChange={e => setForm({ ...form, estado: e.target.value.toUpperCase() })} />
               </div>
+            </div>
+            <div>
+              <Label>Habilidades</Label>
+              <Textarea className="mt-1" placeholder="Separar por ponto-e-vírgula. Ex: Leitura de projetos; NR-35; Operação de betoneira" value={form.habilidades} onChange={e => setForm({ ...form, habilidades: e.target.value })} rows={2} />
+            </div>
+            <div>
+              <Label>Cursos / Formações / Certificações</Label>
+              <Textarea className="mt-1" placeholder="Cursos técnicos, NRs, treinamentos..." value={form.cursoFormacao} onChange={e => setForm({ ...form, cursoFormacao: e.target.value })} rows={2} />
             </div>
             <div>
               <Label>Observações</Label>
@@ -597,6 +829,9 @@ export default function Curriculos() {
                   cidade: form.cidade,
                   estado: form.estado,
                   dataNascimento: form.dataNascimento || null,
+                  habilidades: form.habilidades || null,
+                  escolaridade: form.escolaridade || null,
+                  cursoFormacao: form.cursoFormacao || null,
                   observacoes: form.observacoes,
                 });
               }} disabled={atualizarMut.isPending} className="bg-blue-600 hover:bg-blue-700">
@@ -616,6 +851,9 @@ export default function Curriculos() {
                   cidade: form.cidade || undefined,
                   estado: form.estado || undefined,
                   dataNascimento: form.dataNascimento || undefined,
+                  habilidades: form.habilidades || undefined,
+                  escolaridade: form.escolaridade || undefined,
+                  cursoFormacao: form.cursoFormacao || undefined,
                   observacoes: form.observacoes || undefined,
                 });
               }} disabled={criarMut.isPending || uploadMut.isPending} className="bg-amber-600 hover:bg-amber-700">
@@ -627,7 +865,6 @@ export default function Curriculos() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Reprovar Candidato(s) */}
       <Dialog open={showReprovDialog} onOpenChange={(open) => { if (!open) { setShowReprovDialog(false); setMotivoReprovacao(""); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -639,35 +876,24 @@ export default function Curriculos() {
           <div className="py-2 space-y-3">
             <div className="bg-red-50 border border-red-200 rounded-xl p-3">
               <p className="text-sm text-red-800">
-                Os candidatos selecionados serão marcados como <strong>reprovados</strong> e ficarão em uma lista separada para evitar novas entrevistas com eles.
+                Os candidatos selecionados serão marcados como <strong>reprovados</strong> e ficarão em uma lista separada para evitar novas entrevistas.
               </p>
             </div>
             <div>
               <Label>Motivo da reprovação *</Label>
-              <Textarea
-                className="mt-1"
+              <Textarea className="mt-1"
                 placeholder="Ex: Não possui experiência na área, não compareceu à entrevista, não tem perfil para a vaga..."
                 value={motivoReprovacao}
                 onChange={e => setMotivoReprovacao(e.target.value)}
-                rows={3}
-              />
+                rows={3} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowReprovDialog(false); setMotivoReprovacao(""); }}>Cancelar</Button>
-            <Button
-              onClick={() => {
-                if (!motivoReprovacao.trim()) { toast.error("Informe o motivo da reprovação"); return; }
-                atualizarStatusMut.mutate({
-                  ids: selectedIds,
-                  companyId,
-                  statusCandidato: "reprovado",
-                  motivoReprovacao: motivoReprovacao.trim(),
-                });
-              }}
-              disabled={atualizarStatusMut.isPending}
-              className="bg-red-600 hover:bg-red-700"
-            >
+            <Button onClick={() => {
+              if (!motivoReprovacao.trim()) { toast.error("Informe o motivo da reprovação"); return; }
+              atualizarStatusMut.mutate({ ids: selectedIds, companyId, statusCandidato: "reprovado", motivoReprovacao: motivoReprovacao.trim() });
+            }} disabled={atualizarStatusMut.isPending} className="bg-red-600 hover:bg-red-700">
               {atualizarStatusMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ThumbsDown className="h-4 w-4 mr-1" />}
               Confirmar Reprovação
             </Button>
@@ -675,7 +901,6 @@ export default function Curriculos() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Upload com IA */}
       <Dialog open={showIADialog} onOpenChange={(open) => { if (!iaProcessing) setShowIADialog(open); }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -694,17 +919,8 @@ export default function Curriculos() {
               </div>
               <div>
                 <Label>Selecionar Currículos (PDF/JPG/PNG) - Múltiplos</Label>
-                <Input
-                  type="file"
-                  className="mt-1"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  multiple
-                  disabled={iaProcessing}
-                  onChange={e => {
-                    const files = Array.from(e.target.files || []);
-                    setIAFiles(files);
-                  }}
-                />
+                <Input type="file" className="mt-1" accept=".pdf,.jpg,.jpeg,.png" multiple disabled={iaProcessing}
+                  onChange={e => setIAFiles(Array.from(e.target.files || []))} />
                 {iaFiles.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {iaFiles.map((f, i) => (
@@ -757,7 +973,7 @@ export default function Curriculos() {
                       <div><span className="text-slate-500">Função:</span> <span className="font-medium">{r.funcaoNome || r.dados.funcaoDetectada || "-"}</span></div>
                       <div><span className="text-slate-500">Telefone:</span> <span>{r.dados.telefone || "-"}</span></div>
                       <div><span className="text-slate-500">E-mail:</span> <span>{r.dados.email || "-"}</span></div>
-                      <div><span className="text-slate-500">Nascimento:</span> <span>{r.dados.dataNascimento ? `${r.dados.dataNascimento.split("-").reverse().join("/")}${(() => { const i = calcularIdade(r.dados.dataNascimento); return i !== null ? ` (${i} anos)` : ""; })()}` : "-"}</span></div>
+                      <div><span className="text-slate-500">Nascimento:</span> <span>{r.dados.dataNascimento ? `${formatDate(r.dados.dataNascimento)}${(() => { const i = calcularIdade(r.dados.dataNascimento); return i !== null ? ` (${i} anos)` : ""; })()}` : "-"}</span></div>
                       <div><span className="text-slate-500">Cidade:</span> <span>{r.dados.cidade ? `${r.dados.cidade}${r.dados.estado ? ` - ${r.dados.estado}` : ""}` : "-"}</span></div>
                       <div><span className="text-slate-500">Endereço:</span> <span>{r.dados.endereco || "-"}</span></div>
                       {r.dados.experiencia && (
@@ -794,7 +1010,6 @@ export default function Curriculos() {
                       <p className="text-red-800 text-xs mt-1">Este candidato NÃO foi cadastrado. Consulte o RH antes de prosseguir.</p>
                     </div>
                   )}
-
                   {r.erro && <p className="text-xs text-slate-500 mt-2">{r.erro}</p>}
                 </div>
               ))}
@@ -805,19 +1020,13 @@ export default function Curriculos() {
             {!iaResults ? (
               <>
                 <Button variant="outline" onClick={() => setShowIADialog(false)} disabled={iaProcessing}>Cancelar</Button>
-                <Button
-                  onClick={handleIAUpload}
-                  disabled={iaProcessing || iaFiles.length === 0}
-                  className="bg-purple-600 hover:bg-purple-700"
-                >
+                <Button onClick={handleIAUpload} disabled={iaProcessing || iaFiles.length === 0} className="bg-purple-600 hover:bg-purple-700">
                   {iaProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
                   {iaProcessing ? "Processando..." : `Processar ${iaFiles.length} arquivo(s)`}
                 </Button>
               </>
             ) : (
-              <Button onClick={() => { setShowIADialog(false); setIAResults(null); setIAFiles([]); setIAProgress(""); }}>
-                Fechar
-              </Button>
+              <Button onClick={() => { setShowIADialog(false); setIAResults(null); setIAFiles([]); setIAProgress(""); }}>Fechar</Button>
             )}
           </DialogFooter>
         </DialogContent>
