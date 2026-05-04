@@ -2779,6 +2779,8 @@ export const payrollEngineRouter = router({
       const allCompanyIds = resolveCompanyIds(input);
       const allCompanyIdsSql = sql.join(allCompanyIds.map(id => sql`${id}`), sql`,`);
 
+      console.log(`[SimPag DIAG] mesRef=${input.mesReferencia}, companyId=${input.companyId}, allCompanyIds=[${allCompanyIds.join(',')}], empList=${empList.length}`);
+
       // Get advances for this month
       const advRows = ((await db.execute(sql`
         SELECT * FROM payroll_advances 
@@ -2824,6 +2826,15 @@ export const payrollEngineRouter = router({
       const timecardDailyCount = Number(timecardCountRows[0]?.cnt) || 0;
       const pontoProcessado = timecardDailyCount > 0;
 
+      // Also count ALL timecard_daily (any statusDia) for diagnostic
+      const timecardAllRows = ((await db.execute(sql`
+        SELECT "statusDia", COUNT(*) as cnt FROM timecard_daily
+        WHERE "companyId" IN (${allCompanyIdsSql})
+          AND "mesCompetencia" = ${input.mesReferencia}
+        GROUP BY "statusDia"
+      `)) as any).rows || [];
+      console.log(`[SimPag DIAG] timecardDailyCount(registrado)=${timecardDailyCount}, pontoProcessado=${pontoProcessado}, allStatusCounts=${JSON.stringify(timecardAllRows)}`);
+
       // Get faltas from timecard_daily for the ponto period (registrado only)
       const faltasRows2 = ((await db.execute(sql`
         SELECT "employeeId", 
@@ -2842,6 +2853,7 @@ export const payrollEngineRouter = router({
       for (const r of (faltasRows2 || [])) {
         faltasMap.set(Number(r.employeeId), r);
       }
+      console.log(`[SimPag DIAG] faltasRows2=${faltasRows2.length} employees with faltas/atrasos, adjRows(escuro)=${adjRows.length}, advRows(vale)=${advRows.length}`);
 
       // --- DSR (Descanso Semanal Remunerado) — Lei 605/49 Art. 6º ---
       // Lê o resumo já calculado por ponto_descontos (DSR-falta e DSR-atraso separados)
@@ -2977,6 +2989,7 @@ export const payrollEngineRouter = router({
       `)) as any).rows || [];
       const convenioMap = new Map<number, number>();
       for (const r of convenioBatchRows) convenioMap.set(Number(r.employee_id), parseFloat(r.totalConvenio || '0'));
+      console.log(`[SimPag DIAG] convenioBatchRows=${convenioBatchRows.length}, dsrRows=${dsrRows.length}, empIds=${empIds.length}`);
 
       // PRE-FETCH: Adjustments do mês de desconto (outros + pensão) — sujeitos à aprovação RH (Rev. 1203)
       const adjBatchRows = ((await db.execute(sql`
