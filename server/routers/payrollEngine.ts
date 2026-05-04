@@ -450,8 +450,8 @@ export const payrollEngineRouter = router({
         sql`SELECT id, status FROM payroll_periods WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia} LIMIT 1`
       )) as any).rows || [];
       if (!periods[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Competência não encontrada. Abra a competência primeiro." });
-      if (periods[0].status !== "aberta" && periods[0].status !== "ponto_importado") {
-        throw new TRPCError({ code: "BAD_REQUEST", message: `Competência está no status '${periods[0].status}'. Para reprocessar o ponto, limpe a etapa primeiro.` });
+      if (periods[0].status === "pagamento_consolidado") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Pagamento já consolidado. Desconsolide o pagamento antes de reprocessar o ponto.` });
       }
 
       try {

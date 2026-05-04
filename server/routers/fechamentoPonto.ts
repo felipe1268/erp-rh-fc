@@ -2414,10 +2414,11 @@ export const fechamentoPontoRouter = router({
             INSERT INTO payroll_periods ("companyId", "mesReferencia", "pontoInicio", "pontoFim", "escuroInicio", "escuroFim", status, "totalFuncionarios")
             VALUES (${input.companyId}, ${input.mesReferencia}, ${pontoInicio}, ${pontoFim}, ${escuroInicio}, ${escuroFim}, 'aberta', ${empCountRows[0]?.total || 0})
           `);
-        } else if (existingPeriodRows[0].status !== 'aberta' && existingPeriodRows[0].status !== 'ponto_importado') {
-          // Period exists but already advanced - don't reprocess
-          console.log(`[consolidarMes] Payroll period already at status '${existingPeriodRows[0].status}', skipping processarPonto`);
+        } else if (existingPeriodRows[0].status === 'pagamento_consolidado') {
+          console.log(`[consolidarMes] Payroll period at 'pagamento_consolidado', skipping processarPonto`);
           return { success: true, consolidadoPor: ctx.user?.name || 'RH', consolidadoEm: now, payrollResult: null };
+        } else {
+          console.log(`[consolidarMes] Payroll period at status '${existingPeriodRows[0].status}', reprocessando ponto...`);
         }
         
         // 2. Call processarPonto logic inline (reads time_records, generates timecard_daily)
