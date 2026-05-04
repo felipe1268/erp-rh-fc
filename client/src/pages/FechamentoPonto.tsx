@@ -1222,7 +1222,7 @@ export default function FechamentoPonto() {
     try {
       const filesData = await getFilesBase64();
       const preview = await previewMut.mutateAsync({ companyId, companyIds, files: filesData });
-      if (preview.hasExistingData || (preview.apontamentosCampo && preview.apontamentosCampo.length > 0)) {
+      if (preview.hasExistingData || (preview.apontamentosCampo && preview.apontamentosCampo.length > 0) || preview.isSharedSn) {
         setPreviewData(preview);
         setSelectedEmployeeIds(new Set(preview.employees.map((e: any) => e.employeeId)));
         setSelectiveSearch("");
@@ -4283,7 +4283,7 @@ export default function FechamentoPonto() {
                         <span className="text-xs text-muted-foreground">{r.totalRecords} registros</span>
                       </div>
                       <div className="mt-1.5 ml-6 space-y-0.5">
-                        <p className="text-xs"><strong>SN:</strong> {r.deviceSerial || "Não identificado"}{r.valid && <span className="text-green-700"> → {r.obraNome}</span>}</p>
+                        <p className="text-xs"><strong>SN:</strong> {r.deviceSerial || "Não identificado"}{r.valid && <span className="text-green-700"> → {r.obraNome}</span>}{r.isSharedSn && <span className="text-blue-600 ml-1">(compartilhado com {r.sharedSnObras?.length} obras)</span>}</p>
                         {r.mesesDetectados.length > 0 && (
                           <p className="text-xs"><strong>Competência(s):</strong> {r.mesesDetectados.map((m: string) => formatMesAno(m)).join(", ")}</p>
                         )}
@@ -4343,10 +4343,34 @@ export default function FechamentoPonto() {
         </FullScreenDialog>
 
         {/* ===== SELECTIVE UPLOAD DIALOG ===== */}
-        <FullScreenDialog open={showSelectiveDialog} onClose={() => setShowSelectiveDialog(false)} title="Dados já Existentes" subtitle={previewData ? `${previewData.obraNome} — SN: ${previewData.deviceSerial}` : ""} icon={<ListChecks className="h-5 w-5 text-white" />} headerColor="bg-gradient-to-r from-amber-700 to-amber-500">
+        <FullScreenDialog open={showSelectiveDialog} onClose={() => setShowSelectiveDialog(false)} title={previewData?.isSharedSn ? "Relógio Compartilhado — Revisão" : "Dados já Existentes"} subtitle={previewData ? `${previewData.isSharedSn ? previewData.sharedSnObras?.map((o: any) => o.obraNome).join(" + ") : previewData.obraNome} — SN: ${previewData.deviceSerial}` : ""} icon={<ListChecks className="h-5 w-5 text-white" />} headerColor={previewData?.isSharedSn ? "bg-gradient-to-r from-blue-700 to-blue-500" : "bg-gradient-to-r from-amber-700 to-amber-500"}>
           <div className="w-full max-w-4xl mx-auto">
             {previewData && !uploading && !uploadResult && (
               <div className="space-y-4">
+                {previewData.isSharedSn && previewData.sharedSnObras && previewData.sharedSnObras.length > 1 && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                      <Building2 className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+                      <div className="flex-1">
+                        <p className="font-semibold text-blue-900">Relógio compartilhado entre {previewData.sharedSnObras.length} obras</p>
+                        <p className="text-sm text-blue-700 mt-1">
+                          O SN <strong className="font-mono">{previewData.deviceSerial}</strong> está vinculado a:
+                        </p>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {previewData.sharedSnObras.map((o: any) => (
+                            <span key={o.obraId} className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-1 rounded-full">
+                              <Building2 className="h-3 w-3" />{o.obraNome}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="text-xs text-blue-600 mt-2">
+                          Os registros serão distribuídos automaticamente para a obra de cada funcionário com base na alocação atual.
+                          Funcionários sem alocação definida ou alocados em múltiplas obras não serão importados — uma inconsistência será registrada para análise.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {previewData.hasExistingData && (() => {
                   const jaImportados = previewData.employees.filter((e: any) => e.jaImportado);
                   const novos = previewData.employees.filter((e: any) => !e.jaImportado);
@@ -4586,6 +4610,17 @@ export default function FechamentoPonto() {
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="text-xs text-gray-500">{emp.totalRegistros} reg.</span>
+                          {previewData.isSharedSn && emp.obraDestino && (
+                            emp.obraDestino.status === "resolved" ? (
+                              <Badge className="bg-teal-50 text-teal-700 text-[10px] px-1.5 flex items-center gap-1">
+                                <Building2 className="h-2.5 w-2.5" />{emp.obraDestino.obraNome.substring(0, 20)}
+                              </Badge>
+                            ) : emp.obraDestino.status === "ambiguous" ? (
+                              <Badge className="bg-red-100 text-red-700 text-[10px] px-1.5" title="Alocado em múltiplas obras — não será importado">Ambíguo</Badge>
+                            ) : (
+                              <Badge className="bg-orange-100 text-orange-700 text-[10px] px-1.5" title="Sem alocação — não será importado">Sem alocação</Badge>
+                            )
+                          )}
                           {emp.jaImportado ? (
                             <Badge className="bg-amber-100 text-amber-700 text-[10px] px-1.5">Já importado</Badge>
                           ) : (

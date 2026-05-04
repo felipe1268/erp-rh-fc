@@ -3,7 +3,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import * as XLSX from "xlsx";
 import { getDb } from "../db";
 import {
-  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices, unmatchedDixiRecords, dixiNameMappings, vacationPeriods, fieldNotes, atestados, feriados
+  timeRecords, timeInconsistencies, employees, obras, dixiDevices, warnings, obraHorasRateio, pontoConsolidacao, obraSns, systemCriteria, terminationNotices, unmatchedDixiRecords, dixiNameMappings, vacationPeriods, fieldNotes, atestados, feriados, obraFuncionarios, obraPontoInconsistencies
 } from "../../drizzle/schema";
 import { eq, and, sql, like, or, between, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -786,14 +786,16 @@ export const fechamentoPontoRouter = router({
       let obraId: number | null = null;
       let obraNome = "";
       let deviceSerial = "";
+      let isSharedSn = false;
+      let sharedSnObras: Array<{ obraId: number; obraNome: string }> = [];
 
       for (const file of input.files) {
         const buffer = Buffer.from(file.fileBase64, "base64");
         const { records, deviceSerial: sn } = parseDixiXLS(buffer);
         deviceSerial = sn;
 
-        const snMatch = activeSns.find(s => s.sn === sn);
-        if (snMatch) { obraId = snMatch.obraId; obraNome = snMatch.obraNome || ""; }
+        const snMatches = activeSns.filter(s => s.sn === sn);
+        if (snMatches.length > 0) { obraId = snMatches[0].obraId; obraNome = snMatches[0].obraNome || ""; }
         if (!obraId) {
           const device = devices.find(d => d.serialNumber === sn);
           if (device?.obraId) { obraId = device.obraId; const o = obrasList.find(x => x.id === device.obraId); if (o) obraNome = o.nome; }
@@ -801,6 +803,10 @@ export const fechamentoPontoRouter = router({
         if (!obraId) {
           const o = obrasList.find(x => x.snRelogioPonto === sn);
           if (o) { obraId = o.id; obraNome = o.nome; }
+        }
+        if (snMatches.length > 1) {
+          isSharedSn = true;
+          sharedSnObras = snMatches.map(m => ({ obraId: m.obraId!, obraNome: m.obraNome || "" }));
         }
 
         const byPerson: Record<string, { dixiName: string; dixiId: string; records: any[] }> = {};
@@ -839,7 +845,10 @@ export const fechamentoPontoRouter = router({
       const mesesArr = Array.from(mesesDetectados).sort();
       let existingByEmployee: Record<number, number> = {};
       let existingRecordsByEmployee: Record<number, Array<{ data: string; entrada1: string; saida1: string; entrada2: string; saida2: string; horasTrabalhadas: string; horasExtras: string; faltas: string; fonte: string }>> = {};
-      if (mesesArr.length > 0 && obraId) {
+      const obraIdsToCheck = isSharedSn && sharedSnObras.length > 1
+        ? sharedSnObras.map(o => o.obraId)
+        : obraId ? [obraId] : [];
+      if (mesesArr.length > 0 && obraIdsToCheck.length > 0) {
         for (const mesRef of mesesArr) {
           const existingRecs = await db.select({
             employeeId: timeRecords.employeeId,
@@ -857,7 +866,7 @@ export const fechamentoPontoRouter = router({
             .where(and(
               companyFilter(timeRecords.companyId, input),
               eq(timeRecords.mesReferencia, mesRef),
-              eq(timeRecords.obraId, obraId),
+              inArray(timeRecords.obraId, obraIdsToCheck),
               eq(timeRecords.fonte, "dixi"),
             ))
             .orderBy(sql`${timeRecords.data} ASC`);
@@ -880,6 +889,42 @@ export const fechamentoPontoRouter = router({
       }
 
       const hasExistingData = Object.keys(existingByEmployee).length > 0;
+
+      let employeeObraRouting: Record<number, { obraId: number; obraNome: string; status: "resolved" | "ambiguous" | "unassigned" }> = {};
+      if (isSharedSn && sharedSnObras.length > 1) {
+        const empIds = previewEmployees.map(e => e.employeeId);
+        if (empIds.length > 0) {
+          const allocs = await db.select({
+            employeeId: obraFuncionarios.employeeId,
+            obraId: obraFuncionarios.obraId,
+          }).from(obraFuncionarios).where(and(
+            inArray(obraFuncionarios.employeeId, empIds),
+            eq(obraFuncionarios.isActive, 1),
+          ));
+          const sharedObraIds = new Set(sharedSnObras.map(o => o.obraId));
+          const empAllocations: Record<number, Set<number>> = {};
+          for (const alloc of allocs) {
+            if (sharedObraIds.has(alloc.obraId)) {
+              if (!empAllocations[alloc.employeeId]) empAllocations[alloc.employeeId] = new Set();
+              empAllocations[alloc.employeeId].add(alloc.obraId);
+            }
+          }
+          for (const empId of empIds) {
+            const allocObras = Array.from(empAllocations[empId] || new Set());
+            if (allocObras.length === 1) {
+              const obraInfo = sharedSnObras.find(o => o.obraId === allocObras[0]);
+              if (obraInfo) {
+                employeeObraRouting[empId] = { obraId: obraInfo.obraId, obraNome: obraInfo.obraNome, status: "resolved" };
+              }
+            } else if (allocObras.length > 1) {
+              const obraInfo = sharedSnObras.find(o => o.obraId === allocObras[0]);
+              employeeObraRouting[empId] = { obraId: obraInfo?.obraId || 0, obraNome: allocObras.map(id => sharedSnObras.find(o => o.obraId === id)?.obraNome).join(" / "), status: "ambiguous" };
+            } else {
+              employeeObraRouting[empId] = { obraId: 0, obraNome: "", status: "unassigned" };
+            }
+          }
+        }
+      }
 
       let apontamentosCampo: Array<{ employeeId: number; nomeCompleto: string; data: string; tipoOcorrencia: string; descricao: string; status: string }> = [];
       if (mesesArr.length > 0) {
@@ -918,6 +963,8 @@ export const fechamentoPontoRouter = router({
       return {
         hasExistingData,
         obraId, obraNome, deviceSerial,
+        isSharedSn,
+        sharedSnObras,
         meses: mesesArr,
         apontamentosCampo,
         employees: previewEmployees.map(e => ({
@@ -925,6 +972,7 @@ export const fechamentoPontoRouter = router({
           jaImportado: !!existingByEmployee[e.employeeId],
           registrosExistentes: existingByEmployee[e.employeeId] || 0,
           registrosDetalhe: existingRecordsByEmployee[e.employeeId] || [],
+          obraDestino: employeeObraRouting[e.employeeId] || null,
         })).sort((a, b) => a.nomeCompleto.localeCompare(b.nomeCompleto)),
         totalRegistros: previewEmployees.reduce((sum, e) => sum + e.totalRegistros, 0),
       };
@@ -992,15 +1040,19 @@ export const fechamentoPontoRouter = router({
           });
         }
 
-        // Find obra by SN
+        // Find obra by SN (supports shared SNs across multiple obras)
         let obraId: number | null = null;
         let obraNome = "";
+        let fileSharedSnObras: Array<{ obraId: number; obraNome: string }> = [];
 
-        // 1. Check obra_sns table (primary - supports multiple SNs per obra)
-        const snMatch = activeSns.find(s => s.sn === deviceSerial);
-        if (snMatch) {
-          obraId = snMatch.obraId;
-          obraNome = snMatch.obraNome || "";
+        // 1. Check obra_sns table (primary - supports shared SNs)
+        const snMatches = activeSns.filter(s => s.sn === deviceSerial);
+        if (snMatches.length > 0) {
+          obraId = snMatches[0].obraId;
+          obraNome = snMatches[0].obraNome || "";
+          if (snMatches.length > 1) {
+            fileSharedSnObras = snMatches.map(m => ({ obraId: m.obraId!, obraNome: m.obraNome || "" }));
+          }
         }
 
         // 2. Fallback: Check dixi_devices table
@@ -1028,6 +1080,36 @@ export const fechamentoPontoRouter = router({
             code: "BAD_REQUEST",
             message: `Arquivo "${file.fileName}": O equipamento DIXI com SN "${deviceSerial}" não está vinculado a nenhuma obra cadastrada. Por favor, cadastre o SN na aba de Obras antes de fazer o upload.`,
           });
+        }
+
+        // ===== SHARED SN: Load employee→obra assignments with ambiguity detection =====
+        let empObraMap: Record<number, { obraId: number; obraNome: string; status: "resolved" | "ambiguous" | "unassigned" }> = {};
+        if (fileSharedSnObras.length > 1) {
+          const sharedObraIds = fileSharedSnObras.map(o => o.obraId);
+          const allocs = await db.select({
+            employeeId: obraFuncionarios.employeeId,
+            obraId: obraFuncionarios.obraId,
+          }).from(obraFuncionarios).where(and(
+            inArray(obraFuncionarios.obraId, sharedObraIds),
+            eq(obraFuncionarios.isActive, 1),
+          ));
+          const empAllocSets: Record<number, Set<number>> = {};
+          for (const alloc of allocs) {
+            if (!empAllocSets[alloc.employeeId]) empAllocSets[alloc.employeeId] = new Set();
+            empAllocSets[alloc.employeeId].add(alloc.obraId);
+          }
+          for (const [empIdStr, allocSet] of Object.entries(empAllocSets)) {
+            const empId = Number(empIdStr);
+            const allocObras = Array.from(allocSet);
+            if (allocObras.length === 1) {
+              const obraInfo = fileSharedSnObras.find(o => o.obraId === allocObras[0]);
+              if (obraInfo) {
+                empObraMap[empId] = { obraId: obraInfo.obraId, obraNome: obraInfo.obraNome, status: "resolved" };
+              }
+            } else if (allocObras.length > 1) {
+              empObraMap[empId] = { obraId: 0, obraNome: allocObras.map(id => fileSharedSnObras.find(o => o.obraId === id)?.obraNome).join(" / "), status: "ambiguous" };
+            }
+          }
         }
 
         // Buscar critérios do sistema para aplicar nos cálculos
@@ -1077,9 +1159,78 @@ export const fechamentoPontoRouter = router({
           records, empList as any, obraId, input.companyId, criteria, activeAvisos, memMappings, activeFeriasGozo as any
         );
 
+        // ===== SHARED SN: Reassign obraId by employee→obra assignment =====
+        const skippedEmployeeIds = new Set<number>();
+        if (fileSharedSnObras.length > 1) {
+          const sharedSnObraNames = fileSharedSnObras.map(o => o.obraNome).join(", ");
+          const unresolvedEmployees = new Set<number>();
+
+          for (const rec of timeRecordsToInsert) {
+            const routing = empObraMap[rec.employeeId];
+            if (routing && routing.status === "resolved") {
+              rec.obraId = routing.obraId;
+            } else {
+              unresolvedEmployees.add(rec.employeeId);
+              skippedEmployeeIds.add(rec.employeeId);
+            }
+          }
+          for (const inc of inconsistencies) {
+            const routing = empObraMap[inc.employeeId];
+            if (routing && routing.status === "resolved") {
+              inc.obraId = routing.obraId;
+            }
+          }
+
+          if (unresolvedEmployees.size > 0) {
+            const pontoIncons: any[] = [];
+            const seenEmpDays = new Set<string>();
+            for (const rec of timeRecordsToInsert) {
+              if (!unresolvedEmployees.has(rec.employeeId)) continue;
+              const key = `${rec.employeeId}|${rec.data}`;
+              if (seenEmpDays.has(key)) continue;
+              seenEmpDays.add(key);
+              const routing = empObraMap[rec.employeeId];
+              const reason = routing?.status === "ambiguous"
+                ? `SN compartilhado entre ${sharedSnObraNames} — funcionário alocado em múltiplas obras (${routing.obraNome}), não foi possível determinar destino`
+                : `SN compartilhado entre ${sharedSnObraNames} — funcionário sem alocação definida em nenhuma dessas obras`;
+              pontoIncons.push({
+                companyId: input.companyId,
+                employeeId: rec.employeeId,
+                obraAlocadaId: null,
+                obraPontoId: obraId!,
+                dataPonto: rec.data,
+                snRelogio: deviceSerial,
+                status: "pendente",
+                observacoes: reason,
+              });
+            }
+            if (pontoIncons.length > 0) {
+              const unresolvedEmpArr = Array.from(unresolvedEmployees);
+              const inconsDates = Array.from(new Set(pontoIncons.map((p: any) => p.dataPonto)));
+              await db.delete(obraPontoInconsistencies).where(and(
+                eq(obraPontoInconsistencies.companyId, input.companyId),
+                inArray(obraPontoInconsistencies.employeeId, unresolvedEmpArr),
+                eq(obraPontoInconsistencies.snRelogio, deviceSerial),
+                eq(obraPontoInconsistencies.status, "pendente"),
+                inArray(obraPontoInconsistencies.dataPonto, inconsDates),
+              ));
+              for (let i = 0; i < pontoIncons.length; i += 50) {
+                await db.insert(obraPontoInconsistencies).values(pontoIncons.slice(i, i + 50));
+              }
+            }
+
+            const resolvedOnly = timeRecordsToInsert.filter(r => !skippedEmployeeIds.has(r.employeeId));
+            timeRecordsToInsert.length = 0;
+            timeRecordsToInsert.push(...resolvedOnly);
+
+            const resolvedIncons = inconsistencies.filter(i => !skippedEmployeeIds.has(i.employeeId));
+            inconsistencies.length = 0;
+            inconsistencies.push(...resolvedIncons);
+          }
+        }
+
         // Salvar registros não identificados para vinculação posterior
         if (unmatchedRecordsToInsert.length > 0) {
-          // Limpar registros não identificados anteriores desta obra/mês
           const unmatchedMeses = Array.from(new Set(unmatchedRecordsToInsert.map((r: any) => r.mesReferencia)));
           for (const mesRef of unmatchedMeses) {
             await db.delete(unmatchedDixiRecords).where(
@@ -1090,7 +1241,6 @@ export const fechamentoPontoRouter = router({
               )
             );
           }
-          // Inserir novos registros não identificados em lotes
           const batchSize = 50;
           for (let i = 0; i < unmatchedRecordsToInsert.length; i += batchSize) {
             const batch = unmatchedRecordsToInsert.slice(i, i + batchSize);
@@ -1098,16 +1248,18 @@ export const fechamentoPontoRouter = router({
           }
         }
 
-        // Group records by mesReferencia (auto-detected)
-        const recordsByMes: Record<string, any[]> = {};
-        const inconsByMes: Record<string, any[]> = {};
+        // Group records by mesReferencia + obraId (supports shared SN routing)
+        const recordsByMesObra: Record<string, any[]> = {};
+        const inconsByMesObra: Record<string, any[]> = {};
         for (const rec of timeRecordsToInsert) {
-          if (!recordsByMes[rec.mesReferencia]) recordsByMes[rec.mesReferencia] = [];
-          recordsByMes[rec.mesReferencia].push(rec);
+          const key = `${rec.mesReferencia}|${rec.obraId}`;
+          if (!recordsByMesObra[key]) recordsByMesObra[key] = [];
+          recordsByMesObra[key].push(rec);
         }
         for (const inc of inconsistencies) {
-          if (!inconsByMes[inc.mesReferencia]) inconsByMes[inc.mesReferencia] = [];
-          inconsByMes[inc.mesReferencia].push(inc);
+          const key = `${inc.mesReferencia}|${inc.obraId}`;
+          if (!inconsByMesObra[key]) inconsByMesObra[key] = [];
+          inconsByMesObra[key].push(inc);
         }
 
         if (input.mode === "selective" && (!input.selectedEmployeeIds || input.selectedEmployeeIds.length === 0)) {
@@ -1116,14 +1268,13 @@ export const fechamentoPontoRouter = router({
         const isSelective = input.mode === "selective" && input.selectedEmployeeIds && input.selectedEmployeeIds.length > 0;
         const selectedSet = isSelective ? new Set(input.selectedEmployeeIds) : null;
 
-        for (const [mesRef, allRecs] of Object.entries(recordsByMes)) {
+        for (const [mesObraKey, allRecs] of Object.entries(recordsByMesObra)) {
+          const [mesRef, groupObraIdStr] = mesObraKey.split("|");
+          const groupObraId = Number(groupObraIdStr);
           const recs = selectedSet ? allRecs.filter((r: any) => selectedSet.has(r.employeeId)) : allRecs;
           if (recs.length === 0) continue;
           mesesAfetados.add(mesRef);
 
-          // Aplicar lock por DIA: se um ciclo consolidado (de qualquer competência)
-          // intersecta o mês importado, não podemos apagar nem inserir registros
-          // para essas datas — eles pertencem ao período já fechado/pago.
           const mesStart = `${mesRef}-01`;
           const mesEnd = lastDayOfMonth(mesRef);
           const lockedRanges = await getLockedRangesInWindow(db, input, mesStart, mesEnd);
@@ -1134,14 +1285,16 @@ export const fechamentoPontoRouter = router({
             return false;
           };
 
+          // Delete old records for this (mesRef, groupObraId) combo
+          const empIdsInGroup = Array.from(new Set(recs.map((r: any) => r.employeeId))) as number[];
           if (isSelective && selectedSet) {
-            const selIds = input.selectedEmployeeIds!;
+            const selIds = input.selectedEmployeeIds!.filter(id => empIdsInGroup.includes(id));
             for (let i = 0; i < selIds.length; i += 50) {
               const batch = selIds.slice(i, i + 50);
               const baseConds = [
                 companyFilter(timeRecords.companyId, input),
                 eq(timeRecords.mesReferencia, mesRef),
-                eq(timeRecords.obraId, obraId!),
+                eq(timeRecords.obraId, groupObraId),
                 eq(timeRecords.fonte, "dixi"),
                 inArray(timeRecords.employeeId, batch),
               ];
@@ -1152,7 +1305,7 @@ export const fechamentoPontoRouter = router({
               const incConds = [
                 companyFilter(timeInconsistencies.companyId, input),
                 eq(timeInconsistencies.mesReferencia, mesRef),
-                eq(timeInconsistencies.obraId, obraId!),
+                eq(timeInconsistencies.obraId, groupObraId),
                 inArray(timeInconsistencies.employeeId, batch),
               ];
               for (const r of lockedRanges) {
@@ -1161,25 +1314,53 @@ export const fechamentoPontoRouter = router({
               await db.delete(timeInconsistencies).where(and(...incConds));
             }
           } else {
-            const baseConds = [
-              companyFilter(timeRecords.companyId, input),
-              eq(timeRecords.mesReferencia, mesRef),
-              eq(timeRecords.obraId, obraId!),
-              eq(timeRecords.fonte, "dixi"),
-            ];
-            for (const r of lockedRanges) {
-              baseConds.push(sql`NOT (${timeRecords.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
+            // For shared SNs, only delete records of employees in this group
+            if (fileSharedSnObras.length > 1) {
+              for (let i = 0; i < empIdsInGroup.length; i += 50) {
+                const batch = empIdsInGroup.slice(i, i + 50);
+                const baseConds = [
+                  companyFilter(timeRecords.companyId, input),
+                  eq(timeRecords.mesReferencia, mesRef),
+                  eq(timeRecords.obraId, groupObraId),
+                  eq(timeRecords.fonte, "dixi"),
+                  inArray(timeRecords.employeeId, batch),
+                ];
+                for (const r of lockedRanges) {
+                  baseConds.push(sql`NOT (${timeRecords.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
+                }
+                await db.delete(timeRecords).where(and(...baseConds));
+                const incConds = [
+                  companyFilter(timeInconsistencies.companyId, input),
+                  eq(timeInconsistencies.mesReferencia, mesRef),
+                  eq(timeInconsistencies.obraId, groupObraId),
+                  inArray(timeInconsistencies.employeeId, batch),
+                ];
+                for (const r of lockedRanges) {
+                  incConds.push(sql`NOT (${timeInconsistencies.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
+                }
+                await db.delete(timeInconsistencies).where(and(...incConds));
+              }
+            } else {
+              const baseConds = [
+                companyFilter(timeRecords.companyId, input),
+                eq(timeRecords.mesReferencia, mesRef),
+                eq(timeRecords.obraId, groupObraId),
+                eq(timeRecords.fonte, "dixi"),
+              ];
+              for (const r of lockedRanges) {
+                baseConds.push(sql`NOT (${timeRecords.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
+              }
+              await db.delete(timeRecords).where(and(...baseConds));
+              const incConds = [
+                companyFilter(timeInconsistencies.companyId, input),
+                eq(timeInconsistencies.mesReferencia, mesRef),
+                eq(timeInconsistencies.obraId, groupObraId),
+              ];
+              for (const r of lockedRanges) {
+                incConds.push(sql`NOT (${timeInconsistencies.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
+              }
+              await db.delete(timeInconsistencies).where(and(...incConds));
             }
-            await db.delete(timeRecords).where(and(...baseConds));
-            const incConds = [
-              companyFilter(timeInconsistencies.companyId, input),
-              eq(timeInconsistencies.mesReferencia, mesRef),
-              eq(timeInconsistencies.obraId, obraId!),
-            ];
-            for (const r of lockedRanges) {
-              incConds.push(sql`NOT (${timeInconsistencies.data} BETWEEN ${r.dataInicioCiclo}::date AND ${r.dataFimCiclo}::date)`);
-            }
-            await db.delete(timeInconsistencies).where(and(...incConds));
           }
 
           // Filtrar registros DIXI onde já existe lançamento manual para o mesmo funcionário/dia
@@ -1196,7 +1377,6 @@ export const fechamentoPontoRouter = router({
             const manualSet = new Set((manuaisExistentes.rows as any[]).map((r: any) => `${r.employeeId}|${r.data}`));
             recsParaInserir = recsParaInserir.filter((r: any) => !manualSet.has(`${r.employeeId}|${r.data}`));
           }
-          // Insert time records in batches
           if (recsParaInserir.length > 0) {
             const batchSize = 50;
             for (let i = 0; i < recsParaInserir.length; i += batchSize) {
@@ -1206,8 +1386,8 @@ export const fechamentoPontoRouter = router({
             fileActualInserted += recsParaInserir.length;
           }
 
-          const allMonthIncons = inconsByMes[mesRef] || [];
-          const monthIncons = (selectedSet ? allMonthIncons.filter((i: any) => selectedSet.has(i.employeeId)) : allMonthIncons)
+          const allGroupIncons = inconsByMesObra[mesObraKey] || [];
+          const monthIncons = (selectedSet ? allGroupIncons.filter((i: any) => selectedSet.has(i.employeeId)) : allGroupIncons)
             .filter((i: any) => !isDateInLocked(String(i.data)));
           if (monthIncons.length > 0) {
             const batchSize = 50;
@@ -1217,27 +1397,42 @@ export const fechamentoPontoRouter = router({
             }
           }
 
+          // Rateio per obra group
           if (isSelective && selectedSet) {
-            const selIds = input.selectedEmployeeIds!;
+            const selIds = input.selectedEmployeeIds!.filter(id => empIdsInGroup.includes(id));
             for (let i = 0; i < selIds.length; i += 50) {
               const batch = selIds.slice(i, i + 50);
               await db.delete(obraHorasRateio).where(
                 and(
                   companyFilter(obraHorasRateio.companyId, input),
                   eq(obraHorasRateio.mesAno, mesRef),
-                  eq(obraHorasRateio.obraId, obraId!),
+                  eq(obraHorasRateio.obraId, groupObraId),
                   inArray(obraHorasRateio.employeeId, batch),
                 )
               );
             }
           } else {
-            await db.delete(obraHorasRateio).where(
-              and(
-                companyFilter(obraHorasRateio.companyId, input),
-                eq(obraHorasRateio.mesAno, mesRef),
-                eq(obraHorasRateio.obraId, obraId!),
-              )
-            );
+            if (fileSharedSnObras.length > 1) {
+              for (let i = 0; i < empIdsInGroup.length; i += 50) {
+                const batch = empIdsInGroup.slice(i, i + 50);
+                await db.delete(obraHorasRateio).where(
+                  and(
+                    companyFilter(obraHorasRateio.companyId, input),
+                    eq(obraHorasRateio.mesAno, mesRef),
+                    eq(obraHorasRateio.obraId, groupObraId),
+                    inArray(obraHorasRateio.employeeId, batch),
+                  )
+                );
+              }
+            } else {
+              await db.delete(obraHorasRateio).where(
+                and(
+                  companyFilter(obraHorasRateio.companyId, input),
+                  eq(obraHorasRateio.mesAno, mesRef),
+                  eq(obraHorasRateio.obraId, groupObraId),
+                )
+              );
+            }
           }
 
           const empIds = Array.from(new Set(recsParaInserir.map((r: any) => r.employeeId)));
@@ -1273,7 +1468,7 @@ export const fechamentoPontoRouter = router({
             const normais = data.totalHoras - data.horasExtras;
             rateioInserts.push({
               companyId: input.companyId,
-              obraId: obraId!,
+              obraId: groupObraId,
               employeeId: Number(empId),
               dixiDeviceId: devices.find(d => d.serialNumber === deviceSerial)?.id || null,
               mesAno: mesRef,
@@ -1295,13 +1490,15 @@ export const fechamentoPontoRouter = router({
         totalUnmatched = [...totalUnmatched, ...unmatchedNames];
 
         // Collect months found in this file
-        const mesesNoArquivo = Object.keys(recordsByMes).sort();
+        const mesesNoArquivo = Array.from(new Set(Object.keys(recordsByMesObra).map(k => k.split("|")[0]))).sort();
 
         fileResults.push({
           fileName: file.fileName,
           deviceSerial,
           obraNome,
           obraId,
+          isSharedSn: fileSharedSnObras.length > 1,
+          sharedSnObras: fileSharedSnObras.length > 1 ? fileSharedSnObras : undefined,
           mesesDetectados: mesesNoArquivo,
           totalRegistrosBrutos: records.length,
           totalDiasProcessados: fileActualInserted,
@@ -2730,11 +2927,11 @@ export const fechamentoPontoRouter = router({
         let obraId: number | null = null;
         let obraNome = "";
 
-        // 1. Check obra_sns table (primary)
-        const snMatch = activeSns.find(s => s.sn === deviceSerial);
-        if (snMatch) {
-          obraId = snMatch.obraId;
-          obraNome = snMatch.obraNome || "";
+        // 1. Check obra_sns table (primary - supports shared SNs)
+        const snMatches = activeSns.filter(s => s.sn === deviceSerial);
+        if (snMatches.length > 0) {
+          obraId = snMatches[0].obraId;
+          obraNome = snMatches[0].obraNome || "";
         }
 
         // 2. Fallback: dixi_devices
@@ -2769,6 +2966,8 @@ export const fechamentoPontoRouter = router({
           obraId,
           obraNome,
           valid: obraId !== null,
+          isSharedSn: snMatches.length > 1,
+          sharedSnObras: snMatches.length > 1 ? snMatches.map(m => ({ obraId: m.obraId!, obraNome: m.obraNome || "" })) : undefined,
           totalRecords: records.length,
           mesesDetectados: Array.from(meses).sort(),
           registrosPorMes: contagemPorMes,

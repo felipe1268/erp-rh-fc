@@ -279,6 +279,20 @@ When creating a new module, ALWAYS register it in ALL 3 places:
 - Frontend: aba "Hist. Status" no dialog de edição do colaborador (Colaboradores.tsx)
 - Schema Drizzle: `employeeStatusLog` em `drizzle/schema.ts`
 
+## SN Compartilhado — Relógio de Ponto (Shared Clock Device Routing)
+- **Tabelas**: `obra_sns` (SN ↔ obra, suporta mesmo SN em múltiplas obras), `obra_funcionarios` (employee ↔ obra assignment), `obra_ponto_inconsistencies` (unresolved routing conflicts)
+- **Backend**: `server/routers/fechamentoPonto.ts` — `previewDixi`, `uploadDixi`, `validateSN` mutations
+- **Frontend**: `client/src/pages/FechamentoPonto.tsx` — shared SN banner, per-employee routing badges, dynamic dialog title/color
+- **Flow**: When a DIXI file's device SN is linked to 2+ obras via `obra_sns`, the system:
+  1. Detects shared SN (`activeSns.filter()` finds multiple matches)
+  2. Loads employee→obra assignments from `obra_funcionarios` (active only, scoped to shared obras)
+  3. Classifies each employee: `resolved` (exactly 1 matching obra), `ambiguous` (2+ matching obras), `unassigned` (no matching obra)
+  4. Routes resolved employees' records to their assigned obra; groups by `(mesRef|obraId)` for delete/insert/rateio
+  5. Skips insertion for ambiguous/unassigned employees — creates `obra_ponto_inconsistencies` instead (with dedup on re-import)
+- **Preview**: existing-data detection queries ALL shared obras (not just first match) via `inArray(obraId, obraIdsToCheck)`
+- **UI**: Blue banner lists linked obras, teal badge for resolved, red badge for ambiguous, orange badge for unassigned. Dialog title changes to "Relógio Compartilhado — Revisão" with blue gradient header
+- **SN Sharing Setup**: `server/routers.ts` `addSn` mutation accepts `forceShare` flag; `client/src/pages/Obras.tsx` shows amber warning + confirmation dialog when SN already linked elsewhere
+
 ## Critical DB Patterns (PostgreSQL/Neon)
 - **REGRA DE OURO — EMPRESAS DELETADAS**: NUNCA considerar empresas com `companies."deletedAt" IS NOT NULL`. Toda query, agregação, listagem, contagem, dropdown, relatório e job DEVE filtrar `WHERE c."deletedAt" IS NULL`. Empresas são soft-deleted, não removidas — mantê-las visíveis polui dados, contagens e UI.
 - `db.execute()` returns QueryResult object, NOT array. Use: `((await db.execute(sql`...`)) as any).rows || []`
