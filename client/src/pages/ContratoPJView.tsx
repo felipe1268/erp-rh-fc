@@ -115,6 +115,37 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
   const [novoTextoClausulas, setNovoTextoClausulas] = useState<Record<string, string>>({});
   const [dataAditivo, setDataAditivo] = useState(new Date().toISOString().split('T')[0]);
 
+  // Rev. 1340: auto-save de rascunho do aditivo no navegador (localStorage)
+  const draftKey = `pj-aditivo-draft-${contratoId}`;
+  // Restaura rascunho ao abrir o modal
+  React.useEffect(() => {
+    if (!showAditivoModal) return;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d?.dataAditivo) setDataAditivo(d.dataAditivo);
+        if (d?.selectedClausulas) setSelectedClausulas(d.selectedClausulas);
+        if (d?.novoTextoClausulas) setNovoTextoClausulas(d.novoTextoClausulas);
+        if (d?.dataAditivo || Object.keys(d?.selectedClausulas || {}).length > 0) {
+          toast.info("Rascunho recuperado do navegador.");
+        }
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAditivoModal]);
+  // Salva rascunho enquanto digita (apenas se houver algo)
+  React.useEffect(() => {
+    if (!showAditivoModal) return;
+    const hasContent = Object.values(selectedClausulas).some(Boolean) || Object.values(novoTextoClausulas).some(v => (v || "").trim().length > 0);
+    try {
+      if (hasContent) {
+        localStorage.setItem(draftKey, JSON.stringify({ dataAditivo, selectedClausulas, novoTextoClausulas }));
+      }
+    } catch {}
+  }, [showAditivoModal, draftKey, dataAditivo, selectedClausulas, novoTextoClausulas]);
+  const clearDraft = () => { try { localStorage.removeItem(draftKey); } catch {} };
+
   const clausulasQ = (trpc as any).pj.extrairClausulas.useQuery(
     { contractId: contratoId, companyId },
     { enabled: showAditivoModal && companyId > 0 },
@@ -127,6 +158,7 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
       setShowAditivoModal(false);
       setSelectedClausulas({});
       setNovoTextoClausulas({});
+      clearDraft();
       navigate(`/contrato-pj/${contratoId}/aditivo/${data.id}`);
     },
     onError: (err: any) => toast.error(err.message || "Erro ao criar aditivo"),
@@ -449,7 +481,21 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
               </span>
               <div className="flex gap-3">
                 <Button variant="outline" onClick={() => setShowAditivoModal(false)} className="text-gray-600 px-6">
-                  Cancelar
+                  Fechar (manter rascunho)
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (!confirm("Descartar rascunho deste aditivo? Esta ação não pode ser desfeita.")) return;
+                    setSelectedClausulas({});
+                    setNovoTextoClausulas({});
+                    setDataAditivo(new Date().toISOString().split('T')[0]);
+                    clearDraft();
+                    toast.success("Rascunho descartado.");
+                  }}
+                  className="text-red-600 border-red-200 hover:bg-red-50 px-4"
+                >
+                  Descartar Rascunho
                 </Button>
                 <Button
                   onClick={() => {

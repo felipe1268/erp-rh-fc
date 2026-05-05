@@ -1268,6 +1268,26 @@ export const pjContractsRouter = router({
         return { id: (result.rows[0] as any).id, numeroAditivo: nextNum };
       }),
 
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        companyId: z.number(),
+        clausulasAlteradas: z.string(),
+        dataAditivo: z.string(),
+        observacoes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        await db.execute(sql`
+          UPDATE pj_contract_aditivos
+             SET "clausulasAlteradas" = ${input.clausulasAlteradas},
+                 "dataAditivo"        = ${input.dataAditivo},
+                 observacoes          = ${input.observacoes ?? null}
+           WHERE id = ${input.id} AND "companyId" = ${input.companyId}
+        `);
+        return { ok: true };
+      }),
+
     delete: protectedProcedure
       .input(z.object({ id: z.number(), companyId: z.number() }))
       .mutation(async ({ input }) => {

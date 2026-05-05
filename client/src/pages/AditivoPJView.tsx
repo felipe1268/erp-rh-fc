@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Printer, Loader2 } from "lucide-react";
+import { ArrowLeft, Printer, Loader2, Pencil, Check, Save } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
+import { toast } from "sonner";
 
 function formatDateExtenso(d: string | null | undefined) {
   if (!d) return "_______________";
@@ -27,10 +29,43 @@ function AditivoPJViewInner({ aditivoId }: { aditivoId: number }) {
   const { selectedCompany, selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
 
-  const { data: aditivo, isLoading, error } = (trpc as any).pj.aditivos.getById.useQuery(
+  const { data: aditivo, isLoading, error, refetch } = (trpc as any).pj.aditivos.getById.useQuery(
     { id: aditivoId, companyId },
     { enabled: !!aditivoId && companyId > 0 }
   );
+
+  // ---------- EDIÇÃO ----------
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editData, setEditData] = useState("");
+  const [editClausulas, setEditClausulas] = useState<Array<{ clausulaNum: string; clausulaTitulo: string; novoTexto: string }>>([]);
+
+  // Cláusulas originais do contrato (para poder ADICIONAR uma nova ao aditivo durante a edição)
+  const clausulasContratoQ = (trpc as any).pj.extrairClausulas.useQuery(
+    { contractId: aditivo?.contractId, companyId },
+    { enabled: showEditModal && !!aditivo?.contractId && companyId > 0 },
+  );
+  const clausulasContrato: Array<{ numero: string; titulo: string }> = clausulasContratoQ.data ?? [];
+
+  const updateAditivo = (trpc as any).pj.aditivos.update.useMutation({
+    onSuccess: () => {
+      toast.success("Aditivo atualizado com sucesso!");
+      setShowEditModal(false);
+      refetch();
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao atualizar aditivo"),
+  });
+
+  // Pré-preenche o estado de edição quando o modal abre
+  useEffect(() => {
+    if (!showEditModal || !aditivo) return;
+    setEditData(aditivo.dataAditivo || "");
+    try {
+      const arr = JSON.parse(aditivo.clausulasAlteradas || "[]");
+      setEditClausulas(Array.isArray(arr) ? arr : []);
+    } catch {
+      setEditClausulas([]);
+    }
+  }, [showEditModal, aditivo]);
 
   const handlePrint = () => window.print();
 
@@ -75,6 +110,22 @@ function AditivoPJViewInner({ aditivoId }: { aditivoId: number }) {
     clausulasData = JSON.parse(aditivo.clausulasAlteradas || "[]");
   } catch { clausulasData = []; }
 
+  const adicionarClausulaNova = (numero: string, titulo: string) => {
+    if (editClausulas.find(c => c.clausulaNum === numero)) {
+      toast.error(`Cláusula ${numero} já está no aditivo.`);
+      return;
+    }
+    setEditClausulas(prev => [...prev, { clausulaNum: numero, clausulaTitulo: titulo, novoTexto: "" }]);
+  };
+
+  const removerClausula = (numero: string) => {
+    setEditClausulas(prev => prev.filter(c => c.clausulaNum !== numero));
+  };
+
+  const atualizarTextoClausula = (numero: string, texto: string) => {
+    setEditClausulas(prev => prev.map(c => c.clausulaNum === numero ? { ...c, novoTexto: texto } : c));
+  };
+
   return (
     <>
       <div className="print:hidden sticky top-0 z-50 bg-gradient-to-r from-blue-800 to-blue-900 text-white px-6 py-3 flex items-center justify-between shadow-lg">
@@ -88,6 +139,9 @@ function AditivoPJViewInner({ aditivoId }: { aditivoId: number }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setShowEditModal(true)} className="text-white hover:bg-white/20 gap-1.5 border border-amber-300/50 text-amber-200">
+            <Pencil className="h-4 w-4" /> Editar Aditivo
+          </Button>
           <Button variant="ghost" size="sm" onClick={handlePrint} className="text-white hover:bg-white/20 gap-1.5 border border-white/30">
             <Printer className="h-4 w-4" /> Imprimir / Salvar PDF
           </Button>
@@ -207,6 +261,119 @@ function AditivoPJViewInner({ aditivoId }: { aditivoId: number }) {
 
         </div>
       </div>
+
+      {/* MODAL EDITAR ADITIVO */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent className="max-w-3xl w-[92vw] max-h-[88vh] overflow-y-auto" style={{ background: '#ffffff', color: '#111827' }}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg text-gray-900">
+              <Pencil className="h-5 w-5 text-amber-600" />
+              Editar Aditivo nº {aditivo.numeroAditivo}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border-2 border-amber-200 bg-amber-50 p-3">
+              <p className="text-sm text-amber-800">
+                Ajuste a data, edite o texto das cláusulas já incluídas, remova ou adicione novas cláusulas. As alterações <strong>não criam um novo aditivo</strong> — apenas atualizam o atual.
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-gray-600 mb-1 block">Data do Aditivo</label>
+              <input
+                type="date"
+                value={editData}
+                onChange={e => setEditData(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-48 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Cláusulas alteradas neste aditivo</p>
+              {editClausulas.length === 0 ? (
+                <p className="text-sm text-gray-400 italic py-3">Nenhuma cláusula no aditivo. Adicione abaixo.</p>
+              ) : (
+                <div className="space-y-2">
+                  {editClausulas.map((cl) => (
+                    <div key={cl.clausulaNum} className="rounded-lg border-2 border-blue-300 bg-blue-50/40 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <span className="text-xs font-bold text-gray-700">Cláusula {cl.clausulaNum}</span>
+                          <span className="text-xs text-gray-500 ml-2">{cl.clausulaTitulo}</span>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => removerClausula(cl.clausulaNum)} className="text-red-600 hover:bg-red-50 h-7 px-2 text-xs">
+                          Remover
+                        </Button>
+                      </div>
+                      <textarea
+                        value={cl.novoTexto}
+                        onChange={e => atualizarTextoClausula(cl.clausulaNum, e.target.value)}
+                        rows={5}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y bg-white"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-2">Adicionar outra cláusula do contrato</p>
+              {clausulasContratoQ.isLoading ? (
+                <div className="flex items-center gap-2 py-3 text-gray-400 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Carregando cláusulas do contrato...
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {clausulasContrato
+                    .filter(c => !editClausulas.find(ec => ec.clausulaNum === c.numero))
+                    .map(c => (
+                      <button
+                        key={c.numero}
+                        type="button"
+                        onClick={() => adicionarClausulaNova(c.numero, c.titulo)}
+                        className="text-xs border border-gray-300 hover:border-blue-500 hover:bg-blue-50 rounded-lg px-3 py-1.5 text-gray-700"
+                      >
+                        + Cláusula {c.numero} <span className="text-gray-400">— {c.titulo}</span>
+                      </button>
+                    ))}
+                  {clausulasContrato.filter(c => !editClausulas.find(ec => ec.clausulaNum === c.numero)).length === 0 && !clausulasContratoQ.isLoading && (
+                    <p className="text-xs text-gray-400 italic">Todas as cláusulas do contrato já estão neste aditivo.</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-200">
+              <Button variant="outline" onClick={() => setShowEditModal(false)} className="text-gray-600 px-6">
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!editData) { toast.error("Informe a data do aditivo."); return; }
+                  if (editClausulas.length === 0) { toast.error("O aditivo precisa ter ao menos uma cláusula."); return; }
+                  const semTexto = editClausulas.filter(c => !c.novoTexto.trim()).map(c => c.clausulaNum);
+                  if (semTexto.length > 0) {
+                    toast.error(`Preencha a nova redação para a(s) cláusula(s): ${semTexto.join(", ")}`);
+                    return;
+                  }
+                  updateAditivo.mutate({
+                    id: aditivoId,
+                    companyId,
+                    clausulasAlteradas: JSON.stringify(editClausulas),
+                    dataAditivo: editData,
+                  });
+                }}
+                disabled={updateAditivo.isPending}
+                className="bg-amber-600 hover:bg-amber-500 text-white gap-1.5 px-6"
+              >
+                {updateAditivo.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Salvar Alterações
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <style>{`
         @media print {
