@@ -3211,3 +3211,36 @@ export async function reinsertSnapshot(tableName: string, snapshot: Record<strin
   }).join(", ");
   await db.execute(sql.raw(`INSERT INTO "${tableName}" (${colList}) VALUES (${literals}) ON CONFLICT (id) DO NOTHING`));
 }
+
+/**
+ * Encerra todos os contratos PJ ativos de um funcionário desligado.
+ * Marca status='encerrado' e adiciona observação com motivo/data.
+ * Idempotente: se não há contratos ativos, não faz nada.
+ * Retorna a quantidade de contratos encerrados.
+ */
+export async function encerrarContratosPjDoFuncionario(
+  employeeId: number,
+  motivo: string,
+  encerradoPorNome: string,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const hoje = new Date().toISOString().split('T')[0];
+  const obsLine = `[Encerrado automaticamente em ${hoje} — ${motivo} — por ${encerradoPorNome}]`;
+  const r: any = await db.execute(sql`
+    UPDATE pj_contracts
+    SET "status" = 'encerrado',
+        "observacoes" = COALESCE("observacoes" || E'\n', '') || ${obsLine},
+        "updatedAt" = NOW()
+    WHERE "employeeId" = ${employeeId}
+      AND "status" IN ('ativo', 'pendente_assinatura', 'suspenso')
+      AND "deletedAt" IS NULL
+    RETURNING id
+  `);
+  const rows = r?.rows ?? r ?? [];
+  const count = Array.isArray(rows) ? rows.length : 0;
+  if (count > 0) {
+    console.log(`[PJ AutoEncerrar] Funcionário #${employeeId}: ${count} contrato(s) PJ encerrado(s) (${motivo})`);
+  }
+  return count;
+}

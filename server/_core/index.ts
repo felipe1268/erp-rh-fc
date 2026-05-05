@@ -541,6 +541,25 @@ Regras:
           }
         } catch (e: any) { console.log(`[TimecardFix] Skipped:`, e?.message || e); }
 
+        try {
+          const r: any = await db.execute(sql`
+            UPDATE pj_contracts pc
+            SET "status" = 'encerrado',
+                "observacoes" = COALESCE(pc."observacoes" || E'\n', '') || '[Encerrado automaticamente — funcionário desligado (backfill)]',
+                "updatedAt" = NOW()
+            FROM employees e
+            WHERE pc."employeeId" = e.id
+              AND pc."status" IN ('ativo', 'pendente_assinatura', 'suspenso')
+              AND pc."deletedAt" IS NULL
+              AND (e."status" IN ('Desligado', 'Lista_Negra', 'Inativo') OR e."deletedAt" IS NOT NULL)
+            RETURNING pc.id
+          `);
+          const rows = r?.rows ?? r ?? [];
+          const n = Array.isArray(rows) ? rows.length : 0;
+          if (n > 0) console.log(`[PJBackfill] Encerrados ${n} contrato(s) PJ de funcionários já desligados.`);
+          else console.log(`[PJBackfill] Nenhum contrato PJ pendente de encerramento — OK`);
+        } catch (e: any) { console.log(`[PJBackfill] Skipped:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

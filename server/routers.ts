@@ -42,7 +42,7 @@ import {
   listTrashEntries, getTrashEntry, markTrashEntryRestored, deleteTrashEntry, reinsertSnapshot,
 } from "./db";
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
-import { getDb } from "./db";
+import { getDb, encerrarContratosPjDoFuncionario } from "./db";
 import { normalizeCidadeInput } from "../shared/normalizeCidade";
 import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist } from "../drizzle/schema";
 import { eq, and, sql, or, ilike, isNull } from "drizzle-orm";
@@ -591,6 +591,13 @@ export const appRouter = router({
             console.log(`[AutoDesalocação] Funcionário #${input.id} removido da obra (status: ${statusNovo})`);
           }
         } catch (e) { console.error('[AutoDesalocação] Erro:', e); }
+        try {
+          await encerrarContratosPjDoFuncionario(
+            input.id,
+            `Status alterado para ${statusNovo} via edição de colaborador`,
+            ctx.user.name ?? 'Sistema',
+          );
+        } catch (e) { console.error('[employees.update] Erro ao encerrar contratos PJ:', e); }
       }
       
       // Disparo automático de notificação por mudança de status (fire-and-forget, não bloqueia o retorno)
@@ -772,6 +779,13 @@ export const appRouter = router({
           console.log(`[AutoDesalocação] Funcionário #${input.employeeId} removido da obra (desligamento experiência)`);
         }
       } catch (e) { console.error('[AutoDesalocação] Erro:', e); }
+      try {
+        await encerrarContratosPjDoFuncionario(
+          input.employeeId,
+          'Desligamento durante período de experiência',
+          ctx.user.name ?? 'Sistema',
+        );
+      } catch (e) { console.error('[ExperienciaDesligamento] Erro ao encerrar contratos PJ:', e); }
       return { success: true };
     }),
 

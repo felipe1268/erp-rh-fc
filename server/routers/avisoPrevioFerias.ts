@@ -1,6 +1,6 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
-import { getDb, createAuditLog } from "../db";
+import { getDb, createAuditLog, encerrarContratosPjDoFuncionario } from "../db";
 import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo, employeeTerminationChecklist } from "../../drizzle/schema";
 import { eq, and, sql, isNull, lte, gte, desc, asc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -1299,6 +1299,15 @@ export const avisoPrevioFeriasRouter = router({
             }
             await db.update(employees).set({ status: novoStatus } as any)
               .where(eq(employees.id, aviso.employeeId));
+            if (novoStatus === 'Desligado') {
+              try {
+                await encerrarContratosPjDoFuncionario(
+                  aviso.employeeId,
+                  `Desligamento via cancelamento de aviso prévio #${id}`,
+                  ctx.user?.name ?? 'Sistema',
+                );
+              } catch (e) { console.error('[avisoPrevio.update] Erro ao encerrar contratos PJ:', e); }
+            }
           }
         }
 
@@ -1615,6 +1624,14 @@ export const avisoPrevioFeriasRouter = router({
                 .where(eq(obraFuncionarios.id, aloc.id));
             }
           } catch (e) { console.error('[darBaixa] Erro ao desalocar obra:', e); }
+
+          try {
+            await encerrarContratosPjDoFuncionario(
+              aviso.employeeId,
+              `Desligamento via aviso prévio #${input.id}`,
+              ctx.user.name ?? 'Sistema',
+            );
+          } catch (e) { console.error('[darBaixa] Erro ao encerrar contratos PJ:', e); }
 
           desligouFuncionario = true;
           await createAuditLog({
