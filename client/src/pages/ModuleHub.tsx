@@ -322,6 +322,11 @@ export default function ModuleHub() {
   const [dragActive, setDragActive] = useState<string | null>(null);
   const [dragTarget, setDragTarget] = useState<string | null>(null);
   const didDrag = useRef(false);
+  // Touch (mobile/tablet) — long-press para arrastar
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchDragging = useRef(false);
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  const [touchDragId, setTouchDragId] = useState<string | null>(null);
 
   const greeting = useMemo(() => getGreeting(), []);
   const formattedDate = useMemo(() => getFormattedDate(), []);
@@ -432,6 +437,90 @@ export default function ModuleHub() {
     dragOverId.current = null;
     setTimeout(() => { didDrag.current = false; }, 0);
   }
+
+  // ── Touch handlers (mobile/tablet) ─────────────────────────────────
+  function handleTouchStart(id: string, e: React.TouchEvent) {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    touchStartPos.current = { x: t.clientX, y: t.clientY };
+    touchDragging.current = false;
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    // Long-press de 350ms ativa o modo arrastar
+    longPressTimer.current = setTimeout(() => {
+      touchDragging.current = true;
+      handleDragStart(id);     // este chama didDrag = false internamente
+      didDrag.current = true;  // por isso reatribuímos depois
+      setTouchDragId(id);
+      try { (navigator as any).vibrate?.(15); } catch {}
+    }, 350);
+  }
+
+  // Limpa estado sem chamar handleDragEnd (evita o setTimeout(0) que zera didDrag
+  // antes do click sintético do touchend disparar). Mantém didDrag=true por 350ms
+  // para suprimir o click que o navegador dispara depois de um touchend.
+  function endTouchDrag() {
+    touchDragging.current = false;
+    setTouchDragId(null);
+    setDragActive(null);
+    setDragTarget(null);
+    draggingId.current = null;
+    dragOverId.current = null;
+    didDrag.current = true;
+    setTimeout(() => { didDrag.current = false; }, 350);
+  }
+
+  function handleTouchEnd() {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    if (touchDragging.current) {
+      if (dragOverId.current && draggingId.current && dragOverId.current !== draggingId.current) {
+        handleDrop(dragOverId.current);
+      }
+      endTouchDrag();
+    }
+    touchStartPos.current = null;
+  }
+
+  // Listener global não-passivo: precisa do preventDefault para travar o scroll
+  // durante o arrasto. React 17+ usa listeners passivos no root, por isso anexamos no document.
+  useEffect(() => {
+    function onMove(e: TouchEvent) {
+      // Cancela o long-press se o usuário começa a deslizar antes de ativar o arrastar
+      if (!touchDragging.current && touchStartPos.current && longPressTimer.current) {
+        const t = e.touches[0];
+        const dx = Math.abs(t.clientX - touchStartPos.current.x);
+        const dy = Math.abs(t.clientY - touchStartPos.current.y);
+        if (dx > 10 || dy > 10) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
+          touchStartPos.current = null;
+        }
+        return;
+      }
+      if (!touchDragging.current) return;
+      e.preventDefault();
+      const t = e.touches[0];
+      const el = document.elementFromPoint(t.clientX, t.clientY) as HTMLElement | null;
+      const tileEl = el?.closest('[data-module-id]') as HTMLElement | null;
+      if (tileEl) {
+        const targetId = tileEl.getAttribute('data-module-id');
+        if (targetId && targetId !== draggingId.current && targetId !== dragOverId.current) {
+          dragOverId.current = targetId;
+          setDragTarget(targetId);
+        }
+      }
+    }
+    function onCancel() {
+      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+      if (touchDragging.current) endTouchDrag();
+      touchStartPos.current = null;
+    }
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchcancel', onCancel);
+    return () => {
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchcancel', onCancel);
+    };
+  }, []);
   const disabledModules = MODULES.filter(m => {
     if (!m.active) return false;
     const configKey = hubToConfigKey[m.id] ?? m.id;
@@ -634,28 +723,38 @@ export default function ModuleHub() {
               {/* Module Tiles - App grid style */}
               <div className="flex flex-wrap gap-3 mt-3 relative z-10">
                 {sortedActiveModules.map((mod, idx) => {
-                  const isBeingDragged = dragActive === mod.id;
-                  const isDropTarget = dragTarget === mod.id && dragActive !== mod.id;
+                  const isBeingDragged = dragActive === mod.id || touchDragId === mod.id;
+                  const isDropTarget = dragTarget === mod.id && dragActive !== mod.id && touchDragId !== mod.id;
                   return (
                     <div
                       key={mod.id}
+                      data-module-id={mod.id}
                       draggable
                       onDragStart={() => handleDragStart(mod.id)}
                       onDragOver={e => handleDragOver(e, mod.id)}
                       onDrop={() => handleDrop(mod.id)}
                       onDragEnd={handleDragEnd}
+                      onTouchStart={(e) => handleTouchStart(mod.id, e)}
+                      onTouchEnd={handleTouchEnd}
+                      onContextMenu={(e) => { if (touchDragging.current) e.preventDefault(); }}
                       onClick={() => { if (!didDrag.current) { setActiveModule(mod.id as ModuleId); navigate(mod.path); } }}
                       className={`group relative flex flex-col items-center justify-center text-center rounded-2xl p-3 cursor-pointer ${mounted ? 'hub-animate-up' : 'opacity-0'} transition-all duration-200 hover:scale-[1.04] select-none`}
                       style={{
                         animationDelay: `${0.3 + idx * 0.07}s`,
                         opacity: isBeingDragged ? 0.4 : 1,
+                        transform: touchDragId === mod.id ? 'scale(1.08)' : undefined,
+                        zIndex: touchDragId === mod.id ? 50 : undefined,
                         width: '115px',
                         minHeight: '96px',
                         background: `linear-gradient(145deg, ${mod.accentFrom}16, ${mod.accentTo}0a)`,
                         border: isDropTarget
                           ? `2px solid ${mod.accentFrom}`
                           : `1.5px solid ${mod.accentFrom}38`,
-                        boxShadow: `0 4px 20px -6px ${mod.accentGlow || mod.accentFrom + "28"}`,
+                        boxShadow: touchDragId === mod.id
+                          ? `0 12px 32px -6px ${mod.accentGlow || mod.accentFrom + "55"}`
+                          : `0 4px 20px -6px ${mod.accentGlow || mod.accentFrom + "28"}`,
+                        WebkitTouchCallout: 'none',
+                        WebkitUserSelect: 'none',
                       }}
                     >
                       {/* Hover glow */}
