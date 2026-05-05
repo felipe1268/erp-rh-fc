@@ -245,11 +245,15 @@ export default function ComunicadosInternos() {
             <div className="mt-12 pt-6">
               <div className="flex justify-between gap-12">
                 <div className="flex-1 text-center">
+                  {c.criadoPor && (
+                    <p className="text-xs font-semibold text-[#1B2A4A] mb-1 mx-4">{c.criadoPor}</p>
+                  )}
                   <div className="border-t border-gray-400 pt-2 mx-4">
                     <p className="text-[10px] text-gray-500">Departamento de Recursos Humanos</p>
                   </div>
                 </div>
                 <div className="flex-1 text-center">
+                  <p className="text-xs font-semibold text-[#1B2A4A] mb-1 mx-4">&nbsp;</p>
                   <div className="border-t border-gray-400 pt-2 mx-4">
                     <p className="text-[10px] text-gray-500">Direção</p>
                   </div>

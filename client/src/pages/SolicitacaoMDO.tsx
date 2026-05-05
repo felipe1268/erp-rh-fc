@@ -194,9 +194,11 @@ function ChecklistOnboarding({ checklist, companyId, companyIds, userName, check
           <p style="margin-top:10px">Atenciosamente,</p>
           <div class="signature">
             <div class="signature-line"></div>
-            <div><strong>${e.nomeEmpresa}</strong></div>
-            ${e.telefoneEmpresa ? `<div>Telefone: ${e.telefoneEmpresa}</div>` : ""}
-            ${e.emailEmpresa ? `<div>E-mail: ${e.emailEmpresa}</div>` : ""}
+            <div><strong>${e.responsavelNome}</strong></div>
+            <div style="font-size:11px;color:#555">Responsável pelo encaminhamento</div>
+            <div style="margin-top:6px"><strong>${e.nomeEmpresa}</strong></div>
+            ${e.telefoneEmpresa ? `<div style="font-size:11px;color:#555">Telefone: ${e.telefoneEmpresa}</div>` : ""}
+            ${e.emailEmpresa ? `<div style="font-size:11px;color:#555">E-mail: ${e.emailEmpresa}</div>` : ""}
           </div>
           <p style="margin-top:40px">Local e data: ${e.cidadeData}</p>
         </div>
