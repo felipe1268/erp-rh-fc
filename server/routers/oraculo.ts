@@ -7,13 +7,30 @@ import { invokeLLM } from "../_core/llm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================
-// CACHE de contexto — evita 8 queries por mensagem
+// CACHE de contexto — evita N queries por mensagem
 // ============================================================
 const ctxCache = new Map<string, { data: string; ts: number }>();
-const CTX_TTL_MS = 5 * 60 * 1000; // 5 minutos
+const CTX_TTL_MS = 2 * 60 * 1000; // 2 minutos (snapshot mais detalhado, refresh mais frequente)
+
+// Limites por lista — evita estourar context window do LLM mesmo em empresas grandes.
+const MAX_EMPLOYEES = 3000;
+const MAX_OBRAS = 500;
+const MAX_PJ = 1000;
+const MAX_VEHICLES = 800;
+const MAX_PROCESSOS = 300;
+const MAX_TERCEIRIZADOS = 500;
+const MAX_FORNECEDORES = 500;
+// Hard cap de bytes do snapshot serializado (~600KB ≈ 150K tokens) — Claude Sonnet aceita 200K.
+const MAX_SNAPSHOT_BYTES = 600_000;
+
+// Helper: extrai linhas de qualquer formato de retorno do Neon/Drizzle execute
+function rowsOf(res: any): any[] {
+  return (res?.rows ?? res ?? []) as any[];
+}
 
 // ============================================================
-// CONTEXT BUILDER — snapshot de dados de todos os módulos
+// CONTEXT BUILDER — snapshot COMPLETO de dados de todos os módulos
+// O Oráculo é assistente do ADM Master e tem acesso irrestrito.
 // ============================================================
 async function buildContext(companyId: number, companyIds?: number[]): Promise<string> {
   const db = await getDb();
@@ -36,13 +53,43 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
 
   console.log("[ORÁCULO] buildContext rodando para empresas:", ids);
 
-  const [empRes, obrasRes, processosRes, warnRes, atesRes, folhaRes, frotaRes, epiRes] = await Promise.allSettled([
+  const queries = await Promise.allSettled([
+    // 0 — Empresas (com nome fantasia, razão social, cnpj)
+    db.execute(sql`
+      SELECT id, "nomeFantasia", razao_social, cnpj, cidade, estado
+      FROM companies
+      WHERE id = ANY(${ids}::int[]) AND "deletedAt" IS NULL
+      ORDER BY id
+    `),
+    // 1 — Colaboradores (status agregado)
     db.execute(sql`
       SELECT status, COUNT(*)::int as total
       FROM employees
       WHERE "companyId" = ANY(${ids}::int[]) AND "deletedAt" IS NULL
       GROUP BY status
     `),
+    // 2 — Colaboradores DETALHADOS (lista completa com vínculos a obras)
+    // PII sensível (CPF, salário, email, celular) deliberadamente OMITIDA do snapshot
+    // enviado ao LLM externo — pode ser consultada pontualmente via ERP.
+    db.execute(sql`
+      SELECT
+        e.id, e."companyId", e.matricula, e."nomeCompleto", e.cargo, e.funcao, e.setor,
+        e.status, e."tipoContrato", e."dataAdmissao", e."dataDemissao",
+        e.cidade, e.estado,
+        COALESCE(
+          (SELECT string_agg(DISTINCT o.nome, ' | ' ORDER BY o.nome)
+           FROM obra_funcionarios ofa
+           JOIN obras o ON o.id = ofa."obraId"
+           WHERE ofa."employeeId" = e.id AND ofa."isActive" = 1
+             AND o."deletedAt" IS NULL),
+          ''
+        ) as obras_vinculadas
+      FROM employees e
+      WHERE e."companyId" = ANY(${ids}::int[]) AND e."deletedAt" IS NULL
+      ORDER BY e."nomeCompleto"
+      LIMIT ${MAX_EMPLOYEES}
+    `),
+    // 3 — Obras (agregado de status)
     db.execute(sql`
       SELECT
         COUNT(*)::int as total,
@@ -52,22 +99,50 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
       FROM obras
       WHERE "companyId" = ANY(${ids}::int[]) AND "deletedAt" IS NULL
     `),
+    // 4 — Obras DETALHADAS (lista com responsáveis e efetivo)
     db.execute(sql`
       SELECT
-        (SELECT COUNT(*)::int FROM processos_trabalhistas WHERE "companyId" = ANY(${ids}::int[])) as trabalhistas,
-        (SELECT COUNT(*)::int FROM processos_tributarios WHERE "companyId" = ANY(${ids}::int[])) as tributarios,
-        (SELECT COUNT(*)::int FROM processos_civis WHERE "companyId" = ANY(${ids}::int[])) as civis
+        o.id, o."companyId", o.nome, o.codigo, o.cliente, o.responsavel, o.responsavel_id,
+        o.status, o.cidade, o.estado, o."dataInicio", o."dataPrevisaoFim", o."dataFimReal",
+        o."valorContrato", o."tipoContrato", o.gerenciadora_nome,
+        (SELECT COUNT(*)::int FROM obra_funcionarios ofx
+          WHERE ofx."obraId" = o.id AND ofx."isActive" = 1) as efetivo_ativo,
+        (SELECT e."nomeCompleto" FROM employees e WHERE e.id = o.responsavel_id) as responsavel_funcionario
+      FROM obras o
+      WHERE o."companyId" = ANY(${ids}::int[]) AND o."deletedAt" IS NULL
+      ORDER BY o.status, o.nome
+      LIMIT ${MAX_OBRAS}
     `),
+    // 5 — Processos jurídicos (contagem)
+    db.execute(sql`
+      SELECT
+        (SELECT COUNT(*)::int FROM processos_trabalhistas WHERE "companyId" = ANY(${ids}::int[]) AND "deletedAt" IS NULL) as trabalhistas,
+        (SELECT COUNT(*)::int FROM processos_tributarios WHERE company_id = ANY(${ids}::int[])) as tributarios,
+        (SELECT COUNT(*)::int FROM processos_civeis WHERE company_id = ANY(${ids}::int[])) as civis
+    `),
+    // 6 — Processos trabalhistas DETALHADOS
+    db.execute(sql`
+      SELECT
+        id, "numeroProcesso", reclamante, status, fase, risco, tribunal, comarca,
+        "valorCausa", "dataDistribuicao", "dataAudiencia", reclamados
+      FROM processos_trabalhistas
+      WHERE "companyId" = ANY(${ids}::int[]) AND "deletedAt" IS NULL
+      ORDER BY "dataDistribuicao" DESC NULLS LAST
+      LIMIT ${MAX_PROCESSOS}
+    `),
+    // 7 — Advertências (30 dias)
     db.execute(sql`
       SELECT COUNT(*)::int as total
       FROM warnings
       WHERE "companyId" = ANY(${ids}::int[]) AND "deletedAt" IS NULL AND "createdAt"::date >= ${trintaDias}
     `),
+    // 8 — Atestados (30 dias)
     db.execute(sql`
       SELECT COUNT(*)::int as total
       FROM atestados
       WHERE "companyId" = ANY(${ids}::int[]) AND "deletedAt" IS NULL AND "dataInicio" >= ${trintaDias}
     `),
+    // 9 — Folha do mês
     db.execute(sql`
       SELECT
         SUM(CASE WHEN tipo_lancamento = 'clt' THEN valor ELSE 0 END)::numeric as custo_clt,
@@ -78,79 +153,305 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
       WHERE "companyId" = ANY(${ids}::int[]) AND competencia = ${mesAtual}
       GROUP BY competencia
     `),
+    // 10 — Frota (agregado)
     db.execute(sql`
       SELECT COUNT(*)::int as total_veiculos,
         COUNT(CASE WHEN "statusVeiculo" ILIKE 'ativo%' THEN 1 END)::int as ativos
       FROM vehicles
       WHERE "companyId" = ANY(${ids}::int[])
     `),
+    // 11 — Frota DETALHADA
+    db.execute(sql`
+      SELECT v.id, v."companyId", v.placa, v.modelo, v.marca, v."tipoVeiculo",
+        v."statusVeiculo", v.km_atual, v.responsavel, v.motorista_padrao,
+        (SELECT o.nome FROM obras o WHERE o.id = v.obra_id) as obra_alocada
+      FROM vehicles v
+      WHERE v."companyId" = ANY(${ids}::int[])
+      ORDER BY v.placa
+      LIMIT ${MAX_VEHICLES}
+    `),
+    // 12 — EPI alertas pendentes
     db.execute(sql`
       SELECT COUNT(*)::int as pendentes
       FROM epi_discount_alerts
       WHERE "companyId" = ANY(${ids}::int[]) AND status = 'pendente'
     `),
+    // 13 — Contratos PJ DETALHADOS
+    db.execute(sql`
+      SELECT pj.id, pj."companyId", pj."numeroContrato", pj."razaoSocialPrestador",
+        pj."cnpjPrestador", pj."objetoContrato", pj.status, pj."dataInicio", pj."dataFim",
+        pj."valorMensal", pj.valor_total_contrato, pj.valor_medido,
+        e."nomeCompleto" as funcionario_nome, e.id as employee_id,
+        (SELECT o.nome FROM obras o WHERE o.id = pj.obra_id) as obra_vinculada
+      FROM pj_contracts pj
+      LEFT JOIN employees e ON e.id = pj."employeeId"
+      WHERE pj."companyId" = ANY(${ids}::int[]) AND pj."deletedAt" IS NULL
+      ORDER BY pj.status, e."nomeCompleto"
+      LIMIT ${MAX_PJ}
+    `),
+    // 14 — Setores
+    db.execute(sql`
+      SELECT id, nome, "companyId" FROM sectors
+      WHERE "companyId" = ANY(${ids}::int[])
+      ORDER BY nome
+    `),
+    // 15 — Funções/Cargos catalogados
+    db.execute(sql`
+      SELECT id, nome, "companyId" FROM job_functions
+      WHERE "companyId" = ANY(${ids}::int[])
+      ORDER BY nome
+    `),
+    // 16 — Empresas terceirizadas
+    db.execute(sql`
+      SELECT id, "companyId", razao_social, nome_fantasia, cnpj, status,
+        responsavel_nome, tipo_servico
+      FROM empresas_terceiras
+      WHERE "companyId" = ANY(${ids}::int[]) AND deleted_at IS NULL
+      ORDER BY razao_social
+      LIMIT ${MAX_TERCEIRIZADOS}
+    `),
+    // 17 — Funcionários terceirizados (CPF omitido — PII)
+    db.execute(sql`
+      SELECT id, "companyId", nome, funcao, status, "empresaTerceiraId",
+        obra_nome, status_aptidao
+      FROM funcionarios_terceiros
+      WHERE "companyId" = ANY(${ids}::int[]) AND deleted_at IS NULL
+      ORDER BY nome
+      LIMIT ${MAX_TERCEIRIZADOS}
+    `),
+    // 18 — Fornecedores
+    db.execute(sql`
+      SELECT id, company_id, razao_social, nome_fantasia, cnpj,
+        atividade_principal, ativo
+      FROM fornecedores
+      WHERE company_id = ANY(${ids}::int[])
+      ORDER BY razao_social
+      LIMIT ${MAX_FORNECEDORES}
+    `),
+    // 19 — Clientes
+    db.execute(sql`
+      SELECT id, company_id, razao_social, nome_fantasia, cnpj, cidade, estado, ativo
+      FROM clientes
+      WHERE company_id = ANY(${ids}::int[])
+      ORDER BY razao_social
+      LIMIT 500
+    `),
+    // 20 — Férias programadas / em andamento
+    db.execute(sql`
+      SELECT vp.id, vp."employeeId", e."nomeCompleto" as nome,
+        vp."dataInicio", vp."dataFim", vp.status, vp."diasGozo"
+      FROM vacation_periods vp
+      LEFT JOIN employees e ON e.id = vp."employeeId"
+      WHERE vp."companyId" = ANY(${ids}::int[])
+        AND vp."deletedAt" IS NULL
+        AND vp.status NOT IN ('cancelada','concluida')
+      ORDER BY vp."dataInicio" NULLS LAST
+      LIMIT 500
+    `),
   ]);
 
-  // Diagnóstico: logar qualquer query que tenha falhado
-  const queryNames = ["employees", "obras", "processos", "warnings", "atestados", "folha", "frota", "epi"];
-  const allResults = [empRes, obrasRes, processosRes, warnRes, atesRes, folhaRes, frotaRes, epiRes];
-  allResults.forEach((r, i) => {
+  // Diagnóstico: logar e EXPOR no snapshot qualquer query que tenha falhado.
+  // O LLM precisa saber que dados podem estar incompletos (evita falso negativo).
+  const queryNames = [
+    "companies", "employees_status", "employees_detail", "obras_count", "obras_detail",
+    "processos_count", "processos_trab_detail", "warnings_30d", "atestados_30d",
+    "folha_mes", "frota_count", "frota_detail", "epi_alertas",
+    "pj_contracts", "sectors", "job_functions", "terceirizadas", "func_terceiros",
+    "fornecedores", "clientes", "ferias",
+  ];
+  const queryErrors: { secao: string; erro: string }[] = [];
+  queries.forEach((r, i) => {
     if (r.status === "rejected") {
-      console.error(`[ORÁCULO] Query "${queryNames[i]}" FALHOU:`, (r.reason as any)?.message ?? r.reason);
+      const msg = (r.reason as any)?.message ?? String(r.reason);
+      console.error(`[ORÁCULO] Query "${queryNames[i]}" FALHOU:`, msg);
+      queryErrors.push({ secao: queryNames[i], erro: msg });
     }
   });
+  const get = (i: number) => queries[i].status === "fulfilled" ? rowsOf((queries[i] as any).value) : [];
 
   const ctx: Record<string, any> = {
     data_consulta: now.toLocaleDateString("pt-BR", { weekday: "long", year: "numeric", month: "long", day: "numeric" }),
     mes_referencia: mesAtual,
-    empresas_consultadas: ids,
+    empresas_consultadas_ids: ids,
   };
 
-  if (empRes.status === "fulfilled") {
-    const rows = (empRes.value as any).rows ?? empRes.value ?? [];
-    const col: Record<string, number> = {};
-    let total = 0;
-    for (const r of rows) { col[r.status] = Number(r.total); total += Number(r.total); }
-    ctx.colaboradores = { ...col, TOTAL: total };
+  // 0 — Empresas
+  const empresasRows = get(0);
+  ctx.empresas = empresasRows.map((r: any) => ({
+    id: r.id, nomeFantasia: r.nomeFantasia, razaoSocial: r.razao_social,
+    cnpj: r.cnpj, cidade: r.cidade, estado: r.estado,
+  }));
+
+  // 1 — Colaboradores agregado
+  const empStatusRows = get(1);
+  const colAgg: Record<string, number> = {};
+  let totalCol = 0;
+  for (const r of empStatusRows) { colAgg[r.status] = Number(r.total); totalCol += Number(r.total); }
+  ctx.colaboradores_resumo = { ...colAgg, TOTAL: totalCol };
+
+  // 2 — Colaboradores DETALHADOS (sem PII)
+  const empDetailRows = get(2);
+  ctx.colaboradores_lista = empDetailRows.map((r: any) => ({
+    id: r.id, companyId: r.companyId, matricula: r.matricula, nome: r.nomeCompleto,
+    cargo: r.cargo, funcao: r.funcao, setor: r.setor, status: r.status,
+    tipoContrato: r.tipoContrato, dataAdmissao: r.dataAdmissao, dataDemissao: r.dataDemissao,
+    cidade: r.cidade, estado: r.estado,
+    obras: r.obras_vinculadas || null,
+  }));
+  if (ctx.colaboradores_lista.length === MAX_EMPLOYEES) {
+    ctx.colaboradores_lista_truncada = `Mostrando os primeiros ${MAX_EMPLOYEES} colaboradores ordenados por nome.`;
   }
 
-  if (obrasRes.status === "fulfilled") {
-    const r = ((obrasRes.value as any).rows ?? obrasRes.value ?? [])[0] ?? {};
-    ctx.obras = { total: Number(r.total) || 0, em_andamento: Number(r.em_andamento) || 0, concluidas: Number(r.concluidas) || 0, paralisadas: Number(r.paralisadas) || 0 };
+  // 3 — Obras agregado
+  const obrasAggRow = get(3)[0] ?? {};
+  ctx.obras_resumo = {
+    total: Number(obrasAggRow.total) || 0,
+    em_andamento: Number(obrasAggRow.em_andamento) || 0,
+    concluidas: Number(obrasAggRow.concluidas) || 0,
+    paralisadas: Number(obrasAggRow.paralisadas) || 0,
+  };
+
+  // 4 — Obras DETALHADAS
+  const obrasDetailRows = get(4);
+  ctx.obras_lista = obrasDetailRows.map((r: any) => ({
+    id: r.id, companyId: r.companyId, nome: r.nome, codigo: r.codigo, cliente: r.cliente,
+    responsavel: r.responsavel, responsavelFuncionario: r.responsavel_funcionario,
+    status: r.status, cidade: r.cidade, estado: r.estado,
+    dataInicio: r.dataInicio, dataPrevisaoFim: r.dataPrevisaoFim, dataFimReal: r.dataFimReal,
+    valorContrato: r.valorContrato, tipoContrato: r.tipoContrato,
+    gerenciadora: r.gerenciadora_nome, efetivoAtivo: r.efetivo_ativo,
+  }));
+
+  // 5 — Processos contagem
+  const procRow = get(5)[0] ?? {};
+  const t = Number(procRow.trabalhistas) || 0, tr = Number(procRow.tributarios) || 0, ci = Number(procRow.civis) || 0;
+  ctx.processos_juridicos_resumo = { trabalhistas: t, tributarios: tr, civis: ci, total: t + tr + ci };
+
+  // 6 — Processos trabalhistas DETALHADOS
+  ctx.processos_trabalhistas_lista = get(6).map((r: any) => ({
+    id: r.id, numero: r.numeroProcesso, reclamante: r.reclamante,
+    status: r.status, fase: r.fase, risco: r.risco,
+    tribunal: r.tribunal, comarca: r.comarca,
+    valorCausa: r.valorCausa, dataDistribuicao: r.dataDistribuicao,
+    dataAudiencia: r.dataAudiencia, reclamados: r.reclamados,
+  }));
+
+  // 7-8
+  ctx.advertencias_30_dias = Number((get(7)[0] ?? {}).total) || 0;
+  ctx.atestados_30_dias = Number((get(8)[0] ?? {}).total) || 0;
+
+  // 9 — Folha
+  const folhaRow = get(9)[0];
+  if (folhaRow) {
+    ctx.folha_pagamento_mes_atual = {
+      custo_clt: Number(folhaRow.custo_clt) || 0,
+      custo_pj: Number(folhaRow.custo_pj) || 0,
+      custo_total: Number(folhaRow.custo_total) || 0,
+      competencia: folhaRow.competencia,
+    };
   }
 
-  if (processosRes.status === "fulfilled") {
-    const r = ((processosRes.value as any).rows ?? processosRes.value ?? [])[0] ?? {};
-    const t = Number(r.trabalhistas) || 0, tr = Number(r.tributarios) || 0, ci = Number(r.civis) || 0;
-    ctx.processos_juridicos = { trabalhistas: t, tributarios: tr, civis: ci, total: t + tr + ci };
+  // 10-11 — Frota
+  const frotaAgg = get(10)[0] ?? {};
+  ctx.frota_resumo = { total_veiculos: Number(frotaAgg.total_veiculos) || 0, ativos: Number(frotaAgg.ativos) || 0 };
+  ctx.frota_lista = get(11).map((r: any) => ({
+    id: r.id, companyId: r.companyId, placa: r.placa, modelo: r.modelo, marca: r.marca,
+    tipo: r.tipoVeiculo, status: r.statusVeiculo, kmAtual: r.km_atual,
+    responsavel: r.responsavel, motoristaPadrao: r.motorista_padrao,
+    obraAlocada: r.obra_alocada,
+  }));
+
+  // 12 — EPI
+  ctx.epi_alertas_pendentes = Number((get(12)[0] ?? {}).pendentes) || 0;
+
+  // 13 — PJ
+  ctx.pj_contratos_lista = get(13).map((r: any) => ({
+    id: r.id, companyId: r.companyId, numero: r.numeroContrato,
+    prestadorRazaoSocial: r.razaoSocialPrestador, prestadorCnpj: r.cnpjPrestador,
+    objeto: r.objetoContrato, status: r.status,
+    dataInicio: r.dataInicio, dataFim: r.dataFim,
+    valorMensal: r.valorMensal, valorTotal: r.valor_total_contrato, valorMedido: r.valor_medido,
+    funcionarioVinculado: r.funcionario_nome, employeeId: r.employee_id,
+    obraVinculada: r.obra_vinculada,
+  }));
+
+  // 14-15 — Setores e funções
+  ctx.setores = get(14).map((r: any) => ({ id: r.id, nome: r.nome, companyId: r.companyId }));
+  ctx.funcoes_catalogadas = get(15).map((r: any) => ({ id: r.id, nome: r.nome, companyId: r.companyId }));
+
+  // 16-17 — Terceirizados
+  ctx.empresas_terceirizadas = get(16).map((r: any) => ({
+    id: r.id, companyId: r.companyId,
+    razaoSocial: r.razao_social, nomeFantasia: r.nome_fantasia,
+    cnpj: r.cnpj, status: r.status,
+    responsavel: r.responsavel_nome, tipoServico: r.tipo_servico,
+  }));
+  ctx.funcionarios_terceirizados = get(17).map((r: any) => ({
+    id: r.id, companyId: r.companyId, nome: r.nome, funcao: r.funcao,
+    status: r.status, empresaTerceiraId: r.empresaTerceiraId,
+    obraNome: r.obra_nome, statusAptidao: r.status_aptidao,
+  }));
+
+  // 18 — Fornecedores
+  ctx.fornecedores = get(18).map((r: any) => ({
+    id: r.id, companyId: r.company_id, razaoSocial: r.razao_social,
+    nomeFantasia: r.nome_fantasia, cnpj: r.cnpj,
+    atividade: r.atividade_principal, ativo: r.ativo,
+  }));
+
+  // 19 — Clientes
+  ctx.clientes = get(19).map((r: any) => ({
+    id: r.id, companyId: r.company_id, razaoSocial: r.razao_social,
+    nomeFantasia: r.nome_fantasia, cnpj: r.cnpj,
+    cidade: r.cidade, estado: r.estado, ativo: r.ativo,
+  }));
+
+  // 20 — Férias programadas
+  ctx.ferias_programadas = get(20).map((r: any) => ({
+    id: r.id, employeeId: r.employeeId, nome: r.nome,
+    dataInicio: r.dataInicio, dataFim: r.dataFim,
+    status: r.status, diasGozo: r.diasGozo,
+  }));
+
+  // Sinalizadores de qualidade do snapshot — o LLM os usa para evitar falsa confiança.
+  if (queryErrors.length > 0) {
+    ctx._query_errors = queryErrors;
+  }
+  ctx._aviso_pii = "PII sensível (CPF, salário, email, celular) está OMITIDA deste snapshot por política de minimização de dados. Para esses campos, oriente o usuário a consultar diretamente no ERP.";
+
+  let result = JSON.stringify(ctx, null, 2);
+
+  // Hard cap de bytes — degradação progressiva: descarta listas grandes em ordem
+  // até caber em MAX_SNAPSHOT_BYTES. Sinaliza no contexto o que foi truncado.
+  if (result.length > MAX_SNAPSHOT_BYTES) {
+    const truncated: string[] = [];
+    const dropOrder = [
+      "ferias_programadas", "fornecedores", "clientes",
+      "funcionarios_terceirizados", "empresas_terceirizadas",
+      "frota_lista", "processos_trabalhistas_lista", "pj_contratos_lista",
+      "obras_lista", "colaboradores_lista",
+    ];
+    for (const key of dropOrder) {
+      if (result.length <= MAX_SNAPSHOT_BYTES) break;
+      if (Array.isArray(ctx[key]) && ctx[key].length > 0) {
+        truncated.push(`${key} (${ctx[key].length} itens)`);
+        delete ctx[key];
+        result = JSON.stringify(ctx, null, 2);
+      }
+    }
+    ctx._snapshot_truncado = `Snapshot excedeu ${MAX_SNAPSHOT_BYTES} bytes. Listas removidas: ${truncated.join(", ")}. Os dados ainda existem no ERP — peça filtros mais específicos ao usuário.`;
+    result = JSON.stringify(ctx, null, 2);
   }
 
-  if (warnRes.status === "fulfilled") {
-    const r = ((warnRes.value as any).rows ?? warnRes.value ?? [])[0] ?? {};
-    ctx.advertencias_30_dias = Number(r.total) || 0;
-  }
-
-  if (atesRes.status === "fulfilled") {
-    const r = ((atesRes.value as any).rows ?? atesRes.value ?? [])[0] ?? {};
-    ctx.atestados_30_dias = Number(r.total) || 0;
-  }
-
-  if (folhaRes.status === "fulfilled") {
-    const r = ((folhaRes.value as any).rows ?? folhaRes.value ?? [])[0];
-    if (r) ctx.folha_pagamento = { custo_clt: Number(r.custo_clt) || 0, custo_pj: Number(r.custo_pj) || 0, custo_total: Number(r.custo_total) || 0, competencia: r.competencia };
-  }
-
-  if (frotaRes.status === "fulfilled") {
-    const r = ((frotaRes.value as any).rows ?? frotaRes.value ?? [])[0] ?? {};
-    ctx.frota = { total_veiculos: Number(r.total_veiculos) || 0, ativos: Number(r.ativos) || 0 };
-  }
-
-  if (epiRes.status === "fulfilled") {
-    const r = ((epiRes.value as any).rows ?? epiRes.value ?? [])[0] ?? {};
-    ctx.epi_alertas_pendentes = Number(r.pendentes) || 0;
-  }
-
-  const result = JSON.stringify(ctx, null, 2);
+  console.log("[ORÁCULO] Snapshot construído:", {
+    empresas: ctx.empresas?.length, colaboradores: ctx.colaboradores_lista?.length,
+    obras: ctx.obras_lista?.length, pj: ctx.pj_contratos_lista?.length,
+    veiculos: ctx.frota_lista?.length, processos: ctx.processos_trabalhistas_lista?.length,
+    fornecedores: ctx.fornecedores?.length, clientes: ctx.clientes?.length,
+    bytes: result.length,
+    queryErrors: queryErrors.length,
+    truncado: !!ctx._snapshot_truncado,
+  });
   ctxCache.set(cacheKey, { data: result, ts: Date.now() });
   return result;
 }
@@ -160,7 +461,7 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
 // ============================================================
 const SYSTEM_PROMPT_BASE = `Você é o ORÁCULO — assistente analítica de inteligência artificial integrada ao ERP/RH da FC Engenharia.
 
-Você é especialista em análise de dados de RH, folha de pagamento, obras, financeiro, processos jurídicos, frota, compras, EPI e segurança do trabalho.
+Você atende exclusivamente o ADM Master (acesso irrestrito). Você é especialista em análise de dados de RH, folha de pagamento, obras, financeiro, processos jurídicos, frota, compras, EPI, segurança do trabalho, terceirizados, fornecedores, clientes, contratos PJ e férias.
 
 Seu perfil:
 - Analítica, precisa e perspicaz
@@ -169,12 +470,23 @@ Seu perfil:
 - Profissional mas acessível — usa linguagem natural em português do Brasil
 - Usa bullet points e formatação quando listar informações
 
+Capacidades de busca no snapshot:
+- Quando o usuário citar um NOME (de funcionário, prestador, cliente, fornecedor, obra, terceirizado), procure em TODAS as listas relevantes do snapshot por correspondência aproximada (case-insensitive, parcial, ignorando acentos).
+- Cruze informações entre listas: ex. "obras do colaborador X" → ache X em colaboradores_lista, leia o campo "obras", e detalhe cada obra em obras_lista.
+- Use IDs (companyId, employeeId, obraId) para cruzar referências entre seções do snapshot.
+- Se houver MÚLTIPLOS resultados parecidos para um nome, liste todos e peça desambiguação.
+
+Tratamento de limitações do snapshot:
+- O snapshot pode conter os campos "_query_errors" (queries que falharam) e "_snapshot_truncado" (listas removidas por tamanho). SEMPRE consulte esses campos antes de responder "não há registros". Se eles estiverem presentes e relevantes para a pergunta, avise o usuário que o resultado é parcial e oriente como refinar.
+- O campo "_aviso_pii" indica que CPF, salário, email e celular NÃO estão no snapshot por política de minimização de dados. Para essas informações, oriente o usuário a consultar diretamente o módulo do ERP — NÃO invente.
+
 Regras absolutas:
 - Responda SEMPRE em português do Brasil
-- Use os dados do snapshot para embasar respostas com números reais
+- Use os dados do snapshot para embasar respostas com números, nomes e relacionamentos REAIS
 - Quando detectar algo preocupante nos dados, aponte proativamente
-- Se os dados forem insuficientes, diga isso e oriente como obter a informação
+- Se a informação NÃO estiver no snapshot mesmo após busca cuidadosa (e não houver erro/truncamento), diga isso de forma objetiva e indique em qual módulo do ERP o usuário pode encontrar
 - NUNCA invente dados que não estejam no contexto
+- Você TEM acesso completo aos dados operacionais (nomes, vínculos, status, obras, contratos), MAS dados pessoais sensíveis estão protegidos — explique isso quando for o caso
 - Mantenha respostas concisas mas completas`;
 
 async function getSystemPrompt(): Promise<string> {
