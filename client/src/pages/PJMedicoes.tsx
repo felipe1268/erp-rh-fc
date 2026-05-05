@@ -392,9 +392,13 @@ export default function PJMedicoes() {
                 <SelectTrigger className="mt-1.5 h-11"><SelectValue placeholder="Selecione o contrato" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Selecione o contrato</SelectItem>
-                  {contratos?.filter((c: any) => c.status === 'ativo').map((c: any) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.prestadorNome || c.razaoSocial} - {c.descricaoServico || 'PJ'}</SelectItem>
-                  ))}
+                  {contratos?.filter((c: any) => c.status === 'ativo').map((c: any) => {
+                    const nome = c.employeeName || c.razaoSocialPrestador || `Contrato #${c.id}`;
+                    const objeto = c.objetoContrato || c.employeeCargo || 'PJ';
+                    return (
+                      <SelectItem key={c.id} value={String(c.id)}>{nome} — {objeto}</SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
