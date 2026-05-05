@@ -816,24 +816,39 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
 // Ordem importa: padrões mais específicos ANTES dos curtos (CD-01 antes de CD)
 // B-03 e B-05 excluídos (duplicatas erradas — L-01..L-04 são os corretos)
 // PV aceita espaços: "PV - 2" e "PV-2" equivalentes; Sub-códigos CD-02.1, CI-01.x permitidos
-const BDI_COD_VALIDO = /^(CD-\d{2}(\.\d+)?|CI-\d{2}(\.\d+)?|DI-\d{2}|B-0[124]|L-\d{2}|V\d{1,2}|PV\s*-\s*[23]|PVN|JF?|CD\s*\+.*|CD|CI|DI|B|L)$/;
+// Aceita códigos legados (B-02, PV-2, etc) e o novo padrão R06 (B - 02, PV1, PV2 etc).
+// O hífen é opcional e podem haver espaços ao redor; B/V cobrem 1..9 (novo formato tem B - 03, B - 05, B - 07).
+const BDI_COD_VALIDO = /^(CD-\d{2}(\.\d+)?|CI-\d{2}(\.\d+)?|DI-\d{2}|B\s*-?\s*0?[1-9]|L-\d{2}|V\s*-?\s*\d{1,2}|PV\s*-?\s*[123]|PVN|JF?|CD\s*\+.*|CD|CI|DI|B|L)$/;
+
+// Normaliza código removendo espaços ao redor do hífen ("B - 02" → "B-02", "PV1" → "PV-1") para display consistente.
+function normalizarCodigoBdi(raw: string): string {
+  const s = raw.trim().toUpperCase();
+  // Insere hífen entre letras e dígitos quando ausente (PV1 → PV-1)
+  const semEspaco = s.replace(/\s+/g, '');
+  return semEspaco.replace(/^([A-Z]+)(\d)/, '$1-$2');
+}
 
 function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
   let bdiPercentual = 0;
   let totalVendaBdi = 0; // valor absoluto do PV-2 (preço de venda final da planilha BDI)
+  let bdiPv1Factor = 0; // fator multiplicativo do PV1 (novo padrão R06)
+  let bdiB02Pct = 0;    // % do B-02 (padrão legado — em R06 esta linha é "Lucro MDO")
   const linhas: any[] = [];
   let ordem = 0;
 
   for (const row of rows) {
-    const col2    = String(row[2] || '').trim();
+    const col2Raw = String(row[2] || '').trim();
     const descCol = String(row[3] || '').trim();
 
-    // Rejeita qualquer linha cujo código não bate com o padrão BDI válido
-    if (!BDI_COD_VALIDO.test(col2)) continue;
+    // Rejeita qualquer linha cujo código não bate com o padrão BDI válido (aceita legado e R06).
+    if (!BDI_COD_VALIDO.test(col2Raw)) continue;
     // Exige descrição mínima
     if (descCol.length < 3) continue;
 
-    const isPvRow = /^PV\s*-\s*\d/.test(col2);
+    // Normaliza código para matching consistente: "B - 02" → "B-02", "PV1" → "PV-1"
+    const col2 = normalizarCodigoBdi(col2Raw);
+
+    const isPvRow = /^PV-\d/.test(col2);
     const pct = toNum(row[7]);
 
     // Busca valor absoluto nas colunas 8, 9, 10 — usa o primeiro > 0
@@ -844,19 +859,27 @@ function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
       if (v > 0) { val = v; break; }
     }
 
-    // Extrai o valor de venda final do PV-2 ANTES do filtro de pct
-    // (linhas PV são totais — não têm percentual próprio)
-    if (/^PV\s*-\s*2$/.test(col2) && val > 0) {
+    // Extrai o valor de venda final do PV-2 (preço de venda c/ desconto FD)
+    if (col2 === 'PV-2' && val > 0) {
       totalVendaBdi = val;
+    }
+
+    // Captura o fator multiplicativo do PV1 (novo padrão R06: BDI = 1 - 1/fator)
+    // Ex.: PV1 fator=1.3332 → BDI = 25%. Em col[7] vem o fator (>1).
+    if (col2 === 'PV-1' && pct > 1) {
+      bdiPv1Factor = pct;
+      // Se PV-2 não foi encontrado, usa PV-1 como total de venda (s/ desconto FD)
+      if (!totalVendaBdi && val > 0) totalVendaBdi = val;
+    }
+
+    // Captura % do B-02 do padrão legado (em R06 esta linha é "Lucro MDO" e NÃO deve ser usada).
+    // A escolha entre B-02 (legado) e PV1 (R06) é feita após o loop, com base no formato detectado.
+    if (col2 === 'B-02' && !bdiB02Pct && Math.abs(pct) <= 1) {
+      bdiB02Pct = pct;
     }
 
     // Ignora percentuais absurdos (> 1000%) — mas linhas PV passam mesmo com pct alto
     if (!isPvRow && Math.abs(pct) > 10) continue;
-
-    // Extrai BDI total do B-02
-    if (col2 === 'B-02' && !bdiPercentual) {
-      bdiPercentual = pct;
-    }
 
     linhas.push({
       companyId,
@@ -868,6 +891,16 @@ function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
       ordem:         ordem++,
     });
   }
+
+  // Decide a fonte do BDI total:
+  // - Se PV1 tem fator > 1 (novo padrão R06), deriva BDI = 1 - 1/fator.
+  // - Senão, usa B-02 do padrão legado.
+  if (bdiPv1Factor > 1) {
+    bdiPercentual = 1 - 1 / bdiPv1Factor;
+  } else if (bdiB02Pct > 0) {
+    bdiPercentual = bdiB02Pct;
+  }
+
   return { bdiPercentual, totalVendaBdi, linhas };
 }
 

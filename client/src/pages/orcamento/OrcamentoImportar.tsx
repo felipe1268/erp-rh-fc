@@ -191,12 +191,19 @@ async function analisarBdi(
   const errors: string[] = [];
   const warnings: string[] = [];
   let rowCount = 0;
-  let foundB02 = false;
+  let foundBdiTotal = false;
 
   const bdiAbas = abas.filter((n: string) => {
     const l = n.toLowerCase();
     return !["orçamento", "orcamento", "orc", "abc insumos", "pln_imp"].includes(l);
   });
+
+  // Normaliza código removendo espaços ao redor do hífen ("B - 02" → "B-02", "PV1" → "PV-1").
+  // Mesma lógica do backend (parsearAbaBdi) para detectar marcadores de BDI total nos dois padrões.
+  const normalizeCode = (raw: string) => {
+    const s = String(raw || "").trim().toUpperCase().replace(/\s+/g, "");
+    return s.replace(/^([A-Z]+)(\d)/, "$1-$2");
+  };
 
   if (bdiAbas.length === 0) {
     errors.push("Nenhuma aba de BDI encontrada na planilha");
@@ -205,14 +212,18 @@ async function analisarBdi(
       const data = XLSX.utils.sheet_to_json(wb.Sheets[aba], { header: 1, defval: "" }) as string[][];
       rowCount += data.length;
       for (const row of data) {
-        const c1 = String(row[1] || "").trim().toUpperCase();
-        const c2 = String(row[2] || "").trim().toUpperCase();
-        if (c1 === "B-02" || c2 === "B-02") { foundB02 = true; break; }
+        const c1 = normalizeCode(row[1] as any);
+        const c2 = normalizeCode(row[2] as any);
+        // Aceita padrão legado (B-02) OU novo padrão R06 (PV-1 com fator multiplicativo).
+        if (c1 === "B-02" || c2 === "B-02" || c1 === "PV-1" || c2 === "PV-1") {
+          foundBdiTotal = true;
+          break;
+        }
       }
-      if (foundB02) break;
+      if (foundBdiTotal) break;
     }
-    if (!foundB02)
-      warnings.push("Linha B-02 (%BDI total) não encontrada — BDI% será calculado pelo sistema");
+    if (!foundBdiTotal)
+      warnings.push("BDI total não encontrado (linha B-02 ou PV1) — BDI% será calculado pelo sistema");
   }
 
   setProgress(100);
