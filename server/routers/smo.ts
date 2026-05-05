@@ -1199,8 +1199,13 @@ export const smoRouter = router({
 
       return {
         nomeEmpresa: company.razaoSocial,
+        nomeFantasia: company.nomeFantasia || "",
         cnpj: formatCNPJ(company.cnpj),
         enderecoEmpresa,
+        endereco: company.endereco || "",
+        cidade: company.cidade || "",
+        estado: company.estado || "",
+        logoUrl: company.logoUrl || "",
         telefoneEmpresa: company.telefone || "",
         emailEmpresa: company.email || "",
         nomeColaborador: emp.nomeCompleto,

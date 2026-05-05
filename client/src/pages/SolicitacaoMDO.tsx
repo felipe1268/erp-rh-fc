@@ -118,10 +118,15 @@ function ChecklistOnboarding({ checklist, companyId, companyIds, userName, check
   function imprimirCarta() {
     const d = cartaQ.data;
     if (!d) return;
+    const headerNome = (d as any).nomeFantasia || d.nomeEmpresa;
+    const enderecoLinha = [(d as any).endereco, (d as any).cidade, (d as any).estado].filter(Boolean).join(" - ");
     const e = {
       nomeEmpresa: escHtml(d.nomeEmpresa),
+      headerNome: escHtml(headerNome),
       cnpj: escHtml(d.cnpj),
       enderecoEmpresa: escHtml(d.enderecoEmpresa || "___________________________"),
+      enderecoLinha: escHtml(enderecoLinha),
+      logoUrl: escHtml((d as any).logoUrl || ""),
       telefoneEmpresa: d.telefoneEmpresa ? escHtml(d.telefoneEmpresa) : "",
       emailEmpresa: d.emailEmpresa ? escHtml(d.emailEmpresa) : "",
       nomeColaborador: escHtml(d.nomeColaborador),
@@ -136,38 +141,66 @@ function ChecklistOnboarding({ checklist, companyId, companyIds, userName, check
     if (!w) { toast.error("Bloqueador de popup ativo."); return; }
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Carta de Encaminhamento — ${e.nomeColaborador}</title>
       <style>
-        body{font-family:'Times New Roman',serif;padding:60px 80px;color:#111;line-height:1.8;font-size:14px}
-        h1{font-size:16px;text-align:center;text-transform:uppercase;letter-spacing:1px;margin-bottom:40px;font-weight:bold}
+        body{font-family:'Helvetica Neue',Arial,sans-serif;padding:32px 48px;color:#111;line-height:1.7;font-size:13px;background:#fff}
+        .doc{max-width:780px;margin:0 auto}
+        .header{margin-bottom:24px}
+        .header-top{display:flex;flex-direction:column;align-items:center;justify-content:center;margin-bottom:16px}
+        .header-top img{height:64px;margin-bottom:8px;object-fit:contain}
+        .header-top .nome{font-size:18px;font-weight:bold;color:#1B2A4A;letter-spacing:0.5px;text-align:center;margin:0}
+        .header-top .cnpj{font-size:10px;color:#6b7280;margin:2px 0 0}
+        .header-top .end{font-size:10px;color:#9ca3af;margin:1px 0 0}
+        .title-bar{background:#1B2A4A;color:#fff;padding:10px 16px;text-align:center;border-radius:2px}
+        .title-bar span{font-size:14px;font-weight:bold;letter-spacing:2px}
+        .meta{display:flex;justify-content:space-between;margin-top:12px;font-size:11px;color:#4b5563;padding:0 4px}
+        .meta .num{color:#1B2A4A;font-weight:600}
+        .body{margin-top:24px}
         .field{margin-bottom:6px}
         .label{font-weight:bold}
-        .separator{border-top:1px solid #ccc;margin:30px 0}
-        .signature{margin-top:60px;text-align:center}
+        .separator{border-top:1px solid #ccc;margin:24px 0}
+        .signature{margin-top:48px;text-align:center}
         .signature-line{border-top:1px solid #333;width:300px;margin:0 auto 5px}
-        @media print {body{padding:40px 60px}}
+        @media print {body{padding:24px 36px}}
       </style></head><body>
-      <h1>Carta de Encaminhamento para Abertura de Conta Salário</h1>
-      <p>À Instituição Financeira: _______________________________</p>
-      <p>Prezados,</p>
-      <p>A empresa <strong>${e.nomeEmpresa}</strong>, inscrita no CNPJ sob o nº <strong>${e.cnpj}</strong>, com sede à <strong>${e.enderecoEmpresa}</strong>, vem por meio desta encaminhar o(a) colaborador(a) abaixo identificado(a) para fins de abertura de conta salário, conforme previsto na legislação vigente.</p>
-      <div class="separator"></div>
-      <p><strong>Dados do(a) Colaborador(a):</strong></p>
-      <div class="field"><span class="label">Nome completo:</span> ${e.nomeColaborador}</div>
-      <div class="field"><span class="label">CPF:</span> ${e.cpf}</div>
-      <div class="field"><span class="label">RG:</span> ${e.rg}</div>
-      <div class="field"><span class="label">Cargo:</span> ${e.cargo}</div>
-      <div class="field"><span class="label">Data de admissão:</span> ${e.dataAdmissao}</div>
-      <div class="separator"></div>
-      <p>Informamos que o(a) referido(a) colaborador(a) mantém vínculo empregatício ativo com esta empresa, sendo necessária a abertura da conta salário para recebimento de sua remuneração mensal.</p>
-      <p>Solicitamos, portanto, a gentileza de proceder com a abertura da conta salário, nos termos aplicáveis.</p>
-      <p>Sem mais para o momento, colocamo-nos à disposição para quaisquer esclarecimentos adicionais.</p>
-      <p style="margin-top:10px">Atenciosamente,</p>
-      <div class="signature">
-        <div class="signature-line"></div>
-        <div><strong>${e.nomeEmpresa}</strong></div>
-        ${e.telefoneEmpresa ? `<div>Telefone: ${e.telefoneEmpresa}</div>` : ""}
-        ${e.emailEmpresa ? `<div>E-mail: ${e.emailEmpresa}</div>` : ""}
+      <div class="doc">
+        <div class="header">
+          <div class="header-top">
+            ${e.logoUrl ? `<img src="${e.logoUrl}" alt="${e.headerNome}" onerror="this.style.display='none'" />` : ""}
+            <h2 class="nome">${e.headerNome}</h2>
+            ${e.cnpj ? `<p class="cnpj">CNPJ: ${e.cnpj}</p>` : ""}
+            ${e.enderecoLinha ? `<p class="end">${e.enderecoLinha}</p>` : ""}
+          </div>
+          <div class="title-bar"><span>CARTA DE ENCAMINHAMENTO</span></div>
+          <div class="meta">
+            <div><span class="num">Abertura de Conta Salário</span></div>
+            <div>Data de Emissão: ${e.cidadeData}</div>
+          </div>
+        </div>
+
+        <div class="body">
+          <p>À Instituição Financeira: _______________________________</p>
+          <p>Prezados,</p>
+          <p>A empresa <strong>${e.nomeEmpresa}</strong>, inscrita no CNPJ sob o nº <strong>${e.cnpj}</strong>, com sede à <strong>${e.enderecoEmpresa}</strong>, vem por meio desta encaminhar o(a) colaborador(a) abaixo identificado(a) para fins de abertura de conta salário, conforme previsto na legislação vigente.</p>
+          <div class="separator"></div>
+          <p><strong>Dados do(a) Colaborador(a):</strong></p>
+          <div class="field"><span class="label">Nome completo:</span> ${e.nomeColaborador}</div>
+          <div class="field"><span class="label">CPF:</span> ${e.cpf}</div>
+          <div class="field"><span class="label">RG:</span> ${e.rg}</div>
+          <div class="field"><span class="label">Cargo:</span> ${e.cargo}</div>
+          <div class="field"><span class="label">Data de admissão:</span> ${e.dataAdmissao}</div>
+          <div class="separator"></div>
+          <p>Informamos que o(a) referido(a) colaborador(a) mantém vínculo empregatício ativo com esta empresa, sendo necessária a abertura da conta salário para recebimento de sua remuneração mensal.</p>
+          <p>Solicitamos, portanto, a gentileza de proceder com a abertura da conta salário, nos termos aplicáveis.</p>
+          <p>Sem mais para o momento, colocamo-nos à disposição para quaisquer esclarecimentos adicionais.</p>
+          <p style="margin-top:10px">Atenciosamente,</p>
+          <div class="signature">
+            <div class="signature-line"></div>
+            <div><strong>${e.nomeEmpresa}</strong></div>
+            ${e.telefoneEmpresa ? `<div>Telefone: ${e.telefoneEmpresa}</div>` : ""}
+            ${e.emailEmpresa ? `<div>E-mail: ${e.emailEmpresa}</div>` : ""}
+          </div>
+          <p style="margin-top:40px">Local e data: ${e.cidadeData}</p>
+        </div>
       </div>
-      <p style="margin-top:40px">Local e data: ${e.cidadeData}</p>
       <script>setTimeout(()=>window.print(),500)<\/script>
       </body></html>`);
     w.document.close();
