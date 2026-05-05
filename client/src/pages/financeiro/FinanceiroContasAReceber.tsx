@@ -1129,6 +1129,19 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, mesAtu
     ? Math.min(100, Math.round((obra.totalRecebidoHistorico / obra.valorContrato) * 100))
     : null;
 
+  // Rev. 1346: "A Faturar no Período" — soma o que está previsto/medido nos meses da
+  // visualização atual (ano selecionado) e ainda não foi recebido. Considera overrides
+  // otimistas (cellOverrides) para refletir baixas em andamento.
+  const aFaturarPeriodo = mesesChave.reduce((s, mk) => {
+    const rawC = obra.byMes[mk];
+    if (!rawC) return s;
+    const ov = cellOverrides[`${obra.projetoId}_${mk}`];
+    const c = ov ? { ...rawC, ...ov } as MedicaoCell : rawC;
+    const valorBase = c.valor || 0;
+    const recebido = c.valorRecebido || 0;
+    return s + Math.max(0, valorBase - recebido);
+  }, 0);
+
   return (
     <tr className={`border-b border-gray-100 hover:bg-blue-50/20 transition-colors ${rowBg} ${hasOverdue ? "border-l-4 border-l-red-400" : hasPartial ? "border-l-4 border-l-amber-400" : ""}`}>
       {/* Obra */}
@@ -1387,6 +1400,13 @@ function ObraTableRow({ obra, mesesChave, zebra, viewMode, cellOverrides, mesAtu
             </p>
           )}
         </div>
+        {/* A Faturar no Período (ano selecionado) — Rev. 1346 */}
+        {aFaturarPeriodo > 0 && (
+          <div className="mb-1.5" title={`Soma do previsto nos meses de ${mesesChave[0]?.slice(0,4) ?? ""} ainda não recebido`}>
+            <p className="text-[9px] text-blue-500 uppercase tracking-wide leading-none mb-0.5">A Faturar no Período</p>
+            <p className="text-xs font-bold text-blue-700">{BRL(aFaturarPeriodo)}</p>
+          </div>
+        )}
         {/* Saldo a Faturar */}
         {obra.saldoContrato > 0 && (
           <div>
