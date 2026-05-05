@@ -2682,7 +2682,7 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
     eq(obraFuncionarios.isActive, 1),
   ));
   if (allocs.length === 0) return [];
-  const empIds = allocs.map(a => a.employeeId);
+  const empIdsAll = allocs.map(a => a.employeeId);
   const emps = await db.select({
     id: employees.id,
     nomeCompleto: employees.nomeCompleto,
@@ -2692,7 +2692,13 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
     status: employees.status,
     dataAdmissao: employees.dataAdmissao,
     cpf: employees.cpf,
-  }).from(employees).where(sql`${employees.id} IN (${sql.raw(empIds.join(","))})`);
+  }).from(employees).where(and(
+    sql`${employees.id} IN (${sql.raw(empIdsAll.join(","))})`,
+    sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra', 'Inativo')`,
+    isNull(employees.deletedAt),
+  ));
+  if (emps.length === 0) return [];
+  const empIds = emps.map(e => e.id);
 
   // Cross-reference termination_notices for Aviso Prévio
   const today = new Date().toISOString().split('T')[0];
