@@ -449,6 +449,15 @@ Regras:
         await db.execute(sql`ALTER TABLE curriculos ADD COLUMN IF NOT EXISTS historico_status_json TEXT`);
         console.log(`[SyncSchema+] Coluna historico_status_json garantida na tabela curriculos.`);
 
+        // Rastreio de quem cadastrou/atualizou itens do almoxarifado
+        try {
+          await db.execute(sql`ALTER TABLE almoxarifado_itens ADD COLUMN IF NOT EXISTS criado_por_id INTEGER`);
+          await db.execute(sql`ALTER TABLE almoxarifado_itens ADD COLUMN IF NOT EXISTS criado_por_nome VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE almoxarifado_itens ADD COLUMN IF NOT EXISTS atualizado_por_id INTEGER`);
+          await db.execute(sql`ALTER TABLE almoxarifado_itens ADD COLUMN IF NOT EXISTS atualizado_por_nome VARCHAR(255)`);
+          console.log(`[SyncSchema+] Colunas de rastreio (criado_por/atualizado_por) garantidas em almoxarifado_itens.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA almoxarifado_itens criado_por:`, e?.message || e); }
+
         await db.execute(sql`CREATE TABLE IF NOT EXISTS sst_integracao_config (
           id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, obra_id INTEGER, obra_nome VARCHAR(255),
           titulo VARCHAR(255) NOT NULL, descricao TEXT, nota_minima INTEGER NOT NULL DEFAULT 70,

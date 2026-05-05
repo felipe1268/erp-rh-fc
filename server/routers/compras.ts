@@ -995,7 +995,7 @@ export const comprasRouter = router({
       diasAlertaLocacao:     z.number().nullable().optional(),
       observacoesLocacao:    z.string().nullable().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const [item] = await db.insert(almoxarifadoItens).values({
         companyId:             input.companyId,
@@ -1017,6 +1017,8 @@ export const comprasRouter = router({
         valorLocacaoMensal:    input.valorLocacaoMensal != null ? String(input.valorLocacaoMensal) : null,
         diasAlertaLocacao:     input.diasAlertaLocacao ?? 7,
         observacoesLocacao:    input.observacoesLocacao ?? null,
+        criadoPorId:           ctx.user?.id ?? null,
+        criadoPorNome:         ctx.user?.name || null,
       } as any).returning();
       return item;
     }),
@@ -1041,10 +1043,14 @@ export const comprasRouter = router({
       observacoesLocacao:    z.string().nullable().optional(),
       quantidadeAtual:       z.number().nullable().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const { id, ...data } = input;
-      const updates: any = { atualizadoEm: new Date().toISOString() };
+      const updates: any = {
+        atualizadoEm: new Date().toISOString(),
+        atualizadoPorId: ctx.user?.id ?? null,
+        atualizadoPorNome: ctx.user?.name || null,
+      };
       if (data.nome !== undefined)                 updates.nome = data.nome;
       if (data.unidade !== undefined)              updates.unidade = data.unidade;
       if (data.categoria !== undefined)            updates.categoria = data.categoria;

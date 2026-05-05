@@ -250,6 +250,10 @@ export default function AlmoxarifadoPage() {
   // ── Modal Item ──────────────────────────────────────────────────
   const [modalItem, setModalItem] = useState(false);
   const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [editandoMeta, setEditandoMeta] = useState<{
+    criadoPorNome?: string | null; criadoEm?: string | null;
+    atualizadoPorNome?: string | null; atualizadoEm?: string | null;
+  } | null>(null);
   const [formItem, setFormItem] = useState({ ...EMPTY_ITEM });
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [analisandoFotoIA, setAnalisandoFotoIA] = useState(false);
@@ -258,7 +262,7 @@ export default function AlmoxarifadoPage() {
   const [categoriaAutoSugerida, setCategoriaAutoSugerida] = useState(false);
   const fotoInputRef = useRef<HTMLInputElement>(null);
 
-  function abrirNovo() { setFormItem({ ...EMPTY_ITEM }); setEditandoId(null); setCamposPreenchidosIA(false); setCategoriaManualment(false); setCategoriaAutoSugerida(false); setModalItem(true); }
+  function abrirNovo() { setFormItem({ ...EMPTY_ITEM }); setEditandoId(null); setEditandoMeta(null); setCamposPreenchidosIA(false); setCategoriaManualment(false); setCategoriaAutoSugerida(false); setModalItem(true); }
   function resolveRealItem(i: any) {
     return i._subItems && i._subItems.length > 1 ? i._subItems[0] : i;
   }
@@ -279,10 +283,25 @@ export default function AlmoxarifadoPage() {
       observacoesLocacao: real.observacoesLocacao ?? "",
     });
     setEditandoId(real.id);
+    setEditandoMeta({
+      criadoPorNome: real.criadoPorNome ?? null,
+      criadoEm: real.criadoEm ?? null,
+      atualizadoPorNome: real.atualizadoPorNome ?? null,
+      atualizadoEm: real.atualizadoEm ?? null,
+    });
     setCamposPreenchidosIA(false);
     setCategoriaManualment(!!real.categoria);
     setCategoriaAutoSugerida(false);
     setModalItem(true);
+  }
+
+  function fmtDataHora(s?: string | null) {
+    if (!s) return "";
+    try {
+      const d = new Date(s);
+      if (isNaN(d.getTime())) return "";
+      return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    } catch { return ""; }
   }
 
   const sugerirCadastroMut = trpc.warehouse.sugerirCadastroItem.useMutation({
@@ -1113,6 +1132,11 @@ export default function AlmoxarifadoPage() {
                         <p className="text-sm font-semibold text-gray-800 leading-tight line-clamp-2">{item.nome}</p>
                         {item.categoria && <p className="text-[11px] text-gray-400 mt-0.5">{item.categoria}</p>}
                         {item.codigoInterno && <p className="text-[11px] font-mono text-gray-400">{item.codigoInterno}</p>}
+                        {(item as any).criadoPorNome && (
+                          <p className="text-[10px] text-gray-400 mt-0.5 truncate" title={`Cadastrado por ${(item as any).criadoPorNome}${(item as any).criadoEm ? " em " + fmtDataHora((item as any).criadoEm) : ""}`}>
+                            <span className="text-gray-300">por</span> {(item as any).criadoPorNome}
+                          </p>
+                        )}
                       </div>
                       <div className="mt-auto">
                         <p className={`text-lg font-bold ${abaixo ? "text-red-600" : "text-gray-900"}`}>
@@ -1572,6 +1596,24 @@ export default function AlmoxarifadoPage() {
                 </div>
               </div>
             </div>
+            {editandoId && editandoMeta && (editandoMeta.criadoPorNome || editandoMeta.atualizadoPorNome) && (
+              <div className="px-5 py-2 border-t border-gray-100 bg-gray-50 text-[11px] text-gray-500 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 shrink-0">
+                {editandoMeta.criadoPorNome && (
+                  <span>
+                    <span className="text-gray-400">Cadastrado por</span>{" "}
+                    <span className="font-medium text-gray-700">{editandoMeta.criadoPorNome}</span>
+                    {editandoMeta.criadoEm && <span className="text-gray-400"> em {fmtDataHora(editandoMeta.criadoEm)}</span>}
+                  </span>
+                )}
+                {editandoMeta.atualizadoPorNome && (
+                  <span>
+                    <span className="text-gray-400">Última edição por</span>{" "}
+                    <span className="font-medium text-gray-700">{editandoMeta.atualizadoPorNome}</span>
+                    {editandoMeta.atualizadoEm && <span className="text-gray-400"> em {fmtDataHora(editandoMeta.atualizadoEm)}</span>}
+                  </span>
+                )}
+              </div>
+            )}
             <div className="flex gap-3 px-5 py-3 border-t border-gray-100 shrink-0">
               <button onClick={() => setModalItem(false)} className="flex-1 h-9 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 font-medium transition">Cancelar</button>
               <button onClick={salvarItem} disabled={criarMut.isPending || atualizarMut.isPending} className="flex-1 h-9 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition disabled:opacity-60 flex items-center justify-center gap-2">

@@ -1157,6 +1157,8 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
           quantidadeMinima: "0",
           fotoUrl: (itemOrigem as any).fotoUrl,
           ativo: true,
+          criadoPorId: ctx.user?.id ?? null,
+          criadoPorNome: ctx.user?.name || `Transferência de ${input.origemTipo}`,
         } as any).returning({ id: almoxarifadoItens.id });
         itemIdDestino = novoItem.id;
       }
@@ -1600,6 +1602,8 @@ REGRAS:
             quantidadeAtual: "0",
             quantidadeMinima: "0",
             origem: "proprio",
+            criadoPorId: ctx.user?.id ?? null,
+            criadoPorNome: ctx.user?.name || null,
           } as any).returning();
           itemId = newItem.id;
           createdItems.push(newItem.id);

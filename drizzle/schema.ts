@@ -5466,6 +5466,10 @@ export const almoxarifadoItens = pgTable("almoxarifado_itens", {
   diasAlertaLocacao:     integer("dias_alerta_locacao").default(7),
   observacoesLocacao:    text("observacoes_locacao"),
   dataValidade:          varchar("data_validade", { length: 10 }),
+  criadoPorId:           integer("criado_por_id"),
+  criadoPorNome:         varchar("criado_por_nome", { length: 255 }),
+  atualizadoPorId:       integer("atualizado_por_id"),
+  atualizadoPorNome:     varchar("atualizado_por_nome", { length: 255 }),
   criadoEm:             timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
   atualizadoEm:         timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
 });
