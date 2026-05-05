@@ -1,5 +1,8 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1330 — 05/05/2026
+- **Proj./Doc. Técnicos — Ordenação crescente/decrescente por código**: o cabeçalho "Título / Código" da listagem de documentos (`client/src/pages/gestaodocumentos/index.tsx`) virou um botão clicável com seta (▲/▼) que alterna entre ordem crescente e decrescente, respeitando a numeração natural dos códigos (`HPAPA-ARQ-009` vem antes de `HPAPA-ARQ-010` e antes de `HPAPA-ARQ-100`). Implementado via `Array.sort` + `String.localeCompare(..., { numeric: true })`. Aplicado a `filteredDocs`, então preserva o filtro por disciplina/sub-pasta/busca. Default agora é **crescente** (antes era decrescente por data de atualização vinda do backend).
+
 ## Revisão 1329 — 05/05/2026
 - **Previsão de Medição — Sinal/Mobilização agora desconta o Faturamento Direto**: a fórmula passou de `Sinal = Contrato × %` para `Sinal = (Contrato − Faturamento Direto) × %`. O Sinal/Mobilização do contrato é pago sobre a parte da obra que efetivamente vai medir, excluindo os materiais/serviços faturados diretamente pelo cliente (curva ABC).
   - **Faturamento Direto editável**: novo campo "Faturamento Direto (R$)" no bloco "Parâmetros" da Configuração de Medição (5ª coluna do grid, ao lado de Dia de Corte / Sinal / Retenção / Data de Início). Vem pré-preenchido com a soma da aba **F.D.** do BDI do orçamento vinculado (`SUM(bdi_fd.total) WHERE orcamento_id = projeto.orcamentoId`), mas o usuário pode sobrescrever a qualquer momento.

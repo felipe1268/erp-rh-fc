@@ -65,6 +65,8 @@ import {
   Paperclip,
   AlertTriangle,
   Loader2,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -159,6 +161,9 @@ export default function GestaoDocumentos() {
   const [selectedObraId, setSelectedObraId] = useState<number | null>(null);
   const [activeFicheiroId, setActiveFicheiroId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
+  // Ordenação da lista de documentos por código (respeitando a numeração natural,
+  // ex.: ARQ-009 < ARQ-010 < ARQ-100). "asc" = crescente; "desc" = decrescente.
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const [selectedDiscId, setSelectedDiscId] = useState<number | null>(null);
   const [selectedSubpasta, setSelectedSubpasta] = useState<string | null>(null);
@@ -975,6 +980,12 @@ export default function GestaoDocumentos() {
       if (!s.split(/\s+/).every(word => fields.includes(word))) return false;
     }
     return true;
+  }).sort((a: any, b: any) => {
+    // Ordenação natural por código/título: respeita a numeração (ARQ-009 antes de ARQ-010 antes de ARQ-100).
+    const ka = String(a.codigo || a.titulo || "");
+    const kb = String(b.codigo || b.titulo || "");
+    const cmp = ka.localeCompare(kb, "pt-BR", { numeric: true, sensitivity: "base" });
+    return sortDir === "asc" ? cmp : -cmp;
   }) : [];
 
   const breadcrumb = (() => {
@@ -1585,7 +1596,20 @@ export default function GestaoDocumentos() {
                               }}
                             />
                           </TableHead>
-                          <TableHead className="text-gray-500 text-xs">Título / Código</TableHead>
+                          <TableHead className="text-gray-500 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setSortDir(d => d === "asc" ? "desc" : "asc")}
+                              title={`Ordenar por código (${sortDir === "asc" ? "crescente — clique para inverter" : "decrescente — clique para inverter"})`}
+                              className="inline-flex items-center gap-1 hover:text-gray-900 transition-colors font-semibold"
+                            >
+                              Título / Código
+                              {sortDir === "asc"
+                                ? <ArrowUp className="w-3 h-3 text-blue-600" />
+                                : <ArrowDown className="w-3 h-3 text-blue-600" />
+                              }
+                            </button>
+                          </TableHead>
                           <TableHead className="text-gray-500 text-xs w-[80px]">Disciplina</TableHead>
                           <TableHead className="text-gray-500 text-xs w-[60px] text-center">Rev.</TableHead>
                           <TableHead className="text-gray-500 text-xs w-[110px]">Status</TableHead>
