@@ -977,6 +977,24 @@ Regras:
             "criadoEm" TIMESTAMP DEFAULT now() NOT NULL
           )
         `);
+        // Rev. 1339: pj_contract_aditivos — aditivos de contrato PJ
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS pj_contract_aditivos (
+            id SERIAL PRIMARY KEY,
+            "companyId" INTEGER NOT NULL,
+            "contractId" INTEGER NOT NULL,
+            "employeeId" INTEGER NOT NULL,
+            "numeroAditivo" INTEGER NOT NULL DEFAULT 1,
+            "clausulasAlteradas" TEXT NOT NULL,
+            "dataAditivo" DATE NOT NULL,
+            observacoes TEXT,
+            "criadoPor" VARCHAR(255),
+            "criadoPorUserId" INTEGER,
+            "criadoEm" TIMESTAMP DEFAULT now() NOT NULL
+          )
+        `);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS pjca_contract ON pj_contract_aditivos("contractId")`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS pjca_company ON pj_contract_aditivos("companyId")`);
         await db.execute(sql`
           CREATE TABLE IF NOT EXISTS recycle_bin (
             id SERIAL PRIMARY KEY,

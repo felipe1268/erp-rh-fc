@@ -1,5 +1,11 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1339 — 05/05/2026
+- **Contratos PJ — Criar Aditivo agora funciona**: corrigido erro **"failed query"** ao gerar aditivos de contrato PJ (ex.: PJ-2026-0101). Causas: (1) a tabela `pj_contract_aditivos` ainda não existia no banco Neon e (2) as queries SQL brutas em `server/routers/pjContracts.ts` referenciavam colunas em snake_case (`numero_aditivo`, `company_id`, `contract_id`...), enquanto o schema Drizzle define essas colunas em camelCase. Correções:
+  - **ColFix** (`server/_core/index.ts`): adicionado `CREATE TABLE IF NOT EXISTS pj_contract_aditivos` com todas as colunas em camelCase entre aspas (`"companyId"`, `"contractId"`, `"employeeId"`, `"numeroAditivo"`, `"clausulasAlteradas"`, `"dataAditivo"`, `"criadoPor"`, `"criadoPorUserId"`, `"criadoEm"`) + índices `pjca_contract` e `pjca_company`. Tabela já criada no Neon.
+  - **Router** (`server/routers/pjContracts.ts → aditivos`): `list`, `getById`, `create` e `delete` reescritos para usar identificadores camelCase entre aspas (padrão do projeto). Os JOINs com `pj_contracts` e `companies` também passaram a usar as colunas camelCase corretas (`"numeroContrato"`, `"objetoContrato"`, `"dataInicio"`, `"valorMensal"`, `"cnpjPrestador"`, `"razaoSocialPrestador"`, `"razaoSocial"`, `"logoUrl"` etc.).
+  - **Resultado**: o botão **Gerar Aditivo** dentro do modal "Criar Aditivo" passa a salvar normalmente, atribuindo `numeroAditivo` sequencial por contrato (1, 2, 3, ...).
+
 ## Revisão 1338 — 05/05/2026
 - **Hub de Módulos — Comunicados Internos e Currículos movidos para dentro do RH**: os cards standalone de "Comunicados Internos" e "Currículos" foram removidos do hub principal de módulos (`ModuleHub`). Eles continuam acessíveis pelo **menu lateral do módulo RH & DP**, na seção "Comunicação e Recrutamento". Rotas (`/comunicados-internos`, `/curriculos`), permissões, dashboards e configurações por usuário **permanecem ativos** — apenas o ponto de entrada no hub foi consolidado para evitar duplicidade.
 

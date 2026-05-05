@@ -1183,15 +1183,15 @@ export const pjContractsRouter = router({
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const rows = await db.execute(sql`
-          SELECT id, company_id as "companyId", contract_id as "contractId",
-                 employee_id as "employeeId", numero_aditivo as "numeroAditivo",
-                 clausulas_alteradas as "clausulasAlteradas",
-                 data_aditivo as "dataAditivo", observacoes,
-                 criado_por as "criadoPor", criado_em as "criadoEm"
+          SELECT id, "companyId", "contractId",
+                 "employeeId", "numeroAditivo",
+                 "clausulasAlteradas",
+                 "dataAditivo", observacoes,
+                 "criadoPor", "criadoEm"
           FROM pj_contract_aditivos
-          WHERE contract_id = ${input.contractId}
-            AND company_id = ${input.companyId}
-          ORDER BY numero_aditivo ASC
+          WHERE "contractId" = ${input.contractId}
+            AND "companyId" = ${input.companyId}
+          ORDER BY "numeroAditivo" ASC
         `);
         return rows.rows as any[];
       }),
@@ -1201,38 +1201,38 @@ export const pjContractsRouter = router({
       .query(async ({ input, ctx }) => {
         const db = (await getDb())!;
         const rows = await db.execute(sql`
-          SELECT a.id, a.company_id as "companyId", a.contract_id as "contractId",
-                 a.employee_id as "employeeId", a.numero_aditivo as "numeroAditivo",
-                 a.clausulas_alteradas as "clausulasAlteradas",
-                 a.data_aditivo as "dataAditivo", a.observacoes,
-                 a.criado_por as "criadoPor", a.criado_em as "criadoEm",
-                 c.numero_contrato as "numeroContrato",
-                 c.objeto_contrato as "objetoContrato",
-                 c.data_inicio as "dataInicio",
-                 c.valor_mensal as "valorMensal",
-                 c.percentual_adiantamento as "percentualAdiantamento",
-                 c.percentual_fechamento as "percentualFechamento",
-                 c.dia_adiantamento as "diaAdiantamento",
-                 c.dia_fechamento as "diaFechamento",
+          SELECT a.id, a."companyId", a."contractId",
+                 a."employeeId", a."numeroAditivo",
+                 a."clausulasAlteradas",
+                 a."dataAditivo", a.observacoes,
+                 a."criadoPor", a."criadoEm",
+                 c."numeroContrato",
+                 c."objetoContrato",
+                 c."dataInicio",
+                 c."valorMensal",
+                 c."percentualAdiantamento",
+                 c."percentualFechamento",
+                 c."diaAdiantamento",
+                 c."diaFechamento",
                  e."nomeCompleto" as "employeeName",
                  e.cpf as "employeeCpf",
                  e.cargo as "employeeCargo",
-                 c.cnpj_prestador as "cnpjPrestador",
-                 c.razao_social_prestador as "razaoSocialPrestador",
+                 c."cnpjPrestador",
+                 c."razaoSocialPrestador",
                  c.revisao,
-                 comp.razao_social as "companyRazaoSocial",
+                 comp."razaoSocial" as "companyRazaoSocial",
                  comp.cnpj as "companyCnpj",
                  comp.endereco as "companyEndereco",
                  comp.cidade as "companyCidade",
                  comp.estado as "companyEstado",
-                 comp.logo_url as "companyLogoUrl",
-                 comp.responsavel_legal as "responsavelLegal"
+                 comp."logoUrl" as "companyLogoUrl",
+                 NULL as "responsavelLegal"
           FROM pj_contract_aditivos a
-          JOIN pj_contracts c ON c.id = a.contract_id
-          JOIN employees e ON e.id = a.employee_id
-          LEFT JOIN companies comp ON comp.id = a.company_id
+          JOIN pj_contracts c ON c.id = a."contractId"
+          JOIN employees e ON e.id = a."employeeId"
+          LEFT JOIN companies comp ON comp.id = a."companyId"
           WHERE a.id = ${input.id}
-            ${input.companyId ? sql`AND a.company_id = ${input.companyId}` : sql``}
+            ${input.companyId ? sql`AND a."companyId" = ${input.companyId}` : sql``}
         `);
         if (rows.rows.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Aditivo não encontrado" });
         return rows.rows[0] as any;
@@ -1253,15 +1253,15 @@ export const pjContractsRouter = router({
         if (!contrato) throw new TRPCError({ code: "NOT_FOUND", message: "Contrato não encontrado" });
 
         const existing = await db.execute(sql`
-          SELECT COALESCE(MAX(numero_aditivo), 0) as max_num
+          SELECT COALESCE(MAX("numeroAditivo"), 0) as max_num
           FROM pj_contract_aditivos
-          WHERE contract_id = ${input.contractId} AND company_id = ${input.companyId}
+          WHERE "contractId" = ${input.contractId} AND "companyId" = ${input.companyId}
         `);
         const nextNum = (parseInt(String((existing.rows[0] as any).max_num)) || 0) + 1;
         const criadoPor = (ctx.user as any)?.name || (ctx.user as any)?.username || 'sistema';
 
         const result = await db.execute(sql`
-          INSERT INTO pj_contract_aditivos (company_id, contract_id, employee_id, numero_aditivo, clausulas_alteradas, data_aditivo, observacoes, criado_por, criado_por_user_id)
+          INSERT INTO pj_contract_aditivos ("companyId", "contractId", "employeeId", "numeroAditivo", "clausulasAlteradas", "dataAditivo", observacoes, "criadoPor", "criadoPorUserId")
           VALUES (${input.companyId}, ${input.contractId}, ${contrato.employeeId}, ${nextNum}, ${input.clausulasAlteradas}, ${input.dataAditivo}, ${input.observacoes ?? null}, ${criadoPor}, ${(ctx.user as any)?.id ?? null})
           RETURNING id
         `);
@@ -1273,7 +1273,7 @@ export const pjContractsRouter = router({
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
         await db.execute(sql`
-          DELETE FROM pj_contract_aditivos WHERE id = ${input.id} AND company_id = ${input.companyId}
+          DELETE FROM pj_contract_aditivos WHERE id = ${input.id} AND "companyId" = ${input.companyId}
         `);
         return { ok: true };
       }),
