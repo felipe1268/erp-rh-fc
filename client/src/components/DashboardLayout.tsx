@@ -145,6 +145,15 @@ const menuSectionsRHDP: MenuSection[] = [
     ],
   },
   {
+    title: "PJ",
+    items: [
+      { icon: FileSignature, label: "Contratos PJ", path: "/modulo-pj" },
+      { icon: FileSpreadsheet, label: "Medições PJ", path: "/pj-medicoes" },
+      { icon: ShieldCheck, label: "Conformidade PJ", path: "/terceiros/pj/conformidade" },
+      { icon: BarChart3, label: "Dashboard Conformidade PJ", path: "/terceiros/pj/dashboard-conformidade" },
+    ],
+  },
+  {
     title: "Tabelas e Configurações",
     items: [
       { icon: CalendarDays, label: "Feriados", path: "/feriados" },
