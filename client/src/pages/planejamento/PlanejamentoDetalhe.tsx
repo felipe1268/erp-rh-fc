@@ -6582,7 +6582,9 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                             </td>
                             <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
                             <td className="py-2 px-3 text-right font-bold text-violet-700">{fmt(r.medicaoBruta)}</td>
-                            <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
+                            <td className="py-2 px-3 text-right text-rose-600">
+                              {r.retencao > 0 ? `−${fmt(r.retencao)}` : <span className="text-slate-300">—</span>}
+                            </td>
                             <td className="py-2 px-3 text-right"><span className="text-slate-300">—</span></td>
                             <td className={`py-2 px-3 text-right font-bold ${confirmado ? "text-emerald-600 line-through" : "text-violet-700"}`}>
                               {fmt(r.liquido)}
