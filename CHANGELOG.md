@@ -1,5 +1,10 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1335 — 05/05/2026
+- **Comunicados Internos — Espaçamento de parágrafos preservado na impressão**: ao imprimir um Comunicado, os parágrafos saíam todos colados (sem linha em branco entre eles), apesar de aparecerem corretamente espaçados na tela. Causa: o projeto usa Tailwind v4 sem `tailwind.config`, então o plugin `@tailwindcss/typography` (classes `prose`/`prose-p:my-2`) não está sendo carregado — o espaçamento na tela vinha apenas do default do navegador para `<p>`, que muitos motores de impressão colapsam.
+  - **Mudanças**: o container do comunicado ganhou a classe `comunicado-print-area`; o div com `dangerouslySetInnerHTML` ganhou a classe `comunicado-conteudo`. No `client/src/index.css` foram adicionadas regras explícitas (com `!important` dentro de `@media print`) forçando `margin-bottom: 0.75em` em `<p>`, `line-height: 1.55`, e regras equivalentes para `<h1..h4>`, `<ul>`, `<ol>`, `<li>`. Regras equivalentes (sem `!important`) também foram adicionadas fora do `@media print` para garantir consistência visual entre tela e papel.
+  - **Sem regressão**: regras escopadas a `.comunicado-conteudo` — não afetam outros conteúdos da aplicação. Listas (UL/OL) também ganharam `list-style` (disc/decimal) e padding-left, que estavam sumindo por causa do reset do Tailwind.
+
 ## Revisão 1334 — 05/05/2026
 - **SMO — Carta de Encaminhamento (Conta Salário) com cabeçalho padronizado**: a "Carta de Encaminhamento para Abertura de Conta Salário" gerada pelo checklist de onboarding agora usa o **mesmo cabeçalho institucional do Comunicado Interno** — logo da empresa, nome (preferencialmente nomeFantasia), CNPJ, endereço/cidade/UF e a faixa azul-escura (`#1B2A4A`) com o título "CARTA DE ENCAMINHAMENTO". Linha de meta abaixo mostra "Abertura de Conta Salário" à esquerda e "Data de Emissão" à direita, idêntico ao Nº/Data do comunicado.
   - **Backend (`server/routers/smo.ts` → `gerarCartaBanco`)**: query passou a retornar `nomeFantasia`, `endereco`, `cidade`, `estado` e `logoUrl` da empresa (campos já existentes em `companies`). Corpo da carta inalterado.

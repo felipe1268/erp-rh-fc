@@ -189,7 +189,7 @@ export default function ComunicadosInternos() {
             )}
           </div>
 
-          <div className="bg-white border rounded-lg p-8 max-w-3xl mx-auto print:border-0 print:shadow-none print:p-4 print:max-w-none">
+          <div className="comunicado-print-area bg-white border rounded-lg p-8 max-w-3xl mx-auto print:border-0 print:shadow-none print:p-4 print:max-w-none">
             <div className="mb-6">
               <div className="flex flex-col items-center justify-center mb-4">
                 {logoUrl ? (
@@ -233,7 +233,7 @@ export default function ComunicadosInternos() {
               {c.conteudo ? (
                 isHtmlContent(c.conteudo) ? (
                   <div
-                    className="prose prose-sm max-w-none text-gray-800 leading-relaxed prose-headings:text-[#1B2A4A] prose-p:my-2"
+                    className="comunicado-conteudo prose prose-sm max-w-none text-gray-800 leading-relaxed prose-headings:text-[#1B2A4A] prose-p:my-2"
                     dangerouslySetInnerHTML={{ __html: sanitizeHtml(c.conteudo) }}
                   />
                 ) : (
