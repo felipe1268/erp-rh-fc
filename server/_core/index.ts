@@ -464,6 +464,12 @@ Regras:
           console.log(`[SyncSchema+] Coluna data_prevista garantida na tabela pj_payments.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA pj_payments data_prevista:`, e?.message || e); }
 
+        // Faturamento Direto editável na Configuração de Medição (Sinal = (Contrato − FD) × %)
+        try {
+          await db.execute(sql`ALTER TABLE planejamento_medicao_config ADD COLUMN IF NOT EXISTS fd_valor NUMERIC(18,2)`);
+          console.log(`[SyncSchema+] Coluna fd_valor garantida na tabela planejamento_medicao_config.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_medicao_config fd_valor:`, e?.message || e); }
+
         await db.execute(sql`CREATE TABLE IF NOT EXISTS sst_integracao_config (
           id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, obra_id INTEGER, obra_nome VARCHAR(255),
           titulo VARCHAR(255) NOT NULL, descricao TEXT, nota_minima INTEGER NOT NULL DEFAULT 70,

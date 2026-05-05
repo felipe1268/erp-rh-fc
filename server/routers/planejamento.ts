@@ -16,6 +16,7 @@ import {
   planejamentoMedicaoConfig,
   orcamentos,
   orcamentoItens,
+  bdiFd,
   composicaoInsumos,
   almoxarifadoItens,
   equipment,
@@ -2066,7 +2067,23 @@ export const planejamentoRouter = router({
       const [cfg] = await db.select().from(planejamentoMedicaoConfig)
         .where(eq(planejamentoMedicaoConfig.projetoId, input.projetoId))
         .limit(1);
-      return cfg ?? null;
+
+      // Sugestão de Faturamento Direto: soma da aba F.D. do BDI do orçamento vinculado ao projeto.
+      // O usuário pode sobrescrever esse valor (gravado em fd_valor); quando fd_valor é NULL usamos esta sugestão.
+      let fdSugerido = 0;
+      const [proj] = await db.select({ orcamentoId: planejamentoProjetos.orcamentoId })
+        .from(planejamentoProjetos)
+        .where(eq(planejamentoProjetos.id, input.projetoId))
+        .limit(1);
+      if (proj?.orcamentoId) {
+        const [row] = await db.execute(sql`
+          SELECT COALESCE(SUM(total),0)::numeric AS total
+          FROM bdi_fd
+          WHERE orcamento_id = ${proj.orcamentoId}
+        `) as any;
+        fdSugerido = Number(row?.total ?? 0) || 0;
+      }
+      return cfg ? { ...cfg, fdSugerido } : { fdSugerido } as any;
     }),
 
   salvarConfigMedicao: protectedProcedure
@@ -2079,6 +2096,7 @@ export const planejamentoRouter = router({
       inicioFaturamento: z.string().nullable().optional(),
       sinalPct:          z.number().min(0).max(100).optional(),
       sinalValor:        z.number().optional(),
+      fdValor:           z.number().nullable().optional(),
       retencaoPct:       z.number().min(0).max(100).optional(),
       dataInicioObra:    z.string().nullable().optional(),
       valorParcelaFixa:  z.number().min(0).optional(),
@@ -2110,6 +2128,7 @@ export const planejamentoRouter = router({
           : null,
         sinalPct:          String(input.sinalPct ?? 0),
         sinalValor:        String(input.sinalValor ?? 0),
+        fdValor:           input.fdValor == null ? null : String(input.fdValor),
         retencaoPct:       String(input.retencaoPct ?? 5),
         dataInicioObra:    input.dataInicioObra ?? null,
         valorParcelaFixa:  String(input.valorParcelaFixa ?? 0),
@@ -2128,6 +2147,7 @@ export const planejamentoRouter = router({
         inicioFaturamento: data.inicioFaturamento,
         sinalPct:          data.sinalPct,
         sinalValor:        data.sinalValor,
+        fdValor:           data.fdValor,
         retencaoPct:       data.retencaoPct,
         dataInicioObra:    data.dataInicioObra,
         valorParcelaFixa:  data.valorParcelaFixa,

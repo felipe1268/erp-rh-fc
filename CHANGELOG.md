@@ -1,5 +1,13 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1329 — 05/05/2026
+- **Previsão de Medição — Sinal/Mobilização agora desconta o Faturamento Direto**: a fórmula passou de `Sinal = Contrato × %` para `Sinal = (Contrato − Faturamento Direto) × %`. O Sinal/Mobilização do contrato é pago sobre a parte da obra que efetivamente vai medir, excluindo os materiais/serviços faturados diretamente pelo cliente (curva ABC).
+  - **Faturamento Direto editável**: novo campo "Faturamento Direto (R$)" no bloco "Parâmetros" da Configuração de Medição (5ª coluna do grid, ao lado de Dia de Corte / Sinal / Retenção / Data de Início). Vem pré-preenchido com a soma da aba **F.D.** do BDI do orçamento vinculado (`SUM(bdi_fd.total) WHERE orcamento_id = projeto.orcamentoId`), mas o usuário pode sobrescrever a qualquer momento.
+  - **Persistência**: nova coluna `fd_valor NUMERIC(18,2)` em `planejamento_medicao_config` (criada via SyncSchema+ no boot). `NULL` = "usar sugestão automática do orçamento"; valor preenchido = override manual do usuário (inclusive `0`).
+  - **Backend**: `getConfigMedicao` agora retorna `fdSugerido` (soma da aba F.D.) junto com o `cfg`, permitindo o fallback automático quando `fd_valor` é nulo. `salvarConfigMedicao` aceita `fdValor: number | null`.
+  - **Cálculo no front (`PrevisaoMedicao` em `PlanejamentoDetalhe.tsx`)**: `sinalRaw = (baseV − fdEfetivo) × %sinal / 100` no modo "%". Modo "R$" (override manual em reais) continua sobrescrevendo o cálculo. Hint atualizado mostra "Base: Contrato − F.D. = R$ X · Sinal: R$ Y · Saldo: R$ Z".
+  - Toggle "Resetar para sugerido" devolve o campo ao automático (volta a seguir mudanças no orçamento).
+
 ## Revisão 1328 — 05/05/2026
 - **Cronograma — Desativar atividade individualmente (estilo MS Project "Inactive Task")**: novo 4º checkbox na coluna "Atividade / Grupo" do modo de edição (cinza-escuro, ao lado de Grupo / Marco / Indireta). Marcar a atividade como `disabled` faz ela:
   - Aparecer riscada (line-through) com opacidade reduzida em todas as visualizações.

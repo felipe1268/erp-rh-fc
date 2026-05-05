@@ -5241,6 +5241,11 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
   const [cfgSinalPct, setCfgSinalPct]     = useState(15);
   const [cfgRetencaoPct, setCfgRetencaoPct] = useState(5);
   const [cfgDataInicioObra, setCfgDataInicioObra] = useState("");
+  // Faturamento Direto: null = usar sugestão automática vinda do orçamento (aba F.D. do BDI);
+  // valor numérico = override manual do usuário (inclusive 0). Sinal = (Contrato − FD) × %sinal.
+  const [cfgFdValor, setCfgFdValor] = useState<number | null>(null);
+  const [fdValorFocused, setFdValorFocused] = useState(false);
+  const [fdValorInput, setFdValorInput] = useState("");
   const [salvando, setSalvando]       = useState(false);
   const [saved, setSaved]             = useState(false);
   const [entradaFocused, setEntradaFocused] = useState(false);
@@ -5434,8 +5439,15 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
       setCfgBloqueado(configMed.bloqueado ?? false);
       const vpf = n((configMed as any).valorParcelaFixa);
       setCfgValorParcelaManual(vpf > 0 ? vpf : 0);
+      const fdv = (configMed as any).fdValor;
+      setCfgFdValor(fdv == null || fdv === "" ? null : n(fdv));
     }
   }, [configMed]);
+
+  // Sugestão de Faturamento Direto vinda do orçamento (soma da aba F.D. do BDI).
+  // Quando o usuário não preencheu fdValor manualmente, usamos esta sugestão como valor efetivo.
+  const fdSugerido = n((configMed as any)?.fdSugerido);
+  const fdEfetivo  = cfgFdValor != null ? cfgFdValor : fdSugerido;
 
   // ── Dados mensais (cruzamento orç x cronograma) ──────────────────────────
   const { data: cruzamento, isLoading: loadCruz } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(
@@ -5499,9 +5511,12 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
     });
     Object.values(avByAct).forEach(arr => arr.sort((a, b) => a.semana.localeCompare(b.semana)));
 
+    // Sinal/Mobilização incide sobre (Contrato − Faturamento Direto): a parcela de FD é faturada
+    // diretamente pelo cliente e não entra na base de medição do contrato.
+    const baseSinal = Math.max(0, baseV - fdEfetivo);
     const sinalRaw = sinalModo === "valor" && cfgSinalValor != null && cfgSinalValor > 0
       ? cfgSinalValor
-      : +(baseV * cfgSinalPct / 100).toFixed(2);
+      : +(baseSinal * cfgSinalPct / 100).toFixed(2);
     const sinalTotal = Math.max(0, Math.min(sinalRaw, baseV));
     const hasSinalRow = sinalTotal > 0 && !!cfgDataInicioObra;
     const baseMedicoes = hasSinalRow ? baseV - sinalTotal : baseV;
@@ -5773,6 +5788,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
       inicioFaturamento: cfgInicioFat || null,
       sinalPct: cfgSinalPct,
       sinalValor: cfgSinalValor ?? 0,
+      fdValor: cfgFdValor,
       retencaoPct: cfgRetencaoPct,
       dataInicioObra: cfgDataInicioObra || null,
       valorParcelaFixa: cfgValorParcelaManual > 0 ? cfgValorParcelaManual : 0,
@@ -5793,6 +5809,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
           inicioFaturamento: cfgInicioFat || null,
           sinalPct: cfgSinalPct,
           sinalValor: cfgSinalValor ?? 0,
+          fdValor: cfgFdValor,
           retencaoPct: cfgRetencaoPct,
           dataInicioObra: cfgDataInicioObra || null,
         });
@@ -5901,7 +5918,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
           {/* Parâmetros */}
           <div>
             <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Parâmetros</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <div>
                 <label className="text-[10px] text-slate-500 block mb-1 font-medium">Dia de Corte do Mês</label>
                 <input type="number" min={1} max={31} value={cfgDiaCorte}
@@ -5974,8 +5991,56 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                     )}
                     <p className="text-[10px] text-slate-400 mt-0.5">
                       {sinalModo === "pct"
-                        ? <>Sinal: {fmt(baseV * cfgSinalPct / 100)} · Saldo: {fmt(baseV - baseV * cfgSinalPct / 100)}</>
+                        ? <>Base (Contrato − F.D.): {fmt(Math.max(0, baseV - fdEfetivo))} · Sinal: {fmt(Math.max(0, baseV - fdEfetivo) * cfgSinalPct / 100)} · Saldo: {fmt(baseV - Math.max(0, baseV - fdEfetivo) * cfgSinalPct / 100)}</>
                         : <>Percentual: {(cfgSinalPct).toFixed(2).replace(".", ",")}% · Saldo: {fmt(baseV - (cfgSinalValor ?? 0))}</>
+                      }
+                    </p>
+                  </div>
+
+                  {/* Faturamento Direto (R$) — desconta da base do Sinal/Mobilização — só para avanço físico */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] text-slate-500 font-medium">Faturamento Direto (R$)</label>
+                      {cfgFdValor != null && (
+                        <button
+                          type="button"
+                          onClick={() => { setCfgFdValor(null); setFdValorInput(""); }}
+                          title="Voltar a usar a sugestão automática vinda do orçamento (aba F.D. do BDI)"
+                          className="text-[9px] px-1.5 py-0.5 rounded text-emerald-700 hover:bg-emerald-50 font-semibold"
+                        >↺ sugerido</button>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={fdValorFocused
+                          ? fdValorInput
+                          : fdEfetivo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        }
+                        onFocus={() => {
+                          setFdValorFocused(true);
+                          setFdValorInput(fdEfetivo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                        }}
+                        onBlur={() => {
+                          setFdValorFocused(false);
+                          const raw = fdValorInput.replace(/\./g, "").replace(",", ".");
+                          const parsed = parseFloat(raw);
+                          if (isNaN(parsed)) { setCfgFdValor(null); return; }
+                          setCfgFdValor(Math.max(0, parsed));
+                        }}
+                        onChange={e => setFdValorInput(e.target.value.replace(/[^\d.,]/g, ""))}
+                        placeholder="0,00"
+                        className={`h-9 w-full text-sm border rounded-lg px-3 pr-8 bg-white focus:ring-2 outline-none font-semibold text-center ${
+                          cfgFdValor != null
+                            ? "border-amber-300 focus:ring-amber-400"
+                            : "border-emerald-200 focus:ring-emerald-400"
+                        }`} />
+                      <span className="absolute right-3 top-2 text-slate-400 text-xs">R$</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      {cfgFdValor != null
+                        ? <>Manual · Sugerido pelo orçamento: {fmt(fdSugerido)}</>
+                        : <>Sugerido automaticamente do orçamento (aba F.D.)</>
                       }
                     </p>
                   </div>
