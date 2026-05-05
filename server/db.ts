@@ -1712,11 +1712,17 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
     eq(obraFuncionarios.isActive, 1)
   ));
   if (allocs.length === 0) return [];
-  const empIds = allocs.map(a => a.employeeId);
+  const empIdsAll = allocs.map(a => a.employeeId);
   const companyIdsSet = new Set(allocs.map(a => a.companyId));
   const companyIdsArr = Array.from(companyIdsSet);
-  const emps = await db.select().from(employees).where(sql`${employees.id} IN (${sql.raw(empIds.join(","))})`);
-  const empMap = Object.fromEntries(emps.map(e => [e.id, e]));
+  const empsRaw = await db.select().from(employees).where(and(
+    sql`${employees.id} IN (${sql.raw(empIdsAll.join(","))})`,
+    sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra', 'Inativo')`,
+    isNull(employees.deletedAt),
+  ));
+  const empMap = Object.fromEntries(empsRaw.map(e => [e.id, e]));
+  const empIds = empsRaw.map(e => e.id);
+  if (empIds.length === 0) return [];
 
   // Cross-reference termination_notices for Aviso Prévio
   const today = new Date().toISOString().split('T')[0];
@@ -1762,24 +1768,26 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
   const feriasMap = new Map<number, { dataInicio: string | null; dataFim: string | null }>();
   for (const r of feriasRows) feriasMap.set(r.employeeId, { dataInicio: r.dataInicio, dataFim: r.dataFim });
 
-  return allocs.map(a => {
-    const emp = empMap[a.employeeId] || null;
-    const avisoInfo = avisoMap.get(a.employeeId);
-    const feriasInfo = feriasMap.get(a.employeeId);
-    let effectiveStatus: string = emp?.status || 'Ativo';
-    if (avisoInfo) {
-      effectiveStatus = avisoInfo.dispensado ? 'AvisoDispensado' : 'Aviso';
-    } else if (feriasInfo) effectiveStatus = 'Ferias';
-    return {
-      ...a,
-      employee: emp ? { ...emp, status: effectiveStatus as any } : null,
-      avisoDataFim: avisoInfo?.dataFim || null,
-      avisoTipo: avisoInfo?.tipo || null,
-      avisoDispensado: avisoInfo?.dispensado || false,
-      feriasDataInicio: feriasInfo?.dataInicio || null,
-      feriasDataFim: feriasInfo?.dataFim || null,
-    };
-  });
+  return allocs
+    .filter(a => empMap[a.employeeId])
+    .map(a => {
+      const emp = empMap[a.employeeId];
+      const avisoInfo = avisoMap.get(a.employeeId);
+      const feriasInfo = feriasMap.get(a.employeeId);
+      let effectiveStatus: string = emp?.status || 'Ativo';
+      if (avisoInfo) {
+        effectiveStatus = avisoInfo.dispensado ? 'AvisoDispensado' : 'Aviso';
+      } else if (feriasInfo) effectiveStatus = 'Ferias';
+      return {
+        ...a,
+        employee: { ...emp, status: effectiveStatus as any },
+        avisoDataFim: avisoInfo?.dataFim || null,
+        avisoTipo: avisoInfo?.tipo || null,
+        avisoDispensado: avisoInfo?.dispensado || false,
+        feriasDataInicio: feriasInfo?.dataInicio || null,
+        feriasDataFim: feriasInfo?.dataFim || null,
+      };
+    });
 }
 
 /** Check which employees from a list already have active obra allocations */
@@ -2224,6 +2232,8 @@ export async function getEfetivoPorObra(companyId: number, companyIds?: number[]
       inArray(obraFuncionarios.companyId, ids),
       eq(obraFuncionarios.isActive, 1),
       sql`${obras.status} NOT IN ('Concluida', 'Paralisada', 'Cancelada')`,
+      sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra', 'Inativo')`,
+      isNull(employees.deletedAt),
     ));
 
   if (alocacoes.length === 0) return [];
