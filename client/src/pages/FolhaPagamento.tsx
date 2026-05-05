@@ -4045,12 +4045,12 @@ export default function FolhaPagamento() {
               <Button variant="destructive" onClick={() => {
                 setOverridesPrompt({ open: false, count: 0 });
                 setCalcType("pagamento");
-                simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, descartarOverrides: true, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim });
+                simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, descartarOverrides: true, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim, forcarRecalculoPonto: true });
               }}>Descartar e recalcular do zero</Button>
               <Button onClick={() => {
                 setOverridesPrompt({ open: false, count: 0 });
                 setCalcType("pagamento");
-                simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, manterOverrides: true, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim });
+                simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, manterOverrides: true, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim, forcarRecalculoPonto: true });
               }}>Manter alterações manuais</Button>
             </DialogFooter>
           </DialogContent>
@@ -5762,7 +5762,7 @@ export default function FolhaPagamento() {
                 <Button size="sm" className={`w-full mt-auto ${pagamentoConsolidado ? 'bg-gray-400 cursor-not-allowed' : pagOk ? 'bg-slate-500 hover:bg-slate-600' : 'bg-green-600 hover:bg-green-700'}`}
                   disabled={simularPagamentoMut.isPending || !step4Ready || pagamentoConsolidado}
                   title={pagamentoConsolidado ? "Pagamento consolidado — desconsolide primeiro para resimular" : ""}
-                  onClick={() => { setCalcType("pagamento"); simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim }); }}>
+                  onClick={() => { setCalcType("pagamento"); simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim, forcarRecalculoPonto: true }); }}>
                   {simularPagamentoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Simulando...</> : pagamentoConsolidado ? <><Lock className="h-3 w-3 mr-1" /> Consolidado</> : pagOk ? <><RefreshCw className="h-3 w-3 mr-1" /> Resimular</> : <><Zap className="h-3 w-3 mr-1" /> Simular Pagamento</>}
                 </Button>
                 {pagamentoResult && (

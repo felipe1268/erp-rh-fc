@@ -2778,6 +2778,7 @@ export const payrollEngineRouter = router({
       aplicarDsrFalta: z.boolean().optional(),
       pontoInicioManual: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       pontoFimManual: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      forcarRecalculoPonto: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -2921,9 +2922,13 @@ export const payrollEngineRouter = router({
       console.log(`[SimPag DIAG] timecardDailyCount(registrado)=${timecardDailyCount}, pontoProcessado=${pontoProcessado}, allStatusCounts=${JSON.stringify(timecardAllRows)}`);
 
       const periodoDiferente = !!(input.pontoInicioManual && input.pontoFimManual) && (input.pontoInicioManual !== storedPontoInicio || input.pontoFimManual !== storedPontoFim);
-      const forcarReprocessamento = periodoDiferente && pontoProcessado;
+      const forcarReprocessamento = (periodoDiferente && pontoProcessado) || (!!input.forcarRecalculoPonto && pontoProcessado);
       if (forcarReprocessamento) {
-        console.log(`[SimPag AUTO-PONTO] Período manual diferente do armazenado (${input.pontoInicioManual} → ${input.pontoFimManual} vs ${storedPontoInicio} → ${storedPontoFim}). Reprocessando...`);
+        if (periodoDiferente) {
+          console.log(`[SimPag AUTO-PONTO] Período manual diferente do armazenado (${input.pontoInicioManual} → ${input.pontoFimManual} vs ${storedPontoInicio} → ${storedPontoFim}). Reprocessando...`);
+        } else {
+          console.log(`[SimPag AUTO-PONTO] forcarRecalculoPonto=true (Resimular). Reprocessando timecard_daily a partir de time_records...`);
+        }
       }
       if (!pontoProcessado || forcarReprocessamento) {
         console.log(`[SimPag AUTO-PONTO] ${forcarReprocessamento ? 'Reprocessando' : 'Nenhum registro em timecard_daily para'} ${input.mesReferencia}. Auto-processando ponto...`);
@@ -2950,9 +2955,16 @@ export const payrollEngineRouter = router({
             AND data >= ${pontoInicioAP} AND data <= ${pontoFimAP}
         `)) as any).rows || [];
 
-        if (autoRecords.length === 0) {
+        // Quando NÃO há time_records:
+        //   - Primeira importação (!pontoProcessado): mantém o SKIP histórico (não há nada a processar nem a limpar).
+        //   - Reprocessamento forçado (forcarReprocessamento): ainda limpa derivados stale para evitar que a folha
+        //     continue usando dados antigos quando o usuário removeu/zerou o ponto de origem.
+        if (autoRecords.length === 0 && !forcarReprocessamento) {
           console.log(`[SimPag AUTO-PONTO] SKIP: nenhum time_record encontrado para ${pontoInicioAP} → ${pontoFimAP}. Ponto não importado?`);
         } else {
+          if (autoRecords.length === 0) {
+            console.log(`[SimPag AUTO-PONTO] AVISO: forcarRecalculoPonto=true e nenhum time_record para ${pontoInicioAP} → ${pontoFimAP}. Limpando timecard_daily não-manual; nada será reinserido.`);
+          }
           const fmtDate = (d: any): string => {
             if (typeof d === 'string') return d.substring(0, 10);
             if (d instanceof Date) {
@@ -2967,8 +2979,30 @@ export const payrollEngineRouter = router({
             autoRecordMap.get(key)!.push(r);
           }
 
+          // Preservar dias com edição manual / aferição (Fechamento de Ponto, ajustes manuais e aferição do escuro)
+          // E também dias com resolução manual de inconsistência (atestado/justificar/abonar/feriado/bh) que
+          // marcam isFalta=0 sem trocar origemRegistro para 'manual' (vide payrollEngine ~857-887).
+          const preservedRows = ((await db.execute(sql`
+            SELECT "employeeId", "data" FROM timecard_daily
+            WHERE "companyId" IN (${allCompanyIdsSql})
+              AND "mesCompetencia" = ${input.mesReferencia}
+              AND ("origemRegistro" IN ('manual', 'ajuste_manual', 'ajusteManual', 'aferido')
+                   OR "resolucaoTipo" IS NOT NULL)
+          `)) as any).rows || [];
+          const preservedKeys = new Set<string>();
+          for (const r of preservedRows) {
+            const dStr = typeof r.data === 'string' ? r.data.substring(0, 10) : (r.data instanceof Date ? `${r.data.getUTCFullYear()}-${String(r.data.getUTCMonth()+1).padStart(2,'0')}-${String(r.data.getUTCDate()).padStart(2,'0')}` : String(r.data).substring(0,10));
+            preservedKeys.add(`${r.employeeId}-${dStr}`);
+          }
+          if (preservedKeys.size > 0) {
+            console.log(`[SimPag AUTO-PONTO] Preservando ${preservedKeys.size} dia(s) com edição manual / aferição / resolução de inconsistência.`);
+          }
           await db.execute(sql`
-            DELETE FROM timecard_daily WHERE "companyId" IN (${allCompanyIdsSql}) AND "mesCompetencia" = ${input.mesReferencia}
+            DELETE FROM timecard_daily
+            WHERE "companyId" IN (${allCompanyIdsSql})
+              AND "mesCompetencia" = ${input.mesReferencia}
+              AND "origemRegistro" NOT IN ('manual', 'ajuste_manual', 'ajusteManual', 'aferido')
+              AND "resolucaoTipo" IS NULL
           `);
 
           let autoFaltas = 0, autoAtrasos = 0;
@@ -2977,6 +3011,7 @@ export const payrollEngineRouter = router({
           for (const emp of empList) {
             const pontoDatesAP = getDateRange(pontoInicioAP, pontoFimAP);
             for (const dateStr of pontoDatesAP) {
+              if (preservedKeys.has(`${emp.id}-${dateStr}`)) continue;
               const dow = new Date(dateStr + 'T12:00:00Z').getUTCDay();
               if (dow === 0) continue;
               let tipoDia = 'util';
@@ -3046,6 +3081,7 @@ export const payrollEngineRouter = router({
             if (criteria.fecharNoEscuro) {
               for (let d = diaCorteAP + 1; d <= lastDayAP; d++) {
                 const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                if (preservedKeys.has(`${emp.id}-${dateStr}`)) continue;
                 const dow = new Date(dateStr + 'T12:00:00Z').getUTCDay();
                 if (dow === 0) continue;
                 let tipoDia = 'util';
