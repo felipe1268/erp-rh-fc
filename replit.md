@@ -1,325 +1,101 @@
 # ERP RH & DP — FC Engenharia
 
-## Project Overview
-A full-stack HR/ERP system built for FC Engenharia. It handles employees, payroll, time tracking, training, safety (SST), legal cases, administrative functions, and budget management.
+A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, projects, finance, procurement, and operational workflows.
 
-## Active Modules (8)
-1. **RH & DP** — Payroll, time tracking, employees, benefits
-2. **SST** — Safety (EPIs, ASOs, CIPA, NRs, PGR/PCMSO/LTCAT). EPI page performance optimized: lazy loading per tab, SQL aggregation stats, server-side pagination (50/page) on catalog+deliveries, DB indexes on epi_deliveries(deletedAt, dataEntrega) and employees(deletedAt, status), on-demand employee loading. **Programas Legais SST** (PGR/PCMSO/LTCAT): tabela `sst_documents` com multi-file por tipo, lotação (Matriz ou Obra), data elaboração/validade, responsável/CREA, empresa elaboradora, status calculado (Válido/A Vencer/Vencido). Upload multipart via Express (até 150MB) com barra de progresso XHR. Router: `server/routers/sstDocuments.ts`. Upload endpoint: `POST /api/upload/sst-document` (multer). Frontend: `client/src/pages/ProgramasSST.tsx`. Rota: `/programas-sst`. Menu SST: seção "Programas Legais" com 3 itens (PGR/PCMSO/LTCAT)
-3. **Jurídico** (Rev.1050) — 3 submódulos segregados: **Trabalhista** (dashboard rica com DataJud auto-check, KPIs financeiros, gráficos Chart.js, alertas, audiências, evolução mensal, fase/tipo ação, valor por risco), **Tributário** (dashboard rica com KPIs, tributos, esfera judicial/admin, evolução mensal, audiências, valor por risco), **Civil** (dashboard rica com KPIs, tipo ação, fase processual, audiências, valor por risco). Hub central `/painel/juridico` com resumo consolidado dos 3 submódulos. Cada submódulo tem seu próprio painel, lista de processos e dashboard analítico. Backend: `dashboards.juridico` (trabalhista), `dashboards.tributario`, `dashboards.civil`. Frontend: `PainelJuridico.tsx` (hub), `PainelTrabalhista.tsx`, `PainelTributario.tsx`, `PainelCivil.tsx`. Sidebar: links para painel+processos+dashboard em cada submódulo
-4. **Terceiros** — Third-party companies, contractors, medição with inline-edit %, reject flow, comparativo (físico×medido×pago), item history, divergence alerts, partial medição, retenções/descontos (ISS/INSS/IRRF/outras/descontos), PDF boletim de medição (PDFKit), qty/unit/value columns, hierarchical EAP matching with normName()
-5. **Parceiros** — Benefits partners (pharmacy, gas station, etc.)
-6. **Orçamento** — Excel import, 3 budget versions (Venda/Custo/Meta), ABC curve, BDI, EAP tree, 3 cost categories (MAT/MDO/EQUIP). Equipment (EQUIP) = insumos with código 80.xx (SINAPI/DER pattern) auto-classified on import. Columns: `alocacao_equip` in `composicao_insumos`, `custo_unit_equip`/`meta_unit_equip`/`custo_total_equip`/`meta_total_equip` in `orcamento_itens`
-7. **Financeiro Integrado** (Rev.1306) — **22 DB tables, 60+ tRPC endpoints, 14 React pages (+ FinanceiroIntegracao)**. Módulo financeiro como "fase final" de todos os outros módulos — zero dupla digitação. **FASE 1 (Fundação)**: `financial_entries`, `financial_accounts`, `financial_revenue`, `financial_tax_config`, `financial_tax_obligations`, `financial_cost_centers`, `bank_statement_lines`, `bank_daily_balance`, `obra_medicoes`, `cash_flow_forecast`, `dre_cache`, `financial_approvals`, `financial_opening_balances`, `company_partners`, `collection_rules`, `collection_log`, `financial_budget`, `financial_revision_alerts`, `financial_payment_approvals`, `financial_reconciliation_log`, `financial_kpi_cache`, `financial_import_log`. **FASE 2 (15 Fontes de Despesa)**: `financialIntegrationBridge.ts` — folha CLT, PJ payments, terceiros (medições aprovadas), parceiros, frotas (abastecimento+manutenção), benefícios VR/VA, seguro vida, adiantamentos, pró-labore, planejamento compras, almoxarifado, processos trabalhistas, guias tributárias (ISS/INSS/FGTS). **FASE 3 (7 Fontes de Receita)**: medições de obra, medições PJ recebíveis, terceiro cobrável. **FASE 4 (Caminho Reverso)**: `verificarImpactoFinanceiro()`, aprovações por alçada COSO (<R$500 Coord./R$500-5k Gerente/>R$5k Diretoria), `rollbackFinanceiroPorOrigem()`, `sincronizarStatusPagamento()`, `gerarAlertasVencimento()`. **FASE 5 (KPIs Financeiros)**: `financialKpiService.ts` — DSO, DPO, Burn Rate, Capital de Giro Líquido, Liquidez Corrente, Caixa Livre (FCL=FCO-CAPEX), Margem Bruta, Inadimplência, margem por obra. DRE automático. Projeção fluxo 90 dias. EFD-REINF (IN RFB 2.043/2021). **FASE 6 (Retroação Histórica)**: `retroacaoHistorica` mutation reimporta N meses retroativamente. **FASE 7 (Cronograma Financeiro)**: `importAtividadesCronogramaToFinancial` importa atividades do cronograma como financial_entries (despesa) usando COALESCE(valor_contrato → orcamento.totalVenda) como base; `importAllMedicoesPrevistaToFinancial` importa TODOS os meses de planejamento_medicoes como receita prevista; ambos usam bulk INSERT via `db.$client` (pg pool direto) para evitar stack overflow do Drizzle. Página `/financeiro/cronograma` — `FinanceiroCronograma.tsx`: KPIs (receita/custo/resultado/margem), chart recharts ComposedChart (barras receita+custo + linha resultado), tabela mensal com Acum%, filtro por obra ou empresa toda, "Resumo por Obra" com drill-down clickável. tRPC: `getCronogramaFinanceiro` (query), `importarCronogramaFinanceiro` (mutation). **Job automático**: importação a cada 60min, alertas a cada 6h. **FinanceiroIntegracao** (`/financeiro/integracao`): KPI cards (DSO/DPO/FCL/etc.), resumo por módulo origem, alertas com resolver, aprovações COSO com aprovar/recusar, log de importação, botões: Importar Agora / Retroação Histórica / Gerar Alertas. Serviços: `financialIntegrationBridge.ts`, `financialKpiService.ts`, `financialAutoImportJob.ts`, `purchaseFinancialBridge.ts`
-8. **Compras** (Rev.849, FK fix Rev.1007) — 25 DB tables, 40+ tRPC endpoints, 8+ páginas: SC emergencial, cotações (portal fornecedor), OC com numeração configurável, recebimentos, AP integrada, realocação de verba, comissões, bridge financeiro. **FK Constraint Fix (Rev.1007)**: editarSolicitação agora NULLa FKs em `compras_cotacoes_itens` e `compras_ordens_itens` antes de deletar itens da SC, evitando erro de FK constraint. **Compras Inteligentes** (Rev.822): SC via EAP com explosão de insumos (2 modos: Via EAP Inteligente / Manual), saldo orçamentário em tempo real, consolidação automática de insumos, Meta×Real no mapa de cotação, histórico de preços por insumo, rastreabilidade SC→Cotação→OC, entregas programadas na OC, imagem de referência na SC (Rev.820), cobertura orçamentária no mapa de cotação (Rev.821), condição de pagamento estruturada com parcelas automáticas (Rev.822). **Meta MAT/MDO Separada** (Rev.888): Import de orçamento calcula metaUnitMat/metaUnitMdo separadamente. Mapa de cotação usa metaUnitMdo para cotações MDO/serviço. updateMeta recalcula todos os campos MAT/MDO. **Separação Profissional/Ajudante** (Rev.889): SC de serviço permite escolher se contratação inclui ajudante/auxiliar. Select global "Considerar MDO" (Equipe completa / Só profissional) com override por item. Decomposição visual do custo MDO (Prof R$X + Ajud R$Y). Meta ajustada na cotação. Classificação automática: nome contém "ajudante/servente/auxiliar" = ajudante. Campos: `incluir_ajudante`, `meta_mdo_profissional`, `meta_mdo_ajudante` em `compras_solicitacoes_itens`. **Agrupar Itens Iguais** (Rev.889): Toggle no mapa de cotação para consolidar itens com mesma descrição+unidade, somando quantidades. **Meta Fix** (Rev.890): `updateMeta` com `totalMetaExato` agora só atualiza totais do orçamento — não recalcula meta por item, preservando desconto da importação. Cálculo "Só prof." no mapa usa proporção sobre `meta_unit_mdo` (não recalcula do custo). Filtro "Com orçamento" no Dashboard Obras. **Cotação Tipo Fix** (Rev.891): Cotação herda tipo da SC ao ser criada; `getMapaCotacao` verifica SC tipo como fallback para cotações legadas com tipo=material incorreto; usa `meta_unit_mdo` para cotações de serviço. **SC Serviço/MDO — Contratação por Composição** (Rev.886): SC tipo servico contrata na unidade da composição (m², m³, kg) — sem explosão em insumos individuais de MDO. EAP tree mostra cards orçado/contratado/saldo por composição. `getEapParaObra` retorna `custoUnitMdo`, `mdoContratado`, `mdoSaldo`. Checkbox seleciona composição inteira. Aba "Por Insumo" ocultada quando tipo=servico. Sem-verba flow idêntico ao material (realocação → risco → admin). Preços ausentes na SC — apenas na cotação/OC.
-**Controle de Saldo por Insumo** (Rev.849): saldo global consolidado por insumo (soma de TODAS as composições da obra), badges BLOQUEADO/LIMITADO/EXTRA-ORÇAMENTO, botão desbloquear extra-orçamento, validação handleSalvar por insumoCodigo, links clicáveis SC/COT/OC nos status de insumos (Rev.848). **PDF da OC**: geração de PDF profissional via PDFKit com layout de cabeçalho, dados da empresa/fornecedor, tabela de itens, totalizadores, observações e espaço para assinaturas. Endpoint Express `GET /api/download/oc/:id` com autenticação e autorização por empresa. Botões "Exportar PDF" e "Imprimir" na tela de detalhes da OC (`Ordens.tsx`). Arquivos: `server/services/purchaseOrderPdf.ts`, `server/routers/downloadOC.ts`. **Condição de Pagamento Estruturada** (Rev.822): Seletor padronizado (À Vista, DDL, 30/60, 30/60/90, Entrada+parcelas, Medição). Shared utility `shared/paymentConditions.ts` com `calcularParcelas()`. Bridge financeiro cria N financial_entries + N purchase_accounts_payable por OC. Colunas `tipo_pagamento` em `compras_cotacao_fornecedores`, `compras_ordens`, `purchase_orders`. Portal do fornecedor usa seletor estruturado. **Controle de Frete** (Rev.822): freteTipo (CIF/FOB), valorFrete, transportadora per supplier in quotation map; OC stores transportadora + codigoRastreamento + portalToken; FOB freight adds to cost totals, CIF is informational; supplier portal post-OC tracking update via token (`/portal/oc-entrega/:token`); financial bridge includes FOB freight in cost description; OC detail shows freight info with editable tracking fields; receiving screen shows delivery mode. New schema fields on `comprasSolicitacoesItens` (insumoCodigo, composicaoCodigo, precoMeta, quantidadeServico, coeficiente, origemEap). New table: `compras_entregas_programadas`. **Alertas Automáticos** (Rev.823): Endpoint `getAlertasCompras` com alertas de pagamentos vencidos/próximos (7 dias), entregas atrasadas, SCs sem cobertura orçamentária, divergências de recebimento (integração almoxarifado_notificacoes). **Dashboard por Obra** (Rev.823): Endpoin... **Alertas Automáticos Financeiro + Almoxarifado**: Na emissão de OC, alerta financeiro (notification_logs + email) com parcelas/vencimentos e alerta almoxarifado (almoxarifado_notificacoes + email) com itens/contato fornecedor. Entregas programadas geram alertas individuais. Job diário verifica entregas nos próximos 3 dias e cotações prestes a expirar. Painel de alertas no almoxarifado (slide-over com filtro pendentes/todos, marcar como recebido).
-**Faturamento Direto (FD)** (Rev.884, Rev.896): FD Cliente — OC de material marcada como FD, valida saldo contra BDI FD (`bdi_fd` table), hard block se excede teto. FD Terceiro — limite definido no contrato PJ (`limite_fd` / `fd_consumido` em `pj_contracts`), rastreia OCs comprometidas, bloqueia se excede. **FD na Cotação** (Rev.896): FD pode ser definido na cotação antes de aprovar (material ou serviço). Usuário escolhe "FD Cliente" (saldo de FD orçado) ou "FD FC" (a FC paga diretamente). Ao aprovar e gerar OC ou Contrato de Serviço, FD é propagado automaticamente. Validação de saldo conta apenas cotações pendentes + OCs existentes (evita double-count). Colunas: `modalidade_fd`, `fd_valor`, `fd_pagador`, `fd_bdi_item_id` em `compras_cotacoes`. Card FD no mapa de cotação com definir/remover. Badge FD na listagem e painel lateral. Ajuste FD: somente Admin Master com justificativa+auditoria (`fd_ajustes` table) + company-scope auth. Medição PJ auto-deduz FD Terceiro pendente (`fd_desconto` / `fd_detalhe` em `pj_medicoes`). **PDF Aprovação FD**: `server/services/fdApprovalPdf.ts` + rota `/api/download/fd/:id` — PDF profissional com dados da obra, materiais, saldo FD e bloco de assinatura do cliente. **Auto-criação FD na medição cliente**: ao aprovar OC como FD Cliente, auto-insere `medicaoFdRegistros` (idempotente por `compraId`). **Adicionar/Remover itens FD**: `compras.adicionarItemFd` e `compras.removerItemFd` com Admin Master auth + company-scope + auditoria. **Detalhe expandível FD**: boletim de medição com row expandível mostrando breakdown de registros FD (`boletimDescontoId`). Painel FD: `client/src/pages/compras/PainelFd.tsx`, rota `/compras/painel-fd`, com tabela de OCs vinculadas e botão PDF. Endpoints: `compras.getSaldoFd`, `compras.marcarOcComoFd`, `compras.aprovarFdCliente`, `compras.ajustarFd`, `compras.getHistoricoFdAjustes`, `compras.adicionarItemFd`, `compras.removerItemFd`, `compras.marcarCotacaoFd`, `compras.removerCotacaoFd`, `pjContracts.definirLimiteFd`, `pjContracts.getSaldoFdTerceiro`, `pjContracts.marcarOcFdTerceiro`.
-9. **Operacional** (Rev.1069) — Módulo de controle operacional de obra. 8 submódulos: **Diário de Obra** (importação completa do diariodeobra.app com fotos/vídeos/PDFs binários para independência total, grid de obras, lista de relatórios, detalhe com todas as seções, CRUD completo, 10 tabelas dedicadas), RDO (Relatório Diário de Obra com clima, mão de obra, atividades, equipamentos, materiais, auto-preenchimento), Checklists (templates com itens configuráveis, preenchimento Conforme/NC/NA), Concretagem (mapa de elementos, lançamentos com controle de tempo usina→obra, CPs com datas de ruptura 7/14/28d), Não Conformidades (abertura, tratativa, fechamento com plano de ação, gravidade, disciplina), Registro Fotográfico (galeria com filtros disciplina/data, upload com legenda), Dashboard (KPIs consolidados, status RDO do dia). Tabelas Diário de Obra: `diario_obra_obras`, `diario_obra_relatorios`, `diario_obra_mao_obra`, `diario_obra_equipamentos`, `diario_obra_atividades`, `diario_obra_ocorrencias`, `diario_obra_materiais`, `diario_obra_comentarios`, `diario_obra_fotos`, `diario_obra_videos`. Tabelas RDO: `rdo_relatorios`, `rdo_mao_obra`, `rdo_equipamentos`, `rdo_atividades`, `rdo_materiais`, `rdo_fotos`, `checklists_templates`, `checklists_template_itens`, `checklists_preenchidos`, `checklists_respostas`, `concretagem_mapa`, `concretagem_lancamentos`, `concretagem_cps`, `nao_conformidades`, `registro_fotografico`. Routers: `server/routers/operacional.ts`, `server/routers/diarioObra.ts`. Frontend: `client/src/pages/operacional/`. **Ensaios Tecnológicos** (Rev.1069 — CRUD completo de ensaios de concreto/solo/aço/asfalto/agregados/argamassa, corpos de prova com idades 3/7/14/28/63/91 dias, registro de ruptura com tipo cônica/colunar/cisalhamento, cálculo automático de média de resistência vs fck projeto com resultado aprovado/reprovado, dashboard analítico por tipo/obra, numeração automática ENS-XXXX). Tabelas: `ensaios_tecnologicos`, `ensaios_corpos_prova`. Tenant-scoped em todos endpoints. Rotas: `/operacional/painel`, `/operacional/diario-obra`, `/operacional/rdo`, `/operacional/checklists`, `/operacional/concretagem`, `/operacional/nc`, `/operacional/fotos`, `/operacional/ensaios`. Tema: amber. Ícone: HardHat.
-10. **Databook de Obra** (Rev.1003) — Documentação técnica de produtos para entrega final ao cliente. Tabelas: `databook_fichas`, `databook_terceiro_entregas` + campos `databook_obrigatorio`/`databook_status` em `terceiro_contratos`. Router: `server/routers/databook.ts`. PDF: `server/services/databookPdf.ts`. Frontend: `client/src/pages/compras/Databook.tsx`. Rota: `/compras/databook`. Funcionalidades: importação automática de itens de OCs com deduplicação (hash MD5), 13 disciplinas, classificação e geração de especificações técnicas via IA (Claude/invokeLLM), busca de fotos via Gemini (GOOGLE_API_KEY), fluxo de status (pendente_ia→gerado→revisado→enviado→aprovado/reprovado) com validação de transição, entregas de terceiros com validação IA, aprovação idempotente, geração de PDF individual por ficha e índice geral, comparação com EAP do orçamento, dashboard com progresso por disciplina, ações em lote, exportação Excel.
-10. **IntegraSign** (Rev.940) — Módulo interno de assinatura eletrônica de contratos de serviço (estilo DocuSign). Fluxo sequencial: Fornecedor(1)→Gestor(2)→Financeiro(3)→Diretor(4) + testemunhas opcionais. Tabelas: `integrasign_envelopes`, `integrasign_signatarios`, `integrasign_audit_log`. Router: `server/routers/integrasign.ts`. Email: `server/services/integrasignEmail.ts`. Frontend: `IntegraSignDashboard.tsx` (painel interno) + `IntegraSignAssinar.tsx` (página pública token-based). Auto-trigger: OC de serviço aprovada → gera contrato PJ + envelope IntegraSign automaticamente. Assinatura com canvas (rubrica+assinatura), hash SHA-256, geolocalização, IP, user-agent. Dashboard com progresso, recusa com justificativa, versionamento, reenvio de lembretes. Rota: `/integrasign` (interno), `/integrasign/assinar/:token` (público). Menu: Terceiros > Contratos e Medições.
-10. **Portal do Prestador de Serviço** — Portal externo (acesso via token) para gestão de contratos de mão de obra/serviços. Tabelas: `service_contract_tokens`, `service_contract_measurements`, `service_contract_documents`, `service_contract_action_logs`. Campos adicionais em `supplier_contracts`: `tipo`, `escopo`, `obra_id`, `obra_nome`, `valor_total`, `condicao_pagamento`, `contrato_confirmado`, `confirmado_em`. Router: `server/routers/portalServico.ts` (publicProcedure para portal, protectedProcedure para gestão interna). Frontend: `client/src/pages/PortalServico.tsx` (portal externo), `client/src/pages/compras/MedicoesServico.tsx` (aprovação interna). Rotas: `/portal/servico/:token` (portal), `/compras/medicoes-servico` (interno). Funcionalidades: visualização de contrato, confirmação de recebimento, medições mensais (% concluído + valor), upload de documentação (ART, seguros, certidões), histórico de contratos, log de ações para rastreabilidade.
-10. **BIM 3D/4D** (Rev.777-779) — Visualizador de modelos IFC no Planejamento. Three.js + web-ifc (WASM). Importação multi-disciplina com persistência no servidor. Seleção interativa de elementos 3D (raycasting + multi-select) para vincular a atividades do cronograma (BIM 4D). Tabelas: `bim_models`, `bim_links`. Router: `server/routers/bim.ts`. Frontend: `client/src/pages/planejamento/BimViewer.tsx`. Arquivos salvos em `server/uploads/bim/`. Limite 35MB por arquivo.
+## Run & Operate
 
-11. **Frotas** — Controle de Frotas e Veículos. 12 submódulos: Dashboard, Analítico, Veículos (FIPE, depreciação), Manutenções (preventiva/corretiva, importação IA, integração SC/OC Compras), Combustível (importação CSV/PDF, aliases motoristas, consolidação), Pedágios/Sem Parar (importação PDF IA), Multas, IPVA, Licenciamento, Seguros (análise IA, **upload em lote de PDFs de apólices** Rev.1095 — drag-and-drop até 20 PDFs, extração automática via Claude: seguradora/placa/veículo/apólice/coberturas/franquia/prêmio/vigência/corretor, match automático de veículo por placa, PDF salvo no sistema, análise IA detalhada, dialog de detalhes com coberturas/alertas/exclusões, cards KPI ativas/vencendo/vencidas, colunas `corretor`+`apolice_arquivo_nome` em `fleet_insurance`), **Raio-X do Veículo** (Rev.1038 — ficha completa: timeline cronológica de todos os eventos, Score de Saúde 0-100, TCO com gráfico de composição, alertas inteligentes de km — troca de óleo 10k km, rodízio pneus 10k km, revisão 15k km —, 7 abas: resumo/timeline/manutenções/combustível/custos/checklists/documentos), **Checklist Veicular** (Rev.1038 — templates personalizáveis com 9 categorias padrão, 39 itens gerados automaticamente, preenchimento Conforme/NC/NA com fotos, km obrigatório que atualiza o veículo, score por checklist), Rastreamento (mapa Leaflet + **integração Infleet API** via GraphQL `https://api.infleet.com.br/v1/graphql` — tempo real com 10 veículos, auto-refresh 60s, marcadores coloridos por status ON/OFF/OUTDATED, painel lateral com lista de veículos, abas Tempo Real / Histórico). Secret: `FROTA_API_TOKEN`. **Controle de Km** (Rev.1068 — km diário por veículo via Infleet Trips API, cruzamento com abastecimentos do DB: consumo real km/L, custo R$/km, visualização de rotas GPS no mapa Leaflet com polyline, abas Resumo/Diário/Cruzamento). **Motorista Padrão** (Rev.1078 — motorista padrão no cadastro do veículo com data de início, preenche automaticamente registros diários sem motorista, indicador visual "(padrão)" no histórico, edição inline no card do veículo). Colunas: `vehicles.motorista_padrao`, `vehicles.motorista_padrao_inicio`. Tabelas: `fleet_daily_km`, `fleet_trips`. Tabelas: `fleet_maintenances`, `fleet_fuel_records`, `fleet_toll_records`, `fleet_tracking_points`, `fleet_documents`, `fleet_fines`, `fleet_ipva`, `fleet_licensing`, `fleet_insurance`, `fleet_driver_aliases`, `fleet_checklist_templates`, `fleet_checklist_template_items`, `fleet_checklists`, `fleet_checklist_responses`, `fleet_washes`, `fleet_parking` + campos expandidos em `vehicles`. Router: `server/routers/frotas.ts`. Frontend: `client/src/pages/frotas/`. Rotas: `/frotas/painel`, `/frotas/veiculos`, `/frotas/manutencoes`, `/frotas/combustivel`, `/frotas/pedagios`, `/frotas/rastreamento`, `/frotas/multas`, `/frotas/ipva`, `/frotas/licenciamento`, `/frotas/seguros`, `/frotas/raio-x`, `/frotas/checklist`. Tema: cyan. Ícone: Truck.
+- **Dev**: `PORT=5000 NODE_ENV=development pnpm dev`
+- **Build**: `pnpm build`
+- **Prod**: `node dist/index.js`
 
-12. **SMO — Solicitação de Mão de Obra** (Rev.1169) — Módulo completo de gestão de solicitações de mão de obra para obras. Tabelas: `smo_solicitacoes`, `smo_atividades_eap`, `smo_onboarding_checklist`. Router: `server/routers/smo.ts` (list, create, approve, reject, recruitment, checklist, financial impact, reallocation suggestion, turnover history, similar requests, análise comparativa CLT vs Terceirização com lucro configurável, reverterAprovacao). Frontend: `client/src/pages/SolicitacaoMDO.tsx` com 4 telas (listagem com filtros e KPIs, formulário full-screen multi-step, detalhes/aprovação com impacto financeiro e sugestão de realocação, checklist de onboarding). Rota: `/solicitacao-mdo`. Menu: Gestão de Pessoas > Solicitação de Mão de Obra. **Edição/Exclusão**: criador pode editar/excluir enquanto NENHUMA aprovação foi registrada; admin/admin_master sempre podem. `canEdit` flag em list e getById. Botão Editar na tela de detalhes pré-preenche o formulário. Backend: `smo.update` mutation + `assertCanEditOrDelete` helper. **Reversão de Aprovação**: admin_master pode reverter aprovações individuais (RH ou Diretoria) com motivo obrigatório. Diretoria revert → status volta para "aprovada_rh". RH revert → limpa ambas aprovações, status volta para "enviada". Bloqueado após `em_recrutamento`/`concluida`/`rejeitada`. Ícone RotateCcw na timeline de aprovação. **Resiliência DB** (Rev.1168): withRetry helper com detecção de erros transientes (timeout, connection reset, PG codes 57P01/08006/53300) e 3 tentativas automáticas nos endpoints list e dashboard. tRPC onError extrai causa real do DrizzleQueryError. **Validação de Integração** (T006): `smo.verificarIntegracaoObra` endpoint — match da obra.cliente → clientes.razaoSocial por ILIKE, retorna config de integração se `integracaoRequer=true`. Alert card no formulário SMO mostra plataforma/duração/validade/dias/procedimento/email + lista de colaboradores já na obra com integração vencida ou a vencer (VENCIDA/A_VENCER/SEM_REGISTRO).
+**Required Env Vars**:
+- `NEON_DATABASE_URL` (or `DATABASE_URL`)
+- `JWT_SECRET` (random 48-char hex)
+- `NODE_ENV=production`
+- `SMTP_PASSWORD`
+- `GOOGLE_API_KEY`
+- `FROTA_API_TOKEN` (for Infleet API)
+- `VITE_APP_TITLE`
+- `VITE_APP_LOGO`
+- `OAUTH_SERVER_URL`
+- `VITE_APP_ID`
+- `OWNER_OPEN_ID`
 
-13. **HE — Solicitação de Hora Extra** — Módulo de solicitação de horas extras. Tabelas: `he_solicitacoes`, `he_solicitacao_funcionarios`. Router: `server/routers/heSolicitacoes.ts` (list, create, update, delete, getById, approve/reject, reverterAprovacao). Frontend: `client/src/pages/SolicitacaoHE.tsx`. **Edição/Exclusão**: criador pode editar/excluir enquanto status=pendente; admin/admin_master sempre podem. `canEdit` flag no list. Botão Editar no detalhe, histórico e aba de aprovações (cards pendentes). Formulário alterna entre modo criação e edição com header "Editando HE-XXXXX". Backend: `heSolicitacoes.update` mutation valida status+autoria, atualiza solicitação+funcionários+atividades em transação. **Reversão de Aprovação**: admin_master pode reverter aprovações/rejeições com motivo obrigatório. Status volta para "pendente", campos de aprovação limpos, motivo registrado em `observacaoAdmin` com prefixo [REVERSÃO], audit log criado. Guard `jaFoiAprovadaAntes` no approve mutation previne double-counting de custo REFI após revert+re-approve.
+## Stack
 
-14. **Currículos** — Banco de currículos organizado por função. Tabelas: `curriculos`, `curriculo_funcoes`. Router: `server/routers/curriculos.ts`. Frontend: `client/src/pages/Curriculos.tsx`. Rota: `/curriculos`. Menu: RH > Comunicação e Recrutamento. Funcionalidades: CRUD de funções e currículos, upload de documentos (PDF/DOC/imagem), busca por nome/telefone/email/cidade/habilidades. **8 Status de Candidato**: Ativo, Em Análise, Entrevista, Aprovado, Contratado, Reprovado, Desistiu, Blacklist — com filtros na sidebar, badges coloridos, contagens por status e por função (query `contagens`). **Ações em lote**: selecionar múltiplos candidatos para alterar status (dialog com grid de opções) ou excluir. **Histórico de status**: coluna `historico_status_json` (TEXT/JSON array) registra cada mudança com de/para/data/usuario/motivo. **Ordenação**: mais recentes, mais antigos, nome A→Z, nome Z→A. **Ficha do Candidato** e **Formulário Novo/Editar**: ambos usam `FullScreenDialog` (padrão do sistema) com cabeçalho dark gradient, seções icon+h4, grid responsivo. Ficha inclui seção "Histórico de Status" com timeline visual. **Upload com IA** — upload múltiplo (até 20 arquivos PDF/JPG/PNG), leitura automática via Claude Vision (`invokeAnthropicVision`), extração de nome/telefone/email/função/experiência/habilidades/escolaridade/cursos/experiências detalhadas (JSON), auto-criação de função se não existir, verificação de duplicidade multi-sinal (nome exato + telefone normalizado + email), detecção de ex-funcionário desligado (`employees.status='Desligado'`), detecção de lista negra (`employees.listaNegra=1`) com bloqueio automático de cadastro, alertas visuais coloridos (verde=ok, amarelo=duplicado, laranja=desligado, vermelho=blacklist). Autorização company-scoped (`assertCompanyAccess`). Limite 10MB por arquivo. Storage: `documentos/curriculos/c{companyId}/`.
-
-15. **Controle de Integrações** — Rastreamento de integrações de colaboradores em clientes PJ e reciclagens internas anuais. **Schema**: 7 colunas adicionais na tabela `clientes` (`integracao_requer`, `integracao_dias_semana`, `integracao_duracao`, `integracao_validade_meses`, `integracao_email`, `integracao_plataforma`, `integracao_procedimento`) + nova tabela `employee_integrations` (company_id, employee_id, tipo externa/interna, cliente_id, cliente_nome, data_realizacao, data_vencimento, evidencia, observacoes, registrado_por). **Backend**: `server/routers/integracoes.ts` (listar com statusCalc ATIVA/A_VENCER/VENCIDA/SEM_VENCIMENTO, criar, atualizar, excluir, verificarColaborador, kpis, clientesComIntegracao). `server/routers/clientes.ts` atualizado para salvar/ler campos de integração. **Frontend Clientes**: seção "Integração de Pessoal" aparece só para PJ — toggle, dias da semana (pills), duração, validade meses, email, plataforma, procedimento. **Frontend ControleDocumentos** (`IntegracoesPanel`): nova aba "Integrações" com 4 KPI cards, filtros por cliente/tipo/status/busca, tabela paginada de registros, modal "Registrar Integração" com busca de colaborador por nome + seleção de tipo/cliente/datas/evidência. **Frontend RaioXFuncionario**: aba "Integrações" no grupo SST com formulário de registro e tabela de histórico por colaborador.
-
-16. **Integração de Segurança SST** — Módulo completo de integração/onboarding de segurança para novos colaboradores. **Schema**: 7 tabelas (`sst_integracao_config`, `sst_integracao_modulos`, `sst_integracao_perguntas`, `sst_integracao_alternativas`, `sst_integracao_registros`, `sst_integracao_respostas`, `sst_integracao_sessoes`). **Backend**: `server/routers/integracaoSST.ts` — 18 endpoints tRPC: config CRUD, módulo CRUD, salvarPerguntas (upsert completo), listarRegistros, criarRegistro/criarRegistrosEmLote (com token único), criarSessao/listarSessoes (grupo), dashboardKpis (8 métricas), alertas (pendentes/vencendo/reprovados/advertências com trigger 2+ warnings), gerarReciclagem, historicoColaborador. **Endpoints públicos** (publicProcedure): buscarPorCpf (validação CPF+token, retorna módulos/vídeos/perguntas sem flag correta), submeterQuestionario (correção automática, nota, aprovado/reprovado, validade N meses), obterResultado. **Frontend Admin**: `client/src/pages/sst/IntegracaoSST.tsx` — 5 abas (Dashboard KPIs, Configurações com editor de módulos/perguntas/alternativas inline, Pendentes com link copiável, Histórico com filtros, Sessões em grupo). **Frontend Público**: `client/src/pages/sst/IntegracaoPublica.tsx` — fluxo 4 etapas (CPF → Vídeos → Quiz → Resultado), player YouTube embed, marcação de vídeo assistido, quiz com progresso, tela de resultado aprovado/reprovado. **Raio-X**: seção "Integração de Segurança (SST)" na aba Integrações do RaioXFuncionario com histórico completo. **Rota admin**: `/sst/integracao`. **Rota pública**: `/integracao/:token`. **Menu**: SST > Integração > Integração SST. **Tabelas criadas via SyncSchema+ safety net** em `server/_core/index.ts`. **Advertências**: alerta automático quando colaborador tem 2+ advertências sem reciclagem pendente. **Validade**: configurável por config (padrão 12 meses). **Nota mínima**: configurável (padrão 70%).
-
-## Reorganização Módulo PJ (Rev. 1326 — 05/05/2026)
-**Fase 1 — Migração de Menu**: Submenu "Contratos PJ" e "PJ Medições" removidos de **RH & DP** e movidos para novo grupo **PJ** dentro de **Terceiros** (alinhado a Compras > Contratos de Serviço, Medições de Serviço). Itens: Contratos PJ, Medições PJ, Conformidade PJ. `ROUTE_MODULE_MAP` em `client/src/contexts/ModuleContext.tsx` atualizado: rotas PJ (`/pj-contracts`, `/pj-medicoes`, `/terceiros/pj/conformidade`) agora pertencem a `terceiros`. `MenuConfigPanel.tsx` default removido das duas entradas RH&DP. Job de startup `[PJTipoFix]` em `server/_core/index.ts` auto-corrige `employees.tipoContrato='PJ'` para qualquer funcionário com contrato PJ ativo divergente.
-
-**Fase 2 — Conformidade PJ**: Tabela `pj_conformidade` (criada via raw SQL no startup `[PJConformidade]`) com colunas `companyId, employeeId, tipo, competencia, status, dataVencimento, dataEnvio, valor, documentoUrl, observacoes`. Cinco tipos monitorados: **das** (DAS-MEI, mensal, vence dia 20), **nf** (NF mensal de prestação), **cnd** (CND CNPJ — vigente, status auto-vencido por dataVencimento), **seguro_vida** (Cláusula 5.1 — vigente), **status_cnpj** (Status na Receita — vigente). Status: pendente/ok/vencido/na. Itens mensais usam `competencia=YYYY-MM`; itens de validade usam `competencia=null` + `dataVencimento`. Router `server/routers/pjConformidade.ts` (listar, upsert, remover, resumoPorEmployee). Página `client/src/pages/ConformidadePJ.tsx` (rota `/terceiros/pj/conformidade`): tabela com 5 colunas por PJ, navegação mensal, contadores OK/Pendente/Vencido, dialog de edição (status, vencimento, envio, valor, link doc, observações). **Integração Raio-X**: `controleDocumentos.raioXFuncionario` agora retorna `pjConformidade` (snapshot do mês atual com pendências computadas) apenas quando `tipoContrato='PJ'`; aba PJ do `RaioXFuncionario.tsx` exibe painel verde/âmbar com 5 cards coloridos + botão "Gerenciar"; badge da aba PJ inclui `pjConformidade.pendencias`.
-
-## Tipos de Contrato (Rev. 1171)
-Obras agora suportam 3 tipos de contrato:
-- **global** (Empreitada Global) — MDO + Material + Equipamentos, BDI aplicado em tudo (padrão)
-- **mdo** (Fornecimento de MDO) — Contrato de mão de obra, material como referência para Compras. BDI aplicado somente sobre MDO. Percentual de gerenciamento de material (8-12%) gera recebível variável
-- **adm** (ADM Geral) — % sobre tudo que foi gasto na obra no mês
-Campos: `tipo_contrato`, `percentual_gerenciamento_material`, `percentual_adm` em `obras`
-Impacto: Orçamento (BDI condicional por tipo), Medição (banner + tipo exposto), Compras (sem mudança)
-
-## Telemetria & Analytics Module (Rev. 799)
-- Route: `/admin/telemetria` (admin_master only, MasterOnlyGuard)
-- Backend: `server/routers/telemetria.ts` (7 tRPC endpoints)
-- Schema table: `user_activity_log` (company_id, user_id, user_name, tipo, pagina, acao, modulo, detalhes, duracao_segundos, criado_em)
-- Tracker: `client/src/components/ActivityTracker.tsx` — invisible component in DashboardLayout that logs page visits, time spent, and supports action tracking via `trackAction()` export
-- Frontend: `client/src/pages/Telemetria.tsx` — full analytics dashboard with 2 tabs:
-  - **Uso da Plataforma**: KPIs (acessos, usuários ativos, tempo médio, inativos), daily/hourly charts, page ranking, module usage, engagement score (0-100), user ranking with drill-down profile, dead features alert, inactive users alert
-  - **Analytics da IA**: total conversations, per-module breakdown, user ranking, full history with search/expand
-- Endpoints: trackPageVisit, trackPageLeave, trackAction, dashboardGeral, perfilUsuario, analyticsIA, historicoCompleto, scoreEngajamento
-- Menu: sidebar "Administração" section, visible only to admin_master (adminMasterOnly flag)
-
-## Dashboard Executivo de Obras (Rev. 794)
-- Backend: `planejamento.dashboardGeral` endpoint in `server/routers/planejamento.ts`
-- Frontend: `client/src/pages/planejamento/DashboardObras.tsx`
-- Toggle Dashboard ↔ Projetos na barra de ações do PlanejamentoLista
-- KPIs: total projetos, em andamento, concluídos, atrasados, valor total, atividades
-- Indicadores: avanço médio previsto vs realizado (barra dupla), SPI/CPI médios com semáforo, custo meta, margem bruta
-- Ranking por obra: avanço, SPI, CPI, dias restantes, valor, cards expansíveis com detalhes
-- Matriz de Saúde: verde/amarelo/vermelho baseado em SPI/CPI
-- Filtro por obra individual, ordenação por avanço/SPI/valor/prazo/nome
-- Controle de acesso por obra para usuários não-admin (mesma lógica de `listarProjetos`)
-
-## Proj./Doc. Técnicos Module (Rev. 791-801)
-- Route: `/gestao-documentos` (hierarchical navigation: Ficheiros → Disciplinas → Pastas → Documentos)
-- Backend: `server/routers/gestaodocumentos.ts` (35+ tRPC endpoints)
-- Schema tables: `gd_ficheiros_obra`, `gd_disciplinas` (+ ficheiro_id), `gd_pastas`, `gd_documentos` (+ ficheiro_id, pasta_id), `gd_tipos_documento`, `gd_revisoes`, `gd_revisao_comentarios`, `gd_distribuicao`, `gd_download_log`, `gd_arts`, `gd_tipos_subpasta`
-- New endpoints (Rev.795): listObrasDisponiveis, listFicheiros, createFicheiro, deleteFicheiro, getFicheiroDetail, createDisciplinaFicheiro (auto-creates DWG/PDF/IFC/DOC pastas), deleteDisciplinaFicheiro, listPastas
-- Flow (Rev.801): Create ficheiro first (one-click, no wizard), then add disciplinas with subpastas inside the ficheiro. No pre-configuration required. Modal with quick-add shortcuts for standard disciplinas (ARQ, EST, ELE, HID...) and custom form. Duplicate sigla check. Discipline list with delete option inside modal.
-- Features: Ficheiro de Obra (linked to obras em andamento), Disciplines with color-coded sigla, auto-created folder structure (DWG/PDF/IFC/DOC), Document CRUD per pasta, revision control (create/approve/reject), ART/RRT management with expiry alerts (30 days)
-- ConfigSection (Rev.800): Editable tables for Disciplinas, Tipos de Documento, Sub-pastas with inline edit/delete/create
-- All endpoints enforce companyId ownership validation (tenant isolation)
-- Tab deep-linking via `?tab=` query param
-- Module ID: `gestao-documentos` (registered in shared/modules.ts, ModuleContext, DashboardLayout)
-
-## Medição Module (Rev. 789-790)
-- Routes: `/medicao/:contratoId`
-- Backend: `server/routers/medicao.ts`
-- Schema tables: `medicao_contratos`, `medicao_boletins`, `medicao_boletim_itens`, `medicao_fd_registros`
-- 3 tabs: Planilha de Medição (global EAP view), Boletins de Medição, Faturamento Direto (FD)
-- Auto-populate boletim items from physical progress (`planejamento_avancos`)
-- EAP normalization: `01.01` → `1.1` to bridge orçamento vs cronograma formats
-- Status-filtered accumulation: only `enviado/aprovado/finalizado` boletins count in medido totals
-- companyId enforcement on all procedures
-
-## Orçamento Module
-- Routes: `/orcamento/painel`, `/orcamento/lista`, `/orcamento/importar`, `/orcamento/:id`
-- Backend: `server/routers/orcamento.ts`, `server/routers/orcamentista.ts`
-- Schema tables: `orcamentos`, `orcamento_itens`, `orcamento_insumos`, `orcamento_bdi`, `insumos_catalogo`, `composicoes_catalogo`
-- Excel import: reads ALL sheets from BDI file; "Orçamento" tab (cols 9–32) + optional "Insumos" tab
-- 3 versions: Venda (BDI applied), Custo (direct cost), Meta (cost × (1-metaPerc), default 20%)
-- Meta % adjustable by admin_master role, recalculates all items
-- BDI: stored with `nomeAba` per sheet, displayed grouped by sheet, 2 decimal places
-- **BDI parser — suporte a 2 padrões de planilha** (Rev.1327): legado usa `B-02` como %BDI total; novo padrão R06 (`BDI_805_03_2026_R06_REVTE.xlsx`) traz `B - 02` como "Lucro líquido 02 - MDO" (~39%, NÃO é BDI) e o BDI total deriva do fator do `PV1` (col[7]≈1.3332 → BDI = 1−1/fator ≈ 25%). Discriminador inequívoco: códigos brutos `PV1`/`PV2` sem hífen só existem no R06 (legado tem `PV -1`/`PV - 2`). Em modo R06 o backend injeta uma linha sintética com `codigo='B-02'` e o BDI calculado, mantendo `BdiView`/`OrcamentoBdiIndicadores`/`OrcamentoDashTab` (que filtram por `codigo === 'B-02'`) funcionando sem mudanças. `VALID_BDI` regex em `BdiView.tsx` ampliado para aceitar `B - 04`, `B - 07`, `PV1`, `PV2`. Sem impacto em obras já cadastradas.
-- EAP: shows Mat/MO separately for leaf items, quantity 2 decimal places
-- Catalog: auto-populated on each import; intelligent dedup by code + normalized description
-- **ORCAMENTISTA PHD**: AI assistant widget (OrcamentistaWidget.tsx) floating in OrcamentoDetalhe
-  - 6 quick insights: Resumo Executivo, Reduzir Custo, Maximizar Margem, Análise BDI, Curva ABC, Riscos
-  - Full chat interface with orçamento context (totals, Mat/MO, top items, ABC insumos)
-  - Uses invokeLLM (Gemini) via existing infrastructure
-
-## Architecture
-- **Frontend**: React 19 + Tailwind CSS 4 + shadcn/ui + Wouter (routing)
-- **Backend**: Express 4 + tRPC 11 + Drizzle ORM
-- **Database**: PostgreSQL (Neon) — all raw SQL uses PG syntax
+- **Frontend**: React 19, Tailwind CSS 4, shadcn/ui, Wouter
+- **Backend**: Express 4, tRPC 11, Drizzle ORM
+- **Database**: PostgreSQL (Neon)
 - **Auth**: Manus OAuth (JWT) or local username/password
-- **Build**: Vite 7 (embedded in Express in dev mode), TypeScript 5
+- **Build**: Vite 7
 - **Package Manager**: pnpm
 
-## Project Structure
-```
-client/         # React frontend (root: client/, port 5000 via Express)
-server/         # Express backend + tRPC routers
-  _core/        # Auth, OAuth, Vite setup, env config
-  routers/      # tRPC routers per module
-  db.ts         # Database helpers (MySQL via Drizzle)
-drizzle/        # Schema and migrations
-shared/         # Shared types and constants
-```
+## Where things live
 
-## Production Deployment — Railway
-Files: `railway.toml` + `nixpacks.toml` (Node 20 + pnpm). GitHub repo: `felipe1268/erp-rh-fc`.
-Railway env vars required: `NEON_DATABASE_URL`, `DATABASE_URL` (=same), `JWT_SECRET` (random 48-char hex), `NODE_ENV=production`, `SMTP_PASSWORD`, `GOOGLE_API_KEY`.
-SyncSchema + SyncRevisions run on every cold start → Neon DB kept up to date automatically.
+- `client/`: React frontend
+- `server/`: Express backend + tRPC routers
+  - `server/_core/`: Auth, OAuth, Vite setup, env config
+  - `server/routers/`: tRPC routers per module
+  - `server/db.ts`: Database helpers
+- `drizzle/`: Schema and migrations
+- `shared/`: Shared types and constants (e.g., `shared/version.ts`, `shared/changelog.ts`, `shared/paymentConditions.ts`, `shared/modules.ts`)
+- **DB Schema**: `drizzle/schema.ts`
+- **API Contracts**: Defined by tRPC routers in `server/routers/`
+- **Theme/UI**: `client/src/index.css`, `tailwind.config.ts`, `shadcn/ui` components
 
-## Running the App
-- Dev: `PORT=5000 NODE_ENV=development pnpm dev` — starts Express + Vite on port 5000
-- Build: `pnpm build` — builds frontend to dist/public, bundles server to dist/
-- Production: `node dist/index.js`
+## Architecture decisions
 
-## Environment Variables
-- `NEON_DATABASE_URL` — Neon PostgreSQL connection string (takes priority over DATABASE_URL)
-- `DATABASE_URL` — Replit internal PostgreSQL fallback (runtime-managed by Replit)
-- `JWT_SECRET` — JWT signing secret
-- `PORT` — Server port (default 5000 in dev)
-- `VITE_APP_TITLE` — App title shown in UI
-- `VITE_APP_LOGO` — Logo path
-- `OAUTH_SERVER_URL` — Manus OAuth server URL (optional)
-- `VITE_APP_ID` — OAuth App ID (optional)
-- `OWNER_OPEN_ID` — Owner user OpenID (optional)
+- **Consolidated Payroll Model**: Parent company (`input.companyId`) owns payroll periods and records. Read queries use `allCompanyIds` IN clauses for subsidiary data, while write queries use `input.companyId` for consolidation.
+- **Single Database Source (Neon)**: The system exclusively uses Neon PostgreSQL via `NEON_DATABASE_URL`. `DATABASE_URL` is *never* used as a fallback. All schema changes and fixes are applied directly to Neon.
+- **Tenant Isolation**: All data operations (`INSERT`, `SELECT`, `UPDATE`, `DELETE`) consistently filter by `companyId` to ensure strict tenant isolation. Soft-deletes are handled by filtering `deletedAt IS NOT NULL`.
+- **EAP Adaptability**: Budget structures (EAP) can vary wildly per project (depth, naming, accumulated values). Cross-module logic (budget × schedule, financial curve, measurements) is designed to be adaptive, automatically detecting leaf items and normalizing values.
+- **Specialized AI per Module**: Instead of a generic AI assistant, each module (Planning, Budget, Purchasing, HR, Finance, SST, Measurement) integrates a dedicated AI widget with specific system prompts and context for relevant insights.
 
-## Payroll Multi-Company Architecture
-- **Consolidated payroll model**: Parent company (`input.companyId`) owns the payroll period and all payment records
-- **READ queries** (faltas, DSR, convênios, adjustments, advances, VR, VA, EPI, HE, timecard) use `allCompanyIds` IN clause to find data stored under subsidiary company IDs (60002, 60004, 90001)
-- **WRITE queries** (INSERT payments, DELETE old payments, UPDATE period) correctly use `input.companyId` since all output is consolidated under the parent company
-- `resolveCompanyIds(input)` from `server/companyHelper.ts` returns all company IDs for the group
-- `pontoProcessado` boolean + `timecardDailyCount` diagnostic fields added to simulation result payload
-- Frontend shows yellow warning banner when ponto not processed for the competência
+## Product
 
-## Golden Rules
-- **#0**: Verificar comportamento real no banco ANTES de declarar bug.
-- **#1**: Toda mudança = `APP_VERSION_NUMBER` em `shared/version.ts` + entrada em `shared/changelog.ts`.
-- **#5**: Novas colunas via ColFix em `server/_core/index.ts` (syncSchema pode falhar antes).
-- **#10**: Todo bugfix deve TAMBÉM corrigir dados existentes no banco (ColFix retroativo).
-- **#11**: Excluir obra = cascata TOTAL. Nada do projeto deletado pode ser reaproveitado. `deleteObra()` em `server/db.ts` remove TODOS os dados filhos (37 tabelas) antes de soft-delete da obra. ColFix de startup limpa órfãos retroativamente.
-- **#12**: O banco é SEMPRE Neon (`NEON_DATABASE_URL`). Nunca usar `DATABASE_URL` local como fallback. Consultas de debug/verificação devem usar `process.env.NEON_DATABASE_URL`.
-- **#13**: Orçamentos têm ESTRUTURAS VARIÁVEIS.
-- **#14**: PADRÃO ÚNICO DE ACESSO A DADOS. Todo dado deve ter UM caminho para leitura e UM caminho para escrita. (a) Toda mutation (update/delete) DEVE incluir `companyId` no WHERE, nunca filtrar apenas por `id`. (b) Frontend usa `useCompany()` de `@/hooks/useCompany` com `queryInput` padronizado. (c) Queries secundárias (por projetoId, revisaoId etc.) só devem disparar (`enabled`) quando TODOS os IDs pais estiverem resolvidos (>0). (d) Cruzamento orçamento×cronograma: filtrar por revisão ativa + match por nome exato com fallback LIKE para conteúdo parcial. Cada obra pode ter EAP com profundidades differentes, com ou sem valores acumulados nos pais, nomenclaturas diversas. NUNCA fazer lógica rígida que assume uma única estrutura. Toda solução de cruzamento (orç × cronograma, curva financeira, medições) deve ser adaptativa: detectar automaticamente itens-folha, normalizar valores para totais do orçamento, e funcionar independente de quantos níveis EAP existam. Ao corrigir um orçamento, TESTAR SEMPRE em pelo menos 2 obras com estruturas diferentes (ex: Hotel do Papa e QIU 2).
-- **#17**: Todo novo módulo DEVE ser adicionado ao array `ALL_MODULE_DEFS` em `client/src/components/DashboardLayout.tsx` (~ linha 1132). Esse array alimenta o dropdown de mudança rápida de módulo no sidebar. Sem essa entrada, o módulo não aparece no seletor. Checklist: (1) `ALL_MODULE_DEFS` com id, label, icon, color, bg, path, canSee; (2) `ModuleId` type em `client/src/contexts/ModuleContext.tsx`; (3) `MODULE_LABELS` no mesmo arquivo; (4) `ROUTE_MODULE_MAP` com todas as rotas do módulo; (5) Sidebar menu sections (`menuSections*`) no DashboardLayout.
+- **HR & DP**: Payroll, time tracking, employee management, benefits.
+- **SST (Safety)**: EPIs, ASOs, CIPA, NRs, PGR/PCMSO/LTCAT management with AI-powered document upload.
+- **Jurídico**: Legal case management (Labor, Tax, Civil) with rich dashboards, KPIs, and alerts.
+- **Terceiros**: Third-party contractors, detailed measurement workflows, PDF generation, financial integration.
+- **Parceiros**: Benefits partners management.
+- **Orçamento**: Budget creation (Excel import), 3 versions (Sale/Cost/Target), ABC curve, BDI, EAP tree, AI assistant.
+- **Financeiro Integrado**: Comprehensive financial module integrating all other modules, auto-DRE, cash flow projection, KPI tracking, COSO approvals.
+- **Compras**: Full procurement cycle (SC → Quotation → PO → Warehouse), smart purchasing, budget control, supplier portal, automated alerts.
+- **Operacional**: Construction site operations including Daily Log, RDO, Checklists, Concreting, Non-Conformities, Photo Register, Technological Tests, BIM 3D/4D viewer.
+- **IntegraSign**: Internal electronic signature module for service contracts.
+- **Portal do Prestador de Serviço**: External portal for service contract management and measurements.
+- **Frotas**: Fleet and vehicle management (maintenance, fuel, tolls, fines, insurance, tracking, vehicle checklists, Infleet API integration).
+- **SMO (Manpower Request)**: Workflow for requesting manpower, financial impact analysis, onboarding checklists, approval process.
+- **HE (Overtime Request)**: Workflow for requesting overtime, approval, and financial impact.
+- **Currículos**: Resume bank with AI-powered parsing, status tracking, and duplicate detection.
+- **Controle de Integrações**: Tracking employee integrations with clients and internal refreshers.
+- **Integração de Segurança SST**: Onboarding/training module for safety with public quiz portal and admin dashboard.
+- **Telemetria & Analytics**: Tracks platform usage, user engagement, and AI interaction for administrative insights.
+- **Dashboard Executivo de Obras**: High-level project KPIs, progress tracking, and health matrix.
+- **Proj./Doc. Técnicos**: Document management system for technical project documentation with revision control and ART/RRT management.
+- **Medição**: Contract measurement sheets, bulletin generation, direct invoicing (FD).
+- **Integração Mas Controle ERP**: Data import from Mas Controle ERP via API or CSV.
 
-## Database — CRITICAL: Somente Neon
-- **Neon PostgreSQL** (único banco): `ep-young-water-ac67nuby.sa-east-1.aws.neon.tech`, db=`neondb`
-  - Conectado via `NEON_DATABASE_URL` — **ESTE É O ÚNICO BANCO DO SISTEMA**
-  - Toda query do app usa este banco. NÃO há fallback para `DATABASE_URL` local.
-  - **REGRA DE OURO #5**: Ao adicionar novas colunas, SEMPRE adicionar via ColFix em `server/_core/index.ts`
-    pois o `syncSchema` pode não rodar antes das queries falharem no startup. Ou adicionar diretamente
-    no Neon via `node -e "... process.env.NEON_DATABASE_URL ..."` ANTES de fazer o deploy.
-  - **REGRA DE OURO #12**: O banco é SEMPRE Neon. Nunca usar `DATABASE_URL` local do Replit como fallback.
-    Consultas de debug/verificação devem usar `process.env.NEON_DATABASE_URL` diretamente.
-- Neon usa pooler URL para conexões da app; syncSchema e ColFix também conectam ao Neon via getDb().
+## User preferences
 
-## Rev. 1186 — INSS 2026 + IR com Redutor MP + Dependentes (16/04/2026)
-- **INSS 2026**: Faixas atualizadas (1.621/2.902,84/4.354/8.475,55) em `calcularINSS()`
-- **IR com Redutor MP**: `calcularIRRF()` agora usa `semReducao=false` no vale — isenção total até R$5.000, redução parcial até R$7.350
-- **100% IR no vale**: IR mensal completo retido no vale (sem rateio por percentual). `Math.min(irrfMensal, valorAdiantamento)` garante que IR não exceda o vale
-- **Dependentes IR**: Novo campo `dependentes_ir` (smallint) na tabela `employees`. Dedução de R$228,80/dependente na base IRRF. UI na aba "Obrigações Legais" da ficha do funcionário
-- **Constante**: `VALOR_DEPENDENTE_IR = 228.80` em `payrollEngine.ts`
-- **editarValorVale**: Busca dependentes do funcionário e recalcula IR com nova lógica
-
-## Rev. 416 — Custo de MO nas Atividades (16/03/2026)
-- **Novas tabelas**: `cargo_categorias_custo` (cargo→categoria), `folha_mo_transferencias` (histórico), `planejamento_custos_mo` (custo real por atividade/mês)
-- **Router**: `server/routers/moAlocacao.ts` — CRUD categorias, `fecharFolhaMes`, `verificarTransferenciaMO`, `executarTransferenciaMO` (3 camadas: direto, indireta_obra, escritorio_central), `desfazerTransferenciaMO`
-- **RH**: card "Fechar Folha para Custo de MO" + modal "Config. Cargos" em `FolhaPagamento.tsx`
-- **Planejamento**: botão "Importar Custos MO" no cabeçalho de `PlanejamentoDetalhe.tsx` com dialog de pré-condições
-
-## IA Especializada por Módulo (Rev. 771, Vision Rev. 775)
-- **Router**: `server/routers/iaModulos.ts` — chat, historico, analytics, getModulos
-- **Componente**: `client/src/components/IAModuloChat.tsx` — painel lateral reutilizável
-- **Tabela auditoria**: `ia_modulo_conversas` (company_id, user_id, user_name, modulo, pergunta, resposta, projeto_id, criado_em)
-- **Módulos**: planejamento, orcamento, compras, rh, financeiro, sst, medicao
-- **Integração**: Auto-detecção no `DashboardLayout.tsx` via `IAModuloAutoDetect` (mapeia rota → módulo)
-- **Upload de Imagens (Rev. 775)**: Botão ImagePlus + Ctrl+V paste para anexar prints/fotos. Imagens enviadas como base64 via tRPC (max 5MB, max 5 por msg, tipos: png/jpeg/webp/gif). Backend constrói content blocks with image_url para Anthropic Vision. VISION_INSTRUCTION adicionada ao system prompt quando imagens presentes.
-- O antigo `AssistenteIAFloat` (botão azul genérico) foi removido na Rev. 772
-
-## Planejamento Module
-- Routes: `/planejamento/:id` (tabs: cronograma, curva-s, avanco, refis, compras, ia-gestora, etc.)
-- `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` — main file ~7430 lines
-- Projects in DB: id=4 (Hotel do Papa), id=6 (Chlorum Palmeira), id=7 (Hotel QIU 2 - 4 Fase), id=8 (active)
-- **JULINHO AI**: Google Gemini (gemini-2.5-flash) via GOOGLE_API_KEY, system prompt = persona only, project context in user message
-- **Prog. Semanal — Recursos**: `buscarRecursosSemana` endpoint (planejamento.ts:1100) has two-stage matching:
-  1. Primary: match by `eapCodigo` (when cronograma and orçamento use the same EAP numbering)
-  2. Fallback: match by `atividadeNomes` via ILIKE (when EAP codes differ — e.g. project 8 uses `2.4` vs `01.04`)
-  - Returns `matchedByNome: true` flag; frontend shows amber warning badge when fallback used
-  - Frontend file: `ProgramacaoSemanal.tsx`, `RecursosDaSemana` component (~line 460)
-- **Prog. Semanal — JULINHO errors**: `iaErro` state captures and shows mutation errors (no more silent fail)
-- **Curva S**: Shows spinner while loading; server generates curve using equal weights when no peso_financeiro set. gerarCurvaPlanejada uses toMondayStr() to normalize all dates to Monday before generating keys (aligns X-axis); uses Math.ceil for dur; skips invalid dates with isNaN guard. Projects: id=4 (Hotel do Papa), id=6 (Chlorum Palmeira), id=7 (QIU 2 F4 old), id=16 (QIU 2 F4 active, 1900 ativs, rev 25)
-- **Avanço Semanal**: Import MS Project (XML/XLSX) → uses `salvarAvancoLote` batch endpoint (NOT 1512 individual requests)
-  - `salvarAvancoLote` endpoint: 1 request with all items, processed in chunks of 50 on server
-  - `filtroAtivo` states: "semana" (active week), "pendentes" (pending activities), "todas" (all)
-- **REFIS tab** — enhanced report:
-  - Desvio físico card (+/- pp) alongside SPI
-  - "Faturamento do Mês" (renamed from Venda): Previsto, Realizado, Desvio (R$)
-  - Curva S Física with trend line (purple dashed)
-  - Curva S Financeira (R$) with trend line
-  - "Modo Campo" toggle (EyeOff button) — hides all monetary values for field team
-  - "Imprimir PDF" button — triggers browser print with `@media print` CSS
-  - Histórico REFIS table (BLOCO 7) — shows all previous reports sortable by date
-- **IA Gestora tab** — CRONOS AI assistant with 4 sub-tabs
-
-## Integração Mas Controle ERP (Rev. 231)
-- **Rota**: `/integracoes/mas-controle` (visível para admin_master)
-- **Tabelas DB**: `mas_controle_config` (credenciais + status), `migration_logs` (log detalhado por tipo)
-- **Router server**: `server/routers/masControle.ts` → registrado como `masControle:` no appRouter
-- **Página**: `client/src/pages/integracoes/MasControle.tsx`
-- **Abas**: Configuração (credenciais + teste API) | Importar via API | Importar via CSV | Histórico
-- **Importação via API**: Basic Auth → tenta 3 URLs base diferentes do Mas Controle; fallback para CSV
-- **Importação via CSV**: Parser robusto (vírgula ou ponto-e-vírgula; campos com aspas); mapeamento flexível de colunas; sempre disponível
-- **Idempotente**: nunca duplica dados (verifica por CNPJ para fornecedores, nome para obras e insumos)
-- **Logs**: migration_logs registra total encontrado/importado/duplicado/erros por execução
-
-## Módulo de Compras (Rev. 245 — Completo)
-- **Rotas**: `/compras/painel`, `/compras/solicitacoes`, `/compras/cotacoes`, `/compras/ordens`, `/compras/fornecedores`, `/compras/almoxarifado`
-- **Tabelas DB**: `fornecedores`, `almoxarifado_itens`, `almoxarifado_movimentacoes`, `compras_solicitacoes`, `compras_solicitacoes_itens`, `compras_cotacoes`, `compras_cotacoes_itens`, `compras_ordens`, `compras_ordens_itens`
-- **Router server**: `server/routers/compras.ts`
-- **Fluxo completo**: SC (Solicitação de Compra) → Cotação → OC (Ordem de Compra) → Almoxarifado
-- **obraId obrigatório** em SC, Cotação e OC — propaga automaticamente SC→Cotação e Cotação→OC
-- **Integração OC→Almoxarifado** (Rev. 245): ao marcar OC como "entregue", itens entram automaticamente no almoxarifado com movimentação de entrada; SC item recebe quantidadeAtendida; SC marcada "concluída" quando todos os itens atendidos
-- **Painel de Compras**: KPIs, alertas de entrega, gastos mensais, SCs e OCs recentes com nome da obra visível
-- **Almoxarifado**: Itens com semáforo de estoque; movimentações entrada/saída vinculadas à obra; entradas automáticas via OC entregue
-- **Módulo Almoxarifado independente** (Rev. 297): UI mobile-first com 4 botões de ação rápida (ENTRADA/SAÍDA/EMPRESTAR/FECHAR DIA); comodato diário de ferramentas por código JFCxxxx; inventário semanal com barra de progresso e botões BATE/DIFERENTE; páginas Movimentações e Inventário Semanal; 3 novas tabelas DB (warehouse_loans, warehouse_inventory_sessions, warehouse_inventory_session_items); router warehouse.ts; PWA (manifest.json, metas Apple/Android, banner de instalação)
-- **Almoxarifado Central + por Obra** (Rev. 298): coluna `obra_id` em `almoxarifado_itens` (NULL=Central, número=Obra); seletor de contexto horizontal com pills (verde=Central, azul=Obra); lista de itens recarregada ao trocar contexto; criação de item vinculada ao contexto; título da página dinâmico; backend filtra por obraId (IS NULL / = X)
-- **Inventário Semanal por contexto** (Rev. 299): seletor de contexto (pills) também na página de Inventário; cada contexto (Central ou Obra) tem sessão de inventário independente por semana; itens carregados conforme o contexto; coluna `obra_id` adicionada a `warehouse_inventory_sessions`
-- **Cadastro de Unidades de Medida** (Rev. 300): nova tabela `almoxarifado_unidades`; 22 unidades padrão pré-cadastradas; campo de unidade agora é select controlado (não digitação livre); modal "Gerenciar Unidades" com CRUD completo (adicionar com sigla+descrição, excluir com proteção contra uso); endpoints `listarUnidades`, `criarUnidade`, `excluirUnidade` in compras.ts
-- **Fornecedores**: Cadastro completo com busca automática CNPJ via BrasilAPI
-
-## Contas a Receber — Dar Baixa (Implementado Rev. atual)
-
-**Dar Baixa** — registrar recebimento diretamente da célula da matriz, sem burocracia:
-
-- Clicar em qualquer célula (status Previsto/A Faturar/Faturado/A Receber) → abre modal verde compacto
-- Campos: Valor recebido (pré-preenchido), Data do recebimento (default hoje), Forma de pagamento, Observação (colapsável)
-- Ao confirmar: atualiza `financial_revenue` (status → `recebido_total`, `valor_recebido`, `data_recebimento`) **e** `financial_entries` (status → `recebido`, `valor_realizado`)
-- Para células já Recebidas → clique abre painel lateral de detalhe
-- Botão "···" aparece no hover da célula para abrir fluxo completo de status
-
-**Novo endpoint backend**: `financial.registrarRecebimento` — cria `financial_revenue` se não existe, ou atualiza o existente; sempre sincroniza `financial_entries`.
-
-**Conceito de 4 camadas (Previsto → Previsão → Faturado → Recebido) ainda pendente de implementação completa.** Pergunta em aberto: "Previsão de Faturamento" via % avanço físico automático ou lançamento manual?
-
-**Arquivos relevantes:**
-- Frontend: `client/src/pages/financeiro/FinanceiroContasAReceber.tsx`
-- Backend: `server/routers/financial.ts` (endpoints `getContasReceberMatrix`, `registrarRecebimento`, `updateRevenueStatus`)
-- Tabelas: `financial_revenue`, `financial_entries`, `planejamento_medicoes`
-
-## User Preferences
 - After every completed adjustment, remind the user to click **Publish** to deploy. Deployment config: autoscale, build=`pnpm run build`, run=`node dist/index.js`.
 
-## Golden Rule: New Module Checklist
-When creating a new module, ALWAYS register it in ALL 3 places:
-1. **`server/routers.ts`** → `ALL_MODULES` array in `moduleConfig.list` (~line 2411)
-2. **`client/src/pages/Configuracoes.tsx`** → `MODULE_INFO` object (label, subtitle, icon, colors, description) AND `MODULE_PAGES` object (sub-features with section/label/path)
-3. **`client/src/pages/ModuleHub.tsx`** → `MODULES` array (icon, label, path, theme colors)
+## Gotchas
 
-## Dar Baixa — Aviso Prévio (Rescisão + FGTS separados)
-- Fluxo de baixa agora é **duplo**: Rescisão (pago ao colaborador) e Multa FGTS (pago à Caixa Econômica Federal) são registradas separadamente
-- 8 colunas em `termination_notices`: `baixa_rescisao_valor`, `baixa_rescisao_data`, `baixa_rescisao_por`, `baixa_rescisao_obs`, `baixa_fgts_valor`, `baixa_fgts_data`, `baixa_fgts_por`, `baixa_fgts_obs`
-- Status só muda para `concluido` quando **ambas** as baixas estão registradas (ou FGTS N/A para pedido de demissão)
-- Modal com seletor de tipo (cards Rescisão vs Multa FGTS), valor editável com botão "Usar Estimado", observações por baixa
-- Detalhe mostra registro de baixas com valores/datas/responsável
-- Tabela mostra badges "Rescisão OK" / "FGTS OK" para baixas parciais
-- `revertConcluido` limpa todos os 8 campos de baixa ao reverter
-- Desligamento do funcionário só ocorre na **última** baixa (quando processo conclui)
+- **CamelCase in Raw SQL**: Always quote camelCase column names in raw SQL (e.g., `"companyId"`) because PostgreSQL lowercases unquoted identifiers, leading to mismatches with Drizzle schemas.
+- **New Columns**: For new database columns, always add them via `ColFix` in `server/_core/index.ts` to ensure they are present before queries run, as `syncSchema` might not execute early enough during startup.
+- **Deleting Projects**: Deleting a project triggers a CASCADE delete of ALL child data across 37 tables. No deleted project data is reusable.
+- **Budget Structures**: Budgets have VARIABLE structures. Never assume a single EAP structure; cross-module solutions must be adaptive and tested across diverse project structures.
+- **New Module Registration**: When creating a new module, it MUST be registered in `server/routers.ts` (`ALL_MODULES`), `client/src/pages/Configuracoes.tsx` (`MODULE_INFO`, `MODULE_PAGES`), and `client/src/pages/ModuleHub.tsx` (`MODULES`) for full visibility and functionality.
+- **Soft-Deleted Companies**: All queries, aggregations, listings, and jobs MUST filter out companies with `companies."deletedAt" IS NOT NULL`.
 
-## Auditoria de Status de Funcionários (Rev. 1104)
-- Tabela: `employee_status_log` — registra toda alteração de status com quem/quando/motivo/módulo
-- Helper: `server/lib/employeeStatusHelper.ts` — `updateEmployeeStatus()` e `logStatusChange()`
-- Pontos instrumentados: edição manual (employee.update), aviso prévio (darBaixa + desligamento), férias (em_gozo/concluída/lote), processos trabalhistas (Lista Negra), sync automático (statusSyncJob)
-- Endpoint: `employees.statusLog` — lista log filtrado por empresa/funcionário
-- Frontend: aba "Hist. Status" no dialog de edição do colaborador (Colaboradores.tsx)
-- Schema Drizzle: `employeeStatusLog` em `drizzle/schema.ts`
+## Pointers
 
-## SN Compartilhado — Relógio de Ponto (Shared Clock Device Routing)
-- **Tabelas**: `obra_sns` (SN ↔ obra, suporta mesmo SN em múltiplas obras), `obra_funcionarios` (employee ↔ obra assignment), `obra_ponto_inconsistencies` (unresolved routing conflicts)
-- **Backend**: `server/routers/fechamentoPonto.ts` — `previewDixi`, `uploadDixi`, `validateSN` mutations
-- **Frontend**: `client/src/pages/FechamentoPonto.tsx` — shared SN banner, per-employee routing badges, dynamic dialog title/color
-- **Flow**: When a DIXI file's device SN is linked to 2+ obras via `obra_sns`, the system:
-  1. Detects shared SN (`activeSns.filter()` finds multiple matches)
-  2. Loads employee→obra assignments from `obra_funcionarios` (active only, scoped to shared obras)
-  3. Classifies each employee: `resolved` (exactly 1 matching obra), `ambiguous` (2+ matching obras), `unassigned` (no matching obra)
-  4. Routes resolved employees' records to their assigned obra; groups by `(mesRef|obraId)` for delete/insert/rateio
-  5. Skips insertion for ambiguous/unassigned employees — creates `obra_ponto_inconsistencies` instead (with dedup on re-import)
-- **Preview**: existing-data detection queries ALL shared obras (not just first match) via `inArray(obraId, obraIdsToCheck)`
-- **UI**: Blue banner lists linked obras, teal badge for resolved, red badge for ambiguous, orange badge for unassigned. Dialog title changes to "Relógio Compartilhado — Revisão" with blue gradient header
-- **SN Sharing Setup**: `server/routers.ts` `addSn` mutation accepts `forceShare` flag; `client/src/pages/Obras.tsx` shows amber warning + confirmation dialog when SN already linked elsewhere
-
-## Critical DB Patterns (PostgreSQL/Neon)
-- **REGRA DE OURO — EMPRESAS DELETADAS**: NUNCA considerar empresas com `companies."deletedAt" IS NOT NULL`. Toda query, agregação, listagem, contagem, dropdown, relatório e job DEVE filtrar `WHERE c."deletedAt" IS NULL`. Empresas são soft-deleted, não removidas — mantê-las visíveis polui dados, contagens e UI.
-- `db.execute()` returns QueryResult object, NOT array. Use: `((await db.execute(sql`...`)) as any).rows || []`
-- All camelCase column names in raw SQL MUST be quoted: `"companyId"`, `"deletedAt"`, `"nomeCompleto"`, etc. **CRITICAL**: PostgreSQL lowercases unquoted identifiers — `companyId` (unquoted) becomes `companyid`, which does NOT match the Drizzle-created column `"companyId"`. This caused the April 2026 payroll bug where `processarPonto` INSERT wrote to wrong columns and `simularPagamento` SELECT found zero records. Always quote camelCase columns in INSERT, SELECT, WHERE, GROUP BY, ORDER BY.
-- **timecard_daily column fix (May 2026)**: Fixed unquoted INSERT column names in `payrollEngine.ts:processarPonto` and `fechamentoPonto.ts:processarPontoV2`. Startup `[TimecardFix]` detects/repairs dual-column situations. All raw SQL for `timecard_daily` now uses quoted camelCase consistently.
-- **Auto-ponto in simularPagamento (May 2026)**: When `simularPagamento` detects no `timecard_daily` records (pontoProcessado=false), it auto-processes ponto from `time_records` inline — computing faltas, atrasos, HE — and inserts into `timecard_daily` before calculating payroll. This eliminates the dependency on running `processarPonto`/`consolidarMes` separately. Uses employee's actual `companyId`, handles multi-record days (multi-obra), normalizes date formats, and batches INSERTs in chunks of 100. Logs tagged `[SimPag AUTO-PONTO]`.
-- **Período do ponto off-by-one fix (May 2026)**: Fixed `pontoInicio` calculation across the entire codebase — was using `diaCorte` (day 15) as start, now correctly uses `diaCorte + 1` (day 16). Affected: `openPeriod`, `processarPonto`, `simularPagamento` auto-ponto (all in `payrollEngine.ts`), and `consolidarMes` inline period creation (in `fechamentoPonto.ts`). Uses `Date.UTC + setUTCDate(+1)` for safe month rollover. Note: `computeCicloRange` in `fechamentoPonto.ts` and `computeCycleRangeForCompetencia` in `parceiros.ts` were already correct.
-- **Período manual na simulação (May 2026)**: `simularPagamento` accepts optional `pontoInicioManual`/`pontoFimManual` (YYYY-MM-DD format, regex-validated). When provided and different from stored dates, forces auto-ponto reprocessing with the new range. Persists effective dates to `payroll_periods.pontoInicio/pontoFim` after simulation. Frontend (FolhaPagamento.tsx Step 4 card) shows date pickers pre-filled from payroll period or defaults (diaCorte+1 to diaCorte), with "Personalizado" badge and "Restaurar padrão" link when modified.
-- **Filtro de desligados em Efetivo por Obra (May 2026)**: `getEfetivoPorObra`, `getObraFuncionarios` e `getEquipeObra` (server/db.ts) agora filtram funcionários com `status IN ('Desligado', 'Lista_Negra', 'Inativo')` ou `deletedAt NOT NULL`. Antes, se o `obra_funcionarios.isActive` não fosse desativado junto com a demissão, o funcionário continuava aparecendo na contagem da obra, nos cards de status e na tela "Ver equipe" (drill-down). Agora a exclusão é garantida na query de leitura, independente do estado da alocação. `getFuncionariosSemObra` já filtrava corretamente.
-- **Auto-encerrar contratos PJ no desligamento (May 2026)**: Helper `encerrarContratosPjDoFuncionario(employeeId, motivo, encerradoPor)` em `server/db.ts` faz UPDATE em `pj_contracts` setando `status='encerrado'` e anotando observação para todos os contratos `ativo|pendente_assinatura|suspenso` do funcionário. Hooked em 4 fluxos: (1) `avisoPrevio.darBaixa` (server/routers/avisoPrevioFerias.ts) quando o funcionário é desligado/lista_negra; (2) `avisoPrevio.update` cancelamento que volta status para Desligado; (3) `desligarExperiencia` (server/routers.ts) durante período de experiência; (4) `employees.update` genérico (server/routers.ts) quando o status muda manualmente para Desligado/Lista_Negra via tela de edição do colaborador. Backfill on startup em `server/_core/index.ts` (`[PJBackfill]`) encerra retroativamente contratos órfãos cujo funcionário já está Desligado/Lista_Negra/Inativo/soft-deleted. Garante que módulo "PJ — Contratos e Pagamentos" reflete o ciclo de vida do funcionário sem intervenção manual.
-- MySQL → PG conversions: `CURDATE()` → `CURRENT_DATE`; `DATE_FORMAT(c,'%Y-%m')` → `TO_CHAR(c,'YYYY-MM')`; `TIMESTAMPDIFF(YEAR,c,CURRENT_DATE)` → `EXTRACT(YEAR FROM AGE(CURRENT_DATE,"c"))`; `IFNULL(a,b)` → `COALESCE(a,b)`; `GROUP_CONCAT(x)` → `STRING_AGG(x,',')`; boolean: `= 1` → `= true`
-- Schema changes via raw SQL only (db:push broken); use `json()` not `jsonb()`
-- Login: `felipe@fcengenhariacivil.com.br` / `asdf1020` (role: admin_master, userId: 601043)
-- Company IDs: 60002 (FC Engenharia), 60004 (CF Hotelaria), 60005 (Julio Ferraz), 90001 (Locnow)
+- **Drizzle ORM**: [https://orm.drizzle.team/docs/overview](https://orm.drizzle.team/docs/overview)
+- **tRPC**: [https://trpc.io/docs](https://trpc.io/docs)
+- **Tailwind CSS**: [https://tailwindcss.com/docs](https://tailwindcss.com/docs)
+- **Neon PostgreSQL**: [https://neon.tech/docs/introduction/about](https://neon.tech/docs/introduction/about)
+- **Manus OAuth**: _(External documentation not provided, assume internal docs)_
+- **Replit Deployment**: [https://docs.replit.com/](https://docs.replit.com/)
+- **Infleet API**: [https://api.infleet.com.br/v1/graphql](https://api.infleet.com.br/v1/graphql)
+- **BrasilAPI (CNPJ lookup)**: [https://brasilapi.com.br/docs](https://brasilapi.com.br/docs)
