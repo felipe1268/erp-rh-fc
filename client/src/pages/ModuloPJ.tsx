@@ -59,7 +59,7 @@ export default function ModuloPJ() {
   const companyIds = getCompanyIdsForQuery();
   const [tab, setTab] = useState("contratos");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("todos");
+  const [statusFilter, setStatusFilter] = useState("ativo");
   const [showContratoDialog, setShowContratoDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [showPagamentoDialog, setShowPagamentoDialog] = useState(false);
@@ -81,8 +81,11 @@ export default function ModuloPJ() {
   const [mesRef, setMesRef] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
 
   // Queries
+  // Sempre busca a lista completa do servidor — o filtro de status é aplicado
+  // no client (useMemo `filtered`). Assim os contadores no topo refletem os
+  // totais reais independente do filtro selecionado.
   const { data: contratos = [], refetch: refetchContratos } = trpc.pj.contratos.list.useQuery(
-    { companyId, ...(statusFilter !== "todos" ? { status: statusFilter } : {}) },
+    { companyId },
     { enabled: !!companyId || companyIds?.length > 0 }
   );
   const { data: alertas } = trpc.pj.contratos.alertas.useQuery(
@@ -264,16 +267,17 @@ export default function ModuloPJ() {
     return (e.nomeCompleto || "").toLowerCase().includes(s) || (e.cpf || "").replace(/\D/g, "").includes(s.replace(/\D/g, "")) || codigo.includes(s);
   });
 
-  // Filtered contratos
+  // Filtered contratos (busca textual + filtro de status — ambos client-side)
   const filtered = useMemo(() => {
     return (contratos as any[]).filter((c: any) => {
+      if (statusFilter !== "todos" && c.status !== statusFilter) return false;
       if (search) {
         const s = removeAccents(search);
         if (!(c.employeeName || "").toLowerCase().includes(s) && !(c.cnpjPrestador || "").includes(s) && !(c.numeroContrato || "").toLowerCase().includes(s)) return false;
       }
       return true;
     });
-  }, [contratos, search]);
+  }, [contratos, search, statusFilter]);
 
   // Stats
   const stats = useMemo(() => {
