@@ -1,5 +1,8 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1338 — 05/05/2026
+- **Hub de Módulos — Comunicados Internos e Currículos movidos para dentro do RH**: os cards standalone de "Comunicados Internos" e "Currículos" foram removidos do hub principal de módulos (`ModuleHub`). Eles continuam acessíveis pelo **menu lateral do módulo RH & DP**, na seção "Comunicação e Recrutamento". Rotas (`/comunicados-internos`, `/curriculos`), permissões, dashboards e configurações por usuário **permanecem ativos** — apenas o ponto de entrada no hub foi consolidado para evitar duplicidade.
+
 ## Revisão 1337 — 05/05/2026
 - **Orçamento — Vincular Composições agora casa itens "composto" por descrição**: ao importar a planilha de custo via "Vincular Composições", itens da EAP cujo `servicoCodigo` veio como o placeholder literal `composto` (ou vazio) **passam a ser casados pela descrição normalizada com as CPUs da aba CPUs** da própria planilha. Quando um match é encontrado, o `servicoCodigo` do item EAP é atualizado para o código REAL da CPU, e a partir daí os insumos da CPU são exibidos corretamente na tabela "Composições" do orçamento.
   - **Sintoma anterior**: a tabela exibia `1 COMPOSIÇÕES, 0 INSUMOS` porque a EAP apontava para `codigo='composto'` (placeholder) e não para a CPU real, então a junção com `composicao_insumos` retornava vazio.
