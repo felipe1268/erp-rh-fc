@@ -2,11 +2,14 @@
 
 ## Revisão 1327 — 05/05/2026
 - **Importação BDI — suporte ao novo padrão da planilha (R06)**: o template `BDI_805_03_2026_R06_REVTE.xlsx` reorganizou as linhas-chave da aba BDI: `B - 02` deixou de ser o "%BDI total" e virou "Lucro líquido 02 - Mão de obra"; o BDI total agora vem do **fator multiplicativo do `PV1`** (col 7), com `BDI = 1 − 1/fator`. Códigos passaram a ter espaços ao redor do hífen (`B - 02`, `B - 04`, `B - 07`) e PV virou `PV1`/`PV2` sem hífen.
-  - `parsearAbaBdi` (server/routers/orcamento.ts) agora detecta os dois padrões: se houver `PV1` com fator > 1, deriva BDI dele (novo); senão, cai no `B-02` legado. PV-2 também aceita `PV2` (sem hífen) para o total de venda final.
-  - Nova função `normalizarCodigoBdi` colapsa espaços ao redor do hífen e insere hífen entre letra e dígito (`PV1` → `PV-1`), garantindo display consistente independente do padrão.
+  - **Discriminador de formato**: códigos brutos `PV1`/`PV2` sem hífen só existem no R06 (legado tem `PV -1` / `PV - 2`). `parsearAbaBdi` (server/routers/orcamento.ts) usa essa diferença literal — em R06 deriva BDI do PV1; em legado usa B-02 direto. Sem fallback cruzado: planilhas legadas que tenham PV-1 com fator NÃO são confundidas com R06 (regressão evitada).
+  - **Linha sintética `B-02`**: em modo R06 o backend acrescenta uma linha com `codigo='B-02'` carregando o BDI calculado, permitindo que `BdiView`, `OrcamentoBdiIndicadores` e `OrcamentoDashTab` (que filtram por `codigo === 'B-02'`) continuem funcionando sem precisar conhecer o R06.
+  - **Preço de Venda = PV1**: `totalVendaBdi` agora prioriza o valor de `PV-1` (preço cheio, ex.: R$ 1.414.540,00 no R06), com fallback para `PV-2` (preço com impostos sobre MDO). Decisão da diretoria.
+  - Nova função `normalizarCodigoBdi` colapsa espaços ao redor do hífen e insere hífen entre letra e dígito (`PV1` → `PV-1`) — usada apenas para matching interno; o codigo gravado no banco mantém o formato bruto da planilha.
   - Regex `BDI_COD_VALIDO` ampliada: aceita `B\s*-?\s*0?[1-9]` (cobre B-03/B-05/B-07 do novo template) e `PV\s*-?\s*[123]` (com ou sem hífen).
+  - `BdiView.tsx`: regex `VALID_BDI` ampliada e helpers (`getGrupoKey`, `isGroupHeader`, `EDITABLE_PCT`, detecção de PV2) passam a normalizar o codigo internamente — assim os códigos R06 (`B - 04`, `PV2`, etc.) ficam visíveis na tabela e respeitam estilos/edição corretamente, sem alterar o que é exibido na coluna "Cód.".
   - Validação do frontend (`OrcamentoImportar.analisarBdi`) deixa de alertar "Linha B-02 não encontrada" quando a planilha nova traz `PV1`.
-  - **Sem impacto em obras já cadastradas**: o parser só roda em novas importações; `bdi_percentual` salvo das obras antigas não é alterado.
+  - **Sem impacto em obras já cadastradas**: o parser só roda em novas importações; `bdi_percentual` e linhas BDI salvos das obras antigas não são alterados.
 
 ## Revisão 1263 — 21/04/2026
 - **Botão "Recalcular Período" no Espelho de Ponto**: reaplica em lote a regra de cálculo (HE, atrasos e total trabalhado) em todos os dias do período exibido, sem alterar as batidas. Resolve o caso de dias importados pelo Dixi (especialmente os incompletos / com batidas ímpares) que ficaram com `atrasos = 0:00` por terem sido importados antes da lógica completa rodar — não é mais necessário abrir cada dia, clicar no lápis e salvar manualmente.

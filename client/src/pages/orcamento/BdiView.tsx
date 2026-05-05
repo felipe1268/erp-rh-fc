@@ -69,17 +69,25 @@ const GRUPO_STYLES: Record<string, GrupoStyle> = {
 // Apenas esses códigos exatos são cabeçalhos de grupo (com sub-itens)
 const HEADER_CODES = new Set(["CD","CI","DI","B","L","J","JF"]);
 
+// Normaliza código bruto da planilha ("B - 02" → "B-02", "PV1" → "PV-1") para matching
+// interno (estilo, grupo, edição). O código bruto é mantido para EXIBIÇÃO na coluna "Cód.".
+function normCod(codigo: string): string {
+  const s = String(codigo || "").trim().toUpperCase();
+  return s.replace(/\s+/g, "").replace(/^([A-Z]+)(\d)/, "$1-$2");
+}
+
 function getGrupoKey(codigo: string): string {
-  if (codigo === "PVN") return "PVN";
-  if (codigo.startsWith("PV")) return "PV";
-  const prefix = codigo.split("-")[0].toUpperCase();
+  const c = normCod(codigo);
+  if (c === "PVN") return "PVN";
+  if (c.startsWith("PV")) return "PV";
+  const prefix = c.split("-")[0];
   // V1, V2... → grupo "V"
   if (prefix.match(/^V\d*$/)) return "V";
   return prefix;
 }
 
 function isGroupHeader(codigo: string): boolean {
-  return HEADER_CODES.has(codigo.toUpperCase());
+  return HEADER_CODES.has(normCod(codigo));
 }
 
 function pct2(v: string | number | null | undefined) {
@@ -89,10 +97,9 @@ function pct2(v: string | number | null | undefined) {
 }
 
 // Filtra apenas códigos BDI válidos — descarta lixo de importações antigas.
-// B-03 e B-05 são excluídos (dados errados de import antigo — L-01..L-04 existem corretamente).
-// PV aceita espaços: "PV - 2" e "PV-2" são equivalentes.
+// Aceita formato legado ("B-02", "PV - 2") e novo padrão R06 ("B - 04", "PV1", "PV2", "B - 07").
 // Sub-códigos (CD-02.1, CI-01.1, CI-01.2) são permitidos.
-const VALID_BDI = /^(CD-\d{2}(\.\d+)?|CI-\d{2}(\.\d+)?|DI-\d{2}|B-0[124]|L-\d{2}|V\d{1,2}|PV\s*-\s*[23]|PVN|JF?|CD\s*\+.*|CD|CI|DI|B|L)$/;
+const VALID_BDI = /^(CD-\d{2}(\.\d+)?|CI-\d{2}(\.\d+)?|DI-\d{2}|B\s*-?\s*0?[1-9]|L-\d{2}|V\s*-?\s*\d{1,2}|PV\s*-?\s*[123]|PVN|JF?|CD\s*\+.*|CD|CI|DI|B|L)$/;
 
 // Códigos cujo % é digitado diretamente nesta aba (células azuis/verdes do Excel BDI)
 // Os demais têm valor agregado das abas complementares e são somente leitura aqui.
@@ -184,8 +191,8 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
                   const g      = GRUPO_STYLES[key] ?? GRUPO_STYLES["CD"];
                   const header = isGroupHeader(l.codigo);
                   const sumRow = isSumRow(l.codigo);
-                  const isBdi  = l.codigo === "B-02";
-                  const isPV2  = /^PV\s*-\s*[23]$/.test(l.codigo);
+                  const isBdi  = l.codigo === "B-02"; // somente sintética/legado, nunca raw "B - 02" do R06
+                  const isPV2  = ["PV-2", "PV-3"].includes(normCod(l.codigo)); // aceita "PV - 2", "PV2", "PV-3"
                   const hasVal = fmt(l.valorAbsoluto) !== 0;
                   const hasPct = fmt(l.percentual) !== 0;
 
@@ -283,7 +290,7 @@ function AbaBdi({ linhas }: { linhas: any[] }) {
 
                   // ── Linha normal de sub-item
                   const isEven   = idx % 2 === 0;
-                  const isEdit   = EDITABLE_PCT.has(l.codigo);
+                  const isEdit   = EDITABLE_PCT.has(normCod(l.codigo));
                   const editVal  = edits[l.id];
                   // Valor exibido no input (usa edição pendente ou valor do banco convertido para %)
                   const inputVal = editVal !== undefined

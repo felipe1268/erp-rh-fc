@@ -97,6 +97,7 @@ Impacto: Orçamento (BDI condicional por tipo), Medição (banner + tipo exposto
 - 3 versions: Venda (BDI applied), Custo (direct cost), Meta (cost × (1-metaPerc), default 20%)
 - Meta % adjustable by admin_master role, recalculates all items
 - BDI: stored with `nomeAba` per sheet, displayed grouped by sheet, 2 decimal places
+- **BDI parser — suporte a 2 padrões de planilha** (Rev.1327): legado usa `B-02` como %BDI total; novo padrão R06 (`BDI_805_03_2026_R06_REVTE.xlsx`) traz `B - 02` como "Lucro líquido 02 - MDO" (~39%, NÃO é BDI) e o BDI total deriva do fator do `PV1` (col[7]≈1.3332 → BDI = 1−1/fator ≈ 25%). Discriminador inequívoco: códigos brutos `PV1`/`PV2` sem hífen só existem no R06 (legado tem `PV -1`/`PV - 2`). Em modo R06 o backend injeta uma linha sintética com `codigo='B-02'` e o BDI calculado, mantendo `BdiView`/`OrcamentoBdiIndicadores`/`OrcamentoDashTab` (que filtram por `codigo === 'B-02'`) funcionando sem mudanças. `VALID_BDI` regex em `BdiView.tsx` ampliado para aceitar `B - 04`, `B - 07`, `PV1`, `PV2`. Sem impacto em obras já cadastradas.
 - EAP: shows Mat/MO separately for leaf items, quantity 2 decimal places
 - Catalog: auto-populated on each import; intelligent dedup by code + normalized description
 - **ORCAMENTISTA PHD**: AI assistant widget (OrcamentistaWidget.tsx) floating in OrcamentoDetalhe

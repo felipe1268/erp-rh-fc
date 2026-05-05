@@ -831,8 +831,9 @@ function normalizarCodigoBdi(raw: string): string {
 function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
   let bdiPercentual = 0;
   let totalVendaBdi = 0; // valor absoluto do PV-2 (preço de venda final da planilha BDI)
-  let bdiPv1Factor = 0; // fator multiplicativo do PV1 (novo padrão R06)
-  let bdiB02Pct = 0;    // % do B-02 (padrão legado — em R06 esta linha é "Lucro MDO")
+  let bdiPv1Factor = 0;  // fator multiplicativo do PV1 (novo padrão R06)
+  let bdiB02Pct = 0;     // % do B-02 do padrão legado
+  let isR06Format = false; // discriminador: PV1 raw (sem hífen) só aparece no R06
   const linhas: any[] = [];
   let ordem = 0;
 
@@ -845,10 +846,16 @@ function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
     // Exige descrição mínima
     if (descCol.length < 3) continue;
 
-    // Normaliza código para matching consistente: "B - 02" → "B-02", "PV1" → "PV-1"
-    const col2 = normalizarCodigoBdi(col2Raw);
+    // Discriminador inequívoco do novo padrão R06: "PV1" / "PV2" raw, sem hífen e sem espaços.
+    // Planilhas legadas usam "PV -1", "PV - 2" (com espaço e hífen) — nunca "PV1" sem hífen.
+    if (col2Raw === 'PV1' || col2Raw === 'PV2') isR06Format = true;
 
-    const isPvRow = /^PV-\d/.test(col2);
+    // Forma normalizada apenas para matching de marcadores específicos (B-02, PV-2);
+    // o `codigo` armazenado mantém o formato bruto da planilha para preservar compat
+    // com obras já cadastradas (BdiView, indicadores, dash usam codigos legados).
+    const col2Norm = normalizarCodigoBdi(col2Raw);
+
+    const isPvRow = /^PV-\d/.test(col2Norm);
     const pct = toNum(row[7]);
 
     // Busca valor absoluto nas colunas 8, 9, 10 — usa o primeiro > 0
@@ -859,22 +866,21 @@ function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
       if (v > 0) { val = v; break; }
     }
 
-    // Extrai o valor de venda final do PV-2 (preço de venda c/ desconto FD)
-    if (col2 === 'PV-2' && val > 0) {
+    // Total de venda: PRIORIZA PV-1 (preço de venda cheio, sem desconto de impostos sobre MDO).
+    // PV-2 é o preço de venda com impostos incidentes somente sobre M.O. (~4% menor).
+    // Decisão da diretoria: o "Preço de Venda" do orçamento é o PV-1.
+    if (col2Norm === 'PV-1') {
+      // Captura o fator multiplicativo do PV1 (col[7] vem como fator >1, ex.: 1.3332).
+      if (pct > 1) bdiPv1Factor = pct;
+      if (val > 0) totalVendaBdi = val; // sobrescreve PV-2 se já tiver sido capturado
+    }
+    // PV-2 só é usado como fallback se PV-1 não estiver presente
+    if (col2Norm === 'PV-2' && val > 0 && !totalVendaBdi) {
       totalVendaBdi = val;
     }
 
-    // Captura o fator multiplicativo do PV1 (novo padrão R06: BDI = 1 - 1/fator)
-    // Ex.: PV1 fator=1.3332 → BDI = 25%. Em col[7] vem o fator (>1).
-    if (col2 === 'PV-1' && pct > 1) {
-      bdiPv1Factor = pct;
-      // Se PV-2 não foi encontrado, usa PV-1 como total de venda (s/ desconto FD)
-      if (!totalVendaBdi && val > 0) totalVendaBdi = val;
-    }
-
-    // Captura % do B-02 do padrão legado (em R06 esta linha é "Lucro MDO" e NÃO deve ser usada).
-    // A escolha entre B-02 (legado) e PV1 (R06) é feita após o loop, com base no formato detectado.
-    if (col2 === 'B-02' && !bdiB02Pct && Math.abs(pct) <= 1) {
+    // Captura % do B-02 do padrão legado. No R06 o B-02 é "Lucro MDO" (~39%) e NÃO deve ser usado.
+    if (col2Norm === 'B-02' && !bdiB02Pct && Math.abs(pct) <= 1) {
       bdiB02Pct = pct;
     }
 
@@ -884,7 +890,7 @@ function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
     linhas.push({
       companyId,
       nomeAba,
-      codigo:        col2.substring(0, 30),
+      codigo:        col2Raw.substring(0, 30), // mantém formato bruto p/ preservar compat
       descricao:     descCol.substring(0, 255),
       percentual:    fix6(isPvRow ? 0 : pct),
       valorAbsoluto: fix2(val),
@@ -893,10 +899,29 @@ function parsearAbaBdi(rows: any[][], companyId: number, nomeAba = 'BDI') {
   }
 
   // Decide a fonte do BDI total:
-  // - Se PV1 tem fator > 1 (novo padrão R06), deriva BDI = 1 - 1/fator.
-  // - Senão, usa B-02 do padrão legado.
-  if (bdiPv1Factor > 1) {
-    bdiPercentual = 1 - 1 / bdiPv1Factor;
+  // - Formato R06 (PV1/PV2 raw detectados): deriva BDI = 1 - 1/fator do PV1.
+  //   IMPORTANTE: NÃO cair em B-02 como fallback no R06 — lá B-02 é "Lucro MDO" (~39%)
+  //   e usá-lo daria um BDI absurdo. Se PV1 não tem fator válido, deixa BDI=0
+  //   (sistema mostra warning e o usuário corrige a planilha).
+  // - Formato legado: usa B-02 direto.
+  if (isR06Format) {
+    if (bdiPv1Factor > 1) {
+      bdiPercentual = 1 - 1 / bdiPv1Factor;
+
+      // Injeta linha sintética com codigo='B-02' carregando o BDI calculado.
+      // Permite que BdiView, OrcamentoBdiIndicadores e OrcamentoDashTab — que filtram
+      // por `codigo === 'B-02'` — continuem funcionando sem precisar conhecer R06.
+      linhas.push({
+        companyId,
+        nomeAba,
+        codigo:        'B-02',
+        descricao:     'BDI Total (calculado a partir do fator multiplicativo do PV1)',
+        percentual:    fix6(bdiPercentual),
+        valorAbsoluto: fix2(totalVendaBdi),
+        ordem:         ordem++,
+      });
+    }
+    // se R06 e PV1 inválido: bdiPercentual fica 0, validação do importarBdi reporta
   } else if (bdiB02Pct > 0) {
     bdiPercentual = bdiB02Pct;
   }
