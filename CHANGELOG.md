@@ -1,5 +1,8 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1342 — 05/05/2026
+- **Previsão de Medição — "Faturamento Direto sugerido" agora aparece**: corrigido bug em `getConfigMedicao` (server/routers/planejamento.ts) que fazia o campo **Faturamento Direto (R$)** sempre mostrar **R$ 0,00** quando o usuário clicava em "↺ sugerido", mesmo havendo dados na **aba F.D. do BDI** do orçamento. A consulta SQL bruta destruturava o resultado de `db.execute(...)` como se fosse um array (`const [row] = ...`), mas o driver retorna `{ rows: [...] }` — então `row` ficava `undefined` e a soma caía em 0. Agora o valor correto vem do orçamento (ex.: VITRA → R$ 82.811,11) e desconta automaticamente da base do Sinal/Mobilização.
+
 ## Revisão 1341 — 05/05/2026
 - **Contrato PJ — Lista de Aditivos visível no cabeçalho**: o aditivo gerado para a Thais Sugahara (e qualquer outro contrato PJ) agora aparece como **botão clicável amarelo** ao lado de "Criar Aditivo", no cabeçalho azul da tela do contrato. Antes o aditivo era criado e salvo no banco corretamente, mas não havia caminho visível na tela do contrato para reabri-lo — o usuário precisava lembrar do link direto. Agora basta clicar no botão **"Nº 01"**, **"Nº 02"** etc. para abrir o aditivo correspondente em modo de visualização/edição/impressão. A lista é carregada automaticamente do endpoint `pj.aditivos.list` e fica oculta quando o contrato não tem aditivos.
 

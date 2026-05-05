@@ -2076,11 +2076,14 @@ export const planejamentoRouter = router({
         .where(eq(planejamentoProjetos.id, input.projetoId))
         .limit(1);
       if (proj?.orcamentoId) {
-        const [row] = await db.execute(sql`
+        // Rev. 1342: db.execute retorna { rows: [...] } — destruturar como array dava undefined,
+        // então fdSugerido sempre vinha 0 mesmo quando havia linhas em bdi_fd.
+        const res: any = await db.execute(sql`
           SELECT COALESCE(SUM(total),0)::numeric AS total
           FROM bdi_fd
           WHERE orcamento_id = ${proj.orcamentoId}
-        `) as any;
+        `);
+        const row = res?.rows?.[0] ?? res?.[0];
         fdSugerido = Number(row?.total ?? 0) || 0;
       }
       return cfg ? { ...cfg, fdSugerido } : { fdSugerido } as any;
