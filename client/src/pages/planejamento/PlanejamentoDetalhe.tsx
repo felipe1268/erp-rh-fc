@@ -6673,8 +6673,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                       <td className="py-2 px-3 font-bold">TOTAL</td>
                       <td className="py-2 px-3" />
                       <td className="py-2 px-3 text-right font-bold text-indigo-300">{fmt(previsoesMensais.filter(r => !(r as any).isRetencaoRow).reduce((s, r) => s + r.medicaoBruta, 0))}</td>
-                      <td className="py-2 px-3 text-right font-bold text-emerald-300" title="Crédito a receber: total retido durante a obra que será liberado após a conclusão">
-                        {(() => { const retTotal = previsoesMensais.filter(r => !(r as any).isRetencaoRow && !r.isSinalRow).reduce((s, r) => s + r.retencao, 0); return retTotal > 0 ? `+${fmt(retTotal)}` : "—"; })()}
+                      <td className="py-2 px-3 text-right font-bold text-emerald-300" title="Crédito a receber: total retido durante a obra (mensal + sinal, quando aplicável) que será liberado após a conclusão">
+                        {(() => { const retTotal = previsoesMensais.filter(r => !(r as any).isRetencaoRow).reduce((s, r) => s + r.retencao, 0); return retTotal > 0 ? `+${fmt(retTotal)}` : "—"; })()}
                       </td>
                       <td className="py-2 px-3 text-right font-bold text-violet-300">{fmt(previsoesMensais.find(r => r.isSinalRow)?.medicaoBruta ?? 0)}</td>
                       <td className="py-2 px-3 text-right font-bold text-emerald-300">{fmt(previsoesMensais.reduce((s, r) => s + r.liquido, 0))}</td>
