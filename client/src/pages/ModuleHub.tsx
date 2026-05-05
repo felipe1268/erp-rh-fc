@@ -334,6 +334,58 @@ export default function ModuleHub() {
 
   useEffect(() => { setMounted(true); }, []);
 
+  // Listener global não-passivo para touch drag (precisa ficar ANTES de qualquer
+  // early return — Rules of Hooks). Usa preventDefault para travar o scroll
+  // durante o arrasto. React 17+ usa listeners passivos no root, por isso anexamos no document.
+  useEffect(() => {
+    function onMove(e: TouchEvent) {
+      // Cancela o long-press se o usuário começa a deslizar antes de ativar o arrastar
+      if (!touchDragging.current && touchStartPos.current && longPressTimer.current) {
+        const t = e.touches[0];
+        const dx = Math.abs(t.clientX - touchStartPos.current.x);
+        const dy = Math.abs(t.clientY - touchStartPos.current.y);
+        if (dx > 10 || dy > 10) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
+          touchStartPos.current = null;
+        }
+        return;
+      }
+      if (!touchDragging.current) return;
+      e.preventDefault();
+      const t = e.touches[0];
+      const el = document.elementFromPoint(t.clientX, t.clientY) as HTMLElement | null;
+      const tileEl = el?.closest('[data-module-id]') as HTMLElement | null;
+      if (tileEl) {
+        const targetId = tileEl.getAttribute('data-module-id');
+        if (targetId && targetId !== draggingId.current && targetId !== dragOverId.current) {
+          dragOverId.current = targetId;
+          setDragTarget(targetId);
+        }
+      }
+    }
+    function onCancel() {
+      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+      if (touchDragging.current) {
+        touchDragging.current = false;
+        setTouchDragId(null);
+        setDragActive(null);
+        setDragTarget(null);
+        draggingId.current = null;
+        dragOverId.current = null;
+        didDrag.current = true;
+        setTimeout(() => { didDrag.current = false; }, 350);
+      }
+      touchStartPos.current = null;
+    }
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchcancel', onCancel);
+    return () => {
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchcancel', onCancel);
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen hub-mesh-bg">
@@ -480,47 +532,6 @@ export default function ModuleHub() {
     touchStartPos.current = null;
   }
 
-  // Listener global não-passivo: precisa do preventDefault para travar o scroll
-  // durante o arrasto. React 17+ usa listeners passivos no root, por isso anexamos no document.
-  useEffect(() => {
-    function onMove(e: TouchEvent) {
-      // Cancela o long-press se o usuário começa a deslizar antes de ativar o arrastar
-      if (!touchDragging.current && touchStartPos.current && longPressTimer.current) {
-        const t = e.touches[0];
-        const dx = Math.abs(t.clientX - touchStartPos.current.x);
-        const dy = Math.abs(t.clientY - touchStartPos.current.y);
-        if (dx > 10 || dy > 10) {
-          clearTimeout(longPressTimer.current);
-          longPressTimer.current = null;
-          touchStartPos.current = null;
-        }
-        return;
-      }
-      if (!touchDragging.current) return;
-      e.preventDefault();
-      const t = e.touches[0];
-      const el = document.elementFromPoint(t.clientX, t.clientY) as HTMLElement | null;
-      const tileEl = el?.closest('[data-module-id]') as HTMLElement | null;
-      if (tileEl) {
-        const targetId = tileEl.getAttribute('data-module-id');
-        if (targetId && targetId !== draggingId.current && targetId !== dragOverId.current) {
-          dragOverId.current = targetId;
-          setDragTarget(targetId);
-        }
-      }
-    }
-    function onCancel() {
-      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
-      if (touchDragging.current) endTouchDrag();
-      touchStartPos.current = null;
-    }
-    document.addEventListener('touchmove', onMove, { passive: false });
-    document.addEventListener('touchcancel', onCancel);
-    return () => {
-      document.removeEventListener('touchmove', onMove);
-      document.removeEventListener('touchcancel', onCancel);
-    };
-  }, []);
   const disabledModules = MODULES.filter(m => {
     if (!m.active) return false;
     const configKey = hubToConfigKey[m.id] ?? m.id;
