@@ -187,6 +187,9 @@ export default function GestaoDocumentos() {
   const [pendingFiles, setPendingFiles] = useState<{ file: File; codigo: string; titulo: string; isRevision: boolean; existingDocId?: number }[]>([]);
 
   const [newDiscForm, setNewDiscForm] = useState({ nome: "", sigla: "", cor: "#3B82F6", subpastas: ["DWG", "PDF", "IFC", "DOC"] as string[], newSubpasta: "" });
+  // Rev. 1345: seleção múltipla de atalhos para criar várias disciplinas de uma vez.
+  const [selectedShortcuts, setSelectedShortcuts] = useState<Set<string>>(new Set());
+  const [discBatchProgress, setDiscBatchProgress] = useState<{ done: number; total: number } | null>(null);
 
   const [docForm, setDocForm] = useState({
     codigo: "",
@@ -316,13 +319,6 @@ export default function GestaoDocumentos() {
   });
 
   const createDiscFicheiro = trpc.gestaoDocumentos.createDisciplinaFicheiro.useMutation({
-    onSuccess: () => {
-      toast.success("Pasta criada!");
-      utils.gestaoDocumentos.getFicheiroDetail.invalidate();
-      utils.gestaoDocumentos.listFicheiros.invalidate();
-      setNewDiscForm({ nome: "", sigla: "", cor: "#3B82F6", subpastas: ["DWG", "PDF", "IFC", "DOC"], newSubpasta: "" });
-      setShowNewDiscModal(false);
-    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -840,22 +836,85 @@ export default function GestaoDocumentos() {
     }
   }
 
-  function handleCreateDisc() {
+  async function handleCreateDisc() {
     if (!activeFicheiroId) return;
     const existingDiscs = detail?.disciplinas || [];
+
+    // ── Modo múltiplo: cria várias disciplinas selecionadas via atalho ──
+    if (selectedShortcuts.size > 0) {
+      const toCreate = DISCIPLINA_SHORTCUTS.filter(d => selectedShortcuts.has(d.sigla));
+      setDiscBatchProgress({ done: 0, total: toCreate.length });
+      let okCount = 0;
+      const errors: string[] = [];
+      for (let i = 0; i < toCreate.length; i++) {
+        const d = toCreate[i];
+        if (existingDiscs.some((ed: any) => ed.sigla === d.sigla)) {
+          errors.push(`${d.sigla} já existe`);
+        } else {
+          try {
+            await createDiscFicheiro.mutateAsync({
+              companyId,
+              ficheiroId: activeFicheiroId,
+              nome: d.nome,
+              sigla: d.sigla,
+              cor: d.cor,
+              subpastas: newDiscForm.subpastas,
+            });
+            okCount++;
+          } catch (e: any) {
+            errors.push(`${d.sigla}: ${e?.message || "erro"}`);
+          }
+        }
+        setDiscBatchProgress({ done: i + 1, total: toCreate.length });
+      }
+      utils.gestaoDocumentos.getFicheiroDetail.invalidate();
+      utils.gestaoDocumentos.listFicheiros.invalidate();
+      if (okCount > 0) toast.success(`${okCount} pasta${okCount > 1 ? "s criadas" : " criada"}!`);
+      if (errors.length > 0) toast.error(errors.join(" · "));
+      setSelectedShortcuts(new Set());
+      setDiscBatchProgress(null);
+      setNewDiscForm({ nome: "", sigla: "", cor: "#3B82F6", subpastas: ["DWG", "PDF", "IFC", "DOC"], newSubpasta: "" });
+      setShowNewDiscModal(false);
+      return;
+    }
+
+    // ── Modo único: usa nome/sigla preenchidos no formulário ──
     if (existingDiscs.some((ed: any) => ed.sigla === newDiscForm.sigla.trim().toUpperCase())) {
       toast.error(`Pasta "${newDiscForm.sigla.trim().toUpperCase()}" já existe`);
       return;
     }
-    createDiscFicheiro.mutate({
-      companyId,
-      ficheiroId: activeFicheiroId,
-      nome: newDiscForm.nome.trim(),
-      sigla: newDiscForm.sigla.trim().toUpperCase(),
-      cor: newDiscForm.cor,
-      subpastas: newDiscForm.subpastas,
-    });
+    try {
+      await createDiscFicheiro.mutateAsync({
+        companyId,
+        ficheiroId: activeFicheiroId,
+        nome: newDiscForm.nome.trim(),
+        sigla: newDiscForm.sigla.trim().toUpperCase(),
+        cor: newDiscForm.cor,
+        subpastas: newDiscForm.subpastas,
+      });
+      toast.success("Pasta criada!");
+      utils.gestaoDocumentos.getFicheiroDetail.invalidate();
+      utils.gestaoDocumentos.listFicheiros.invalidate();
+      setNewDiscForm({ nome: "", sigla: "", cor: "#3B82F6", subpastas: ["DWG", "PDF", "IFC", "DOC"], newSubpasta: "" });
+      setShowNewDiscModal(false);
+    } catch {}
   }
+
+  // Rev. 1345: lista compartilhada de atalhos (usada no modal e em handleCreateDisc).
+  const DISCIPLINA_SHORTCUTS = [
+    { nome: "Arquitetura", sigla: "ARQ", cor: "#3B82F6" },
+    { nome: "Estrutural", sigla: "EST", cor: "#EF4444" },
+    { nome: "Elétrica", sigla: "ELE", cor: "#F59E0B" },
+    { nome: "Hidrossanitário", sigla: "HID", cor: "#06B6D4" },
+    { nome: "HVAC / Climatização", sigla: "CLI", cor: "#8B5CF6" },
+    { nome: "Incêndio", sigla: "INC", cor: "#DC2626" },
+    { nome: "Fundações", sigla: "FUN", cor: "#78716C" },
+    { nome: "Topografia", sigla: "TOP", cor: "#22C55E" },
+    { nome: "Paisagismo", sigla: "PAI", cor: "#10B981" },
+    { nome: "Geotecnia", sigla: "GEO", cor: "#A16207" },
+    { nome: "Telecom / Dados", sigla: "TEL", cor: "#0EA5E9" },
+    { nome: "Automação", sigla: "AUT", cor: "#6366F1" },
+  ];
 
   function handleOpenObra(obra: any) {
     setSelectedDiscId(null);
@@ -1782,35 +1841,52 @@ export default function GestaoDocumentos() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label className="text-xs text-gray-500 mb-2">Atalhos — clique para preencher automaticamente</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { nome: "Arquitetura", sigla: "ARQ", cor: "#3B82F6" },
-                  { nome: "Estrutural", sigla: "EST", cor: "#EF4444" },
-                  { nome: "Elétrica", sigla: "ELE", cor: "#F59E0B" },
-                  { nome: "Hidrossanitário", sigla: "HID", cor: "#06B6D4" },
-                  { nome: "HVAC / Climatização", sigla: "CLI", cor: "#8B5CF6" },
-                  { nome: "Incêndio", sigla: "INC", cor: "#DC2626" },
-                  { nome: "Fundações", sigla: "FUN", cor: "#78716C" },
-                  { nome: "Topografia", sigla: "TOP", cor: "#22C55E" },
-                  { nome: "Paisagismo", sigla: "PAI", cor: "#10B981" },
-                  { nome: "Geotecnia", sigla: "GEO", cor: "#A16207" },
-                  { nome: "Telecom / Dados", sigla: "TEL", cor: "#0EA5E9" },
-                  { nome: "Automação", sigla: "AUT", cor: "#6366F1" },
-                ].filter(d => !(detail?.disciplinas || []).some((ed: any) => ed.sigla === d.sigla)).map(d => (
-                  <button
-                    key={d.sigla}
-                    type="button"
-                    onClick={() => setNewDiscForm({ ...newDiscForm, nome: d.nome, sigla: d.sigla, cor: d.cor })}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-gray-200 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm transition-all text-left"
-                  >
-                    <span className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shrink-0" style={{ backgroundColor: d.cor }}>
-                      {d.sigla}
-                    </span>
-                    <span className="text-sm text-gray-700">{d.nome}</span>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-xs text-gray-500">Atalhos — clique para selecionar (múltiplas pastas de uma vez)</Label>
+                {selectedShortcuts.size > 0 && (
+                  <button type="button" onClick={() => setSelectedShortcuts(new Set())} className="text-[10px] text-blue-600 hover:underline">
+                    Limpar seleção ({selectedShortcuts.size})
                   </button>
-                ))}
+                )}
               </div>
+              <div className="grid grid-cols-2 gap-2">
+                {DISCIPLINA_SHORTCUTS.filter(d => !(detail?.disciplinas || []).some((ed: any) => ed.sigla === d.sigla)).map(d => {
+                  const sel = selectedShortcuts.has(d.sigla);
+                  return (
+                    <button
+                      key={d.sigla}
+                      type="button"
+                      onClick={() => {
+                        setSelectedShortcuts(prev => {
+                          const next = new Set(prev);
+                          if (next.has(d.sigla)) next.delete(d.sigla); else next.add(d.sigla);
+                          return next;
+                        });
+                        // Também preenche o form (compatível com o modo único caso desmarque tudo).
+                        if (!sel) setNewDiscForm({ ...newDiscForm, nome: d.nome, sigla: d.sigla, cor: d.cor });
+                      }}
+                      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border transition-all text-left ${
+                        sel
+                          ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200 shadow-sm"
+                          : "border-gray-200 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm"
+                      }`}
+                    >
+                      <span className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shrink-0 relative" style={{ backgroundColor: d.cor }}>
+                        {d.sigla}
+                        {sel && (
+                          <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] flex items-center justify-center border-2 border-white">✓</span>
+                        )}
+                      </span>
+                      <span className={`text-sm ${sel ? "text-blue-900 font-semibold" : "text-gray-700"}`}>{d.nome}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedShortcuts.size > 1 && (
+                <p className="text-[10px] text-blue-600 mt-2 bg-blue-50 border border-blue-200 rounded px-2 py-1.5">
+                  ✓ {selectedShortcuts.size} disciplinas selecionadas — todas serão criadas com as mesmas sub-pastas definidas abaixo. Os campos Nome/Sigla/Cor serão ignorados.
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -1864,10 +1940,22 @@ export default function GestaoDocumentos() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewDiscModal(false)} className="border-gray-300 text-gray-600">Fechar</Button>
-            <Button onClick={handleCreateDisc} className="bg-blue-600 text-white hover:bg-blue-700" disabled={createDiscFicheiro.isPending || !newDiscForm.nome.trim() || !newDiscForm.sigla.trim()}>
+            <Button variant="outline" onClick={() => { setShowNewDiscModal(false); setSelectedShortcuts(new Set()); }} className="border-gray-300 text-gray-600" disabled={!!discBatchProgress}>Fechar</Button>
+            <Button
+              onClick={handleCreateDisc}
+              className="bg-blue-600 text-white hover:bg-blue-700"
+              disabled={
+                createDiscFicheiro.isPending ||
+                !!discBatchProgress ||
+                (selectedShortcuts.size === 0 && (!newDiscForm.nome.trim() || !newDiscForm.sigla.trim()))
+              }
+            >
               <Plus className="w-4 h-4 mr-1" />
-              {createDiscFicheiro.isPending ? "Criando..." : "Criar Pasta"}
+              {discBatchProgress
+                ? `Criando ${discBatchProgress.done}/${discBatchProgress.total}...`
+                : selectedShortcuts.size > 1
+                  ? `Criar ${selectedShortcuts.size} Pastas`
+                  : createDiscFicheiro.isPending ? "Criando..." : "Criar Pasta"}
             </Button>
           </DialogFooter>
         </DialogContent>
