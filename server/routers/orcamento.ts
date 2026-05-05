@@ -2513,11 +2513,35 @@ export const orcamentoRouter = router({
 
           job.progresso = 40; job.mensagem = `${itens.filter(i => !!i.servicoCodigo).length} códigos encontrados na planilha...`;
 
+          // Mapa chaveNorm (descrição normalizada) → código REAL da CPU
+          // Permite "consertar" itens EAP cujo servicoCodigo veio como placeholder 'composto'
+          // associando-os à CPU correspondente da aba CPUs e, com isso, herdando seus insumos.
+          const cpuByDescricao = new Map<string, string>();
+          for (const cpu of cpusParsed.composicoes) {
+            if (cpu.chaveNorm && cpu.codigo && !cpuByDescricao.has(cpu.chaveNorm)) {
+              cpuByDescricao.set(cpu.chaveNorm, cpu.codigo);
+            }
+          }
+
           const newCodigoMap = new Map<string, string>();
           const newTipoMap = new Map<string, string>();
+          let upgraded = 0;
           for (const it of itens) {
-            if (it.servicoCodigo) newCodigoMap.set(it.eapCodigo, it.servicoCodigo);
+            let codigo = it.servicoCodigo;
+            // Se for placeholder ou vazio, tenta casar por descrição com uma CPU real
+            if ((!codigo || codigo === 'composto') && it.descricao) {
+              const chave = it.descricao.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 500);
+              const real = cpuByDescricao.get(chave);
+              if (real) {
+                codigo = real;
+                upgraded++;
+              }
+            }
+            if (codigo) newCodigoMap.set(it.eapCodigo, codigo);
             if (it.composicaoTipo) newTipoMap.set(it.eapCodigo, it.composicaoTipo);
+          }
+          if (upgraded > 0) {
+            console.log(`[atualizarComposicoes] ${upgraded} itens EAP "composto" vinculados a CPUs reais por descrição.`);
           }
 
           job.etapa = 'vinculando'; job.progresso = 45; job.mensagem = 'Carregando itens existentes...';

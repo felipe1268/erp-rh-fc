@@ -1,5 +1,11 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1337 — 05/05/2026
+- **Orçamento — Vincular Composições agora casa itens "composto" por descrição**: ao importar a planilha de custo via "Vincular Composições", itens da EAP cujo `servicoCodigo` veio como o placeholder literal `composto` (ou vazio) **passam a ser casados pela descrição normalizada com as CPUs da aba CPUs** da própria planilha. Quando um match é encontrado, o `servicoCodigo` do item EAP é atualizado para o código REAL da CPU, e a partir daí os insumos da CPU são exibidos corretamente na tabela "Composições" do orçamento.
+  - **Sintoma anterior**: a tabela exibia `1 COMPOSIÇÕES, 0 INSUMOS` porque a EAP apontava para `codigo='composto'` (placeholder) e não para a CPU real, então a junção com `composicao_insumos` retornava vazio.
+  - **Implementação**: em `server/routers/orcamento.ts → atualizarComposicoes`, antes de montar o `newCodigoMap`, é construído um mapa `chaveNorm → códigoCPU` a partir de `cpusParsed.composicoes`. Para cada item EAP com `servicoCodigo` vazio ou igual a `composto`, normaliza-se a descrição e tenta-se um lookup. Em caso de hit, o código real da CPU substitui o placeholder; quantidade de "upgrades" é logada para diagnóstico.
+  - **Sem regressão**: itens com `servicoCodigo` real (já apontando para uma CPU) não são alterados; itens sem match continuam como `composto`/vazio.
+
 ## Revisão 1336 — 05/05/2026
 - **Comunicados Internos — Nome do responsável acima da linha de assinatura do RH**: o bloco de assinaturas no rodapé do comunicado agora mostra o nome de quem criou o comunicado (`c.criadoPor`) acima da linha "Departamento de Recursos Humanos", em destaque (azul escuro, semibold). A coluna "Direção" mantém a linha em branco para assinatura manual da liderança. Útil para identificar de quem é a assinatura do RH ao imprimir.
 - **SMO — Carta de Encaminhamento (Conta Salário) com assinatura do responsável**: o bloco de assinatura da carta passou a mostrar **acima da linha o usuário responsável pela emissão** (`responsavelNome`, já existente no retorno da query), e abaixo da linha o rótulo "Responsável pelo encaminhamento" + os dados de contato da empresa (telefone/e-mail) em fonte menor. Antes, a linha de assinatura mostrava apenas o nome da empresa, sem indicar a pessoa.
