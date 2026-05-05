@@ -1,8 +1,5 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
-## Revisão 1339 — 05/05/2026
-- **Menu RH — Seção "PJ" adicionada**: a seção **PJ** (Contratos PJ, Medições PJ, Conformidade PJ, Dashboard Conformidade PJ) passou a aparecer também dentro do menu lateral do módulo **RH & DP**, abaixo de "Comunicação e Recrutamento". Antes, a seção existia apenas no menu de **Terceiros**, o que dificultava o acesso pelo time de RH/DP que gerencia esses contratos. Os mesmos itens continuam disponíveis em Terceiros — sem duplicidade de rota, apenas um atalho adicional no menu do RH.
-
 ## Revisão 1338 — 05/05/2026
 - **Hub de Módulos — Comunicados Internos e Currículos movidos para dentro do RH**: os cards standalone de "Comunicados Internos" e "Currículos" foram removidos do hub principal de módulos (`ModuleHub`). Eles continuam acessíveis pelo **menu lateral do módulo RH & DP**, na seção "Comunicação e Recrutamento". Rotas (`/comunicados-internos`, `/curriculos`), permissões, dashboards e configurações por usuário **permanecem ativos** — apenas o ponto de entrada no hub foi consolidado para evitar duplicidade.
 
