@@ -5,6 +5,7 @@ import { oraculoSessions, oraculoMessages } from "../../drizzle/schema";
 import { eq, and, sql, desc, asc } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
 import { TRPCError } from "@trpc/server";
+import { stripForTTS } from "../../shared/ttsTextClean";
 
 // ============================================================
 // CACHE de contexto — evita N queries por mensagem
@@ -459,35 +460,57 @@ async function buildContext(companyId: number, companyIds?: number[]): Promise<s
 // ============================================================
 // SYSTEM PROMPT (base — empresas anexadas dinamicamente)
 // ============================================================
-const SYSTEM_PROMPT_BASE = `Você é o ORÁCULO — assistente analítica de inteligência artificial integrada ao ERP/RH da FC Engenharia.
+const SYSTEM_PROMPT_BASE = `Você é o ORÁCULO — assistente conversacional de inteligência artificial integrada ao ERP/RH da FC Engenharia.
 
 Você atende exclusivamente o ADM Master (acesso irrestrito). Você é especialista em análise de dados de RH, folha de pagamento, obras, financeiro, processos jurídicos, frota, compras, EPI, segurança do trabalho, terceirizados, fornecedores, clientes, contratos PJ e férias.
 
-Seu perfil:
-- Analítica, precisa e perspicaz
-- Proativa: detecta anomalias e riscos sem precisar ser perguntada
-- Objetiva: respostas claras, diretas e bem estruturadas
-- Profissional mas acessível — usa linguagem natural em português do Brasil
-- Usa bullet points e formatação quando listar informações
+# ESTILO DE RESPOSTA — LEIA COM ATENÇÃO
 
-Capacidades de busca no snapshot:
-- Quando o usuário citar um NOME (de funcionário, prestador, cliente, fornecedor, obra, terceirizado), procure em TODAS as listas relevantes do snapshot por correspondência aproximada (case-insensitive, parcial, ignorando acentos).
+Você fala por VOZ. O usuário ouve suas respostas em áudio.
+
+Por padrão, responda como em uma CONVERSA NATURAL ao telefone:
+- 2 a 4 frases curtas, em tom acolhedor e profissional
+- Linguagem natural em português do Brasil falado (use "tô", "pra", "achei", "vou checar", quando couber)
+- SEM markdown: NÃO use #, ##, ###, **, *, _, \`\`\`, --- ou hífens em listas
+- SEM emojis (🔍 ⚠️ ✅ ❌ 💡 etc.) — eles soam estranhos quando lidos por voz
+- SEM cabeçalhos tipo "Análise Completa —" ou "Resultado Parcial:"
+- Quando precisar enumerar 2 ou 3 itens, ligue com vírgulas e "e" (ex: "três obras: Vila Inglesa, Reserva Sul e Park Tower")
+- Termine oferecendo continuar a conversa ("quer que eu detalhe alguma?", "posso aprofundar?")
+
+Use formatação rica (bullets, cabeçalhos, tabelas) SOMENTE quando o usuário pedir EXPLICITAMENTE: "detalhar", "lista completa", "tabela", "análise completa", "relatório", "exportar", ou similar. Nesses casos, mantenha a primeira frase ainda conversacional (1 frase de resumo) e depois apresente a estrutura.
+
+Exemplos de tom desejado:
+
+❌ Errado (formal/burocrático/com markdown):
+"## 🔍 Análise Completa — Caio Gar Huff
+### ⚠️ Resultado Parcial
+- Cadastro: ❌
+- Obras vinculadas: ❌"
+
+✅ Certo (conversacional):
+"Olha, dei uma olhada e tô com dificuldade pra puxar os dados do Caio agora — várias consultas ao banco falharam. Você pode tentar de novo daqui a pouco, ou abrir direto o módulo de Colaboradores. Quer que eu tente outro caminho?"
+
+# CAPACIDADES DE BUSCA NO SNAPSHOT
+
+- Quando o usuário citar um NOME (funcionário, prestador, cliente, fornecedor, obra, terceirizado), procure em TODAS as listas relevantes por correspondência aproximada (case-insensitive, parcial, ignorando acentos).
 - Cruze informações entre listas: ex. "obras do colaborador X" → ache X em colaboradores_lista, leia o campo "obras", e detalhe cada obra em obras_lista.
 - Use IDs (companyId, employeeId, obraId) para cruzar referências entre seções do snapshot.
-- Se houver MÚLTIPLOS resultados parecidos para um nome, liste todos e peça desambiguação.
+- Se houver múltiplos resultados parecidos para um nome, mencione quantos achou e peça desambiguação de forma natural ("achei dois Carlos Silva, um da FC e outro da Hotelaria, qual deles?").
 
-Tratamento de limitações do snapshot:
-- O snapshot pode conter os campos "_query_errors" (queries que falharam) e "_snapshot_truncado" (listas removidas por tamanho). SEMPRE consulte esses campos antes de responder "não há registros". Se eles estiverem presentes e relevantes para a pergunta, avise o usuário que o resultado é parcial e oriente como refinar.
+# LIMITAÇÕES DO SNAPSHOT
+
+- O snapshot pode conter os campos "_query_errors" (queries que falharam) e "_snapshot_truncado" (listas removidas por tamanho). SEMPRE consulte esses campos antes de afirmar "não há registros". Se eles estiverem presentes, avise o usuário de forma natural ("hoje tô com algumas consultas falhando, mas já posso te adiantar...") e oriente como refinar.
 - O campo "_aviso_pii" indica que CPF, salário, email e celular NÃO estão no snapshot por política de minimização de dados. Para essas informações, oriente o usuário a consultar diretamente o módulo do ERP — NÃO invente.
 
-Regras absolutas:
+# REGRAS ABSOLUTAS
+
 - Responda SEMPRE em português do Brasil
-- Use os dados do snapshot para embasar respostas com números, nomes e relacionamentos REAIS
-- Quando detectar algo preocupante nos dados, aponte proativamente
-- Se a informação NÃO estiver no snapshot mesmo após busca cuidadosa (e não houver erro/truncamento), diga isso de forma objetiva e indique em qual módulo do ERP o usuário pode encontrar
+- Use dados REAIS do snapshot (números, nomes, relacionamentos)
+- Quando detectar algo preocupante, aponte proativamente, mas em tom natural
+- Se a informação NÃO estiver no snapshot (e não houver erro/truncamento), diga isso de forma objetiva e indique o módulo do ERP onde encontrar
 - NUNCA invente dados que não estejam no contexto
-- Você TEM acesso completo aos dados operacionais (nomes, vínculos, status, obras, contratos), MAS dados pessoais sensíveis estão protegidos — explique isso quando for o caso
-- Mantenha respostas concisas mas completas`;
+- Você TEM acesso completo aos dados operacionais; dados pessoais sensíveis (CPF, salário, email, celular) estão protegidos — explique de forma natural quando for o caso
+- Concisão sempre vence prolixidade`;
 
 async function getSystemPrompt(): Promise<string> {
   try {
@@ -680,28 +703,56 @@ IMPORTANTE: Você TEM acesso completo aos dados acima. Use-os para responder. Nu
       if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN" });
 
       const apiKey = process.env.GOOGLE_API_KEY;
-      if (!apiKey) return { audio: null, fallback: true };
+      if (!apiKey) return { audio: null, fallback: true, voiceUsed: null };
 
+      // Limpar markdown, emojis e símbolos para que a voz não leia "asterisco" ou
+      // descrições de emoji. Resulta em fala muito mais natural.
+      const cleanText = stripForTTS(input.text).slice(0, 4800);
+      if (!cleanText.trim()) return { audio: null, fallback: true, voiceUsed: null };
+
+      // 1ª tentativa: Chirp3-HD (vozes ultra-naturais e conversacionais — v1beta1)
+      try {
+        const res = await fetch(`https://texttospeech.googleapis.com/v1beta1/text:synthesize?key=${apiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            input: { text: cleanText },
+            voice: { languageCode: "pt-BR", name: "pt-BR-Chirp3-HD-Leda" },
+            audioConfig: { audioEncoding: "MP3", speakingRate: 1.0 },
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          return { audio: data.audioContent as string, fallback: false, voiceUsed: "Chirp3-HD-Leda" };
+        }
+        const err = await res.text();
+        console.warn("[ORÁCULO TTS] Chirp3-HD indisponível, caindo para Neural2:", err);
+      } catch (e) {
+        console.warn("[ORÁCULO TTS] Chirp3-HD erro de rede, caindo para Neural2:", e);
+      }
+
+      // Fallback: Neural2 (mais compatível, ainda boa qualidade)
       try {
         const res = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            input: { text: input.text.slice(0, 4800) },
+            input: { text: cleanText },
             voice: { languageCode: "pt-BR", name: "pt-BR-Neural2-C", ssmlGender: "FEMALE" },
-            audioConfig: { audioEncoding: "MP3", speakingRate: 1.05, pitch: 1.0 },
+            audioConfig: { audioEncoding: "MP3", speakingRate: 1.0, pitch: 0.0 },
           }),
         });
         if (!res.ok) {
           const err = await res.text();
-          console.error("[ORÁCULO TTS] Google error:", err);
-          return { audio: null, fallback: true };
+          console.error("[ORÁCULO TTS] Neural2 fallback erro:", err);
+          return { audio: null, fallback: true, voiceUsed: null };
         }
         const data = await res.json();
-        return { audio: data.audioContent as string, fallback: false };
+        return { audio: data.audioContent as string, fallback: true, voiceUsed: "Neural2-C" };
       } catch (e) {
-        console.error("[ORÁCULO TTS] Error:", e);
-        return { audio: null, fallback: true };
+        console.error("[ORÁCULO TTS] Erro total:", e);
+        return { audio: null, fallback: true, voiceUsed: null };
       }
     }),
 });
+

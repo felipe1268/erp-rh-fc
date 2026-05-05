@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
+import { stripForTTS } from "@shared/ttsTextClean";
 import { memo, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Textarea } from "@/components/ui/textarea";
@@ -192,8 +193,12 @@ export default function Oraculo() {
   function speakFallback(text: string, onDone?: () => void) {
     try {
       if (!window.speechSynthesis) { setOrbState("idle"); setStatus("Pronto"); onDone?.(); return; }
+      // Mesma limpeza usada no servidor: sem isso o navegador lê "asterisco"
+      // e descreve emojis quando o Google TTS não está disponível.
+      const cleaned = stripForTTS(text);
+      if (!cleaned) { setOrbState("idle"); setStatus("Pronto"); onDone?.(); return; }
       window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(text.slice(0, 400));
+      const utter = new SpeechSynthesisUtterance(cleaned.slice(0, 400));
       utter.lang = "pt-BR"; utter.rate = 1.05;
       // carregar vozes (async no Chrome, sync no Safari)
       const trySpeak = () => {
