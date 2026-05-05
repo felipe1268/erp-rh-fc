@@ -593,6 +593,13 @@ export const payrollEngineRouter = router({
             horasNoturnas = rec.horasNoturnas || "0:00";
             numBatidas = countPunches(rec);
 
+            // Respeitar tipoDia abonado vindo do time_records (atestado/feriado/bh definidos no editor do Espelho de Ponto)
+            // Sem isso, a derivação puramente por dow marcaria isFalta=1 mesmo em dias abonados.
+            const recTipoDia = (rec.tipoDia || "").toLowerCase();
+            if (recTipoDia === "atestado" || recTipoDia === "feriado" || recTipoDia === "bh") {
+              tipoDia = recTipoDia;
+            }
+
             // Multi-obra detection
             if (recs.length > 1) {
               obraSecundariaId = recs[1].obraId || null;
@@ -2988,6 +2995,12 @@ export const payrollEngineRouter = router({
                 timeRecordId = rec.id;
                 obraId = rec.obraId || null;
                 horasNoturnas = rec.horasNoturnas || '0:00';
+
+                // Respeitar tipoDia abonado vindo do time_records (atestado/feriado/bh)
+                const recTipoDia = (rec.tipoDia || "").toLowerCase();
+                if (recTipoDia === "atestado" || recTipoDia === "feriado" || recTipoDia === "bh") {
+                  tipoDia = recTipoDia;
+                }
 
                 if (recs.length > 1) {
                   let totalMins = 0;

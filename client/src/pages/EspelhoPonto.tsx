@@ -75,7 +75,7 @@ function getBatidas(r: any): string[] {
   return [r.entrada1, r.saida1, r.entrada2, r.saida2, r.entrada3, r.saida3].filter(Boolean);
 }
 
-type DayStatus = "normal" | "he" | "falta" | "ferias" | "incompleto" | "atraso" | "sabado" | "domingo" | "desligado" | "escuro" | "apontamento" | "feriado" | "atestado";
+type DayStatus = "normal" | "he" | "falta" | "ferias" | "incompleto" | "atraso" | "sabado" | "domingo" | "desligado" | "escuro" | "apontamento" | "feriado" | "atestado" | "bh";
 
 function nextDay(d: string): string {
   const dt = new Date(d + "T12:00:00Z");
@@ -92,6 +92,7 @@ function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string
   // mesmo sem batidas, sem contar como falta.
   if (rec?.tipoDia === "feriado") return "feriado";
   if (rec?.tipoDia === "atestado") return "atestado";
+  if (rec?.tipoDia === "bh") return "bh";
   const { dow, isSun, isSat } = dayInfo(dateStr);
   if (isSun) return "domingo";
   if (isSat) return "sabado";
@@ -123,6 +124,7 @@ const STATUS_STYLE: Record<DayStatus, { row: string; badge: string; label: strin
   escuro:     { row: "bg-indigo-50/30", badge: "bg-indigo-100 text-indigo-600", label: "Pendente" },
   feriado:    { row: "bg-orange-50/40", badge: "bg-orange-100 text-orange-700", label: "Feriado" },
   atestado:   { row: "bg-purple-50/40", badge: "bg-purple-100 text-purple-700", label: "Atestado" },
+  bh:         { row: "bg-blue-50/40",   badge: "bg-blue-100 text-blue-700",     label: "BH" },
 };
 
 function initials(name: string) {
@@ -139,7 +141,7 @@ interface EditForm {
   entrada3: string; saida3: string;
   justificativa: string;
   motivoAjuste: string;
-  tipoDia: "normal" | "feriado" | "atestado";
+  tipoDia: "normal" | "feriado" | "atestado" | "bh";
 }
 
 interface EditDialogProps {
@@ -179,7 +181,7 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, com
     saida3:   record?.saida3   || "",
     justificativa: record?.justificativa || "",
     motivoAjuste: "Correção manual",
-    tipoDia: (record?.tipoDia === "feriado" || record?.tipoDia === "atestado") ? record.tipoDia : "normal",
+    tipoDia: (record?.tipoDia === "feriado" || record?.tipoDia === "atestado" || record?.tipoDia === "bh") ? record.tipoDia : "normal",
   });
 
   useEffect(() => {
@@ -193,7 +195,7 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, com
       saida3:   record?.saida3   || "",
       justificativa: record?.justificativa || "",
       motivoAjuste: "Correção manual",
-      tipoDia: (record?.tipoDia === "feriado" || record?.tipoDia === "atestado") ? record.tipoDia : "normal",
+      tipoDia: (record?.tipoDia === "feriado" || record?.tipoDia === "atestado" || record?.tipoDia === "bh") ? record.tipoDia : "normal",
     });
   }, [dateStr, record]);
 
@@ -213,7 +215,7 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, com
       toast.error(`Dia ${dateStr} pertence ao ciclo consolidado${cycleMesRef ? ` de ${cycleMesRef}` : ""}. Desconsolide antes de alterar.`);
       return;
     }
-    const isAbonado = form.tipoDia === "feriado" || form.tipoDia === "atestado";
+    const isAbonado = form.tipoDia === "feriado" || form.tipoDia === "atestado" || form.tipoDia === "bh";
     saveMut.mutate({
       companyId,
       employeeId,
@@ -368,14 +370,15 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, com
             </div>
           )}
 
-          {/* Tipo do dia — Normal | Feriado | Atestado */}
+          {/* Tipo do dia — Normal | Feriado | Atestado | BH */}
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Tipo do dia</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {([
                 { v: "normal",   label: "Normal",   colorActive: "bg-slate-700 text-white border-slate-700",   colorIdle: "bg-white text-slate-700 border-slate-200 hover:bg-slate-50" },
                 { v: "feriado",  label: "Feriado",  colorActive: "bg-orange-500 text-white border-orange-500", colorIdle: "bg-white text-orange-700 border-orange-200 hover:bg-orange-50" },
                 { v: "atestado", label: "Atestado", colorActive: "bg-purple-600 text-white border-purple-600", colorIdle: "bg-white text-purple-700 border-purple-200 hover:bg-purple-50" },
+                { v: "bh",       label: "BH",       colorActive: "bg-blue-600 text-white border-blue-600",     colorIdle: "bg-white text-blue-700 border-blue-200 hover:bg-blue-50" },
               ] as const).map(opt => {
                 const active = form.tipoDia === opt.v;
                 return (
@@ -391,7 +394,11 @@ function EditDialog({ open, onClose, dateStr, record, employeeId, companyId, com
                 );
               })}
             </div>
-            {form.tipoDia !== "normal" && (
+            {form.tipoDia === "bh" ? (
+              <p className="text-[11px] text-blue-700 mt-1.5">
+                Falta alocada como <strong>Banco de Horas</strong> — a jornada esperada do dia será debitada do saldo de BH do colaborador. As batidas serão zeradas e o dia não contará como falta na folha.
+              </p>
+            ) : form.tipoDia !== "normal" && (
               <p className="text-[11px] text-slate-500 mt-1.5">
                 Dia abonado — as batidas serão zeradas e o dia não conta como falta nem trabalho.
               </p>
@@ -626,7 +633,7 @@ export default function EspelhoPonto() {
       const isWeekendDay = dow === 0 || dow === 6;
       const r = recordMap[d];
       const isFerias = feriasDatesSet.has(d);
-      const isAbonado = r?.tipoDia === "feriado" || r?.tipoDia === "atestado";
+      const isAbonado = r?.tipoDia === "feriado" || r?.tipoDia === "atestado" || r?.tipoDia === "bh";
       if (r && !isFerias && !isAbonado) { totalHEMins += parseHHMM(r.horasExtras); totalAtrasoMins += parseHHMM(r.atrasos); }
       if (isWeekendDay) continue;
       if (isFerias) { diasFerias++; continue; }

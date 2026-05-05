@@ -429,6 +429,11 @@ export const pontoDescontosRouter = router({
         if (feriadosSet.has(data)) continue;
         if (feriasDateSet.has(`${emp.id}-${data}`)) continue;
 
+        // Respeitar tipoDia abonado vindo do time_records (atestado/feriado/bh definidos no editor do Espelho de Ponto).
+        // Esses dias NÃO geram desconto de falta — bh debita do saldo de Banco de Horas via fluxo separado.
+        const recTipoDia = ((rec as any).tipoDia || "").toLowerCase();
+        if (recTipoDia === "atestado" || recTipoDia === "feriado" || recTipoDia === "bh") continue;
+
         const atestadoInfo = atestadoMap.get(`${emp.id}-${data}`);
         const hasAtestadoDiaInteiro = atestadoInfo?.tipo === "dia";
         const hasAtestadoHoras = atestadoInfo?.tipo === "horas";

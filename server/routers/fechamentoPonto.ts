@@ -1847,14 +1847,16 @@ export const fechamentoPontoRouter = router({
       saida3: z.string().optional(),
       justificativa: z.string().optional(),
       motivoAjuste: z.string().optional(),
-      tipoDia: z.enum(["normal", "feriado", "atestado"]).optional(),
+      tipoDia: z.enum(["normal", "feriado", "atestado", "bh"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      // Quando o dia é marcado como Feriado ou Atestado, zera batidas/horas
-      // automaticamente — o dia é abonado, não há jornada a contabilizar.
+      // Quando o dia é marcado como Feriado, Atestado ou BH (Banco de Horas),
+      // zera batidas/horas automaticamente — o dia é abonado, não há jornada
+      // a contabilizar. No caso de BH, a falta é debitada do saldo do banco
+      // de horas do funcionário (lógica adicional após o save do time_record).
       const tipoDia = input.tipoDia ?? "normal";
-      const isAbonado = tipoDia === "feriado" || tipoDia === "atestado";
+      const isAbonado = tipoDia === "feriado" || tipoDia === "atestado" || tipoDia === "bh";
 
       // Bloqueia lançamento em dia de férias
       const feriasAtivas = await db.select({
@@ -1911,9 +1913,21 @@ export const fechamentoPontoRouter = router({
         if (input.entrada3 && input.saida3) totalMinutes += diffMinutes(input.entrada3, input.saida3);
       }
 
-      // Fetch employee jornada to compute overtime correctly
+      // Fetch employee jornada to compute overtime correctly.
+      // Importante: validar tenant — só ler/alterar funcionário que pertença ao
+      // escopo da empresa (companyFilter), evitando vazamento entre tenants já
+      // que esse endpoint mexe em ponto e em banco_horas_saldo/lancamentos.
       const empData = await db.select({ jornadaTrabalho: employees.jornadaTrabalho })
-        .from(employees).where(eq(employees.id, input.employeeId)).limit(1);
+        .from(employees).where(and(
+          eq(employees.id, input.employeeId),
+          companyFilter(employees.companyId, input),
+        )).limit(1);
+      if (empData.length === 0) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `Funcionário ${input.employeeId} não pertence ao escopo da empresa ${input.companyId}.`,
+        });
+      }
       const jornadaTrabalho = empData[0]?.jornadaTrabalho ?? null;
       const dow = new Date(input.data + "T12:00:00Z").getUTCDay();
       const isWeekendDay = dow === 0 || dow === 6;
@@ -1925,13 +1939,18 @@ export const fechamentoPontoRouter = router({
         ? Math.max(0, expectedMins - totalMinutes)
         : 0;
 
-      const existing = await db.select().from(timeRecords)
-        .where(and(
-          companyFilter(timeRecords.companyId, input),
-          eq(timeRecords.employeeId, input.employeeId),
-          eq(timeRecords.data, input.data),
-        ))
-        .limit(1);
+      // Pré-validação BH (sem I/O): se for marcar como BH, a jornada esperada
+      // do dia precisa existir (sem jornada não há quanto debitar). Validamos
+      // antes de abrir transação para falhar rápido com mensagem clara.
+      if (tipoDia === "bh") {
+        const debitMinsCheck = isWeekendDay ? 0 : (expectedMins ?? 0);
+        if (debitMinsCheck <= 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Dia ${input.data} não tem jornada esperada (fim de semana ou jornada não cadastrada). Não é possível alocar como Banco de Horas.`,
+          });
+        }
+      }
 
       // Build justificativa with motivo
       const motivoPrefix = input.motivoAjuste ? `[${input.motivoAjuste}] ` : "";
@@ -1961,36 +1980,130 @@ export const fechamentoPontoRouter = router({
         tipoDia,
       };
 
-      if (existing.length > 0) {
-        await db.update(timeRecords).set(record as any).where(eq(timeRecords.id, existing[0].id));
-        // Apagar quaisquer outros registros DIXI do mesmo funcionário/dia (não o que acabamos de salvar)
-        await db.execute(sql`
-          DELETE FROM time_records
-          WHERE "companyId" = ${input.companyId}
-            AND "employeeId" = ${input.employeeId}
-            AND data = ${input.data}
-            AND fonte = 'dixi'
-            AND id != ${existing[0].id}
-        `);
-        await db.update(timeInconsistencies)
-          .set({ status: "ajustado", resolvidoPor: ctx.user?.name || "RH", resolvidoEm: new Date().toISOString().split("T")[0] })
+      // Atomicidade: salvar o ponto, estornar débito BH anterior (se houver) e
+      // aplicar o novo débito BH dentro de uma única transação. Sem isso, uma
+      // falha intermediária poderia deixar o dia com tipoDia='bh' sem débito
+      // correspondente — ou, na re-edição, estornar o débito antigo sem
+      // aplicar o novo. O delete-then-insert do lançamento [BH-FALTA] dentro
+      // da mesma transação também serializa execuções concorrentes do mesmo
+      // (employeeId, companyId, data) via lock de linha em time_records.
+      const saveAction = await db.transaction(async (tx: any) => {
+        // Serialização contra corrida: advisory lock por (employeeId, data).
+        // Sem unique constraint em time_records(companyId, employeeId, data) ou
+        // em banco_horas_lancamentos(employeeId, companyId, data, [BH-FALTA]),
+        // duas requisições concorrentes para o mesmo dia poderiam ambas
+        // observar "sem registro" e ambas inserir, gerando duplicatas e débito
+        // BH em duplicidade. O advisory_xact_lock segura até o COMMIT/ROLLBACK
+        // desta transação — só uma execução por (empregado, dia) avança por
+        // vez. Não bloqueia outros empregados/dias.
+        const [yLk, mLk, dLk] = input.data.split("-").map(Number);
+        const dateKey = (yLk * 10000) + (mLk * 100) + dLk;
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${input.employeeId}, ${dateKey})`);
+
+        const existing = await tx.select().from(timeRecords)
           .where(and(
-            eq(timeInconsistencies.employeeId, input.employeeId),
-            eq(timeInconsistencies.data, input.data),
-          ));
-        return { success: true, action: "updated" };
-      } else {
-        // Apagar DIXI existente antes de inserir o manual
-        await db.execute(sql`
-          DELETE FROM time_records
-          WHERE "companyId" = ${input.companyId}
-            AND "employeeId" = ${input.employeeId}
-            AND data = ${input.data}
-            AND fonte = 'dixi'
-        `);
-        await db.insert(timeRecords).values(record as any);
-        return { success: true, action: "created" };
-      }
+            companyFilter(timeRecords.companyId, input),
+            eq(timeRecords.employeeId, input.employeeId),
+            eq(timeRecords.data, input.data),
+          ))
+          .limit(1);
+        const prevTipoDia: string = (existing[0] as any)?.tipoDia ?? "normal";
+
+        let action: "updated" | "created";
+        if (existing.length > 0) {
+          await tx.update(timeRecords).set(record as any).where(eq(timeRecords.id, existing[0].id));
+          // Apagar quaisquer outros registros DIXI do mesmo funcionário/dia (não o que acabamos de salvar)
+          await tx.execute(sql`
+            DELETE FROM time_records
+            WHERE "companyId" = ${input.companyId}
+              AND "employeeId" = ${input.employeeId}
+              AND data = ${input.data}
+              AND fonte = 'dixi'
+              AND id != ${existing[0].id}
+          `);
+          await tx.update(timeInconsistencies)
+            .set({ status: "ajustado", resolvidoPor: ctx.user?.name || "RH", resolvidoEm: new Date().toISOString().split("T")[0] })
+            .where(and(
+              eq(timeInconsistencies.employeeId, input.employeeId),
+              eq(timeInconsistencies.data, input.data),
+            ));
+          action = "updated";
+        } else {
+          // Apagar DIXI existente antes de inserir o manual
+          await tx.execute(sql`
+            DELETE FROM time_records
+            WHERE "companyId" = ${input.companyId}
+              AND "employeeId" = ${input.employeeId}
+              AND data = ${input.data}
+              AND fonte = 'dixi'
+          `);
+          await tx.insert(timeRecords).values(record as any);
+          action = "created";
+        }
+
+        // BH (Banco de Horas): pós-save — estorna débito anterior (se o dia
+        // já era BH) e/ou aplica novo débito (se a edição marcou como BH).
+        // Marcador "[BH-FALTA]" identifica os lançamentos criados por aqui,
+        // sem interferir nos demais lançamentos do banco de horas (HE, ajustes
+        // manuais via tela de Banco de Horas, etc.). Como estamos em transação,
+        // o delete-then-insert é atômico e idempotente.
+        if (prevTipoDia === "bh") {
+          const prevLancRows = ((await tx.execute(sql`
+            SELECT id, minutos FROM banco_horas_lancamentos
+            WHERE "employeeId" = ${input.employeeId}
+              AND "companyId" = ${input.companyId}
+              AND data = ${input.data}
+              AND descricao LIKE '[BH-FALTA]%'
+          `)) as any).rows || [];
+          for (const lanc of prevLancRows) {
+            const credit = Number(lanc.minutos) || 0;
+            if (credit > 0) {
+              await tx.execute(sql`
+                INSERT INTO banco_horas_saldo ("employeeId", "companyId", "saldoMinutos", "atualizadoEm")
+                VALUES (${input.employeeId}, ${input.companyId}, ${credit}, NOW())
+                ON CONFLICT ("employeeId", "companyId")
+                DO UPDATE SET "saldoMinutos" = banco_horas_saldo."saldoMinutos" + ${credit}, "atualizadoEm" = NOW()
+              `);
+            }
+            await tx.execute(sql`
+              DELETE FROM banco_horas_lancamentos WHERE id = ${lanc.id}
+            `);
+          }
+        }
+        if (tipoDia === "bh") {
+          const debitMins = expectedMins ?? 0;
+          if (debitMins > 0) {
+            // Defesa em profundidade contra corrida: apaga qualquer lançamento
+            // [BH-FALTA] residual do mesmo dia antes do INSERT (caso o
+            // prevTipoDia tenha mudado entre a SELECT e a UPDATE de outra
+            // requisição concorrente). Sob a transação atual e o lock de linha
+            // de time_records, isso garante exatamente um lançamento por dia.
+            await tx.execute(sql`
+              DELETE FROM banco_horas_lancamentos
+              WHERE "employeeId" = ${input.employeeId}
+                AND "companyId" = ${input.companyId}
+                AND data = ${input.data}
+                AND descricao LIKE '[BH-FALTA]%'
+            `);
+            const dataBr = input.data.split("-").reverse().join("/");
+            const desc = `[BH-FALTA] Falta convertida em Banco de Horas — ${dataBr}`;
+            await tx.execute(sql`
+              INSERT INTO banco_horas_saldo ("employeeId", "companyId", "saldoMinutos", "atualizadoEm")
+              VALUES (${input.employeeId}, ${input.companyId}, ${-debitMins}, NOW())
+              ON CONFLICT ("employeeId", "companyId")
+              DO UPDATE SET "saldoMinutos" = banco_horas_saldo."saldoMinutos" + ${-debitMins}, "atualizadoEm" = NOW()
+            `);
+            await tx.execute(sql`
+              INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", tipo, minutos, descricao, data, "criadoEm", "criadoPor", "minutosBase", "minutosAcrescimo")
+              VALUES (${input.employeeId}, ${input.companyId}, 'debito', ${debitMins}, ${desc}, ${input.data}, NOW(), ${ctx.user?.name || 'RH'}, ${debitMins}, 0)
+            `);
+          }
+        }
+
+        return action;
+      });
+
+      return { success: true, action: saveAction };
     }),
 
   // Get employee detail for a month (day by day) — NOW includes obra info per record
@@ -2556,6 +2669,11 @@ export const fechamentoPontoRouter = router({
               timeRecordId = rec.id; obraId = rec.obraId || null;
               horasTrabalhadas = rec.horasTrabalhadas || '0:00'; horasExtras = rec.horasExtras || '0:00'; horasNoturnas = rec.horasNoturnas || '0:00';
               numBatidas = [rec.entrada1, rec.saida1, rec.entrada2, rec.saida2, rec.entrada3, rec.saida3].filter(Boolean).length;
+              // Respeitar tipoDia abonado vindo do time_records (atestado/feriado/bh definidos no editor)
+              const recTipoDia = ((rec as any).tipoDia || '').toLowerCase();
+              if (recTipoDia === 'atestado' || recTipoDia === 'feriado' || recTipoDia === 'bh') {
+                tipoDia = recTipoDia;
+              }
               if (recs.length > 1) {
                 obraSecundariaId = recs[1].obraId || null;
                 const totalMinsPrimary = _parseTime(rec.horasTrabalhadas) || 0;

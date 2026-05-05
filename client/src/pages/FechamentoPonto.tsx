@@ -3731,6 +3731,8 @@ export default function FechamentoPonto() {
                                         <Badge className="text-xs bg-orange-500 text-white">Feriado</Badge>
                                       ) : rec.tipoDia === "atestado" ? (
                                         <Badge className="text-xs bg-purple-600 text-white">Atestado</Badge>
+                                      ) : rec.tipoDia === "bh" ? (
+                                        <Badge className="text-xs bg-blue-600 text-white">BH</Badge>
                                       ) : hasConflict ? (
                                         <Badge className="text-xs bg-orange-600 text-white"><AlertCircle className="h-3 w-3 mr-1" /> Conflito</Badge>
                                       ) : hasIncons ? (
