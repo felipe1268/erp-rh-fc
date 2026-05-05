@@ -1,5 +1,8 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1344 — 05/05/2026
+- **Previsão de Medição — Retenção Técnica também do Sinal/Mobilização**: novo checkbox "**Reter também do Sinal**" logo abaixo do campo Retenção Técnica (%) na Configuração de Medição. Quando marcado, o mesmo percentual de retenção (ex.: 5%) é deduzido também da linha sintética de **Sinal/Mobilização**, e não apenas das medições mensais. A retenção do sinal entra no acumulado total e é devolvida normalmente na linha de **Liberação da Retenção** após a conclusão da obra. Por padrão fica **desligado** (comportamento atual preservado). A preferência é salva em `planejamento_medicao_config.reter_sinal` (nova coluna BOOLEAN).
+
 ## Revisão 1343 — 05/05/2026
 - **Planejamento — Ponderação fixada em Peso Financeiro**: o alternador entre "💰 Peso Financeiro" e "⏱ Duração (Project)" foi **removido** do cabeçalho do Avanço Físico. Toda a Previsão de Medição, medições contratuais, curva S e fluxo de caixa do ERP trabalham com base em **valor (R$)**, então usar Duração na visão geral gerava distorção entre o "% Previsto" da tela e o que aparece no financeiro. Agora o cálculo é sempre por **peso financeiro** (padrão da construção civil) e o badge "💰 Peso Financeiro" passa a ser apenas informativo (com tooltip explicativo). A preferência antiga em `localStorage` é ignorada.
 

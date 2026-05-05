@@ -5235,6 +5235,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
   const [cfgInicioFat, setCfgInicioFat] = useState("");
   const [cfgSinalPct, setCfgSinalPct]     = useState(15);
   const [cfgRetencaoPct, setCfgRetencaoPct] = useState(5);
+  const [cfgReterSinal, setCfgReterSinal]   = useState(false);
   const [cfgDataInicioObra, setCfgDataInicioObra] = useState("");
   // Faturamento Direto: null = usar sugestão automática vinda do orçamento (aba F.D. do BDI);
   // valor numérico = override manual do usuário (inclusive 0). Sinal = (Contrato − FD) × %sinal.
@@ -5430,6 +5431,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
       }
       const retVal = n(configMed.retencaoPct);
       setCfgRetencaoPct(retVal != null && !isNaN(retVal) ? retVal : 5);
+      setCfgReterSinal(Boolean((configMed as any).reterSinal));
       setCfgDataInicioObra((configMed as any).dataInicioObra ?? "");
       setCfgBloqueado(configMed.bloqueado ?? false);
       const vpf = n((configMed as any).valorParcelaFixa);
@@ -5575,6 +5577,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
       const nomeMesSinal = sinalDate.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
       const primeiroMes = rows[0]?.mes ?? "";
       // Insere antes do primeiro mês ou no início da tabela
+      const retencaoSinal = cfgReterSinal ? +(sinalTotal * cfgRetencaoPct / 100).toFixed(2) : 0;
       const sinalRow = {
         mes: sinalMes,
         nomeMes: nomeMesSinal,
@@ -5583,9 +5586,9 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
         pct: 0, pctMensal: 0,
         prevMedicao: 0,
         medicaoBruta: sinalTotal,
-        retencao: 0,
+        retencao: retencaoSinal,
         descontoSinal: 0,
-        liquido: sinalTotal,
+        liquido: +(sinalTotal - retencaoSinal).toFixed(2),
         isSinalRow: true,
       };
       if (!primeiroMes || sinalMes <= primeiroMes) {
@@ -5622,7 +5625,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
     }
 
     return rows;
-  }, [cfgSinalPct, cfgRetencaoPct, cfgDataInicioObra, dadosMensais, atividades, baseV, sinalModo, cfgSinalValor]);
+  }, [cfgSinalPct, cfgRetencaoPct, cfgReterSinal, cfgDataInicioObra, dadosMensais, atividades, baseV, sinalModo, cfgSinalValor]);
 
   // ── Análise de Performance Semanal ───────────────────────────────────────
   const analiseSemanal = useMemo(() => {
@@ -5785,6 +5788,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
       sinalValor: cfgSinalValor ?? 0,
       fdValor: cfgFdValor,
       retencaoPct: cfgRetencaoPct,
+      reterSinal: cfgReterSinal,
       dataInicioObra: cfgDataInicioObra || null,
       valorParcelaFixa: cfgValorParcelaManual > 0 ? cfgValorParcelaManual : 0,
       revisadoPorNome: authUser?.name ?? authUser?.email ?? undefined,
@@ -5806,6 +5810,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
           sinalValor: cfgSinalValor ?? 0,
           fdValor: cfgFdValor,
           retencaoPct: cfgRetencaoPct,
+          reterSinal: cfgReterSinal,
           dataInicioObra: cfgDataInicioObra || null,
         });
       } catch { return; } finally { setSalvando(false); }
@@ -6049,7 +6054,22 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                         className="h-9 w-full text-sm border border-rose-200 rounded-lg px-3 pr-8 bg-white focus:ring-2 focus:ring-rose-400 outline-none font-semibold text-center" />
                       <span className="absolute right-3 top-2 text-slate-400 text-xs">%</span>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Retida por medição; devolvida na conclusão</p>
+                    <label className="flex items-center gap-1.5 mt-1 cursor-pointer select-none" title="Quando marcado, o percentual de retenção também é deduzido do Sinal/Mobilização. A devolução continua sendo feita no mês seguinte ao término da obra.">
+                      <input
+                        type="checkbox"
+                        checked={cfgReterSinal}
+                        onChange={e => setCfgReterSinal(e.target.checked)}
+                        className="h-3 w-3 accent-rose-500"
+                      />
+                      <span className="text-[10px] text-slate-500">
+                        Reter também do <span className="font-semibold text-purple-600">Sinal</span>
+                      </span>
+                    </label>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      {cfgReterSinal
+                        ? "Retida do Sinal e de cada medição; devolvida na conclusão"
+                        : "Retida por medição; devolvida na conclusão"}
+                    </p>
                   </div>
 
                   {/* Data de Início do Projeto — define quando o sinal é pago */}
