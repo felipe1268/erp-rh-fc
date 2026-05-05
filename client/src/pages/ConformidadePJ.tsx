@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   ShieldCheck, AlertTriangle, CheckCircle2, Clock, XCircle, Loader2, FileText,
   Receipt, Building2, Shield, Briefcase, ChevronLeft, ChevronRight, Calendar,
+  Download, Upload, FileDown, Paperclip, BarChart3, Send,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -54,6 +55,31 @@ function labelMes(yyyymm: string): string {
   return `${meses[m-1]}/${y}`;
 }
 
+function downloadBase64(base64: string, fileName: string) {
+  const byteChars = atob(base64);
+  const byteArr = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+  const blob = new Blob([byteArr], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = fileName;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const idx = result.indexOf(",");
+      resolve(idx >= 0 ? result.slice(idx + 1) : result);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function ConformidadePJ() {
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? Number(selectedCompanyId) || 0 : 0;
@@ -69,17 +95,53 @@ export default function ConformidadePJ() {
     dataEnvio: "",
     valor: "",
     documentoUrl: "",
+    arquivoNome: "",
     observacoes: "",
   });
+  const [uploadingArquivo, setUploadingArquivo] = useState(false);
+  const fileUploadRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [importResultDialog, setImportResultDialog] = useState<any | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const { data, isLoading, refetch } = trpc.pjConformidade.listar.useQuery(
     { companyId, mesReferencia: mesRef },
     { enabled: companyId > 0 }
   );
 
+  const utils = trpc.useUtils();
+
   const upsertMut = trpc.pjConformidade.upsert.useMutation({
     onSuccess: () => { toast.success("Conformidade atualizada!"); setDialogOpen(false); refetch(); },
     onError: (e: any) => toast.error(e.message || "Erro ao salvar"),
+  });
+
+  const uploadArquivoMut = trpc.pjConformidade.uploadArquivo.useMutation({
+    onSuccess: (r: any) => {
+      setForm((f) => ({ ...f, documentoUrl: r.url, arquivoNome: r.fileName }));
+      toast.success(`Arquivo "${r.fileName}" anexado!`);
+    },
+    onError: (e: any) => toast.error(e.message || "Erro ao enviar arquivo"),
+    onSettled: () => setUploadingArquivo(false),
+  });
+
+  const importarMut = trpc.pjConformidade.importarXLSX.useMutation({
+    onSuccess: (r: any) => {
+      setImportResultDialog(r);
+      refetch();
+      if (r.erros?.length === 0) {
+        toast.success(`${r.inseridos} novo(s) e ${r.atualizados} atualizado(s)`);
+      } else {
+        toast.warning(`${r.inseridos} inserido(s), ${r.atualizados} atualizado(s), ${r.erros.length} erro(s)`);
+      }
+    },
+    onError: (e: any) => toast.error(e.message || "Erro ao importar"),
+    onSettled: () => setImporting(false),
+  });
+
+  const notificarMut = trpc.pjConformidade.notificarManual.useMutation({
+    onSuccess: (r: any) => toast.success(`${r.emails} e-mail(s) enviados para ${r.empresas} empresa(s).`),
+    onError: (e: any) => toast.error(e.message || "Erro ao notificar"),
   });
 
   const totais = useMemo(() => {
@@ -106,6 +168,7 @@ export default function ConformidadePJ() {
       dataEnvio: item.dataEnvio ? String(item.dataEnvio).slice(0,10) : "",
       valor: item.valor ? String(item.valor) : "",
       documentoUrl: item.documentoUrl || "",
+      arquivoNome: item.arquivoNome || "",
       observacoes: item.observacoes || "",
     });
     setDialogOpen(true);
@@ -123,8 +186,65 @@ export default function ConformidadePJ() {
       dataEnvio: form.dataEnvio || null,
       valor: form.valor || null,
       documentoUrl: form.documentoUrl || null,
+      arquivoNome: form.arquivoNome || null,
       observacoes: form.observacoes || null,
     });
+  }
+
+  async function onSelectArquivo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !editing) return;
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máx 15 MB).");
+      return;
+    }
+    setUploadingArquivo(true);
+    try {
+      const base64 = await fileToBase64(file);
+      uploadArquivoMut.mutate({
+        companyId,
+        employeeId: editing.employeeId,
+        tipo: editing.tipo,
+        fileName: file.name,
+        contentType: file.type || "application/octet-stream",
+        fileBase64: base64,
+      });
+    } catch (err: any) {
+      setUploadingArquivo(false);
+      toast.error("Erro lendo arquivo: " + (err?.message || "desconhecido"));
+    }
+  }
+
+  async function baixarTemplate() {
+    try {
+      const r = await utils.client.pjConformidade.gerarTemplate.query({ companyId, mesReferencia: mesRef });
+      downloadBase64(r.base64, r.fileName);
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao gerar modelo");
+    }
+  }
+  async function exportar() {
+    try {
+      const r = await utils.client.pjConformidade.exportarXLSX.query({ companyId, mesReferencia: mesRef });
+      downloadBase64(r.base64, r.fileName);
+      toast.success("Planilha gerada!");
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao exportar");
+    }
+  }
+  async function onSelectImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImporting(true);
+    try {
+      const base64 = await fileToBase64(file);
+      importarMut.mutate({ companyId, fileBase64: base64 });
+    } catch (err: any) {
+      setImporting(false);
+      toast.error("Erro lendo arquivo: " + (err?.message || "desconhecido"));
+    }
   }
 
   if (companyId === 0) {
@@ -149,7 +269,7 @@ export default function ConformidadePJ() {
             Acompanhamento mensal das obrigações dos prestadores PJ: DAS, NF, CND, Seguro de Vida e status do CNPJ.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setMesRef(mesAnterior(mesRef))}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -163,6 +283,28 @@ export default function ConformidadePJ() {
             <Button variant="ghost" size="sm" onClick={() => setMesRef(mesAtual)}>Hoje</Button>
           )}
         </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={() => window.location.assign("/terceiros/pj/dashboard-conformidade")}>
+          <BarChart3 className="h-4 w-4 mr-1" /> Ver Dashboard
+        </Button>
+        <Button variant="outline" size="sm" onClick={baixarTemplate}>
+          <FileDown className="h-4 w-4 mr-1" /> Modelo Excel
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => importInputRef.current?.click()} disabled={importing}>
+          {importing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Upload className="h-4 w-4 mr-1" />}
+          Importar Excel
+        </Button>
+        <Button variant="outline" size="sm" onClick={exportar}>
+          <Download className="h-4 w-4 mr-1" /> Exportar Excel
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => notificarMut.mutate({})} disabled={notificarMut.isPending}>
+          {notificarMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
+          Notificar agora
+        </Button>
+        <input ref={importInputRef} type="file" accept=".xlsx,.xls" hidden onChange={onSelectImport} />
       </div>
 
       {/* Counters */}
@@ -240,6 +382,7 @@ export default function ConformidadePJ() {
                           title={item?.dataVencimento ? `Vence: ${String(item.dataVencimento).slice(0,10)}` : (item?.dataEnvio ? `Enviado: ${String(item.dataEnvio).slice(0,10)}` : 'Clique para editar')}
                         >
                           <Icon className="h-3 w-3" /> {cfg.label}
+                          {item?.documentoUrl && <Paperclip className="h-2.5 w-2.5 ml-0.5 opacity-70" />}
                         </button>
                       </td>
                     );
@@ -302,8 +445,42 @@ export default function ConformidadePJ() {
               </div>
             )}
             <div>
-              <Label>Link do Documento</Label>
-              <Input value={form.documentoUrl} onChange={e => setForm(f => ({ ...f, documentoUrl: e.target.value }))} placeholder="https://..." />
+              <Label>Anexar arquivo (PDF, imagem, etc.)</Label>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileUploadRef.current?.click()}
+                  disabled={uploadingArquivo}
+                >
+                  {uploadingArquivo ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Upload className="h-4 w-4 mr-1" />}
+                  {form.arquivoNome ? "Substituir" : "Selecionar"}
+                </Button>
+                {form.documentoUrl && (
+                  <a
+                    href={form.documentoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-600 hover:underline truncate max-w-[200px]"
+                    title={form.arquivoNome || form.documentoUrl}
+                  >
+                    <Paperclip className="h-3 w-3 inline mr-1" />
+                    {form.arquivoNome || "Ver arquivo"}
+                  </a>
+                )}
+                {form.documentoUrl && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setForm(f => ({ ...f, documentoUrl: "", arquivoNome: "" }))}>
+                    <XCircle className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+              <input ref={fileUploadRef} type="file" hidden onChange={onSelectArquivo} accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx" />
+              <p className="text-[10px] text-muted-foreground mt-1">Você também pode colar um link externo abaixo. Máx 15 MB.</p>
+            </div>
+            <div>
+              <Label>Link do Documento (URL externa)</Label>
+              <Input value={form.documentoUrl} onChange={e => setForm(f => ({ ...f, documentoUrl: e.target.value, arquivoNome: f.arquivoNome }))} placeholder="https://..." />
             </div>
             <div>
               <Label>Observações</Label>
@@ -316,6 +493,48 @@ export default function ConformidadePJ() {
               {upsertMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
               Salvar
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Resultado da importação */}
+      <Dialog open={!!importResultDialog} onOpenChange={(o) => !o && setImportResultDialog(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Resultado da importação</DialogTitle>
+          </DialogHeader>
+          {importResultDialog && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-md p-3">
+                  <div className="text-xs text-emerald-700">Inseridos</div>
+                  <div className="text-2xl font-bold text-emerald-700">{importResultDialog.inseridos}</div>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                  <div className="text-xs text-blue-700">Atualizados</div>
+                  <div className="text-2xl font-bold text-blue-700">{importResultDialog.atualizados}</div>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                  <div className="text-xs text-red-700">Erros</div>
+                  <div className="text-2xl font-bold text-red-700">{importResultDialog.erros?.length || 0}</div>
+                </div>
+              </div>
+              {importResultDialog.erros?.length > 0 && (
+                <div className="max-h-60 overflow-y-auto border rounded-md p-2 bg-red-50/40 text-xs space-y-1">
+                  {importResultDialog.erros.slice(0, 30).map((e: any, i: number) => (
+                    <div key={i}>
+                      <strong>Linha {e.linha}:</strong> {e.mensagem}
+                    </div>
+                  ))}
+                  {importResultDialog.erros.length > 30 && (
+                    <div className="text-muted-foreground italic">... mais {importResultDialog.erros.length - 30} erro(s)</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setImportResultDialog(null)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

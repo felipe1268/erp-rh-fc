@@ -608,6 +608,19 @@ Regras:
           `);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_pj_conformidade_employee ON pj_conformidade ("employeeId") WHERE "deletedAt" IS NULL`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_pj_conformidade_company ON pj_conformidade ("companyId") WHERE "deletedAt" IS NULL`);
+          // Rev. 1327: anexos (nome original do arquivo) + flag de notificação por e-mail
+          await db.execute(sql`ALTER TABLE pj_conformidade ADD COLUMN IF NOT EXISTS "arquivoNome" VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE notification_recipients ADD COLUMN IF NOT EXISTS "notificarConformidadePJ" SMALLINT NOT NULL DEFAULT 1`);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS pj_conformidade_alertas (
+              id SERIAL PRIMARY KEY,
+              "companyId" INTEGER NOT NULL,
+              "competencia" VARCHAR(7) NOT NULL,
+              "checksum" VARCHAR(64) NOT NULL,
+              "enviadoEm" TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_pj_conformidade_alertas ON pj_conformidade_alertas ("companyId","competencia","checksum")`);
           // Dedupe defensivo: marca como deletadas duplicatas históricas antes de criar índices únicos
           // (mantém apenas a linha mais recente por chave lógica). Para tabela nova é no-op.
           const dedupMensal: any = await db.execute(sql`
@@ -1592,6 +1605,11 @@ Regras:
     // t=120s — FinancialJob (mais pesado — já tinha delay de 90s internamente, agora começa em 120s)
     delay(120_000).then(() =>
       import("../services/financialAutoImportJob").then(m => m.startFinancialAutoImportJob()).catch(e => console.error("[FinancialJob] Erro:", e))
+    );
+
+    // t=135s — PJConformidadeJobs (Rev. 1327)
+    delay(135_000).then(() =>
+      import("../services/pjConformidadeJobs").then(m => m.startPJConformidadeJobs()).catch(e => console.error("[PJConformidadeJobs] Erro:", e))
     );
   });
 }

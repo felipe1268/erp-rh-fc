@@ -269,6 +269,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "modulo-pj", label: "Contratos PJ", route: "/modulo-pj", icon: "Briefcase" },
       { key: "pj-medicoes", label: "Medições PJ", route: "/pj-medicoes", icon: "FileSpreadsheet" },
       { key: "pj-conformidade", label: "Conformidade PJ", route: "/terceiros/pj/conformidade", icon: "ShieldCheck" },
+      { key: "pj-dashboard-conformidade", label: "Dashboard Conformidade PJ", route: "/terceiros/pj/dashboard-conformidade", icon: "BarChart3" },
     ],
   },
   {

@@ -153,6 +153,7 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "documentos",     label: "Aprovação de Documentos / Validação IA",    actions: ["view","create","edit","delete"] },
       { id: "contratos_pj",   label: "Contratos PJ e Medições PJ",                actions: ["view","create","edit","delete"] },
       { id: "pj_conformidade", label: "Conformidade PJ (DAS/NF/CND/Seguro/CNPJ)", actions: ["view","create","edit","delete"] },
+      { id: "pj_dashboard_conformidade", label: "Dashboard Conformidade PJ (visão consolidada)", actions: ["view"] },
     ],
     sensitiveFlags: [
       { id: "valores_contratos", label: "Valores de contratos de serviço" },
@@ -420,6 +421,7 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/modulo-pj":              "contratos_pj",
     "/pj-medicoes":            "contratos_pj",
     "/terceiros/pj/conformidade": "pj_conformidade",
+    "/terceiros/pj/dashboard-conformidade": "pj_dashboard_conformidade",
   },
   "parceiros": {
     "/parceiros/cadastro":       "cadastro",
