@@ -354,6 +354,8 @@ export const planejamentoRouter = router({
                 ordem:               a.ordem,
                 isGrupo:             a.isGrupo,
                 isIndireta:          a.isIndireta ?? false,
+                isMarco:             a.isMarco ?? false,
+                disabled:            a.disabled ?? false,
               }))
             );
           }
@@ -684,30 +686,39 @@ export const planejamentoRouter = router({
         isGrupo:             z.boolean().optional(),
         isMarco:             z.boolean().optional(),
         isIndireta:          z.boolean().optional(),
+        disabled:            z.boolean().optional(),
         percentConcluido:    z.preprocess(v => v == null ? 0 : Number(v), z.number().min(0).max(100)).optional(),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      const rows = input.atividades.map((a, i) => ({
-        revisaoId:           input.revisaoId,
-        projetoId:           input.projetoId,
-        eapCodigo:           a.eapCodigo ?? null,
-        nome:                a.nome ?? "",
-        nivel:               a.nivel ?? 1,
-        dataInicio:          a.dataInicio ?? null,
-        dataFim:             a.dataFim ?? null,
-        duracaoDias:         a.duracaoDias ?? 0,
-        predecessora:        a.predecessora ?? null,
-        pesoFinanceiro:      String(a.pesoFinanceiro ?? 0),
-        recursoPrincipal:    a.recursoPrincipal ?? null,
-        quantidadePlanejada: String(a.quantidadePlanejada ?? 0),
-        unidade:             a.unidade ?? null,
-        ordem:               a.ordem ?? i,
-        isGrupo:             a.isGrupo ?? false,
-        isMarco:             a.isMarco ?? false,
-        isIndireta:          a.isIndireta ?? false,
-      }));
+      const rows = input.atividades.map((a, i) => {
+        const isDisabled = a.disabled ?? false;
+        return {
+          revisaoId:           input.revisaoId,
+          projetoId:           input.projetoId,
+          eapCodigo:           a.eapCodigo ?? null,
+          nome:                a.nome ?? "",
+          nivel:               a.nivel ?? 1,
+          dataInicio:          a.dataInicio ?? null,
+          dataFim:             a.dataFim ?? null,
+          duracaoDias:         a.duracaoDias ?? 0,
+          predecessora:        a.predecessora ?? null,
+          // Atividades desativadas (Inactive Task — estilo MS Project) não devem
+          // contribuir para a soma do Peso% nem para nenhum cálculo financeiro.
+          // Forçamos peso 0 aqui para garantir consistência mesmo fora do
+          // auto-recalc (allPesosZero), independente do que o cliente envia.
+          pesoFinanceiro:      isDisabled ? "0" : String(a.pesoFinanceiro ?? 0),
+          recursoPrincipal:    a.recursoPrincipal ?? null,
+          quantidadePlanejada: String(a.quantidadePlanejada ?? 0),
+          unidade:             a.unidade ?? null,
+          ordem:               a.ordem ?? i,
+          isGrupo:             a.isGrupo ?? false,
+          isMarco:             a.isMarco ?? false,
+          isIndireta:          a.isIndireta ?? false,
+          disabled:            isDisabled,
+        };
+      });
 
       const allPesosZero = rows.every(r => parseFloat(r.pesoFinanceiro) === 0 || r.isGrupo);
       if (allPesosZero) {
@@ -726,12 +737,12 @@ export const planejamentoRouter = router({
               const custoMap = new Map<string, number>();
               for (const it of eapItens) custoMap.set(it.eapCodigo ?? "", parseFloat(it.custoTotal ?? "0") || 0);
 
-              const folhas = rows.filter(r => !r.isGrupo);
+              const folhas = rows.filter(r => !r.isGrupo && !r.disabled);
               const totalCusto = folhas.reduce((s, r) => s + (custoMap.get(r.eapCodigo ?? "") ?? 0), 0);
 
               if (totalCusto > 0) {
                 for (const r of rows) {
-                  if (r.isGrupo) { r.pesoFinanceiro = "0"; continue; }
+                  if (r.isGrupo || r.disabled) { r.pesoFinanceiro = "0"; continue; }
                   const custo = custoMap.get(r.eapCodigo ?? "") ?? 0;
                   r.pesoFinanceiro = String(+((custo / totalCusto) * 100).toFixed(4));
                 }
@@ -742,11 +753,11 @@ export const planejamentoRouter = router({
         }
 
         if (!pesoCalculado) {
-          const folhas = rows.filter(r => !r.isGrupo && (r.duracaoDias ?? 0) > 0);
+          const folhas = rows.filter(r => !r.isGrupo && !r.disabled && (r.duracaoDias ?? 0) > 0);
           const totalDias = folhas.reduce((s, r) => s + (r.duracaoDias ?? 0), 0);
           if (totalDias > 0) {
             for (const r of rows) {
-              if (r.isGrupo) { r.pesoFinanceiro = "0"; continue; }
+              if (r.isGrupo || r.disabled) { r.pesoFinanceiro = "0"; continue; }
               const dur = r.duracaoDias ?? 0;
               r.pesoFinanceiro = String(+((dur / totalDias) * 100).toFixed(4));
             }
@@ -800,7 +811,8 @@ export const planejamentoRouter = router({
                 ${cases("ordem", r => escNum(r.ordem))},
                 ${cases("is_grupo", r => escBool(r.isGrupo))},
                 ${cases("is_marco", r => escBool(r.isMarco))},
-                ${cases("is_indireta", r => escBool(r.isIndireta))}
+                ${cases("is_indireta", r => escBool(r.isIndireta))},
+                ${cases("disabled", r => escBool(r.disabled))}
               WHERE id IN (${batchIds.join(",")})
                 AND revisao_id = ${input.revisaoId}
             `));
@@ -1230,7 +1242,7 @@ export const planejamentoRouter = router({
 
       function gerarCurvaPlanejada(ativs: typeof atividades) {
         if (!ativs.length) return [];
-        const folhas = ativs.filter(a => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
+        const folhas = ativs.filter(a => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
         if (!folhas.length) return [];
 
         // Modo MS Project: pondera por duração em dias (igual ao cálculo nativo do Project)
@@ -1297,7 +1309,7 @@ export const planejamentoRouter = router({
 
       // Curva realizada — acumulado ponderado por atividade
       const porDuracaoCurva    = !!input.usarPesoPorDuracao;
-      const folhasParaCurva    = atividades.filter(a => !a.isGrupo && !a.isIndireta);
+      const folhasParaCurva    = atividades.filter(a => !a.isGrupo && !a.isIndireta && !a.disabled);
       const pesoBrutoCurva     = porDuracaoCurva
         ? folhasParaCurva.reduce((s, a) => s + (a.duracaoDias ?? 0), 0)
         : folhasParaCurva.reduce((s, a) => s + n(a.pesoFinanceiro), 0);
@@ -1381,7 +1393,7 @@ export const planejamentoRouter = router({
         .orderBy(asc(planejamentoRevisoes.numero));
 
       function gerarCurva(ativs: any[]) {
-        const folhas = ativs.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
+        const folhas = ativs.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
         if (!folhas.length) return [];
         const pesoBruto   = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
         const ativComPeso = folhas.filter((a: any) => n(a.pesoFinanceiro) > 0).length;
@@ -1458,18 +1470,34 @@ export const planejamentoRouter = router({
   // ── Toggle disabled em bloco (remover/restaurar do escopo) ────────────────
   toggleAtividadesDisabled: protectedProcedure
     .input(z.object({
-      ids:     z.array(z.number()),
-      disabled: z.boolean(),
+      projetoId: z.number(),
+      revisaoId: z.number(),
+      ids:       z.array(z.number()),
+      disabled:  z.boolean(),
     }))
     .mutation(async ({ input }) => {
       if (!input.ids.length) return { updated: 0 };
       const db = await getDb();
-      await db.execute(sql`
+      // Escopa por projeto+revisão para impedir que IDs de outros projetos
+      // sejam alterados (broken-access-control). Só atividades pertencentes ao
+      // mesmo projeto/revisão informados serão afetadas — IDs estranhos são
+      // silenciosamente ignorados.
+      // Quando desativando, força peso_financeiro = '0' para manter a
+      // invariante "atividade disabled tem peso 0 sempre" igual ao
+      // salvarAtividades. Ao reativar, mantemos o peso atual = 0 e o
+      // usuário precisa rodar "Recalcular Pesos" se quiser redistribuir
+      // (política conservadora, evita mexer em pesos manuais antigos).
+      const setClause = input.disabled
+        ? sql`SET disabled = TRUE, peso_financeiro = '0'`
+        : sql`SET disabled = FALSE`;
+      const res = await db.execute(sql`
         UPDATE planejamento_atividades
-        SET disabled = ${input.disabled}
+        ${setClause}
         WHERE id = ANY(ARRAY[${sql.raw(input.ids.join(","))}]::int[])
+          AND projeto_id = ${input.projetoId}
+          AND revisao_id = ${input.revisaoId}
       `);
-      return { updated: input.ids.length };
+      return { updated: (res as any)?.rowCount ?? input.ids.length };
     }),
 
   // ── Cronograma de Compras ──────────────────────────────────────────────────
@@ -1764,6 +1792,7 @@ export const planejamentoRouter = router({
           WHERE projeto_id = ${input.projetoId}
             AND revisao_id = ${revId}
             AND NOT is_grupo
+            AND NOT disabled
             AND data_inicio IS NOT NULL
             AND data_fim IS NOT NULL
         ),
@@ -3421,13 +3450,14 @@ REGRAS TÉCNICAS:
         dataFim:        planejamentoAtividades.dataFim,
         isGrupo:        planejamentoAtividades.isGrupo,
         isMarco:        planejamentoAtividades.isMarco,
+        disabled:       planejamentoAtividades.disabled,
         pesoFinanceiro: planejamentoAtividades.pesoFinanceiro,
       })
         .from(planejamentoAtividades)
         .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
 
       const folhas = todasAtividades.filter(a =>
-        !a.isGrupo && !a.isMarco && a.dataInicio && a.dataFim,
+        !a.isGrupo && !a.isMarco && !a.disabled && a.dataInicio && a.dataFim,
       );
 
       if (folhas.length === 0) {
@@ -3667,12 +3697,13 @@ REGRAS TÉCNICAS:
         eapCodigo: planejamentoAtividades.eapCodigo,
         isGrupo: planejamentoAtividades.isGrupo,
         isMarco: planejamentoAtividades.isMarco,
+        disabled: planejamentoAtividades.disabled,
         duracaoDias: planejamentoAtividades.duracaoDias,
       }).from(planejamentoAtividades).where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
 
       if (ativs.length === 0) return { ok: false, msg: "Nenhuma atividade encontrada" };
 
-      const folhas = ativs.filter(a => !a.isGrupo && !a.isMarco);
+      const folhas = ativs.filter(a => !a.isGrupo && !a.isMarco && !a.disabled);
       let metodo = "duracao";
       let vinculados = 0;
       let semVinculo = 0;
@@ -3698,7 +3729,7 @@ REGRAS TÉCNICAS:
           if (totalCusto > 0) {
             metodo = "orcamento";
             for (const a of ativs) {
-              if (a.isGrupo || a.isMarco) {
+              if (a.isGrupo || a.isMarco || a.disabled) {
                 updates.push({ id: a.id, peso: "0" });
               } else {
                 const custo = custoMap.get(a.eapCodigo ?? "") ?? 0;
@@ -3713,7 +3744,7 @@ REGRAS TÉCNICAS:
         const totalDias = folhas.reduce((s, a) => s + (a.duracaoDias ?? 0), 0);
         if (totalDias === 0) return { ok: false, msg: "Sem duração nas atividades para calcular pesos" };
         for (const a of ativs) {
-          if (a.isGrupo || a.isMarco) {
+          if (a.isGrupo || a.isMarco || a.disabled) {
             updates.push({ id: a.id, peso: "0" });
           } else {
             const dur = a.duracaoDias ?? 0;

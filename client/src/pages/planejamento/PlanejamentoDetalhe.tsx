@@ -379,7 +379,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
 
   const avancoAtual = useMemo(() => {
     if (!atividades.length) return 0;
-    const folhas    = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
+    const folhas    = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
     const pesoBruto = usarPesoPorDuracao
       ? folhas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
       : folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
@@ -393,7 +393,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   }, [atividades, avancosMapSemana, usarPesoPorDuracao]);
 
   const avancoPrevistoDia = useMemo(() => {
-    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
     if (!folhas.length) return null;
     const semIni = semanaVisualizacao ?? toMonday(new Date());
     const d = new Date(semIni + "T12:00:00");
@@ -1303,8 +1303,8 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
   const { selectedCompany } = useCompany();
   const [refisAberto, setRefisAberto] = useState<any | null>(null);
   const [atrasosAberto, setAtrasosAberto] = useState(false);
-  const totalAtiv   = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta).length;
-  const concluidas  = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta).filter((a: any) => {
+  const totalAtiv   = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled).length;
+  const concluidas  = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled).filter((a: any) => {
     const avMap: Record<number, number> = {};
     avancos.forEach((av: any) => { avMap[av.atividadeId] = n(av.percentualAcumulado); });
     return (avMap[a.id] ?? 0) >= 100;
@@ -1346,7 +1346,7 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
 
   // Atividades em atraso: prazo vencido mas não 100%, OU progresso atual < esperado hoje
   const criticas = atividades.filter((a: any) => {
-    if (a.isGrupo) return false;
+    if (a.isGrupo || a.disabled) return false;
     const real = avMap[a.id] ?? 0;
     if (real >= 100) return false;
     const esperado = progressoEsperadoHoje(a);
@@ -2561,7 +2561,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     setLinhas(l => [...l, {
       id: undefined, eapCodigo: "", nome: "", nivel: 1,
       dataInicio: "", dataFim: "", duracaoDias: 0,
-      predecessora: "", pesoFinanceiro: 0, recursoPrincipal: "", isGrupo: false, isIndireta: false, ordem: l.length,
+      predecessora: "", pesoFinanceiro: 0, recursoPrincipal: "", isGrupo: false, isIndireta: false, disabled: false, ordem: l.length,
     }]);
   }
 
@@ -2892,14 +2892,14 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                 return todosDisabled ? (
                   <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1.5"
                     disabled={toggleAtivDisabledMut.isPending}
-                    onClick={() => toggleAtivDisabledMut.mutate({ ids: [...selectedAtiv], disabled: false })}>
+                    onClick={() => toggleAtivDisabledMut.mutate({ projetoId, revisaoId: revisaoAtiva?.id ?? 0, ids: [...selectedAtiv], disabled: false })}>
                     {toggleAtivDisabledMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckSquare className="h-3.5 w-3.5" />}
                     Reativar ({selectedAtiv.size})
                   </Button>
                 ) : (
                   <Button size="sm" className="bg-slate-600 hover:bg-slate-700 gap-1.5"
                     disabled={toggleAtivDisabledMut.isPending}
-                    onClick={() => toggleAtivDisabledMut.mutate({ ids: [...selectedAtiv], disabled: true })}>
+                    onClick={() => toggleAtivDisabledMut.mutate({ projetoId, revisaoId: revisaoAtiva?.id ?? 0, ids: [...selectedAtiv], disabled: true })}>
                     {toggleAtivDisabledMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <EyeOff className="h-3.5 w-3.5" />}
                     Desativar ({selectedAtiv.size})
                   </Button>
@@ -3022,7 +3022,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
 
       {/* ── Indicador de soma do Peso% ────────────────────────────────────────── */}
       {atividades.length > 0 && (() => {
-        const folhas = (editando ? linhas : atividades).filter((a: any) => !a.isGrupo);
+        const folhas = (editando ? linhas : atividades).filter((a: any) => !a.isGrupo && !a.disabled);
         const soma = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
         const ok = Math.abs(soma - 100) < 0.1;
         const overshot = soma > 100.05;
@@ -3165,8 +3165,17 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                               <UiTooltipContent side="top" className="text-xs">Marcar como indireta (não conta no avanço efetivo)</UiTooltipContent>
                             </UiTooltip>
                           </UiTooltipProvider>
+                          <UiTooltipProvider delayDuration={300}>
+                            <UiTooltip>
+                              <UiTooltipTrigger asChild>
+                                <input type="checkbox" checked={!!a.disabled} onChange={e => updateLinha(idx, "disabled", e.target.checked)}
+                                  className="h-3.5 w-3.5 shrink-0 cursor-pointer" style={{accentColor:"#475569"}} />
+                              </UiTooltipTrigger>
+                              <UiTooltipContent side="top" className="text-xs">Desativar atividade (fora do escopo, igual ao MS Project — não conta em peso, avanço nem custo)</UiTooltipContent>
+                            </UiTooltip>
+                          </UiTooltipProvider>
                           <Input value={a.nome} onChange={e => updateLinha(idx, "nome", e.target.value)}
-                            className={`h-7 text-xs w-full ${a.isGrupo ? "font-semibold bg-yellow-50" : ""}`}
+                            className={`h-7 text-xs w-full ${a.isGrupo ? "font-semibold bg-yellow-50" : ""} ${a.disabled ? "line-through text-slate-400" : ""}`}
                             placeholder="Nome da atividade" />
                         </div>
                       </td>
@@ -3354,7 +3363,7 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
     const m: Record<number, number> = {};
     atividades.filter((a: any) => a.isGrupo && a.eapCodigo).forEach((g: any) => {
       const leaves = atividades.filter((a: any) =>
-        !a.isGrupo && a.eapCodigo && a.eapCodigo.startsWith(g.eapCodigo + ".")
+        !a.isGrupo && !a.disabled && a.eapCodigo && a.eapCodigo.startsWith(g.eapCodigo + ".")
       );
       if (leaves.length === 0) return;
       const total = leaves.reduce((s: number, l: any) => s + (avMap[l.id] ?? 0), 0);
@@ -4232,8 +4241,8 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     }
   }, [semanas]);
 
-  const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.isIndireta), [atividades]);
-  const folhasComInd = useMemo(() => atividades.filter((a: any) => !a.isGrupo), [atividades]);
+  const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled), [atividades]);
+  const folhasComInd = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.disabled), [atividades]);
 
   // Filtra atividades ativas na semana selecionada (Seg-Sex) — base para todos os modos
   const folhasNaSemana = useMemo(() => {
@@ -9089,7 +9098,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // Calcula avanço previsto ponderado para a semana a partir do cronograma.
   // Usa o FIM da semana (domingo) como referência — igual ao AvancoSemanal.
   const avancoPrevisto = useMemo(() => {
-    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
     if (!folhas.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
@@ -9112,7 +9121,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const avancoPrevAntes = useMemo(() => {
     if (!semAntesFim) return 0;
-    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
     if (!folhas.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
@@ -9131,7 +9140,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         (m as any)[`d_${av.atividadeId}`] = av.semana;
       }
     });
-    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
       const peso = getPeso(a, semPeso);
@@ -9148,7 +9157,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         (m as any)[`d_${av.atividadeId}`] = av.semana;
       }
     });
-    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
       const peso = getPeso(a, semPeso);
@@ -9160,7 +9169,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const spi = avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0;
 
   const refisPrevistoComInd = useMemo(() => {
-    const f = atividades.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim);
+    const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim);
     if (!f.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(f);
     return Math.min(100, f.reduce((s: number, a: any) => {
@@ -9177,7 +9186,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         (m as any)[`d_${av.atividadeId}`] = av.semana;
       }
     });
-    const f = atividades.filter((a: any) => !a.isGrupo);
+    const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled);
     const { pesoTotal, semPeso } = calcPesoTotal(f);
     return Math.min(100, f.reduce((s: number, a: any) => {
       const peso = getPeso(a, semPeso);
@@ -9193,11 +9202,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const refisDistPrev = +(refisPrevistoComInd - avancoPrevisto).toFixed(2);
   const refisDistReal = +(refisRealComInd - avancoRealAtual).toFixed(2);
-  const qtdIndiretas = atividades.filter((a: any) => a.isIndireta && !a.isGrupo).length;
+  const qtdIndiretas = atividades.filter((a: any) => a.isIndireta && !a.isGrupo && !a.disabled).length;
 
   const avancoPrevAntesComInd = useMemo(() => {
     if (!semAntesFim) return 0;
-    const f = atividades.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim);
+    const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim);
     if (!f.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(f);
     return Math.min(100, f.reduce((s: number, a: any) => {
@@ -9215,7 +9224,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         (m as any)[`d_${av.atividadeId}`] = av.semana;
       }
     });
-    const f = atividades.filter((a: any) => !a.isGrupo);
+    const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled);
     const { pesoTotal, semPeso } = calcPesoTotal(f);
     return Math.min(100, f.reduce((s: number, a: any) => {
       const peso = getPeso(a, semPeso);
@@ -9253,7 +9262,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   // ── Agrupamento hierárquico por EAP para gráficos ─────────────────────────
   const grupos = useMemo(() => {
-    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
 
     function prevInd(a: any) {
       if (!a.dataInicio || !a.dataFim) return 0;
@@ -11233,7 +11242,7 @@ function IAGestora({ projetoId, proj, atividades, avancos, revisaoAtiva, utils, 
   // Calcular avanço/SPI atual a partir de atividades+avanços (para contexto do simulador)
   const metricsAtuais = useMemo(() => {
     const hoje = new Date().toISOString().split("T")[0];
-    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta);
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
     const pesoTotal = folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || folhas.length || 1;
     let prevAcum = 0;
     folhas.forEach((a: any) => {

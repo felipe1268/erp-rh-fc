@@ -1,5 +1,20 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1328 — 05/05/2026
+- **Cronograma — Desativar atividade individualmente (estilo MS Project "Inactive Task")**: novo 4º checkbox na coluna "Atividade / Grupo" do modo de edição (cinza-escuro, ao lado de Grupo / Marco / Indireta). Marcar a atividade como `disabled` faz ela:
+  - Aparecer riscada (line-through) com opacidade reduzida em todas as visualizações.
+  - **Sair do cálculo de Avanço Físico, Avanço Previsto e SPI** (`avancoAtual`, `avancoPrevistoDia` em `PlanejamentoDetalhe.tsx`, e também nos cálculos de Avanço Semanal e REFIS — `avancoPrevisto`, `avancoPrevAntes`, `avancoRealAtual`, `avancoRealAntes`, `refisPrevistoComInd`, `refisRealComInd`, `avancoPrevAntesComInd`, `avancoRealAntesComInd`, `grupos` para gráficos do REFIS).
+  - **Sair do contador "Atividades concluídas / total"**, da lista de "Atividades em atraso" na Visão Geral e do contador de Indiretas no REFIS.
+  - **Sair da soma do Peso%** (não conta nem para denominador nem para a soma 100%).
+  - **Receber peso 0** automaticamente em `recalcularPesosFinanceiros` e no auto-cálculo dentro de `salvarAtividades` (tanto via custo do orçamento quanto via duração).
+  - **Sair da Curva S Física** (`getCurvaS` — curvas baseline, planejada e realizada — e `getCurvasTodasRevisoes`).
+  - **Sair da Curva S Financeira** (`getCurvaSFinanceira`).
+  - **Sair do cruzamento Orçamento × Cronograma** (`obterCruzamentoOrcCronograma`: `norm_ativ` agora exige `NOT disabled`), de modo que o Cronograma Financeiro mensal não distribui mais venda/custo para atividades inativas.
+  - Persistido em `salvarAtividades` (input zod, mapping de rows e UPDATE em batch passaram a incluir o campo `disabled`; e qualquer atividade com `disabled = true` tem o `pesoFinanceiro` forçado a `"0"` na hora de gravar, independente do que o cliente envia) e em `criarRevisao` (cópia de revisão anterior agora preserva `disabled` e `isMarco`).
+  - Também filtrado em `metricsAtuais` (Simulador IA) e em `groupAvMap` (avanço agregado dos grupos no Gantt), evitando que disabled inflasse barras de progresso.
+  - **Correção de segurança**: `toggleAtividadesDisabled` (mutation em massa do "Modo seleção") agora exige `projetoId` + `revisaoId` no input e escopa o UPDATE por essas duas colunas, impedindo que IDs de outros projetos/revisões sejam alterados via id-guessing. Além disso, ao desativar, força `peso_financeiro = '0'` para manter a invariante "disabled ⇒ peso 0".
+  - **Escopo deliberadamente fora**: `propagateDates` (auto-shift de datas via predecessoras) e `CaminhoCritico` continuam considerando atividades disabled. O usuário pediu "não conte em peso, avanço, custo, curva S" — o scheduler de datas/CPM ficou intocado para evitar regressão silenciosa em planos já validados; pode ser ajustado em uma tarefa futura caso a aderência ao MS Project precise ser estendida.
+
 ## Revisão 1327 — 05/05/2026
 - **Importação BDI — suporte ao novo padrão da planilha (R06)**: o template `BDI_805_03_2026_R06_REVTE.xlsx` reorganizou as linhas-chave da aba BDI: `B - 02` deixou de ser o "%BDI total" e virou "Lucro líquido 02 - Mão de obra"; o BDI total agora vem do **fator multiplicativo do `PV1`** (col 7), com `BDI = 1 − 1/fator`. Códigos passaram a ter espaços ao redor do hífen (`B - 02`, `B - 04`, `B - 07`) e PV virou `PV1`/`PV2` sem hífen.
   - **Discriminador de formato**: códigos brutos `PV1`/`PV2` sem hífen só existem no R06 (legado tem `PV -1` / `PV - 2`). `parsearAbaBdi` (server/routers/orcamento.ts) usa essa diferença literal — em R06 deriva BDI do PV1; em legado usa B-02 direto. Sem fallback cruzado: planilhas legadas que tenham PV-1 com fator NÃO são confundidas com R06 (regressão evitada).
