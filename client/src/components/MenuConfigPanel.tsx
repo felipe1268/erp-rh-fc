@@ -108,6 +108,7 @@ const MODULE_DISPLAY_ORDER: ModuleId[] = [
   "compras", "almoxarifado", "financeiro",
   "terceiros", "parceiros",
   "gestao-documentos", "operacional", "frotas",
+  "comunicados-internos", "curriculos", "oraculo",
   "juridico", "admin",
 ];
 

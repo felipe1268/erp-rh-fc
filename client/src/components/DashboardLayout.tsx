@@ -38,7 +38,7 @@ import {
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft, Gauge,
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine,
   Camera, Blocks, CheckSquare, FileCheck2, Milestone,
-  UserMinus, Search, X, GraduationCap,
+  UserMinus, Search, X, GraduationCap, Sparkles,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -631,6 +631,36 @@ const menuSectionsCadastro: MenuSection[] = [
   },
 ];
 
+// Comunicados Internos — módulo simples, uma página
+const menuSectionsComunicados: MenuSection[] = [
+  {
+    title: "Comunicados Internos",
+    items: [
+      { icon: Megaphone, label: "Comunicados Internos", path: "/comunicados-internos" },
+    ],
+  },
+];
+
+// Currículos — módulo simples, uma página
+const menuSectionsCurriculos: MenuSection[] = [
+  {
+    title: "Currículos",
+    items: [
+      { icon: Briefcase, label: "Banco de Currículos", path: "/curriculos" },
+    ],
+  },
+];
+
+// Oráculo — admin_master only
+const menuSectionsOraculo: MenuSection[] = [
+  {
+    title: "Oráculo",
+    items: [
+      { icon: Sparkles, label: "Assistente IA", path: "/oraculo", adminMasterOnly: true },
+    ],
+  },
+];
+
 export const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "rh-dp": menuSectionsRHDP,
   "sst": menuSectionsSST,
@@ -651,6 +681,9 @@ export const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "gestao-documentos": menuSectionsGestaoDocumentos,
   "operacional": menuSectionsOperacional,
   "frotas": menuSectionsFrotas,
+  "comunicados-internos": menuSectionsComunicados,
+  "curriculos":           menuSectionsCurriculos,
+  "oraculo":              menuSectionsOraculo,
   "admin": menuSectionsAdmin,
   "all": [...menuSectionsRHDP], // fallback: show RH & DP
 };
@@ -726,6 +759,9 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "gestao-documentos": "/gestao-documentos",
   "operacional": "/operacional/painel",
   "frotas":         "/frotas/painel",
+  "comunicados-internos": "/comunicados-internos",
+  "curriculos":           "/curriculos",
+  "oraculo":              "/oraculo",
   "admin": "/admin/telemetria",
   "all": "/painel",
 };
@@ -751,6 +787,9 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "gestao-documentos": { icon: FolderOpen, color: "text-indigo-400", bg: "bg-indigo-500/20" },
   "operacional": { icon: HardHat, color: "text-amber-400", bg: "bg-amber-500/20" },
   "frotas":      { icon: Truck,     color: "text-cyan-400",    bg: "bg-cyan-500/20" },
+  "comunicados-internos": { icon: Megaphone, color: "text-blue-400",   bg: "bg-blue-500/20"   },
+  "curriculos":           { icon: Briefcase, color: "text-amber-400",  bg: "bg-amber-500/20"  },
+  "oraculo":              { icon: Sparkles,  color: "text-violet-400", bg: "bg-violet-500/20" },
   "admin": { icon: BarChart3, color: "text-red-400", bg: "bg-red-500/20" },
   "all": { icon: LayoutDashboard, color: "text-[#D4A843]", bg: "bg-[#D4A843]/20" },
 };
@@ -1440,6 +1479,9 @@ function DashboardLayoutContent({
     { id: "gestao-documentos", label: "Proj./Doc. Técnicos", icon: FolderOpen, color: "text-sky-400", bg: "bg-sky-500/20", path: "/gestao-documentos", canSee: () => (permIsAdminMaster || canAccessModule("gestao-documentos")) && isModEnabled("gestao-documentos") },
     { id: "operacional", label: "Operacional", icon: HardHat, color: "text-amber-400", bg: "bg-amber-500/20", path: "/operacional/painel", canSee: () => (permIsAdminMaster || canAccessModule("operacional")) && isModEnabled("operacional") },
     { id: "frotas", label: "Frotas", icon: Truck, color: "text-cyan-400", bg: "bg-cyan-500/20", path: "/frotas/painel", canSee: () => (permIsAdminMaster || canAccessModule("frotas")) && isModEnabled("frotas") },
+    { id: "comunicados-internos", label: "Comunicados Internos", icon: Megaphone, color: "text-blue-400",   bg: "bg-blue-500/20",   path: "/comunicados-internos", canSee: () => (permIsAdminMaster || canAccessModule("comunicados-internos")) && isModEnabled("comunicados-internos") },
+    { id: "curriculos",           label: "Currículos",           icon: Briefcase, color: "text-amber-400",  bg: "bg-amber-500/20",  path: "/curriculos",           canSee: () => (permIsAdminMaster || canAccessModule("curriculos"))           && isModEnabled("curriculos") },
+    { id: "oraculo",              label: "Oráculo",              icon: Sparkles,  color: "text-violet-400", bg: "bg-violet-500/20", path: "/oraculo",              canSee: () => permIsAdminMaster },
   ];
   const visibleModuleDefs = ALL_MODULE_DEFS.filter(m => m.canSee());
   const sortedModuleDefs = moduleOrder.length === 0 ? visibleModuleDefs :
