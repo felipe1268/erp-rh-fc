@@ -125,8 +125,16 @@ export default function ModuloPJ() {
     onSuccess: () => { refetchContratos(); toast.success("Contrato excluído!"); },
   });
   const gerarMensal = trpc.pj.pagamentos.gerarMensal.useMutation({
-    onSuccess: (data: any) => { refetchPagamentos(); toast.success(`${data.contratosProcessados} contrato(s) processado(s)!`); },
-    onError: (e: any) => toast.error(e.message),
+    onSuccess: (data: any) => {
+      refetchPagamentos();
+      const novas = data?.medicoesCriadas || 0;
+      if (novas > 0) {
+        toast.success(`${novas} medição(ões) criada(s) em ${data.contratosProcessados} contrato(s).`);
+      } else {
+        toast.success(`Tudo em dia: ${data?.totalContratos || 0} contrato(s) ativos já tinham todas as previsões.`);
+      }
+    },
+    onError: (e: any) => toast.error(e?.message || "Erro ao sincronizar previsões."),
   });
   const createPagamento = trpc.pj.pagamentos.create.useMutation({
     onSuccess: () => { refetchPagamentos(); toast.success("Lançamento criado!"); setShowPagamentoDialog(false); setPagForm({}); },
@@ -564,8 +572,8 @@ export default function ModuloPJ() {
                 <Input type="month" value={mesRef} onChange={e => setMesRef(e.target.value)} className="w-48" />
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => gerarMensal.mutate({ companyId, companyIds, mesReferencia: mesRef })} disabled={gerarMensal.isPending}>
-                  <RefreshCw className={`h-4 w-4 mr-2 ${gerarMensal.isPending ? "animate-spin" : ""}`} /> Gerar Lançamentos
+                <Button variant="outline" onClick={() => gerarMensal.mutate({ companyId, companyIds })} disabled={gerarMensal.isPending} title="Sincroniza previsões de medições para todos os contratos PJ ativos (idempotente).">
+                  <RefreshCw className={`h-4 w-4 mr-2 ${gerarMensal.isPending ? "animate-spin" : ""}`} /> Sincronizar Previsões
                 </Button>
                 <Button onClick={() => { setPagForm({ mesReferencia: mesRef }); setShowPagamentoDialog(true); }}>
                   <Plus className="h-4 w-4 mr-2" /> Lançamento Manual
@@ -616,7 +624,7 @@ export default function ModuloPJ() {
                         <th className="p-3 text-left font-medium">Tipo</th>
                         <th className="p-3 text-left font-medium">Descrição</th>
                         <th className="p-3 text-right font-medium">Valor</th>
-                        <th className="p-3 text-left font-medium">Data Pagamento</th>
+                        <th className="p-3 text-left font-medium">Data</th>
                         <th className="p-3 text-center font-medium">Status</th>
                         <th className="p-3 text-center font-medium">Ações</th>
                       </tr>
@@ -624,7 +632,7 @@ export default function ModuloPJ() {
                     <tbody>
                       {(pagamentos as any[]).length === 0 ? (
                         <tr><td colSpan={7} className="py-12 text-center text-muted-foreground">
-                          Nenhum lançamento para {mesRef}. Clique em "Gerar Lançamentos" para criar automaticamente.
+                          Nenhuma medição para {mesRef}. Novos contratos já geram as previsões automaticamente — para contratos antigos use "Sincronizar Previsões".
                         </td></tr>
                       ) : (pagamentos as any[]).map((p: any) => {
                         const st = STATUS_PAGAMENTO[p.status] || STATUS_PAGAMENTO.pendente;
@@ -638,7 +646,15 @@ export default function ModuloPJ() {
                             </td>
                             <td className="p-3 text-xs">{p.descricao || "-"}</td>
                             <td className="p-3 text-right font-bold">{formatMoeda(p.valor)}</td>
-                            <td className="p-3 text-xs">{formatDate(p.dataPagamento)}</td>
+                            <td className="p-3 text-xs">
+                              {p.dataPagamento ? (
+                                <span className="text-green-700">Pago em {formatDate(p.dataPagamento)}</span>
+                              ) : p.dataPrevista ? (
+                                <span className="text-muted-foreground">Previsto: {formatDate(p.dataPrevista)}</span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </td>
                             <td className="p-3 text-center">
                               <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.bg} ${st.color}`}>{st.label}</span>
                             </td>
@@ -1006,16 +1022,10 @@ export default function ModuloPJ() {
                   placeholder="0,00"
                 />
               </div>
-              <div>
-                <label className="text-sm font-medium">Renovação Automática</label>
-                <Select value={String(form.renovacaoAutomatica || 0)} onValueChange={v => setForm({ ...form, renovacaoAutomatica: parseInt(v) })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0">Não</SelectItem>
-                    <SelectItem value="1">Sim</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Renovação automática foi removida: contratos PJ são sempre
+                  vigentes pelo período definido (sem renovação automática).
+                  As medições previstas para toda a vigência são geradas
+                  automaticamente na criação do contrato. */}
 
               <div className="col-span-2 bg-purple-50 rounded-lg p-4">
                 <p className="text-sm font-semibold text-purple-800 mb-3">Regra de Pagamento (Folha PJ)</p>

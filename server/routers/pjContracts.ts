@@ -7,6 +7,119 @@ import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
 import { storagePut } from "../storage";
 
+// ---------------------------------------------------------------------------
+// Helpers de geração de medições previstas (Folha PJ)
+// ---------------------------------------------------------------------------
+
+/** Retorna a quantidade de dias em um mês YYYY-MM. */
+function diasDoMes(ano: number, mes1a12: number): number {
+  return new Date(ano, mes1a12, 0).getDate();
+}
+
+/**
+ * Monta uma data ISO (YYYY-MM-DD) garantindo que o dia exista no mês
+ * (ex.: dia 31 em fevereiro vira 28/29).
+ */
+function dataIsoSegura(ano: number, mes1a12: number, dia: number): string {
+  const max = diasDoMes(ano, mes1a12);
+  const d = Math.min(Math.max(1, dia | 0), max);
+  return `${ano}-${String(mes1a12).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** Soma N meses a um par (ano, mes1a12) e devolve novo par. */
+function addMeses(ano: number, mes1a12: number, n: number): { ano: number; mes: number } {
+  const total = (ano * 12 + (mes1a12 - 1)) + n;
+  return { ano: Math.floor(total / 12), mes: (total % 12) + 1 };
+}
+
+/**
+ * Gera (idempotente) todas as medições previstas de um contrato PJ ao longo
+ * da sua vigência. Para cada mês de referência cria DOIS lançamentos:
+ *   - adiantamento (no mesmo mês, dia = diaAdiantamento do contrato)
+ *   - fechamento  (no mês seguinte, dia = diaFechamento do contrato)
+ * Pula combinações (contractId, mesReferencia, tipo) que já existirem,
+ * portanto pode ser chamado múltiplas vezes sem duplicar.
+ *
+ * Retorna a quantidade de novas medições criadas.
+ */
+async function gerarPrevisoesDoContrato(
+  db: any,
+  contrato: any,
+  criadoPor: string,
+): Promise<number> {
+  if (!contrato?.dataInicio || !contrato?.dataFim) return 0;
+
+  const valorMensal = parseFloat(contrato.valorMensal || "0") || 0;
+  const percAdiant = contrato.percentualAdiantamento ?? 40;
+  const percFech = contrato.percentualFechamento ?? 60;
+  const diaAdiant = contrato.diaAdiantamento ?? 15;
+  const diaFech = contrato.diaFechamento ?? 5;
+
+  const valorAdiant = (valorMensal * percAdiant / 100).toFixed(2);
+  const valorFech = (valorMensal * percFech / 100).toFixed(2);
+
+  // Range de meses de referência: do mês de dataInicio até o mês de dataFim, inclusive.
+  const ini = String(contrato.dataInicio).slice(0, 10).split("-").map(Number);
+  const fim = String(contrato.dataFim).slice(0, 10).split("-").map(Number);
+  if (ini.length < 2 || fim.length < 2) return 0;
+  const [aIni, mIni] = ini;
+  const [aFim, mFim] = fim;
+  const totalMeses = (aFim * 12 + (mFim - 1)) - (aIni * 12 + (mIni - 1)) + 1;
+  if (totalMeses <= 0) return 0;
+
+  // Pré-carrega os pares (mes, tipo) já existentes para esse contrato.
+  const existentes = await db.select({
+    mes: pjPayments.mesReferencia,
+    tipo: pjPayments.tipo,
+  }).from(pjPayments).where(eq(pjPayments.contractId, contrato.id));
+  const jaTem = new Set<string>(
+    (existentes as any[]).map((r) => `${r.mes}::${r.tipo}`),
+  );
+
+  const linhas: any[] = [];
+  for (let i = 0; i < totalMeses; i++) {
+    const { ano, mes } = addMeses(aIni, mIni, i);
+    const mesRef = `${ano}-${String(mes).padStart(2, "0")}`;
+
+    // Adiantamento: mesmo mês de referência
+    if (!jaTem.has(`${mesRef}::adiantamento`)) {
+      linhas.push({
+        contractId: contrato.id,
+        companyId: contrato.companyId,
+        employeeId: contrato.employeeId,
+        mesReferencia: mesRef,
+        tipo: "adiantamento",
+        valor: valorAdiant,
+        descricao: `Adiantamento ${percAdiant}% — ${mesRef}`,
+        dataPrevista: dataIsoSegura(ano, mes, diaAdiant),
+        status: "pendente",
+        criadoPor,
+      });
+    }
+
+    // Fechamento: mês seguinte ao de referência
+    if (!jaTem.has(`${mesRef}::fechamento`)) {
+      const prox = addMeses(ano, mes, 1);
+      linhas.push({
+        contractId: contrato.id,
+        companyId: contrato.companyId,
+        employeeId: contrato.employeeId,
+        mesReferencia: mesRef,
+        tipo: "fechamento",
+        valor: valorFech,
+        descricao: `Fechamento ${percFech}% — ${mesRef}`,
+        dataPrevista: dataIsoSegura(prox.ano, prox.mes, diaFech),
+        status: "pendente",
+        criadoPor,
+      });
+    }
+  }
+
+  if (linhas.length === 0) return 0;
+  await db.insert(pjPayments).values(linhas);
+  return linhas.length;
+}
+
 // Modelo de contrato PJ padrão (FC Engenharia)
 const MODELO_CONTRATO_PJ = `CONTRATO PARTICULAR DE PRESTAÇÃO DE SERVIÇOS E COMPROMISSO DE CONFIDENCIALIDADE E NÃO CONCORRÊNCIA ENTRE SI
 
@@ -416,7 +529,8 @@ export const pjContractsRouter = router({
           objetoContrato: input.objetoContrato || null,
           dataInicio: input.dataInicio,
           dataFim: input.dataFim,
-          renovacaoAutomatica: input.renovacaoAutomatica,
+          // Modelo atual: contratos PJ NÃO renovam automaticamente.
+          renovacaoAutomatica: 0,
           valorMensal: input.valorMensal,
           percentualAdiantamento: input.percentualAdiantamento,
           percentualFechamento: input.percentualFechamento,
@@ -439,8 +553,31 @@ export const pjContractsRouter = router({
           criadoPor: ctx.user.name ?? 'Sistema',
           criadoPorUserId: ctx.user.id,
         });
-        
-        return { success: true, id: inserted.id, numeroContrato: numero };
+
+        // Gerar previsão de medições (adiantamento + fechamento por mês) já na
+        // criação, cobrindo toda a vigência do contrato.
+        let previsoesGeradas = 0;
+        try {
+          const contratoCompleto = {
+            id: inserted.id,
+            companyId: inserted.companyId,
+            employeeId: inserted.employeeId,
+            dataInicio: input.dataInicio,
+            dataFim: input.dataFim,
+            valorMensal: input.valorMensal,
+            percentualAdiantamento: input.percentualAdiantamento,
+            percentualFechamento: input.percentualFechamento,
+            diaAdiantamento: input.diaAdiantamento,
+            diaFechamento: input.diaFechamento,
+          };
+          previsoesGeradas = await gerarPrevisoesDoContrato(
+            db, contratoCompleto, ctx.user.name ?? 'Sistema',
+          );
+        } catch (e: any) {
+          console.error('[pj.contratos.create] Falha ao gerar previsões:', e?.message || e);
+        }
+
+        return { success: true, id: inserted.id, numeroContrato: numero, previsoesGeradas };
       }),
 
     update: protectedProcedure
@@ -640,6 +777,7 @@ export const pjContractsRouter = router({
           tipo: pjPayments.tipo,
           valor: pjPayments.valor,
           descricao: pjPayments.descricao,
+          dataPrevista: pjPayments.dataPrevista,
           dataPagamento: pjPayments.dataPagamento,
           status: pjPayments.status,
           comprovanteUrl: pjPayments.comprovanteUrl,
@@ -650,72 +788,63 @@ export const pjContractsRouter = router({
         .from(pjPayments)
         .innerJoin(employees, eq(pjPayments.employeeId, employees.id))
         .where(and(...conditions))
-        .orderBy(desc(pjPayments.createdAt));
+        .orderBy(asc(employees.nomeCompleto), asc(pjPayments.mesReferencia), asc(pjPayments.tipo));
         
         return rows;
       }),
 
-    /** Gerar lançamentos mensais para todos os PJs ativos */
+    /**
+     * Sincroniza previsões de medições para TODOS os contratos PJ ativos da
+     * empresa, cobrindo a vigência completa de cada contrato. Idempotente:
+     * só insere o que ainda não existe (não duplica).
+     *
+     * Mantido com o nome `gerarMensal` para compatibilidade com o frontend
+     * existente — `mesReferencia` é aceito mas ignorado (servia ao modelo
+     * antigo que gerava apenas o mês corrente).
+     */
     gerarMensal: protectedProcedure
-      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesReferencia: z.string() }))
+      .input(z.object({
+        companyId: z.number(),
+        companyIds: z.array(z.number()).optional(),
+        mesReferencia: z.string().optional(),
+      }))
       .mutation(async ({ input, ctx }) => {
-        const db = (await getDb())!;
-        
-        // Buscar contratos ativos
-        const contratosAtivos = await db.select()
-          .from(pjContracts)
-          .where(and(
-            companyFilter(pjContracts.companyId, input),
-            eq(pjContracts.status, 'ativo'),
-            isNull(pjContracts.deletedAt),
-          ));
-        
-        let criados = 0;
-        for (const contrato of contratosAtivos) {
-          const valorMensal = parseFloat(contrato.valorMensal || "0");
-          const percAdiant = contrato.percentualAdiantamento || 40;
-          const percFech = contrato.percentualFechamento || 60;
-          
-          // Verificar se já existe lançamento para este mês
-          const [existente] = await db.select({ total: sql<number>`COUNT(*)` })
-            .from(pjPayments)
+        try {
+          const db = (await getDb())!;
+
+          const contratosAtivos = await db.select()
+            .from(pjContracts)
             .where(and(
-              eq(pjPayments.contractId, contrato.id),
-              eq(pjPayments.mesReferencia, input.mesReferencia),
+              companyFilter(pjContracts.companyId, input),
+              eq(pjContracts.status, 'ativo'),
+              isNull(pjContracts.deletedAt),
             ));
-          
-          if ((existente?.total || 0) > 0) continue;
-          
-          // Criar adiantamento
-          await db.insert(pjPayments).values({
-            contractId: contrato.id,
-            companyId: input.companyId,
-            employeeId: contrato.employeeId,
-            mesReferencia: input.mesReferencia,
-            tipo: 'adiantamento',
-            valor: (valorMensal * percAdiant / 100).toFixed(2),
-            descricao: `Adiantamento ${percAdiant}% - ${input.mesReferencia}`,
-            status: 'pendente',
-            criadoPor: ctx.user.name ?? 'Sistema',
+
+          let totalCriados = 0;
+          let contratosComMedicoesNovas = 0;
+          for (const contrato of contratosAtivos) {
+            const novos = await gerarPrevisoesDoContrato(
+              db, contrato, ctx.user.name ?? 'Sistema',
+            );
+            if (novos > 0) {
+              totalCriados += novos;
+              contratosComMedicoesNovas++;
+            }
+          }
+
+          return {
+            success: true,
+            contratosProcessados: contratosComMedicoesNovas,
+            medicoesCriadas: totalCriados,
+            totalContratos: contratosAtivos.length,
+          };
+        } catch (e: any) {
+          console.error('[pj.pagamentos.gerarMensal] Erro:', e);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `Falha ao gerar previsões PJ: ${e?.message || 'erro desconhecido'}`,
           });
-          
-          // Criar fechamento
-          await db.insert(pjPayments).values({
-            contractId: contrato.id,
-            companyId: input.companyId,
-            employeeId: contrato.employeeId,
-            mesReferencia: input.mesReferencia,
-            tipo: 'fechamento',
-            valor: (valorMensal * percFech / 100).toFixed(2),
-            descricao: `Fechamento ${percFech}% - ${input.mesReferencia}`,
-            status: 'pendente',
-            criadoPor: ctx.user.name ?? 'Sistema',
-          });
-          
-          criados++;
         }
-        
-        return { success: true, contratosProcessados: criados };
       }),
 
     create: protectedProcedure

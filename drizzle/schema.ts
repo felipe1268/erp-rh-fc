@@ -2385,6 +2385,8 @@ export const pjPayments = pgTable("pj_payments", {
         tipo: text().notNull(),
         valor: varchar({ length: 20 }).notNull(),
         descricao: text(),
+        // Data prevista do pagamento (gerada a partir das regras do contrato).
+        dataPrevista: date("data_prevista", { mode: 'string' }),
         // you can use { mode: 'date' }, if you want to have Date as type for this column
         dataPagamento: date({ mode: 'string' }),
         status: text().default('pendente').notNull(),
