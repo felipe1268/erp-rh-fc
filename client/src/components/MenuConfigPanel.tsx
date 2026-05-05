@@ -32,6 +32,8 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { MODULE_SECTIONS, adminSections } from "./DashboardLayout";
+import { MODULE_LABELS, type ModuleId } from "@/contexts/ModuleContext";
 
 const ICON_MAP: Record<string, any> = {
   "Painel RH": LayoutDashboard, "Empresas": Building2, "Colaboradores": Users,
@@ -88,73 +90,92 @@ const PATH_ICON_MAP: Record<string, any> = {
   "/ajuda": BookOpen,
 };
 
-const DEFAULT_MENU = [
-  { title: "Principal", items: [
-    { label: "Painel RH", path: "/painel/rh", visible: true },
-  ]},
-  { title: "Cadastro", items: [
-    { label: "Empresas", path: "/empresas", visible: true },
-    { label: "Colaboradores", path: "/colaboradores", visible: true },
-    { label: "Obras", path: "/obras", visible: true },
-    { label: "Efetivo por Obra", path: "/obras/efetivo", visible: true },
-    { label: "Setores", path: "/setores", visible: true },
-    { label: "Funções", path: "/funcoes", visible: true },
-    { label: "Relógios de Ponto", path: "/relogios-ponto", visible: true },
-    { label: "Convenções Coletivas", path: "/convencoes-coletivas", visible: true },
-  ]},
-  { title: "Operacional", items: [
-    { label: "Gestão de Competências", path: "/gestao-competencias", visible: true },
-    { label: "Controle de Documentos", path: "/controle-documentos", visible: true },
-    { label: "Vale Alimentação", path: "/vale-alimentacao", visible: true },
-    { label: "Solicitação de Hora Extra", path: "/solicitacao-he", visible: true },
-    { label: "Crachás", path: "/crachas", visible: true },
-    { label: "Lançar Atestados", path: "/controle-documentos?tab=atestados", visible: true },
-    { label: "Advertências", path: "/controle-documentos?tab=advertencias", visible: true },
-  ]},
-  { title: "Gestão de Pessoas", items: [
-    { label: "Aviso Prévio", path: "/aviso-previo", visible: true },
-    { label: "Férias", path: "/ferias", visible: true },
-    { label: "Seguro de Vida", path: "/seguro-vida", visible: true },
-  ]},
-  { title: "Relatórios", items: [
-    { label: "Raio-X do Funcionário", path: "/relatorios/raio-x", visible: true },
-    { label: "Relatório de Ponto", path: "/relatorios/ponto", visible: true },
-    { label: "Relatório de Folha", path: "/relatorios/folha", visible: true },
-    { label: "Relatório de Divergências", path: "/relatorios/divergencias", visible: true },
-    { label: "Custo por Obra", path: "/relatorios/custo-obra", visible: true },
-  ]},
-  { title: "Dashboards", items: [
-    { label: "Todos os Dashboards", path: "/dashboards", visible: true },
-    { label: "Funcionários", path: "/dashboards/funcionarios", visible: true },
-    { label: "Cartão de Ponto", path: "/dashboards/cartao-ponto", visible: true },
-    { label: "Folha de Pagamento", path: "/dashboards/folha-pagamento", visible: true },
-    { label: "Aviso Prévio", path: "/dashboards/aviso-previo", visible: true },
-    { label: "Férias", path: "/dashboards/ferias", visible: true },
-    { label: "Efetivo por Obra", path: "/dashboards/efetivo-obra", visible: true },
-    { label: "Perfil por Tempo de Casa", path: "/dashboards/perfil-tempo-casa", visible: true },
-    { label: "Controle de Documentos", path: "/dashboards/controle-documentos", visible: true },
-  ]},
-  { title: "Tabelas e Configurações", items: [
-    { label: "Feriados", path: "/feriados", visible: true },
-    { label: "Dissídio", path: "/dissidio", visible: true },
-  ]},
-  { title: "Inteligência Artificial", items: [
-    { label: "Comparativo Convenções", path: "/comparativo-convencoes", visible: true },
-  ]},
-  { title: "Administração", items: [
-    { label: "Usuários e Permissões", path: "/usuarios", visible: true },
-    { label: "Auditoria do Sistema", path: "/auditoria", visible: true },
-    { label: "Configurações", path: "/configuracoes", visible: true },
-    { label: "Revisões do Sistema", path: "/revisoes", visible: true },
-    { label: "Lixeira", path: "/lixeira", visible: true },
-  ]},
-  { title: "Ajuda", items: [
-    { label: "Biblioteca de Conhecimento", path: "/ajuda", visible: true },
-  ]},
-];
-
 type MenuItem = { label: string; path: string; visible: boolean; originalLabel?: string };
 type MenuSection = { title: string; items: MenuItem[] };
+
+// Módulos que reusam a mesma constante (evita duplicar Jurídico) ou são fallback ("all").
+const SKIP_MODULE_IDS = new Set<ModuleId>([
+  "juridico-trabalhista",
+  "juridico-tributario",
+  "juridico-civil",
+  "all",
+]);
+
+// Ordem de exibição dos módulos no painel de controle.
+const MODULE_DISPLAY_ORDER: ModuleId[] = [
+  "cadastro", "rh-dp", "sst", "avaliacao",
+  "orcamento", "planejamento", "medicao",
+  "compras", "almoxarifado", "financeiro",
+  "terceiros", "parceiros",
+  "gestao-documentos", "operacional", "frotas",
+  "juridico", "admin",
+];
+
+// Aceita o tipo bruto de itens da sidebar (com children opcionais).
+type SidebarRawItem = { label: string; path?: string; children?: SidebarRawItem[] };
+
+/**
+ * Achata recursivamente os itens da sidebar, emitindo APENAS folhas navegáveis.
+ * Se um item tem `children`, é tratado como categoria (pai ignorado, filhos emitidos).
+ * Isso evita expor pais não-navegáveis (ex: "Demissão" / "/demissao" sem rota real).
+ */
+function flattenLeaves(items: SidebarRawItem[]): Array<{ label: string; path: string }> {
+  const out: Array<{ label: string; path: string }> = [];
+  for (const it of items) {
+    if (it.children && it.children.length > 0) {
+      out.push(...flattenLeaves(it.children));
+    } else if (it.path) {
+      out.push({ label: it.label, path: it.path });
+    }
+  }
+  return out;
+}
+
+/**
+ * DEFAULT_MENU é derivado automaticamente das constantes `menuSections*` da sidebar
+ * (via MODULE_SECTIONS) + `adminSections` (Ajuda). Assim, qualquer item novo
+ * adicionado à barra lateral aparece automaticamente neste painel — não há lista
+ * duplicada para manter.
+ *
+ * Cada item aparece UMA vez (dedupe global por path) para evitar que o mesmo path
+ * apareça em múltiplas seções (a visibilidade é salva por path, então duplicatas
+ * causariam confusão).
+ */
+function buildDefaultMenuFromSidebar(): MenuSection[] {
+  const out: MenuSection[] = [];
+  const seenSectionRefs = new WeakSet<object>();
+  const seenPaths = new Set<string>();
+
+  const emitGroup = (groupLabel: string | null, sections: { title: string; items: SidebarRawItem[] }[]) => {
+    for (const sec of sections) {
+      if (seenSectionRefs.has(sec)) continue;
+      seenSectionRefs.add(sec);
+      const leaves = flattenLeaves(sec.items);
+      const items: MenuItem[] = [];
+      for (const leaf of leaves) {
+        if (seenPaths.has(leaf.path)) continue;
+        seenPaths.add(leaf.path);
+        items.push({ label: leaf.label, path: leaf.path, visible: true });
+      }
+      if (items.length === 0) continue;
+      const title = groupLabel ? `${groupLabel} — ${sec.title}` : sec.title;
+      out.push({ title, items });
+    }
+  };
+
+  for (const moduleId of MODULE_DISPLAY_ORDER) {
+    if (SKIP_MODULE_IDS.has(moduleId)) continue;
+    const sections = MODULE_SECTIONS[moduleId];
+    if (!sections || sections.length === 0) continue;
+    emitGroup(MODULE_LABELS[moduleId] ?? moduleId, sections);
+  }
+  // Seções comuns a todos os módulos (Ajuda etc.) — sem prefixo.
+  emitGroup(null, adminSections);
+
+  return out;
+}
+
+const DEFAULT_MENU: MenuSection[] = buildDefaultMenuFromSidebar();
 
 // Unique ID helpers: sections use "sec-{idx}", items use "item-{sectionIdx}-{itemIdx}"
 function secId(idx: number) { return `sec-${idx}`; }
@@ -456,31 +477,30 @@ export default function MenuConfigPanel() {
   });
 
   useEffect(() => {
-    if (configQuery.data) {
-      const saved = configQuery.data as MenuSection[];
-      const allSavedPaths = new Set(saved.flatMap(s => s.items.map(i => i.path)));
-      const merged = saved.map(s => ({ ...s, items: [...s.items] }));
-      for (const defSection of DEFAULT_MENU) {
-        const existingSection = merged.find(s => s.title === defSection.title);
-        for (const defItem of defSection.items) {
-          if (!allSavedPaths.has(defItem.path)) {
-            if (existingSection) {
-              existingSection.items.push({ ...defItem });
-            } else {
-              merged.push({ title: defSection.title, items: defSection.items.map(i => ({ ...i })) });
-              break;
-            }
-            allSavedPaths.add(defItem.path);
-          }
+    if (!configQuery.data) return;
+    const saved = configQuery.data as MenuSection[];
+    // Path é a chave canônica. Itens duplicados em seções diferentes são deduplicados.
+    const savedPaths = new Set(saved.flatMap(s => s.items.map(i => i.path)));
+    const merged: MenuSection[] = saved.map(s => ({
+      ...s,
+      items: s.items.map(i => ({ ...i })),
+    }));
+    for (const defSection of DEFAULT_MENU) {
+      // Apenas itens cujo path AINDA NÃO existe em nenhuma seção salva.
+      const newItems = defSection.items.filter(i => !savedPaths.has(i.path));
+      if (newItems.length === 0) continue;
+      const existing = merged.find(s => s.title === defSection.title);
+      if (existing) {
+        for (const item of newItems) {
+          existing.items.push({ ...item });
+          savedPaths.add(item.path);
         }
+      } else {
+        merged.push({ title: defSection.title, items: newItems.map(i => ({ ...i })) });
+        for (const item of newItems) savedPaths.add(item.path);
       }
-      for (const defSection of DEFAULT_MENU) {
-        if (!merged.find(s => s.title === defSection.title)) {
-          merged.push({ title: defSection.title, items: defSection.items.map(i => ({ ...i })) });
-        }
-      }
-      setMenuConfig(merged);
     }
+    setMenuConfig(merged);
   }, [configQuery.data]);
 
   const toggleSection = (title: string) => {

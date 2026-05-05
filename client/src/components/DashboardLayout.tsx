@@ -238,7 +238,7 @@ const menuSectionsJuridico: MenuSection[] = [
 ];
 
 // Shared admin sections (appended to every module)
-const adminSections: MenuSection[] = [
+export const adminSections: MenuSection[] = [
   {
     title: "Ajuda",
     items: [
@@ -631,7 +631,7 @@ const menuSectionsCadastro: MenuSection[] = [
   },
 ];
 
-const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
+export const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "rh-dp": menuSectionsRHDP,
   "sst": menuSectionsSST,
   "juridico": menuSectionsJuridico,
@@ -1102,50 +1102,70 @@ function DashboardLayoutContent({
     // Combine module sections + admin sections
     let sections: MenuSection[] = [...moduleSections, ...adminSections];
 
-    // Apply saved menu config if available (only for rh-dp module which is the main one)
-    if (savedMenuConfig && activeModule === 'rh-dp') {
-      // Build a map of all available items by path for icon lookup
+    // Apply saved menu config if available (para TODOS os módulos — assim o usuário
+    // pode ocultar/renomear/reordenar itens em qualquer módulo via Painel de Controle).
+    if (savedMenuConfig) {
+      // Build a map of all available items by path for icon lookup.
+      // Indexa RECURSIVAMENTE (inclui `children`) — assim folhas aninhadas como
+      // /aviso-previo e /pedido-demissao (filhos de "Demissão") também são
+      // reconhecidas como pertencentes ao módulo ativo.
+      // Apenas paths do módulo ativo (+ adminSections) são "permitidos" — paths
+      // salvos que pertencem a OUTROS módulos são ignorados aqui para evitar
+      // contaminação cruzada entre módulos.
       const allItemsByPath = new Map<string, MenuItem>();
-      for (const sec of sections) {
-        for (const item of sec.items) {
-          allItemsByPath.set(item.path, item);
+      const indexLeavesAndParents = (items: MenuItem[]) => {
+        for (const item of items) {
+          if (item.children && item.children.length > 0) {
+            // Pai não-navegável: descer nos filhos.
+            indexLeavesAndParents(item.children);
+          } else {
+            allItemsByPath.set(item.path, item);
+          }
         }
-      }
+      };
+      for (const sec of sections) indexLeavesAndParents(sec.items);
+      const allowedPaths = new Set(allItemsByPath.keys());
 
-      // Reconstruct sections from saved config
+      // Reconstruct sections from saved config — apenas itens cujo path pertence
+      // ao módulo ativo (allowedPaths). Aplica label customizado e respeita visible.
       const customSections: MenuSection[] = [];
       for (const savedSection of savedMenuConfig) {
         const items: MenuItem[] = [];
         for (const savedItem of savedSection.items) {
-          if (!savedItem.visible) continue; // Hide invisible items
-          const original = allItemsByPath.get(savedItem.path);
-          // Skip deprecated paths that were removed from the codebase
+          if (!savedItem.visible) continue;
           if (DEPRECATED_PATHS.has(savedItem.path)) continue;
-          if (original) {
-            items.push({
-              ...original,
-              label: savedItem.label || original.label, // Use custom label if set
-            });
-          } else {
-            // Item exists in saved config but not in code (e.g. new path)
-            // Try to find icon from ICON_MAP
-            const iconFromMap = ICON_MAP[savedItem.label] || ICON_MAP[savedItem.originalLabel || ''] || Grid2X2;
-            items.push({
-              icon: iconFromMap,
-              label: savedItem.label,
-              path: savedItem.path,
-            });
-          }
+          if (!allowedPaths.has(savedItem.path)) continue; // path de outro módulo — ignora
+          const original = allItemsByPath.get(savedItem.path)!;
+          items.push({
+            ...original,
+            label: savedItem.label || original.label,
+          });
         }
         if (items.length > 0) {
           customSections.push({ title: savedSection.title, items });
         }
       }
 
-      // Add any sections/items from code that are NOT in saved config (new items added after save)
-      const savedPaths = new Set(savedMenuConfig.flatMap(s => s.items.map(i => i.path)));
+      // Add any leaves from code that are NOT in saved config (new items added after save).
+      // Considera apenas paths do módulo ativo já presentes em `savedMenuConfig`.
+      // Walk recursivo: para itens com `children`, emite apenas as folhas faltantes
+      // (não o pai não-navegável, ex: "Demissão"/`/demissao`).
+      const savedPathsThisModule = new Set(
+        savedMenuConfig.flatMap(s => s.items.map(i => i.path)).filter(p => allowedPaths.has(p))
+      );
+      const collectMissingLeaves = (items: MenuItem[]): MenuItem[] => {
+        const out: MenuItem[] = [];
+        for (const item of items) {
+          if (item.children && item.children.length > 0) {
+            out.push(...collectMissingLeaves(item.children));
+          } else if (!savedPathsThisModule.has(item.path)) {
+            out.push(item);
+          }
+        }
+        return out;
+      };
       for (const sec of sections) {
-        const missingItems = sec.items.filter(item => !savedPaths.has(item.path));
+        const missingItems = collectMissingLeaves(sec.items);
         if (missingItems.length > 0) {
           const existingSection = customSections.find(s => s.title === sec.title);
           if (existingSection) {
@@ -1733,7 +1753,16 @@ function DashboardLayoutContent({
                   </div>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="w-56">
+                {isMasterUser && (
+                  <DropdownMenuItem
+                    onClick={() => setLocation("/configuracoes/menu")}
+                    className="cursor-pointer"
+                  >
+                    <Settings2 className="mr-2 h-4 w-4" />
+                    <span>Personalizar Menu</span>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"

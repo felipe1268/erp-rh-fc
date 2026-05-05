@@ -86,6 +86,7 @@ const Usuarios = lazy(() => import("./pages/Usuarios"));
 const GruposUsuarios = lazy(() => import("./pages/GruposUsuarios"));
 const Auditoria = lazy(() => import("./pages/Auditoria"));
 const Configuracoes = lazy(() => import("./pages/Configuracoes"));
+const MenuConfig = lazy(() => import("./pages/MenuConfig"));
 const Migration = lazy(() => import("./pages/Migration"));
 const Obras = lazy(() => import("./pages/Obras"));
 const Clientes = lazy(() => import("./pages/Clientes"));
@@ -349,6 +350,7 @@ function Router() {
         <Route path={"/controle-documentos"} component={() => <RouteGuard component={ControleDocumentos} route="/controle-documentos" />} />
         <Route path={"/vale-alimentacao"} component={() => <RouteGuard component={ValeAlimentacao} route="/vale-alimentacao" />} />
         <Route path={"/configuracoes"} component={() => <MasterOnlyGuard component={Configuracoes} />} />
+        <Route path={"/configuracoes/menu"} component={() => <MasterOnlyGuard component={MenuConfig} />} />
         <Route path={"/migracao"} component={() => <RouteGuard component={Migration} route="/colaboradores" />} />
         <Route path={"/lixeira"} component={() => <MasterOnlyGuard component={Lixeira} />} />
         <Route path={"/aviso-previo"} component={() => <RouteGuard component={AvisoPrevio} route="/aviso-previo" />} />
