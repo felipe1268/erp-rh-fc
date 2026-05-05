@@ -5762,7 +5762,20 @@ export default function FolhaPagamento() {
                 <Button size="sm" className={`w-full mt-auto ${pagamentoConsolidado ? 'bg-gray-400 cursor-not-allowed' : pagOk ? 'bg-slate-500 hover:bg-slate-600' : 'bg-green-600 hover:bg-green-700'}`}
                   disabled={simularPagamentoMut.isPending || !step4Ready || pagamentoConsolidado}
                   title={pagamentoConsolidado ? "Pagamento consolidado — desconsolide primeiro para resimular" : ""}
-                  onClick={() => { setCalcType("pagamento"); simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim, forcarRecalculoPonto: true }); }}>
+                  onClick={() => {
+                    // Detecta overrides ANTES de disparar a simulação para abrir o diálogo na hora,
+                    // evitando que o usuário fique esperando "Simulando..." e só veja a confirmação ao
+                    // entrar em "Ver Resultado". Conta funcionários com descontosManuais não-vazio.
+                    const overridesCount = ((pagamentoResult as any)?.funcionarios || []).filter(
+                      (f: any) => f && f.descontosManuais && Object.keys(f.descontosManuais).length > 0
+                    ).length;
+                    if (overridesCount > 0) {
+                      setOverridesPrompt({ open: true, count: overridesCount });
+                      return;
+                    }
+                    setCalcType("pagamento");
+                    simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim, forcarRecalculoPonto: true });
+                  }}>
                   {simularPagamentoMut.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Simulando...</> : pagamentoConsolidado ? <><Lock className="h-3 w-3 mr-1" /> Consolidado</> : pagOk ? <><RefreshCw className="h-3 w-3 mr-1" /> Resimular</> : <><Zap className="h-3 w-3 mr-1" /> Simular Pagamento</>}
                 </Button>
                 {pagamentoResult && (
