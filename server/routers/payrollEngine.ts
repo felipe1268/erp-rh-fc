@@ -3232,7 +3232,8 @@ export const payrollEngineRouter = router({
       for (const r of convenioBatchRows) convenioMap.set(Number(r.employee_id), parseFloat(r.totalConvenio || '0'));
       console.log(`[SimPag DIAG] convenioBatchRows=${convenioBatchRows.length}, dsrRows=${dsrRows.length}, empIds=${empIds.length}`);
 
-      // PRE-FETCH: Adjustments do mês de desconto (outros + pensão) — sujeitos à aprovação RH (Rev. 1203)
+      // PRE-FETCH: Adjustments do mês de desconto (apenas 'outros') — sujeitos à aprovação RH (Rev. 1203)
+      // Pensão NÃO entra mais aqui (Rev. 1205): cálculo é dinâmico direto do cadastro do funcionário.
       const adjBatchRows = ((await db.execute(sql`
         SELECT "employeeId", tipo, "valorDesconto", "aprovadoRh", id, descricao, data
         FROM payroll_adjustments
@@ -3240,7 +3241,7 @@ export const payrollEngineRouter = router({
           AND "employeeId" IN (${empIdsSql})
           AND "mesDesconto" = ${input.mesReferencia}
           AND status IN ('pendente','aplicado')
-          AND tipo IN ('outros','pensao')
+          AND tipo = 'outros'
       `)) as any).rows || [];
       const adjustmentsByEmp = new Map<number, any[]>();
       for (const r of adjBatchRows) {
@@ -3359,12 +3360,24 @@ export const payrollEngineRouter = router({
         const descontoFaltas  = descontoFaltasBase + dsrFaltaValorAplicado;
         const descontoAtrasos = descontoAtrasosBase;
 
-        // PENSÃO ALIMENTÍCIA: vem de payroll_adjustments tipo='pensao' aprovados pelo RH (Rev. 1203)
-        // Geração mensal automática via gerarPensoesMes; aprovação via aprovarAdjustmentRh.
-        const pensaoAdjs = (adjustmentsByEmp.get(emp.id) || []).filter(
-          (a: any) => a.tipo === 'pensao' && a.aprovadoRh === true
-        );
-        const descontoPensao = pensaoAdjs.reduce((s: number, a: any) => s + parseBRL(a.valorDesconto), 0);
+        // PENSÃO ALIMENTÍCIA: cálculo dinâmico direto do cadastro do funcionário (Rev. 1205).
+        // Não depende mais de payroll_adjustments nem de aprovação RH (a configuração da pensão
+        // já é controlada no cadastro do colaborador). Base = bruto do mês (inclui HE aprovada)
+        // OU salário mínimo vigente, conforme emp.pensaoBase.
+        let descontoPensao = 0;
+        if (Number(emp.pensaoAlimenticia) === 1) {
+          if (emp.pensaoTipo === 'percentual') {
+            const perc = (parseBRL(emp.pensaoPercentual) || 0) / 100;
+            const heValor = heMap.get(emp.id) || 0;
+            const baseBruto = salarioBruto + heValor;
+            const basePensao = emp.pensaoBase === 'salario_minimo' ? salarioMinimoVigente : baseBruto;
+            descontoPensao = basePensao * perc;
+          } else {
+            // valor_fixo (default)
+            descontoPensao = parseBRL(emp.pensaoValor) || 0;
+          }
+          if (descontoPensao < 0) descontoPensao = 0;
+        }
 
         const vaValor = vaLancamento;
         const vrValorMensal = vrDiario * diasUteis;
@@ -5358,6 +5371,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         SELECT 1 FROM user_companies WHERE "userId" = ${userId} AND "companyId" = ${Number(input.companyId)} LIMIT 1
       `)) as any).rows || [];
       if (accessChk.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para ver pendências dessa empresa" });
+      // Rev. 1205: pensão saiu da aprovação RH (cálculo é dinâmico do cadastro). Aqui só 'outros'.
       const adjs = ((await db.execute(sql`
         SELECT pa.id, pa."employeeId", pa.tipo, pa.descricao, pa."valorDesconto", pa.data,
                pa."aprovadoRh", pa."aprovadoRhEm", pa."aprovadoRhMotivo",
@@ -5367,7 +5381,7 @@ Responda EXATAMENTE no formato JSON abaixo:`;
         WHERE pa."companyId" = ${input.companyId}
           AND pa."mesDesconto" = ${input.mesReferencia}
           AND pa.status IN ('pendente','aplicado')
-          AND pa.tipo IN ('pensao','outros')
+          AND pa.tipo = 'outros'
         ORDER BY e."nomeCompleto", pa.data
       `)) as any).rows || [];
       const epi = ((await db.execute(sql`

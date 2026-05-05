@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1293,
+    titulo: "Folha: Pensão alimentícia volta a ser calculada direto do cadastro (corrige coluna zerada)",
+    descricao: "BUGFIX CRÍTICO: a coluna PENSÃO da Folha de Pagamento aparecia zerada (—) para todos os colaboradores, mesmo os que tinham pensão alimentícia configurada no cadastro. Causa: regressão entre as revisões 1203 (que exigia adjustment + aprovação RH) e 1205 (que prometeu cálculo dinâmico do cadastro) — o servidor continuou lendo só de payroll_adjustments tipo='pensao' AND aprovadoRh=true, mas nenhum lançamento desse tipo era criado nem havia UI para aprovar. Agora o simularPagamento calcula a pensão diretamente do cadastro do funcionário (pensaoAlimenticia=1, pensaoTipo, pensaoValor, pensaoPercentual, pensaoBase) a cada simulação, exatamente como prometido no Rev. 1205 e como já é descrito no rodapé da tela de Aprovações RH ('Pensão alimentícia é automática, não precisa de aprovação'). Base do percentual segue o cadastro: salário bruto do mês (com HE aprovada) OU salário mínimo vigente. Valor fixo continua somando direto. A tela de Aprovações RH deixou de listar lançamentos de pensão (não há mais essa fila).",
+    tipo: "bugfix",
+    modulos: "Folha de Pagamento",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-05-05 11:30:00",
+  },
+  {
     version: 1292,
     titulo: "Novo módulo: Seguro de Vida",
     descricao: "Aba 'Seguro de Vida' criada no menu Gestão de Pessoas. Permite controlar coberturas de todos os CLT ativos com status: Ativo, Pendente Inclusão, Pendente Cancelamento, Cancelado. Cards de resumo: total segurados, pendentes, sem cobertura. Importação mensal do relatório do corretor via texto colado (PDF): cruzamento automático por similaridade de nomes com funcionários CLT ativos, detectando 4 cenários — ✅ OK (em ambos), 🔴 Sem Seguro (urgente!), 🟡 Pagamento Indevido (desligado ainda segurado), 🆕 Recém-admitido em carência. Histórico de todas as importações com detalhe das divergências. Carga inicial via seed (admin_master) para popular com a lista atual do corretor. Aviso fixo no topo da tela: 'Trabalhar sem Seguro de Vida é estritamente proibido'. Banco de dados: duas novas tabelas — seguro_vida_coberturas e seguro_vida_importacoes.",
