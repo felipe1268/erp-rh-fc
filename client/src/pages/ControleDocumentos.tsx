@@ -974,7 +974,7 @@ const TIPOS_DOC_LABELS: Record<string, string> = {
   atestado_medico: "Atestado Médico", diploma: "Diploma", certificado: "Certificado", outros: "Outros"
 };
 
-function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee }: { companyId: number; companyIds?: number[]; employees: any[]; onClickEmployee: (id: number) => void }) {
+function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee, EmployeeSelect }: { companyId: number; companyIds?: number[]; employees: any[]; onClickEmployee: (id: number) => void; EmployeeSelect?: React.FC<{ value: number | undefined; onChange: (id: number) => void }> }) {
   const { data: docs = [], refetch } = trpc.employeeDocuments.listar.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
   const uploadDoc = trpc.employeeDocuments.upload.useMutation({ onSuccess: () => { refetch(); toast.success("Documento enviado!"); } });
   const deleteDoc = trpc.employeeDocuments.excluir.useMutation({ onSuccess: () => { refetch(); toast.success("Documento excluído!"); } });
@@ -1116,12 +1116,16 @@ function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee }: 
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium">Colaborador *</label>
-              <Select value={docForm.employeeId?.toString() || ""} onValueChange={v => setDocForm({ ...docForm, employeeId: parseInt(v) })}>
-                <SelectTrigger><SelectValue placeholder="Selecione o colaborador" /></SelectTrigger>
-                <SelectContent>
-                  {employees.map((e: any) => <SelectItem key={e.id} value={e.id.toString()}>{e.nomeCompleto}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              {EmployeeSelect ? (
+                <EmployeeSelect value={docForm.employeeId} onChange={(id: number) => setDocForm({ ...docForm, employeeId: id })} />
+              ) : (
+                <Select value={docForm.employeeId?.toString() || ""} onValueChange={v => setDocForm({ ...docForm, employeeId: parseInt(v) })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o colaborador" /></SelectTrigger>
+                  <SelectContent>
+                    {employees.map((e: any) => <SelectItem key={e.id} value={e.id.toString()}>{e.nomeCompleto}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <div>
               <label className="text-sm font-medium">Tipo de Documento *</label>
@@ -1946,7 +1950,7 @@ export default function ControleDocumentos() {
 
           {/* ===================== ABA DOCUMENTOS DO FUNCIONÁRIO ===================== */}
           <TabsContent value="documentos">
-            <DocumentosPanel companyId={companyId} companyIds={companyIds} employees={activeEmployees} onClickEmployee={setRaioXEmployeeId} />
+            <DocumentosPanel companyId={companyId} companyIds={companyIds} employees={allEmployees as any[]} onClickEmployee={setRaioXEmployeeId} EmployeeSelect={EmployeeSelect} />
           </TabsContent>
 
           {/* ===================== ABA ASO ===================== */}
