@@ -1,5 +1,8 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1341 — 05/05/2026
+- **Contrato PJ — Lista de Aditivos visível no cabeçalho**: o aditivo gerado para a Thais Sugahara (e qualquer outro contrato PJ) agora aparece como **botão clicável amarelo** ao lado de "Criar Aditivo", no cabeçalho azul da tela do contrato. Antes o aditivo era criado e salvo no banco corretamente, mas não havia caminho visível na tela do contrato para reabri-lo — o usuário precisava lembrar do link direto. Agora basta clicar no botão **"Nº 01"**, **"Nº 02"** etc. para abrir o aditivo correspondente em modo de visualização/edição/impressão. A lista é carregada automaticamente do endpoint `pj.aditivos.list` e fica oculta quando o contrato não tem aditivos.
+
 ## Revisão 1340 — 05/05/2026
 - **Aditivo PJ — Auto-save de rascunho + edição após gerar**: dois reforços no fluxo de criação de aditivos contratuais PJ para evitar perda de trabalho:
   - **Rascunho automático no navegador**: enquanto você preenche o modal "Criar Aditivo Contratual" (data, cláusulas selecionadas, novas redações), tudo é salvo automaticamente no `localStorage` (chave por contrato). Se a página recarregar, o navegador travar ou você fechar o modal sem querer, **basta reabrir**: o rascunho é recuperado e um aviso confirma a restauração. O botão antes chamado "Cancelar" virou **"Fechar (manter rascunho)"** e foi adicionado um botão vermelho **"Descartar Rascunho"** (com confirmação) para apagar o rascunho de propósito. Ao clicar em "Gerar Aditivo" com sucesso, o rascunho é limpo automaticamente.

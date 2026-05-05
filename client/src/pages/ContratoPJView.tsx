@@ -152,6 +152,13 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
   );
   const clausulas = clausulasQ.data ?? [];
 
+  // Aditivos já gerados para este contrato
+  const aditivosListQ = (trpc as any).pj.aditivos.list.useQuery(
+    { contractId: contratoId, companyId },
+    { enabled: !!contratoId && companyId > 0 },
+  );
+  const aditivosExistentes: Array<{ id: number; numeroAditivo: number; dataAditivo: string }> = aditivosListQ.data ?? [];
+
   const criarAditivo = (trpc as any).pj.aditivos.create.useMutation({
     onSuccess: (data: any) => {
       toast.success(`Aditivo nº ${data.numeroAditivo} criado com sucesso!`);
@@ -335,6 +342,21 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {aditivosExistentes.length > 0 && (
+            <div className="flex items-center gap-1.5 mr-2 pr-2 border-r border-white/20">
+              <span className="text-[11px] uppercase tracking-wider text-white/70 mr-1">Aditivos:</span>
+              {aditivosExistentes.map(a => (
+                <button
+                  key={a.id}
+                  onClick={() => navigate(`/contrato-pj/${contratoId}/aditivo/${a.id}`)}
+                  title={`Abrir Aditivo nº ${a.numeroAditivo} (${a.dataAditivo})`}
+                  className="px-2 py-1 text-xs font-bold rounded bg-amber-500/90 hover:bg-amber-400 text-white shadow"
+                >
+                  Nº {String(a.numeroAditivo).padStart(2, '0')}
+                </button>
+              ))}
+            </div>
+          )}
           <Button variant="ghost" size="sm" onClick={() => setShowAditivoModal(true)} className="text-white hover:bg-white/20 gap-1.5 border border-amber-300/50 text-amber-200">
             <FilePlus2 className="h-4 w-4" /> Criar Aditivo
           </Button>
