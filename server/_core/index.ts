@@ -470,6 +470,13 @@ Regras:
           console.log(`[SyncSchema+] Coluna fd_valor garantida na tabela planejamento_medicao_config.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_medicao_config fd_valor:`, e?.message || e); }
 
+        try {
+          // Rev. 1345: garantir reter_sinal sempre — Rev. 1344 ColFix não rodava se versão já estava aplicada,
+          // o que quebrava SELECT * em planejamento_medicao_config (column does not exist).
+          await db.execute(sql`ALTER TABLE planejamento_medicao_config ADD COLUMN IF NOT EXISTS reter_sinal BOOLEAN NOT NULL DEFAULT false`);
+          console.log(`[SyncSchema+] Coluna reter_sinal garantida na tabela planejamento_medicao_config.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_medicao_config reter_sinal:`, e?.message || e); }
+
         await db.execute(sql`CREATE TABLE IF NOT EXISTS sst_integracao_config (
           id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, obra_id INTEGER, obra_nome VARCHAR(255),
           titulo VARCHAR(255) NOT NULL, descricao TEXT, nota_minima INTEGER NOT NULL DEFAULT 70,
