@@ -5445,7 +5445,9 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
   // Quando o usuário não preencheu fdValor manualmente, usamos esta sugestão como valor efetivo.
   const fdSugerido    = n((configMed as any)?.fdSugerido);
   const fdItensCount  = Number((configMed as any)?.fdItensCount ?? 0);
-  const orcamentoIdProj = (configMed as any)?.orcamentoIdProj ?? null;
+  // undefined = API antiga / dados ainda carregando; null = projeto realmente sem orçamento.
+  const hasOrcInfo      = configMed != null && (configMed as any).orcamentoIdProj !== undefined;
+  const orcamentoIdProj = hasOrcInfo ? (configMed as any).orcamentoIdProj : undefined;
   const fdEfetivo     = cfgFdValor != null ? cfgFdValor : fdSugerido;
 
   // ── Dados mensais (cruzamento orç x cronograma) ──────────────────────────
@@ -6042,7 +6044,9 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                     <p className="text-[10px] text-slate-400 mt-0.5">
                       {cfgFdValor != null ? (
                         <>Manual · Sugerido pelo orçamento: {fmt(fdSugerido)}</>
-                      ) : orcamentoIdProj == null ? (
+                      ) : !hasOrcInfo ? (
+                        <>Sugerido automaticamente do orçamento (aba F.D.)</>
+                      ) : orcamentoIdProj === null ? (
                         <span className="text-amber-600">⚠ Projeto sem orçamento vinculado — informe um valor manual</span>
                       ) : fdItensCount === 0 ? (
                         <span className="text-amber-600">⚠ Orçamento #{orcamentoIdProj} não tem itens na aba F.D. — informe manualmente ou cadastre no BDI</span>
