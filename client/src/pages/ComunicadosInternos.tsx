@@ -5,9 +5,9 @@ import { usePermissions } from "@/contexts/PermissionsContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft, Pencil, CheckCircle2, RotateCcw, Lock, X } from "lucide-react";
+import RichTextEditor, { stripHtml, sanitizeHtml, isHtmlContent } from "@/components/RichTextEditor";
+import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft, Pencil, CheckCircle2, RotateCcw, Lock, X, Maximize2, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -33,6 +33,8 @@ export default function ComunicadosInternos() {
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ titulo: "", conteudo: "" });
   const [pendingText, setPendingText] = useState<{ id: number; text: string } | null>(null);
+  const [novoFullscreen, setNovoFullscreen] = useState(false);
+  const [editFullscreen, setEditFullscreen] = useState(false);
 
   const { data: comunicados = [], isLoading } = trpc.comunicadosInternos.listar.useQuery(
     { companyId },
@@ -228,9 +230,16 @@ export default function ComunicadosInternos() {
             </div>
 
             <div className="border border-gray-200 rounded p-6 mb-6 min-h-[200px]">
-              <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
-                {c.conteudo || ""}
-              </div>
+              {c.conteudo ? (
+                isHtmlContent(c.conteudo) ? (
+                  <div
+                    className="prose prose-sm max-w-none text-gray-800 leading-relaxed prose-headings:text-[#1B2A4A] prose-p:my-2"
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(c.conteudo) }}
+                  />
+                ) : (
+                  <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{c.conteudo}</div>
+                )
+              ) : null}
             </div>
 
             <div className="mt-12 pt-6">
@@ -318,7 +327,10 @@ export default function ComunicadosInternos() {
                         <td className="px-4 py-3 font-mono font-bold text-blue-700">{c.numero}</td>
                         <td className="px-4 py-3 overflow-hidden max-w-0">
                           <div className="font-medium text-slate-800 truncate">{c.titulo}</div>
-                          {c.conteudo && <div className="text-xs text-slate-500 truncate">{c.conteudo.length > 100 ? c.conteudo.substring(0, 100) + "..." : c.conteudo}</div>}
+                          {c.conteudo && (() => {
+                            const preview = stripHtml(c.conteudo);
+                            return preview ? <div className="text-xs text-slate-500 truncate">{preview.length > 100 ? preview.substring(0, 100) + "..." : preview}</div> : null;
+                          })()}
                         </td>
                         <td className="px-4 py-3">
                           {isConcluido ? (
@@ -385,12 +397,18 @@ export default function ComunicadosInternos() {
         </div>
       </div>
 
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-          <DialogHeader className="flex-shrink-0">
-            <DialogTitle className="flex items-center gap-2"><Megaphone className="h-5 w-5 text-blue-600" /> Novo Comunicado Interno</DialogTitle>
+      <Dialog open={showDialog} onOpenChange={(open) => { setShowDialog(open); if (!open) setNovoFullscreen(false); }}>
+        <DialogContent className={`flex flex-col p-0 ${novoFullscreen ? "max-w-[98vw] w-[98vw] h-[96vh] max-h-[96vh]" : "max-w-3xl max-h-[88vh]"}`}>
+          <DialogHeader className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-slate-200">
+            <div className="flex items-center justify-between gap-2">
+              <DialogTitle className="flex items-center gap-2"><Megaphone className="h-5 w-5 text-blue-600" /> Novo Comunicado Interno</DialogTitle>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 mr-6" title={novoFullscreen ? "Sair da tela cheia" : "Tela cheia"}
+                onClick={() => setNovoFullscreen(v => !v)}>
+                {novoFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </Button>
+            </div>
           </DialogHeader>
-          <div className="space-y-4 py-2 overflow-y-auto flex-1 min-h-0">
+          <div className="space-y-4 py-3 px-6 overflow-y-auto flex-1 min-h-0">
             <div>
               <Label>Título *</Label>
               <Input className="mt-1" placeholder="Ex: Registro de Ponto" value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} />
@@ -400,12 +418,17 @@ export default function ComunicadosInternos() {
               <Input type="date" className="mt-1" value={form.dataEmissao} onChange={e => setForm({ ...form, dataEmissao: e.target.value })} />
               <p className="text-xs text-slate-500 mt-1">A numeração ({String((comunicados.filter((c:any)=>c.ano===new Date(form.dataEmissao+"T12:00:00").getFullYear()).length)+1).padStart(3,"0")}/{new Date(form.dataEmissao+"T12:00:00").getFullYear()}) é gerada automaticamente.</p>
             </div>
-            <div>
-              <Label>Conteúdo</Label>
-              <Textarea className="mt-1 min-h-[120px] max-h-[250px] resize-y" placeholder="Texto do comunicado..." value={form.conteudo} onChange={e => setForm({ ...form, conteudo: e.target.value })} />
+            <div className="flex flex-col">
+              <Label className="mb-1">Conteúdo</Label>
+              <RichTextEditor
+                value={form.conteudo}
+                onChange={(html) => setForm({ ...form, conteudo: html })}
+                placeholder="Texto do comunicado..."
+                minHeight={novoFullscreen ? "calc(96vh - 360px)" : "260px"}
+              />
             </div>
           </div>
-          <DialogFooter className="flex-shrink-0">
+          <DialogFooter className="flex-shrink-0 px-6 py-4 border-t border-slate-200">
             <Button variant="outline" onClick={() => setShowDialog(false)}>Cancelar</Button>
             <Button onClick={() => {
               if (!form.titulo.trim()) { toast.error("Informe o título"); return; }
@@ -419,22 +442,33 @@ export default function ComunicadosInternos() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={editId !== null} onOpenChange={(open) => { if (!open) setEditId(null); }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-          <DialogHeader className="flex-shrink-0">
-            <DialogTitle className="flex items-center gap-2"><Pencil className="h-5 w-5 text-amber-600" /> Editar Comunicado</DialogTitle>
+      <Dialog open={editId !== null} onOpenChange={(open) => { if (!open) { setEditId(null); setEditFullscreen(false); } }}>
+        <DialogContent className={`flex flex-col p-0 ${editFullscreen ? "max-w-[98vw] w-[98vw] h-[96vh] max-h-[96vh]" : "max-w-3xl max-h-[88vh]"}`}>
+          <DialogHeader className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-slate-200">
+            <div className="flex items-center justify-between gap-2">
+              <DialogTitle className="flex items-center gap-2"><Pencil className="h-5 w-5 text-amber-600" /> Editar Comunicado</DialogTitle>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 mr-6" title={editFullscreen ? "Sair da tela cheia" : "Tela cheia"}
+                onClick={() => setEditFullscreen(v => !v)}>
+                {editFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </Button>
+            </div>
           </DialogHeader>
-          <div className="space-y-4 py-2 overflow-y-auto flex-1 min-h-0">
+          <div className="space-y-4 py-3 px-6 overflow-y-auto flex-1 min-h-0">
             <div>
               <Label>Título *</Label>
               <Input className="mt-1" value={editForm.titulo} onChange={e => setEditForm({ ...editForm, titulo: e.target.value })} />
             </div>
-            <div>
-              <Label>Conteúdo</Label>
-              <Textarea className="mt-1 min-h-[120px] max-h-[250px] resize-y" placeholder="Texto do comunicado..." value={editForm.conteudo} onChange={e => setEditForm({ ...editForm, conteudo: e.target.value })} />
+            <div className="flex flex-col">
+              <Label className="mb-1">Conteúdo</Label>
+              <RichTextEditor
+                value={editForm.conteudo}
+                onChange={(html) => setEditForm({ ...editForm, conteudo: html })}
+                placeholder="Texto do comunicado..."
+                minHeight={editFullscreen ? "calc(96vh - 280px)" : "320px"}
+              />
             </div>
           </div>
-          <DialogFooter className="flex-shrink-0">
+          <DialogFooter className="flex-shrink-0 px-6 py-4 border-t border-slate-200">
             <Button variant="outline" onClick={() => setEditId(null)}>Cancelar</Button>
             <Button onClick={() => {
               if (!editForm.titulo.trim()) { toast.error("Informe o título"); return; }
