@@ -2070,7 +2070,10 @@ export const planejamentoRouter = router({
 
       // Sugestão de Faturamento Direto: soma da aba F.D. do BDI do orçamento vinculado ao projeto.
       // O usuário pode sobrescrever esse valor (gravado em fd_valor); quando fd_valor é NULL usamos esta sugestão.
+      // Rev. 1345: também retornamos o orcamentoId e o nº de itens para o usuário diagnosticar
+      // casos onde o projeto está vinculado a um orçamento sem F.D. lançado.
       let fdSugerido = 0;
+      let fdItensCount = 0;
       const [proj] = await db.select({ orcamentoId: planejamentoProjetos.orcamentoId })
         .from(planejamentoProjetos)
         .where(eq(planejamentoProjetos.id, input.projetoId))
@@ -2079,14 +2082,18 @@ export const planejamentoRouter = router({
         // Rev. 1342: db.execute retorna { rows: [...] } — destruturar como array dava undefined,
         // então fdSugerido sempre vinha 0 mesmo quando havia linhas em bdi_fd.
         const res: any = await db.execute(sql`
-          SELECT COALESCE(SUM(total),0)::numeric AS total
+          SELECT COALESCE(SUM(total),0)::numeric AS total, COUNT(*)::int AS n
           FROM bdi_fd
           WHERE orcamento_id = ${proj.orcamentoId}
         `);
         const row = res?.rows?.[0] ?? res?.[0];
         fdSugerido = Number(row?.total ?? 0) || 0;
+        fdItensCount = Number(row?.n ?? 0) || 0;
       }
-      return cfg ? { ...cfg, fdSugerido } : { fdSugerido } as any;
+      const orcamentoIdProj = proj?.orcamentoId ?? null;
+      return cfg
+        ? { ...cfg, fdSugerido, fdItensCount, orcamentoIdProj }
+        : { fdSugerido, fdItensCount, orcamentoIdProj } as any;
     }),
 
   salvarConfigMedicao: protectedProcedure

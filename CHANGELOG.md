@@ -1,5 +1,8 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1345 — 05/05/2026
+- **Previsão de Medição — Diagnóstico do Faturamento Direto sugerido**: a legenda abaixo do campo **Faturamento Direto (R$)** agora mostra de qual orçamento o sistema está puxando o valor e quantos itens existem na aba F.D. dele. Antes a mensagem era genérica ("Sugerido automaticamente do orçamento") e o usuário não tinha como saber por que o valor vinha como R$ 0,00. Agora aparece, conforme o caso: **(a)** "Sugerido do orçamento #59 (38 itens na aba F.D.)" quando há itens, **(b)** "⚠ Orçamento #51 não tem itens na aba F.D." quando o orçamento existe mas está vazio, ou **(c)** "⚠ Projeto sem orçamento vinculado" quando o projeto foi criado sem link de orçamento. O endpoint `getConfigMedicao` agora retorna também `fdItensCount` e `orcamentoIdProj`.
+
 ## Revisão 1344 — 05/05/2026
 - **Previsão de Medição — Retenção Técnica também do Sinal/Mobilização**: novo checkbox "**Reter também do Sinal**" logo abaixo do campo Retenção Técnica (%) na Configuração de Medição. Quando marcado, o mesmo percentual de retenção (ex.: 5%) é deduzido também da linha sintética de **Sinal/Mobilização**, e não apenas das medições mensais. A retenção do sinal entra no acumulado total e é devolvida normalmente na linha de **Liberação da Retenção** após a conclusão da obra. Por padrão fica **desligado** (comportamento atual preservado). A preferência é salva em `planejamento_medicao_config.reter_sinal` (nova coluna BOOLEAN).
 
