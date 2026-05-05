@@ -135,6 +135,7 @@ const ComunicadosInternos = lazy(() => import("./pages/ComunicadosInternos"));
 const Curriculos = lazy(() => import("./pages/Curriculos"));
 const Dissidio = lazy(() => import("./pages/Dissidio"));
 const PJMedicoes = lazy(() => import("./pages/PJMedicoes"));
+const ConformidadePJ = lazy(() => import("./pages/ConformidadePJ"));
 const PainelRH = lazy(() => import("./pages/PainelRH"));
 const PainelSST = lazy(() => import("./pages/PainelSST"));
 const ProgramasSST = lazy(() => import("./pages/ProgramasSST"));
@@ -380,6 +381,7 @@ function Router() {
         <Route path={"/feriados"} component={() => <RouteGuard component={Feriados} route="/feriados" />} />
         <Route path={"/dissidio"} component={() => <RouteGuard component={Dissidio} route="/dissidio" />} />
         <Route path={"/pj-medicoes"} component={() => <RouteGuard component={PJMedicoes} route="/pj-medicoes" />} />
+        <Route path={"/terceiros/pj/conformidade"} component={() => <RouteGuard component={ConformidadePJ} route="/terceiros/pj/conformidade" />} />
         <Route path="/habilidades" component={() => <RouteGuard component={Habilidades} route="/habilidades" />} />
         <Route path="/habilidades/importacao" component={() => <RouteGuard component={ImportacaoHabilidades} route="/habilidades/importacao" />} />
         <Route path="/relatorios/habilidades-obra" component={() => <RouteGuard component={RelatorioHabilidadesObra} route="/habilidades" />} />

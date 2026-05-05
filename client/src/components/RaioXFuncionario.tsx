@@ -288,6 +288,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const cipa = (raioX as any)?.cipa || [];
   const pjContratos = (raioX as any)?.pjContratos || [];
   const pjPagamentos = (raioX as any)?.pjPagamentos || [];
+  const pjConformidade = (raioX as any)?.pjConformidade || null;
   const emprestimosAlmox = (raioX as any)?.emprestimosAlmox || [];
   const descontosAlmox = (raioX as any)?.descontosAlmox || [];
   const insumosAlmox = (raioX as any)?.insumosAlmox || [];
@@ -1046,7 +1047,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       { value: "ponto", label: "Ponto", icon: Clock, count: pontoResumo.length },
                       { value: "folha", label: "Folha", icon: DollarSign, count: folhaPagamento.length },
                       { value: "he", label: emp?.tipoContrato === 'PJ' ? "Adicionais" : "Horas Extras", icon: Zap, count: horasExtras.length },
-                      ...(emp?.tipoContrato === 'PJ' ? [{ value: "pj", label: "PJ", icon: FileSignature, count: pjContratos.length }] : []),
+                      ...(emp?.tipoContrato === 'PJ' ? [{ value: "pj", label: "PJ", icon: FileSignature, count: (pjConformidade?.pendencias || 0) + pjContratos.length }] : []),
                       { value: "descontos_epi", label: "Descontos EPI", icon: Ban, count: (raioX as any)?.epiDiscountAlerts?.filter((a: any) => a.status === 'pendente').length || 0 },
                     ],
                   },
@@ -2319,6 +2320,52 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                   <div className="text-center py-12 text-muted-foreground">Nenhum contrato PJ registrado</div>
                 ) : (
                   <div className="space-y-4">
+                    {/* Painel de Conformidade PJ */}
+                    {pjConformidade && (
+                      <div className={`rounded-xl border p-4 ${pjConformidade.pendencias > 0 ? 'bg-amber-50/60 border-amber-300' : 'bg-emerald-50/60 border-emerald-300'}`}>
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className={`text-sm font-bold flex items-center gap-2 ${pjConformidade.pendencias > 0 ? 'text-amber-900' : 'text-emerald-900'}`}>
+                            <ShieldCheck className="h-4 w-4" />
+                            Conformidade PJ — {pjConformidade.mesReferencia}
+                            {pjConformidade.pendencias > 0 ? (
+                              <Badge variant="destructive" className="ml-2">{pjConformidade.pendencias} pendência(s)</Badge>
+                            ) : (
+                              <Badge className="bg-emerald-600 hover:bg-emerald-700 ml-2">Tudo em dia</Badge>
+                            )}
+                          </h4>
+                          <Button size="sm" variant="outline" className="text-purple-700 border-purple-300 hover:bg-purple-50" onClick={() => window.location.href = '/terceiros/pj/conformidade'}>
+                            Gerenciar
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-5 gap-2">
+                          {[
+                            { tipo: 'das', label: 'DAS-MEI' },
+                            { tipo: 'nf', label: 'NF do mês' },
+                            { tipo: 'cnd', label: 'CND CNPJ' },
+                            { tipo: 'seguro_vida', label: 'Seguro Vida' },
+                            { tipo: 'status_cnpj', label: 'CNPJ Ativo' },
+                          ].map(({ tipo, label }) => {
+                            const it = pjConformidade.itens?.[tipo];
+                            const status = it?.statusComputed || it?.status || 'pendente';
+                            const colorMap: Record<string, string> = {
+                              ok: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+                              pendente: 'bg-amber-100 text-amber-700 border-amber-300',
+                              vencido: 'bg-red-100 text-red-700 border-red-300',
+                              na: 'bg-gray-100 text-gray-500 border-gray-200',
+                            };
+                            return (
+                              <div key={tipo} className={`rounded-md border px-2 py-2 text-center ${colorMap[status]}`}>
+                                <div className="text-[10px] font-semibold uppercase tracking-wide">{label}</div>
+                                <div className="text-xs font-bold mt-1 capitalize">{status === 'na' ? 'N/A' : status}</div>
+                                {it?.dataVencimento && (
+                                  <div className="text-[9px] mt-0.5 opacity-75">vence {String(it.dataVencimento).slice(0,10)}</div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                     <div className="bg-white rounded-xl border p-6">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><FileSignature className="h-5 w-5 text-purple-500" /> Contratos PJ — {pjContratos.length}</h3>

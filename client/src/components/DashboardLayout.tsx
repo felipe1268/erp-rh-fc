@@ -108,8 +108,6 @@ const menuSectionsRHDP: MenuSection[] = [
       ]},
       { icon: Palmtree, label: "Férias", path: "/ferias" },
       { icon: ShieldCheck, label: "Seguro de Vida", path: "/seguro-vida" },
-      { icon: FileSignature, label: "Contratos PJ", path: "/modulo-pj" },
-      { icon: FileSpreadsheet, label: "PJ Medições", path: "/pj-medicoes" },
     ],
   },
   {
@@ -297,6 +295,14 @@ const menuSectionsTerceiros: MenuSection[] = [
       { icon: LayoutDashboard, label: "Painel Terceiros", path: "/terceiros/painel" },
       { icon: Building2, label: "Fornecedores / Terceiros", path: "/compras/fornecedores" },
       { icon: Users, label: "Funcionários Terceiros", path: "/terceiros/funcionarios" },
+    ],
+  },
+  {
+    title: "PJ",
+    items: [
+      { icon: FileSignature, label: "Contratos PJ", path: "/modulo-pj" },
+      { icon: FileSpreadsheet, label: "Medições PJ", path: "/pj-medicoes" },
+      { icon: ShieldCheck, label: "Conformidade PJ", path: "/terceiros/pj/conformidade" },
     ],
   },
   {

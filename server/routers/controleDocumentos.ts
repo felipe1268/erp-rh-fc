@@ -1524,6 +1524,53 @@ export const controleDocumentosRouter = router({
         .where(eq(pjPayments.employeeId, input.employeeId))
         .orderBy(desc(pjPayments.mesReferencia));
 
+      // PJ CONFORMIDADE — apenas para funcionários PJ (5 itens: das, nf, cnd, seguro_vida, status_cnpj)
+      let empPjConformidade: any = null;
+      if (emp.tipoContrato === 'PJ') {
+        try {
+          const d = new Date();
+          const mesRef = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+          const today = d.toISOString().slice(0, 10);
+          // Defesa em profundidade: filtra também por companyId do funcionário já carregado
+          const r: any = await db.execute(sql`
+            SELECT * FROM pj_conformidade
+            WHERE "deletedAt" IS NULL
+              AND "companyId" = ${emp.companyId}
+              AND "employeeId" = ${input.employeeId}
+              AND (
+                ("tipo" IN ('das','nf') AND "competencia" = ${mesRef})
+                OR "tipo" IN ('cnd','seguro_vida','status_cnpj')
+              )
+            ORDER BY "createdAt" DESC
+          `);
+          const itens: any[] = r?.rows ?? [];
+          const TIPOS = ["das","nf","cnd","seguro_vida","status_cnpj"];
+          const MENSAIS = new Set(["das","nf"]);
+          const byTipo: Record<string, any> = {};
+          for (const tipo of TIPOS) {
+            if (MENSAIS.has(tipo)) {
+              byTipo[tipo] = itens.find((i: any) => i.tipo === tipo && i.competencia === mesRef) || { tipo, competencia: mesRef, status: "pendente" };
+            } else {
+              const it = itens.filter((i: any) => i.tipo === tipo)[0];
+              if (it && it.dataVencimento && it.dataVencimento < today && it.status !== "na") {
+                it.statusComputed = "vencido";
+              } else if (it) {
+                it.statusComputed = it.status;
+              }
+              byTipo[tipo] = it || { tipo, competencia: null, status: "pendente" };
+            }
+          }
+          const pendencias = TIPOS.filter(t => {
+            const s = byTipo[t]?.statusComputed || byTipo[t]?.status;
+            return s === "pendente" || s === "vencido";
+          }).length;
+          empPjConformidade = { mesReferencia: mesRef, itens: byTipo, pendencias };
+        } catch (e: any) {
+          // Tabela pode ainda não existir — devolve null silenciosamente
+          empPjConformidade = null;
+        }
+      }
+
       // DESCONTOS ALMOXARIFADO (itens perdidos)
       const empDescontosAlmox = await db.select()
         .from(almoxarifadoDescontoFolha)
@@ -1653,6 +1700,7 @@ export const controleDocumentosRouter = router({
         cipa: empCipa,
         pjContratos: empPjContratos,
         pjPagamentos: empPjPagamentos,
+        pjConformidade: empPjConformidade,
         epiDiscountAlerts: empEpiDiscountAlerts,
         emprestimosAlmox: empEmprestimos,
         descontosAlmox: empDescontosAlmox,

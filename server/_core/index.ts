@@ -560,6 +560,96 @@ Regras:
           else console.log(`[PJBackfill] Nenhum contrato PJ pendente de encerramento — OK`);
         } catch (e: any) { console.log(`[PJBackfill] Skipped:`, e?.message || e); }
 
+        try {
+          const r: any = await db.execute(sql`
+            UPDATE employees e
+            SET "tipoContrato" = 'PJ',
+                "updatedAt" = NOW()
+            WHERE EXISTS (
+              SELECT 1 FROM pj_contracts pc
+              WHERE pc."employeeId" = e.id
+                AND pc."status" IN ('ativo', 'pendente_assinatura', 'suspenso')
+                AND pc."deletedAt" IS NULL
+            )
+              AND COALESCE(e."tipoContrato",'') <> 'PJ'
+              AND e."deletedAt" IS NULL
+            RETURNING e.id, e."nomeCompleto", e."tipoContrato"
+          `);
+          const rows = r?.rows ?? r ?? [];
+          const n = Array.isArray(rows) ? rows.length : 0;
+          if (n > 0) {
+            console.log(`[PJTipoFix] Corrigidos ${n} funcionário(s) com contrato PJ ativo mas tipoContrato divergente:`);
+            for (const row of rows) {
+              console.log(`  - id=${row.id} nome="${row.nomeCompleto}" → tipoContrato='PJ'`);
+            }
+          } else {
+            console.log(`[PJTipoFix] Todos os funcionários com contratos PJ ativos já têm tipoContrato='PJ' — OK`);
+          }
+        } catch (e: any) { console.log(`[PJTipoFix] Skipped:`, e?.message || e); }
+
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS pj_conformidade (
+              id SERIAL PRIMARY KEY,
+              "companyId" INTEGER NOT NULL,
+              "employeeId" INTEGER NOT NULL,
+              "tipo" VARCHAR(40) NOT NULL,
+              "competencia" VARCHAR(7),
+              "status" VARCHAR(20) NOT NULL DEFAULT 'pendente',
+              "dataVencimento" DATE,
+              "dataEnvio" DATE,
+              "valor" NUMERIC(14,2),
+              "documentoUrl" TEXT,
+              "observacoes" TEXT,
+              "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+              "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+              "deletedAt" TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_pj_conformidade_employee ON pj_conformidade ("employeeId") WHERE "deletedAt" IS NULL`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_pj_conformidade_company ON pj_conformidade ("companyId") WHERE "deletedAt" IS NULL`);
+          // Dedupe defensivo: marca como deletadas duplicatas históricas antes de criar índices únicos
+          // (mantém apenas a linha mais recente por chave lógica). Para tabela nova é no-op.
+          const dedupMensal: any = await db.execute(sql`
+            UPDATE pj_conformidade SET "deletedAt" = NOW()
+            WHERE id IN (
+              SELECT id FROM (
+                SELECT id, ROW_NUMBER() OVER (
+                  PARTITION BY "employeeId","tipo","competencia"
+                  ORDER BY "createdAt" DESC, id DESC
+                ) AS rn
+                FROM pj_conformidade
+                WHERE "deletedAt" IS NULL AND "competencia" IS NOT NULL
+              ) t WHERE t.rn > 1
+            )
+            RETURNING id
+          `);
+          const dedupVigente: any = await db.execute(sql`
+            UPDATE pj_conformidade SET "deletedAt" = NOW()
+            WHERE id IN (
+              SELECT id FROM (
+                SELECT id, ROW_NUMBER() OVER (
+                  PARTITION BY "employeeId","tipo"
+                  ORDER BY "createdAt" DESC, id DESC
+                ) AS rn
+                FROM pj_conformidade
+                WHERE "deletedAt" IS NULL AND "competencia" IS NULL
+              ) t WHERE t.rn > 1
+            )
+            RETURNING id
+          `);
+          const nDedup = (dedupMensal?.rows?.length ?? 0) + (dedupVigente?.rows?.length ?? 0);
+          if (nDedup > 0) console.log(`[PJConformidade] Dedupe: ${nDedup} linhas duplicadas marcadas como deletadas.`);
+          // Garante idempotência do upsert: 1 linha por (employee, tipo, competencia) para mensais e 1 por (employee, tipo) para vigentes
+          try {
+            await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_pj_conformidade_mensal ON pj_conformidade ("employeeId","tipo","competencia") WHERE "deletedAt" IS NULL AND "competencia" IS NOT NULL`);
+            await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_pj_conformidade_vigente ON pj_conformidade ("employeeId","tipo") WHERE "deletedAt" IS NULL AND "competencia" IS NULL`);
+          } catch (idxErr: any) {
+            console.error(`[PJConformidade] FALHA ao criar índices únicos (verifique duplicatas residuais):`, idxErr?.message || idxErr);
+          }
+          console.log(`[PJConformidade] Tabela pj_conformidade garantida.`);
+        } catch (e: any) { console.log(`[PJConformidade] Skipped:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

@@ -115,8 +115,6 @@ const DEFAULT_MENU = [
     { label: "Aviso Prévio", path: "/aviso-previo", visible: true },
     { label: "Férias", path: "/ferias", visible: true },
     { label: "Seguro de Vida", path: "/seguro-vida", visible: true },
-    { label: "Contratos PJ", path: "/modulo-pj", visible: true },
-    { label: "PJ Medições", path: "/pj-medicoes", visible: true },
   ]},
   { title: "Relatórios", items: [
     { label: "Raio-X do Funcionário", path: "/relatorios/raio-x", visible: true },

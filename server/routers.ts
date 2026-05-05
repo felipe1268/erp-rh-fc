@@ -82,6 +82,7 @@ import { comunicadosInternosRouter } from "./routers/comunicadosInternos";
 import { curriculosRouter } from "./routers/curriculos";
 import { employeeDocumentsRouter } from "./routers/employeeDocuments";
 import { pjMedicoesRouter } from "./routers/pjMedicoes";
+import { pjConformidadeRouter } from "./routers/pjConformidade";
 import { dissidioRouter } from "./routers/dissidio";
 import { sindicalRouter } from "./routers/sindical";
 import { seguroVidaRouter } from "./routers/seguroVida";
@@ -2329,6 +2330,7 @@ export const appRouter = router({
   curriculos: curriculosRouter,
   employeeDocuments: employeeDocumentsRouter,
   pjMedicoes: pjMedicoesRouter,
+  pjConformidade: pjConformidadeRouter,
   dissidio: dissidioRouter,
   sindical: sindicalRouter,
   seguroVida: seguroVidaRouter,

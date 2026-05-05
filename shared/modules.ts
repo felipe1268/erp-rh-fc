@@ -151,8 +151,6 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "solicitacao-mdo", label: "Solicitação de Mão de Obra", route: "/solicitacao-mdo", icon: "HardHat" },
       { key: "banco-horas", label: "Banco de Horas", route: "/banco-horas", icon: "ArrowLeftRight" },
       { key: "espelho-ponto", label: "Espelho de Ponto", route: "/espelho-ponto", icon: "FileText" },
-      { key: "modulo-pj", label: "Módulo PJ", route: "/modulo-pj", icon: "Briefcase" },
-      { key: "pj-medicoes", label: "PJ Medições", route: "/pj-medicoes", icon: "FileSpreadsheet" },
       // === Relatórios ===
       { key: "raio-x", label: "Raio-X do Funcionário", route: "/relatorios/raio-x", icon: "UserSearch" },
       { key: "relatorio-ponto", label: "Relatório de Ponto", route: "/relatorios/ponto", icon: "Clock" },
@@ -267,6 +265,10 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "terceiros-portal", label: "Portal Externo", route: "/terceiros/portal", icon: "ExternalLink" },
       { key: "terceiros-crachas", label: "Crachás", route: "/terceiros/crachas", icon: "CreditCard" },
       { key: "terceiros-validacao-ia", label: "Validação IA de Docs", route: "/terceiros/validacao-ia", icon: "FileSearch" },
+      // === PJ ===
+      { key: "modulo-pj", label: "Contratos PJ", route: "/modulo-pj", icon: "Briefcase" },
+      { key: "pj-medicoes", label: "Medições PJ", route: "/pj-medicoes", icon: "FileSpreadsheet" },
+      { key: "pj-conformidade", label: "Conformidade PJ", route: "/terceiros/pj/conformidade", icon: "ShieldCheck" },
     ],
   },
   {

@@ -151,6 +151,8 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "medicoes",       label: "Medições de Terceiros",                     actions: ["view","create","edit","delete"] },
       { id: "previsao_caixa", label: "Previsão de Caixa — Terceiros",             actions: ["view"] },
       { id: "documentos",     label: "Aprovação de Documentos / Validação IA",    actions: ["view","create","edit","delete"] },
+      { id: "contratos_pj",   label: "Contratos PJ e Medições PJ",                actions: ["view","create","edit","delete"] },
+      { id: "pj_conformidade", label: "Conformidade PJ (DAS/NF/CND/Seguro/CNPJ)", actions: ["view","create","edit","delete"] },
     ],
     sensitiveFlags: [
       { id: "valores_contratos", label: "Valores de contratos de serviço" },
@@ -357,8 +359,6 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/solicitacao-mdo":                 "solicitacao_mdo",
     "/banco-horas":                     "banco_horas",
     "/espelho-ponto":                   "espelho_ponto",
-    "/modulo-pj":                       "contratos_pj",
-    "/pj-medicoes":                     "contratos_pj",
     "/feriados":                        "dissidio",
     "/dissidio":                        "dissidio",
     "/comparativo-convencoes":          "comparativo",
@@ -417,6 +417,9 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/terceiros/alertas":      "alertas",
     "/terceiros/aprovacao":    "documentos",
     "/terceiros/validacao-ia": "documentos",
+    "/modulo-pj":              "contratos_pj",
+    "/pj-medicoes":            "contratos_pj",
+    "/terceiros/pj/conformidade": "pj_conformidade",
   },
   "parceiros": {
     "/parceiros/cadastro":       "cadastro",
