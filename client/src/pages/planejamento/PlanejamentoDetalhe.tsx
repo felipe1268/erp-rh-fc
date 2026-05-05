@@ -191,9 +191,9 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   const { selectedCompany, companyId } = useCompany();
   const [refisInitSemana, setRefisInitSemana] = useState<string | null>(null);
   const [semanaVisualizacao, setSemanaVisualizacao] = useState<string | null>(null);
-  const [usarPesoPorDuracao, setUsarPesoPorDuracao] = useState<boolean>(() => {
-    try { return localStorage.getItem(`planDuracao_${projetoId}`) === "1"; } catch { return false; }
-  });
+  // Rev. 1343: ponderação fixada em Peso Financeiro (padrão da construção civil).
+  // O alternador "Duração (Project)" foi removido a pedido — toda a obra mede por valor.
+  const usarPesoPorDuracao = false;
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const [dragIdx, setDragIdx]   = useState<number | null>(null);
   const [overIdx, setOverIdx]   = useState<number | null>(null);
@@ -508,17 +508,12 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                   {desvio !== null && Math.abs(desvio) < 0.1 && (
                     <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">No prazo</span>
                   )}
-                  <button
-                    onClick={() => {
-                      const next = !usarPesoPorDuracao;
-                      setUsarPesoPorDuracao(next);
-                      try { localStorage.setItem(`planDuracao_${projetoId}`, next ? "1" : "0"); } catch {}
-                    }}
-                    title={usarPesoPorDuracao ? "Ponderação por Duração (MS Project) — clique para usar Peso Financeiro" : "Ponderação por Peso Financeiro — clique para usar Duração (MS Project)"}
-                    className={`text-[10px] font-semibold px-2 py-0.5 rounded border transition-colors ${usarPesoPorDuracao ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-500 border-slate-300 hover:border-blue-400 hover:text-blue-600"}`}
+                  <span
+                    title="Avanço previsto ponderado pelo peso financeiro de cada atividade (padrão da construção civil — alinhado com medição, curva S e fluxo de caixa)."
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded border bg-white text-slate-500 border-slate-300"
                   >
-                    {usarPesoPorDuracao ? "⏱ Duração (Project)" : "💰 Peso Financeiro"}
-                  </button>
+                    💰 Peso Financeiro
+                  </span>
                 </div>
               </div>
               {/* Barra Previsto */}

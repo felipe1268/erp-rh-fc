@@ -1,5 +1,8 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1343 — 05/05/2026
+- **Planejamento — Ponderação fixada em Peso Financeiro**: o alternador entre "💰 Peso Financeiro" e "⏱ Duração (Project)" foi **removido** do cabeçalho do Avanço Físico. Toda a Previsão de Medição, medições contratuais, curva S e fluxo de caixa do ERP trabalham com base em **valor (R$)**, então usar Duração na visão geral gerava distorção entre o "% Previsto" da tela e o que aparece no financeiro. Agora o cálculo é sempre por **peso financeiro** (padrão da construção civil) e o badge "💰 Peso Financeiro" passa a ser apenas informativo (com tooltip explicativo). A preferência antiga em `localStorage` é ignorada.
+
 ## Revisão 1342 — 05/05/2026
 - **Previsão de Medição — "Faturamento Direto sugerido" agora aparece**: corrigido bug em `getConfigMedicao` (server/routers/planejamento.ts) que fazia o campo **Faturamento Direto (R$)** sempre mostrar **R$ 0,00** quando o usuário clicava em "↺ sugerido", mesmo havendo dados na **aba F.D. do BDI** do orçamento. A consulta SQL bruta destruturava o resultado de `db.execute(...)` como se fosse um array (`const [row] = ...`), mas o driver retorna `{ rows: [...] }` — então `row` ficava `undefined` e a soma caía em 0. Agora o valor correto vem do orçamento (ex.: VITRA → R$ 82.811,11) e desconta automaticamente da base do Sinal/Mobilização.
 
