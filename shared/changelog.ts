@@ -9149,6 +9149,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 02:00:00",
   },
   {
+    version: 1353,
+    titulo: "Importação de Orçamento: lê coluna M (Cód. Composição Auxiliar) e avisa quando composições da EAP não existem na aba CPUs",
+    descricao: "1) BUG: o importador lia 'Cód. Serviço' (coluna N) que está vazia no layout FC, ignorando a coluna M ('Cód. Composição Auxiliar') que contém o código real de vínculo com a aba CPUs. Resultado: TODA a EAP era importada sem vínculo de insumos, sem nenhum aviso. Adicionados aliases para 'codcomposicaoauxiliar', 'codigocomposicaoauxiliar', 'composicaoauxiliar', 'codcompauxiliar', etc., e o FC_PRESET do client foi corrigido para apontar para a coluna M (índice 12). 2) MELHORIA: ao terminar a importação (e a reimportação), o sistema agora compara as composições referenciadas na EAP com as da aba CPUs e exibe um aviso (toast amarelo, 20s) listando os códigos faltantes — antes era sucesso silencioso, o que confundia o usuário sem indicar a causa.",
+    tipo: "bugfix",
+    modulos: "Orçamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-06 04:30:00",
+  },
+  {
     version: 1352,
     titulo: "Histórico de Notificações: contadores corrigidos e StatusSync passa a enviar e-mail (não fica mais 'Pendente' eterno)",
     descricao: "1) BUG corrigido: o endpoint notifications.logStats usava SQL cru com colunas camelCase sem aspas (statusEnvio, lido) — Postgres lowercased e retornava erro 'column statusenvio does not exist', deixando todos os contadores (Total Enviadas, Enviados, Erros, Lidos) zerados. Refatorado para usar refs de coluna do Drizzle, com COALESCE/::int e contagem de 'pendentes' adicionada. Mesma correção aplicada em getNotificationLogStats (emailNotification.ts). 2) BUG corrigido: o StatusSync (alerta de retorno de afastamento) apenas inseria uma linha 'pendente' no histórico mas NUNCA disparava o e-mail. Agora chama sendEmail() de fato; se a SMTP falhar, grava status='erro' com a mensagem (nunca propaga exceção, o job continua rodando).",

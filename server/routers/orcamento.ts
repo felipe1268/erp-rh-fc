@@ -442,7 +442,15 @@ const COL_ALIASES: Record<string, string[]> = {
   quantidade:     ['quantidade', 'quant', 'qtd', 'qde', 'qt'],
   nivel:          ['nivel', 'hierarquia', 'niv'],
   composicaoTipo: ['composicaotipo', 'tipocomposicao', 'composicao', 'comp'],
-  servicoCodigo:  ['codigoservico', 'codservico', 'codservicoo', 'cods', 'codigodacomposicao'],
+  // servicoCodigo: vincula o item da EAP a uma composição na aba CPUs.
+  // Inclui aliases para "Cód. Composição Auxiliar" (coluna M no layout FC) — antes
+  // a planilha era silenciosamente importada sem vínculos com CPUs porque só lia "Cód. Serviço".
+  // ATENÇÃO: NÃO incluir aliases iniciados em "composicao..." aqui — eles colidem
+  // com o alias 'composicao' do campo composicaoTipo (que vem antes neste mapa) via startsWith.
+  // Para a coluna "Cód. Composição Auxiliar" usamos apenas variantes que começam com 'cod...'.
+  servicoCodigo:  ['codigoservico', 'codservico', 'codservicoo', 'cods', 'codigodacomposicao',
+                   'codcomposicaoauxiliar', 'codigocomposicaoauxiliar',
+                   'codcompauxiliar', 'codigocompauxiliar'],
   tipo:           ['tipo'],
   // Custo unitário — "Preço Unit. Material" / "Preço Unit. MO" (FC Engenharia)
   // NÃO incluir "custopreco*" — planilha FC tem colunas separadas "Custo Preço Unit." que NÃO devem ser importadas
@@ -2064,11 +2072,32 @@ export const orcamentoRouter = router({
         }).where(eq(orcamentos.id, orcamentoId));
       }
 
-      console.log(`[Importar] Concluído — orcamentoId: ${orcamentoId}, itens: ${itens.length}, CPUs: ${cpusParsed.composicoes.length}`);
+      // Rev. 1353: detecta composições da EAP que NÃO existem na aba CPUs.
+      // Antes: importação retornava sucesso silencioso e o usuário não sabia que faltavam composições.
+      // Normaliza códigos (uppercase, sem espaços extras) para tolerar diferenças de digitação.
+      const normCod = (s: any) => String(s || '').toUpperCase().replace(/\s+/g, '').trim();
+      const cpusDisponiveis = new Set(cpusParsed.composicoes.map(c => normCod(c.codigo)).filter(Boolean));
+      const cpusReferenciadasMap = new Map<string, string>(); // norm -> original (para exibir)
+      for (const it of itens) {
+        const codOrig = String(it.servicoCodigo || '').trim();
+        const cod = normCod(codOrig);
+        if (cod && cod !== 'COMPOSTO') cpusReferenciadasMap.set(cod, codOrig);
+      }
+      const cpusFaltantes: string[] = [];
+      for (const [cod, orig] of cpusReferenciadasMap) {
+        if (!cpusDisponiveis.has(cod)) cpusFaltantes.push(orig);
+      }
+      cpusFaltantes.sort();
+      const cpusReferenciadas = cpusReferenciadasMap;
+
+      console.log(`[Importar] Concluído — orcamentoId: ${orcamentoId}, itens: ${itens.length}, CPUs: ${cpusParsed.composicoes.length}, CPUs referenciadas: ${cpusReferenciadas.size}, faltantes: ${cpusFaltantes.length}`);
       return {
         id: orcamentoId, codigo, totalVenda: totalVendaFinal, totalCusto, totalMeta,
         itemCount: itens.length,
         composicoesCount: cpusParsed.composicoes.length,
+        cpusReferenciadasCount: cpusReferenciadas.size,
+        cpusFaltantesCount: cpusFaltantes.length,
+        cpusFaltantes: cpusFaltantes.slice(0, 50), // limita para não inflar a resposta
       };
       } catch (err: any) {
         // Captura qualquer erro não tratado e loga com detalhes para diagnóstico
@@ -2446,6 +2475,22 @@ export const orcamentoRouter = router({
         `);
       }
 
+      // Rev. 1353: detecta composições da EAP ausentes na aba CPUs (mesma lógica do importar)
+      const normCodRe = (s: any) => String(s || '').toUpperCase().replace(/\s+/g, '').trim();
+      const cpusDisponiveisRe = new Set(cpusParsedReimp.composicoes.map(c => normCodRe(c.codigo)).filter(Boolean));
+      const cpusReferenciadasReMap = new Map<string, string>();
+      for (const it of itens) {
+        const codOrig = String(it.servicoCodigo || '').trim();
+        const cod = normCodRe(codOrig);
+        if (cod && cod !== 'COMPOSTO') cpusReferenciadasReMap.set(cod, codOrig);
+      }
+      const cpusFaltantesRe: string[] = [];
+      for (const [cod, orig] of cpusReferenciadasReMap) {
+        if (!cpusDisponiveisRe.has(cod)) cpusFaltantesRe.push(orig);
+      }
+      cpusFaltantesRe.sort();
+      const cpusReferenciadasRe = cpusReferenciadasReMap;
+
       return {
         success: true,
         saved: true,
@@ -2454,6 +2499,9 @@ export const orcamentoRouter = router({
         itemCount:    itens.length,
         insumosCount: insumosItens.length,
         composicoesCount: cpusParsedReimp.composicoes.length,
+        cpusReferenciadasCount: cpusReferenciadasRe.size,
+        cpusFaltantesCount: cpusFaltantesRe.length,
+        cpusFaltantes: cpusFaltantesRe.slice(0, 50),
         totalCusto,
         totalVenda,
         bdiPercentual: bdiFinal,

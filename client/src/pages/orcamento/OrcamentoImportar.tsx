@@ -66,7 +66,10 @@ const KEY_FIELDS: { key: string; label: string; required: boolean }[] = [
 const FC_PRESET: Record<string, number> = {
   item:          10, // K
   composicaoTipo:11, // L (CPU / INF)
-  servicoCodigo: 13, // N (Cód. Serviço — vincula à composição CPUs)
+  // Rev. 1353: corrigido para coluna M (Cód. Composição Auxiliar) — onde está o
+  // código que vincula à aba CPUs. A coluna N ("Cód. Serviço") fica vazia no layout FC,
+  // o que fazia toda EAP ficar sem vínculo com nenhuma composição.
+  servicoCodigo: 12, // M (Cód. Composição Auxiliar — vincula à composição na aba CPUs)
   tipo:          14, // O (TIPO)
   descricao:     15, // P
   unidade:       16, // Q
@@ -568,6 +571,17 @@ export default function OrcamentoImportar() {
         itemCount:  res.itemCount,
       });
       toast.success(`Planilha de custo importada — ${res.itemCount} itens`);
+      // Rev. 1353: aviso se houver composições da EAP sem correspondência na aba CPUs
+      const faltantes: string[] = (res as any).cpusFaltantes ?? [];
+      const faltantesCount: number = (res as any).cpusFaltantesCount ?? 0;
+      if (faltantesCount > 0) {
+        const amostra = faltantes.slice(0, 10).join(", ");
+        const sufixo = faltantesCount > faltantes.length ? ` (e mais ${faltantesCount - faltantes.length})` : "";
+        toast.warning(
+          `Atenção: ${faltantesCount} composição(ões) referenciada(s) na EAP NÃO foram encontradas na aba CPUs. Códigos: ${amostra}${sufixo}. Os itens foram importados, mas ficarão sem vínculo de insumos. Corrija a aba CPUs e reimporte.`,
+          { duration: 20000 }
+        );
+      }
       setTimeout(() => setStep("bdi"), 800);
     } catch (err: any) {
       clearInterval(interval);

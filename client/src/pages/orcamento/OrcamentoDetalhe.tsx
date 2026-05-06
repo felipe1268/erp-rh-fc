@@ -166,6 +166,17 @@ function OrcamentoDetalheInner({ routeId }: { routeId: number }) {
       setReuploadProgress(100);
       const compMsg = res.composicoesCount ? ` ${res.composicoesCount} composições (CPUs) carregadas.` : '';
       toast.success(`Orçamento atualizado! ${res.itemCount} itens reimportados.${compMsg}`);
+      // Rev. 1353: aviso de composições da EAP ausentes na aba CPUs
+      const faltantes: string[] = (res as any).cpusFaltantes ?? [];
+      const faltantesCount: number = (res as any).cpusFaltantesCount ?? 0;
+      if (faltantesCount > 0) {
+        const amostra = faltantes.slice(0, 10).join(", ");
+        const sufixo = faltantesCount > faltantes.length ? ` (e mais ${faltantesCount - faltantes.length})` : "";
+        toast.warning(
+          `Atenção: ${faltantesCount} composição(ões) referenciada(s) na EAP NÃO foram encontradas na aba CPUs. Códigos: ${amostra}${sufixo}. Os itens foram importados, mas ficarão sem vínculo de insumos.`,
+          { duration: 20000 }
+        );
+      }
       setTimeout(() => { setReuploadOpen(false); setReuploadFile(null); setReuploadAnalise(null); setReuploadProgress(0); }, 600);
       refetch();
     },
