@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1365,
+    titulo: "Dashboard SST 'Atestados & Acidentes' agora aparece no menu lateral SST > Dashboards",
+    descricao: "AJUSTE: o novo dashboard /sst/dashboard-atestados-acidentes (criado na Rev. 1364) estava registrado apenas no menu de Configurações. Agora também aparece na sidebar do módulo SST, na seção 'Dashboards', logo abaixo de 'EPIs', com ícone HeartPulse.",
+    tipo: "bugfix",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-06 12:30:00",
+  },
+  {
     version: 1364,
     titulo: "Dashboard SST de Análise de Atestados & Acidentes",
     descricao: "FEATURE no módulo SST: nova página '/sst/dashboard-atestados-acidentes' (menu Configurações > SST > Dashboards > 'Atestados & Acidentes') com análise consolidada por período. Filtros de data com atalhos (1M/3M/6M/12M/24M, default últimos 12 meses). Aba VISÃO GERAL: KPIs (total atestados, dias afastamento, total acidentes, dias perdidos, Taxa de Frequência, Taxa de Gravidade, atestados c/ INSS, acidentes c/ CAT), gráfico combinado mensal (barras: atestados+acidentes / linhas: dias) e listas dos últimos 8 eventos. Aba ATESTADOS: pizza por tipo, top 10 CIDs, top 10 motivos (qtd+dias) e top 10 funcionários. Aba ACIDENTES: pizza por gravidade (cores semânticas leve→fatal), barras por tipo, parte do corpo, local e top 10 funcionários. Backend: novo router 'sstAnalytics.atestadosAcidentes' agregando dados das tabelas 'atestados' e 'accidents' com tenant isolation por companyId/companyIds, headcount ativo para HH (220h/mês × meses), TF=acidC/Afast×1M÷HH, TG=diasPerdidos×1M÷HH.",

@@ -38,7 +38,7 @@ import {
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft, Gauge,
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine,
   Camera, Blocks, CheckSquare, FileCheck2, Milestone,
-  UserMinus, Search, X, GraduationCap, Sparkles,
+  UserMinus, Search, X, GraduationCap, Sparkles, HeartPulse,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -198,6 +198,7 @@ const menuSectionsSST: MenuSection[] = [
     title: "Dashboards",
     items: [
       { icon: HardHat, label: "EPIs", path: "/dashboards/epis" },
+      { icon: HeartPulse, label: "Atestados & Acidentes", path: "/sst/dashboard-atestados-acidentes" },
     ],
   },
 ];
