@@ -477,7 +477,31 @@ export const smoRouter = router({
         }
       }
 
-      return { ...s, obraNome: row.obraNome, atividades, checklist, canEdit };
+      // Rev. 1361 — para SMOs antigas (criadas antes da Rev. 1357), o detalheCustos
+      // não tem o split por regime de Experiência. Recomputa on-the-fly se faltar
+      // (e persiste de volta para evitar reprocessar).
+      let detalheCustosOut: string | null = s.detalheCustos as any;
+      try {
+        const reg = ((s as any).regimeContratacao || "experiencia") as RegimeContratacao;
+        const parsed = s.detalheCustos ? JSON.parse(s.detalheCustos) : null;
+        const faltaSplit = !parsed
+          || parsed.regimeContratacao == null
+          || parsed.encargosBasicoPerc == null
+          || parsed.mesesExperiencia == null
+          || parsed.custoMensalUnitExperiencia == null;
+        if (faltaSplit && s.obraId && s.funcaoSolicitada) {
+          const recomputado = await computeCustoSMO(
+            db, { companyId: input.companyId, companyIds: input.companyIds },
+            s.obraId, s.funcaoSolicitada, s.quantidade || 1, s.duracaoMeses || 1, reg,
+          );
+          detalheCustosOut = JSON.stringify(recomputado.detalhes);
+          await db.update(smoSolicitacoes)
+            .set({ detalheCustos: detalheCustosOut, custoMensalEstimado: String(recomputado.custoMensal), custoTotalEstimado: String(recomputado.custoTotal) } as any)
+            .where(eq(smoSolicitacoes.id, input.id));
+        }
+      } catch (e) { console.error("[SMO getById] erro ao recomputar detalheCustos:", e); }
+
+      return { ...s, detalheCustos: detalheCustosOut, obraNome: row.obraNome, atividades, checklist, canEdit };
     }),
 
   obrasAtivas: protectedProcedure

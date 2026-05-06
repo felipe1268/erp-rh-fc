@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1361,
+    titulo: "SMO: detalhe da solicitação recomputa o split de Experiência (45+45) para SMOs antigas",
+    descricao: "BUGFIX: solicitações criadas antes da Rev. 1357 não tinham o detalheCustos com o split por regime de Experiência (Mês 1-3 sem aviso/multa, Mês 4+ efetivado). Por isso o card 'Impacto Financeiro' aparecia só com a linha agregada 'Encargos (xx%)' e não mostrava o badge 'Experiência 45+45' / 'Indeterminado' nem o detalhamento por mês. AJUSTE: o endpoint smo.getById agora detecta quando o detalheCustos está sem o split (faltam mesesExperiencia / encargosBasicoPerc / custoMensalUnitExperiencia), recalcula via computeCustoSMO usando o regime salvo na própria SMO (default 'experiencia') e PERSISTE o resultado no banco para evitar reprocessamento. Após a correção, ao abrir a SMO a tela passa a exibir: badge do regime, linha 'Mês 1-N (sem aviso/multa) — XX%', linha 'Mês N+1+ (efetivado) — XX%', encargos médio e a fórmula de cálculo no rodapé.",
+    tipo: "bugfix",
+    modulos: "smo",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-06 21:00:00",
+  },
+  {
     version: 1360,
     titulo: "Alocar Funcionários: badge de status visível em cada linha (Ativo, Afastado, Recluso, Férias, etc.)",
     descricao: "MELHORIA: na tela 'Alocar Funcionários' (acionada a partir do 'Efetivo por Obra'), cada funcionário da lista agora exibe um badge colorido com o status atual — Ativo (verde), Aviso Prévio (vermelho), Dispensado (laranja), Férias (amarelo), Afastado (roxo), Licença (ciano), Recluso (cinza), Desligado (vermelho escuro), Lista Negra (preto) e Inativo (cinza claro). Isso permite identificar rapidamente situações que impedem ou exigem atenção na alocação (ex.: Afastado, Férias) sem precisar abrir o Raio-X. O badge da obra atual também recebeu truncate + tooltip para nomes longos.",
