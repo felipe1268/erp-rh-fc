@@ -16,6 +16,7 @@ import { getDb } from "../db";
 import { employees, vacationPeriods, atestados, notificationLogs, notificationRecipients } from "../../drizzle/schema";
 import { eq, and, sql, isNull, inArray } from "drizzle-orm";
 import { logStatusChange } from "../lib/employeeStatusHelper";
+import { sendEmail } from "./smtpService";
 
 let statusSyncInterval: NodeJS.Timeout | null = null;
 
@@ -248,22 +249,46 @@ export async function syncEmployeeStatus(): Promise<{
           ? `RETORNO HOJE — ${emp.nomeCompleto} retorna do afastamento`
           : `RETORNO EM ${diasRestantes} DIA(S) — ${emp.nomeCompleto} retorna em ${at.dataRetorno}`;
 
+        // Rev. 1352: dispara o e-mail de fato (antes ficava "pendente" eterno).
+        // Em caso de erro de SMTP, registra como "erro" para aparecer no contador,
+        // mas NUNCA propaga a exceção (o job não pode quebrar por causa de e-mail).
+        const corpoTxt = `O funcionário ${emp.nomeCompleto} tem retorno previsto para ${at.dataRetorno} (${diasRestantes} dia(s)). O sistema mudará o status automaticamente para Ativo na data de retorno.`;
+        const corpoHtml = `<p>${corpoTxt.replace(/\n/g, "<br>")}</p>`;
         for (const r of recipients) {
-          await db.insert(notificationLogs).values({
-            companyId: at.companyId,
-            employeeId: at.employeeId,
-            employeeName: emp.nomeCompleto,
-            tipoMovimentacao: "retorno_afastamento",
-            statusAnterior: "Afastado",
-            statusNovo: "Ativo",
-            recipientId: r.id,
-            recipientName: r.nome,
-            recipientEmail: r.email,
-            titulo,
-            corpo: `O funcionário ${emp.nomeCompleto} tem retorno previsto para ${at.dataRetorno} (${diasRestantes} dia(s)). O sistema mudará o status automaticamente para Ativo na data de retorno.`,
-            statusEnvio: "pendente",
-            disparadoPor: "Sistema (StatusSync)",
-          });
+          let statusEnvio: "enviado" | "erro" = "erro";
+          let erroMsg: string | null = "SMTP não configurado";
+          try {
+            const res = await sendEmail({ to: r.email, subject: titulo, html: corpoHtml, text: corpoTxt });
+            if (res.success) { statusEnvio = "enviado"; erroMsg = null; }
+            else { erroMsg = res.error || "Falha SMTP"; }
+          } catch (e: any) {
+            erroMsg = e?.message || "Erro desconhecido no envio";
+            console.error("[StatusSync] Erro ao enviar e-mail de retorno:", e);
+          }
+          try {
+            await db.insert(notificationLogs).values({
+              companyId: at.companyId,
+              employeeId: at.employeeId,
+              employeeName: emp.nomeCompleto,
+              tipoMovimentacao: "retorno_afastamento",
+              statusAnterior: "Afastado",
+              statusNovo: "Ativo",
+              recipientId: r.id,
+              recipientName: r.nome,
+              recipientEmail: r.email,
+              titulo,
+              corpo: corpoTxt,
+              statusEnvio,
+              erroMensagem: erroMsg,
+              disparadoPor: "Sistema (StatusSync)",
+            });
+          } catch (e) {
+            console.error("[StatusSync] Erro ao registrar notification_log:", e);
+          }
+          // Delay entre envios para evitar rate-limit do SMTP
+          if (recipients.length > 1) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
         }
 
         if (recipients.length > 0) {

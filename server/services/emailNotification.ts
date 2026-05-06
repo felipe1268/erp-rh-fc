@@ -537,11 +537,12 @@ export async function getNotificationLogs(companyId: number, limit = 50) {
 export async function getNotificationLogStats(companyId: number) {
   const db = await getDb();
   if (!db) return { total: 0, enviados: 0, erros: 0, lidos: 0 };
+  // Rev. 1352: usa refs de coluna do Drizzle (camelCase precisa de aspas em raw SQL).
   const rows = await db.select({
-    total: sql<number>`count(*)`,
-    enviados: sql<number>`SUM(CASE WHEN statusEnvio = 'enviado' THEN 1 ELSE 0 END)`,
-    erros: sql<number>`SUM(CASE WHEN statusEnvio = 'erro' THEN 1 ELSE 0 END)`,
-    lidos: sql<number>`SUM(CASE WHEN lido = true THEN 1 ELSE 0 END)`,
+    total: sql<number>`COUNT(*)::int`,
+    enviados: sql<number>`COALESCE(SUM(CASE WHEN ${notificationLogs.statusEnvio} = 'enviado' THEN 1 ELSE 0 END), 0)::int`,
+    erros: sql<number>`COALESCE(SUM(CASE WHEN ${notificationLogs.statusEnvio} = 'erro' THEN 1 ELSE 0 END), 0)::int`,
+    lidos: sql<number>`COALESCE(SUM(CASE WHEN ${notificationLogs.lido} = 1 THEN 1 ELSE 0 END), 0)::int`,
   }).from(notificationLogs).where(eq(notificationLogs.companyId, companyId));
   return rows[0] || { total: 0, enviados: 0, erros: 0, lidos: 0 };
 }

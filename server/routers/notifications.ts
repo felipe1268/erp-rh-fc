@@ -111,13 +111,20 @@ export const notificationsRouter = router({
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
+      // Rev. 1352: usa refs de coluna do Drizzle (gera identificadores entre aspas)
+      // em vez de SQL cru com camelCase (Postgres lowercased → "column statusenvio does not exist").
+      // Também: coluna `lido` é smallint (0/1), nunca booleana — usa `= 1`.
       const rows = await db!.select({
-        total: sql<number>`COUNT(*)`,
-        enviados: sql<number>`SUM(CASE WHEN statusEnvio = 'enviado' THEN 1 ELSE 0 END)`,
-        erros: sql<number>`SUM(CASE WHEN statusEnvio = 'erro' THEN 1 ELSE 0 END)`,
-        lidos: sql<number>`SUM(CASE WHEN lido = true THEN 1 ELSE 0 END)`,
+        total: sql<number>`COUNT(*)::int`,
+        enviados: sql<number>`COALESCE(SUM(CASE WHEN ${notificationLogs.statusEnvio} = 'enviado' THEN 1 ELSE 0 END), 0)::int`,
+        erros: sql<number>`COALESCE(SUM(CASE WHEN ${notificationLogs.statusEnvio} = 'erro' THEN 1 ELSE 0 END), 0)::int`,
+        pendentes: sql<number>`COALESCE(SUM(CASE WHEN ${notificationLogs.statusEnvio} = 'pendente' THEN 1 ELSE 0 END), 0)::int`,
+        lidos: sql<number>`COALESCE(SUM(CASE WHEN ${notificationLogs.lido} = 1 THEN 1 ELSE 0 END), 0)::int`,
       }).from(notificationLogs).where(companyFilter(notificationLogs.companyId, input));
-      return rows[0] || { total: 0, enviados: 0, erros: 0, lidos: 0 };
+      const r = rows[0];
+      return r
+        ? { total: Number(r.total) || 0, enviados: Number(r.enviados) || 0, erros: Number(r.erros) || 0, pendentes: Number(r.pendentes) || 0, lidos: Number(r.lidos) || 0 }
+        : { total: 0, enviados: 0, erros: 0, pendentes: 0, lidos: 0 };
     }),
 
   // Preview de texto de notificação (para visualizar antes de enviar)

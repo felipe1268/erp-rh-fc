@@ -9149,6 +9149,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 02:00:00",
   },
   {
+    version: 1352,
+    titulo: "Histórico de Notificações: contadores corrigidos e StatusSync passa a enviar e-mail (não fica mais 'Pendente' eterno)",
+    descricao: "1) BUG corrigido: o endpoint notifications.logStats usava SQL cru com colunas camelCase sem aspas (statusEnvio, lido) — Postgres lowercased e retornava erro 'column statusenvio does not exist', deixando todos os contadores (Total Enviadas, Enviados, Erros, Lidos) zerados. Refatorado para usar refs de coluna do Drizzle, com COALESCE/::int e contagem de 'pendentes' adicionada. Mesma correção aplicada em getNotificationLogStats (emailNotification.ts). 2) BUG corrigido: o StatusSync (alerta de retorno de afastamento) apenas inseria uma linha 'pendente' no histórico mas NUNCA disparava o e-mail. Agora chama sendEmail() de fato; se a SMTP falhar, grava status='erro' com a mensagem (nunca propaga exceção, o job continua rodando).",
+    tipo: "bugfix",
+    modulos: "Notificações,RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-06 04:00:00",
+  },
+  {
     version: 1351,
     titulo: "Data Prev. Pagto do Sinal: usa data de HOJE como referência (em vez da Data de Início do Projeto)",
     descricao: "No campo 'Data Prev. Pagto do Sinal' da Configuração de Medição, ao digitar apenas o dia sem ter uma data preenchida, o sistema agora usa o mês/ano de HOJE como referência. Antes usava o mês/ano da Data de Início do Projeto, que costuma estar no futuro e gerava confusão (ex.: usuário digitava '25' esperando 25 do mês atual e o sistema preenchia 25/05/2026).",
