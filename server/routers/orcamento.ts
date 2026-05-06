@@ -450,7 +450,9 @@ const COL_ALIASES: Record<string, string[]> = {
   // Para a coluna "Cód. Composição Auxiliar" usamos apenas variantes que começam com 'cod...'.
   servicoCodigo:  ['codigoservico', 'codservico', 'codservicoo', 'cods', 'codigodacomposicao',
                    'codcomposicaoauxiliar', 'codigocomposicaoauxiliar',
-                   'codcompauxiliar', 'codigocompauxiliar'],
+                   'codcompauxiliar', 'codigocompauxiliar',
+                   // Rev. 1355: cabeçalho abreviado "Cód. Compos.. Auxiliar" (FC) → "codcomposauxiliar"
+                   'codcomposauxiliar', 'codigocomposauxiliar'],
   tipo:           ['tipo'],
   // Custo unitário — "Preço Unit. Material" / "Preço Unit. MO" (FC Engenharia)
   // NÃO incluir "custopreco*" — planilha FC tem colunas separadas "Custo Preço Unit." que NÃO devem ser importadas
