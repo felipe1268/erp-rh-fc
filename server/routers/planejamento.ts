@@ -1943,9 +1943,17 @@ export const planejamentoRouter = router({
         lucro:      bdiMap['L-01']?.pct ?? 0,  // % de Venda (L-01 Lucro Bruto)
       };
 
+      // Rev. 1350: MDO no preço de VENDA (com BDI aplicado) — base correta para o
+      // SINAL/Mobilização quando "Sobre: Mão de Obra". Usa o mesmo padrão do
+      // orcamento.ts (vendaMdo = custoMdo / bdiDivisor; equivalente a custo*venda/custo).
+      const totalMdoVenda = totalCusto > 0
+        ? +(totalMdo * totalVenda / totalCusto).toFixed(2)
+        : totalMdo;
+
       return {
         itens,
         totalVenda, totalMeta, totalCusto, totalMat, totalMdo,
+        totalMdoVenda,
         valorBase: valorVenda,
         valorBaseMeta: valorMeta,
         valorBaseCusto: valorCusto,

@@ -5512,7 +5512,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
   const baseV = n((cruzamento as any)?.valorBase ?? valorContrato);
   // Rev. 1348: total de mão de obra do orçamento (já normalizado em planejamento.ts).
   // Usado como base alternativa do SINAL quando cfgSinalBase === 'mao_de_obra'.
-  const totalMdoCruz = n((cruzamento as any)?.totalMdo);
+  // Rev. 1350: usar MDO no preço de VENDA (com BDI aplicado) — fallback para custo se ausente.
+  const totalMdoCruz = n((cruzamento as any)?.totalMdoVenda ?? (cruzamento as any)?.totalMdo);
 
   // ── Previsão por avanço físico ────────────────────────────────────────────
   const previsoesMensais = useMemo(() => {
@@ -6068,8 +6069,10 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                     </p>
                   </div>
 
-                  {/* Faturamento Direto (R$) — desconta da base do Sinal/Mobilização — só para avanço físico */}
-                  <div>
+                  {/* Faturamento Direto (R$) — desconta da base do Sinal/Mobilização — só para avanço físico
+                      Rev. 1350: oculto quando a base do sinal é "Mão de Obra" (FD não se aplica). */}
+                  <div className={cfgSinalBase === "mao_de_obra" ? "opacity-30 pointer-events-none" : ""}
+                       title={cfgSinalBase === "mao_de_obra" ? "Faturamento Direto não se aplica quando a base do sinal é Mão de Obra" : undefined}>
                     <div className="flex items-center justify-between mb-1">
                       <label className="text-[10px] text-slate-500 font-medium">Faturamento Direto (R$)</label>
                       {cfgFdValor != null && (

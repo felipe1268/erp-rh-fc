@@ -2739,7 +2739,13 @@ export const financialRouter = router({
              COALESCE(orc.valor_negociado::numeric,
                       orc."totalVenda"::numeric,
                       pp.valor_contrato::numeric, 0) AS total_venda,
-             COALESCE(orc."totalMdo"::numeric, 0) AS total_mdo,
+             -- Rev. 1350: MDO no preço de VENDA (com BDI), base correta do sinal em modo "mao_de_obra"
+             CASE WHEN COALESCE(orc."totalCusto"::numeric, 0) > 0
+               THEN COALESCE(orc."totalMdo"::numeric, 0)
+                    * COALESCE(orc.valor_negociado::numeric, orc."totalVenda"::numeric, 0)
+                    / orc."totalCusto"::numeric
+               ELSE COALESCE(orc."totalMdo"::numeric, 0)
+             END AS total_mdo,
              COALESCE((SELECT SUM(b.total::numeric)
                        FROM bdi_fd b
                        WHERE b.orcamento_id = pp.orcamento_id), 0) AS fd_sugerido

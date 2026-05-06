@@ -9148,4 +9148,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-06 02:00:00",
   },
+  {
+    version: 1350,
+    titulo: "Sinal sobre Mão de Obra: usa MDO no preço de VENDA (com BDI) e oculta campo de FD",
+    descricao: "Quando a base do sinal é 'Mão de Obra', o valor utilizado agora é o MDO no preço de venda (custo × valorVenda/totalCusto) — alinhado ao mesmo padrão do orçamento (vendaMdo = custoMdo / bdiDivisor). Antes era usado o MDO ao custo, gerando uma base subdimensionada (ex.: R$ 139.313,80 em vez do equivalente com BDI aplicado). Cruzamento orç×cronograma agora retorna `totalMdoVenda`; getContasReceberMatrix calcula MDO@venda inline na query SQL via CASE WHEN totalCusto > 0 THEN totalMdo * valorNegociado/totalCusto. Adicionalmente, o campo 'Faturamento Direto (R$)' é visualmente desabilitado (opacity 30%, sem cliques) quando a base é MDO, pois FD não se aplica nesse modo.",
+    tipo: "bugfix",
+    modulos: "Planejamento,Financeiro",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-06 02:30:00",
+  },
 ];
