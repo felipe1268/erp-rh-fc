@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1362,
+    titulo: "Currículos — Upload com IA: barra de progresso 0–100% com contagem por arquivo",
+    descricao: "MELHORIA: o diálogo 'Upload com IA' do banco de currículos passou a exibir uma barra de progresso real (0% → 100%) com nome do arquivo sendo processado no momento. ANTES: aparecia apenas a mensagem 'Enviando para IA analisar N currículo(s)... isso pode levar alguns segundos', sem ideia de quanto faltava. AGORA: (1) os arquivos são enviados para a IA UM POR UM (em vez de tudo em uma única chamada), permitindo medir o progresso real; (2) etapa 1 — leitura local dos arquivos (0% a 15%); (3) etapa 2 — análise pela IA (15% a 100%, +85%/N por arquivo); (4) mensagem dinâmica: 'Analisando currículo X de N com IA...'; (5) os resultados aparecem em tempo real na lista enquanto os outros arquivos ainda estão sendo processados; (6) se um arquivo falhar, é registrado como erro mas o processamento dos demais continua.",
+    tipo: "melhoria",
+    modulos: "curriculos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-06 21:15:00",
+  },
+  {
     version: 1361,
     titulo: "SMO: detalhe da solicitação recomputa o split de Experiência (45+45) para SMOs antigas",
     descricao: "BUGFIX: solicitações criadas antes da Rev. 1357 não tinham o detalheCustos com o split por regime de Experiência (Mês 1-3 sem aviso/multa, Mês 4+ efetivado). Por isso o card 'Impacto Financeiro' aparecia só com a linha agregada 'Encargos (xx%)' e não mostrava o badge 'Experiência 45+45' / 'Indeterminado' nem o detalhamento por mês. AJUSTE: o endpoint smo.getById agora detecta quando o detalheCustos está sem o split (faltam mesesExperiencia / encargosBasicoPerc / custoMensalUnitExperiencia), recalcula via computeCustoSMO usando o regime salvo na própria SMO (default 'experiencia') e PERSISTE o resultado no banco para evitar reprocessamento. Após a correção, ao abrir a SMO a tela passa a exibir: badge do regime, linha 'Mês 1-N (sem aviso/multa) — XX%', linha 'Mês N+1+ (efetivado) — XX%', encargos médio e a fórmula de cálculo no rodapé.",

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { Briefcase, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, UserPlus, FolderPlus, Sparkles, AlertTriangle, ShieldAlert, Ban, CheckCircle, XCircle, Info, Pencil, Save, ThumbsDown, RotateCcw, X, Phone, Mail, MapPin, GraduationCap, Wrench, Calendar, Clock, Building2, Eye, ArrowUpDown, UserCheck, Handshake, CircleDot, UserX, History } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -77,6 +78,8 @@ export default function Curriculos() {
   const [iaProcessing, setIAProcessing] = useState(false);
   const [iaResults, setIAResults] = useState<IAResultado[] | null>(null);
   const [iaProgress, setIAProgress] = useState("");
+  const [iaPercent, setIAPercent] = useState(0);
+  const [iaCurrentFile, setIACurrentFile] = useState<string>("");
 
   const { data: funcoes = [] } = trpc.curriculos.listarFuncoes.useQuery(
     { companyId },
@@ -241,11 +244,17 @@ export default function Curriculos() {
     if (iaFiles.length === 0) { toast.error("Selecione ao menos um arquivo"); return; }
     setIAProcessing(true);
     setIAResults(null);
-    setIAProgress(`Lendo ${iaFiles.length} arquivo(s)...`);
+    setIAPercent(0);
+    setIACurrentFile("");
+    const total = iaFiles.length;
 
+    // Etapa 1 — leitura local dos arquivos (0% → 15%)
+    setIAProgress(`Lendo ${total} arquivo(s)...`);
+    const arquivos: { fileBase64: string; fileName: string }[] = [];
     try {
-      const arquivos: { fileBase64: string; fileName: string }[] = [];
-      for (const file of iaFiles) {
+      for (let i = 0; i < iaFiles.length; i++) {
+        const file = iaFiles[i];
+        setIACurrentFile(file.name);
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve((reader.result as string).split(",")[1]);
@@ -253,24 +262,54 @@ export default function Curriculos() {
           reader.readAsDataURL(file);
         });
         arquivos.push({ fileBase64: base64, fileName: file.name });
+        setIAPercent(Math.round(((i + 1) / total) * 15));
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao ler arquivos");
+      setIAProgress("Erro na leitura dos arquivos");
+      setIAProcessing(false);
+      return;
+    }
+
+    // Etapa 2 — envio para IA (1 chamada por arquivo, progresso real 15% → 100%)
+    const resultadosAcumulados: any[] = [];
+    try {
+      for (let i = 0; i < arquivos.length; i++) {
+        const arq = arquivos[i];
+        setIACurrentFile(arq.fileName);
+        setIAProgress(`Analisando currículo ${i + 1} de ${total} com IA...`);
+        try {
+          const r = await processarIAMut.mutateAsync({ companyId, arquivos: [arq] });
+          if (Array.isArray(r.resultados)) resultadosAcumulados.push(...r.resultados);
+        } catch (err: any) {
+          // Preserva resultado parcial mesmo se um arquivo falhar
+          resultadosAcumulados.push({
+            fileName: arq.fileName,
+            status: "erro",
+            alertas: [],
+            erro: err?.message || "Falha ao processar",
+          });
+        }
+        // 15% (leitura) + até 85% restante
+        setIAPercent(15 + Math.round(((i + 1) / total) * 85));
+        // Mostra resultados acumulados em tempo real
+        setIAResults([...resultadosAcumulados] as IAResultado[]);
       }
 
-      setIAProgress(`Enviando para IA analisar ${arquivos.length} currículo(s)... Isso pode levar alguns segundos.`);
-
-      const result = await processarIAMut.mutateAsync({ companyId, arquivos });
-      setIAResults(result.resultados as IAResultado[]);
       utils.curriculos.listar.invalidate();
       utils.curriculos.listarFuncoes.invalidate();
       utils.curriculos.contagens.invalidate();
 
-      const ok = result.resultados.filter((r: any) => r.status === "ok").length;
-      const alertas = result.resultados.filter((r: any) => r.status !== "ok" && r.status !== "erro").length;
-      const erros = result.resultados.filter((r: any) => r.status === "erro").length;
+      const ok = resultadosAcumulados.filter((r: any) => r.status === "ok").length;
+      const alertas = resultadosAcumulados.filter((r: any) => r.status !== "ok" && r.status !== "erro").length;
+      const erros = resultadosAcumulados.filter((r: any) => r.status === "erro").length;
       setIAProgress(`Concluído: ${ok} cadastrado(s), ${alertas} com alerta(s), ${erros} erro(s)`);
+      setIAPercent(100);
     } catch (err: any) {
       toast.error(err.message || "Erro ao processar arquivos");
       setIAProgress("Erro no processamento");
     } finally {
+      setIACurrentFile("");
       setIAProcessing(false);
     }
   }
@@ -673,7 +712,7 @@ export default function Curriculos() {
                 </div>
                 <div className="flex gap-2">
                   <Button onClick={() => {
-                    setIAFiles([]); setIAResults(null); setIAProgress(""); setShowIADialog(true);
+                    setIAFiles([]); setIAResults(null); setIAProgress(""); setIAPercent(0); setIACurrentFile(""); setShowIADialog(true);
                   }} variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50">
                     <Sparkles className="h-4 w-4 mr-1" /> Upload com IA
                   </Button>
@@ -1080,7 +1119,11 @@ export default function Curriculos() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showIADialog} onOpenChange={(open) => { if (!iaProcessing) setShowIADialog(open); }}>
+      <Dialog open={showIADialog} onOpenChange={(open) => {
+        if (iaProcessing) return;
+        setShowIADialog(open);
+        if (!open) { setIAResults(null); setIAFiles([]); setIAProgress(""); setIAPercent(0); setIACurrentFile(""); }
+      }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1089,33 +1132,49 @@ export default function Curriculos() {
             </DialogTitle>
           </DialogHeader>
 
-          {!iaResults ? (
+          {(!iaResults || iaProcessing) ? (
             <div className="space-y-4 py-2">
-              <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
-                <p className="text-sm text-purple-800">
-                  Selecione um ou mais currículos (PDF ou imagem). A IA vai ler cada arquivo, extrair os dados automaticamente, verificar duplicidades, ex-funcionários e lista negra.
-                </p>
-              </div>
-              <div>
-                <Label>Selecionar Currículos (PDF/JPG/PNG) - Múltiplos</Label>
-                <Input type="file" className="mt-1" accept=".pdf,.jpg,.jpeg,.png" multiple disabled={iaProcessing}
-                  onChange={e => setIAFiles(Array.from(e.target.files || []))} />
-                {iaFiles.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {iaFiles.map((f, i) => (
-                      <div key={i} className="flex items-center gap-2 text-xs text-slate-600">
-                        <FileText className="h-3 w-3" />
-                        <span>{f.name}</span>
-                        <span className="text-slate-400">({(f.size / 1024).toFixed(0)} KB)</span>
-                      </div>
-                    ))}
+              {!iaResults && (
+                <>
+                  <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                    <p className="text-sm text-purple-800">
+                      Selecione um ou mais currículos (PDF ou imagem). A IA vai ler cada arquivo, extrair os dados automaticamente, verificar duplicidades, ex-funcionários e lista negra.
+                    </p>
                   </div>
-                )}
-              </div>
-              {iaProgress && (
-                <div className="flex items-center gap-2 text-sm text-purple-700 bg-purple-50 rounded-lg p-3">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {iaProgress}
+                  <div>
+                    <Label>Selecionar Currículos (PDF/JPG/PNG) - Múltiplos</Label>
+                    <Input type="file" className="mt-1" accept=".pdf,.jpg,.jpeg,.png" multiple disabled={iaProcessing}
+                      onChange={e => setIAFiles(Array.from(e.target.files || []))} />
+                    {iaFiles.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {iaFiles.map((f, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs text-slate-600">
+                            <FileText className="h-3 w-3" />
+                            <span>{f.name}</span>
+                            <span className="text-slate-400">({(f.size / 1024).toFixed(0)} KB)</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+              {(iaProcessing || iaProgress) && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2 text-sm text-purple-800">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {iaProcessing && <Loader2 className="h-4 w-4 animate-spin shrink-0" />}
+                      <span className="truncate">{iaProgress}</span>
+                    </div>
+                    <span className="font-bold tabular-nums shrink-0">{iaPercent}%</span>
+                  </div>
+                  <Progress value={iaPercent} className="h-2 bg-purple-100" />
+                  {iaCurrentFile && (
+                    <div className="text-[11px] text-purple-700 truncate flex items-center gap-1">
+                      <FileText className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{iaCurrentFile}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1205,7 +1264,7 @@ export default function Curriculos() {
                 </Button>
               </>
             ) : (
-              <Button onClick={() => { setShowIADialog(false); setIAResults(null); setIAFiles([]); setIAProgress(""); }}>Fechar</Button>
+              <Button onClick={() => { setShowIADialog(false); setIAResults(null); setIAFiles([]); setIAProgress(""); setIAPercent(0); setIACurrentFile(""); }}>Fechar</Button>
             )}
           </DialogFooter>
         </DialogContent>
