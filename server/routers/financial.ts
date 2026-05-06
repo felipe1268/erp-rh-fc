@@ -2768,11 +2768,14 @@ export const financialRouter = router({
              c.tipo_medicao,
              c.entrada::numeric         AS entrada,
              c.numero_parcelas,
+             c.dia_corte                AS dia_corte,
              c.inicio_faturamento::text AS inicio_faturamento,
              c.sinal_pct::numeric       AS sinal_pct,
              c.sinal_valor::numeric     AS sinal_valor,
              c.retencao_pct::numeric    AS retencao_pct,
              c.data_inicio_obra::text   AS data_inicio_obra,
+             c.data_primeiro_faturamento::text AS data_primeiro_faturamento,
+             c.prazo_recebimento_dias_uteis    AS prazo_recebimento_dias_uteis,
              c.valor_parcela_fixa::numeric AS valor_parcela_fixa
       FROM planejamento_medicao_config c
       WHERE c.projeto_id IN (${idsStr})
@@ -3341,8 +3344,29 @@ export const financialRouter = router({
       totalRecebidoHistByProjId[pid] = (totalRecebidoHistByProjId[pid] ?? 0) + parseFloat(r.total_recebido ?? "0");
     }
 
+    // Rev. 1347: helper para deslocar competência → mês de recebimento previsto.
+    // recebimento = data de corte do mês de competência + N dias úteis (pula sáb/dom).
+    // Quando prazoDiasUteis = 0, mantém o próprio mês de competência.
+    const shiftToRecebimentoMes = (competenciaMes: string, diaCorte: number, prazoDiasUteis: number): string => {
+      if (!prazoDiasUteis || prazoDiasUteis <= 0) return competenciaMes;
+      const [y, m] = competenciaMes.split("-").map(Number);
+      if (!y || !m) return competenciaMes;
+      const lastDay = new Date(y, m, 0).getDate();
+      const diaCorteEfetivo = Math.min(Math.max(1, diaCorte || 30), lastDay);
+      const dataRec = new Date(y, m - 1, diaCorteEfetivo);
+      let restantes = prazoDiasUteis;
+      while (restantes > 0) {
+        dataRec.setDate(dataRec.getDate() + 1);
+        const dow = dataRec.getDay();
+        if (dow !== 0 && dow !== 6) restantes--;
+      }
+      return `${dataRec.getFullYear()}-${String(dataRec.getMonth() + 1).padStart(2, "0")}`;
+    };
+
     // Helper: converte rows de distribuição em previsto líquido por projeto+mês
     //         (aplica tipo, retenção, sinal conforme planejamento_medicao_config)
+    //         Rev. 1347: reindexa por MÊS DE RECEBIMENTO (competência + prazoDiasUteis úteis)
+    //         para refletir corretamente o cronograma de Contas a Receber.
     const buildPrevDist = (rows: any[]): Record<number, Record<string, number>> => {
       const raw: Record<number, Record<string, number>> = {};
       const soma: Record<number, number> = {};
@@ -3406,9 +3430,16 @@ export const financialRouter = router({
           const sinalValor = parseFloat(cfg?.sinal_valor ?? "0") || 0;
           const sinalPct   = parseFloat(cfg?.sinal_pct   ?? "0") || 0;
           const dataInicioObra = (cfg?.data_inicio_obra as string | null) ?? null;
+          // Rev. 1347: data exata do pagamento do sinal (substitui dataInicioObra para
+          // posicionamento na matriz de Contas a Receber); fallback para dataInicioObra.
+          const dataPrimeiroFat = (cfg?.data_primeiro_faturamento as string | null) ?? null;
+          // Rev. 1347: prazo de recebimento em dias úteis (ex.: 15 = cliente paga 15
+          // dias úteis após o fechamento da medição).
+          const prazoRecDiasUteis = parseInt(cfg?.prazo_recebimento_dias_uteis ?? "0") || 0;
+          const diaCorte = parseInt(cfg?.dia_corte ?? "30") || 30;
           const sinalRaw   = sinalValor > 0 ? sinalValor : (totalVenda * sinalPct / 100);
           const sinalTotal = Math.max(0, Math.min(sinalRaw, totalVenda));
-          const hasSinal   = sinalTotal > 0 && dataInicioObra !== null;
+          const hasSinal   = sinalTotal > 0 && (dataPrimeiroFat !== null || dataInicioObra !== null);
           const baseMedicoes = hasSinal ? totalVenda - sinalTotal : totalVenda;
           const escala = totalVenda > 0 ? baseMedicoes / totalVenda : 1;
           const mesesOrd = Object.keys(vendaByMes).sort();
@@ -3420,19 +3451,28 @@ export const financialRouter = router({
               : parseFloat(((vendaByMes[mes] ?? 0) * escala).toFixed(2));
             somaArr += bruta;
             const ret = parseFloat((bruta * retencaoPct / 100).toFixed(2));
-            result[pid][mes] = (result[pid][mes] ?? 0) + parseFloat((bruta - ret).toFixed(2));
+            // Rev. 1347: usa mês de recebimento (competência + N dias úteis) em vez da
+            // própria competência para refletir o ciclo real do cliente.
+            const mesRec = shiftToRecebimentoMes(mes, diaCorte, prazoRecDiasUteis);
+            result[pid][mesRec] = (result[pid][mesRec] ?? 0) + parseFloat((bruta - ret).toFixed(2));
             totalRet += ret;
             lastMes = mes;
           }
-          if (hasSinal && dataInicioObra) {
-            const sinalMes = dataInicioObra.substring(0, 7);
-            result[pid][sinalMes] = (result[pid][sinalMes] ?? 0) + sinalTotal;
+          if (hasSinal) {
+            // Rev. 1347: SINAL cai no mês da data de pagamento informada (ou início da obra como fallback).
+            // Não soma prazo de dias úteis — sinal é antecipado por contrato.
+            const sinalDataExata = dataPrimeiroFat ?? dataInicioObra ?? "";
+            const sinalMes = sinalDataExata.substring(0, 7);
+            if (sinalMes) result[pid][sinalMes] = (result[pid][sinalMes] ?? 0) + sinalTotal;
           }
           if (totalRet > 0 && lastMes) {
+            // Rev. 1347: retenção liberada também sofre prazo de N dias úteis após a competência
+            // do mês seguinte ao último mês da obra (mês padrão de liberação).
             const [aU, mU] = lastMes.split("-").map(Number);
             const nd = new Date(aU, mU, 1);
-            const proxMes = `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, "0")}`;
-            result[pid][proxMes] = (result[pid][proxMes] ?? 0) + parseFloat(totalRet.toFixed(2));
+            const liberacaoCompetencia = `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, "0")}`;
+            const mesRecRetencao = shiftToRecebimentoMes(liberacaoCompetencia, diaCorte, prazoRecDiasUteis);
+            result[pid][mesRecRetencao] = (result[pid][mesRecRetencao] ?? 0) + parseFloat(totalRet.toFixed(2));
           }
         }
       }
