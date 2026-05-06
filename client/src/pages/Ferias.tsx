@@ -15,6 +15,7 @@ import FullScreenDialog from "@/components/FullScreenDialog";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import { formatCPF, formatMoeda, fmtNum } from "@/lib/formatters";
 import { removeAccents } from "@/lib/searchUtils";
+import { dataLimiteInicioGozoFerias } from "@/lib/dateUtils";
 import {
   Palmtree, Plus, Search, Calendar, DollarSign, AlertTriangle,
   Users, Eye, X, RefreshCw, ChevronLeft, ChevronRight,
@@ -87,8 +88,8 @@ function DefinirFeriasForm({ definirItem, definirForm, setDefinirForm, companyId
         <p className="text-xs text-muted-foreground">
           Período Aquisitivo: {formatDate(definirItem.periodoAquisitivoInicio)} a {formatDate(definirItem.periodoAquisitivoFim)}
         </p>
-        <p className="text-xs text-muted-foreground">
-          Concessivo até: {formatDate(definirItem.periodoConcessivoFim)}
+        <p className="text-xs text-muted-foreground" title="Data limite p/ iniciar o gozo (30 dias antes do próximo período aquisitivo, conforme CLT art. 134)">
+          Concessivo até: {formatDate(dataLimiteInicioGozoFerias(definirItem.periodoConcessivoFim))}
         </p>
       </div>
 
@@ -400,7 +401,7 @@ function GanttEmployeeFeriasDialog({companyId, employeeId, onClose, onDefinirDat
                               <span className="text-muted-foreground"> a </span>
                               <span className="font-medium">{formatDate(p.periodoAquisitivoFim)}</span>
                             </td>
-                            <td className="p-2">{formatDate(p.periodoConcessivoFim)}</td>
+                            <td className="p-2" title="Data limite p/ iniciar o gozo (30 dias antes do próximo período aquisitivo)">{formatDate(dataLimiteInicioGozoFerias(p.periodoConcessivoFim))}</td>
                             <td className="p-2">
                               {p.dataInicio ? (
                                 <span>{formatDate(p.dataInicio)} a {formatDate(p.dataFim)}</span>
@@ -465,7 +466,7 @@ function GanttEmployeeFeriasDialog({companyId, employeeId, onClose, onDefinirDat
                             <span className="text-muted-foreground"> a </span>
                             <span className="font-medium">{formatDate(p.periodoAquisitivoFim)}</span>
                           </td>
-                          <td className="p-2">{formatDate(p.periodoConcessivoFim)}</td>
+                          <td className="p-2" title="Data limite p/ iniciar o gozo (30 dias antes do próximo período aquisitivo)">{formatDate(dataLimiteInicioGozoFerias(p.periodoConcessivoFim))}</td>
                           <td className="p-2 text-right font-bold">{formatMoeda(parseFloat(p.valorEstimado || '0'))}</td>
                           <td className="p-2 text-center">
                             <Badge variant={p.vencida ? 'destructive' : 'outline'} className="text-[10px]">
@@ -528,7 +529,7 @@ function AlertCard({ icon: Icon, count, title, items, borderClass, numClass, nam
             {items.map((v: any) => (
               <p key={v.id} className="text-xs">
                 <span className={`font-medium cursor-pointer hover:underline ${nameClass}`} onClick={() => onSelectEmployee(v.employeeId)}>{v.employeeName}</span>
-                <span className={`${dateClass}`}> — Concessivo até {formatDate(v.periodoConcessivoFim)}</span>
+                <span className={`${dateClass}`} title="Data limite p/ iniciar o gozo"> — Concessivo até {formatDate(dataLimiteInicioGozoFerias(v.periodoConcessivoFim))}</span>
               </p>
             ))}
           </div>
@@ -1013,7 +1014,7 @@ export default function Ferias() {
                             </td>
                             <td className="p-3 text-xs">{formatDate(f.periodoAquisitivoInicio)} a {formatDate(f.periodoAquisitivoFim)}</td>
                             <td className="p-3">
-                              <span className={isVencida ? "text-red-600 font-semibold" : isPrimeiroVencido ? "text-amber-600 font-semibold" : ""}>{formatDate(f.periodoConcessivoFim)}</span>
+                              <span className={isVencida ? "text-red-600 font-semibold" : isPrimeiroVencido ? "text-amber-600 font-semibold" : ""} title="Data limite p/ iniciar o gozo (30 dias antes do próximo período aquisitivo)">{formatDate(dataLimiteInicioGozoFerias(f.periodoConcessivoFim))}</span>
                               {isVencida && <Badge variant="destructive" className="ml-1 text-[10px]">VENCIDA</Badge>}
                               {isPrimeiroVencido && <Badge className="ml-1 text-[10px] bg-amber-100 text-amber-700 border border-amber-300">VENCIDA</Badge>}
                             </td>
@@ -1180,7 +1181,7 @@ export default function Ferias() {
                                   <p className="text-sm font-medium">
                                     {formatDate(p.periodoAquisitivoInicio)} <ArrowRight className="inline h-3 w-3 mx-1" /> {formatDate(p.periodoAquisitivoFim)}
                                   </p>
-                                  <p className="text-xs text-muted-foreground">Concessivo até: {formatDate(p.periodoConcessivoFim)}</p>
+                                  <p className="text-xs text-muted-foreground" title="Data limite p/ iniciar o gozo (30 dias antes do próximo período aquisitivo)">Concessivo até: {formatDate(dataLimiteInicioGozoFerias(p.periodoConcessivoFim))}</p>
                                 </div>
                               </div>
                               <Button
@@ -1774,9 +1775,9 @@ export default function Ferias() {
                   <p className="text-xs text-blue-600 uppercase font-semibold">Período Aquisitivo</p>
                   <p className="font-medium">{formatDate(selectedItem.periodoAquisitivoInicio)} a {formatDate(selectedItem.periodoAquisitivoFim)}</p>
                 </div>
-                <div className="bg-amber-50 rounded-lg p-4">
+                <div className="bg-amber-50 rounded-lg p-4" title="Data limite p/ iniciar o gozo (30 dias antes do próximo período aquisitivo, conforme CLT art. 134)">
                   <p className="text-xs text-amber-600 uppercase font-semibold">Concessivo Até</p>
-                  <p className="font-medium">{formatDate(selectedItem.periodoConcessivoFim)}</p>
+                  <p className="font-medium">{formatDate(dataLimiteInicioGozoFerias(selectedItem.periodoConcessivoFim))}</p>
                 </div>
               </div>
               {selectedItem.dataInicio && (

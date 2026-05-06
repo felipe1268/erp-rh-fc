@@ -5,6 +5,7 @@ import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
+import { dataLimiteInicioGozoFerias } from "@/lib/dateUtils";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -611,7 +612,7 @@ export default function DashFerias() {
                       <td className="py-2 text-xs text-[#64748B]">{f.funcao}</td>
                       <td className="py-2 text-xs text-[#64748B]">{f.setor}</td>
                       <td className="py-2 text-xs text-[#64748B]">{fmtDate(f.periodoAquisitivoInicio)} — {fmtDate(f.periodoAquisitivoFim)}</td>
-                      <td className="py-2 text-xs text-[#64748B]">{fmtDate(f.periodoConcessivoFim)}</td>
+                      <td className="py-2 text-xs text-[#64748B]" title="Data limite p/ iniciar o gozo (30 dias antes do próximo período aquisitivo)">{fmtDate(dataLimiteInicioGozoFerias(f.periodoConcessivoFim))}</td>
                       <td className="py-2 text-xs text-[#64748B]">{fmtDate(f.dataInicio)}</td>
                       <td className="py-2 text-xs text-[#64748B]">{fmtDate(f.dataFim)}</td>
                       <td className="py-2 text-xs text-center">{f.diasGozo || 30}</td>
@@ -715,7 +716,7 @@ export default function DashFerias() {
                         <tr key={i} className={`border-b hover:bg-muted/20 ${p.vencida ? 'bg-red-50/50' : ''}`}>
                           <td className="py-2 px-3 text-muted-foreground">{i + 1}</td>
                           <td className="py-2 px-3">{fmtDate(p.inicio)} a {fmtDate(p.fim)}</td>
-                          <td className="py-2 px-3">{fmtDate(p.fimConcessivo)}</td>
+                          <td className="py-2 px-3" title="Data limite p/ iniciar o gozo (30 dias antes do próximo período aquisitivo)">{fmtDate(dataLimiteInicioGozoFerias(p.fimConcessivo))}</td>
                           <td className="py-2 px-3 text-right font-semibold">{fmtBRL(parseFloat(p.valorEstimado || '0'))}</td>
                           <td className="py-2 px-3 text-center">
                             <Badge className={`text-[10px] ${statusColors[st] || 'bg-gray-100 text-gray-700'}`}>

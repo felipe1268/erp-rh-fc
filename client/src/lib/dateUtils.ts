@@ -102,6 +102,33 @@ export function todayBrasilia(): string {
 }
 
 /**
+ * Férias — Calcula a DATA LIMITE para INICIAR o gozo das férias, dado o fim do
+ * período concessivo (CLT art. 134). Equivale a 30 dias antes do próximo período
+ * aquisitivo: se o gozo é de 30 dias corridos, iniciar na data limite faz com que
+ * o último dia caia exatamente no fim do concessivo.
+ *
+ * Fórmula: limite = periodoConcessivoFim - 29 dias
+ * (porque o dia de início também conta como 1 dia de gozo)
+ *
+ * Ex.: aquisitivo 01/03/2025–28/02/2026, concessivo termina em 28/02/2027.
+ *      Próximo aquisitivo começa em 01/03/2027. Limite p/ iniciar gozo = 30/01/2027
+ *      (= 28/02/2027 − 29 dias = 01/03/2027 − 30 dias).
+ *
+ * Retorna string YYYY-MM-DD (mesmo formato do input).
+ */
+export function dataLimiteInicioGozoFerias(periodoConcessivoFim: string | null | undefined): string | null {
+  if (!periodoConcessivoFim) return null;
+  const m = String(periodoConcessivoFim).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  d.setUTCDate(d.getUTCDate() - 29);
+  const y = d.getUTCFullYear();
+  const mo = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const da = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${mo}-${da}`;
+}
+
+/**
  * Retorna a data atual por extenso no fuso de Brasília.
  * Ex: "24 de fevereiro de 2026"
  */

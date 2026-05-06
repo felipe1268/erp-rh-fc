@@ -9149,6 +9149,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 02:00:00",
   },
   {
+    version: 1354,
+    titulo: "Férias: coluna 'Concessivo Até' passa a exibir a data limite para iniciar o gozo (30 dias antes do próximo período aquisitivo)",
+    descricao: "BUG: a coluna 'Concessivo Até' mostrava o último dia do período concessivo (ex.: 28/02/2027), mas o que o RH precisa enxergar é a DATA LIMITE para INICIAR o gozo das férias — caso contrário, a empresa fica sujeita a pagamento em dobro. Conforme a CLT (art. 134), as férias devem ser concedidas em um único período de 30 dias dentro dos 12 meses subsequentes ao aquisitivo; logo, o último dia possível para iniciar o gozo é 30 dias antes do próximo período aquisitivo (= fim do concessivo − 29 dias). Ex.: para o aquisitivo 01/03/2025–28/02/2026 (concessivo até 28/02/2027), o limite passa a aparecer como 30/01/2027. A mudança é apenas de exibição (telas de Férias e Dashboard de Férias) — o valor real do fim do concessivo continua armazenado e usado nas regras de status 'vencida' e nos alertas. Tooltip explicando a regra adicionado em todas as células.",
+    tipo: "bugfix",
+    modulos: "RH,Dashboards",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-06 05:00:00",
+  },
+  {
     version: 1353,
     titulo: "Importação de Orçamento: lê coluna M (Cód. Composição Auxiliar) e avisa quando composições da EAP não existem na aba CPUs",
     descricao: "1) BUG: o importador lia 'Cód. Serviço' (coluna N) que está vazia no layout FC, ignorando a coluna M ('Cód. Composição Auxiliar') que contém o código real de vínculo com a aba CPUs. Resultado: TODA a EAP era importada sem vínculo de insumos, sem nenhum aviso. Adicionados aliases para 'codcomposicaoauxiliar', 'codigocomposicaoauxiliar', 'composicaoauxiliar', 'codcompauxiliar', etc., e o FC_PRESET do client foi corrigido para apontar para a coluna M (índice 12). 2) MELHORIA: ao terminar a importação (e a reimportação), o sistema agora compara as composições referenciadas na EAP com as da aba CPUs e exibe um aviso (toast amarelo, 20s) listando os códigos faltantes — antes era sucesso silencioso, o que confundia o usuário sem indicar a causa.",
