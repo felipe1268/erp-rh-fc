@@ -60,7 +60,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 type ViewMode = "list" | "form" | "detail";
-type FormItem = { id: string; funcao: string; quantidade: number; duracaoMeses: number };
+type FormItem = { id: string; funcao: string; quantidade: number; duracaoMeses: number; regimeContratacao: "experiencia" | "indeterminado" };
 
 function removeAccentsMDO(str: string) {
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -298,7 +298,7 @@ export default function SolicitacaoMDO() {
   const [rejectingId, setRejectingId] = useState<number | null>(null);
 
   const [formObraId, setFormObraId] = useState(0);
-  const [formItens, setFormItens] = useState<FormItem[]>([{ id: "1", funcao: "", quantidade: 1, duracaoMeses: 1 }]);
+  const [formItens, setFormItens] = useState<FormItem[]>([{ id: "1", funcao: "", quantidade: 1, duracaoMeses: 1, regimeContratacao: "experiencia" }]);
   const [formDataInicio, setFormDataInicio] = useState("");
   const [formPrioridade, setFormPrioridade] = useState("normal");
   const [formMotivo, setFormMotivo] = useState("");
@@ -350,10 +350,10 @@ export default function SolicitacaoMDO() {
   );
 
   const validItensForAnalise = formItens.filter(i => i.funcao.trim() && i.quantidade > 0 && i.duracaoMeses > 0);
-  const analiseItensKey = validItensForAnalise.map(i => `${i.funcao}|${i.quantidade}|${i.duracaoMeses}`).join(",");
+  const analiseItensKey = validItensForAnalise.map(i => `${i.funcao}|${i.quantidade}|${i.duracaoMeses}|${i.regimeContratacao}`).join(",");
 
   const analiseInput = useMemo(() => {
-    const mapped = validItensForAnalise.map(i => ({ funcao: i.funcao, quantidade: i.quantidade, duracaoMeses: i.duracaoMeses }));
+    const mapped = validItensForAnalise.map(i => ({ funcao: i.funcao, quantidade: i.quantidade, duracaoMeses: i.duracaoMeses, regimeContratacao: i.regimeContratacao }));
     return { obraId: formObraId, itens: mapped };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formObraId, analiseItensKey]);
@@ -457,7 +457,7 @@ export default function SolicitacaoMDO() {
 
   function resetForm() {
     setFormObraId(0);
-    setFormItens([{ id: "1", funcao: "", quantidade: 1, duracaoMeses: 1 }]);
+    setFormItens([{ id: "1", funcao: "", quantidade: 1, duracaoMeses: 1, regimeContratacao: "experiencia" }]);
     setFormDataInicio("");
     setFormPrioridade("normal");
     setFormMotivo("");
@@ -467,7 +467,7 @@ export default function SolicitacaoMDO() {
   }
 
   function addItem() {
-    setFormItens(prev => [...prev, { id: String(Date.now()), funcao: "", quantidade: 1, duracaoMeses: 1 }]);
+    setFormItens(prev => [...prev, { id: String(Date.now()), funcao: "", quantidade: 1, duracaoMeses: 1, regimeContratacao: "experiencia" }]);
   }
 
   function removeItem(id: string) {
@@ -494,6 +494,7 @@ export default function SolicitacaoMDO() {
         funcaoSolicitada: item.funcao,
         quantidade: item.quantidade,
         duracaoMeses: item.duracaoMeses,
+        regimeContratacao: item.regimeContratacao,
         dataInicioNecessidade: formDataInicio,
         prioridade: formPrioridade as any,
         observacao: formMotivo || undefined,
@@ -506,7 +507,7 @@ export default function SolicitacaoMDO() {
         obraId: formObraId,
         solicitanteId: user?.id || 0,
         solicitanteNome: user?.name || "Usuário",
-        itens: validItens.map(i => ({ funcao: i.funcao, quantidade: i.quantidade, duracaoMeses: i.duracaoMeses })),
+        itens: validItens.map(i => ({ funcao: i.funcao, quantidade: i.quantidade, duracaoMeses: i.duracaoMeses, regimeContratacao: i.regimeContratacao })),
         dataInicioNecessidade: formDataInicio,
         prioridade: formPrioridade as any,
         observacao: formMotivo || undefined,
@@ -906,6 +907,33 @@ export default function SolicitacaoMDO() {
                           <Trash2 className="h-4 w-4" />
                         </button>
                       )}
+                    </div>
+
+                    {/* Regime de Contratação (Rev. 1357) */}
+                    <div className="col-span-12 -mt-1">
+                      <div className="flex flex-wrap items-center gap-3 px-2 py-2 rounded-lg bg-slate-50 border border-slate-200">
+                        <span className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">Regime CLT:</span>
+                        <label className="flex items-center gap-1.5 cursor-pointer text-xs">
+                          <input
+                            type="radio"
+                            name={`regime-${item.id}`}
+                            checked={item.regimeContratacao === "experiencia"}
+                            onChange={() => updateItem(item.id, "regimeContratacao", "experiencia")}
+                            className="accent-blue-600"
+                          />
+                          <span><strong>Experiência 45+45</strong> <span className="text-muted-foreground">— sem aviso/multa nos 3 primeiros meses</span></span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer text-xs">
+                          <input
+                            type="radio"
+                            name={`regime-${item.id}`}
+                            checked={item.regimeContratacao === "indeterminado"}
+                            onChange={() => updateItem(item.id, "regimeContratacao", "indeterminado")}
+                            className="accent-blue-600"
+                          />
+                          <span><strong>Indeterminado</strong> <span className="text-muted-foreground">— encargos plenos desde o 1º mês</span></span>
+                        </label>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -1409,8 +1437,8 @@ export default function SolicitacaoMDO() {
                       setFormObraId(d.obraId);
                       setFormItens(
                         d.funcaoSolicitada
-                          ? [{ id: "1", funcao: d.funcaoSolicitada, quantidade: d.quantidade || 1, duracaoMeses: d.duracaoMeses || 1 }]
-                          : [{ id: "1", funcao: "", quantidade: 1, duracaoMeses: 1 }]
+                          ? [{ id: "1", funcao: d.funcaoSolicitada, quantidade: d.quantidade || 1, duracaoMeses: d.duracaoMeses || 1, regimeContratacao: ((d as any).regimeContratacao || "experiencia") as "experiencia" | "indeterminado" }]
+                          : [{ id: "1", funcao: "", quantidade: 1, duracaoMeses: 1, regimeContratacao: "experiencia" }]
                       );
                       setFormDataInicio(d.dataInicioNecessidade ? d.dataInicioNecessidade.split("T")[0] : "");
                       setFormPrioridade(d.prioridade || "normal");
@@ -1439,14 +1467,43 @@ export default function SolicitacaoMDO() {
                       <>
                         <div className="bg-white rounded-xl border p-4">
                           <h4 className="font-semibold text-xs text-[#1B2A4A] mb-3 flex items-center gap-2"><DollarSign className="h-3.5 w-3.5" /> Impacto Financeiro</h4>
+                          {c.regimeContratacao && (
+                            <div className={`mb-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${c.regimeContratacao === "experiencia" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"}`}>
+                              {c.regimeContratacao === "experiencia" ? "Experiência 45+45" : "Indeterminado"}
+                            </div>
+                          )}
                           <div className="space-y-1.5 text-xs">
                             <div className="flex justify-between"><span className="text-muted-foreground">Salário Base</span><span className="font-mono">{fmtMoney(c.salarioBase)}</span></div>
-                            <div className="flex justify-between"><span className="text-muted-foreground">Encargos ({(c.encargosPerc || 79.3).toFixed(1)}%)</span><span className="font-mono">{fmtMoney(c.encargosValor)}</span></div>
+                            {c.regimeContratacao === "experiencia" && c.mesesExperiencia > 0 && c.encargosBasicoPerc != null ? (
+                              <>
+                                <div className="flex justify-between text-amber-700">
+                                  <span className="text-[11px]">Mês 1–{c.mesesExperiencia} (sem aviso/multa) — {(c.encargosBasicoPerc).toFixed(1)}%</span>
+                                  <span className="font-mono">{fmtMoney(c.custoMensalUnitExperiencia)}</span>
+                                </div>
+                                {c.mesesEfetivo > 0 && (
+                                  <div className="flex justify-between text-blue-700">
+                                    <span className="text-[11px]">Mês {c.mesesExperiencia + 1}+ (efetivado) — {(c.encargosRescisaoPerc != null ? (c.encargosBasicoPerc + c.encargosRescisaoPerc) : (c.encargosPerc || 79.3)).toFixed(1)}%</span>
+                                    <span className="font-mono">{fmtMoney(c.custoMensalUnitEfetivo)}</span>
+                                  </div>
+                                )}
+                                <div className="flex justify-between text-muted-foreground border-t border-dashed pt-1">
+                                  <span>Encargos médio ({(c.encargosMediaPerc ?? c.encargosPerc ?? 79.3).toFixed(1)}%)</span>
+                                  <span className="font-mono">{fmtMoney(c.encargosValor)}</span>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex justify-between"><span className="text-muted-foreground">Encargos ({(c.encargosMediaPerc ?? c.encargosPerc ?? 79.3).toFixed(1)}%)</span><span className="font-mono">{fmtMoney(c.encargosValor)}</span></div>
+                            )}
                             <div className="flex justify-between"><span className="text-muted-foreground">Benefícios</span><span className="font-mono">{fmtMoney(c.beneficios || 0)}</span></div>
-                            <div className="border-t pt-1.5 flex justify-between font-semibold"><span>Mensal CLT ({d.quantidade}x)</span><span className="text-blue-700">{fmtMoney(c.custoMensalTotal)}</span></div>
+                            <div className="border-t pt-1.5 flex justify-between font-semibold"><span>Mensal CLT médio ({d.quantidade}x)</span><span className="text-blue-700">{fmtMoney(c.custoMensalTotal)}</span></div>
                             <div className="bg-blue-50 text-blue-900 rounded-lg p-2 flex justify-between font-bold">
                               <span>CLT Total ({d.duracaoMeses}m)</span><span>{fmtMoney(c.custoTotal)}</span>
                             </div>
+                            {c.regimeContratacao === "experiencia" && c.mesesEfetivo > 0 && c.custoMensalUnitExperiencia && c.custoMensalUnitEfetivo && (
+                              <p className="text-[10px] text-muted-foreground italic mt-1">
+                                Cálculo: {c.mesesExperiencia}m × {fmtMoney(c.custoMensalUnitExperiencia * d.quantidade)} + {c.mesesEfetivo}m × {fmtMoney(c.custoMensalUnitEfetivo * d.quantidade)} + custos únicos
+                              </p>
+                            )}
                           </div>
                         </div>
 

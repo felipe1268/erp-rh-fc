@@ -21,6 +21,158 @@ function companyFilter(col: any, input: { companyId: number; companyIds?: number
 
 const parseBRL = (v: any) => parseFloat(String(v || "0").replace(/\./g, "").replace(",", ".")) || 0;
 
+// ─────────────────────────────────────────────────────────────────────────
+// Rev. 1357 — Encargos por regime (Experiência 45+45 vs Indeterminado)
+// CLT Art. 443/445: contrato de experiência até 90 dias (3 meses).
+// Nesse período NÃO incidem aviso prévio nem multa de 40% do FGTS se a
+// rescisão ocorrer ao término do prazo. Esses encargos estão no GRUPO C
+// da tabela `encargos_sociais` ("Encargos ligados à demissão do trabalhador").
+// Logo: durante a experiência aplicamos apenas A+B; após o 90º dia aplicamos
+// A+B+C (encargos plenos).
+// ─────────────────────────────────────────────────────────────────────────
+const MESES_EXPERIENCIA = 3;
+type RegimeContratacao = "experiencia" | "indeterminado";
+
+function splitEncargosPorGrupo(rows: Array<{ grupo: string | null; valor: any }>) {
+  let basicoPerc = 0;   // Grupos A + B (incidem todos os meses)
+  let rescisaoPerc = 0; // Grupo C (só após o término da experiência)
+  for (const e of rows) {
+    const v = parseFloat(String(e.valor) || "0");
+    if ((e.grupo || "").toUpperCase() === "C") rescisaoPerc += v;
+    else basicoPerc += v;
+  }
+  return { basicoPerc, rescisaoPerc, totalPerc: basicoPerc + rescisaoPerc };
+}
+
+// Recalcula custos da SMO (usado em create e update). Retorna {custoMensal, custoTotal, detalhes}.
+async function computeCustoSMO(
+  db: any,
+  input: { companyId: number; companyIds?: number[] },
+  obraId: number,
+  funcao: string,
+  quantidade: number,
+  duracaoMeses: number,
+  regime: RegimeContratacao,
+) {
+  const encargosRows = await db.select().from(encargosSociais).where(companyFilter(encargosSociais.companyId, input));
+  let { basicoPerc, rescisaoPerc, totalPerc: totalEncargosPerc } = splitEncargosPorGrupo(encargosRows);
+  if (totalEncargosPerc === 0) { basicoPerc = 66.7; rescisaoPerc = 12.6; totalEncargosPerc = 79.3; }
+
+  const [convData] = await db.select().from(convencaoColetiva)
+    .where(and(companyFilter(convencaoColetiva.companyId, input), eq(convencaoColetiva.status, "vigente")))
+    .orderBy(desc(convencaoColetiva.vigenciaInicio)).limit(1);
+
+  const convVrDiario = parseFloat(convData?.valeRefeicao || "0");
+  const convVaVal = parseFloat(convData?.valeAlimentacao || "0");
+  const pisoFallback = parseFloat(convData?.pisoSalarial || "2500");
+
+  const mealCfg = await getMealConfig(db, input, obraId);
+  const benef = calcBeneficiosFromConfig(mealCfg, convVrDiario, convVaVal);
+
+  let emps = await db.select({ salarioBase: employees.salarioBase })
+    .from(employees)
+    .where(and(companyFilter(employees.companyId, input), eq(employees.funcao, funcao), eq(employees.status, "Ativo")));
+  if (emps.length === 0) {
+    const palavras = funcao.split(/\s+/).filter(p => p.length > 2);
+    if (palavras.length > 0) {
+      const likePattern = `%${palavras[0]}%`;
+      emps = await db.select({ salarioBase: employees.salarioBase })
+        .from(employees)
+        .where(and(companyFilter(employees.companyId, input), sql`${employees.funcao} ILIKE ${likePattern}`, eq(employees.status, "Ativo")));
+    }
+  }
+
+  let salarioRef = 0;
+  if (emps.length > 0) {
+    const sals = emps.map((e: any) => parseFloat(String(e.salarioBase || "0").replace(/\./g, "").replace(",", ".")) || 0).filter((s: number) => s > 0);
+    salarioRef = sals.length > 0 ? sals.reduce((a: number, b: number) => a + b, 0) / sals.length : 0;
+  }
+  if (salarioRef === 0) salarioRef = pisoFallback;
+
+  const vr = benef.vrMensal;
+  const va = benef.vaMensal;
+  const vt = salarioRef * 0.06;
+  const beneficios = vr + va + vt + 45;
+  const dur = duracaoMeses || 1;
+
+  const blended = calcEncargosBlended(basicoPerc, rescisaoPerc, regime, dur);
+  const encargosValor = salarioRef * (blended.mediaPerc / 100);
+  const encargosValorExp = salarioRef * (blended.mensalExperienciaPerc / 100);
+  const encargosValorEf = salarioRef * (blended.mensalEfetivoPerc / 100);
+  const custoMensalUnitExperiencia = salarioRef + encargosValorExp + beneficios;
+  const custoMensalUnitEfetivo = salarioRef + encargosValorEf + beneficios;
+  const custoMensalUnit = salarioRef + encargosValor + beneficios;
+  const custoMensal = custoMensalUnit * quantidade;
+  const custoUnico = (200 + 350 + 250) * quantidade;
+  const folhaPeriodo = (custoMensalUnitExperiencia * blended.mesesExperiencia + custoMensalUnitEfetivo * blended.mesesEfetivo) * quantidade;
+  const custoTotal = folhaPeriodo + custoUnico;
+
+  const fatorBDI = 1.35;
+  const tercMensal = salarioRef * fatorBDI * quantidade;
+  const tercTotal = tercMensal * dur;
+
+  const detalhes = {
+    salarioBase: salarioRef,
+    regimeContratacao: regime,
+    encargosPerc: totalEncargosPerc,
+    encargosBasicoPerc: blended.basicoPerc,
+    encargosRescisaoPerc: blended.rescisaoPerc,
+    encargosMediaPerc: blended.mediaPerc,
+    encargosValor,
+    encargosValorExperiencia: encargosValorExp,
+    encargosValorEfetivo: encargosValorEf,
+    mesesExperiencia: blended.mesesExperiencia,
+    mesesEfetivo: blended.mesesEfetivo,
+    custoMensalUnitExperiencia,
+    custoMensalUnitEfetivo,
+    beneficios,
+    custoMensalUnit,
+    custoMensalTotal: custoMensal,
+    custoTotal,
+    tercMensalTotal: tercMensal,
+    tercTotal,
+    recomendacao: custoTotal > tercTotal ? "terceirizar" : "contratar",
+    baseSalarial: emps.length > 0 ? "Média ativos" : "Piso convenção",
+  };
+
+  return { custoMensal, custoTotal, detalhes };
+}
+
+function calcEncargosBlended(
+  basicoPerc: number,
+  rescisaoPerc: number,
+  regime: RegimeContratacao,
+  duracaoMeses: number,
+) {
+  const totalPerc = basicoPerc + rescisaoPerc;
+  const dur = Math.max(1, duracaoMeses || 1);
+  if (regime === "indeterminado") {
+    return {
+      regime,
+      basicoPerc,
+      rescisaoPerc,
+      mensalExperienciaPerc: totalPerc,
+      mensalEfetivoPerc: totalPerc,
+      mediaPerc: totalPerc,
+      mesesExperiencia: 0,
+      mesesEfetivo: dur,
+    };
+  }
+  const mesesExp = Math.min(MESES_EXPERIENCIA, dur);
+  const mesesEf = Math.max(0, dur - MESES_EXPERIENCIA);
+  const mediaPerc = (basicoPerc * mesesExp + totalPerc * mesesEf) / dur;
+  return {
+    regime,
+    basicoPerc,
+    rescisaoPerc,
+    mensalExperienciaPerc: basicoPerc,
+    mensalEfetivoPerc: totalPerc,
+    mediaPerc,
+    mesesExperiencia: mesesExp,
+    mesesEfetivo: mesesEf,
+  };
+}
+
 async function getMealConfig(db: any, input: { companyId: number; companyIds?: number[] }, obraId?: number) {
   let mealCfg: any = null;
   if (obraId) {
@@ -384,6 +536,7 @@ export const smoRouter = router({
     .input(z.object({
       companyId: z.number(), companyIds: z.array(z.number()).optional(),
       funcao: z.string(), quantidade: z.number(), duracaoMeses: z.number(), obraId: z.number(),
+      regimeContratacao: z.enum(["experiencia", "indeterminado"]).default("experiencia"),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
@@ -414,9 +567,14 @@ export const smoRouter = router({
       }
 
       const encargos = await db.select().from(encargosSociais).where(companyFilter(encargosSociais.companyId, input));
-      let totalEncargosPerc = 0;
-      for (const e of encargos) totalEncargosPerc += parseFloat(String(e.valor) || "0");
-      if (totalEncargosPerc === 0) totalEncargosPerc = 79.3;
+      let { basicoPerc, rescisaoPerc, totalPerc: totalEncargosPerc } = splitEncargosPorGrupo(encargos);
+      if (totalEncargosPerc === 0) {
+        // Fallback CLT padrão: A+B ≈ 79.3% – 12.6% (aviso+multa) = 66.7% de "básico"
+        basicoPerc = 66.7;
+        rescisaoPerc = 12.6;
+        totalEncargosPerc = 79.3;
+      }
+      const blended = calcEncargosBlended(basicoPerc, rescisaoPerc, input.regimeContratacao, input.duracaoMeses);
 
       const [conv] = await db.select().from(convencaoColetiva)
         .where(and(companyFilter(convencaoColetiva.companyId, input), eq(convencaoColetiva.status, "vigente")))
@@ -435,24 +593,41 @@ export const smoRouter = router({
       const epiEstimado = 350;
       const uniformeEstimado = 250;
 
-      const encargosValor = salarioRef * (totalEncargosPerc / 100);
-      const custoMensal = salarioRef + encargosValor + vr + va + vt + seguroVidaGrupo;
+      const beneficios = vr + va + vt + seguroVidaGrupo;
+      // Encargos "médio ponderado" no período (mistura experiência + efetivo)
+      const encargosValor = salarioRef * (blended.mediaPerc / 100);
+      const encargosValorExperiencia = salarioRef * (blended.mensalExperienciaPerc / 100);
+      const encargosValorEfetivo = salarioRef * (blended.mensalEfetivoPerc / 100);
+      const custoMensalExperiencia = salarioRef + encargosValorExperiencia + beneficios;
+      const custoMensalEfetivo = salarioRef + encargosValorEfetivo + beneficios;
+      const custoMensal = salarioRef + encargosValor + beneficios; // média ponderada
       const custoUnico = exameAdmissional + epiEstimado + uniformeEstimado;
       const custoMensalTotal = custoMensal * input.quantidade;
-      const custoTotal = (custoMensal * input.quantidade * input.duracaoMeses) + (custoUnico * input.quantidade);
+      // Custo total = soma exata (3m experiência + restante efetivo) × qtd + custos únicos
+      const custoFolhaPeriodo = (custoMensalExperiencia * blended.mesesExperiencia + custoMensalEfetivo * blended.mesesEfetivo) * input.quantidade;
+      const custoTotal = custoFolhaPeriodo + (custoUnico * input.quantidade);
 
       const ferias13 = salarioRef / 12 + (salarioRef / 12) / 3 + salarioRef / 12;
-      const totalBeneficios = vr + va + vt + seguroVidaGrupo;
 
       return {
         salarioBase: salarioRef,
-        encargosPercentual: totalEncargosPerc,
+        regimeContratacao: input.regimeContratacao,
+        encargosPercentual: totalEncargosPerc,         // % pleno (legado, compat)
+        encargosBasicoPerc: blended.basicoPerc,         // grupos A+B
+        encargosRescisaoPerc: blended.rescisaoPerc,     // grupo C (aviso + multa)
+        encargosMediaPerc: blended.mediaPerc,           // % médio ponderado p/ regime
         encargosValor,
+        encargosValorExperiencia,
+        encargosValorEfetivo,
+        custoMensalExperiencia,
+        custoMensalEfetivo,
+        mesesExperiencia: blended.mesesExperiencia,
+        mesesEfetivo: blended.mesesEfetivo,
         valeRefeicao: vr,
         valeAlimentacao: va,
         valeTransporte: vt,
         seguroVidaGrupo,
-        totalBeneficios,
+        totalBeneficios: beneficios,
         exameAdmissional,
         epiEstimado,
         uniformeEstimado,
@@ -479,15 +654,17 @@ export const smoRouter = router({
         funcao: z.string(),
         quantidade: z.number().min(1),
         duracaoMeses: z.number().min(1),
+        regimeContratacao: z.enum(["experiencia", "indeterminado"]).default("experiencia"),
       })).min(1),
     }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
 
       const encargos = await db.select().from(encargosSociais).where(companyFilter(encargosSociais.companyId, input));
-      let totalEncargosPerc = 0;
-      for (const e of encargos) totalEncargosPerc += parseFloat(String(e.valor) || "0");
-      if (totalEncargosPerc === 0) totalEncargosPerc = 79.3;
+      let { basicoPerc, rescisaoPerc, totalPerc: totalEncargosPerc } = splitEncargosPorGrupo(encargos);
+      if (totalEncargosPerc === 0) {
+        basicoPerc = 66.7; rescisaoPerc = 12.6; totalEncargosPerc = 79.3;
+      }
 
       const [conv] = await db.select().from(convencaoColetiva)
         .where(and(companyFilter(convencaoColetiva.companyId, input), eq(convencaoColetiva.status, "vigente")))
@@ -546,7 +723,10 @@ export const smoRouter = router({
         if (salarioRef === 0) salarioRef = parseFloat(conv?.pisoSalarial || "2500");
 
         const vt = salarioRef * 0.06;
-        const encargosValor = salarioRef * (totalEncargosPerc / 100);
+        const blended = calcEncargosBlended(basicoPerc, rescisaoPerc, item.regimeContratacao, item.duracaoMeses);
+        const encargosValor = salarioRef * (blended.mediaPerc / 100);
+        const encargosValorExperiencia = salarioRef * (blended.mensalExperienciaPerc / 100);
+        const encargosValorEfetivo = salarioRef * (blended.mensalEfetivoPerc / 100);
 
         const inss = salarioRef * 0.20;
         const fgts = salarioRef * 0.08;
@@ -556,13 +736,18 @@ export const smoRouter = router({
         const provisao13 = salarioRef / 12;
         const provisaoMultaFGTS = salarioRef * 0.08 * 0.40 / 12;
 
-        const custoMensalUnit = salarioRef + encargosValor + vrMensal + vaMensal + vt + seguroVidaGrupo + planoSaudeMensal;
+        const beneficiosFixos = vrMensal + vaMensal + vt + seguroVidaGrupo + planoSaudeMensal;
+        const custoMensalUnitExperiencia = salarioRef + encargosValorExperiencia + beneficiosFixos;
+        const custoMensalUnitEfetivo = salarioRef + encargosValorEfetivo + beneficiosFixos;
+        const custoMensalUnit = salarioRef + encargosValor + beneficiosFixos; // média ponderada
         const custoMensalTotal = custoMensalUnit * item.quantidade;
 
         const custosAdmissaoTotal = custoAdmissao * item.quantidade;
         const examePeriodicoTotal = Math.floor(item.duracaoMeses / 12) * examePeriodico * item.quantidade;
         const exameDemissionalTotal = exameDemissional * item.quantidade;
-        const custoPeriodo = (custoMensalTotal * item.duracaoMeses) + custosAdmissaoTotal + examePeriodicoTotal + exameDemissionalTotal;
+        // Folha do período = experiência (custo reduzido) + restante (custo pleno)
+        const folhaPeriodo = (custoMensalUnitExperiencia * blended.mesesExperiencia + custoMensalUnitEfetivo * blended.mesesEfetivo) * item.quantidade;
+        const custoPeriodo = folhaPeriodo + custosAdmissaoTotal + examePeriodicoTotal + exameDemissionalTotal;
 
         const lucroTercPerc = input.lucroTerceirizacaoPerc / 100;
         const tercMensalUnit = custoMensalUnit * (1 + lucroTercPerc);
@@ -591,8 +776,17 @@ export const smoRouter = router({
           baseSalarial: baseSalarialOrigem,
           qtdReferencia: emps.length,
           clt: {
+            regimeContratacao: item.regimeContratacao,
             encargosPerc: totalEncargosPerc,
+            encargosBasicoPerc: blended.basicoPerc,
+            encargosRescisaoPerc: blended.rescisaoPerc,
+            encargosMediaPerc: blended.mediaPerc,
             encargosValor,
+            mesesExperiencia: blended.mesesExperiencia,
+            mesesEfetivo: blended.mesesEfetivo,
+            custoMensalUnitExperiencia,
+            custoMensalUnitEfetivo,
+            folhaPeriodo,
             detalhamento: {
               salarioBruto: salarioRef,
               inss,
@@ -871,6 +1065,7 @@ export const smoRouter = router({
         funcao: z.string(),
         quantidade: z.number().min(1),
         duracaoMeses: z.number().min(1).default(1),
+        regimeContratacao: z.enum(["experiencia", "indeterminado"]).default("experiencia"),
       })).min(1),
       dataInicioNecessidade: z.string(),
       prioridade: z.enum(["urgente", "normal", "planejada"]),
@@ -889,9 +1084,10 @@ export const smoRouter = router({
         })();
 
       const encargosRows = await db.select().from(encargosSociais).where(companyFilter(encargosSociais.companyId, input));
-      let totalEncargosPerc = 0;
-      for (const e of encargosRows) totalEncargosPerc += parseFloat(String(e.valor) || "0");
-      if (totalEncargosPerc === 0) totalEncargosPerc = 79.3;
+      let { basicoPerc: bPerc, rescisaoPerc: rPerc, totalPerc: totalEncargosPerc } = splitEncargosPorGrupo(encargosRows);
+      if (totalEncargosPerc === 0) {
+        bPerc = 66.7; rPerc = 12.6; totalEncargosPerc = 79.3;
+      }
 
       const [convData] = await db.select().from(convencaoColetiva)
         .where(and(companyFilter(convencaoColetiva.companyId, input), eq(convencaoColetiva.status, "vigente")))
@@ -930,21 +1126,40 @@ export const smoRouter = router({
         const vr = benefCreate.vrMensal;
         const va = benefCreate.vaMensal;
         const vt = salarioRef * 0.06;
-        const encargosValor = salarioRef * (totalEncargosPerc / 100);
-        const custoMensal = (salarioRef + encargosValor + vr + va + vt + 45) * item.quantidade;
+        const beneficios = vr + va + vt + 45;
+        const dur = item.duracaoMeses || 1;
+        const blendedCreate = calcEncargosBlended(bPerc, rPerc, item.regimeContratacao, dur);
+        const encargosValor = salarioRef * (blendedCreate.mediaPerc / 100);
+        const encargosValorExp = salarioRef * (blendedCreate.mensalExperienciaPerc / 100);
+        const encargosValorEf = salarioRef * (blendedCreate.mensalEfetivoPerc / 100);
+        const custoMensalUnitExperiencia = salarioRef + encargosValorExp + beneficios;
+        const custoMensalUnitEfetivo = salarioRef + encargosValorEf + beneficios;
+        const custoMensalUnit = salarioRef + encargosValor + beneficios;
+        const custoMensal = custoMensalUnit * item.quantidade;
         const custoUnico = (200 + 350 + 250) * item.quantidade;
-        const custoTotal = (custoMensal * (item.duracaoMeses || 1)) + custoUnico;
+        const folhaPeriodo = (custoMensalUnitExperiencia * blendedCreate.mesesExperiencia + custoMensalUnitEfetivo * blendedCreate.mesesEfetivo) * item.quantidade;
+        const custoTotal = folhaPeriodo + custoUnico;
 
         const fatorBDI = 1.35;
         const tercMensal = salarioRef * fatorBDI * item.quantidade;
-        const tercTotal = tercMensal * (item.duracaoMeses || 1);
+        const tercTotal = tercMensal * dur;
 
         const detalhes = {
           salarioBase: salarioRef,
-          encargosPerc: totalEncargosPerc,
+          regimeContratacao: item.regimeContratacao,
+          encargosPerc: totalEncargosPerc,                 // pleno (legado)
+          encargosBasicoPerc: blendedCreate.basicoPerc,
+          encargosRescisaoPerc: blendedCreate.rescisaoPerc,
+          encargosMediaPerc: blendedCreate.mediaPerc,
           encargosValor,
-          beneficios: vr + va + vt + 45,
-          custoMensalUnit: salarioRef + encargosValor + vr + va + vt + 45,
+          encargosValorExperiencia: encargosValorExp,
+          encargosValorEfetivo: encargosValorEf,
+          mesesExperiencia: blendedCreate.mesesExperiencia,
+          mesesEfetivo: blendedCreate.mesesEfetivo,
+          custoMensalUnitExperiencia,
+          custoMensalUnitEfetivo,
+          beneficios,
+          custoMensalUnit,
           custoMensalTotal: custoMensal,
           custoTotal,
           tercMensalTotal: tercMensal,
@@ -971,6 +1186,7 @@ export const smoRouter = router({
           detalheCustos: JSON.stringify(detalhes),
           prazoMinimoAlerta,
           loteId,
+          regimeContratacao: item.regimeContratacao,
         } as any).returning();
         results.push(sol);
       }
@@ -986,6 +1202,7 @@ export const smoRouter = router({
       quantidade: z.number().min(1).optional(),
       dataInicioNecessidade: z.string().optional(),
       duracaoMeses: z.number().min(1).optional(),
+      regimeContratacao: z.enum(["experiencia", "indeterminado"]).optional(),
       prioridade: z.enum(["urgente", "normal", "planejada"]).optional(),
       qualificacoes: z.string().optional(),
       observacao: z.string().optional(),
@@ -1007,7 +1224,25 @@ export const smoRouter = router({
       const { id, companyId, companyIds, atividades, ...data } = input;
       await assertOwnership(db, id, { companyId, companyIds });
       await assertCanEditOrDelete(db, id, ctx.user);
-      await db.update(smoSolicitacoes).set({ ...data, atualizadoEm: new Date().toISOString() } as any).where(eq(smoSolicitacoes.id, id));
+
+      // Rev. 1357 — recalcula custos quando função, qtd, duração ou regime mudam
+      const fieldsThatAffectCusto: Array<keyof typeof data> = ["funcaoSolicitada", "quantidade", "duracaoMeses", "regimeContratacao"];
+      const triggersRecalc = fieldsThatAffectCusto.some(k => data[k] !== undefined) && data.detalheCustos === undefined;
+      const dataToPersist: any = { ...data, atualizadoEm: new Date().toISOString() };
+      if (triggersRecalc) {
+        const [current] = await db.select().from(smoSolicitacoes).where(eq(smoSolicitacoes.id, id));
+        if (current) {
+          const funcao = (data.funcaoSolicitada ?? current.funcaoSolicitada) as string;
+          const qtd = (data.quantidade ?? current.quantidade ?? 1) as number;
+          const dur = (data.duracaoMeses ?? current.duracaoMeses ?? 1) as number;
+          const reg = (data.regimeContratacao ?? (current as any).regimeContratacao ?? "experiencia") as RegimeContratacao;
+          const computed = await computeCustoSMO(db, { companyId, companyIds }, current.obraId, funcao, qtd, dur, reg);
+          dataToPersist.custoMensalEstimado = String(computed.custoMensal.toFixed(2));
+          dataToPersist.custoTotalEstimado = String(computed.custoTotal.toFixed(2));
+          dataToPersist.detalheCustos = JSON.stringify(computed.detalhes);
+        }
+      }
+      await db.update(smoSolicitacoes).set(dataToPersist).where(eq(smoSolicitacoes.id, id));
 
       if (atividades !== undefined) {
         await db.delete(smoAtividadesEap).where(eq(smoAtividadesEap.solicitacaoId, id));

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1357,
+    titulo: "SMO: cálculo de custo CLT considera regime Experiência (45+45 dias)",
+    descricao: "FEATURE: a Solicitação de Mão de Obra agora calcula o impacto financeiro respeitando o regime de contratação. Foi adicionado um seletor 'Experiência 45+45' (padrão) vs 'Indeterminado' por item. Em 'Experiência', durante os 3 primeiros meses não são aplicados os encargos do GRUPO C da tabela de Encargos Sociais ('Aviso prévio' + 'Multa 40% FGTS' + indenizações de rescisão), porque a CLT (Art. 443/445) prevê que esses encargos só são devidos em rescisão sem justa causa após o término da experiência. A partir do 4º mês os encargos plenos (A+B+C) passam a incidir. O custo total do período é calculado de forma blended: (mesesExperiência × custo reduzido) + (mesesEfetivo × custo pleno) + custos únicos. O card 'Impacto Financeiro' mostra o breakdown: % básico, % efetivo e % médio ponderado. Backend: novos helpers splitEncargosPorGrupo() e calcEncargosBlended() em server/routers/smo.ts; aplicados em calcularImpactoFinanceiro, analiseComparativa, create e update. Schema: nova coluna smo_solicitacoes.regime_contratacao (default 'experiencia'), com ColFix DDL.",
+    tipo: "feature",
+    modulos: "smo",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-06 19:00:00",
+  },
+  {
     version: 1356,
     titulo: "Cards 'Aniversariantes do Mês' e 'Aniversários de Empresa': não exibem mais funcionários em Lista Negra ou Inativos",
     descricao: "BUGFIX: os cards 'Aniversariantes do Mês' e 'Aniversários de Empresa' (Home e Painel RH) listavam funcionários com status 'Lista_Negra' (e 'Inativo'), porque o filtro só excluía 'Desligado'. Foi adicionada uma constante STATUS_FORA = {'Desligado','Lista_Negra','Inativo'} no homeData.ts para alinhar com os demais filtros do db.ts (que já tratam os três como 'fora') — agora apenas funcionários efetivamente em atividade (Ativo, Afastado, Licença, Férias) aparecem nesses cards.",
