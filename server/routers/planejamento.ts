@@ -2112,6 +2112,7 @@ export const planejamentoRouter = router({
       dataInicioObra:    z.string().nullable().optional(),
       dataPrimeiroFaturamento: z.string().nullable().optional(),
       prazoRecebimentoDiasUteis: z.number().int().min(0).max(180).optional(),
+      sinalBase:         z.enum(["contrato", "mao_de_obra"]).optional(),
       valorParcelaFixa:  z.number().min(0).optional(),
       revisadoPorNome:   z.string().optional(),
     }))
@@ -2147,6 +2148,7 @@ export const planejamentoRouter = router({
         dataInicioObra:    input.dataInicioObra ?? null,
         dataPrimeiroFaturamento: input.dataPrimeiroFaturamento ?? null,
         prazoRecebimentoDiasUteis: input.prazoRecebimentoDiasUteis ?? 15,
+        sinalBase:         input.sinalBase ?? "contrato",
         valorParcelaFixa:  String(input.valorParcelaFixa ?? 0),
         bloqueado:         false,
         revisaoNumero:     nextRevisao,
@@ -2169,6 +2171,7 @@ export const planejamentoRouter = router({
         dataInicioObra:    data.dataInicioObra,
         dataPrimeiroFaturamento: data.dataPrimeiroFaturamento,
         prazoRecebimentoDiasUteis: data.prazoRecebimentoDiasUteis,
+        sinalBase:         data.sinalBase,
         valorParcelaFixa:  data.valorParcelaFixa,
         bloqueado:         false,
         revisaoNumero:     nextRevisao,

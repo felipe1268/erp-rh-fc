@@ -5141,6 +5141,9 @@ export const planejamentoMedicaoConfig = pgTable("planejamento_medicao_config", 
   dataInicioObra:    date("data_inicio_obra"),
   dataPrimeiroFaturamento: date("data_primeiro_faturamento"),
   prazoRecebimentoDiasUteis: integer("prazo_recebimento_dias_uteis").default(15),
+  // Rev. 1348: base de cálculo do SINAL/Mobilização — 'contrato' (padrão) ou 'mao_de_obra'.
+  // Usado quando o cliente paga o sinal apenas sobre a parcela de mão de obra do contrato.
+  sinalBase:         varchar("sinal_base", { length: 20 }).default("contrato"),
   valorParcelaFixa:  numeric("valor_parcela_fixa", { precision: 18, scale: 2 }).default("0"),
   bloqueado:         boolean("bloqueado").default(false),
   revisaoNumero:     integer("revisao_numero").default(0),

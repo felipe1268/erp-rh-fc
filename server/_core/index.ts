@@ -489,6 +489,13 @@ Regras:
           console.log(`[SyncSchema+] Coluna prazo_recebimento_dias_uteis garantida na tabela planejamento_medicao_config.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_medicao_config prazo_recebimento_dias_uteis:`, e?.message || e); }
 
+        try {
+          // Rev. 1348: base de cálculo do sinal — 'contrato' (default) ou 'mao_de_obra'.
+          // Usado quando o cliente paga sinal apenas sobre a parcela de mão de obra do contrato.
+          await db.execute(sql`ALTER TABLE planejamento_medicao_config ADD COLUMN IF NOT EXISTS sinal_base VARCHAR(20) DEFAULT 'contrato'`);
+          console.log(`[SyncSchema+] Coluna sinal_base garantida na tabela planejamento_medicao_config.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_medicao_config sinal_base:`, e?.message || e); }
+
         await db.execute(sql`CREATE TABLE IF NOT EXISTS sst_integracao_config (
           id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, obra_id INTEGER, obra_nome VARCHAR(255),
           titulo VARCHAR(255) NOT NULL, descricao TEXT, nota_minima INTEGER NOT NULL DEFAULT 70,

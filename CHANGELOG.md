@@ -1,5 +1,14 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
+## Revisão 1348 — 06/05/2026
+- **Planejamento › Configuração de Medição — Base do Sinal: Contrato OU Mão de Obra**: alguns clientes pagam o sinal/mobilização **somente sobre a parcela de mão de obra do contrato** (e não sobre o valor cheio). Foi adicionado um seletor compacto **"Sobre: Contrato | Mão de Obra"** logo abaixo do toggle %/R$ do Sinal:
+  - **Contrato** (padrão): mantém o comportamento atual — sinal = (Contrato − F.D.) × %.
+  - **Mão de Obra**: sinal = MDO do orçamento × %. O botão fica desabilitado se o orçamento não tiver MDO informada.
+  - O texto auxiliar abaixo do campo mostra dinamicamente a base usada, o valor do sinal e o saldo do contrato.
+  - Disponível apenas quando o Sinal está em modo **%** (no modo R$ o valor é definido pelo usuário e a base não importa).
+- **Backend**: nova coluna `sinal_base VARCHAR(20) DEFAULT 'contrato'` em `planejamento_medicao_config` (criada via SyncSchema+). Endpoint `salvarConfigMedicao` aceita `sinalBase`. O cruzamento orçamento×cronograma já retornava `totalMdo`; agora ele alimenta o cálculo no cliente.
+- **Financeiro › Contas a Receber**: o `getContasReceberMatrix` busca o `totalMdo` de cada projeto (via JOIN com `orcamentos`) e usa a base configurada (`sinal_base`) para distribuir o valor do SINAL na matriz mensal.
+
 ## Revisão 1347 — 05/05/2026
 - **Configuração de Medição — Data Prev. Pagto do Sinal + Prazo de Recebimento (dias úteis)**: dois campos novos na seção *Por Avanço Físico* para refletir o ciclo real do recebimento:
   - **Data Prev. Pagto do Sinal** (dia ↔ data acoplados): define a data exata em que o sinal/mobilização é pago. Substitui a "Data de Início do Projeto" no posicionamento da linha SINAL na tabela. Inputs Dia (1-31) e Data totalmente sincronizados, com clamp ao último dia do mês.

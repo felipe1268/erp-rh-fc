@@ -5243,6 +5243,9 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
   const [cfgDataPrimeiroFat, setCfgDataPrimeiroFat] = useState("");
   // Rev. 1347: prazo (em dias úteis) entre a medição e o recebimento. Padrão = 15.
   const [cfgPrazoRecDiasUteis, setCfgPrazoRecDiasUteis] = useState<number>(15);
+  // Rev. 1348: base de cálculo do SINAL — 'contrato' (sobre o valor total do contrato)
+  // ou 'mao_de_obra' (apenas sobre a parcela de MDO do orçamento).
+  const [cfgSinalBase, setCfgSinalBase] = useState<"contrato" | "mao_de_obra">("contrato");
   // Faturamento Direto: null = usar sugestão automática vinda do orçamento (aba F.D. do BDI);
   // valor numérico = override manual do usuário (inclusive 0). Sinal = (Contrato − FD) × %sinal.
   const [cfgFdValor, setCfgFdValor] = useState<number | null>(null);
@@ -5441,6 +5444,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
       setCfgDataInicioObra((configMed as any).dataInicioObra ?? "");
       setCfgDataPrimeiroFat((configMed as any).dataPrimeiroFaturamento ?? "");
       setCfgPrazoRecDiasUteis(Number((configMed as any).prazoRecebimentoDiasUteis ?? 15));
+      setCfgSinalBase(((configMed as any).sinalBase as any) === "mao_de_obra" ? "mao_de_obra" : "contrato");
       setCfgBloqueado(configMed.bloqueado ?? false);
       const vpf = n((configMed as any).valorParcelaFixa);
       setCfgValorParcelaManual(vpf > 0 ? vpf : 0);
@@ -5506,6 +5510,9 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
   }, [cruzamento]);
 
   const baseV = n((cruzamento as any)?.valorBase ?? valorContrato);
+  // Rev. 1348: total de mão de obra do orçamento (já normalizado em planejamento.ts).
+  // Usado como base alternativa do SINAL quando cfgSinalBase === 'mao_de_obra'.
+  const totalMdoCruz = n((cruzamento as any)?.totalMdo);
 
   // ── Previsão por avanço físico ────────────────────────────────────────────
   const previsoesMensais = useMemo(() => {
@@ -5522,7 +5529,11 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
 
     // Sinal/Mobilização incide sobre (Contrato − Faturamento Direto): a parcela de FD é faturada
     // diretamente pelo cliente e não entra na base de medição do contrato.
-    const baseSinal = Math.max(0, baseV - fdEfetivo);
+    // Rev. 1348: quando cfgSinalBase = 'mao_de_obra', o sinal incide somente sobre a MDO do orçamento
+    // (sem desconto de FD, pois FD é referente à parcela de materiais/serviços diretos).
+    const baseSinal = cfgSinalBase === "mao_de_obra" && totalMdoCruz > 0
+      ? totalMdoCruz
+      : Math.max(0, baseV - fdEfetivo);
     const sinalRaw = sinalModo === "valor" && cfgSinalValor != null && cfgSinalValor > 0
       ? cfgSinalValor
       : +(baseSinal * cfgSinalPct / 100).toFixed(2);
@@ -5658,7 +5669,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
     }
 
     return rows;
-  }, [cfgSinalPct, cfgRetencaoPct, cfgReterSinal, cfgDataInicioObra, cfgDataPrimeiroFat, cfgPrazoRecDiasUteis, cfgDiaCorte, dadosMensais, atividades, baseV, sinalModo, cfgSinalValor]);
+  }, [cfgSinalPct, cfgRetencaoPct, cfgReterSinal, cfgDataInicioObra, cfgDataPrimeiroFat, cfgPrazoRecDiasUteis, cfgDiaCorte, dadosMensais, atividades, baseV, sinalModo, cfgSinalValor, cfgSinalBase, totalMdoCruz, fdEfetivo]);
 
   // ── Análise de Performance Semanal ───────────────────────────────────────
   const analiseSemanal = useMemo(() => {
@@ -5825,6 +5836,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
       dataInicioObra: cfgDataInicioObra || null,
       dataPrimeiroFaturamento: cfgDataPrimeiroFat || null,
       prazoRecebimentoDiasUteis: cfgPrazoRecDiasUteis,
+      sinalBase: cfgSinalBase,
       valorParcelaFixa: cfgValorParcelaManual > 0 ? cfgValorParcelaManual : 0,
       revisadoPorNome: authUser?.name ?? authUser?.email ?? undefined,
     });
@@ -5849,6 +5861,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
           dataInicioObra: cfgDataInicioObra || null,
           dataPrimeiroFaturamento: cfgDataPrimeiroFat || null,
           prazoRecebimentoDiasUteis: cfgPrazoRecDiasUteis,
+          sinalBase: cfgSinalBase,
         });
       } catch { return; } finally { setSalvando(false); }
     }
@@ -5983,6 +5996,25 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                         >R$</button>
                       </div>
                     </div>
+                    {/* Rev. 1348: Base de cálculo do sinal — Contrato (cheio) ou apenas MDO. */}
+                    {sinalModo === "pct" && (
+                      <div className="flex items-center gap-1 mb-1">
+                        <span className="text-[9px] text-slate-500">Sobre:</span>
+                        <button
+                          type="button"
+                          onClick={() => setCfgSinalBase("contrato")}
+                          className={`text-[9px] px-2 py-0.5 rounded border transition-colors ${cfgSinalBase === "contrato" ? "bg-violet-100 border-violet-400 text-violet-800 font-bold" : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+                          title="Sinal calculado sobre o valor total do contrato (descontado o Faturamento Direto)"
+                        >Contrato</button>
+                        <button
+                          type="button"
+                          onClick={() => setCfgSinalBase("mao_de_obra")}
+                          disabled={totalMdoCruz <= 0}
+                          className={`text-[9px] px-2 py-0.5 rounded border transition-colors ${cfgSinalBase === "mao_de_obra" ? "bg-violet-100 border-violet-400 text-violet-800 font-bold" : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"} ${totalMdoCruz <= 0 ? "opacity-40 cursor-not-allowed" : ""}`}
+                          title={totalMdoCruz > 0 ? `Sinal calculado apenas sobre a MDO do orçamento (${fmt(totalMdoCruz)})` : "Orçamento sem MDO informado"}
+                        >Mão de Obra</button>
+                      </div>
+                    )}
                     {sinalModo === "pct" ? (
                       <div className="relative">
                         <input type="number" min={0} max={100} step={0.5} value={cfgSinalPct}
@@ -6028,7 +6060,9 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                     )}
                     <p className="text-[10px] text-slate-400 mt-0.5">
                       {sinalModo === "pct"
-                        ? <>Base (Contrato − F.D.): {fmt(Math.max(0, baseV - fdEfetivo))} · Sinal: {fmt(Math.max(0, baseV - fdEfetivo) * cfgSinalPct / 100)} · Saldo: {fmt(baseV - Math.max(0, baseV - fdEfetivo) * cfgSinalPct / 100)}</>
+                        ? (cfgSinalBase === "mao_de_obra" && totalMdoCruz > 0
+                            ? <>Base (MDO): {fmt(totalMdoCruz)} · Sinal: {fmt(totalMdoCruz * cfgSinalPct / 100)} · Saldo do contrato: {fmt(baseV - totalMdoCruz * cfgSinalPct / 100)}</>
+                            : <>Base (Contrato − F.D.): {fmt(Math.max(0, baseV - fdEfetivo))} · Sinal: {fmt(Math.max(0, baseV - fdEfetivo) * cfgSinalPct / 100)} · Saldo: {fmt(baseV - Math.max(0, baseV - fdEfetivo) * cfgSinalPct / 100)}</>)
                         : <>Percentual: {(cfgSinalPct).toFixed(2).replace(".", ",")}% · Saldo: {fmt(baseV - (cfgSinalValor ?? 0))}</>
                       }
                     </p>

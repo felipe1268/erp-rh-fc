@@ -2738,7 +2738,8 @@ export const financialRouter = router({
              COALESCE(o.nome, pp.nome) AS obra_nome,
              COALESCE(orc.valor_negociado::numeric,
                       orc."totalVenda"::numeric,
-                      pp.valor_contrato::numeric, 0) AS total_venda
+                      pp.valor_contrato::numeric, 0) AS total_venda,
+             COALESCE(orc."totalMdo"::numeric, 0) AS total_mdo
       FROM planejamento_projetos pp
       LEFT JOIN obras o ON o.id = pp.obra_id
       LEFT JOIN orcamentos orc ON orc.id = pp.orcamento_id
@@ -2776,6 +2777,7 @@ export const financialRouter = router({
              c.data_inicio_obra::text   AS data_inicio_obra,
              c.data_primeiro_faturamento::text AS data_primeiro_faturamento,
              c.prazo_recebimento_dias_uteis    AS prazo_recebimento_dias_uteis,
+             c.sinal_base                      AS sinal_base,
              c.valor_parcela_fixa::numeric AS valor_parcela_fixa
       FROM planejamento_medicao_config c
       WHERE c.projeto_id IN (${idsStr})
@@ -3437,7 +3439,12 @@ export const financialRouter = router({
           // dias úteis após o fechamento da medição).
           const prazoRecDiasUteis = parseInt(cfg?.prazo_recebimento_dias_uteis ?? "0") || 0;
           const diaCorte = parseInt(cfg?.dia_corte ?? "30") || 30;
-          const sinalRaw   = sinalValor > 0 ? sinalValor : (totalVenda * sinalPct / 100);
+          // Rev. 1348: base de cálculo do sinal: 'contrato' (default) ou 'mao_de_obra'.
+          // Quando 'mao_de_obra', o sinal incide apenas sobre a parcela de MDO do contrato.
+          const sinalBase = String(cfg?.sinal_base ?? "contrato");
+          const totalMdoProj = parseFloat(p.total_mdo ?? "0") || 0;
+          const baseSinalCalc = sinalBase === "mao_de_obra" && totalMdoProj > 0 ? totalMdoProj : totalVenda;
+          const sinalRaw   = sinalValor > 0 ? sinalValor : (baseSinalCalc * sinalPct / 100);
           const sinalTotal = Math.max(0, Math.min(sinalRaw, totalVenda));
           const hasSinal   = sinalTotal > 0 && (dataPrimeiroFat !== null || dataInicioObra !== null);
           const baseMedicoes = hasSinal ? totalVenda - sinalTotal : totalVenda;
