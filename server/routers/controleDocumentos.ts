@@ -1467,18 +1467,45 @@ export const controleDocumentosRouter = router({
       else if (advEscritas >= 1 && advSuspensoes === 0) proximaAcao = "Sugestão: Aplicar Suspensão Disciplinar";
       else if (advSuspensoes >= 1) proximaAcao = "⚠️ Sugestão: Avaliar Rescisão por Justa Causa";
 
-      // Resumo de ponto agrupado por mês
-      const pontoResumoMap: Record<string, { diasTrabalhados: number; horasTrabalhadas: string; horasExtras: string; atrasos: string; faltas: number; ajustesManuais: number }> = {};
+      // Resumo de ponto agrupado por mês (com faltas e assiduidade %)
+      const pontoResumoMap: Record<string, { diasTrabalhados: number; horasTrabalhadas: string; horasExtras: string; atrasos: string; faltas: number; ajustesManuais: number; assiduidadePerc: number }> = {};
       empPonto.forEach((p: any) => {
         const mesRef = p.mesReferencia || (p.data ? p.data.substring(0, 7) : null);
         if (!mesRef) return;
-        if (!pontoResumoMap[mesRef]) pontoResumoMap[mesRef] = { diasTrabalhados: 0, horasTrabalhadas: "0:00", horasExtras: "0:00", atrasos: "0:00", faltas: 0, ajustesManuais: 0 };
-        pontoResumoMap[mesRef].diasTrabalhados++;
+        if (!pontoResumoMap[mesRef]) pontoResumoMap[mesRef] = { diasTrabalhados: 0, horasTrabalhadas: "0:00", horasExtras: "0:00", atrasos: "0:00", faltas: 0, ajustesManuais: 0, assiduidadePerc: 100 };
+        const faltouNoDia = Number(p.faltas || 0) > 0;
+        if (faltouNoDia) {
+          pontoResumoMap[mesRef].faltas++;
+        } else {
+          pontoResumoMap[mesRef].diasTrabalhados++;
+        }
         if (p.ajusteManual) pontoResumoMap[mesRef].ajustesManuais++;
+      });
+      // Calcula assiduidade % por mês: diasTrabalhados / (diasTrabalhados + faltas) * 100
+      Object.values(pontoResumoMap).forEach((m: any) => {
+        const totalDias = m.diasTrabalhados + m.faltas;
+        m.assiduidadePerc = totalDias > 0 ? Math.round((m.diasTrabalhados / totalDias) * 1000) / 10 : 100;
       });
       const pontoResumo = Object.entries(pontoResumoMap)
         .map(([mesRef, dados]) => ({ mesReferencia: mesRef, ...dados }))
         .sort((a, b) => b.mesReferencia.localeCompare(a.mesReferencia));
+
+      // Assiduidade GERAL (média ponderada): soma(diasTrab) / soma(diasTrab + faltas)
+      let assiduidadeMedia = 100;
+      let totalDiasTrab = 0;
+      let totalFaltas = 0;
+      let mesesComRegistro = pontoResumo.length;
+      pontoResumo.forEach((m: any) => { totalDiasTrab += m.diasTrabalhados; totalFaltas += m.faltas; });
+      const totalGeralDias = totalDiasTrab + totalFaltas;
+      if (totalGeralDias > 0) {
+        assiduidadeMedia = Math.round((totalDiasTrab / totalGeralDias) * 1000) / 10;
+      }
+      const assiduidade = {
+        media: assiduidadeMedia,
+        totalDiasTrabalhados: totalDiasTrab,
+        totalFaltas,
+        mesesAvaliados: mesesComRegistro,
+      };
 
       // Atrasos detalhados (registros de ponto com atraso)
       const atrasosDetalhados = empPonto
@@ -1489,6 +1516,16 @@ export const controleDocumentosRouter = router({
       const faltasDetalhadas = empPonto
         .filter((p: any) => p.faltas && Number(p.faltas) > 0)
         .map((p: any) => ({ data: p.data, faltas: p.faltas, mesReferencia: p.mesReferencia || (p.data ? p.data.substring(0, 7) : "") }));
+
+      // FALTAS na timeline — 1 evento por falta
+      faltasDetalhadas.forEach((f: any) => {
+        if (!f.data) return;
+        const qtd = Number(f.faltas || 1);
+        const desc = qtd > 1
+          ? `${qtd} falta(s) no dia — sem registro de presença no ponto`
+          : `Falta registrada no cartão de ponto`;
+        timeline.push({ data: f.data, tipo: "Falta", descricao: desc, cor: "red", icone: "user-x" });
+      });
 
       // AVISO PRÉVIO
       const empAvisosPrevios = await db.select().from(terminationNotices)
@@ -1684,6 +1721,7 @@ export const controleDocumentosRouter = router({
         pontoDetalhado: empPonto,
         atrasosDetalhados,
         faltasDetalhadas,
+        assiduidade,
         folhaPagamento: empPayroll,
         epis: empEpis,
         horasExtras: empHorasExtras,

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1363,
+    titulo: "Raio-X do Funcionário: indicador de Assiduidade (% mensal e geral) + faltas na timeline",
+    descricao: "MELHORIA no Raio-X do colaborador: (1) novo CARD 'Assiduidade' no painel superior de métricas, mostrando o % geral de frequência (verde ≥95%, amarelo ≥85%, vermelho abaixo) — clicável, leva direto à aba Ponto; (2) na aba PONTO foi adicionado um banner grande 'Assiduidade Média Geral' com barra de progresso, % em destaque, contagem de dias trabalhados/faltas e mensagem qualitativa ('Excelente', 'Atenção', 'Crítico'); (3) a tabela 'Resumo Mensal de Ponto' agora exibe duas colunas novas: 'Faltas' (em vermelho quando > 0) e 'Assiduidade' (% por mês colorido por faixa); (4) na TIMELINE CRONOLÓGICA passa a aparecer 1 evento vermelho 'Falta' para cada dia em que o funcionário faltou (ordenado junto com os demais eventos por data). FÓRMULA: assiduidade % = diasTrabalhados / (diasTrabalhados + faltas) × 100. A média geral é ponderada (somatório de todos os meses).",
+    tipo: "melhoria",
+    modulos: "rh,colaboradores,ponto",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-06 21:35:00",
+  },
+  {
     version: 1362,
     titulo: "Currículos — Upload com IA: barra de progresso 0–100% com contagem por arquivo",
     descricao: "MELHORIA: o diálogo 'Upload com IA' do banco de currículos passou a exibir uma barra de progresso real (0% → 100%) com nome do arquivo sendo processado no momento. ANTES: aparecia apenas a mensagem 'Enviando para IA analisar N currículo(s)... isso pode levar alguns segundos', sem ideia de quanto faltava. AGORA: (1) os arquivos são enviados para a IA UM POR UM (em vez de tudo em uma única chamada), permitindo medir o progresso real; (2) etapa 1 — leitura local dos arquivos (0% a 15%); (3) etapa 2 — análise pela IA (15% a 100%, +85%/N por arquivo); (4) mensagem dinâmica: 'Analisando currículo X de N com IA...'; (5) os resultados aparecem em tempo real na lista enquanto os outros arquivos ainda estão sendo processados; (6) se um arquivo falhar, é registrado como erro mas o processamento dos demais continua.",

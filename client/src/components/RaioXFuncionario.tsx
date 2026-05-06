@@ -273,6 +273,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const pontoResumo = raioX?.ponto || [];
   const atrasosDetalhados = raioX?.atrasosDetalhados || [];
   const faltasDetalhadas = raioX?.faltasDetalhadas || [];
+  const assiduidade = (raioX as any)?.assiduidade || { media: 100, totalDiasTrabalhados: 0, totalFaltas: 0, mesesAvaliados: 0 };
   const folhaPagamento = raioX?.folhaPagamento || [];
   const episEntregas = raioX?.epis || [];
   const horasExtras = raioX?.horasExtras || [];
@@ -487,9 +488,22 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
 
     // PONTO
     if (pontoResumo.length > 0) {
-      html += `<div class="section"><div class="section-title">\u{1F552} Resumo de Ponto (${pontoResumo.length} meses)</div><table><thead><tr><th>Compet\u00EAncia</th><th>Dias Trab.</th><th>Ajustes Manuais</th></tr></thead><tbody>`;
+      // Banner de assiduidade geral no PDF
+      if (assiduidade.mesesAvaliados > 0) {
+        const cor = assiduidade.media >= 95 ? "#059669" : assiduidade.media >= 85 ? "#d97706" : "#dc2626";
+        const bgCor = assiduidade.media >= 95 ? "#ecfdf5" : assiduidade.media >= 85 ? "#fffbeb" : "#fef2f2";
+        html += `<div class="section"><div style="background:${bgCor};border:2px solid ${cor};border-radius:8px;padding:12px;margin-bottom:8px;">`;
+        html += `<div style="font-size:11px;font-weight:bold;color:#374151;text-transform:uppercase;letter-spacing:0.5px">Assiduidade Média Geral</div>`;
+        html += `<div style="font-size:24px;font-weight:bold;color:${cor};margin-top:4px">${assiduidade.media}%</div>`;
+        html += `<div style="font-size:11px;color:#6b7280;margin-top:2px">${assiduidade.totalDiasTrabalhados} dia(s) trabalhado(s) de ${assiduidade.totalDiasTrabalhados + assiduidade.totalFaltas} registrado(s) — ${assiduidade.totalFaltas} falta(s) em ${assiduidade.mesesAvaliados} mês(es)</div>`;
+        html += `</div></div>`;
+      }
+      html += `<div class="section"><div class="section-title">\u{1F552} Resumo de Ponto (${pontoResumo.length} meses)</div><table><thead><tr><th>Compet\u00EAncia</th><th>Dias Trab.</th><th>Faltas</th><th>Assiduidade</th><th>Ajustes Manuais</th></tr></thead><tbody>`;
       pontoResumo.forEach((p: any) => {
-        html += `<tr><td>${p.mesReferencia}</td><td style="text-align:center">${p.diasTrabalhados}</td><td style="text-align:center">${p.ajustesManuais || 0}</td></tr>`;
+        const perc = typeof p.assiduidadePerc === "number" ? p.assiduidadePerc : 100;
+        const corP = perc >= 95 ? "#059669" : perc >= 85 ? "#d97706" : "#dc2626";
+        const corF = (p.faltas || 0) > 0 ? "#dc2626" : "#9ca3af";
+        html += `<tr><td>${p.mesReferencia}</td><td style="text-align:center">${p.diasTrabalhados}</td><td style="text-align:center;color:${corF};font-weight:600">${p.faltas || 0}</td><td style="text-align:center;color:${corP};font-weight:700">${perc}%</td><td style="text-align:center">${p.ajustesManuais || 0}</td></tr>`;
       });
       html += `</tbody></table></div>`;
     }
@@ -899,6 +913,15 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     : [{ label: "Horas Extras", value: horasExtras.length, tab: "he", bg: "bg-amber-50 border-amber-200", textColor: "text-amber-700", iconColor: "text-amber-400", icon: Zap }]),
                   { label: "Habilidades", value: empSkills.length, tab: "habilidades", bg: "bg-purple-50 border-purple-200", textColor: "text-purple-700", iconColor: "text-purple-400", icon: Wrench },
                   { label: "Histórico", value: timeline.length, tab: "timeline", bg: "bg-indigo-50 border-indigo-200", textColor: "text-indigo-700", iconColor: "text-indigo-400", icon: History },
+                  ...(assiduidade.mesesAvaliados > 0 ? [{
+                    label: "Assiduidade",
+                    value: `${assiduidade.media}%` as any,
+                    tab: "ponto",
+                    bg: assiduidade.media >= 95 ? "bg-emerald-50 border-emerald-200" : assiduidade.media >= 85 ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-300",
+                    textColor: assiduidade.media >= 95 ? "text-emerald-700" : assiduidade.media >= 85 ? "text-amber-700" : "text-red-700",
+                    iconColor: assiduidade.media >= 95 ? "text-emerald-400" : assiduidade.media >= 85 ? "text-amber-400" : "text-red-400",
+                    icon: UserCheck,
+                  }] : []),
                 ].map(c => {
                   const Icon = c.icon;
                   return (
@@ -1380,6 +1403,50 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
               {/* ============ PONTO ============ */}
               <TabsContent value="ponto" className="mt-4">
                 <div className="space-y-4">
+                  {/* Indicador de Assiduidade Geral */}
+                  {assiduidade.mesesAvaliados > 0 && (
+                    <div className={`rounded-xl border-2 p-4 ${
+                      assiduidade.media >= 95 ? "bg-emerald-50 border-emerald-300" :
+                      assiduidade.media >= 85 ? "bg-amber-50 border-amber-300" :
+                      "bg-red-50 border-red-300"
+                    }`}>
+                      <div className="flex items-center justify-between gap-4 flex-wrap">
+                        <div className="flex items-center gap-3">
+                          <UserCheck className={`h-8 w-8 ${
+                            assiduidade.media >= 95 ? "text-emerald-600" :
+                            assiduidade.media >= 85 ? "text-amber-600" :
+                            "text-red-600"
+                          }`} />
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-wide text-gray-600">Assiduidade Média Geral</p>
+                            <p className={`text-3xl font-bold ${
+                              assiduidade.media >= 95 ? "text-emerald-700" :
+                              assiduidade.media >= 85 ? "text-amber-700" :
+                              "text-red-700"
+                            }`}>{assiduidade.media}%</p>
+                            <p className="text-xs text-gray-600 mt-0.5">
+                              {assiduidade.totalDiasTrabalhados} dia(s) trabalhado(s) de {assiduidade.totalDiasTrabalhados + assiduidade.totalFaltas} registrado(s)
+                              {" • "}{assiduidade.totalFaltas} falta(s) em {assiduidade.mesesAvaliados} mês(es)
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-[200px] max-w-md">
+                          <div className="w-full bg-white rounded-full h-3 border border-gray-200 overflow-hidden">
+                            <div className={`h-full rounded-full transition-all ${
+                              assiduidade.media >= 95 ? "bg-emerald-500" :
+                              assiduidade.media >= 85 ? "bg-amber-500" :
+                              "bg-red-500"
+                            }`} style={{ width: `${Math.max(0, Math.min(100, assiduidade.media))}%` }} />
+                          </div>
+                          <p className="text-[11px] text-gray-500 mt-1 text-right">
+                            {assiduidade.media >= 95 ? "Excelente — frequência exemplar" :
+                             assiduidade.media >= 85 ? "Atenção — algumas faltas no período" :
+                             "Crítico — alto índice de faltas"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {/* Resumo mensal */}
                   {pontoResumo.length > 0 && (
                     <div className="overflow-x-auto rounded-lg border bg-white">
@@ -1388,16 +1455,24 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         <thead><tr className="border-b bg-gray-50">
                           <th className="p-3 text-left font-semibold">Competência</th>
                           <th className="p-3 text-center font-semibold">Dias Trab.</th>
+                          <th className="p-3 text-center font-semibold">Faltas</th>
+                          <th className="p-3 text-center font-semibold">Assiduidade</th>
                           <th className="p-3 text-center font-semibold">Ajustes Manuais</th>
                         </tr></thead>
                         <tbody>
-                          {pontoResumo.map((p: any) => (
-                            <tr key={p.mesReferencia} className="border-b last:border-0 hover:bg-muted/30">
-                              <td className="p-3 font-medium">{p.mesReferencia}</td>
-                              <td className="p-3 text-center">{p.diasTrabalhados}</td>
-                              <td className="p-3 text-center">{p.ajustesManuais || 0}</td>
-                            </tr>
-                          ))}
+                          {pontoResumo.map((p: any) => {
+                            const perc = typeof p.assiduidadePerc === "number" ? p.assiduidadePerc : 100;
+                            const corPerc = perc >= 95 ? "text-emerald-600" : perc >= 85 ? "text-amber-600" : "text-red-600";
+                            return (
+                              <tr key={p.mesReferencia} className="border-b last:border-0 hover:bg-muted/30">
+                                <td className="p-3 font-medium">{p.mesReferencia}</td>
+                                <td className="p-3 text-center">{p.diasTrabalhados}</td>
+                                <td className={`p-3 text-center font-semibold ${(p.faltas || 0) > 0 ? "text-red-600" : "text-gray-400"}`}>{p.faltas || 0}</td>
+                                <td className={`p-3 text-center font-bold ${corPerc}`}>{perc}%</td>
+                                <td className="p-3 text-center">{p.ajustesManuais || 0}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
