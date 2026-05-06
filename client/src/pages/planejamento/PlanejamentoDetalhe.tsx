@@ -6181,12 +6181,11 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                         onChange={e => {
                           const dia = Math.min(31, Math.max(1, parseInt(e.target.value) || 1));
                           // Se já houver data, troca apenas o dia mantendo mês/ano.
-                          // Se não houver data, usa mês/ano da Data de Início do Projeto, ou mês/ano atual.
+                          // Rev. 1351: caso contrário, usa o mês/ano de HOJE como referência
+                          // (era a Data de Início do Projeto, que costuma estar no futuro e confundia o usuário).
                           const baseYM = cfgDataPrimeiroFat
                             ? cfgDataPrimeiroFat.substring(0, 7)
-                            : (cfgDataInicioObra
-                              ? cfgDataInicioObra.substring(0, 7)
-                              : new Date().toISOString().substring(0, 7));
+                            : new Date().toISOString().substring(0, 7);
                           // Limita o dia ao último dia do mês (ex: fev → 28/29).
                           const [y, m] = baseYM.split("-").map(Number);
                           const lastDay = new Date(y, m, 0).getDate();
@@ -6211,7 +6210,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                       )}
                     </div>
                     <p className="text-[10px] text-slate-400 mt-0.5">
-                      Quando o cliente paga o sinal/mobilização. Demais medições seguem a evolução da obra com prazo abaixo.
+                      Quando o cliente paga o sinal/mobilização. Sem data informada, usa a data de hoje como referência. Demais medições seguem a evolução da obra com prazo abaixo.
                     </p>
                   </div>
 
