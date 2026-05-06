@@ -196,6 +196,32 @@ export default function ObraEfetivo() {
     return base.filter((e: any) => removeAccents(e.nomeCompleto || '').includes(s) || removeAccents(e.funcao || '').includes(s));
   }, [semObra, search]);
 
+  // Rev. 1358 — aba "Todos os Funcionários" para facilitar transferência entre obras
+  const [todosObraFilter, setTodosObraFilter] = useState<string>("todos");
+  const filteredTodos = useMemo(() => {
+    let list = (allEmps as any[]).slice();
+    if (search) {
+      const s = removeAccents(search);
+      list = list.filter((e: any) =>
+        removeAccents(e.nomeCompleto || '').includes(s) ||
+        (e.cpf || '').includes(search) ||
+        removeAccents(e.funcao || '').includes(s) ||
+        removeAccents(e.setor || '').includes(s) ||
+        removeAccents(e.obraAtualNome || '').includes(s)
+      );
+    }
+    if (todosObraFilter === "sem-obra") {
+      list = list.filter((e: any) => !e.obraAtualId || e.obraAtualId === 0);
+    } else if (todosObraFilter === "com-obra") {
+      list = list.filter((e: any) => e.obraAtualId && e.obraAtualId !== 0);
+    } else if (todosObraFilter !== "todos") {
+      const oid = parseInt(todosObraFilter, 10);
+      if (!Number.isNaN(oid)) list = list.filter((e: any) => e.obraAtualId === oid);
+    }
+    list.sort((a: any, b: any) => (a.nomeCompleto || '').localeCompare(b.nomeCompleto || '', 'pt-BR'));
+    return list;
+  }, [allEmps, search, todosObraFilter]);
+
   // Filtered employees for search in dialog
   const filteredAllEmps = useMemo(() => {
     let list = allEmps;
@@ -518,9 +544,12 @@ export default function ObraEfetivo() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="efetivo" className="gap-2">
               <BarChart3 className="h-4 w-4" /> Efetivo por Obra
+            </TabsTrigger>
+            <TabsTrigger value="todos" className="gap-2">
+              <Users className="h-4 w-4" /> Todos ({allEmps.length})
             </TabsTrigger>
             <TabsTrigger value="sem-obra" className="gap-2">
               <UserMinus className="h-4 w-4" /> Sem Obra ({totalSemObra})
@@ -613,6 +642,148 @@ export default function ObraEfetivo() {
               </div>
             )}
 
+          </TabsContent>
+
+          {/* Tab: Todos os Funcionários (Rev. 1358) */}
+          <TabsContent value="todos" className="space-y-4 mt-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
+                  <div className="flex-1">
+                    <p className="text-sm text-muted-foreground">
+                      Lista completa de funcionários ativos. Use a ação <strong>Transferir/Alocar</strong> para mover entre obras.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select value={todosObraFilter} onValueChange={setTodosObraFilter}>
+                      <SelectTrigger className="w-[240px] h-9">
+                        <SelectValue placeholder="Filtrar por obra" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todas as obras ({allEmps.length})</SelectItem>
+                        <SelectItem value="com-obra">Apenas com obra ({countComObra})</SelectItem>
+                        <SelectItem value="sem-obra">Apenas sem obra ({countSemObra})</SelectItem>
+                        <div className="px-2 py-1 text-[10px] uppercase text-muted-foreground border-t mt-1">Por Obra</div>
+                        {(obrasAtivas as any[]).map((o: any) => (
+                          <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedEmployees.length > 0 && (
+                      <Button
+                        size="sm"
+                        className="bg-[#1B2A4A] hover:bg-[#243660] gap-1"
+                        onClick={() => { setAllocForm({ obraId: 0, dataInicio: new Date().toISOString().split("T")[0], motivo: "Transferência" }); setAllocDialogOpen(true); }}
+                      >
+                        <ArrowRightLeft className="h-3.5 w-3.5" /> Transferir {selectedEmployees.length}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {filteredTodos.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <Users className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                    <p className="text-sm text-muted-foreground">Nenhum funcionário encontrado.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border rounded-lg">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-slate-50">
+                          <th className="p-2 w-10">
+                            <input
+                              type="checkbox"
+                              className="rounded"
+                              checked={filteredTodos.length > 0 && filteredTodos.every((e: any) => selectedEmployees.includes(e.id))}
+                              onChange={(ev) => {
+                                if (ev.target.checked) {
+                                  const ids = filteredTodos.map((e: any) => e.id);
+                                  setSelectedEmployees(prev => Array.from(new Set([...prev, ...ids])));
+                                } else {
+                                  const ids = new Set(filteredTodos.map((e: any) => e.id));
+                                  setSelectedEmployees(prev => prev.filter(id => !ids.has(id)));
+                                }
+                              }}
+                            />
+                          </th>
+                          <th className="text-left p-2 font-medium">Funcionário</th>
+                          <th className="text-left p-2 font-medium">Função</th>
+                          <th className="text-left p-2 font-medium">Setor</th>
+                          <th className="text-left p-2 font-medium">Obra Atual</th>
+                          <th className="text-left p-2 font-medium">Status</th>
+                          <th className="text-right p-2 font-medium">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredTodos.slice(0, 300).map((emp: any) => {
+                          const semObraFlag = !emp.obraAtualId || emp.obraAtualId === 0;
+                          return (
+                            <tr key={emp.id} className="border-b hover:bg-slate-50">
+                              <td className="p-2">
+                                <input
+                                  type="checkbox"
+                                  className="rounded"
+                                  checked={selectedEmployees.includes(emp.id)}
+                                  onChange={() => toggleEmployee(emp.id)}
+                                />
+                              </td>
+                              <td className="p-2 font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setRaioXEmployeeId(emp.id)}>
+                                {emp.nomeCompleto}
+                                {emp.cpf && <p className="text-[10px] font-normal text-muted-foreground font-mono">{emp.cpf}</p>}
+                              </td>
+                              <td className="p-2 text-muted-foreground">{emp.funcao || emp.cargo || "—"}</td>
+                              <td className="p-2 text-muted-foreground">{emp.setor || "—"}</td>
+                              <td className="p-2">
+                                {semObraFlag ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                                    Sem obra
+                                  </span>
+                                ) : (
+                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 max-w-[200px] truncate inline-block">
+                                    {emp.obraAtualNome || `#${emp.obraAtualId}`}
+                                  </Badge>
+                                )}
+                              </td>
+                              <td className="p-2">
+                                {(() => {
+                                  const st = emp.status || 'Ativo';
+                                  const cfg: Record<string, { label: string; bg: string; text: string }> = {
+                                    Ativo: { label: 'Ativo', bg: 'bg-green-100', text: 'text-green-800' },
+                                    Aviso: { label: 'Aviso', bg: 'bg-amber-100', text: 'text-amber-800' },
+                                    AvisoDispensado: { label: 'Dispensado', bg: 'bg-orange-100', text: 'text-orange-800' },
+                                    Ferias: { label: 'Férias', bg: 'bg-blue-100', text: 'text-blue-800' },
+                                    Afastado: { label: 'Afastado', bg: 'bg-purple-100', text: 'text-purple-800' },
+                                    Licenca: { label: 'Licença', bg: 'bg-teal-100', text: 'text-teal-800' },
+                                    Recluso: { label: 'Recluso', bg: 'bg-red-100', text: 'text-red-800' },
+                                  };
+                                  const c = cfg[st] || { label: st, bg: 'bg-gray-100', text: 'text-gray-800' };
+                                  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${c.bg} ${c.text}`}>{c.label}</span>;
+                                })()}
+                              </td>
+                              <td className="p-2 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => openHistory(emp.id)}>
+                                    <History className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setSelectedEmployees([emp.id]); setAllocForm({ obraId: 0, dataInicio: new Date().toISOString().split("T")[0], motivo: semObraFlag ? "Alocação" : "Transferência" }); setAllocDialogOpen(true); }}>
+                                    {semObraFlag ? <><UserPlus className="h-3.5 w-3.5 mr-1" /> Alocar</> : <><ArrowRightLeft className="h-3.5 w-3.5 mr-1" /> Transferir</>}
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {filteredTodos.length > 300 && (
+                      <div className="p-2 text-center text-xs text-muted-foreground bg-slate-50 border-t">
+                        Mostrando 300 de {filteredTodos.length} resultados — refine a busca para ver outros.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Tab: Sem Obra */}

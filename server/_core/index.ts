@@ -496,6 +496,13 @@ Regras:
           console.log(`[SyncSchema+] Coluna sinal_base garantida na tabela planejamento_medicao_config.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_medicao_config sinal_base:`, e?.message || e); }
 
+        try {
+          // Rev. 1357: regime de contratação CLT — 'experiencia' (45+45 dias, default) ou 'indeterminado'.
+          // Necessário para SMO calcular custo blended (encargos rescisórios só após período de experiência).
+          await db.execute(sql`ALTER TABLE smo_solicitacoes ADD COLUMN IF NOT EXISTS regime_contratacao VARCHAR(20) DEFAULT 'experiencia'`);
+          console.log(`[SyncSchema+] Coluna regime_contratacao garantida na tabela smo_solicitacoes.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA smo_solicitacoes regime_contratacao:`, e?.message || e); }
+
         await db.execute(sql`CREATE TABLE IF NOT EXISTS sst_integracao_config (
           id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, obra_id INTEGER, obra_nome VARCHAR(255),
           titulo VARCHAR(255) NOT NULL, descricao TEXT, nota_minima INTEGER NOT NULL DEFAULT 70,
@@ -714,7 +721,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1325-2026-05-03";
+    const COLFIX_VERSION = "v1358-2026-05-06";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)

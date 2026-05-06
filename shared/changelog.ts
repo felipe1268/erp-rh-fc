@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1358,
+    titulo: "Efetivo por Obra: nova aba 'Todos' com lista completa de funcionários para facilitar transferência entre obras",
+    descricao: "FEATURE: foi adicionada uma 4ª aba 'Todos' na tela 'Efetivo por Obra' contendo a lista completa de funcionários ativos da empresa. A aba traz: (1) busca por nome/CPF/função/setor/obra (reaproveita o campo de busca do topo); (2) filtro por obra (todas / com obra / sem obra / por obra específica); (3) checkbox de seleção múltipla com 'selecionar todos os filtrados'; (4) ação por linha 'Alocar' (se sem obra) ou 'Transferir' (se já alocado), abrindo o diálogo de alocação já preenchido; (5) botão 'Transferir N' no topo para mover em lote os funcionários selecionados; (6) acesso rápido ao histórico e ao Raio-X do funcionário. FIX adicional: a versão foi bumpada para 1358 para reexecutar o ColFix idempotente que garante a coluna smo_solicitacoes.regime_contratacao introduzida na Rev. 1357 (em alguns ambientes a coluna não havia sido criada, gerando erro 'column does not exist' nas listagens da SMO).",
+    tipo: "feature",
+    modulos: "RH, Obras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-06 20:15:00",
+  },
+  {
     version: 1357,
     titulo: "SMO: cálculo de custo CLT considera regime Experiência (45+45 dias)",
     descricao: "FEATURE: a Solicitação de Mão de Obra agora calcula o impacto financeiro respeitando o regime de contratação. Foi adicionado um seletor 'Experiência 45+45' (padrão) vs 'Indeterminado' por item. Em 'Experiência', durante os 3 primeiros meses não são aplicados os encargos do GRUPO C da tabela de Encargos Sociais ('Aviso prévio' + 'Multa 40% FGTS' + indenizações de rescisão), porque a CLT (Art. 443/445) prevê que esses encargos só são devidos em rescisão sem justa causa após o término da experiência. A partir do 4º mês os encargos plenos (A+B+C) passam a incidir. O custo total do período é calculado de forma blended: (mesesExperiência × custo reduzido) + (mesesEfetivo × custo pleno) + custos únicos. O card 'Impacto Financeiro' mostra o breakdown: % básico, % efetivo e % médio ponderado. Backend: novos helpers splitEncargosPorGrupo() e calcEncargosBlended() em server/routers/smo.ts; aplicados em calcularImpactoFinanceiro, analiseComparativa, create e update. Schema: nova coluna smo_solicitacoes.regime_contratacao (default 'experiencia'), com ColFix DDL.",

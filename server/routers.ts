@@ -45,7 +45,7 @@ import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb, encerrarContratosPjDoFuncionario } from "./db";
 import { normalizeCidadeInput } from "../shared/normalizeCidade";
 import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist } from "../drizzle/schema";
-import { eq, and, sql, or, ilike, isNull } from "drizzle-orm";
+import { eq, and, sql, or, ilike, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
 import { dashboardsRouter } from "./routers/dashboards";
@@ -1519,7 +1519,22 @@ export const appRouter = router({
       employeeIds: z.array(z.number()),
       dataInicio: z.string(),
       motivo: z.string().optional(),
-    })).mutation(({ input, ctx }) => transferirFuncionariosEmLote({ ...input, registradoPor: ctx.user.name ?? 'Sistema', registradoPorUserId: ctx.user.id })),
+    })).mutation(async ({ input, ctx }) => {
+      // Rev. 1358 — bloquear funcionários desligados/Lista_Negra/Inativo também no caminho de lote
+      const db = await getDb();
+      if (db && input.employeeIds.length > 0) {
+        const rows = await db.select({ id: employees.id, status: employees.status, nomeCompleto: employees.nomeCompleto })
+          .from(employees).where(inArray(employees.id, input.employeeIds));
+        const bloqueados = rows.filter(r => ['Desligado', 'Lista_Negra', 'Inativo'].includes(r.status || ''));
+        if (bloqueados.length > 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `${bloqueados.length} funcionário(s) não podem ser alocado(s) (desligado/lista negra/inativo): ${bloqueados.slice(0, 3).map(b => b.nomeCompleto).join(", ")}${bloqueados.length > 3 ? "..." : ""}`,
+          });
+        }
+      }
+      return transferirFuncionariosEmLote({ ...input, registradoPor: ctx.user.name ?? 'Sistema', registradoPorUserId: ctx.user.id });
+    }),
     // Rateio de horas
     horasRateio: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesAno: z.string(),
       obraId: z.number().optional(),
