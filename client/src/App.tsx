@@ -142,6 +142,7 @@ const PainelRH = lazy(() => import("./pages/PainelRH"));
 const PainelSST = lazy(() => import("./pages/PainelSST"));
 const ProgramasSST = lazy(() => import("./pages/ProgramasSST"));
 const IntegracaoSST = lazy(() => import("./pages/sst/IntegracaoSST"));
+const DashboardAtestadosAcidentes = lazy(() => import("./pages/sst/DashboardAtestadosAcidentes"));
 const IntegracaoPublica = lazy(() => import("./pages/sst/IntegracaoPublica"));
 const PainelJuridico = lazy(() => import("./pages/PainelJuridico"));
 const PainelTrabalhista = lazy(() => import("./pages/PainelTrabalhista"));
@@ -360,6 +361,7 @@ function Router() {
         <Route path={"/cipa"} component={() => <RouteGuard component={CipaCompleta} route="/cipa" />} />
         <Route path={"/programas-sst"} component={() => <RouteGuard component={ProgramasSST} route="/programas-sst" />} />
         <Route path={"/sst/integracao"} component={() => <RouteGuard component={IntegracaoSST} route="/sst/integracao" />} />
+        <Route path={"/sst/dashboard-atestados-acidentes"} component={() => <RouteGuard component={DashboardAtestadosAcidentes} route="/sst/dashboard-atestados-acidentes" />} />
         <Route path={"/modulo-pj"} component={() => <RouteGuard component={ModuloPJ} route="/modulo-pj" />} />
         <Route path={"/contrato-pj/:id"} component={() => <RouteGuard component={ContratoPJView} route="/modulo-pj" />} />
         <Route path={"/contrato-pj/:contractId/aditivo/:aditivoId"} component={() => <RouteGuard component={AditivoPJView} route="/modulo-pj" />} />

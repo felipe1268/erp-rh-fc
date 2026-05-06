@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1364,
+    titulo: "Dashboard SST de Análise de Atestados & Acidentes",
+    descricao: "FEATURE no módulo SST: nova página '/sst/dashboard-atestados-acidentes' (menu Configurações > SST > Dashboards > 'Atestados & Acidentes') com análise consolidada por período. Filtros de data com atalhos (1M/3M/6M/12M/24M, default últimos 12 meses). Aba VISÃO GERAL: KPIs (total atestados, dias afastamento, total acidentes, dias perdidos, Taxa de Frequência, Taxa de Gravidade, atestados c/ INSS, acidentes c/ CAT), gráfico combinado mensal (barras: atestados+acidentes / linhas: dias) e listas dos últimos 8 eventos. Aba ATESTADOS: pizza por tipo, top 10 CIDs, top 10 motivos (qtd+dias) e top 10 funcionários. Aba ACIDENTES: pizza por gravidade (cores semânticas leve→fatal), barras por tipo, parte do corpo, local e top 10 funcionários. Backend: novo router 'sstAnalytics.atestadosAcidentes' agregando dados das tabelas 'atestados' e 'accidents' com tenant isolation por companyId/companyIds, headcount ativo para HH (220h/mês × meses), TF=acidC/Afast×1M÷HH, TG=diasPerdidos×1M÷HH.",
+    tipo: "feature",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-06 12:00:00",
+  },
+  {
     version: 1363,
     titulo: "Raio-X do Funcionário: indicador de Assiduidade (% mensal e geral) + faltas na timeline",
     descricao: "MELHORIA no Raio-X do colaborador: (1) novo CARD 'Assiduidade' no painel superior de métricas, mostrando o % geral de frequência (verde ≥95%, amarelo ≥85%, vermelho abaixo) — clicável, leva direto à aba Ponto; (2) na aba PONTO foi adicionado um banner grande 'Assiduidade Média Geral' com barra de progresso, % em destaque, contagem de dias trabalhados/faltas e mensagem qualitativa ('Excelente', 'Atenção', 'Crítico'); (3) a tabela 'Resumo Mensal de Ponto' agora exibe duas colunas novas: 'Faltas' (em vermelho quando > 0) e 'Assiduidade' (% por mês colorido por faixa); (4) na TIMELINE CRONOLÓGICA passa a aparecer 1 evento vermelho 'Falta' para cada dia em que o funcionário faltou (ordenado junto com os demais eventos por data). FÓRMULA: assiduidade % = diasTrabalhados / (diasTrabalhados + faltas) × 100. A média geral é ponderada (somatório de todos os meses).",

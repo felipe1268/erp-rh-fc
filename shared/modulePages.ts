@@ -384,6 +384,7 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/epis":             "epi",
     "/cipa":             "cipa",
     "/dashboards/epis":  "dashboards",
+    "/sst/dashboard-atestados-acidentes": "dashboards",
     "/controle-documentos": "epi",
   },
   "juridico": {
