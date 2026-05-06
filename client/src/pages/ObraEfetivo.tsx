@@ -1026,9 +1026,29 @@ export default function ObraEfetivo() {
                               {emp.setor ? ` • ${emp.setor}` : ""}
                             </p>
                           </div>
+                          {(() => {
+                            const statusCfg: Record<string, { label: string; cls: string }> = {
+                              Ativo:            { label: 'Ativo',         cls: 'bg-green-100 text-green-800 border-green-200' },
+                              Aviso:            { label: 'Aviso Prévio',  cls: 'bg-red-100 text-red-800 border-red-200' },
+                              AvisoDispensado:  { label: 'Dispensado',    cls: 'bg-orange-100 text-orange-800 border-orange-200' },
+                              Ferias:           { label: 'Férias',        cls: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
+                              Afastado:         { label: 'Afastado',      cls: 'bg-purple-100 text-purple-800 border-purple-200' },
+                              Licenca:          { label: 'Licença',       cls: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
+                              Recluso:          { label: 'Recluso',       cls: 'bg-gray-200 text-gray-800 border-gray-300' },
+                              Desligado:        { label: 'Desligado',     cls: 'bg-red-200 text-red-900 border-red-300' },
+                              Lista_Negra:      { label: 'Lista Negra',   cls: 'bg-black text-white border-black' },
+                              Inativo:          { label: 'Inativo',       cls: 'bg-slate-200 text-slate-700 border-slate-300' },
+                            };
+                            const cfg = statusCfg[emp.status as string] || { label: emp.status || '—', cls: 'bg-slate-100 text-slate-700 border-slate-200' };
+                            return (
+                              <Badge variant="outline" className={`text-[10px] shrink-0 ${cfg.cls}`}>
+                                {cfg.label}
+                              </Badge>
+                            );
+                          })()}
                           {emp.obraAtualNome ? (
-                            <Badge variant="outline" className="text-[10px] shrink-0 bg-blue-50 text-blue-700 border-blue-200">
-                              <HardHat className="h-3 w-3 mr-1" />{emp.obraAtualNome}
+                            <Badge variant="outline" className="text-[10px] shrink-0 bg-blue-50 text-blue-700 border-blue-200 max-w-[140px] truncate" title={emp.obraAtualNome}>
+                              <HardHat className="h-3 w-3 mr-1 shrink-0" />{emp.obraAtualNome}
                             </Badge>
                           ) : (
                             <Badge variant="outline" className="text-[10px] shrink-0 bg-amber-50 text-amber-600 border-amber-200">

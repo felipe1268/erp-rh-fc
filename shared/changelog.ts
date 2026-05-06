@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1360,
+    titulo: "Alocar Funcionários: badge de status visível em cada linha (Ativo, Afastado, Recluso, Férias, etc.)",
+    descricao: "MELHORIA: na tela 'Alocar Funcionários' (acionada a partir do 'Efetivo por Obra'), cada funcionário da lista agora exibe um badge colorido com o status atual — Ativo (verde), Aviso Prévio (vermelho), Dispensado (laranja), Férias (amarelo), Afastado (roxo), Licença (ciano), Recluso (cinza), Desligado (vermelho escuro), Lista Negra (preto) e Inativo (cinza claro). Isso permite identificar rapidamente situações que impedem ou exigem atenção na alocação (ex.: Afastado, Férias) sem precisar abrir o Raio-X. O badge da obra atual também recebeu truncate + tooltip para nomes longos.",
+    tipo: "melhoria",
+    modulos: "RH, Obras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-06 20:45:00",
+  },
+  {
     version: 1359,
     titulo: "Efetivo por Obra: layout do diálogo de confirmação de transferência ajustado",
     descricao: "BUGFIX: o diálogo 'Funcionário(s) já alocado(s)' (que aparece ao tentar alocar funcionários que já estão em outra obra) estava com largura reduzida (max-w-lg), o que apertava o conteúdo das linhas — nome do funcionário, obra atual, seta e badge da nova obra ficavam praticamente colados, prejudicando a leitura quando os nomes das obras eram longos. AJUSTES: (1) largura aumentada para sm:max-w-2xl / md:max-w-3xl com altura máxima 85vh e scroll interno; (2) cada linha agora usa layout responsivo (empilhado no mobile, em linha no desktop); (3) badge da obra-destino com truncate e tooltip; (4) backdrop reforçado (black/60) para melhor contraste sobre o FullScreenDialog de fundo. Sem mudanças funcionais — apenas visual.",
