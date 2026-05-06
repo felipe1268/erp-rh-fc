@@ -1307,9 +1307,9 @@ export default function ObraEfetivo() {
       <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
 
       {/* Dialog: Confirmação de Transferência */}
-      {transferConfirmOpen && <div className="fixed inset-0 z-[65] bg-black/40" />}
+      {transferConfirmOpen && <div className="fixed inset-0 z-[65] bg-black/60" />}
       <Dialog open={transferConfirmOpen} onOpenChange={(open) => { if (!open) { setTransferConfirmOpen(false); setEmployeesWithAllocation([]); } }}>
-        <DialogContent className="sm:max-w-lg !z-[70]">
+        <DialogContent className="sm:max-w-2xl md:max-w-3xl !z-[70] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-600">
               <AlertTriangle className="h-5 w-5" />
@@ -1328,25 +1328,32 @@ export default function ObraEfetivo() {
                 <Shield className="h-4 w-4" />
                 Funcionários com alocação ativa:
               </p>
-              <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                {employeesWithAllocation.map((emp: any) => (
-                  <div key={emp.employeeId} className="flex items-center gap-3 bg-white rounded-lg px-3 py-2 border border-amber-100">
-                    <div className="h-7 w-7 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                      <span className="text-amber-700 text-[10px] font-bold">{(emp.employeeName || '?')[0]}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{emp.employeeName}</p>
-                      <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                        <HardHat className="h-3 w-3" />
-                        <span>Atualmente em: <strong className="text-amber-700">{emp.obraAtualNome}</strong></span>
+              <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                {employeesWithAllocation.map((emp: any) => {
+                  const novaObraNome = obrasAtivas.find((o: any) => o.id === allocForm.obraId)?.nome || 'Nova obra';
+                  return (
+                    <div key={emp.employeeId} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 bg-white rounded-lg px-3 py-2.5 border border-amber-100">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                          <span className="text-amber-700 text-xs font-bold">{(emp.employeeName || '?')[0]}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate" title={emp.employeeName}>{emp.employeeName}</p>
+                          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <HardHat className="h-3 w-3 shrink-0" />
+                            <span className="truncate">Atualmente em: <strong className="text-amber-700">{emp.obraAtualNome}</strong></span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 sm:shrink-0 pl-11 sm:pl-0">
+                        <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[11px] max-w-[180px] truncate" title={novaObraNome}>
+                          {novaObraNome}
+                        </Badge>
                       </div>
                     </div>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] shrink-0">
-                      {obrasAtivas.find((o: any) => o.id === allocForm.obraId)?.nome || 'Nova obra'}
-                    </Badge>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">

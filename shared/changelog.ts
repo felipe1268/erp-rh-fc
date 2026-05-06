@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1359,
+    titulo: "Efetivo por Obra: layout do diálogo de confirmação de transferência ajustado",
+    descricao: "BUGFIX: o diálogo 'Funcionário(s) já alocado(s)' (que aparece ao tentar alocar funcionários que já estão em outra obra) estava com largura reduzida (max-w-lg), o que apertava o conteúdo das linhas — nome do funcionário, obra atual, seta e badge da nova obra ficavam praticamente colados, prejudicando a leitura quando os nomes das obras eram longos. AJUSTES: (1) largura aumentada para sm:max-w-2xl / md:max-w-3xl com altura máxima 85vh e scroll interno; (2) cada linha agora usa layout responsivo (empilhado no mobile, em linha no desktop); (3) badge da obra-destino com truncate e tooltip; (4) backdrop reforçado (black/60) para melhor contraste sobre o FullScreenDialog de fundo. Sem mudanças funcionais — apenas visual.",
+    tipo: "bugfix",
+    modulos: "RH, Obras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-06 20:30:00",
+  },
+  {
     version: 1358,
     titulo: "Efetivo por Obra: nova aba 'Todos' com lista completa de funcionários para facilitar transferência entre obras",
     descricao: "FEATURE: foi adicionada uma 4ª aba 'Todos' na tela 'Efetivo por Obra' contendo a lista completa de funcionários ativos da empresa. A aba traz: (1) busca por nome/CPF/função/setor/obra (reaproveita o campo de busca do topo); (2) filtro por obra (todas / com obra / sem obra / por obra específica); (3) checkbox de seleção múltipla com 'selecionar todos os filtrados'; (4) ação por linha 'Alocar' (se sem obra) ou 'Transferir' (se já alocado), abrindo o diálogo de alocação já preenchido; (5) botão 'Transferir N' no topo para mover em lote os funcionários selecionados; (6) acesso rápido ao histórico e ao Raio-X do funcionário. FIX adicional: a versão foi bumpada para 1358 para reexecutar o ColFix idempotente que garante a coluna smo_solicitacoes.regime_contratacao introduzida na Rev. 1357 (em alguns ambientes a coluna não havia sido criada, gerando erro 'column does not exist' nas listagens da SMO).",
