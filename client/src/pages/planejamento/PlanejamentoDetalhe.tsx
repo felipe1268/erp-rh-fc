@@ -5237,8 +5237,12 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
   const [cfgRetencaoPct, setCfgRetencaoPct] = useState(5);
   const [cfgReterSinal, setCfgReterSinal]   = useState(false);
   const [cfgDataInicioObra, setCfgDataInicioObra] = useState("");
-  // Rev. 1346: data prevista do 1º faturamento (independente da data de início da obra).
+  // Rev. 1347: data prevista do PAGAMENTO DO SINAL (independente do início da obra).
+  // O sinal é a parcela inicial; o restante das medições segue a evolução da obra
+  // e o recebimento é calculado por prazo em dias úteis após a medição (cfgPrazoRecDiasUteis).
   const [cfgDataPrimeiroFat, setCfgDataPrimeiroFat] = useState("");
+  // Rev. 1347: prazo (em dias úteis) entre a medição e o recebimento. Padrão = 15.
+  const [cfgPrazoRecDiasUteis, setCfgPrazoRecDiasUteis] = useState<number>(15);
   // Faturamento Direto: null = usar sugestão automática vinda do orçamento (aba F.D. do BDI);
   // valor numérico = override manual do usuário (inclusive 0). Sinal = (Contrato − FD) × %sinal.
   const [cfgFdValor, setCfgFdValor] = useState<number | null>(null);
@@ -5436,6 +5440,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
       setCfgReterSinal(Boolean((configMed as any).reterSinal));
       setCfgDataInicioObra((configMed as any).dataInicioObra ?? "");
       setCfgDataPrimeiroFat((configMed as any).dataPrimeiroFaturamento ?? "");
+      setCfgPrazoRecDiasUteis(Number((configMed as any).prazoRecebimentoDiasUteis ?? 15));
       setCfgBloqueado(configMed.bloqueado ?? false);
       const vpf = n((configMed as any).valorParcelaFixa);
       setCfgValorParcelaManual(vpf > 0 ? vpf : 0);
@@ -5574,13 +5579,32 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
       const descontoSinal = 0;
       const liquido = +(medicaoBruta - retencao).toFixed(2);
 
-      return { ...d, pct: pctAcum, pctMensal: 0, prevMedicao: +(cumVenda * escala).toFixed(2), medicaoBruta, retencao, descontoSinal, liquido, isSinalRow: false };
+      // Rev. 1347: data prevista de recebimento = data de corte do mês + N dias úteis.
+      // Data de corte: dia cfgDiaCorte do próprio mês de competência (ex.: 20/05 para maio/2026).
+      const [yMes, mMes] = d.mes.split("-").map(Number);
+      const lastDay = new Date(yMes, mMes, 0).getDate();
+      const diaCorteEfetivo = Math.min(cfgDiaCorte || 30, lastDay);
+      const dataMedicao = new Date(yMes, mMes - 1, diaCorteEfetivo);
+      // Soma N dias úteis (pula sábado=6 e domingo=0). Não considera feriados nacionais.
+      let restantes = Math.max(0, cfgPrazoRecDiasUteis || 0);
+      const dataRec = new Date(dataMedicao);
+      while (restantes > 0) {
+        dataRec.setDate(dataRec.getDate() + 1);
+        const dow = dataRec.getDay();
+        if (dow !== 0 && dow !== 6) restantes--;
+      }
+      const dataRecebimentoPrev = `${dataRec.getFullYear()}-${String(dataRec.getMonth() + 1).padStart(2, "0")}-${String(dataRec.getDate()).padStart(2, "0")}`;
+
+      return { ...d, pct: pctAcum, pctMensal: 0, prevMedicao: +(cumVenda * escala).toFixed(2), medicaoBruta, retencao, descontoSinal, liquido, isSinalRow: false, dataRecebimentoPrev };
     });
 
     // Linha sintética de Sinal/Mobilização
     if (hasSinalRow) {
-      const sinalMes = cfgDataInicioObra.substring(0, 7);
-      const sinalDate = new Date(sinalMes + "-15");
+      // Rev. 1347: se houver "Data Prev. Pagto do Sinal", usa essa data (mês e dia exato).
+      // Caso contrário, cai no fallback (Data de Início do Projeto, dia 15 do mês).
+      const sinalDataExata = cfgDataPrimeiroFat || cfgDataInicioObra;
+      const sinalMes = sinalDataExata.substring(0, 7);
+      const sinalDate = new Date(sinalDataExata + "T12:00:00");
       const nomeMesSinal = sinalDate.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
       const primeiroMes = rows[0]?.mes ?? "";
       // Insere antes do primeiro mês ou no início da tabela
@@ -5597,6 +5621,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
         descontoSinal: 0,
         liquido: +(sinalTotal - retencaoSinal).toFixed(2),
         isSinalRow: true,
+        // Recebimento previsto do sinal: a própria data informada (não soma prazo de dias úteis).
+        dataRecebimentoPrev: sinalDataExata,
       };
       if (!primeiroMes || sinalMes <= primeiroMes) {
         rows.unshift(sinalRow);
@@ -5632,7 +5658,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
     }
 
     return rows;
-  }, [cfgSinalPct, cfgRetencaoPct, cfgReterSinal, cfgDataInicioObra, dadosMensais, atividades, baseV, sinalModo, cfgSinalValor]);
+  }, [cfgSinalPct, cfgRetencaoPct, cfgReterSinal, cfgDataInicioObra, cfgDataPrimeiroFat, cfgPrazoRecDiasUteis, cfgDiaCorte, dadosMensais, atividades, baseV, sinalModo, cfgSinalValor]);
 
   // ── Análise de Performance Semanal ───────────────────────────────────────
   const analiseSemanal = useMemo(() => {
@@ -5798,6 +5824,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
       reterSinal: cfgReterSinal,
       dataInicioObra: cfgDataInicioObra || null,
       dataPrimeiroFaturamento: cfgDataPrimeiroFat || null,
+      prazoRecebimentoDiasUteis: cfgPrazoRecDiasUteis,
       valorParcelaFixa: cfgValorParcelaManual > 0 ? cfgValorParcelaManual : 0,
       revisadoPorNome: authUser?.name ?? authUser?.email ?? undefined,
     });
@@ -5821,6 +5848,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
           reterSinal: cfgReterSinal,
           dataInicioObra: cfgDataInicioObra || null,
           dataPrimeiroFaturamento: cfgDataPrimeiroFat || null,
+          prazoRecebimentoDiasUteis: cfgPrazoRecDiasUteis,
         });
       } catch { return; } finally { setSalvando(false); }
     }
@@ -6099,10 +6127,10 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                     <p className="text-[10px] text-slate-400 mt-0.5">Define quando o sinal/mobilização é pago</p>
                   </div>
 
-                  {/* Rev. 1346: Data Prevista do 1º Faturamento — Dia + Data acoplados (bidirecional) */}
+                  {/* Rev. 1347: Data Prevista do Pagamento do Sinal — Dia + Data acoplados (bidirecional) */}
                   <div>
                     <label className="text-[10px] text-slate-500 block mb-1 font-medium">
-                      Data Prev. do 1º Faturamento
+                      Data Prev. Pagto do <span className="text-violet-700 font-semibold">Sinal</span>
                       <span className="ml-1 text-slate-400 font-normal">· dia ↔ data</span>
                     </label>
                     <div className="flex gap-1.5">
@@ -6146,7 +6174,28 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                       )}
                     </div>
                     <p className="text-[10px] text-slate-400 mt-0.5">
-                      Quando o 1º faturamento ocorre em mês diferente do início da obra. Preencha o dia para mudar só o dia, ou a data completa.
+                      Quando o cliente paga o sinal/mobilização. Demais medições seguem a evolução da obra com prazo abaixo.
+                    </p>
+                  </div>
+
+                  {/* Rev. 1347: Prazo de Recebimento (dias úteis) após cada medição */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-1 font-medium">
+                      Prazo de Recebimento
+                      <span className="ml-1 text-slate-400 font-normal">· dias úteis após medição</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={180}
+                        value={cfgPrazoRecDiasUteis}
+                        onChange={e => setCfgPrazoRecDiasUteis(Math.max(0, Math.min(180, parseInt(e.target.value) || 0)))}
+                        className="h-9 w-20 text-sm border border-violet-200 rounded-lg px-2 bg-white focus:ring-2 focus:ring-violet-400 outline-none text-center font-semibold" />
+                      <span className="text-xs text-slate-500">dias úteis</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      Ex.: cliente paga em <strong>{cfgPrazoRecDiasUteis}</strong> dias úteis após o fechamento da medição (data de corte). Sábados/domingos não contam.
                     </p>
                   </div>
                 </>
@@ -6655,6 +6704,11 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                                   </span>
                                   <p className="text-[9px] text-emerald-600 mt-0.5">via Financeiro</p>
                                 </div>
+                              ) : (r as any).dataRecebimentoPrev ? (
+                                <div className="text-[10px] text-violet-600">
+                                  <p className="font-semibold">Prev:</p>
+                                  <p>{new Date((r as any).dataRecebimentoPrev + "T12:00:00").toLocaleDateString("pt-BR")}</p>
+                                </div>
                               ) : (
                                 <span className="text-slate-300 text-[10px]">—</span>
                               )}
@@ -6715,6 +6769,12 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                                     Saldo: {fmt(baixa.pendente)}
                                   </p>
                                 )}
+                              </div>
+                            ) : (temDados && (r as any).dataRecebimentoPrev) ? (
+                              <div className="text-[10px] text-violet-600">
+                                <p className="font-semibold">Prev:</p>
+                                <p>{new Date((r as any).dataRecebimentoPrev + "T12:00:00").toLocaleDateString("pt-BR")}</p>
+                                <p className="text-[9px] text-slate-400 mt-0.5">+{cfgPrazoRecDiasUteis}d.úteis</p>
                               </div>
                             ) : (
                               <span className="text-slate-300 text-[10px]">—</span>

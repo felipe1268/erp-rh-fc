@@ -483,6 +483,12 @@ Regras:
           console.log(`[SyncSchema+] Coluna data_primeiro_faturamento garantida na tabela planejamento_medicao_config.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_medicao_config data_primeiro_faturamento:`, e?.message || e); }
 
+        try {
+          // Rev. 1347: prazo de recebimento em dias úteis após cada medição (cliente paga em N dias úteis).
+          await db.execute(sql`ALTER TABLE planejamento_medicao_config ADD COLUMN IF NOT EXISTS prazo_recebimento_dias_uteis INTEGER DEFAULT 15`);
+          console.log(`[SyncSchema+] Coluna prazo_recebimento_dias_uteis garantida na tabela planejamento_medicao_config.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_medicao_config prazo_recebimento_dias_uteis:`, e?.message || e); }
+
         await db.execute(sql`CREATE TABLE IF NOT EXISTS sst_integracao_config (
           id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, obra_id INTEGER, obra_nome VARCHAR(255),
           titulo VARCHAR(255) NOT NULL, descricao TEXT, nota_minima INTEGER NOT NULL DEFAULT 70,

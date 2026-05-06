@@ -1,11 +1,12 @@
 # ERP RH & DP - FC Engenharia | Changelog de Revisões
 
 ## Revisão 1347 — 05/05/2026
-- **Configuração de Medição — novo campo "Data Prev. do 1º Faturamento" (dia ↔ data acoplados)**: na seção *Por Avanço Físico*, ao lado de "Data de Início do Projeto", foi adicionado um novo campo para registrar **quando o primeiro faturamento ocorre** (nem sempre é o mesmo mês de início da obra). Possui dois inputs acoplados:
-  - **Dia** (campo numérico, 1–31): ao alterar, **muda apenas o dia** mantendo mês/ano. Se nenhuma data estiver preenchida, usa mês/ano da Data de Início do Projeto (fallback: mês atual). Limita automaticamente ao último dia do mês (ex.: fevereiro → 28/29).
-  - **Data** (date picker completo): ao alterar, atualiza tudo de uma vez.
-  - Botão **✕** para limpar o campo.
-- **Backend**: nova coluna `data_primeiro_faturamento DATE` em `planejamento_medicao_config` (criada via SyncSchema+, sempre executa no boot). Endpoint `salvarConfigMedicao` aceita `dataPrimeiroFaturamento`, `getConfigMedicao` retorna o campo (via SELECT *).
+- **Configuração de Medição — Data Prev. Pagto do Sinal + Prazo de Recebimento (dias úteis)**: dois campos novos na seção *Por Avanço Físico* para refletir o ciclo real do recebimento:
+  - **Data Prev. Pagto do Sinal** (dia ↔ data acoplados): define a data exata em que o sinal/mobilização é pago. Substitui a "Data de Início do Projeto" no posicionamento da linha SINAL na tabela. Inputs Dia (1-31) e Data totalmente sincronizados, com clamp ao último dia do mês.
+  - **Prazo de Recebimento (dias úteis após medição)**: padrão **15 dias úteis**. Para cada medição, o sistema calcula automaticamente a **Data Prevista de Recebimento** = data de corte do mês + N dias úteis (sábado/domingo não contam).
+  - **Coluna "Recebimento" da tabela**: agora exibe a **data prevista de recebimento** em violeta (ex.: "Prev: 18/06/2026 +15d.úteis") quando ainda não há baixa confirmada via Financeiro. Quando o Financeiro confirma o recebimento, mostra o badge verde com o valor real.
+  - **Linha SINAL**: usa a Data Prev. Pagto do Sinal como data de recebimento (não soma o prazo, pois o sinal é antecipado).
+- **Backend**: nova coluna `prazo_recebimento_dias_uteis INTEGER DEFAULT 15` em `planejamento_medicao_config` (criada via SyncSchema+). Endpoint `salvarConfigMedicao` aceita `prazoRecebimentoDiasUteis`.
 
 ## Revisão 1346 — 05/05/2026
 - **Financeiro › Contas a Receber — coluna direita agora mostra "A Faturar no Período"**: na tabela de obras (matriz mensal), o bloco da direita exibia apenas **Contrato / Total Faturado / Saldo a Faturar**. Foi adicionada a métrica intermediária **A Faturar no Período** (em azul), que soma o que está previsto/medido nos meses do **ano selecionado** e ainda não foi recebido. Considera baixas em andamento (cellOverrides) para refletir mudanças em tempo real. Tooltip explica: "Soma do previsto nos meses de {ano} ainda não recebido". Aparece só quando > R$ 0.
