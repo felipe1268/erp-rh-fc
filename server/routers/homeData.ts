@@ -42,7 +42,10 @@ export const homeDataRouter = router({
         .where(and(companyFilter(employees.companyId, input), sql`${employees.deletedAt} IS NULL`));
 
       const ativos = allEmps.filter(e => e.status === "Ativo");
-      const todosNaoDesligados = allEmps.filter(e => e.status !== "Desligado");
+      // Rev. 1356: Excluir também Lista_Negra e Inativo dos cards de aniversariantes
+      // (alinhado com filtros de db.ts que sempre tratam esses 3 como "fora")
+      const STATUS_FORA = new Set(["Desligado", "Lista_Negra", "Inativo"]);
+      const todosNaoDesligados = allEmps.filter(e => !STATUS_FORA.has(e.status || ""));
 
       // ============================================================
       // 2. ANIVERSARIANTES DO MÊS

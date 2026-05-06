@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1356,
+    titulo: "Cards 'Aniversariantes do Mês' e 'Aniversários de Empresa': não exibem mais funcionários em Lista Negra ou Inativos",
+    descricao: "BUGFIX: os cards 'Aniversariantes do Mês' e 'Aniversários de Empresa' (Home e Painel RH) listavam funcionários com status 'Lista_Negra' (e 'Inativo'), porque o filtro só excluía 'Desligado'. Foi adicionada uma constante STATUS_FORA = {'Desligado','Lista_Negra','Inativo'} no homeData.ts para alinhar com os demais filtros do db.ts (que já tratam os três como 'fora') — agora apenas funcionários efetivamente em atividade (Ativo, Afastado, Licença, Férias) aparecem nesses cards.",
+    tipo: "bugfix",
+    modulos: "RH, Home, Painel RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-05-06 18:45:00",
+  },
+  {
     version: 1355,
     titulo: "Importação Orçamento (FC): aba 'Composições' aparecia vazia mesmo com 4419 CPUs carregadas — alias do cabeçalho abreviado 'Cód. Compos.. Auxiliar' adicionado",
     descricao: "BUGFIX: após reimportar uma planilha FC pelo botão 'Atualizar Planilha', o toast informava sucesso ('151 itens reimportados, 4419 composições (CPUs) carregadas') mas a aba 'Composições' do orçamento mostrava apenas '(1)'. Investigação mostrou que TODOS os 151 itens da EAP ficavam com servicoCodigo vazio (124 em branco + 27 marcados como 'composto'), impedindo o vínculo com o catálogo de CPUs. Causa raiz: o cabeçalho real da coluna M na planilha FC é 'Cód. Compos.. Auxiliar' (abreviado, com dois pontos após 'Compos'), que normaliza para 'codcomposauxiliar'. A lista de aliases de servicoCodigo só tinha 'codcomposicaoauxiliar' (palavra inteira) e 'codcompauxiliar' — nenhum casava com a forma abreviada. Adicionados aliases 'codcomposauxiliar' e 'codigocomposauxiliar'. Confirmado por simulação contra a planilha real do cliente: a auto-detecção agora atribui col M (idx 12) ao campo servicoCodigo, restaurando o vínculo entre EAP e CPUs também no fluxo 'Atualizar Planilha' (que, diferente da importação inicial, não recebe o FC_PRESET do client).",
