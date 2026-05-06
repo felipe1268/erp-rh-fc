@@ -5237,6 +5237,8 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
   const [cfgRetencaoPct, setCfgRetencaoPct] = useState(5);
   const [cfgReterSinal, setCfgReterSinal]   = useState(false);
   const [cfgDataInicioObra, setCfgDataInicioObra] = useState("");
+  // Rev. 1346: data prevista do 1º faturamento (independente da data de início da obra).
+  const [cfgDataPrimeiroFat, setCfgDataPrimeiroFat] = useState("");
   // Faturamento Direto: null = usar sugestão automática vinda do orçamento (aba F.D. do BDI);
   // valor numérico = override manual do usuário (inclusive 0). Sinal = (Contrato − FD) × %sinal.
   const [cfgFdValor, setCfgFdValor] = useState<number | null>(null);
@@ -5433,6 +5435,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
       setCfgRetencaoPct(retVal != null && !isNaN(retVal) ? retVal : 5);
       setCfgReterSinal(Boolean((configMed as any).reterSinal));
       setCfgDataInicioObra((configMed as any).dataInicioObra ?? "");
+      setCfgDataPrimeiroFat((configMed as any).dataPrimeiroFaturamento ?? "");
       setCfgBloqueado(configMed.bloqueado ?? false);
       const vpf = n((configMed as any).valorParcelaFixa);
       setCfgValorParcelaManual(vpf > 0 ? vpf : 0);
@@ -5794,6 +5797,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
       retencaoPct: cfgRetencaoPct,
       reterSinal: cfgReterSinal,
       dataInicioObra: cfgDataInicioObra || null,
+      dataPrimeiroFaturamento: cfgDataPrimeiroFat || null,
       valorParcelaFixa: cfgValorParcelaManual > 0 ? cfgValorParcelaManual : 0,
       revisadoPorNome: authUser?.name ?? authUser?.email ?? undefined,
     });
@@ -5816,6 +5820,7 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
           retencaoPct: cfgRetencaoPct,
           reterSinal: cfgReterSinal,
           dataInicioObra: cfgDataInicioObra || null,
+          dataPrimeiroFaturamento: cfgDataPrimeiroFat || null,
         });
       } catch { return; } finally { setSalvando(false); }
     }
@@ -6092,6 +6097,57 @@ function PrevisaoMedicao({ projetoId, proj, atividades, avancos, fmt, hideFinanc
                       onChange={e => setCfgDataInicioObra(e.target.value)}
                       className="h-9 w-full text-sm border border-violet-200 rounded-lg px-3 bg-white focus:ring-2 focus:ring-violet-400 outline-none" />
                     <p className="text-[10px] text-slate-400 mt-0.5">Define quando o sinal/mobilização é pago</p>
+                  </div>
+
+                  {/* Rev. 1346: Data Prevista do 1º Faturamento — Dia + Data acoplados (bidirecional) */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-1 font-medium">
+                      Data Prev. do 1º Faturamento
+                      <span className="ml-1 text-slate-400 font-normal">· dia ↔ data</span>
+                    </label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="number"
+                        min={1}
+                        max={31}
+                        placeholder="Dia"
+                        title="Dia do mês — altera apenas o dia, mantendo mês/ano"
+                        value={cfgDataPrimeiroFat ? parseInt(cfgDataPrimeiroFat.substring(8, 10)) || "" : ""}
+                        onChange={e => {
+                          const dia = Math.min(31, Math.max(1, parseInt(e.target.value) || 1));
+                          // Se já houver data, troca apenas o dia mantendo mês/ano.
+                          // Se não houver data, usa mês/ano da Data de Início do Projeto, ou mês/ano atual.
+                          const baseYM = cfgDataPrimeiroFat
+                            ? cfgDataPrimeiroFat.substring(0, 7)
+                            : (cfgDataInicioObra
+                              ? cfgDataInicioObra.substring(0, 7)
+                              : new Date().toISOString().substring(0, 7));
+                          // Limita o dia ao último dia do mês (ex: fev → 28/29).
+                          const [y, m] = baseYM.split("-").map(Number);
+                          const lastDay = new Date(y, m, 0).getDate();
+                          const diaFinal = Math.min(dia, lastDay);
+                          setCfgDataPrimeiroFat(`${baseYM}-${String(diaFinal).padStart(2, "0")}`);
+                        }}
+                        className="h-9 w-16 text-sm border border-violet-200 rounded-lg px-2 bg-white focus:ring-2 focus:ring-violet-400 outline-none text-center font-semibold" />
+                      <input
+                        type="date"
+                        value={cfgDataPrimeiroFat}
+                        onChange={e => setCfgDataPrimeiroFat(e.target.value)}
+                        className="h-9 flex-1 min-w-0 text-sm border border-violet-200 rounded-lg px-3 bg-white focus:ring-2 focus:ring-violet-400 outline-none" />
+                      {cfgDataPrimeiroFat && (
+                        <button
+                          type="button"
+                          onClick={() => setCfgDataPrimeiroFat("")}
+                          title="Limpar (volta a usar a data de início como referência)"
+                          className="h-9 px-2 text-xs text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      Quando o 1º faturamento ocorre em mês diferente do início da obra. Preencha o dia para mudar só o dia, ou a data completa.
+                    </p>
                   </div>
                 </>
               )}

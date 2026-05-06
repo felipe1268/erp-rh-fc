@@ -2110,6 +2110,7 @@ export const planejamentoRouter = router({
       retencaoPct:       z.number().min(0).max(100).optional(),
       reterSinal:        z.boolean().optional(),
       dataInicioObra:    z.string().nullable().optional(),
+      dataPrimeiroFaturamento: z.string().nullable().optional(),
       valorParcelaFixa:  z.number().min(0).optional(),
       revisadoPorNome:   z.string().optional(),
     }))
@@ -2143,6 +2144,7 @@ export const planejamentoRouter = router({
         retencaoPct:       String(input.retencaoPct ?? 5),
         reterSinal:        input.reterSinal ?? false,
         dataInicioObra:    input.dataInicioObra ?? null,
+        dataPrimeiroFaturamento: input.dataPrimeiroFaturamento ?? null,
         valorParcelaFixa:  String(input.valorParcelaFixa ?? 0),
         bloqueado:         false,
         revisaoNumero:     nextRevisao,
@@ -2163,6 +2165,7 @@ export const planejamentoRouter = router({
         retencaoPct:       data.retencaoPct,
         reterSinal:        data.reterSinal,
         dataInicioObra:    data.dataInicioObra,
+        dataPrimeiroFaturamento: data.dataPrimeiroFaturamento,
         valorParcelaFixa:  data.valorParcelaFixa,
         bloqueado:         false,
         revisaoNumero:     nextRevisao,

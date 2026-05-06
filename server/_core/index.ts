@@ -477,6 +477,12 @@ Regras:
           console.log(`[SyncSchema+] Coluna reter_sinal garantida na tabela planejamento_medicao_config.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_medicao_config reter_sinal:`, e?.message || e); }
 
+        try {
+          // Rev. 1346: data prevista do primeiro faturamento (independente da data de início da obra).
+          await db.execute(sql`ALTER TABLE planejamento_medicao_config ADD COLUMN IF NOT EXISTS data_primeiro_faturamento DATE`);
+          console.log(`[SyncSchema+] Coluna data_primeiro_faturamento garantida na tabela planejamento_medicao_config.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_medicao_config data_primeiro_faturamento:`, e?.message || e); }
+
         await db.execute(sql`CREATE TABLE IF NOT EXISTS sst_integracao_config (
           id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL, obra_id INTEGER, obra_nome VARCHAR(255),
           titulo VARCHAR(255) NOT NULL, descricao TEXT, nota_minima INTEGER NOT NULL DEFAULT 70,
