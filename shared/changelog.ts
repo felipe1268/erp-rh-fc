@@ -9139,4 +9139,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-04-28 23:00:00",
   },
+  {
+    version: 1349,
+    titulo: "Contas a Receber: matriz mensal alinhada à Previsão de Recebimento do Planejamento (subtrai Faturamento Direto)",
+    descricao: "Os valores previstos por mês na matriz de Contas a Receber agora reproduzem exatamente os valores exibidos na tabela 'Previsão por Avanço Físico' do Planejamento. Antes, o servidor calculava o sinal sobre o total do contrato, enquanto o cliente subtraía o Faturamento Direto (FD) — gerando divergência entre as duas telas. Agora a query getContasReceberMatrix busca fd_valor (config) e fd_sugerido (soma da aba F.D. do BDI) por projeto e usa Math.max(0, totalVenda - fdEfetivo) como base do sinal no modo 'contrato', mantendo a base 'mão_de_obra' inalterada. Resultado: o valor distribuído por competência e deslocado pelo prazo de recebimento (dias úteis) bate ao centavo com o cronograma do Planejamento.",
+    tipo: "bugfix",
+    modulos: "Financeiro,Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-06 02:00:00",
+  },
 ];

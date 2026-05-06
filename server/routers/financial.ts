@@ -2739,7 +2739,10 @@ export const financialRouter = router({
              COALESCE(orc.valor_negociado::numeric,
                       orc."totalVenda"::numeric,
                       pp.valor_contrato::numeric, 0) AS total_venda,
-             COALESCE(orc."totalMdo"::numeric, 0) AS total_mdo
+             COALESCE(orc."totalMdo"::numeric, 0) AS total_mdo,
+             COALESCE((SELECT SUM(b.total::numeric)
+                       FROM bdi_fd b
+                       WHERE b.orcamento_id = pp.orcamento_id), 0) AS fd_sugerido
       FROM planejamento_projetos pp
       LEFT JOIN obras o ON o.id = pp.obra_id
       LEFT JOIN orcamentos orc ON orc.id = pp.orcamento_id
@@ -2778,6 +2781,7 @@ export const financialRouter = router({
              c.data_primeiro_faturamento::text AS data_primeiro_faturamento,
              c.prazo_recebimento_dias_uteis    AS prazo_recebimento_dias_uteis,
              c.sinal_base                      AS sinal_base,
+             c.fd_valor::numeric               AS fd_valor,
              c.valor_parcela_fixa::numeric AS valor_parcela_fixa
       FROM planejamento_medicao_config c
       WHERE c.projeto_id IN (${idsStr})
@@ -3441,9 +3445,19 @@ export const financialRouter = router({
           const diaCorte = parseInt(cfg?.dia_corte ?? "30") || 30;
           // Rev. 1348: base de cálculo do sinal: 'contrato' (default) ou 'mao_de_obra'.
           // Quando 'mao_de_obra', o sinal incide apenas sobre a parcela de MDO do contrato.
+          // Rev. 1349: alinha com o cliente (PlanejamentoDetalhe.previsoesMensais) — em modo
+          // 'contrato' subtrai o Faturamento Direto (fd_valor manual ou fd_sugerido do BDI),
+          // pois a parcela FD é faturada diretamente e não compõe a base do sinal.
           const sinalBase = String(cfg?.sinal_base ?? "contrato");
           const totalMdoProj = parseFloat(p.total_mdo ?? "0") || 0;
-          const baseSinalCalc = sinalBase === "mao_de_obra" && totalMdoProj > 0 ? totalMdoProj : totalVenda;
+          const fdValorCfg = cfg?.fd_valor !== null && cfg?.fd_valor !== undefined
+            ? (parseFloat(cfg.fd_valor) || 0)
+            : null;
+          const fdSugProj  = parseFloat(p.fd_sugerido ?? "0") || 0;
+          const fdEfetivo  = fdValorCfg !== null ? fdValorCfg : fdSugProj;
+          const baseSinalCalc = sinalBase === "mao_de_obra" && totalMdoProj > 0
+            ? totalMdoProj
+            : Math.max(0, totalVenda - fdEfetivo);
           const sinalRaw   = sinalValor > 0 ? sinalValor : (baseSinalCalc * sinalPct / 100);
           const sinalTotal = Math.max(0, Math.min(sinalRaw, totalVenda));
           const hasSinal   = sinalTotal > 0 && (dataPrimeiroFat !== null || dataInicioObra !== null);
