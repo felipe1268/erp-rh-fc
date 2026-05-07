@@ -19,6 +19,7 @@ import {
   PieChart, Pie, Cell, Legend, LineChart, Line, ComposedChart, Area, AreaChart,
 } from "recharts";
 import { ChartCard } from "@/components/sst/ChartCard";
+import { EmployeeDetailDialog } from "@/components/sst/EmployeeDetailDialog";
 
 function truncate(s: string, n = 22) {
   if (!s) return "";
@@ -85,6 +86,7 @@ export default function DashboardAtestadosAcidentes() {
 
   const [dataInicio, setDataInicio] = useState(defaultIni());
   const [dataFim, setDataFim] = useState(defaultFim());
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
 
   const dash = trpc.sstAnalytics.atestadosAcidentes.useQuery(
     {
@@ -400,7 +402,17 @@ export default function DashboardAtestadosAcidentes() {
                         {d.atestados.topFuncionarios.map((f, i) => (
                           <tr key={f.employeeId} className="hover:bg-gray-50">
                             <td className="px-3 py-2 text-gray-500">{i + 1}</td>
-                            <td className="px-3 py-2 font-medium">{f.nome}{f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null}</td>
+                            <td className="px-3 py-2 font-medium">
+                              <button
+                                type="button"
+                                className="text-left text-blue-700 hover:underline hover:text-blue-900"
+                                onClick={() => setSelectedEmployeeId(f.employeeId)}
+                                title="Ver todos os atestados deste funcionário"
+                              >
+                                {f.nome}
+                              </button>
+                              {f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null}
+                            </td>
                             <td className="px-3 py-2 text-gray-600">{f.funcao || "—"}</td>
                             <td className="px-3 py-2 text-right font-semibold text-emerald-700">{f.quantidade}</td>
                             <td className="px-3 py-2 text-right text-blue-700">{f.dias}</td>
@@ -533,7 +545,17 @@ export default function DashboardAtestadosAcidentes() {
                         {d.acidentes.topFuncionarios.map((f, i) => (
                           <tr key={f.employeeId} className="hover:bg-gray-50">
                             <td className="px-3 py-2 text-gray-500">{i + 1}</td>
-                            <td className="px-3 py-2 font-medium">{f.nome}{f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null}</td>
+                            <td className="px-3 py-2 font-medium">
+                              <button
+                                type="button"
+                                className="text-left text-blue-700 hover:underline hover:text-blue-900"
+                                onClick={() => setSelectedEmployeeId(f.employeeId)}
+                                title="Ver todos os acidentes deste funcionário"
+                              >
+                                {f.nome}
+                              </button>
+                              {f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null}
+                            </td>
                             <td className="px-3 py-2 text-gray-600">{f.funcao || "—"}</td>
                             <td className="px-3 py-2 text-right font-semibold text-red-700">{f.quantidade}</td>
                             <td className="px-3 py-2 text-right text-orange-700">{f.dias}</td>
@@ -741,7 +763,17 @@ export default function DashboardAtestadosAcidentes() {
                         {(d.atestadosRecorrentes ?? []).length === 0 && (<tr><td colSpan={5} className="p-4 text-center text-gray-500">Nenhum funcionário com atestado recorrente no período.</td></tr>)}
                         {(d.atestadosRecorrentes ?? []).map((f: any) => (
                           <tr key={f.employeeId} className="hover:bg-gray-50">
-                            <td className="px-3 py-2 font-medium">{f.nome}{f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null}</td>
+                            <td className="px-3 py-2 font-medium">
+                              <button
+                                type="button"
+                                className="text-left text-blue-700 hover:underline hover:text-blue-900"
+                                onClick={() => setSelectedEmployeeId(f.employeeId)}
+                                title="Ver todos os atestados deste funcionário"
+                              >
+                                {f.nome}
+                              </button>
+                              {f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null}
+                            </td>
                             <td className="px-3 py-2 text-gray-600">{f.funcao || "—"}</td>
                             <td className="px-3 py-2 text-right font-semibold text-purple-700">{f.quantidade}</td>
                             <td className="px-3 py-2 text-right text-blue-700">{f.dias}</td>
@@ -870,6 +902,14 @@ export default function DashboardAtestadosAcidentes() {
             </TabsContent>
           </Tabs>
         )}
+
+        <EmployeeDetailDialog
+          open={selectedEmployeeId !== null}
+          onOpenChange={(v) => { if (!v) setSelectedEmployeeId(null); }}
+          employeeId={selectedEmployeeId}
+          dataInicio={dataInicio}
+          dataFim={dataFim}
+        />
       </div>
     </DashboardLayout>
   );

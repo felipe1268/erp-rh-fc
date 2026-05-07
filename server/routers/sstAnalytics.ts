@@ -522,4 +522,102 @@ export const sstAnalyticsRouter = router({
         custoEstimadoAfastamento,
       };
     }),
+
+  porFuncionario: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      employeeId: z.number(),
+      dataInicio: z.string().optional(),
+      dataFim: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const { dataInicio, dataFim } = defaultRange(input);
+
+      const [emp] = await db.select({
+        id: employees.id,
+        nome: employees.nomeCompleto,
+        matricula: employees.matricula,
+        funcao: employees.funcao,
+        cargo: employees.cargo,
+      }).from(employees).where(eq(employees.id, input.employeeId));
+
+      const ats = await db.select({
+        id: atestados.id,
+        tipo: atestados.tipo,
+        dataEmissao: atestados.dataEmissao,
+        dataRetorno: atestados.dataRetorno,
+        diasAfastamento: atestados.diasAfastamento,
+        horasAfastamento: atestados.horasAfastamento,
+        afastamentoTipo: atestados.afastamentoTipo,
+        afastamentoINSS: atestados.afastamentoINSS,
+        cid: atestados.cid,
+        medico: atestados.medico,
+        crm: atestados.crm,
+        motivo: atestados.motivo,
+        descricao: atestados.descricao,
+        documentoUrl: atestados.documentoUrl,
+      })
+        .from(atestados)
+        .where(and(
+          companyFilter(atestados.companyId, input),
+          eq(atestados.employeeId, input.employeeId),
+          isNull(atestados.deletedAt),
+          gte(atestados.dataEmissao, dataInicio),
+          lte(atestados.dataEmissao, dataFim),
+        ))
+        .orderBy(desc(atestados.dataEmissao));
+
+      const acs = await db.select({
+        id: accidents.id,
+        dataAcidente: accidents.dataAcidente,
+        horaAcidente: accidents.horaAcidente,
+        tipoAcidente: accidents.tipoAcidente,
+        gravidade: accidents.gravidade,
+        localAcidente: accidents.localAcidente,
+        parteCorpoAtingida: accidents.parteCorpoAtingida,
+        agenteCausador: accidents.agenteCausador,
+        descricao: accidents.descricao,
+        diasAfastamento: accidents.diasAfastamento,
+        houveCAT: accidents.houveCAT,
+        catNumero: accidents.catNumero,
+        catData: accidents.catData,
+        statusAcaoCorretiva: accidents.statusAcaoCorretiva,
+        prazoAcaoCorretiva: accidents.prazoAcaoCorretiva,
+        responsavelAcao: accidents.responsavelAcao,
+        acaoCorretiva: accidents.acaoCorretiva,
+        documentoUrl: accidents.documentoUrl,
+        obraId: accidents.obraId,
+        obraNome: obras.nome,
+      })
+        .from(accidents)
+        .leftJoin(obras, eq(accidents.obraId, obras.id))
+        .where(and(
+          companyFilter(accidents.companyId, input),
+          eq(accidents.employeeId, input.employeeId),
+          isNull(accidents.deletedAt),
+          gte(accidents.dataAcidente, dataInicio),
+          lte(accidents.dataAcidente, dataFim),
+        ))
+        .orderBy(desc(accidents.dataAcidente));
+
+      const totalDiasAtestado = ats.reduce((s, r) => s + (r.diasAfastamento || 0), 0);
+      const totalDiasAcidente = acs.reduce((s, r) => s + (r.diasAfastamento || 0), 0);
+
+      return {
+        funcionario: emp || { id: input.employeeId, nome: `Funcionário #${input.employeeId}`, matricula: null, funcao: null, cargo: null },
+        periodo: { dataInicio, dataFim },
+        atestados: ats,
+        acidentes: acs,
+        resumo: {
+          qtdAtestados: ats.length,
+          totalDiasAtestado,
+          qtdAcidentes: acs.length,
+          totalDiasAcidente,
+          comAfastamentoINSS: ats.filter((r) => (r.afastamentoINSS ?? 0) > 0).length,
+          comCAT: acs.filter((r) => r.houveCAT === 1).length,
+        },
+      };
+    }),
 });

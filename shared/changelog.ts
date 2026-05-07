@@ -9284,6 +9284,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 03:00:00",
   },
   {
+    version: 1368,
+    titulo: "SST Dashboard: clique no nome do funcionário abre detalhamento completo de atestados e acidentes",
+    descricao: "Nas tabelas Top 10 Funcionários — Atestados, Top 10 Funcionários — Acidentes e Funcionários com Atestados Recorrentes (3+) do Dashboard de Atestados & Acidentes, o nome do funcionário agora é clicável (link azul). Ao clicar, abre uma tela ampliada (95vw × 92vh) com: (1) cabeçalho identificando funcionário (nome, matrícula, função); (2) cartões-resumo (qtd de atestados, dias de atestado, qtd de acidentes, dias de acidente, INSS, CAT); (3) abas Atestados / Acidentes listando TODOS os registros do período. Cada atestado mostra tipo, CID, data emissão/retorno, dias ou horas de afastamento, motivo, médico+CRM, descrição e link para o documento. Cada acidente mostra gravidade (badge colorida), tipo, data/hora, dias de afastamento, obra, local, parte do corpo atingida, agente causador, descrição, ação corretiva (status/prazo/responsável) e CAT (nº). Implementado via novo procedure tRPC `sstAnalytics.porFuncionario` que busca atestados e acidentes do funcionário no período filtrado, respeitando isolamento por companyId/Construtoras.",
+    tipo: "melhoria",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 00:30:00",
+  },
+  {
     version: 1367,
     titulo: "SST Dashboard: gráficos responsivos sem texto sobreposto + modo fullscreen com tabela de dados e exportação CSV",
     descricao: "Refatoração visual do Dashboard de Atestados & Acidentes (/sst/dashboard-atestados-acidentes). (1) Novo componente reutilizável ChartCard que envolve cada gráfico com cabeçalho + botão de expandir (ícone Maximize2). (2) Clicar em expandir abre uma tela cheia (Dialog 95vw × 92vh) com o gráfico ampliado (520px de altura) + tabela de dados detalhados com todos os registros + botão de exportar CSV. (3) Eliminação dos textos sobrepostos: pizzas (Atestados por Tipo, Por Gravidade) agora usam Legenda inferior em vez de labels diretos no chart; barras verticais com nomes longos (CIDs, Tipo de Acidente, Parte do Corpo, Local, Ranking de Obras) usam labels truncados (com tooltip mostrando o nome completo) e largura adequada do eixo Y; barras horizontais com motivos longos (Top 10 Motivos) angulam labels a -35° com altura de 80px. (4) Margens calibradas em todos os gráficos (top/right/left/bottom) para evitar cortes. (5) allowDecimals={false} em eixos numéricos onde só faz sentido inteiros. Aplicado em 11 gráficos: Evolução Mensal, Atestados por Tipo, Top 10 CIDs, Top 10 Motivos, Por Gravidade, Por Tipo de Acidente, Partes do Corpo, Locais, Atestados/Acidentes por Dia da Semana, Ranking de Obras.",
