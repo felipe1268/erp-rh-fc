@@ -9284,6 +9284,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 03:00:00",
   },
   {
+    version: 1375,
+    titulo: "SST: diálogos em tela cheia de fato (fix da prop resizable do DialogContent)",
+    descricao: "Bug visual: as telas 'Detalhamento do Funcionário', 'Visualizador de Documento' e 'Novo Registro de Acidente' ficavam estreitas (~512 px) mesmo com `w-[98vw] h-[96vh]`. Causa: o componente `DialogContent` do shadcn aplica um `style` inline com `width: min(512px, calc(100vw - 2rem))` quando `resizable` é `true` (padrão), e estilo inline vence sobre classe Tailwind. Fix: passar `resizable={false}` nos 3 diálogos. Em telas pequenas, agora ocupam 100vw × 100vh; em desktops, 98vw × 96vh como já era a intenção.",
+    tipo: "bugfix",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 05:00:00",
+  },
+  {
     version: 1374,
     titulo: "SST Detalhamento: documento do atestado/acidente abre em visualizador (não baixa)",
     descricao: "Na tela de detalhamento do funcionário (Atestados & Acidentes), o link 'Documento' agora abre o arquivo em um visualizador interno (modal com iframe 95vw × 95vh) em vez de baixar/abrir nova aba. O modal traz botão 'Abrir em nova aba' como alternativa e botão de fechar. Funciona para PDFs e imagens renderizados nativamente pelo navegador.",

@@ -451,7 +451,8 @@ export default function RegistroAcidentes() {
         {/* ================== FORMULÁRIO TELA CHEIA ================== */}
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent
-            className="max-w-none w-[98vw] h-[96vh] p-0 overflow-hidden flex flex-col gap-0 sm:rounded-xl"
+            resizable={false}
+            className="max-w-none w-screen h-screen sm:w-[98vw] sm:h-[96vh] p-0 overflow-hidden flex flex-col gap-0 sm:rounded-xl border-0 sm:border"
             onInteractOutside={(e) => e.preventDefault()}
           >
             {/* Header fixo */}

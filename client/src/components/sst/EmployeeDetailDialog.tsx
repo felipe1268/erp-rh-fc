@@ -59,7 +59,10 @@ export function EmployeeDetailDialog({ open, onOpenChange, employeeId, dataInici
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-none w-[98vw] h-[96vh] overflow-hidden flex flex-col bg-white sm:rounded-xl p-0">
+      <DialogContent
+        resizable={false}
+        className="max-w-none w-screen h-screen sm:w-[98vw] sm:h-[96vh] overflow-hidden flex flex-col bg-white sm:rounded-xl p-0 border-0 sm:border"
+      >
         <DialogHeader className="px-6 pt-5 pb-3 border-b">
           <DialogTitle className="flex items-center gap-2 text-lg">
             <User className="h-5 w-5 text-blue-600" />
@@ -275,7 +278,10 @@ export function EmployeeDetailDialog({ open, onOpenChange, employeeId, dataInici
       </DialogContent>
 
       <Dialog open={!!viewerUrl} onOpenChange={(v) => !v && setViewerUrl(null)}>
-        <DialogContent className="max-w-none w-[95vw] h-[95vh] p-0 overflow-hidden flex flex-col bg-white sm:rounded-xl">
+        <DialogContent
+          resizable={false}
+          className="max-w-none w-screen h-screen sm:w-[98vw] sm:h-[96vh] p-0 overflow-hidden flex flex-col bg-white sm:rounded-xl border-0 sm:border"
+        >
           <DialogHeader className="px-4 py-2 border-b flex-row items-center justify-between space-y-0">
             <DialogTitle className="text-sm font-medium flex items-center gap-2">
               <FileText className="h-4 w-4 text-blue-600" /> Visualizar documento
