@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1401,
+    titulo: "Atestado Médico (parcial) — campo 'Horas de Afastamento' aceita atestados curtos (ex.: 0h48min)",
+    descricao: "CORREÇÃO em /controle-documentos > Novo Atestado > Horas (parcial): o antigo campo único 'HH:MM' interpretava digitação simples como horas (ex.: ao digitar '48' o sistema entendia 48 horas e travava em 12h, impedindo registro de atestados abaixo de 1h). Agora o campo foi dividido em dois inputs numéricos separados — HORAS (0–12) e MINUTOS (0–59) — eliminando ambiguidade. É possível registrar atestados curtos como 0h48min (consulta/atendimento de menos de 1 hora) sem qualquer travamento. Backend já aceitava valores fracionários (z.coerce.number); o problema era exclusivo da parsing de UI.",
+    tipo: "correcao",
+    modulos: "ControleDocumentos,SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 17:55:00",
+  },
+  {
     version: 1400,
     titulo: "Advertência Formal — novo cabeçalho com logo FC branco sobre fundo azul",
     descricao: "AJUSTE VISUAL no PDF impresso de Advertência Formal (/terceiros/advertencias): o cabeçalho dinâmico (faixa azul + logo da empresa + título) foi substituído por um banner único 'ADVERTÊNCIA FORMAL' com a logo FC ENGENHARIA escrita em branco sobre fundo azul, ocupando largura total do documento. O selo '1ª/2ª/3ª MEDIDA' continua em destaque vermelho à direita. Notificações, suspensões e encerramentos seguem usando o cabeçalho dinâmico tradicional (logo da empresa + título variável).",

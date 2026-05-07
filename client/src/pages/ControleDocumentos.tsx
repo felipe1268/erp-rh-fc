@@ -2987,38 +2987,59 @@ export default function ControleDocumentos() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-medium text-amber-700">Horas de Afastamento</label>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      className="mt-1 border-amber-200 focus:border-amber-400"
-                      value={(() => {
-                        const h = Number(atestForm.horasAfastamento || 0);
-                        if (!h) return "";
-                        const hh = Math.floor(h);
-                        const mm = Math.round((h - hh) * 60);
-                        return `${hh}:${String(mm).padStart(2, "0")}`;
-                      })()}
-                      onFocus={(e) => e.currentTarget.select()}
-                      onChange={e => {
-                        // Aceita "1:45", "1h45", "1.75", "2", apenas dígitos para HHMM
-                        let raw = e.target.value.trim().toLowerCase().replace(/h/g, ":").replace(/,/g, ".");
-                        let dec = 0;
-                        if (raw.includes(":")) {
-                          const [hStr, mStr] = raw.split(":");
-                          const h = parseInt(hStr) || 0;
-                          const m = Math.min(59, parseInt(mStr) || 0);
-                          dec = h + m / 60;
-                        } else if (raw.includes(".")) {
-                          dec = parseFloat(raw) || 0;
-                        } else {
-                          dec = parseInt(raw) || 0;
-                        }
-                        dec = Math.max(0, Math.min(12, Math.round(dec * 100) / 100));
+                    {(() => {
+                      const totalDec = Number(atestForm.horasAfastamento || 0);
+                      const hhVal = Math.floor(totalDec);
+                      const mmVal = Math.round((totalDec - hhVal) * 60);
+                      const setHM = (h: number, m: number) => {
+                        const hClamped = Math.max(0, Math.min(12, h));
+                        const mClamped = Math.max(0, Math.min(59, m));
+                        const dec = Math.round((hClamped + mClamped / 60) * 100) / 100;
                         setAtestForm({ ...atestForm, horasAfastamento: dec });
-                      }}
-                      placeholder="Ex: 1:45 ou 2:30"
-                    />
-                    <p className="text-[10px] text-amber-600 mt-1">Horas e minutos no formato HH:MM (ex: 1:45). Máx 12h.</p>
+                      };
+                      return (
+                        <div className="mt-1 flex items-center gap-2">
+                          <div className="flex-1">
+                            <Input
+                              type="number"
+                              min={0}
+                              max={12}
+                              step={1}
+                              className="border-amber-200 focus:border-amber-400 text-center"
+                              value={hhVal === 0 && mmVal === 0 ? "" : hhVal}
+                              onFocus={(e) => e.currentTarget.select()}
+                              onChange={e => {
+                                const h = parseInt(e.target.value) || 0;
+                                setHM(h, mmVal);
+                              }}
+                              placeholder="0"
+                            />
+                            <p className="text-[9px] text-amber-600 text-center mt-0.5">horas</p>
+                          </div>
+                          <span className="text-amber-700 font-bold text-lg pb-4">:</span>
+                          <div className="flex-1">
+                            <Input
+                              type="number"
+                              min={0}
+                              max={59}
+                              step={1}
+                              className="border-amber-200 focus:border-amber-400 text-center"
+                              value={hhVal === 0 && mmVal === 0 ? "" : String(mmVal).padStart(2, "0")}
+                              onFocus={(e) => e.currentTarget.select()}
+                              onChange={e => {
+                                const m = parseInt(e.target.value) || 0;
+                                setHM(hhVal, m);
+                              }}
+                              placeholder="00"
+                            />
+                            <p className="text-[9px] text-amber-600 text-center mt-0.5">minutos</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    <p className="text-[10px] text-amber-600 mt-1">
+                      Informe horas (0–12) e minutos (0–59) separadamente. Aceita atestados curtos como <b>0h48min</b>.
+                    </p>
                   </div>
                   <div>
                     <label className="text-xs font-medium text-amber-700">Data Retorno</label>
