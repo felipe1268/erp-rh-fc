@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { DollarSign, TrendingUp, TrendingDown, Wallet, Building2, Landmark, ArrowLeft, HandCoins, Search, ArrowUp, ArrowDown, Minus, X } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Wallet, Building2, Landmark, ArrowLeft, HandCoins, Search, ArrowUp, ArrowDown, Minus, X, AlertTriangle, Lightbulb } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useMemo } from "react";
@@ -92,6 +92,106 @@ export default function DashFolhaPagamento() {
     const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
     return `${meses[parseInt(m) - 1]}/${y}`;
   }, [mes]);
+
+  // Tabela comparativa mês a mês — proventos, descontos, líquido, FGTS, INSS
+  // com delta (R$ + %) vs mês anterior. Usado tanto pela tabela quanto pelos
+  // pontos de atenção.
+  const comparativo = useMemo(() => {
+    if (!data?.evolucaoMensal || data.evolucaoMensal.length === 0) return [] as any[];
+    const ev = [...(data.evolucaoMensal as any[])].sort((a, b) => String(a.mes).localeCompare(String(b.mes)));
+    const pct = (a: number, b: number) => (b === 0 ? (a > 0 ? 100 : 0) : ((a - b) / Math.abs(b)) * 100);
+    const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    return ev.map((cur, i) => {
+      const prev = i > 0 ? ev[i - 1] : null;
+      const [y, m] = String(cur.mes).split("-");
+      const label = `${meses[parseInt(m) - 1]}/${y.slice(2)}`;
+      const fields = ["proventos", "descontos", "liquido", "fgts", "inss"] as const;
+      const deltas: Record<string, { abs: number; pct: number } | null> = {};
+      for (const f of fields) {
+        if (!prev) { deltas[f] = null; continue; }
+        const a = Number(cur[f] || 0), b = Number(prev[f] || 0);
+        deltas[f] = { abs: a - b, pct: pct(a, b) };
+      }
+      return {
+        mes: cur.mes, label,
+        proventos: Number(cur.proventos || 0),
+        descontos: Number(cur.descontos || 0),
+        liquido:   Number(cur.liquido   || 0),
+        fgts:      Number(cur.fgts      || 0),
+        inss:      Number(cur.inss      || 0),
+        funcionarios: Number(cur.funcionarios || 0),
+        deltas,
+      };
+    });
+  }, [data]);
+
+  // Pontos de atenção — heurísticas para apoiar redução de custos
+  const pontosAtencao = useMemo(() => {
+    const pts: { tipo: "alerta" | "info"; titulo: string; descricao: string }[] = [];
+    if (comparativo.length < 2) return pts;
+    const ult = comparativo[comparativo.length - 1];
+    const ante = comparativo[comparativo.length - 2];
+    const fmtP = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
+
+    // 1) Descontos crescendo forte vs mês anterior
+    if (ult.deltas.descontos && ult.deltas.descontos.pct >= 15 && ult.deltas.descontos.abs > 0) {
+      pts.push({
+        tipo: "alerta",
+        titulo: `Descontos subiram ${fmtP(ult.deltas.descontos.pct)} em ${ult.label}`,
+        descricao: `Aumento de ${fmtBRL(ult.deltas.descontos.abs)} vs ${ante.label}. Avaliar faltas, atrasos, atestados e descontos manuais lançados no mês.`,
+      });
+    }
+    // 2) Líquido caindo (custo subindo sem que o líquido acompanhe pode indicar mais encargos)
+    if (ult.deltas.liquido && ult.deltas.liquido.pct <= -10 && ult.deltas.liquido.abs < 0) {
+      pts.push({
+        tipo: "alerta",
+        titulo: `Líquido pago caiu ${fmtP(ult.deltas.liquido.pct)} em ${ult.label}`,
+        descricao: `Redução de ${fmtBRL(Math.abs(ult.deltas.liquido.abs))}. Verifique se houve afastamentos, férias coletivas ou aumento de descontos.`,
+      });
+    }
+    // 3) FGTS / INSS subindo desproporcionalmente
+    for (const enc of ["fgts", "inss"] as const) {
+      if (ult.deltas[enc] && ult.deltas[enc]!.pct >= 15 && ult.deltas[enc]!.abs > 0) {
+        const provPct = ult.deltas.proventos?.pct ?? 0;
+        if (ult.deltas[enc]!.pct - provPct >= 5) {
+          pts.push({
+            tipo: "alerta",
+            titulo: `${enc.toUpperCase()} cresceu mais do que os proventos em ${ult.label}`,
+            descricao: `${enc.toUpperCase()} ${fmtP(ult.deltas[enc]!.pct)} vs Proventos ${fmtP(provPct)}. Revisar bases de cálculo, horas extras e benefícios tributáveis.`,
+          });
+        }
+      }
+    }
+    // 4) Aumento consistente de descontos por 3 meses
+    if (comparativo.length >= 4) {
+      const ultimos3 = comparativo.slice(-3);
+      const todosSubindo = ultimos3.every(c => c.deltas.descontos && c.deltas.descontos.pct > 0);
+      if (todosSubindo) {
+        pts.push({
+          tipo: "alerta",
+          titulo: "Descontos em alta há 3 meses consecutivos",
+          descricao: "Tendência sustentada — bom momento para auditar lançamentos manuais, rever política de VR/VT e reforçar controle de ponto.",
+        });
+      }
+    }
+    // 5) Funcionários caindo mas custo subindo (indicador de horas extras / adicionais)
+    if (ult.deltas.proventos && ult.deltas.proventos.pct > 5 && ult.funcionarios <= ante.funcionarios) {
+      pts.push({
+        tipo: "alerta",
+        titulo: `Custo cresceu ${fmtP(ult.deltas.proventos.pct)} sem aumento de quadro`,
+        descricao: `${ult.funcionarios} funcionários (vs ${ante.funcionarios} no mês anterior). Forte indício de horas extras, adicionais ou reajustes — abrir o relatório de HE para investigar.`,
+      });
+    }
+    // 6) Bom momento — nenhum item subindo
+    if (pts.length === 0) {
+      pts.push({
+        tipo: "info",
+        titulo: `Sem alertas relevantes em ${ult.label}`,
+        descricao: "Nenhum item da folha apresentou variação anômala vs o mês anterior.",
+      });
+    }
+    return pts;
+  }, [comparativo]);
 
   // Variação mês a mês (R$ vs mês anterior) para cada métrica
   const variacao = useMemo(() => {
@@ -230,6 +330,112 @@ export default function DashFolhaPagamento() {
                 showPercentage={false}
                 valueFormatter={(v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${fmtBRL(Math.abs(v))}`}
               />
+            )}
+
+            {/* Tabela Comparativa Mês a Mês */}
+            {comparativo.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-blue-500" />
+                    Comparativo Mês a Mês — Folha vs período anterior
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40">
+                      <tr className="text-left">
+                        <th rowSpan={2} className="py-2 px-3 font-medium text-muted-foreground border-b">Mês</th>
+                        <th rowSpan={2} className="py-2 px-3 font-medium text-muted-foreground border-b text-right hidden md:table-cell">Func.</th>
+                        <th colSpan={2} className="py-1 px-3 font-medium text-green-700 border-b text-center">Proventos</th>
+                        <th colSpan={2} className="py-1 px-3 font-medium text-red-700 border-b text-center">Descontos</th>
+                        <th colSpan={2} className="py-1 px-3 font-medium text-blue-700 border-b text-center">Líquido</th>
+                        <th colSpan={2} className="py-1 px-3 font-medium text-teal-700 border-b text-center hidden lg:table-cell">FGTS</th>
+                        <th colSpan={2} className="py-1 px-3 font-medium text-purple-700 border-b text-center hidden lg:table-cell">INSS</th>
+                      </tr>
+                      <tr className="text-right text-xs text-muted-foreground">
+                        <th className="py-1 px-3 border-b">Valor</th>
+                        <th className="py-1 px-3 border-b">Δ vs ant.</th>
+                        <th className="py-1 px-3 border-b">Valor</th>
+                        <th className="py-1 px-3 border-b">Δ vs ant.</th>
+                        <th className="py-1 px-3 border-b">Valor</th>
+                        <th className="py-1 px-3 border-b">Δ vs ant.</th>
+                        <th className="py-1 px-3 border-b hidden lg:table-cell">Valor</th>
+                        <th className="py-1 px-3 border-b hidden lg:table-cell">Δ vs ant.</th>
+                        <th className="py-1 px-3 border-b hidden lg:table-cell">Valor</th>
+                        <th className="py-1 px-3 border-b hidden lg:table-cell">Δ vs ant.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comparativo.map((r: any, i: number) => {
+                        const isUlt = i === comparativo.length - 1;
+                        const renderDelta = (d: { abs: number; pct: number } | null, invertido = false) => {
+                          if (!d) return <span className="text-muted-foreground">—</span>;
+                          if (Math.abs(d.abs) < 0.01) return <span className="text-muted-foreground inline-flex items-center gap-1"><Minus className="h-3 w-3" />0,0%</span>;
+                          // invertido=true → subir é ruim (descontos). Para proventos/líquido, subir é bom.
+                          const subiu = d.abs > 0;
+                          const ruim = invertido ? subiu : !subiu;
+                          const cor = ruim ? "text-red-600" : "text-green-600";
+                          return (
+                            <span className={`inline-flex items-center gap-1 font-semibold ${cor} tabular-nums`}>
+                              {subiu ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                              {d.pct >= 0 ? "+" : ""}{d.pct.toFixed(1)}%
+                              <span className="text-[10px] font-normal text-muted-foreground">({subiu ? "+" : "−"}{fmtBRL(Math.abs(d.abs))})</span>
+                            </span>
+                          );
+                        };
+                        return (
+                          <tr key={r.mes} className={`border-b ${isUlt ? "bg-blue-50/50 font-semibold" : "hover:bg-muted/30"}`}>
+                            <td className="py-2 px-3">{r.label}{isUlt && <span className="ml-2 text-[10px] uppercase text-blue-700">atual</span>}</td>
+                            <td className="py-2 px-3 text-right tabular-nums hidden md:table-cell">{r.funcionarios}</td>
+                            <td className="py-2 px-3 text-right tabular-nums">{fmtBRL(r.proventos)}</td>
+                            <td className="py-2 px-3 text-right">{renderDelta(r.deltas.proventos, false)}</td>
+                            <td className="py-2 px-3 text-right tabular-nums">{fmtBRL(r.descontos)}</td>
+                            <td className="py-2 px-3 text-right">{renderDelta(r.deltas.descontos, true)}</td>
+                            <td className="py-2 px-3 text-right tabular-nums">{fmtBRL(r.liquido)}</td>
+                            <td className="py-2 px-3 text-right">{renderDelta(r.deltas.liquido, false)}</td>
+                            <td className="py-2 px-3 text-right tabular-nums hidden lg:table-cell">{fmtBRL(r.fgts)}</td>
+                            <td className="py-2 px-3 text-right hidden lg:table-cell">{renderDelta(r.deltas.fgts, true)}</td>
+                            <td className="py-2 px-3 text-right tabular-nums hidden lg:table-cell">{fmtBRL(r.inss)}</td>
+                            <td className="py-2 px-3 text-right hidden lg:table-cell">{renderDelta(r.deltas.inss, true)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <p className="text-[11px] text-muted-foreground mt-2 px-1">
+                    <strong>Como ler:</strong> setas <span className="text-green-600 font-semibold">verdes</span> = movimento favorável (proventos/líquido subindo, descontos/encargos caindo). Setas <span className="text-red-600 font-semibold">vermelhas</span> = atenção.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Pontos de Atenção — sugestões para redução de custos */}
+            {pontosAtencao.length > 0 && (
+              <Card className="border-amber-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2 text-amber-700">
+                    <Lightbulb className="h-4 w-4" />
+                    Pontos de Atenção — oportunidades para redução de custos
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {pontosAtencao.map((p, i) => (
+                    <div
+                      key={i}
+                      className={`flex items-start gap-3 p-3 rounded-lg border ${p.tipo === "alerta" ? "border-amber-200 bg-amber-50" : "border-blue-200 bg-blue-50"}`}
+                    >
+                      {p.tipo === "alerta"
+                        ? <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                        : <Lightbulb className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />}
+                      <div>
+                        <p className={`text-sm font-semibold ${p.tipo === "alerta" ? "text-amber-900" : "text-blue-900"}`}>{p.titulo}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{p.descricao}</p>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
             )}
 
             {/* Encargos mensais */}
