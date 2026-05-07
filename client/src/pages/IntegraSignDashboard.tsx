@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "../lib/trpc";
 import { useCompany } from "../contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,17 @@ export default function IntegraSignDashboard() {
   const companyId = parseInt(selectedCompanyId) || 0;
   const [statusFilter, setStatusFilter] = useState<string>("todos");
   const [selectedEnvelope, setSelectedEnvelope] = useState<number | null>(null);
+  const [location] = useLocation();
+  // Auto-seleciona o envelope vindo da query string (?envelope=ID), útil quando
+  // o usuário é redirecionado de outras telas após criar o envelope.
+  useEffect(() => {
+    const qs = typeof window !== "undefined" ? window.location.search : "";
+    const m = qs.match(/[?&]envelope=(\d+)/);
+    if (m) {
+      const id = parseInt(m[1], 10);
+      if (!Number.isNaN(id)) setSelectedEnvelope(id);
+    }
+  }, [location]);
   const [cancelDialog, setCancelDialog] = useState<number | null>(null);
   const [motivoCancelamento, setMotivoCancelamento] = useState("");
 

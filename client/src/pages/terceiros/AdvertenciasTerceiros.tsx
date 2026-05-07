@@ -14,7 +14,10 @@ import { toast } from "sonner";
 import {
   ShieldAlert, Plus, Pencil, Trash2, Printer, FileUp, Eye,
   Search, Building2, HardHat, MessageSquare, Users, AlertTriangle,
+  PenTool, Send, Loader2,
 } from "lucide-react";
+import { useLocation } from "wouter";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 const TIPOS: Record<string, { label: string; titulo: string; verbo: string; badge: "outline" | "secondary" | "destructive" }> = {
   Notificacao:             { label: "Notificação",              titulo: "NOTIFICAÇÃO FORMAL",                                  verbo: "NOTIFICAR",                badge: "outline" },
@@ -73,6 +76,68 @@ export default function AdvertenciasTerceiros() {
     { enabled: !!companyId }
   );
   const ensureFromFornecedorMut = trpc.terceiros.empresas.ensureFromFornecedor.useMutation();
+  const criarEnvelopeMut = trpc.integrasign.criarEnvelope.useMutation();
+  const enviarEnvelopeMut = trpc.integrasign.enviarParaAssinatura.useMutation();
+  const [assinaturaDialog, setAssinaturaDialog] = useState<null | {
+    advertencia: any;
+    sigEmpresa: { nome: string; email: string; cpfCnpj: string; cargo: string; empresaNome: string };
+    sigGestor: { nome: string; email: string; cargo: string };
+  }>(null);
+  function abrirAssinatura(a: any) {
+    const emp = (empresas as any[]).find((e: any) => e.source === "terceira" && e.id === a.empresaTerceiraId);
+    setAssinaturaDialog({
+      advertencia: a,
+      sigEmpresa: {
+        nome: emp?.responsavelNome || "",
+        email: emp?.email || emp?.emailFinanceiro || "",
+        cpfCnpj: emp?.cnpj || "",
+        cargo: emp?.responsavelCargo || "Representante Legal",
+        empresaNome: emp?.razaoSocial || a.empresaRazaoSocial || "",
+      },
+      sigGestor: {
+        nome: a.aplicadoPor || authUser?.name || "",
+        email: (authUser as any)?.email || "",
+        cargo: "Gestor / Aplicador",
+      },
+    });
+  }
+  async function enviarParaAssinatura() {
+    if (!assinaturaDialog) return;
+    const { advertencia, sigEmpresa, sigGestor } = assinaturaDialog;
+    if (!sigEmpresa.nome || !sigEmpresa.email) { toast.error("Informe nome e e-mail do representante da empresa prestadora."); return; }
+    if (!sigGestor.nome || !sigGestor.email) { toast.error("Informe nome e e-mail do gestor (FC)."); return; }
+    const tipoLabel = TIPOS[advertencia.tipoAdvertencia]?.label || "Advertência";
+    try {
+      const r = await criarEnvelopeMut.mutateAsync({
+        companyId,
+        titulo: `${tipoLabel} #${advertencia.id} — ${advertencia.empresaRazaoSocial} / ${advertencia.funcionarioNome}`,
+        descricao: `${tipoLabel} aplicada em ${formatDateBR(advertencia.dataOcorrencia)}. Motivo: ${advertencia.motivo}`,
+        signatarios: [
+          { papel: "fornecedor", ordemAssinatura: 1, nome: sigEmpresa.nome, email: sigEmpresa.email, cpfCnpj: sigEmpresa.cpfCnpj || undefined, cargo: sigEmpresa.cargo || undefined, empresaNome: sigEmpresa.empresaNome || undefined },
+          { papel: "gestor_projeto", ordemAssinatura: 2, nome: sigGestor.nome, email: sigGestor.email, cargo: sigGestor.cargo || undefined, empresaNome: nomeContratante },
+        ],
+      });
+      // Encadeia o envio dos convites para que o e-mail seja realmente disparado
+      // (criarEnvelope deixa em rascunho; enviarParaAssinatura troca p/ enviado).
+      try {
+        await enviarEnvelopeMut.mutateAsync({ companyId, envelopeId: r.id });
+        toast.success("Envelope criado e enviado para assinatura!");
+      } catch (sendErr: any) {
+        toast.warning(`Envelope criado (rascunho), mas houve erro ao enviar convites: ${sendErr?.message || "verifique no IntegraSign"}.`);
+      }
+      setAssinaturaDialog(null);
+      navigate(`/integrasign?envelope=${r.id}`);
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao criar envelope.");
+    }
+  }
+  const [, navigate] = useLocation();
+  const [empresaInput, setEmpresaInput] = useState("");
+  const empresasOrdenadas = useMemo(() => {
+    const arr = [...(empresas as any[])];
+    arr.sort((a, b) => (a.razaoSocial || "").localeCompare(b.razaoSocial || "", "pt-BR", { sensitivity: "base" }));
+    return arr;
+  }, [empresas]);
   const { data: funcionarios = [] } = trpc.terceiros.funcionarios.list.useQuery(
     { companyId, companyIds, empresaTerceiraId: form.empresaTerceiraId || undefined } as any,
     { enabled: !!companyId && !!form.empresaTerceiraId }
@@ -110,11 +175,14 @@ export default function AdvertenciasTerceiros() {
 
   function openNew() {
     setEditingId(null);
+    setEmpresaInput("");
     setForm({ tipoAdvertencia: "Advertencia", dataOcorrencia: new Date().toISOString().slice(0, 10) });
     setShowDialog(true);
   }
   function openEdit(a: any) {
     setEditingId(a.id);
+    const empAtual = empresasOrdenadas.find((e: any) => e.source === "terceira" && e.id === a.empresaTerceiraId);
+    setEmpresaInput(empAtual ? `${empAtual.razaoSocial}${empAtual.cnpj ? ` — ${formatCNPJ(empAtual.cnpj)}` : ""}` : (a.empresaRazaoSocial || ""));
     setForm({
       empresaTerceiraId: a.empresaTerceiraId,
       funcionarioTerceiroId: a.funcionarioTerceiroId,
@@ -312,7 +380,7 @@ export default function AdvertenciasTerceiros() {
                 <SelectTrigger><SelectValue placeholder="Empresa Prestadora" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas as empresas</SelectItem>
-                  {(empresas as any[]).map(e => <SelectItem key={e.id} value={String(e.id)}>{e.razaoSocial}</SelectItem>)}
+                  {empresasOrdenadas.map(e => <SelectItem key={e.id} value={String(e.id)}>{e.razaoSocial}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterTipo} onValueChange={setFilterTipo}>
@@ -367,6 +435,9 @@ export default function AdvertenciasTerceiros() {
                             <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" title="Imprimir" onClick={() => handlePrint(a)}>
                               <Printer className="h-3.5 w-3.5" />
                             </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-purple-600" title="Enviar para Assinatura Eletrônica (IntegraSign)" onClick={() => abrirAssinatura(a)}>
+                              <PenTool className="h-3.5 w-3.5" />
+                            </Button>
                             <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" onClick={() => openEdit(a)}>
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>
@@ -404,44 +475,50 @@ export default function AdvertenciasTerceiros() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-medium text-gray-600">Empresa Prestadora *</label>
-                <Select
-                  value={
-                    form.empresaTerceiraId ? `t:${form.empresaTerceiraId}`
-                    : form.fornecedorPendenteId ? `f:${form.fornecedorPendenteId}`
-                    : ""
-                  }
-                  onValueChange={async v => {
-                    if (v.startsWith("t:")) {
-                      setForm({ ...form, empresaTerceiraId: parseInt(v.slice(2)), fornecedorPendenteId: undefined, funcionarioTerceiroId: undefined });
-                    } else if (v.startsWith("f:")) {
-                      const fornecedorId = parseInt(v.slice(2));
-                      setForm({ ...form, fornecedorPendenteId: fornecedorId, empresaTerceiraId: undefined, funcionarioTerceiroId: undefined });
+                <Input
+                  className="mt-1"
+                  list="lista-empresas-prestadoras"
+                  placeholder="Digite o nome ou selecione"
+                  value={empresaInput}
+                  onChange={async e => {
+                    const v = e.target.value;
+                    setEmpresaInput(v);
+                    const match = empresasOrdenadas.find((emp: any) => {
+                      const label = `${emp.razaoSocial}${emp.cnpj ? ` — ${formatCNPJ(emp.cnpj)}` : ""}`;
+                      return label === v || emp.razaoSocial === v;
+                    });
+                    if (!match) {
+                      // não encontrou — limpa seleção; usuário pode continuar digitando
+                      setForm((prev: any) => ({ ...prev, empresaTerceiraId: undefined, fornecedorPendenteId: undefined, funcionarioTerceiroId: undefined }));
+                      return;
+                    }
+                    if (match.source === "terceira") {
+                      setForm((prev: any) => ({ ...prev, empresaTerceiraId: match.id, fornecedorPendenteId: undefined, funcionarioTerceiroId: undefined }));
+                    } else {
+                      // prestador vindo de Compras — cria/recupera empresa terceira vinculada
+                      setForm((prev: any) => ({ ...prev, fornecedorPendenteId: match.fornecedorId, empresaTerceiraId: undefined, funcionarioTerceiroId: undefined }));
                       try {
-                        const r = await ensureFromFornecedorMut.mutateAsync({ companyId, companyIds, fornecedorId });
+                        const r = await ensureFromFornecedorMut.mutateAsync({ companyId, companyIds, fornecedorId: match.fornecedorId });
                         setForm((prev: any) => ({ ...prev, empresaTerceiraId: r.id, fornecedorPendenteId: undefined }));
                         if (r.created) toast.success("Empresa terceira vinculada ao prestador.");
                         refetchEmpresas();
-                      } catch (e: any) {
-                        toast.error(e?.message || "Erro ao vincular fornecedor a empresa terceira");
+                      } catch (err: any) {
+                        toast.error(err?.message || "Erro ao vincular fornecedor a empresa terceira");
                         setForm((prev: any) => ({ ...prev, fornecedorPendenteId: undefined }));
                       }
                     }
                   }}
-                >
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a empresa" /></SelectTrigger>
-                  <SelectContent>
-                    {(empresas as any[]).map(e => {
-                      const key = e.source === "terceira" ? `t:${e.id}` : `f:${e.fornecedorId}`;
-                      const label = `${e.razaoSocial}${e.cnpj ? ` — ${formatCNPJ(e.cnpj)}` : ""}`;
-                      return (
-                        <SelectItem key={key} value={key}>
-                          {label}
-                          {e.source === "fornecedor" ? <span className="text-[10px] text-blue-600 ml-2">(prestador — Compras)</span> : null}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                />
+                <datalist id="lista-empresas-prestadoras">
+                  {empresasOrdenadas.map((e: any) => {
+                    const label = `${e.razaoSocial}${e.cnpj ? ` — ${formatCNPJ(e.cnpj)}` : ""}`;
+                    return (
+                      <option key={`${e.source}:${e.id}`} value={label}>
+                        {e.source === "fornecedor" ? "(prestador — Compras)" : ""}
+                      </option>
+                    );
+                  })}
+                </datalist>
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600">Colaborador Terceirizado <span className="text-gray-400 font-normal">(opcional)</span></label>
@@ -564,6 +641,47 @@ export default function AdvertenciasTerceiros() {
           </div>
         </div>
       </FullScreenDialog>
+
+      {/* Diálogo de Assinatura Eletrônica */}
+      <Dialog open={!!assinaturaDialog} onOpenChange={v => !v && setAssinaturaDialog(null)}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-purple-700"><PenTool className="h-4 w-4" /> Enviar para Assinatura Eletrônica</DialogTitle>
+          </DialogHeader>
+          {assinaturaDialog && (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-purple-50 border border-purple-200 p-3 text-xs text-purple-900">
+                Será criado um envelope IntegraSign com 2 signatários: o representante da <b>empresa prestadora</b> (1º) e o <b>gestor / aplicador</b> da {nomeContratante} (2º). Ambos receberão e-mail com link individual de assinatura.
+              </div>
+              <div>
+                <h4 className="text-xs font-semibold text-gray-700 mb-2">1º Signatário — Empresa Prestadora</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="text-xs text-gray-600">Nome *</label><Input className="mt-1" value={assinaturaDialog.sigEmpresa.nome} onChange={e => setAssinaturaDialog({ ...assinaturaDialog, sigEmpresa: { ...assinaturaDialog.sigEmpresa, nome: e.target.value } })} /></div>
+                  <div><label className="text-xs text-gray-600">E-mail *</label><Input className="mt-1" type="email" value={assinaturaDialog.sigEmpresa.email} onChange={e => setAssinaturaDialog({ ...assinaturaDialog, sigEmpresa: { ...assinaturaDialog.sigEmpresa, email: e.target.value } })} /></div>
+                  <div><label className="text-xs text-gray-600">CPF/CNPJ</label><Input className="mt-1" value={assinaturaDialog.sigEmpresa.cpfCnpj} onChange={e => setAssinaturaDialog({ ...assinaturaDialog, sigEmpresa: { ...assinaturaDialog.sigEmpresa, cpfCnpj: e.target.value } })} /></div>
+                  <div><label className="text-xs text-gray-600">Cargo</label><Input className="mt-1" value={assinaturaDialog.sigEmpresa.cargo} onChange={e => setAssinaturaDialog({ ...assinaturaDialog, sigEmpresa: { ...assinaturaDialog.sigEmpresa, cargo: e.target.value } })} /></div>
+                  <div className="col-span-2"><label className="text-xs text-gray-600">Empresa</label><Input className="mt-1" value={assinaturaDialog.sigEmpresa.empresaNome} onChange={e => setAssinaturaDialog({ ...assinaturaDialog, sigEmpresa: { ...assinaturaDialog.sigEmpresa, empresaNome: e.target.value } })} /></div>
+                </div>
+              </div>
+              <div>
+                <h4 className="text-xs font-semibold text-gray-700 mb-2">2º Signatário — Gestor / Aplicador (FC)</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="text-xs text-gray-600">Nome *</label><Input className="mt-1" value={assinaturaDialog.sigGestor.nome} onChange={e => setAssinaturaDialog({ ...assinaturaDialog, sigGestor: { ...assinaturaDialog.sigGestor, nome: e.target.value } })} /></div>
+                  <div><label className="text-xs text-gray-600">E-mail *</label><Input className="mt-1" type="email" value={assinaturaDialog.sigGestor.email} onChange={e => setAssinaturaDialog({ ...assinaturaDialog, sigGestor: { ...assinaturaDialog.sigGestor, email: e.target.value } })} /></div>
+                  <div className="col-span-2"><label className="text-xs text-gray-600">Cargo</label><Input className="mt-1" value={assinaturaDialog.sigGestor.cargo} onChange={e => setAssinaturaDialog({ ...assinaturaDialog, sigGestor: { ...assinaturaDialog.sigGestor, cargo: e.target.value } })} /></div>
+                </div>
+              </div>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setAssinaturaDialog(null)} disabled={criarEnvelopeMut.isPending || enviarEnvelopeMut.isPending}>Cancelar</Button>
+                <Button className="bg-purple-600 hover:bg-purple-700" onClick={enviarParaAssinatura} disabled={criarEnvelopeMut.isPending || enviarEnvelopeMut.isPending}>
+                  {(criarEnvelopeMut.isPending || enviarEnvelopeMut.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
+                  Criar envelope, enviar convites e abrir IntegraSign
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Preview / Imprimir */}
       {previewData && (

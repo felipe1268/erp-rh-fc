@@ -39,14 +39,15 @@ function MasterOnlyGuard({ component: Component }: { component: ComponentType })
   return <Component />;
 }
 
-function RouteGuard({ component: Component, route }: { component: ComponentType; route: string }) {
+function RouteGuard({ component: Component, route }: { component: ComponentType; route: string | string[] }) {
   const { isAdminMaster, hasGroup, groupCanAccessRoute, isLoading } = usePermissions();
 
   if (isLoading) {
     return <PageLoader />;
   }
 
-  const canAccess = isAdminMaster || !hasGroup || groupCanAccessRoute(route);
+  const routes = Array.isArray(route) ? route : [route];
+  const canAccess = isAdminMaster || !hasGroup || routes.some(r => groupCanAccessRoute(r));
 
   if (!canAccess) {
     return (
@@ -493,7 +494,7 @@ function Router() {
         <Route path="/compras/configuracoes"     component={() => <RouteGuard component={ComprasConfiguracoes} route="/compras/configuracoes" />} />
         <Route path="/compras/dashboard-obra"    component={() => <RouteGuard component={DashboardObra} route="/compras/painel" />} />
         <Route path="/compras/painel-fd"         component={() => <RouteGuard component={PainelFd} route="/compras/painel" />} />
-        <Route path="/integrasign" component={() => <RouteGuard component={IntegraSignDashboard} route="/compras/painel" />} />
+        <Route path="/integrasign" component={() => <RouteGuard component={IntegraSignDashboard} route={["/compras/painel", "/terceiros/painel", "/terceiros/advertencias", "/terceiros/contratos"]} />} />
         <Route path="/integrasign/assinar/:token" component={IntegraSignAssinar} />
         <Route path="/integracao/:token" component={IntegracaoPublica} />
         <Route path="/portal/cotacao/:token"     component={PortalCotacaoPage} />

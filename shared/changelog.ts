@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1399,
+    titulo: "Advertências Terceiros — campo Empresa com digitação livre, ordem alfabética e botão de Assinatura Eletrônica",
+    descricao: "MELHORIA em /terceiros/advertencias: (1) o campo 'Empresa Prestadora' do formulário de Nova Advertência/Notificação deixou de ser um Select fechado e passou a ser um campo de digitação livre com sugestões (datalist) — igual ao campo de colaborador. O usuário pode digitar parte do nome para filtrar e selecionar. (2) A lista de empresas (tanto no filtro quanto no formulário) agora aparece em ORDEM ALFABÉTICA (pt-BR, case-insensitive). (3) Adicionado botão de 'Assinatura Eletrônica' (ícone PenTool roxo) na coluna de ações de cada advertência emitida — abre diálogo IntegraSign que pré-preenche o representante da empresa prestadora (1º signatário) e o gestor/aplicador da FC (2º signatário) e cria o envelope com um clique, redirecionando para a tela do IntegraSign para acompanhar o status.",
+    tipo: "melhoria",
+    modulos: "Terceiros,IntegraSign",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 16:30:00",
+  },
+  {
     version: 1398,
     titulo: "Anti-duplicidade cross-módulo no cadastro de Empresas (Compras ↔ Terceiros)",
     descricao: "MELHORIA: ao cadastrar uma empresa nos módulos COMPRAS (/compras/fornecedores) ou TERCEIROS (/terceiros/empresas), o sistema agora verifica automaticamente se já existe cadastro com o mesmo CNPJ em qualquer um dos dois módulos do tenant. Se a empresa já existir no MESMO módulo, o cadastro é bloqueado com aviso (não é permitido duplicar). Se a empresa já existir no OUTRO módulo, abre uma caixa de diálogo: 'Empresa já está cadastrada! Deseja adicioná-la neste módulo?'. Ao clicar em SIM, todos os dados de cadastro (razão social, endereço, contato, dados bancários etc.) são replicados automaticamente do registro existente para o novo formulário (revisar e salvar). Ao clicar em NÃO, o cadastro é cancelado. Backend: nova procedure terceiros.empresas.verificarCadastroDuplicado (consulta cross-tabela) e proteção server-side em compras.criarFornecedor e terceiros.empresas.create rejeitando duplicidade dentro do mesmo módulo (CONFLICT).",
