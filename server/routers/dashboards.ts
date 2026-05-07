@@ -456,85 +456,115 @@ async function getDashFolhaPagamento(companyId: number, mesRef?: string, company
   const db = await getDb();
   if (!db) return null;
   const mes = mesRef || new Date().toISOString().slice(0, 7);
-  const year = mes.slice(0, 4);
 
-  // Dados do monthlyPayrollSummary e evolução em paralelo
-  const [summaryMes, evolucaoRaw] = await Promise.all([
-    db.select().from(monthlyPayrollSummary)
-      .where(and(companyWhere(monthlyPayrollSummary, companyId, companyIds), eq(monthlyPayrollSummary.mesReferencia, mes))),
-    db.select({
-      mes: monthlyPayrollSummary.mesReferencia,
-      totalProventos: sql<number>`COALESCE(SUM(CAST("totalProventos" AS DECIMAL(12,2))), 0)`,
-      totalDescontos: sql<number>`COALESCE(SUM(CAST("totalDescontos" AS DECIMAL(12,2))), 0)`,
-      totalLiquido: sql<number>`COALESCE(SUM(CAST("folhaLiquido" AS DECIMAL(12,2))), 0)`,
-      totalFgts: sql<number>`COALESCE(SUM(CAST("valorFgts" AS DECIMAL(12,2))), 0)`,
-      totalInss: sql<number>`COALESCE(SUM(CAST("valorInss" AS DECIMAL(12,2))), 0)`,
-      funcionarios: sql<number>`count(DISTINCT "employeeId")`,
-    }).from(monthlyPayrollSummary)
-      .where(and(companyWhere(monthlyPayrollSummary, companyId, companyIds), sql`"mesReferencia" >= TO_CHAR(CURRENT_DATE - INTERVAL '12 months', 'YYYY-MM')`))
-      .groupBy(monthlyPayrollSummary.mesReferencia)
-      .orderBy(monthlyPayrollSummary.mesReferencia),
+  // Lista de companies a consultar (mantém comportamento original do companyWhere).
+  const ids = (companyIds && companyIds.length > 0 ? companyIds : [companyId]).filter(n => n > 0);
+  if (ids.length === 0) return null;
+  const companyList = sql.join(ids.map(id => sql`${id}`), sql`,`);
+
+  // Fonte real da folha: payroll_payments (mesma usada por RelatorioFolha e
+  // AlertaDivergenciaFolha). A tabela legada monthly_payroll_summary não está
+  // sendo populada pelo motor atual, gerando R$ 0,00 no dashboard mesmo com
+  // 93 funcionários processados. Lemos direto da fonte verdadeira.
+  const [pagamentosMesRaw, evolucaoRawRows] = await Promise.all([
+    db.execute(sql`
+      SELECT pp.*, e."nomeCompleto", e.funcao, e."bancoNome", e.banco
+      FROM payroll_payments pp
+      LEFT JOIN employees e ON pp."employeeId" = e.id
+      WHERE pp."companyId" IN (${companyList}) AND pp."mesReferencia" = ${mes}
+    `),
+    db.execute(sql`
+      SELECT
+        "mesReferencia" AS mes,
+        COALESCE(SUM(CAST("totalProventos" AS DECIMAL(14,2))), 0)        AS proventos,
+        -- Descontos exibidos NÃO incluem adiantamento (vale já pago).
+        COALESCE(SUM(
+          GREATEST(
+            CAST("totalDescontos" AS DECIMAL(14,2))
+            - COALESCE(CAST("descontoAdiantamento" AS DECIMAL(14,2)), 0),
+            0
+          )
+        ), 0) AS descontos,
+        COALESCE(SUM(CAST("salarioLiquido" AS DECIMAL(14,2))), 0)        AS liquido,
+        COALESCE(SUM(CAST("descontoFgts" AS DECIMAL(14,2))), 0)          AS fgts,
+        COALESCE(SUM(CAST("descontoInss" AS DECIMAL(14,2))), 0)          AS inss,
+        COUNT(DISTINCT "employeeId")                                       AS funcionarios
+      FROM payroll_payments
+      WHERE "companyId" IN (${companyList})
+        AND "mesReferencia" >= TO_CHAR(CURRENT_DATE - INTERVAL '12 months', 'YYYY-MM')
+      GROUP BY "mesReferencia"
+      ORDER BY "mesReferencia"
+    `),
   ]);
+  const pagamentosMes: any[] = (pagamentosMesRaw as any).rows || [];
+  const evolucaoRaw: any[] = (evolucaoRawRows as any).rows || [];
 
-  // Custo total do mês atual
-  let custoTotalMes = 0, totalProventosMes = 0, totalDescontosMes = 0, totalLiquidoMes = 0;
-  let totalFgtsMes = 0, totalInssMes = 0, totalIrrfMes = 0;
-  for (const s of summaryMes) {
-    custoTotalMes += parseFloat(s.custoTotalMes || "0");
-    totalProventosMes += parseFloat(s.totalProventos || "0");
-    totalDescontosMes += parseFloat(s.totalDescontos || "0");
-    totalLiquidoMes += parseFloat(s.folhaLiquido || "0");
-    totalFgtsMes += parseFloat(s.valorFgts || "0");
-    totalInssMes += parseFloat(s.valorInss || "0");
-    totalIrrfMes += parseFloat(s.valorIrrf || "0");
+  // Resumo do mês atual
+  let totalProventosMes = 0, totalDescontosMes = 0, totalLiquidoMes = 0;
+  let totalFgtsMes = 0, totalInssMes = 0, totalIrrfMes = 0, totalAdiantamentoMes = 0;
+  for (const s of pagamentosMes) {
+    const proventos = parseFloat(s.totalProventos || "0");
+    const descBruto = parseFloat(s.totalDescontos || "0");
+    const adiant    = parseFloat(s.descontoAdiantamento || "0");
+    totalProventosMes    += proventos;
+    totalDescontosMes    += Math.max(0, descBruto - adiant); // sem vale
+    totalAdiantamentoMes += adiant;
+    totalLiquidoMes      += parseFloat(s.salarioLiquido || "0");
+    totalFgtsMes         += parseFloat(s.descontoFgts || "0");
+    totalInssMes         += parseFloat(s.descontoInss || "0");
+    totalIrrfMes         += parseFloat(s.descontoIrrf || "0");
   }
+  // Custo Total ≈ proventos + INSS patronal estimado (20%) + FGTS (8%).
+  // Mantém o KPI "Custo Total" diferente de "Total Proventos".
+  const custoTotalMes = totalProventosMes + totalProventosMes * 0.20 + totalFgtsMes;
 
   // Top 10 maiores salários
-  const topSalarios = summaryMes
+  const topSalarios = pagamentosMes
     .map(s => ({
-      nome: s.nomeColaborador || "Desconhecido",
+      nome: s.nomeCompleto || "Desconhecido",
       funcao: s.funcao || "-",
-      liquido: parseFloat(s.folhaLiquido || "0"),
+      liquido: parseFloat(s.salarioLiquido || "0"),
       bruto: parseFloat(s.totalProventos || "0"),
     }))
     .sort((a, b) => b.bruto - a.bruto).slice(0, 10);
 
-  // Distribuição por banco
+  // Distribuição por banco (líquido pago por banco)
   const porBanco: Record<string, { count: number; valor: number }> = {};
-  for (const s of summaryMes) {
-    const banco = s.bancoFolha || "Não informado";
+  for (const s of pagamentosMes) {
+    const banco = s.bancoNome || s.banco || s.bancoDestino || "Não informado";
     if (!porBanco[banco]) porBanco[banco] = { count: 0, valor: 0 };
     porBanco[banco].count++;
-    porBanco[banco].valor += parseFloat(s.folhaLiquido || "0");
+    porBanco[banco].valor += parseFloat(s.salarioLiquido || "0");
   }
 
-  // Custo por função (top 10)
+  // Custo por função (top 10) — usa proventos como proxy do custo.
   const porFuncao: Record<string, { count: number; custo: number }> = {};
-  for (const s of summaryMes) {
+  for (const s of pagamentosMes) {
     const f = s.funcao || "Sem Função";
     if (!porFuncao[f]) porFuncao[f] = { count: 0, custo: 0 };
     porFuncao[f].count++;
-    porFuncao[f].custo += parseFloat(s.custoTotalMes || "0");
+    porFuncao[f].custo += parseFloat(s.totalProventos || "0");
   }
 
   return {
     resumo: {
-      custoTotalMes: Math.round(custoTotalMes * 100) / 100,
-      totalProventosMes: Math.round(totalProventosMes * 100) / 100,
-      totalDescontosMes: Math.round(totalDescontosMes * 100) / 100,
-      totalLiquidoMes: Math.round(totalLiquidoMes * 100) / 100,
-      totalFgtsMes: Math.round(totalFgtsMes * 100) / 100,
-      totalInssMes: Math.round(totalInssMes * 100) / 100,
-      totalIrrfMes: Math.round(totalIrrfMes * 100) / 100,
-      totalFuncionarios: summaryMes.length,
+      custoTotalMes:        Math.round(custoTotalMes * 100) / 100,
+      totalProventosMes:    Math.round(totalProventosMes * 100) / 100,
+      totalDescontosMes:    Math.round(totalDescontosMes * 100) / 100,
+      totalAdiantamentoMes: Math.round(totalAdiantamentoMes * 100) / 100,
+      totalLiquidoMes:      Math.round(totalLiquidoMes * 100) / 100,
+      totalFgtsMes:         Math.round(totalFgtsMes * 100) / 100,
+      totalInssMes:         Math.round(totalInssMes * 100) / 100,
+      totalIrrfMes:         Math.round(totalIrrfMes * 100) / 100,
+      totalFuncionarios:    pagamentosMes.length,
     },
     evolucaoMensal: evolucaoRaw.map(r => ({
       mes: r.mes,
-      proventos: Number(r.totalProventos),
-      descontos: Number(r.totalDescontos),
-      liquido: Number(r.totalLiquido),
-      fgts: Number(r.totalFgts),
-      inss: Number(r.totalInss),
+      proventos:    Number(r.proventos),
+      descontos:    Number(r.descontos),
+      liquido:      Number(r.liquido),
+      fgts:         Number(r.fgts),
+      inss:         Number(r.inss),
       funcionarios: Number(r.funcionarios),
     })),
     topSalarios,

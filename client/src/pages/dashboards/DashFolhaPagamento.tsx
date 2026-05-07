@@ -7,7 +7,7 @@ import MonthSelector from "@/components/MonthSelector";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, TrendingUp, TrendingDown, Users, Wallet, Building2, Briefcase, Landmark, ExternalLink, ArrowLeft } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Users, Wallet, Building2, Briefcase, Landmark, ExternalLink, ArrowLeft, HandCoins } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useMemo } from "react";
@@ -61,20 +61,26 @@ export default function DashFolhaPagamento() {
         ) : (
           <>
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/folha-pagamento")}>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/folha-pagamento")} title="Proventos + encargos patronais estimados (INSS 20% + FGTS).">
                 <DashKpi label="Custo Total" value={fmtBRL(data.resumo.custoTotalMes)} icon={DollarSign} color="red" sub={`${data.resumo.totalFuncionarios} funcionários`} />
               </div>
               <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/folha-pagamento")}>
                 <DashKpi label="Total Proventos" value={fmtBRL(data.resumo.totalProventosMes)} icon={TrendingUp} color="green" />
               </div>
-              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/folha-pagamento")}>
-                <DashKpi label="Total Descontos" value={fmtBRL(data.resumo.totalDescontosMes)} icon={TrendingDown} color="orange" />
+              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/folha-pagamento")} title="Vale/adiantamento já pago ao funcionário antes da folha. Não é desconto real.">
+                <DashKpi label="Adiantamento (Vale)" value={fmtBRL(data.resumo.totalAdiantamentoMes ?? 0)} icon={HandCoins} color="orange" />
               </div>
-              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/folha-pagamento")}>
+              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/folha-pagamento")} title="Apenas descontos reais: faltas, VR, VT, INSS, IRRF e demais. Não inclui adiantamento.">
+                <DashKpi label="Descontos (sem vale)" value={fmtBRL(data.resumo.totalDescontosMes)} icon={TrendingDown} color="red" />
+              </div>
+              <div className="cursor-pointer hover:scale-[1.02] transition-transform" onClick={() => navigate("/folha-pagamento")} title="Líquido a pagar na folha. Pago total ao funcionário no mês = vale + líquido.">
                 <DashKpi label="Líquido Total" value={fmtBRL(data.resumo.totalLiquidoMes)} icon={Wallet} color="blue" />
               </div>
             </div>
+            <p className="text-xs text-muted-foreground -mt-2 px-1">
+              <strong>Pago total</strong> ao funcionário no mês = <strong>Adiantamento (vale)</strong> + <strong>Líquido Total</strong> = {fmtBRL((data.resumo.totalAdiantamentoMes ?? 0) + data.resumo.totalLiquidoMes)}.
+            </p>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <DashKpi label="FGTS" value={fmtBRL(data.resumo.totalFgtsMes)} icon={Landmark} color="teal" />
