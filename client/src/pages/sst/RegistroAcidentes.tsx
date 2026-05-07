@@ -76,6 +76,7 @@ function emptyForm(): any {
     dataAcidente: nowDate(),
     horaAcidente: nowTime(),
     tipoAcidente: "Queda mesmo nível",
+    tipoAcidenteOutro: "",
     gravidade: "Leve sem afastamento",
     localAcidente: "", parteCorpoAtingida: "", agenteCausador: "",
     descricao: "", testemunhas: "",
@@ -215,10 +216,15 @@ export default function RegistroAcidentes() {
   }
   function openEdit(r: any) {
     setEditId(r.id);
+    // Se o tipo gravado for "Outro: <texto>", separa para o campo livre
+    const rawTipo = r.tipoAcidente || "";
+    const isOutroLivre = /^outro\s*:/i.test(rawTipo);
+    const tipoSel = isOutroLivre ? "Outro" : (TIPOS_ACIDENTE.includes(rawTipo) ? rawTipo : "Outro");
+    const tipoOutro = isOutroLivre ? rawTipo.replace(/^outro\s*:\s*/i, "").trim() : (tipoSel === "Outro" && !TIPOS_ACIDENTE.includes(rawTipo) ? rawTipo : "");
     setForm({
       employeeId: r.employeeId, obraId: r.obraId ?? "",
       dataAcidente: r.dataAcidente, horaAcidente: r.horaAcidente || "",
-      tipoAcidente: r.tipoAcidente, gravidade: r.gravidade,
+      tipoAcidente: tipoSel, tipoAcidenteOutro: tipoOutro, gravidade: r.gravidade,
       localAcidente: r.localAcidente || "", parteCorpoAtingida: r.parteCorpoAtingida || "",
       agenteCausador: r.agenteCausador || "", descricao: r.descricao || "",
       testemunhas: r.testemunhas || "", diasAfastamento: r.diasAfastamento || 0,
@@ -288,7 +294,13 @@ export default function RegistroAcidentes() {
     if (!form.employeeId) { toast.error("Selecione o funcionário"); return; }
     if (!form.dataAcidente) { toast.error("Informe a data"); return; }
     if (!form.tipoAcidente) { toast.error("Informe o tipo"); return; }
+    if (form.tipoAcidente === "Outro" && !form.tipoAcidenteOutro?.trim()) {
+      toast.error("Descreva o tipo de acidente no campo 'Outro'"); return;
+    }
     if (!form.gravidade) { toast.error("Informe a gravidade"); return; }
+    const tipoFinal = form.tipoAcidente === "Outro"
+      ? `Outro: ${form.tipoAcidenteOutro.trim()}`
+      : form.tipoAcidente;
     if (exigeCAT && !form.houveCAT && !form.motivoSemCAT?.trim()) {
       toast.error("Informe a justificativa para 'Sem CAT'"); return;
     }
@@ -299,7 +311,7 @@ export default function RegistroAcidentes() {
       obraId: form.obraId ? parseInt(form.obraId, 10) : null,
       dataAcidente: form.dataAcidente,
       horaAcidente: form.horaAcidente || null,
-      tipoAcidente: form.tipoAcidente,
+      tipoAcidente: tipoFinal,
       gravidade: form.gravidade,
       localAcidente: form.localAcidente || null,
       parteCorpoAtingida: form.parteCorpoAtingida || null,
@@ -566,31 +578,46 @@ export default function RegistroAcidentes() {
                     <h3 className="font-semibold text-gray-900">Quando & Como aconteceu</h3>
                   </div>
                   <div className="p-4 grid md:grid-cols-4 gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs">Data *</Label>
                       <Input type="date" value={form.dataAcidente} onChange={(e) => setForm({ ...form, dataAcidente: e.target.value })} />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs">Hora</Label>
                       <Input type="time" value={form.horaAcidente} onChange={(e) => setForm({ ...form, horaAcidente: e.target.value })} />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs">Tipo *</Label>
                       <Select value={form.tipoAcidente} onValueChange={(v) => setForm({ ...form, tipoAcidente: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>{TIPOS_ACIDENTE.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <Label className="text-xs">Gravidade *</Label>
                       <Select value={form.gravidade} onValueChange={(v) => setForm({ ...form, gravidade: v })}>
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>{GRAVIDADES.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
                       </Select>
-                      <Badge variant="outline" className={`mt-1.5 ${GRAV_COLORS[form.gravidade] || ""}`}>{form.gravidade}</Badge>
+                      <Badge variant="outline" className={`mt-1.5 max-w-full truncate inline-block ${GRAV_COLORS[form.gravidade] || ""}`}>{form.gravidade}</Badge>
                     </div>
+                    {form.tipoAcidente === "Outro" && (
+                      <div className="md:col-span-4">
+                        <Label className="text-xs flex items-center gap-1">
+                          Descreva o tipo de acidente <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          value={form.tipoAcidenteOutro || ""}
+                          onChange={(e) => setForm({ ...form, tipoAcidenteOutro: e.target.value })}
+                          placeholder="Ex.: Picada de animal peçonhento, contato com fios elétricos energizados, etc."
+                          maxLength={120}
+                          autoFocus
+                        />
+                        <p className="text-[11px] text-gray-500 mt-1">Será registrado como “Outro: {form.tipoAcidenteOutro || "..."}”.</p>
+                      </div>
+                    )}
                   </div>
                 </section>
 
