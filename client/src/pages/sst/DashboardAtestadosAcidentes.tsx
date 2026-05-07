@@ -908,6 +908,43 @@ export default function DashboardAtestadosAcidentes() {
 
             {/* ============ OBRAS / AÇÕES ============ */}
             <TabsContent value="obras" className="space-y-4">
+              {/* Atestados & Afastamentos por Obra */}
+              <ChartCard
+                title="Atestados & Afastamentos — por Obra"
+                icon={<MapPin className="h-4 w-4 text-blue-600" />}
+                height={Math.max(260, (d.atestadosPorObra ?? []).filter((o: any) => o.qtdAtestados > 0).length * 32)}
+                isEmpty={(d.atestadosPorObra ?? []).filter((o: any) => o.qtdAtestados > 0).length === 0}
+                emptyMessage="Sem atestados vinculados a obras no período."
+                tableData={(d.atestadosPorObra ?? []).filter((o: any) => o.qtdAtestados > 0)}
+                tableColumns={[
+                  { key: "obraNome", label: "Obra" },
+                  { key: "qtdAtestados", label: "Atestados", align: "right" },
+                  { key: "diasAfastamento", label: "Dias Afast.", align: "right" },
+                  { key: "afastamentosINSS", label: "INSS (≥15d)", align: "right" },
+                  { key: "colaboradoresAfetados", label: "Colab.", align: "right" },
+                ]}
+                renderChart={(h) => (
+                  <ResponsiveContainer width="100%" height={h}>
+                    <BarChart
+                      data={(d.atestadosPorObra ?? [])
+                        .filter((o: any) => o.qtdAtestados > 0)
+                        .slice(0, 15)
+                        .map((o: any) => ({ ...o, obraCurta: truncate(o.obraNome, 24) }))}
+                      layout="vertical"
+                      margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                      <YAxis dataKey="obraCurta" type="category" tick={{ fontSize: 11 }} width={170} />
+                      <Tooltip labelFormatter={(_l, p) => (p && p[0] ? (p[0].payload as any).obraNome : "")} />
+                      <Legend />
+                      <Bar dataKey="qtdAtestados" name="Atestados" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="diasAfastamento" name="Dias Afast." fill="#06b6d4" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              />
+
               {/* Dias sem acidente */}
               <Card>
                 <CardHeader><CardTitle className="text-base flex items-center gap-2"><MapPin className="h-4 w-4 text-emerald-600" /> Dias sem Acidente — por Obra</CardTitle></CardHeader>

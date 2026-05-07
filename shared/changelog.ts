@@ -9383,6 +9383,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 07:00:00",
   },
   {
+    version: 1380,
+    titulo: "SST Dashboard: novo card 'Atestados & Afastamentos — por Obra' na aba Obras/Ações",
+    descricao: "Atendendo solicitação do usuário, o dashboard de Atestados & Acidentes ganhou na aba Obras/Ações um novo ChartCard espelhando o 'Ranking de Obras com Mais Acidentes', mas para atestados/afastamentos. Como atestados não têm obraId direto no banco, a obra é resolvida por colaborador via employee_site_history (janela [dataInicio,dataFim] que cobre a dataEmissao do atestado; fallback para a alocação mais recente até a data). Tabela mostra: Obra, Atestados, Dias de Afastamento, INSS (≥15d), Colaboradores afetados — e barras horizontais top-15 por dias afastados. Inclui CSV e drill-down em tela cheia (98vw×96vh).",
+    tipo: "feature",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 06:00:00",
+  },
+  {
     version: 1379,
     titulo: "SST Dashboard: datas no drill-down em formato brasileiro (dd/MM/aaaa)",
     descricao: "Regra de ouro do ERP: TODAS as datas exibidas para o usuário devem estar no padrão brasileiro dd/MM/aaaa (jamais YYYY-MM-DD). Corrigido o drill-down dos gráficos de Atestados/Acidentes (painel azul de colaboradores que abre ao clicar numa linha da tabela detalhada): as colunas Data agora renderizam via fmtDateBR (split('-').reverse().join('/')). Vale para 7 gráficos com drill-down: Atestados por Tipo, Top 10 CIDs, Top 10 Motivos, Acidentes por Gravidade/Tipo/Parte do Corpo/Local.",

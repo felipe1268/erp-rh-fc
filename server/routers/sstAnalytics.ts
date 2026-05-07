@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { atestados, accidents, employees, obras } from "../../drizzle/schema";
+import { atestados, accidents, employees, obras, employeeSiteHistory } from "../../drizzle/schema";
 import { and, eq, gte, lte, isNull, sql, desc } from "drizzle-orm";
 import { companyFilter } from "../companyHelper";
 
@@ -260,6 +260,96 @@ export const sstAnalyticsRouter = router({
         .select({ id: obras.id, nome: obras.nome })
         .from(obras)
         .where(and(companyFilter(obras.companyId, input), isNull(obras.deletedAt)));
+      const obraNomeById = new Map<number, string>();
+      for (const o of obrasAtivas) obraNomeById.set(o.id, o.nome);
+
+      // ==== Atestados & Afastamentos por Obra ====
+      // Atestados não têm obraId direto. Resolução via employee_site_history:
+      // para cada atestado, buscar a alocação cuja janela [dataInicio, dataFim?]
+      // cobre a dataEmissao. Fallback: alocação mais recente até a data.
+      const empIdsAt = Array.from(new Set(atRows.map((r) => r.employeeId))).filter((x): x is number => typeof x === "number");
+      const eshRows = empIdsAt.length > 0
+        ? await db
+            .select({
+              employeeId: employeeSiteHistory.employeeId,
+              obraId: employeeSiteHistory.obraId,
+              dataInicio: employeeSiteHistory.dataInicio,
+              dataFim: employeeSiteHistory.dataFim,
+            })
+            .from(employeeSiteHistory)
+            .where(and(
+              companyFilter(employeeSiteHistory.companyId, input),
+              sql`${employeeSiteHistory.employeeId} = ANY(${empIdsAt})`,
+            ))
+        : [];
+      const eshByEmp = new Map<number, { obraId: number; dataInicio: string; dataFim: string | null }[]>();
+      for (const r of eshRows) {
+        const arr = eshByEmp.get(r.employeeId) ?? [];
+        arr.push({ obraId: r.obraId, dataInicio: r.dataInicio, dataFim: r.dataFim ?? null });
+        eshByEmp.set(r.employeeId, arr);
+      }
+      // ordena por dataInicio desc para varredura rápida
+      for (const [, arr] of eshByEmp) arr.sort((a, b) => (a.dataInicio < b.dataInicio ? 1 : -1));
+
+      const resolveObraDoAtestado = (employeeId: number, dataEmissao: string): number | null => {
+        const arr = eshByEmp.get(employeeId);
+        if (!arr || arr.length === 0) return null;
+        // 1) janela cobre a data
+        for (const h of arr) {
+          if (h.dataInicio <= dataEmissao && (!h.dataFim || h.dataFim >= dataEmissao)) return h.obraId;
+        }
+        // 2) última alocação iniciada antes da data
+        for (const h of arr) {
+          if (h.dataInicio <= dataEmissao) return h.obraId;
+        }
+        return null;
+      };
+
+      type ObraAfRow = {
+        obraId: number | null;
+        obraNome: string;
+        qtdAtestados: number;
+        diasAfastamento: number;
+        horasAfastamento: number;
+        afastamentosINSS: number;
+        colaboradores: Set<number>;
+      };
+      const obraAfMap = new Map<string, ObraAfRow>();
+      const ensureRow = (oid: number | null, oname: string): ObraAfRow => {
+        const k = String(oid ?? "0");
+        const cur = obraAfMap.get(k) ?? {
+          obraId: oid, obraNome: oname,
+          qtdAtestados: 0, diasAfastamento: 0, horasAfastamento: 0, afastamentosINSS: 0,
+          colaboradores: new Set<number>(),
+        };
+        obraAfMap.set(k, cur);
+        return cur;
+      };
+      for (const r of atRows) {
+        const oid = resolveObraDoAtestado(r.employeeId, r.dataEmissao);
+        const oname = oid != null ? (obraNomeById.get(oid) || `Obra #${oid}`) : "Sem obra/alocação";
+        const row = ensureRow(oid, oname);
+        row.qtdAtestados += 1;
+        row.diasAfastamento += r.diasAfastamento || 0;
+        row.horasAfastamento += r.horasAfastamento || 0;
+        if ((r.afastamentoINSS ?? 0) > 0) row.afastamentosINSS += 1;
+        row.colaboradores.add(r.employeeId);
+      }
+      // garante presença de TODAS as obras ativas (mesmo zeradas)
+      for (const o of obrasAtivas) ensureRow(o.id, o.nome);
+
+      const atestadosPorObra = Array.from(obraAfMap.values())
+        .map((o) => ({
+          obraId: o.obraId,
+          obraNome: o.obraNome,
+          qtdAtestados: o.qtdAtestados,
+          diasAfastamento: o.diasAfastamento,
+          horasAfastamento: o.horasAfastamento,
+          afastamentosINSS: o.afastamentosINSS,
+          colaboradoresAfetados: o.colaboradores.size,
+        }))
+        .sort((a, b) => b.diasAfastamento - a.diasAfastamento || b.qtdAtestados - a.qtdAtestados);
+
       const diasSemAcidente = obrasAtivas
         .map((o) => {
           const reg = obraMap.get(String(o.id));
@@ -693,6 +783,7 @@ export const sstAnalyticsRouter = router({
         atestadosRecorrentes,
         rankingObras,
         diasSemAcidente,
+        atestadosPorObra,
         coberturaCAT,
         acoesCorretivas,
         comparativoPeriodoAnterior,
