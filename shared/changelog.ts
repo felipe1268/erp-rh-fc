@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1400,
+    titulo: "Advertência Formal — novo cabeçalho com logo FC branco sobre fundo azul",
+    descricao: "AJUSTE VISUAL no PDF impresso de Advertência Formal (/terceiros/advertencias): o cabeçalho dinâmico (faixa azul + logo da empresa + título) foi substituído por um banner único 'ADVERTÊNCIA FORMAL' com a logo FC ENGENHARIA escrita em branco sobre fundo azul, ocupando largura total do documento. O selo '1ª/2ª/3ª MEDIDA' continua em destaque vermelho à direita. Notificações, suspensões e encerramentos seguem usando o cabeçalho dinâmico tradicional (logo da empresa + título variável).",
+    tipo: "melhoria",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 17:25:00",
+  },
+  {
     version: 1399,
     titulo: "Advertências Terceiros — campo Empresa com digitação livre, ordem alfabética e botão de Assinatura Eletrônica",
     descricao: "MELHORIA em /terceiros/advertencias: (1) o campo 'Empresa Prestadora' do formulário de Nova Advertência/Notificação deixou de ser um Select fechado e passou a ser um campo de digitação livre com sugestões (datalist) — igual ao campo de colaborador. O usuário pode digitar parte do nome para filtrar e selecionar. (2) A lista de empresas (tanto no filtro quanto no formulário) agora aparece em ORDEM ALFABÉTICA (pt-BR, case-insensitive). (3) Adicionado botão de 'Assinatura Eletrônica' (ícone PenTool roxo) na coluna de ações de cada advertência emitida — abre diálogo IntegraSign que pré-preenche o representante da empresa prestadora (1º signatário) e o gestor/aplicador da FC (2º signatário) e cria o envelope com um clique, redirecionando para a tela do IntegraSign para acompanhar o status.",

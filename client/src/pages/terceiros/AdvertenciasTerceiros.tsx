@@ -279,6 +279,9 @@ export default function AdvertenciasTerceiros() {
   .logo-bar .title { color: white; flex: 1; }
   .logo-bar .title h1 { font-size: 15px; font-weight: bold; letter-spacing: 1px; }
   .logo-bar .title p { font-size: 10px; opacity: 0.85; }
+  .banner-bar { position: relative; margin-bottom: 20px; }
+  .banner-bar img { display: block; width: 100%; height: auto; }
+  .banner-bar .num-badge { position: absolute; top: 50%; right: 16px; transform: translateY(-50%); }
   .num-badge { background: #dc2626; color: white; font-size: 11px; font-weight: bold; padding: 3px 10px; border-radius: 4px; }
   .partes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 14px; margin-bottom: 18px; font-size: 11.5px; line-height: 1.5; }
   .partes b { color: #1e3a6e; }
@@ -295,11 +298,16 @@ export default function AdvertenciasTerceiros() {
   .footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 6px 18mm; border-top: 2px solid #1e3a6e; font-size: 8.5px; display: flex; justify-content: space-between; background: white; }
   .footer .lgpd { color: #dc2626; font-weight: 600; }
 </style></head><body>
+${a.tipoAdvertencia === "Advertencia" ? `
+<div class="banner-bar">
+  <img src="/advertencia-header.png" alt="${tipo.titulo}" />
+  <span class="num-badge">${a.sequencia || 1}ª MEDIDA</span>
+</div>` : `
 <div class="logo-bar">
   ${logoUrl ? `<img src="${logoUrl}" alt="Logo" />` : ""}
   <div class="title"><h1>${tipo.titulo}</h1><p>À empresa prestadora de serviços e ao colaborador terceirizado</p></div>
   <span class="num-badge">${a.sequencia || 1}ª MEDIDA</span>
-</div>
+</div>`}
 <div class="partes">
   <div><b>CONTRATANTE:</b> ${nomeContratante}${cnpjContratante ? ` — CNPJ ${formatCNPJ(cnpjContratante)}` : ""}</div>
   <div><b>EMPRESA PRESTADORA:</b> ${a.empresaRazaoSocial} — CNPJ ${formatCNPJ(a.empresaCnpj)}${a.empresaResponsavel ? ` — Resp.: ${a.empresaResponsavel}` : ""}</div>
