@@ -93,7 +93,7 @@ export default function DashFolhaPagamento() {
     return `${meses[parseInt(m) - 1]}/${y}`;
   }, [mes]);
 
-  // Variação mês a mês (% vs mês anterior) para cada métrica
+  // Variação mês a mês (R$ vs mês anterior) para cada métrica
   const variacao = useMemo(() => {
     if (!data?.evolucaoMensal || data.evolucaoMensal.length < 2) return null;
     const ev = data.evolucaoMensal as any[];
@@ -103,12 +103,12 @@ export default function DashFolhaPagamento() {
       const cur = ev[i], prev = ev[i - 1];
       const [y, m] = String(cur.mes).split("-");
       labels.push(`${m}/${y.slice(2)}`);
-      const pct = (a: number, b: number) => (b === 0 ? (a > 0 ? 100 : 0) : ((a - b) / Math.abs(b)) * 100);
-      vProv.push(+pct(cur.proventos, prev.proventos).toFixed(2));
-      vDesc.push(+pct(cur.descontos, prev.descontos).toFixed(2));
-      vLiq.push(+pct(cur.liquido, prev.liquido).toFixed(2));
-      vFgts.push(+pct(cur.fgts, prev.fgts).toFixed(2));
-      vInss.push(+pct(cur.inss, prev.inss).toFixed(2));
+      const diff = (a: number, b: number) => +(a - b).toFixed(2);
+      vProv.push(diff(cur.proventos, prev.proventos));
+      vDesc.push(diff(cur.descontos, prev.descontos));
+      vLiq.push(diff(cur.liquido,    prev.liquido));
+      vFgts.push(diff(cur.fgts,      prev.fgts));
+      vInss.push(diff(cur.inss,      prev.inss));
     }
     return { labels, vProv, vDesc, vLiq, vFgts, vInss };
   }, [data]);
@@ -213,22 +213,22 @@ export default function DashFolhaPagamento() {
               />
             )}
 
-            {/* Variação Mês a Mês (%) — comparação entre meses */}
+            {/* Variação Mês a Mês (R$) — aumento ou redução em valor absoluto */}
             {variacao && variacao.labels.length > 0 && (
               <DashChart
-                title="Variação Mês a Mês (% vs mês anterior) — aumento ou redução por item"
+                title="Variação Mês a Mês (R$ vs mês anterior) — aumento ou redução por item"
                 type="bar"
                 labels={variacao.labels}
                 datasets={[
-                  { label: "Proventos %", data: variacao.vProv, backgroundColor: SEMANTIC_COLORS.proventos },
-                  { label: "Descontos %", data: variacao.vDesc, backgroundColor: SEMANTIC_COLORS.descontos },
-                  { label: "Líquido %",   data: variacao.vLiq,  backgroundColor: SEMANTIC_COLORS.liquido },
-                  { label: "FGTS %",      data: variacao.vFgts, backgroundColor: SEMANTIC_COLORS.fgts },
-                  { label: "INSS %",      data: variacao.vInss, backgroundColor: SEMANTIC_COLORS.inss },
+                  { label: "Proventos", data: variacao.vProv, backgroundColor: SEMANTIC_COLORS.proventos },
+                  { label: "Descontos", data: variacao.vDesc, backgroundColor: SEMANTIC_COLORS.descontos },
+                  { label: "Líquido",   data: variacao.vLiq,  backgroundColor: SEMANTIC_COLORS.liquido },
+                  { label: "FGTS",      data: variacao.vFgts, backgroundColor: SEMANTIC_COLORS.fgts },
+                  { label: "INSS",      data: variacao.vInss, backgroundColor: SEMANTIC_COLORS.inss },
                 ]}
                 height={300}
                 showPercentage={false}
-                valueFormatter={(v) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`}
+                valueFormatter={(v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${fmtBRL(Math.abs(v))}`}
               />
             )}
 
