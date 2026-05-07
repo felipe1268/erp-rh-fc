@@ -18,6 +18,12 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line, ComposedChart, Area, AreaChart,
 } from "recharts";
+import { ChartCard } from "@/components/sst/ChartCard";
+
+function truncate(s: string, n = 22) {
+  if (!s) return "";
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
 
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1"];
 const GRAV_COLORS: Record<string, string> = {
@@ -205,11 +211,22 @@ export default function DashboardAtestadosAcidentes() {
               </div>
 
               {/* Evolução mensal combinada */}
-              <Card>
-                <CardHeader><CardTitle className="text-base flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Evolução Mensal — Atestados x Acidentes</CardTitle></CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={320}>
-                    <ComposedChart data={evolucaoData}>
+              <ChartCard
+                title="Evolução Mensal — Atestados x Acidentes"
+                icon={<BarChart3 className="h-4 w-4" />}
+                height={320}
+                isEmpty={evolucaoData.length === 0}
+                tableData={evolucaoData}
+                tableColumns={[
+                  { key: "mesLabel", label: "Mês" },
+                  { key: "atestados", label: "Atestados", align: "right" },
+                  { key: "acidentes", label: "Acidentes", align: "right" },
+                  { key: "diasAtestado", label: "Dias Atestado", align: "right" },
+                  { key: "diasAcidente", label: "Dias Acidente", align: "right" },
+                ]}
+                renderChart={(h) => (
+                  <ResponsiveContainer width="100%" height={h}>
+                    <ComposedChart data={evolucaoData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis dataKey="mesLabel" tick={{ fontSize: 12 }} />
                       <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
@@ -222,8 +239,8 @@ export default function DashboardAtestadosAcidentes() {
                       <Line yAxisId="right" type="monotone" dataKey="diasAcidente" name="Dias Acidente" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
                     </ComposedChart>
                   </ResponsiveContainer>
-                </CardContent>
-              </Card>
+                )}
+              />
 
               {/* Últimos eventos */}
               <div className="grid md:grid-cols-2 gap-4">
@@ -291,57 +308,76 @@ export default function DashboardAtestadosAcidentes() {
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader><CardTitle className="text-base">Atestados por Tipo</CardTitle></CardHeader>
-                  <CardContent>
-                    {d.atestados.porTipo.length === 0 ? <p className="text-sm text-gray-500">Sem dados.</p> : (
-                      <ResponsiveContainer width="100%" height={260}>
-                        <PieChart>
-                          <Pie data={d.atestados.porTipo} dataKey="quantidade" nameKey="tipo" cx="50%" cy="50%" outerRadius={90} label={(e: any) => `${e.tipo} (${e.quantidade})`}>
-                            {d.atestados.porTipo.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                          </Pie>
-                          <Tooltip />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    )}
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader><CardTitle className="text-base">Top 10 CIDs</CardTitle></CardHeader>
-                  <CardContent>
-                    {d.atestados.topCIDs.length === 0 ? <p className="text-sm text-gray-500">Nenhum CID registrado.</p> : (
-                      <ResponsiveContainer width="100%" height={260}>
-                        <BarChart data={d.atestados.topCIDs} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis type="number" tick={{ fontSize: 11 }} />
-                          <YAxis dataKey="cid" type="category" tick={{ fontSize: 11 }} width={70} />
-                          <Tooltip />
-                          <Bar dataKey="quantidade" name="Qtd" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card>
-                <CardHeader><CardTitle className="text-base">Top 10 Motivos</CardTitle></CardHeader>
-                <CardContent>
-                  {d.atestados.porMotivo.length === 0 ? <p className="text-sm text-gray-500">Sem motivos registrados.</p> : (
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart data={d.atestados.porMotivo}>
+                <ChartCard
+                  title="Atestados por Tipo"
+                  height={280}
+                  isEmpty={d.atestados.porTipo.length === 0}
+                  tableData={d.atestados.porTipo}
+                  tableColumns={[
+                    { key: "tipo", label: "Tipo" },
+                    { key: "quantidade", label: "Quantidade", align: "right" },
+                  ]}
+                  renderChart={(h) => (
+                    <ResponsiveContainer width="100%" height={h}>
+                      <PieChart>
+                        <Pie data={d.atestados.porTipo} dataKey="quantidade" nameKey="tipo" cx="50%" cy="45%" outerRadius={Math.min(110, h / 3)} labelLine={false}>
+                          {d.atestados.porTipo.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip formatter={(v: any, n: any) => [`${fmtNum(v as number)}`, n]} />
+                        <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: 11 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                />
+                <ChartCard
+                  title="Top 10 CIDs"
+                  height={280}
+                  emptyMessage="Nenhum CID registrado."
+                  isEmpty={d.atestados.topCIDs.length === 0}
+                  tableData={d.atestados.topCIDs}
+                  tableColumns={[
+                    { key: "cid", label: "CID" },
+                    { key: "quantidade", label: "Quantidade", align: "right" },
+                  ]}
+                  renderChart={(h) => (
+                    <ResponsiveContainer width="100%" height={h}>
+                      <BarChart data={d.atestados.topCIDs} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis dataKey="motivo" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" height={60} />
-                        <YAxis tick={{ fontSize: 11 }} />
+                        <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                        <YAxis dataKey="cid" type="category" tick={{ fontSize: 11 }} width={80} />
                         <Tooltip />
-                        <Legend />
-                        <Bar dataKey="quantidade" name="Qtd" fill="#10b981" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="dias" name="Dias" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="quantidade" name="Qtd" fill="#3b82f6" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
-                </CardContent>
-              </Card>
+                />
+              </div>
+
+              <ChartCard
+                title="Top 10 Motivos"
+                height={300}
+                isEmpty={d.atestados.porMotivo.length === 0}
+                emptyMessage="Sem motivos registrados."
+                tableData={d.atestados.porMotivo}
+                tableColumns={[
+                  { key: "motivo", label: "Motivo" },
+                  { key: "quantidade", label: "Quantidade", align: "right" },
+                  { key: "dias", label: "Dias", align: "right" },
+                ]}
+                renderChart={(h) => (
+                  <ResponsiveContainer width="100%" height={h}>
+                    <BarChart data={(d.atestados.porMotivo ?? []).map((m: any) => ({ ...m, motivoCurto: truncate(m.motivo, 16) }))} margin={{ top: 10, right: 20, left: 0, bottom: 70 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis dataKey="motivoCurto" tick={{ fontSize: 11 }} angle={-35} textAnchor="end" interval={0} height={80} />
+                      <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                      <Tooltip labelFormatter={(_l, p) => (p && p[0] ? (p[0].payload as any).motivo : "")} />
+                      <Legend />
+                      <Bar dataKey="quantidade" name="Qtd" fill="#10b981" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="dias" name="Dias" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              />
 
               <Card>
                 <CardHeader><CardTitle className="text-base">Top 10 Funcionários — Atestados</CardTitle></CardHeader>
@@ -387,72 +423,93 @@ export default function DashboardAtestadosAcidentes() {
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader><CardTitle className="text-base">Por Gravidade</CardTitle></CardHeader>
-                  <CardContent>
-                    {d.acidentes.porGravidade.length === 0 ? <p className="text-sm text-gray-500">Sem dados.</p> : (
-                      <ResponsiveContainer width="100%" height={260}>
-                        <PieChart>
-                          <Pie data={d.acidentes.porGravidade} dataKey="quantidade" nameKey="gravidade" cx="50%" cy="50%" outerRadius={90} label={(e: any) => `${e.gravidade} (${e.quantidade})`}>
-                            {d.acidentes.porGravidade.map((g, i) => <Cell key={i} fill={GRAV_COLORS[g.gravidade] || COLORS[i % COLORS.length]} />)}
-                          </Pie>
-                          <Tooltip />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    )}
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader><CardTitle className="text-base">Por Tipo de Acidente</CardTitle></CardHeader>
-                  <CardContent>
-                    {d.acidentes.porTipo.length === 0 ? <p className="text-sm text-gray-500">Sem dados.</p> : (
-                      <ResponsiveContainer width="100%" height={260}>
-                        <BarChart data={d.acidentes.porTipo} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis type="number" tick={{ fontSize: 11 }} />
-                          <YAxis dataKey="tipo" type="category" tick={{ fontSize: 11 }} width={120} />
-                          <Tooltip />
-                          <Bar dataKey="quantidade" fill="#ef4444" radius={[0, 4, 4, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </CardContent>
-                </Card>
+                <ChartCard
+                  title="Por Gravidade"
+                  height={280}
+                  isEmpty={d.acidentes.porGravidade.length === 0}
+                  tableData={d.acidentes.porGravidade}
+                  tableColumns={[
+                    { key: "gravidade", label: "Gravidade" },
+                    { key: "quantidade", label: "Quantidade", align: "right" },
+                  ]}
+                  renderChart={(h) => (
+                    <ResponsiveContainer width="100%" height={h}>
+                      <PieChart>
+                        <Pie data={d.acidentes.porGravidade} dataKey="quantidade" nameKey="gravidade" cx="50%" cy="45%" outerRadius={Math.min(110, h / 3)} labelLine={false}>
+                          {d.acidentes.porGravidade.map((g, i) => <Cell key={i} fill={GRAV_COLORS[g.gravidade] || COLORS[i % COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip />
+                        <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: 11 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                />
+                <ChartCard
+                  title="Por Tipo de Acidente"
+                  height={280}
+                  isEmpty={d.acidentes.porTipo.length === 0}
+                  tableData={d.acidentes.porTipo}
+                  tableColumns={[
+                    { key: "tipo", label: "Tipo" },
+                    { key: "quantidade", label: "Quantidade", align: "right" },
+                  ]}
+                  renderChart={(h) => (
+                    <ResponsiveContainer width="100%" height={h}>
+                      <BarChart data={(d.acidentes.porTipo ?? []).map((x: any) => ({ ...x, tipoCurto: truncate(x.tipo, 22) }))} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                        <YAxis dataKey="tipoCurto" type="category" tick={{ fontSize: 11 }} width={140} />
+                        <Tooltip labelFormatter={(_l, p) => (p && p[0] ? (p[0].payload as any).tipo : "")} />
+                        <Bar dataKey="quantidade" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                />
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader><CardTitle className="text-base">Top Partes do Corpo Atingidas</CardTitle></CardHeader>
-                  <CardContent>
-                    {d.acidentes.porParteCorpo.length === 0 ? <p className="text-sm text-gray-500">Sem dados.</p> : (
-                      <ResponsiveContainer width="100%" height={260}>
-                        <BarChart data={d.acidentes.porParteCorpo} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis type="number" tick={{ fontSize: 11 }} />
-                          <YAxis dataKey="parte" type="category" tick={{ fontSize: 11 }} width={120} />
-                          <Tooltip />
-                          <Bar dataKey="quantidade" fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader><CardTitle className="text-base">Top Locais</CardTitle></CardHeader>
-                  <CardContent>
-                    {d.acidentes.porLocal.length === 0 ? <p className="text-sm text-gray-500">Sem dados.</p> : (
-                      <ResponsiveContainer width="100%" height={260}>
-                        <BarChart data={d.acidentes.porLocal} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                          <XAxis type="number" tick={{ fontSize: 11 }} />
-                          <YAxis dataKey="local" type="category" tick={{ fontSize: 11 }} width={120} />
-                          <Tooltip />
-                          <Bar dataKey="quantidade" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </CardContent>
-                </Card>
+                <ChartCard
+                  title="Top Partes do Corpo Atingidas"
+                  height={280}
+                  isEmpty={d.acidentes.porParteCorpo.length === 0}
+                  tableData={d.acidentes.porParteCorpo}
+                  tableColumns={[
+                    { key: "parte", label: "Parte do corpo" },
+                    { key: "quantidade", label: "Quantidade", align: "right" },
+                  ]}
+                  renderChart={(h) => (
+                    <ResponsiveContainer width="100%" height={h}>
+                      <BarChart data={(d.acidentes.porParteCorpo ?? []).map((x: any) => ({ ...x, parteCurto: truncate(x.parte, 22) }))} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                        <YAxis dataKey="parteCurto" type="category" tick={{ fontSize: 11 }} width={140} />
+                        <Tooltip labelFormatter={(_l, p) => (p && p[0] ? (p[0].payload as any).parte : "")} />
+                        <Bar dataKey="quantidade" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                />
+                <ChartCard
+                  title="Top Locais"
+                  height={280}
+                  isEmpty={d.acidentes.porLocal.length === 0}
+                  tableData={d.acidentes.porLocal}
+                  tableColumns={[
+                    { key: "local", label: "Local" },
+                    { key: "quantidade", label: "Quantidade", align: "right" },
+                  ]}
+                  renderChart={(h) => (
+                    <ResponsiveContainer width="100%" height={h}>
+                      <BarChart data={(d.acidentes.porLocal ?? []).map((x: any) => ({ ...x, localCurto: truncate(x.local, 22) }))} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                        <YAxis dataKey="localCurto" type="category" tick={{ fontSize: 11 }} width={140} />
+                        <Tooltip labelFormatter={(_l, p) => (p && p[0] ? (p[0].payload as any).local : "")} />
+                        <Bar dataKey="quantidade" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                />
               </div>
 
               <Card>
@@ -616,36 +673,53 @@ export default function DashboardAtestadosAcidentes() {
 
               {/* Atestados/Acidentes por dia da semana */}
               <div className="grid md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><CalendarDays className="h-4 w-4 text-emerald-600" /> Atestados por Dia da Semana</CardTitle></CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={240}>
-                      <BarChart data={d.atestadosPorDiaSemana ?? []}>
+                <ChartCard
+                  title="Atestados por Dia da Semana"
+                  icon={<CalendarDays className="h-4 w-4 text-emerald-600" />}
+                  height={260}
+                  isEmpty={(d.atestadosPorDiaSemana ?? []).length === 0}
+                  tableData={d.atestadosPorDiaSemana ?? []}
+                  tableColumns={[
+                    { key: "dia", label: "Dia" },
+                    { key: "qtd", label: "Atestados", align: "right" },
+                    { key: "dias", label: "Dias", align: "right" },
+                  ]}
+                  renderChart={(h) => (
+                    <ResponsiveContainer width="100%" height={h}>
+                      <BarChart data={d.atestadosPorDiaSemana ?? []} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis dataKey="dia" tick={{ fontSize: 12 }} />
-                        <YAxis tick={{ fontSize: 12 }} />
+                        <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
                         <Tooltip />
                         <Legend />
                         <Bar dataKey="qtd" name="Atestados" fill="#10b981" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="dias" name="Dias" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><CalendarDays className="h-4 w-4 text-red-600" /> Acidentes por Dia da Semana</CardTitle></CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={240}>
-                      <BarChart data={d.acidentesPorDiaSemana ?? []}>
+                  )}
+                />
+                <ChartCard
+                  title="Acidentes por Dia da Semana"
+                  icon={<CalendarDays className="h-4 w-4 text-red-600" />}
+                  height={260}
+                  isEmpty={(d.acidentesPorDiaSemana ?? []).length === 0}
+                  tableData={d.acidentesPorDiaSemana ?? []}
+                  tableColumns={[
+                    { key: "dia", label: "Dia" },
+                    { key: "qtd", label: "Acidentes", align: "right" },
+                  ]}
+                  renderChart={(h) => (
+                    <ResponsiveContainer width="100%" height={h}>
+                      <BarChart data={d.acidentesPorDiaSemana ?? []} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis dataKey="dia" tick={{ fontSize: 12 }} />
-                        <YAxis tick={{ fontSize: 12 }} />
+                        <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
                         <Tooltip />
                         <Bar dataKey="qtd" name="Acidentes" fill="#ef4444" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
-                  </CardContent>
-                </Card>
+                  )}
+                />
               </div>
 
               {/* Atestados recorrentes */}
@@ -724,24 +798,32 @@ export default function DashboardAtestadosAcidentes() {
               </Card>
 
               {/* Ranking de obras por nº acidentes */}
-              <Card>
-                <CardHeader><CardTitle className="text-base flex items-center gap-2"><BarChart3 className="h-4 w-4 text-red-600" /> Ranking de Obras com Mais Acidentes</CardTitle></CardHeader>
-                <CardContent>
-                  {(d.rankingObras ?? []).length === 0 ? <p className="text-sm text-gray-500">Sem acidentes vinculados a obras no período.</p> : (
-                    <ResponsiveContainer width="100%" height={Math.max(220, (d.rankingObras ?? []).length * 30)}>
-                      <BarChart data={d.rankingObras} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis type="number" tick={{ fontSize: 11 }} />
-                        <YAxis dataKey="obraNome" type="category" tick={{ fontSize: 11 }} width={150} />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="qtd" name="Acidentes" fill="#ef4444" radius={[0, 4, 4, 0]} />
-                        <Bar dataKey="dias" name="Dias Perdidos" fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
+              <ChartCard
+                title="Ranking de Obras com Mais Acidentes"
+                icon={<BarChart3 className="h-4 w-4 text-red-600" />}
+                height={Math.max(260, (d.rankingObras ?? []).length * 32)}
+                isEmpty={(d.rankingObras ?? []).length === 0}
+                emptyMessage="Sem acidentes vinculados a obras no período."
+                tableData={d.rankingObras ?? []}
+                tableColumns={[
+                  { key: "obraNome", label: "Obra" },
+                  { key: "qtd", label: "Acidentes", align: "right" },
+                  { key: "dias", label: "Dias Perdidos", align: "right" },
+                ]}
+                renderChart={(h) => (
+                  <ResponsiveContainer width="100%" height={h}>
+                    <BarChart data={(d.rankingObras ?? []).map((o: any) => ({ ...o, obraCurta: truncate(o.obraNome, 24) }))} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                      <YAxis dataKey="obraCurta" type="category" tick={{ fontSize: 11 }} width={170} />
+                      <Tooltip labelFormatter={(_l, p) => (p && p[0] ? (p[0].payload as any).obraNome : "")} />
+                      <Legend />
+                      <Bar dataKey="qtd" name="Acidentes" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                      <Bar dataKey="dias" name="Dias Perdidos" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              />
 
               {/* Ações corretivas */}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
