@@ -92,6 +92,18 @@ export default function DashboardAtestadosAcidentes() {
   const [showCustoDetalhe, setShowCustoDetalhe] = useState(false);
   const [indicadorDetalhe, setIndicadorDetalhe] = useState<{ titulo: string; descricao: string; lista: any[] } | null>(null);
   const [reincidenciaDetalhe, setReincidenciaDetalhe] = useState(false);
+  const [diaSemanaDetalhe, setDiaSemanaDetalhe] = useState<{ tipo: "atestado" | "acidente"; diaIdx: number; dia: string } | null>(null);
+
+  const diaSemanaQuery = trpc.sstAnalytics.funcionariosPorDiaSemana.useQuery(
+    {
+      companyId: queryCompanyId,
+      ...(isConstrutoras ? { companyIds } : {}),
+      dataInicio, dataFim,
+      tipo: diaSemanaDetalhe?.tipo ?? "atestado",
+      diaIdx: diaSemanaDetalhe?.diaIdx ?? 0,
+    },
+    { enabled: !!diaSemanaDetalhe && hasValidCompany },
+  );
 
   const dash = trpc.sstAnalytics.atestadosAcidentes.useQuery(
     {
@@ -961,14 +973,23 @@ export default function DashboardAtestadosAcidentes() {
                   ]}
                   renderChart={(h) => (
                     <ResponsiveContainer width="100%" height={h}>
-                      <BarChart data={d.atestadosPorDiaSemana ?? []} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                      <BarChart
+                        data={d.atestadosPorDiaSemana ?? []}
+                        margin={{ top: 10, right: 20, left: 0, bottom: 5 }}
+                        onClick={(e: any) => {
+                          const p = e?.activePayload?.[0]?.payload;
+                          if (p && typeof p.diaIdx === "number" && p.qtd > 0) {
+                            setDiaSemanaDetalhe({ tipo: "atestado", diaIdx: p.diaIdx, dia: p.dia });
+                          }
+                        }}
+                      >
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis dataKey="dia" tick={{ fontSize: 12 }} />
                         <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
                         <Tooltip />
                         <Legend />
-                        <Bar dataKey="qtd" name="Atestados" fill="#10b981" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="dias" name="Dias" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="qtd" name="Atestados" fill="#10b981" radius={[4, 4, 0, 0]} cursor="pointer" />
+                        <Bar dataKey="dias" name="Dias" fill="#3b82f6" radius={[4, 4, 0, 0]} cursor="pointer" />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -985,12 +1006,21 @@ export default function DashboardAtestadosAcidentes() {
                   ]}
                   renderChart={(h) => (
                     <ResponsiveContainer width="100%" height={h}>
-                      <BarChart data={d.acidentesPorDiaSemana ?? []} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                      <BarChart
+                        data={d.acidentesPorDiaSemana ?? []}
+                        margin={{ top: 10, right: 20, left: 0, bottom: 5 }}
+                        onClick={(e: any) => {
+                          const p = e?.activePayload?.[0]?.payload;
+                          if (p && typeof p.diaIdx === "number" && p.qtd > 0) {
+                            setDiaSemanaDetalhe({ tipo: "acidente", diaIdx: p.diaIdx, dia: p.dia });
+                          }
+                        }}
+                      >
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis dataKey="dia" tick={{ fontSize: 12 }} />
                         <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
                         <Tooltip />
-                        <Bar dataKey="qtd" name="Acidentes" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="qtd" name="Acidentes" fill="#ef4444" radius={[4, 4, 0, 0]} cursor="pointer" />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -1416,6 +1446,104 @@ export default function DashboardAtestadosAcidentes() {
                           <td className="px-3 py-2 font-mono">{r.cid}</td>
                           <td className="px-3 py-2 text-right font-semibold text-red-700">{r.quantidade}</td>
                           <td className="px-3 py-2 text-right">{r.dias}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Drill-down: Funcionários por Dia da Semana */}
+        <Dialog open={!!diaSemanaDetalhe} onOpenChange={(v) => { if (!v) setDiaSemanaDetalhe(null); }}>
+          <DialogContent
+            resizable={false}
+            className="max-w-none w-screen h-screen sm:w-[96vw] sm:h-[92vh] sm:max-w-5xl p-0 overflow-hidden flex flex-col bg-white sm:rounded-xl border-0 sm:border"
+          >
+            <DialogHeader className="px-6 pt-5 pb-3 border-b">
+              <DialogTitle className="flex items-center gap-2 text-lg">
+                <CalendarDays className={`h-5 w-5 ${diaSemanaDetalhe?.tipo === "atestado" ? "text-emerald-600" : "text-red-600"}`} />
+                {diaSemanaDetalhe?.tipo === "atestado" ? "Atestados" : "Acidentes"} de {diaSemanaDetalhe?.dia}
+                {diaSemanaQuery.data ? <Badge variant="secondary" className="ml-2">{diaSemanaQuery.data.total} registro(s)</Badge> : null}
+              </DialogTitle>
+              <p className="text-xs text-gray-500 mt-1">Período: {dataInicio.split("-").reverse().join("/")} a {dataFim.split("-").reverse().join("/")}</p>
+            </DialogHeader>
+            <div className="flex-1 overflow-auto px-6 py-4">
+              {diaSemanaQuery.isLoading ? (
+                <p className="text-sm text-gray-500 py-12 text-center">Carregando...</p>
+              ) : (diaSemanaQuery.data?.registros ?? []).length === 0 ? (
+                <p className="text-sm text-gray-500 py-12 text-center">Nenhum registro neste dia.</p>
+              ) : diaSemanaDetalhe?.tipo === "atestado" ? (
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-700">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Data</th>
+                        <th className="px-3 py-2 text-left">Funcionário</th>
+                        <th className="px-3 py-2 text-left">Função</th>
+                        <th className="px-3 py-2 text-left">Tipo</th>
+                        <th className="px-3 py-2 text-left">Motivo</th>
+                        <th className="px-3 py-2 text-left">CID</th>
+                        <th className="px-3 py-2 text-right">Dias</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {(diaSemanaQuery.data?.registros ?? []).map((r: any) => (
+                        <tr
+                          key={r.id}
+                          className="hover:bg-emerald-50 cursor-pointer"
+                          onClick={() => { setDiaSemanaDetalhe(null); setSelectedEmployeeId(r.employeeId); }}
+                        >
+                          <td className="px-3 py-2 whitespace-nowrap">{(r.dataEmissao || "").split("-").reverse().join("/")}</td>
+                          <td className="px-3 py-2 font-medium text-blue-700">
+                            {r.employeeNome || `Funcionário #${r.employeeId}`}
+                            {r.employeeMatricula ? <span className="text-xs text-gray-400 ml-1">#{r.employeeMatricula}</span> : null}
+                          </td>
+                          <td className="px-3 py-2 text-gray-600">{r.employeeFuncao || "—"}</td>
+                          <td className="px-3 py-2">{r.tipo || "—"}</td>
+                          <td className="px-3 py-2 text-gray-700">{r.motivo || "—"}</td>
+                          <td className="px-3 py-2 font-mono text-xs">{r.cid || "—"}</td>
+                          <td className="px-3 py-2 text-right">{r.diasAfastamento ?? 0}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-700">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Data</th>
+                        <th className="px-3 py-2 text-left">Funcionário</th>
+                        <th className="px-3 py-2 text-left">Função</th>
+                        <th className="px-3 py-2 text-left">Tipo</th>
+                        <th className="px-3 py-2 text-left">Gravidade</th>
+                        <th className="px-3 py-2 text-left">Parte do Corpo</th>
+                        <th className="px-3 py-2 text-right">Dias</th>
+                        <th className="px-3 py-2 text-center">CAT</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {(diaSemanaQuery.data?.registros ?? []).map((r: any) => (
+                        <tr
+                          key={r.id}
+                          className="hover:bg-red-50 cursor-pointer"
+                          onClick={() => { setDiaSemanaDetalhe(null); setSelectedEmployeeId(r.employeeId); }}
+                        >
+                          <td className="px-3 py-2 whitespace-nowrap">{(r.dataAcidente || "").split("-").reverse().join("/")}</td>
+                          <td className="px-3 py-2 font-medium text-blue-700">
+                            {r.employeeNome || `Funcionário #${r.employeeId}`}
+                            {r.employeeMatricula ? <span className="text-xs text-gray-400 ml-1">#{r.employeeMatricula}</span> : null}
+                          </td>
+                          <td className="px-3 py-2 text-gray-600">{r.employeeFuncao || "—"}</td>
+                          <td className="px-3 py-2">{r.tipoAcidente || "—"}</td>
+                          <td className="px-3 py-2">{r.gravidade || "—"}</td>
+                          <td className="px-3 py-2 text-gray-700">{r.parteCorpoAtingida || "—"}</td>
+                          <td className="px-3 py-2 text-right">{r.diasAfastamento ?? 0}</td>
+                          <td className="px-3 py-2 text-center">{r.houveCAT === 1 ? "Sim" : "Não"}</td>
                         </tr>
                       ))}
                     </tbody>

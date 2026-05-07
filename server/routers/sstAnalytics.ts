@@ -897,4 +897,67 @@ export const sstAnalyticsRouter = router({
         },
       };
     }),
+
+  // Drill-down: lista de funcionários (atestados ou acidentes) num dia da semana específico
+  funcionariosPorDiaSemana: protectedProcedure
+    .input(inputSchema.extend({
+      tipo: z.enum(["atestado", "acidente"]),
+      diaIdx: z.number().min(0).max(6), // 0=Dom..6=Sab
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const { dataInicio, dataFim } = defaultRange(input);
+      const weekdayName = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+      if (input.tipo === "atestado") {
+        const rows = await db.select({
+          id: atestados.id,
+          dataEmissao: atestados.dataEmissao,
+          tipo: atestados.tipo,
+          motivo: atestados.motivo,
+          cid: atestados.cid,
+          diasAfastamento: atestados.diasAfastamento,
+          employeeId: atestados.employeeId,
+          employeeNome: employees.nomeCompleto,
+          employeeMatricula: employees.matricula,
+          employeeFuncao: employees.funcao,
+        })
+          .from(atestados)
+          .leftJoin(employees, eq(atestados.employeeId, employees.id))
+          .where(and(
+            companyFilter(atestados.companyId, input),
+            isNull(atestados.deletedAt),
+            gte(atestados.dataEmissao, dataInicio),
+            lte(atestados.dataEmissao, dataFim),
+            sql`EXTRACT(DOW FROM ${atestados.dataEmissao}::date) = ${input.diaIdx}`,
+          ))
+          .orderBy(desc(atestados.dataEmissao));
+        return { tipo: "atestado", dia: weekdayName[input.diaIdx], total: rows.length, registros: rows };
+      } else {
+        const rows = await db.select({
+          id: accidents.id,
+          dataAcidente: accidents.dataAcidente,
+          tipoAcidente: accidents.tipoAcidente,
+          gravidade: accidents.gravidade,
+          parteCorpoAtingida: accidents.parteCorpoAtingida,
+          diasAfastamento: accidents.diasAfastamento,
+          houveCAT: accidents.houveCAT,
+          employeeId: accidents.employeeId,
+          employeeNome: employees.nomeCompleto,
+          employeeMatricula: employees.matricula,
+          employeeFuncao: employees.funcao,
+        })
+          .from(accidents)
+          .leftJoin(employees, eq(accidents.employeeId, employees.id))
+          .where(and(
+            companyFilter(accidents.companyId, input),
+            isNull(accidents.deletedAt),
+            gte(accidents.dataAcidente, dataInicio),
+            lte(accidents.dataAcidente, dataFim),
+            sql`EXTRACT(DOW FROM ${accidents.dataAcidente}::date) = ${input.diaIdx}`,
+          ))
+          .orderBy(desc(accidents.dataAcidente));
+        return { tipo: "acidente", dia: weekdayName[input.diaIdx], total: rows.length, registros: rows };
+      }
+    }),
 });

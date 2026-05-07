@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1390,
+    titulo: "SST — Drill-down clicável nos gráficos de Dia da Semana (Atestados/Acidentes)",
+    descricao: "MELHORIA em /sst/dashboard-atestados-acidentes: as barras dos gráficos 'Atestados por Dia da Semana' e 'Acidentes por Dia da Semana' agora são clicáveis. Ao clicar em qualquer dia (Seg/Ter/Qua/etc.) abre-se um modal em tela cheia listando todos os funcionários daquele dia com Data, Nome, Matrícula, Função, Tipo, Motivo/Gravidade, CID/Parte do Corpo, Dias de afastamento e (para acidentes) status do CAT. Cada linha é clicável e abre o detalhe completo do funcionário (EmployeeDetailDialog). Backend: nova procedure trpc sstAnalytics.funcionariosPorDiaSemana com filtro por EXTRACT(DOW) e companyFilter respeitando isolamento de tenant + soft-delete.",
+    tipo: "melhoria",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 21:15:00",
+  },
+  {
     version: 1389,
     titulo: "SST — Atestados & Acidentes: filtros sem sobreposição em tablet",
     descricao: "AJUSTE de layout em /sst/dashboard-atestados-acidentes: cabeçalho de filtros refeito com grid responsivo. Antes, em telas de tablet (~768-1024px) os campos Data Início/Data Fim invadiam os botões de atalho (Mês/3M/6M/12M/24M) causando sobreposição visual. Agora a primeira linha usa grid 1fr 1fr auto (datas + atalhos) e a linha de Trimestre/Semestre/Mês usa grid 3 colunas com whitespace-nowrap nos rótulos, garantindo alinhamento limpo em mobile, tablet e desktop.",
