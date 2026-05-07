@@ -56,8 +56,8 @@ export function EmployeeDetailDialog({ open, onOpenChange, employeeId, dataInici
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] w-[1200px] max-h-[92vh] overflow-hidden flex flex-col bg-white">
-        <DialogHeader>
+      <DialogContent className="max-w-none w-[98vw] h-[96vh] overflow-hidden flex flex-col bg-white sm:rounded-xl p-0">
+        <DialogHeader className="px-6 pt-5 pb-3 border-b">
           <DialogTitle className="flex items-center gap-2 text-lg">
             <User className="h-5 w-5 text-blue-600" />
             {d?.funcionario.nome || "Carregando..."}
@@ -72,7 +72,7 @@ export function EmployeeDetailDialog({ open, onOpenChange, employeeId, dataInici
           )}
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto space-y-4">
+        <div className="flex-1 overflow-y-auto space-y-4 px-6 py-4">
           {detailQuery.isLoading && (
             <div className="flex items-center justify-center py-20 text-gray-500">
               <Loader2 className="h-6 w-6 animate-spin mr-2" /> Carregando dados...
