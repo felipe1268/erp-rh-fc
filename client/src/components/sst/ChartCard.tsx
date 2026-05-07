@@ -68,22 +68,27 @@ export function ChartCard<T = any>({
 
   return (
     <>
-      <Card className={className}>
+      <Card
+        className={`${className ?? ""} cursor-pointer transition-shadow hover:shadow-md hover:border-blue-300 group`}
+        role="button"
+        tabIndex={0}
+        title="Clique para ampliar e ver detalhes"
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+      >
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-base flex items-center gap-2 min-w-0">
             {icon}
             <span className="truncate">{title}</span>
           </CardTitle>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0 flex-shrink-0 text-gray-500 hover:text-gray-900"
-            title="Expandir gráfico"
-            onClick={() => setOpen(true)}
-          >
+          <span className="h-7 w-7 p-0 flex-shrink-0 text-gray-400 group-hover:text-blue-600 flex items-center justify-center" title="Expandir gráfico">
             <Maximize2 className="h-4 w-4" />
-          </Button>
+          </span>
         </CardHeader>
         <CardContent>
           {empty ? (

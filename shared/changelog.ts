@@ -9284,6 +9284,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 03:00:00",
   },
   {
+    version: 1369,
+    titulo: "SST Dashboard: cartão inteiro do gráfico clicável para abrir tela de análise (não só o ícone)",
+    descricao: "Melhoria de UX no Dashboard de Atestados & Acidentes: agora todo o cartão do gráfico (cabeçalho + área do chart) é clicável para abrir a tela ampliada com gráfico ampliado + tabela de dados detalhados + exportação CSV. Hover destaca a borda em azul e a sombra. Suporte a teclado (Enter/Espaço) para acessibilidade. Mantém o ícone Maximize2 como pista visual no canto superior direito. Igual ao comportamento do clique no nome do funcionário.",
+    tipo: "melhoria",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 00:45:00",
+  },
+  {
     version: 1368,
     titulo: "SST Dashboard: clique no nome do funcionário abre detalhamento completo de atestados e acidentes",
     descricao: "Nas tabelas Top 10 Funcionários — Atestados, Top 10 Funcionários — Acidentes e Funcionários com Atestados Recorrentes (3+) do Dashboard de Atestados & Acidentes, o nome do funcionário agora é clicável (link azul). Ao clicar, abre uma tela ampliada (95vw × 92vh) com: (1) cabeçalho identificando funcionário (nome, matrícula, função); (2) cartões-resumo (qtd de atestados, dias de atestado, qtd de acidentes, dias de acidente, INSS, CAT); (3) abas Atestados / Acidentes listando TODOS os registros do período. Cada atestado mostra tipo, CID, data emissão/retorno, dias ou horas de afastamento, motivo, médico+CRM, descrição e link para o documento. Cada acidente mostra gravidade (badge colorida), tipo, data/hora, dias de afastamento, obra, local, parte do corpo atingida, agente causador, descrição, ação corretiva (status/prazo/responsável) e CAT (nº). Implementado via novo procedure tRPC `sstAnalytics.porFuncionario` que busca atestados e acidentes do funcionário no período filtrado, respeitando isolamento por companyId/Construtoras.",
