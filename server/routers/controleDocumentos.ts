@@ -7,6 +7,7 @@ import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 import { verificarAssinaturaMemorial } from "../services/assinaturaMemorial";
 import { logStatusChange } from "../lib/employeeStatusHelper";
+import { sendEmail } from "../services/smtpService";
 
 const LIMITE_DIAS_INSS = 15;
 
@@ -356,25 +357,44 @@ async function handleAfastamentoStatus(
         isINSS ? `O RH deve providenciar o encaminhamento ao INSS para perícia médica.` : "",
       ].filter(Boolean).join("\n");
 
+      const corpoHtml = `<p>${corpo.replace(/\n/g, "<br>")}</p>`;
       for (const r of recipients) {
-        await db.insert(notificationLogs).values({
-          companyId,
-          employeeId,
-          employeeName: emp.nomeCompleto,
-          tipoMovimentacao: isINSS ? "afastamento_inss" : "afastamento_atestado",
-          statusAnterior: emp.status,
-          statusNovo: "Afastado",
-          recipientId: r.id,
-          recipientName: r.nome,
-          recipientEmail: r.email,
-          titulo,
-          corpo,
-          statusEnvio: "pendente",
-          disparadoPor: "Sistema (Atestado)",
-        });
+        let statusEnvio: "enviado" | "erro" = "erro";
+        let erroMsg: string | null = "Falha desconhecida";
+        try {
+          const res = await sendEmail({ to: r.email, subject: titulo, html: corpoHtml, text: corpo });
+          if (res.success) { statusEnvio = "enviado"; erroMsg = null; }
+          else { erroMsg = res.error || "Falha SMTP"; }
+        } catch (e: any) {
+          erroMsg = e?.message || "Erro desconhecido no envio";
+          console.error("[AtestadoStatus] Erro ao enviar e-mail:", e);
+        }
+        try {
+          await db.insert(notificationLogs).values({
+            companyId,
+            employeeId,
+            employeeName: emp.nomeCompleto,
+            tipoMovimentacao: isINSS ? "afastamento_inss" : "afastamento_atestado",
+            statusAnterior: emp.status,
+            statusNovo: "Afastado",
+            recipientId: r.id,
+            recipientName: r.nome,
+            recipientEmail: r.email,
+            titulo,
+            corpo,
+            statusEnvio,
+            erroMensagem: erroMsg,
+            disparadoPor: "Sistema (Atestado)",
+          });
+        } catch (e) {
+          console.error("[AtestadoStatus] Erro ao registrar notification_log:", e);
+        }
+        if (recipients.length > 1) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
       }
 
-      console.log(`[AtestadoStatus] ${recipients.length} alerta(s) RH gerado(s) para afastamento de ${emp.nomeCompleto}`);
+      console.log(`[AtestadoStatus] ${recipients.length} alerta(s) RH disparado(s) para afastamento de ${emp.nomeCompleto}`);
     }
   } catch (err: any) {
     console.error(`[AtestadoStatus] Erro ao atualizar status:`, err?.message);

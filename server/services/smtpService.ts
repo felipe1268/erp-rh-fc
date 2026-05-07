@@ -23,9 +23,12 @@ function getTransporter(): nodemailer.Transporter {
       tls: {
         rejectUnauthorized: false, // Allow self-signed certificates
       },
-      connectionTimeout: 10000, // 10s para conectar
-      greetingTimeout: 10000,   // 10s para greeting
-      socketTimeout: 15000,     // 15s para socket idle
+      connectionTimeout: 30000, // 30s para conectar (Rev: era 10s e causava muitos "Connection timeout")
+      greetingTimeout: 30000,   // 30s para greeting
+      socketTimeout: 45000,     // 45s para socket idle
+      pool: true,               // Reusa conexões (reduz handshake repetido)
+      maxConnections: 3,
+      maxMessages: 50,
     });
   }
   return transporter;

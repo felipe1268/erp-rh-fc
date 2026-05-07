@@ -323,12 +323,65 @@ export async function syncEmployeeStatus(): Promise<{
 async function syncWithRetry(attempt = 0): Promise<void> {
   try {
     await syncEmployeeStatus();
+    await processarNotificacoesPendentes();
   } catch (e: any) {
     if (attempt < 2) {
       // Retry silencioso após 60s (máximo 2 tentativas)
       setTimeout(() => syncWithRetry(attempt + 1), 60000);
     }
   }
+}
+
+/**
+ * Reprocessa notification_logs com status "pendente" há mais de 5 minutos.
+ * Tenta reenviar via SMTP; se falhar, marca como "erro" para parar de aparecer
+ * eternamente como pendente no painel.
+ */
+export async function processarNotificacoesPendentes(): Promise<{ tentados: number; enviados: number; erros: number }> {
+  const result = { tentados: 0, enviados: 0, erros: 0 };
+  try {
+    const db = await getDb();
+    if (!db) return result;
+    const pendentes = await db.execute(sql`
+      SELECT id, "recipientEmail", titulo, corpo
+      FROM notification_logs
+      WHERE "statusEnvio" = 'pendente'
+        AND "enviadoEm" < NOW() - INTERVAL '5 minutes'
+      ORDER BY "enviadoEm" ASC
+      LIMIT 50
+    `);
+    const rows: any[] = (pendentes as any).rows || (pendentes as any) || [];
+    for (const row of rows) {
+      result.tentados++;
+      const corpoHtml = `<p>${String(row.corpo || "").replace(/\n/g, "<br>")}</p>`;
+      let statusEnvio: "enviado" | "erro" = "erro";
+      let erroMsg: string | null = "Falha desconhecida";
+      try {
+        const res = await sendEmail({ to: row.recipientEmail, subject: row.titulo, html: corpoHtml, text: String(row.corpo || "") });
+        if (res.success) { statusEnvio = "enviado"; erroMsg = null; result.enviados++; }
+        else { erroMsg = res.error || "Falha SMTP"; result.erros++; }
+      } catch (e: any) {
+        erroMsg = e?.message || "Erro desconhecido no envio";
+        result.erros++;
+      }
+      try {
+        await db.execute(sql`
+          UPDATE notification_logs
+          SET "statusEnvio" = ${statusEnvio}, "erroMensagem" = ${erroMsg}
+          WHERE id = ${row.id}
+        `);
+      } catch (e) {
+        console.error("[StatusSync/Pendentes] Erro ao atualizar log:", e);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    if (result.tentados > 0) {
+      console.log(`[StatusSync/Pendentes] Reprocessadas ${result.tentados}: ${result.enviados} enviadas, ${result.erros} erros.`);
+    }
+  } catch (e) {
+    console.error("[StatusSync/Pendentes] Erro:", e);
+  }
+  return result;
 }
 
 export function startStatusSyncJob() {
