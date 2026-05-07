@@ -763,7 +763,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1387.1-2026-05-07-warnings-terceiros-manual";
+    const COLFIX_VERSION = "v1393-2026-05-07-fornecedor-tipos";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -943,6 +943,9 @@ Regras:
             ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_inss NUMERIC(6,3) DEFAULT 0;
             ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_irrf NUMERIC(6,3) DEFAULT 0;
             ALTER TABLE terceiro_contratos ADD COLUMN IF NOT EXISTS perc_outras_retencoes NUMERIC(6,3) DEFAULT 0;
+            -- Rev. 1393 — Fornecedor: tipos (Prestação de Serviço / Fornecedor)
+            ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS is_prestador_servico BOOLEAN DEFAULT false;
+            ALTER TABLE fornecedores ADD COLUMN IF NOT EXISTS is_fornecedor BOOLEAN DEFAULT true;
             ALTER TABLE ponto_consolidacao ADD COLUMN IF NOT EXISTS data_inicio_ciclo DATE;
             ALTER TABLE ponto_consolidacao ADD COLUMN IF NOT EXISTS data_fim_ciclo DATE;
             ALTER TABLE time_records ADD COLUMN IF NOT EXISTS "tipoDia" VARCHAR(20) DEFAULT 'normal';

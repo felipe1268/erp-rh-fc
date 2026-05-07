@@ -883,6 +883,8 @@ export const comprasRouter = router({
       representanteCargo: z.string().optional(),
       socios:           z.array(z.any()).optional(),
       categorias:      z.array(z.string()).optional(),
+      isPrestadorServico: z.boolean().optional(),
+      isFornecedor:    z.boolean().optional(),
       observacoes:     z.string().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -923,6 +925,8 @@ export const comprasRouter = router({
         representanteCargo: input.representanteCargo ?? null,
         socios:           sql`${JSON.stringify(input.socios ?? [])}::json`,
         categorias:      sql`${JSON.stringify(input.categorias ?? [])}::json`,
+        isPrestadorServico: input.isPrestadorServico ?? false,
+        isFornecedor:    input.isFornecedor ?? true,
         observacoes:     input.observacoes ?? null,
         ativo:           true,
       }).returning();
@@ -966,6 +970,8 @@ export const comprasRouter = router({
       representanteCargo: z.string().optional(),
       socios:           z.array(z.any()).optional(),
       categorias:      z.array(z.string()).optional(),
+      isPrestadorServico: z.boolean().optional(),
+      isFornecedor:    z.boolean().optional(),
       observacoes:     z.string().optional(),
       ativo:           z.boolean().optional(),
     }))

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1393,
+    titulo: "Compras — Fornecedores: classificação 'Prestação de Serviço' e 'Fornecedor' no cadastro",
+    descricao: "MELHORIA em /compras/fornecedores: dois novos campos selecionáveis (PRESTAÇÃO DE SERVIÇO e FORNECEDOR) adicionados ao topo do modal de cadastro/edição, permitindo classificar a empresa em uma ou nas duas categorias. Persistido nas colunas is_prestador_servico (default false) e is_fornecedor (default true) na tabela fornecedores. Backend (criarFornecedor/atualizarFornecedor) aceita os novos booleanos e o frontend carrega/edita normalmente. Cadastros existentes ficam marcados como 'FORNECEDOR' por padrão (compatibilidade retroativa).",
+    tipo: "feature",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 22:35:00",
+  },
+  {
     version: 1392,
     titulo: "Compras — Aprovações Pendentes: seleção múltipla com aprovar/recusar em lote",
     descricao: "MELHORIA em /compras/aprovacoes: nova coluna de checkbox (linha + cabeçalho com select-all/indeterminate) permite selecionar várias Solicitações de Compra de uma vez. Quando há seleção, aparece uma barra fixa no topo (sticky) com botões 'Aprovar selecionadas' (executa em série mostrando progresso N/M) e 'Recusar selecionadas' (abre modal único pedindo justificativa que é aplicada em lote). Tratamento de falhas individuais sem abortar o lote (ok/fail contabilizados, toast resume o resultado). Linha selecionada destacada com ring azul. Ações individuais (Aprovar/Recusar por linha) seguem disponíveis e ficam desabilitadas durante execução em lote.",

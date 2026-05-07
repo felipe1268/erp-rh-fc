@@ -228,6 +228,7 @@ const EMPTY_FORM = {
   endereco: "", numero: "", complemento: "", bairro: "", cidade: "", estado: "", cep: "",
   telefone: "", email: "", contatoNome: "", contatoCelular: "", contatoEmail: "",
   banco: "", agencia: "", conta: "", pix: "", categorias: [] as string[], observacoes: "",
+  isPrestadorServico: false, isFornecedor: true,
   naturezaJuridica: "", porte: "", capitalSocial: "", atividadePrincipal: "", atividadesCnae: "",
   dataAbertura: "", regimeTributario: "", inscricaoEstadual: "", inscricaoMunicipal: "",
   representanteLegal: "", representanteCpf: "", representanteCargo: "",
@@ -382,6 +383,8 @@ export default function Fornecedores() {
       representanteCargo: f.representanteCargo ?? "",
       socios: Array.isArray(f.socios) ? f.socios : [],
       categorias: Array.isArray(f.categorias) ? f.categorias : [], observacoes: f.observacoes ?? "",
+      isPrestadorServico: !!(f as any).isPrestadorServico,
+      isFornecedor: (f as any).isFornecedor === undefined ? true : !!(f as any).isFornecedor,
     });
     setEditando(f.id);
     setErroCNPJ(null);
@@ -812,6 +815,40 @@ export default function Fornecedores() {
                   <p className="text-sm text-slate-500 mt-0.5">
                     {editando ? `Editando fornecedor #${editando}` : "Digite o CNPJ para preencher automaticamente"}
                   </p>
+                </div>
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setForm(p => ({ ...p, isPrestadorServico: !p.isPrestadorServico }))}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                      form.isPrestadorServico
+                        ? "bg-emerald-600 border-emerald-600 text-white shadow-sm"
+                        : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className={`h-4 w-4 rounded border flex items-center justify-center ${
+                      form.isPrestadorServico ? "bg-white border-white" : "border-slate-400"
+                    }`}>
+                      {form.isPrestadorServico && <span className="text-emerald-600 text-[10px] font-bold leading-none">✓</span>}
+                    </span>
+                    PRESTAÇÃO DE SERVIÇO
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(p => ({ ...p, isFornecedor: !p.isFornecedor }))}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                      form.isFornecedor
+                        ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+                        : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className={`h-4 w-4 rounded border flex items-center justify-center ${
+                      form.isFornecedor ? "bg-white border-white" : "border-slate-400"
+                    }`}>
+                      {form.isFornecedor && <span className="text-blue-600 text-[10px] font-bold leading-none">✓</span>}
+                    </span>
+                    FORNECEDOR
+                  </button>
                 </div>
               </div>
 

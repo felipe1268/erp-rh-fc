@@ -5407,6 +5407,8 @@ export const fornecedores = pgTable("fornecedores", {
   socios:           json().default([]),
   categorias:       json().default([]),
   ativo:            boolean().default(true),
+  isPrestadorServico: boolean("is_prestador_servico").default(false),
+  isFornecedor:     boolean("is_fornecedor").default(true),
   observacoes:      text(),
   criadoEm:         timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
   atualizadoEm:     timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
