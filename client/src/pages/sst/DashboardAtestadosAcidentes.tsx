@@ -161,14 +161,58 @@ export default function DashboardAtestadosAcidentes() {
     emptyMessage: "Nenhum acidente nesta categoria.",
   });
 
+  const fmtISO = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
   const setRange = (months: number) => {
     const fim = new Date();
     const ini = new Date();
     ini.setMonth(ini.getMonth() - (months - 1));
     ini.setDate(1);
-    setDataInicio(ini.toISOString().slice(0, 10));
-    setDataFim(fim.toISOString().slice(0, 10));
+    setDataInicio(fmtISO(ini));
+    setDataFim(fmtISO(fim));
   };
+
+  const hoje = new Date();
+  const [anoSel, setAnoSel] = useState<number>(hoje.getFullYear());
+  const anosDisp = Array.from({ length: 5 }, (_, i) => hoje.getFullYear() - i);
+  const mesesPt = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+  const setMesAno = (year: number, month0: number) => {
+    setDataInicio(fmtISO(new Date(year, month0, 1)));
+    setDataFim(fmtISO(new Date(year, month0 + 1, 0)));
+  };
+  const setTrimestre = (year: number, q: 1 | 2 | 3 | 4) => {
+    const m = (q - 1) * 3;
+    setDataInicio(fmtISO(new Date(year, m, 1)));
+    setDataFim(fmtISO(new Date(year, m + 3, 0)));
+  };
+  const setSemestre = (year: number, s: 1 | 2) => {
+    const m = s === 1 ? 0 : 6;
+    setDataInicio(fmtISO(new Date(year, m, 1)));
+    setDataFim(fmtISO(new Date(year, m + 6, 0)));
+  };
+  const setAnoCheio = (year: number) => {
+    setDataInicio(`${year}-01-01`);
+    setDataFim(`${year}-12-31`);
+  };
+
+  const isAtivo = (ini: string, fim: string) => dataInicio === ini && dataFim === fim;
+  const trimAtivo = (q: 1 | 2 | 3 | 4) => {
+    const m = (q - 1) * 3;
+    return isAtivo(fmtISO(new Date(anoSel, m, 1)), fmtISO(new Date(anoSel, m + 3, 0)));
+  };
+  const semAtivo = (s: 1 | 2) => {
+    const m = s === 1 ? 0 : 6;
+    return isAtivo(fmtISO(new Date(anoSel, m, 1)), fmtISO(new Date(anoSel, m + 6, 0)));
+  };
+  const anoCheioAtivo = (y: number) => isAtivo(`${y}-01-01`, `${y}-12-31`);
+  const mesAtivoIdx = (() => {
+    for (let i = 0; i < 12; i++) {
+      if (isAtivo(fmtISO(new Date(anoSel, i, 1)), fmtISO(new Date(anoSel, i + 1, 0)))) return i;
+    }
+    return -1;
+  })();
 
   return (
     <DashboardLayout>
@@ -207,6 +251,77 @@ export default function DashboardAtestadosAcidentes() {
                 <Button size="sm" variant="outline" onClick={() => setRange(6)}>6M</Button>
                 <Button size="sm" variant="outline" onClick={() => setRange(12)}>12M</Button>
                 <Button size="sm" variant="outline" onClick={() => setRange(24)}>24M</Button>
+              </div>
+            </div>
+
+            {/* Período fixo: Ano / Mês / Trimestre / Semestre */}
+            <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-gray-600 whitespace-nowrap">Ano de referência</Label>
+                <select
+                  className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={anoSel}
+                  onChange={(e) => setAnoSel(parseInt(e.target.value, 10))}
+                >
+                  {anosDisp.map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+                <Button
+                  size="sm"
+                  variant={anoCheioAtivo(anoSel) ? "default" : "outline"}
+                  onClick={() => setAnoCheio(anoSel)}
+                  title={`Período: 01/01/${anoSel} a 31/12/${anoSel}`}
+                >
+                  Ano todo
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs text-gray-500 mr-1">Trimestre:</span>
+                {([1, 2, 3, 4] as const).map((q) => (
+                  <Button
+                    key={`t${q}`}
+                    size="sm"
+                    variant={trimAtivo(q) ? "default" : "outline"}
+                    onClick={() => setTrimestre(anoSel, q)}
+                    className="px-2"
+                  >
+                    T{q}
+                  </Button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs text-gray-500 mr-1">Semestre:</span>
+                {([1, 2] as const).map((s) => (
+                  <Button
+                    key={`s${s}`}
+                    size="sm"
+                    variant={semAtivo(s) ? "default" : "outline"}
+                    onClick={() => setSemestre(anoSel, s)}
+                    className="px-2"
+                  >
+                    S{s}
+                  </Button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-gray-600 whitespace-nowrap">Mês:</Label>
+                <select
+                  className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  value={mesAtivoIdx}
+                  onChange={(e) => {
+                    const idx = parseInt(e.target.value, 10);
+                    if (idx >= 0) setMesAno(anoSel, idx);
+                  }}
+                >
+                  <option value={-1}>—</option>
+                  {mesesPt.map((m, i) => (
+                    <option key={m} value={i}>{m}/{String(anoSel).slice(2)}</option>
+                  ))}
+                </select>
               </div>
             </div>
             {d && (

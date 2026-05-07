@@ -9383,6 +9383,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 07:00:00",
   },
   {
+    version: 1384,
+    titulo: "SST Dashboard: filtros por Ano, Mês, Trimestre e Semestre (mantém intervalo livre de datas)",
+    descricao: "Atendendo solicitação do usuário, o filtro do Dashboard de Atestados & Acidentes ganhou uma nova faixa de seleção rápida com 'Ano de referência' (dropdown 5 anos), 'Ano todo' (01/jan a 31/dez), 'Trimestre' (T1/T2/T3/T4), 'Semestre' (S1/S2) e 'Mês' (Jan a Dez do ano selecionado). Os botões ficam destacados (preenchidos) quando o período correspondente está ativo. Os controles antigos foram preservados: campos livres de Data Início / Data Fim e atalhos relativos (Mês, 3M, 6M, 12M, 24M).",
+    tipo: "feature",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 06:50:00",
+  },
+  {
     version: 1383,
     titulo: "SST: descrição oficial do CID-10 ao lado do código (DataSUS V2008 — base nacional completa)",
     descricao: "Atendendo solicitação do usuário, o ERP agora exibe a descrição oficial de cada código CID ao lado do código. Foi baixada e empacotada a base oficial CID-10 do DataSUS V2008 (cid10.datasus.gov.br) — 2.045 categorias + 12.451 subcategorias = 14.233 verbetes em pt-BR — em shared/cid10.ts (offline, sem chamada externa). Helper cidDescricao(code) faz fallback automático: se a subcategoria (4 chars, ex: J039) não estiver mapeada, volta para a categoria (3 chars, ex: J03 = Amigdalite aguda). Aplicado em (1) tabela 'Top 10 CIDs' (nova coluna 'Descrição (CID-10)' + tooltip do gráfico mostra 'J03 — Amigdalite aguda'); (2) coluna CID dos drill-downs em todos os gráficos de atestados (mostra código + descrição abaixo, em cinza).",
