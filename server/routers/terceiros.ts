@@ -590,8 +590,8 @@ Seja rigoroso na validação. Verifique se o tipo do documento corresponde ao es
             createdAt: warningsTerceiros.createdAt,
           })
           .from(warningsTerceiros)
-          .innerJoin(funcionariosTerceiros, eq(warningsTerceiros.funcionarioTerceiroId, funcionariosTerceiros.id))
-          .innerJoin(empresasTerceiras, eq(warningsTerceiros.empresaTerceiraId, empresasTerceiras.id))
+          .leftJoin(funcionariosTerceiros, eq(warningsTerceiros.funcionarioTerceiroId, funcionariosTerceiros.id))
+          .leftJoin(empresasTerceiras, eq(warningsTerceiros.empresaTerceiraId, empresasTerceiras.id))
           .where(and(...conds))
           .orderBy(desc(warningsTerceiros.dataOcorrencia));
       }),

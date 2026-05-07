@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1391,
+    titulo: "Terceiros — Advertências: corrigida listagem de advertências com colaborador digitado manualmente",
+    descricao: "BUGFIX em /terceiros/advertencias: advertências criadas com nome de colaborador digitado manualmente (sem vínculo a cadastro de Funcionário Terceiro) não apareciam na tabela. Causa: a query de listagem usava INNER JOIN com funcionarios_terceiros e empresas_terceiras, descartando linhas onde funcionario_terceiro_id era NULL (caso do nome digitado livremente, introduzido na Rev. 1388). Trocado para LEFT JOIN, mantendo COALESCE para nome/CPF/função vir do cadastro quando vinculado, ou das colunas auxiliares (funcionario_nome_manual/cpf_manual/funcao_manual) quando digitado.",
+    tipo: "bugfix",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 21:45:00",
+  },
+  {
     version: 1390,
     titulo: "SST — Drill-down clicável nos gráficos de Dia da Semana (Atestados/Acidentes)",
     descricao: "MELHORIA em /sst/dashboard-atestados-acidentes: as barras dos gráficos 'Atestados por Dia da Semana' e 'Acidentes por Dia da Semana' agora são clicáveis. Ao clicar em qualquer dia (Seg/Ter/Qua/etc.) abre-se um modal em tela cheia listando todos os funcionários daquele dia com Data, Nome, Matrícula, Função, Tipo, Motivo/Gravidade, CID/Parte do Corpo, Dias de afastamento e (para acidentes) status do CAT. Cada linha é clicável e abre o detalhe completo do funcionário (EmployeeDetailDialog). Backend: nova procedure trpc sstAnalytics.funcionariosPorDiaSemana com filtro por EXTRACT(DOW) e companyFilter respeitando isolamento de tenant + soft-delete.",
