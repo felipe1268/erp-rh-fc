@@ -923,6 +923,16 @@ export default function DashboardAtestadosAcidentes() {
                   { key: "afastamentosINSS", label: "INSS (≥15d)", align: "right" },
                   { key: "colaboradoresAfetados", label: "Colab.", align: "right" },
                 ]}
+                drillDown={{
+                  getRows: (row: any) =>
+                    (d?.atestadosLista ?? []).filter((a: any) =>
+                      row.obraId == null ? a.obraId == null : a.obraId === row.obraId
+                    ),
+                  columns: drillCols,
+                  labelKey: ((row: any) => row.obraNome) as any,
+                  onRowClick: (r: any) => setSelectedEmployeeId(r.employeeId),
+                  emptyMessage: "Nenhum atestado nesta obra.",
+                }}
                 renderChart={(h) => (
                   <ResponsiveContainer width="100%" height={h}>
                     <BarChart

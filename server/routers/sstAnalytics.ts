@@ -616,21 +616,26 @@ export const sstAnalyticsRouter = router({
       };
 
       // ---- Listas brutas para drill-down nos gráficos ----
-      const atestadosLista = atRows.map((r) => ({
-        id: r.id,
-        dataEmissao: r.dataEmissao,
-        dataRetorno: r.dataRetorno,
-        employeeId: r.employeeId,
-        nome: r.employeeNome || `Funcionário #${r.employeeId}`,
-        codigoInterno: r.employeeCodigoInterno || null,
-        matricula: r.employeeMatricula || null,
-        funcao: r.employeeFuncao || r.employeeCargo || null,
-        tipo: (r.tipo || "Não informado").trim() || "Não informado",
-        cid: (r.cid || "").trim().toUpperCase() || null,
-        motivo: (r.motivo || "").trim() || "Não informado",
-        dias: r.diasAfastamento || 0,
-        afastamentoINSS: r.afastamentoINSS || 0,
-      }));
+      const atestadosLista = atRows.map((r) => {
+        const oid = resolveObraDoAtestado(r.employeeId, r.dataEmissao);
+        return {
+          id: r.id,
+          dataEmissao: r.dataEmissao,
+          dataRetorno: r.dataRetorno,
+          employeeId: r.employeeId,
+          nome: r.employeeNome || `Funcionário #${r.employeeId}`,
+          codigoInterno: r.employeeCodigoInterno || null,
+          matricula: r.employeeMatricula || null,
+          funcao: r.employeeFuncao || r.employeeCargo || null,
+          tipo: (r.tipo || "Não informado").trim() || "Não informado",
+          cid: (r.cid || "").trim().toUpperCase() || null,
+          motivo: (r.motivo || "").trim() || "Não informado",
+          dias: r.diasAfastamento || 0,
+          afastamentoINSS: r.afastamentoINSS || 0,
+          obraId: oid,
+          obraNome: oid != null ? (obraNomeById.get(oid) || `Obra #${oid}`) : "Sem obra/alocação",
+        };
+      });
 
       const acidentesLista = acRows.map((r) => ({
         id: r.id,

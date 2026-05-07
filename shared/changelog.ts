@@ -9383,6 +9383,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 07:00:00",
   },
   {
+    version: 1382,
+    titulo: "SST Dashboard: drill-down clicável no card 'Atestados & Afastamentos — por Obra'",
+    descricao: "Atendendo solicitação do usuário, agora é possível clicar em qualquer linha da tabela 'Atestados & Afastamentos — por Obra' para ver, em tela cheia, todos os atestados daquela obra: data (dd/MM/aaaa), funcionário, função, tipo, CID, motivo e dias. Cada linha do drill-down também é clicável e abre o histórico individual do colaborador. Para sustentar isso, atestadosLista no backend agora carrega obraId/obraNome resolvidos via employee_site_history (mesma regra do agregado).",
+    tipo: "feature",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 06:25:00",
+  },
+  {
     version: 1381,
     titulo: "SST Dashboard: hotfix 'op ANY/ALL requires array' — tela branca em Atestados & Acidentes",
     descricao: "Hotfix do agregado atestadosPorObra (Rev 1380): a query de employee_site_history usava sql`= ANY(${empIdsAt})` mas o Drizzle não bindava o array no formato esperado pelo Postgres, derrubando toda a procedure sstAnalytics.atestadosAcidentes (tela branca após período carregar). Trocado por inArray(employeeSiteHistory.employeeId, empIdsAt) — padrão idiomático do Drizzle, sem mudança funcional.",
