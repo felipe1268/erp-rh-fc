@@ -138,6 +138,61 @@ export const acidentesRouter = router({
       return { id: r.id };
     }),
 
+  // Lista atestados do funcionário (para vincular a um acidente).
+  // Inclui se o atestado já está vinculado a outro acidente (para indicar visualmente).
+  atestadosDoFuncionario: protectedProcedure
+    .input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      excludeAccidentId: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const rows = await db.select({
+        id: atestados.id,
+        tipo: atestados.tipo,
+        dataEmissao: atestados.dataEmissao,
+        dataRetorno: atestados.dataRetorno,
+        diasAfastamento: atestados.diasAfastamento,
+        horasAfastamento: atestados.horasAfastamento,
+        afastamentoTipo: atestados.afastamentoTipo,
+        cid: atestados.cid,
+        medico: atestados.medico,
+        crm: atestados.crm,
+        motivo: atestados.motivo,
+        descricao: atestados.descricao,
+        documentoUrl: atestados.documentoUrl,
+        afastamentoINSS: atestados.afastamentoINSS,
+      })
+        .from(atestados)
+        .where(and(
+          eq(atestados.employeeId, input.employeeId),
+          companyFilter(atestados.companyId, input),
+          isNull(atestados.deletedAt),
+        ))
+        .orderBy(desc(atestados.dataEmissao));
+
+      // Marca os já vinculados a outro acidente (escopo: mesma company, somente atestados retornados)
+      const ids = rows.map((r) => r.id);
+      const vinculados = new Map<number, number>();
+      if (ids.length > 0) {
+        const vincQ = await db.select({ atestadoId: accidents.atestadoId, accId: accidents.id })
+          .from(accidents)
+          .where(and(
+            companyFilter(accidents.companyId, input),
+            isNull(accidents.deletedAt),
+            sql`${accidents.atestadoId} IN (${sql.join(ids.map((i) => sql`${i}`), sql`, `)})`,
+          ));
+        for (const v of vincQ) {
+          if (v.atestadoId && (!input.excludeAccidentId || v.accId !== input.excludeAccidentId)) {
+            vinculados.set(v.atestadoId, v.accId);
+          }
+        }
+      }
+      return rows.map((r) => ({ ...r, jaVinculadoAoAcidenteId: vinculados.get(r.id) ?? null }));
+    }),
+
   delete: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input, ctx }) => {

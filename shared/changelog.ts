@@ -9284,6 +9284,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 03:00:00",
   },
   {
+    version: 1370,
+    titulo: "SST Acidentes: formulário em tela cheia, layout moderno e vínculo com atestados do módulo Documentos",
+    descricao: "Refatorado por completo o formulário 'Novo Registro de Acidente' (Registro de Acidentes & Incidentes) para uso em tela cheia (98vw × 96vh) com layout moderno em duas colunas. Cabeçalho com gradiente vermelho/laranja, ícone, barra de progresso (% preenchido) e botão fechar. COLUNA PRINCIPAL com 6 seções coloridas em cartões: (1) Funcionário & Obra — busca instantânea de funcionário por nome/matrícula/CPF com lista clicável e card resumo do funcionário selecionado (matrícula, função, CPF); (2) Quando & Como — data (default hoje), hora (default agora), tipo, gravidade com badge colorida; (3) Local, Lesão e Agente Causador; (4) Descrição (com contador de caracteres) e Testemunhas + dias de afastamento; (5) CAT — destaque âmbar quando 'CAT exigida' (gravidade ≥ Moderado); auto-marca 'Sim' para Moderado/Grave/Gravíssimo/Fatal e 'Não' para Quase-acidente/Primeiros Socorros; (6) Ação Corretiva. COLUNA LATERAL DIREITA dedicada ao **vínculo com atestados do módulo Documentos**: lista todos os atestados do funcionário ordenados por proximidade da data do acidente; atestados em até ±3 dias são marcados como 'sugeridos' com destaque indigo; atestados já vinculados a outro acidente recebem badge 'já vinculado'; ao clicar em 'Vincular este atestado', auto-preenche dataAcidente, diasAfastamento, sugere gravidade compatível e complementa a descrição com CID/motivo/médico do atestado; possibilidade de desvincular; link direto para abrir o documento PDF. Nova procedure tRPC `acidentes.atestadosDoFuncionario` busca atestados do funcionário com flag de vínculo prévio. Nova coluna 'Atestado' na tabela principal mostrando #ID do atestado vinculado. Footer fixo com botões grandes (Cancelar / Registrar acidente) e badge mostrando o atestado vinculado.",
+    tipo: "melhoria",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 02:00:00",
+  },
+  {
     version: 1369,
     titulo: "SST Dashboard: cartão inteiro do gráfico clicável para abrir tela de análise (não só o ícone)",
     descricao: "Melhoria de UX no Dashboard de Atestados & Acidentes: agora todo o cartão do gráfico (cabeçalho + área do chart) é clicável para abrir a tela ampliada com gráfico ampliado + tabela de dados detalhados + exportação CSV. Hover destaca a borda em azul e a sombra. Suporte a teclado (Enter/Espaço) para acessibilidade. Mantém o ícone Maximize2 como pista visual no canto superior direito. Igual ao comportamento do clique no nome do funcionário.",
