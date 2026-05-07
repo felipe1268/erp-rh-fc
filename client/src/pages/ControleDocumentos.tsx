@@ -2917,10 +2917,14 @@ export default function ControleDocumentos() {
                       <label className="text-xs font-medium text-blue-700">Dias de Afastamento</label>
                       <Input
                         type="number" min={0}
+                        inputMode="numeric"
+                        placeholder="0"
                         className="mt-1 border-blue-200 focus:border-blue-400"
-                        value={atestForm.diasAfastamento || 0}
+                        value={atestForm.diasAfastamento ? String(atestForm.diasAfastamento) : ""}
+                        onFocus={(e) => e.currentTarget.select()}
                         onChange={e => {
-                          const dias = parseInt(e.target.value) || 0;
+                          const raw = e.target.value.replace(/^0+(?=\d)/, "");
+                          const dias = raw === "" ? 0 : parseInt(raw) || 0;
                           const patch: any = { diasAfastamento: dias };
                           // Auto-calcula Data Retorno = Data Emissão + dias
                           if (atestForm.dataEmissao && dias > 0) {
