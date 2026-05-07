@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
@@ -87,6 +88,7 @@ export default function DashboardAtestadosAcidentes() {
   const [dataInicio, setDataInicio] = useState(defaultIni());
   const [dataFim, setDataFim] = useState(defaultFim());
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+  const [showCustoDetalhe, setShowCustoDetalhe] = useState(false);
 
   const dash = trpc.sstAnalytics.atestadosAcidentes.useQuery(
     {
@@ -639,7 +641,11 @@ export default function DashboardAtestadosAcidentes() {
                       <FileWarning className="h-10 w-10 text-amber-600" />
                     </CardContent>
                   </Card>
-                  <Card className="bg-green-50 border-green-200 border">
+                  <Card
+                    className="bg-green-50 border-green-200 border cursor-pointer hover:bg-green-100 hover:shadow transition"
+                    onClick={() => setShowCustoDetalhe(true)}
+                    title="Clique para ver a memória de cálculo por colaborador"
+                  >
                     <CardContent className="p-4">
                       <p className="text-xs uppercase text-gray-600 flex items-center gap-1"><DollarSign className="h-3 w-3" /> Custo Estimado de Afastamento</p>
                       <p className="text-2xl font-bold text-green-700 mt-1">R$ {fmtNum(d.custoEstimadoAfastamento?.total ?? 0, 2)}</p>
@@ -648,6 +654,7 @@ export default function DashboardAtestadosAcidentes() {
                         <div>Acidentes: <span className="font-semibold">R$ {fmtNum(d.custoEstimadoAfastamento?.acidentes ?? 0, 2)}</span></div>
                       </div>
                       <p className="text-[10px] text-gray-500 mt-2">Base: salário-base ÷ 30 × dias afastados (não inclui encargos)</p>
+                      <p className="text-[10px] text-green-700 font-medium mt-1">→ Clique para ver memória de cálculo por colaborador</p>
                     </CardContent>
                   </Card>
                 </div>
@@ -910,6 +917,121 @@ export default function DashboardAtestadosAcidentes() {
           dataInicio={dataInicio}
           dataFim={dataFim}
         />
+
+        {/* Memória de cálculo do Custo Estimado de Afastamento */}
+        <Dialog open={showCustoDetalhe} onOpenChange={setShowCustoDetalhe}>
+          <DialogContent
+            resizable={false}
+            className="max-w-none w-screen h-screen sm:w-[98vw] sm:h-[96vh] p-0 overflow-hidden flex flex-col bg-white sm:rounded-xl border-0 sm:border"
+          >
+            <DialogHeader className="px-6 pt-5 pb-3 border-b">
+              <DialogTitle className="flex items-center gap-2 text-lg">
+                <DollarSign className="h-5 w-5 text-green-600" />
+                Custo Estimado de Afastamento — Memória de Cálculo
+              </DialogTitle>
+              <p className="text-xs text-gray-500 mt-1">
+                Período: {dataInicio.split("-").reverse().join("/")} a {dataFim.split("-").reverse().join("/")} ·
+                Fórmula por colaborador: <strong>(salário-base ÷ 30) × dias afastados</strong>.
+                Não inclui encargos (INSS patronal, FGTS, provisões).
+              </p>
+            </DialogHeader>
+            <div className="flex-1 overflow-auto px-6 py-4">
+              {(() => {
+                const det: any[] = (d?.custoEstimadoAfastamento as any)?.detalhe ?? [];
+                const totAt = d?.custoEstimadoAfastamento?.atestados ?? 0;
+                const totAc = d?.custoEstimadoAfastamento?.acidentes ?? 0;
+                const tot = d?.custoEstimadoAfastamento?.total ?? 0;
+                const totDiasAt = det.reduce((s, r) => s + (r.diasAtestado || 0), 0);
+                const totDiasAc = det.reduce((s, r) => s + (r.diasAcidente || 0), 0);
+                if (det.length === 0) {
+                  return <p className="text-sm text-gray-500 py-12 text-center">Nenhum afastamento com salário-base cadastrado no período.</p>;
+                }
+                return (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
+                      <Card className="bg-gray-50 border"><CardContent className="p-3">
+                        <p className="text-[11px] uppercase text-gray-500">Colaboradores afetados</p>
+                        <p className="text-xl font-bold text-gray-800 mt-1">{det.length}</p>
+                      </CardContent></Card>
+                      <Card className="bg-blue-50 border-blue-200 border"><CardContent className="p-3">
+                        <p className="text-[11px] uppercase text-blue-700">Custo Atestados</p>
+                        <p className="text-xl font-bold text-blue-800 mt-1">R$ {fmtNum(totAt, 2)}</p>
+                        <p className="text-[10px] text-blue-700 mt-0.5">{totDiasAt} dia(s)</p>
+                      </CardContent></Card>
+                      <Card className="bg-red-50 border-red-200 border"><CardContent className="p-3">
+                        <p className="text-[11px] uppercase text-red-700">Custo Acidentes</p>
+                        <p className="text-xl font-bold text-red-800 mt-1">R$ {fmtNum(totAc, 2)}</p>
+                        <p className="text-[10px] text-red-700 mt-0.5">{totDiasAc} dia(s)</p>
+                      </CardContent></Card>
+                      <Card className="bg-green-50 border-green-200 border"><CardContent className="p-3">
+                        <p className="text-[11px] uppercase text-green-700">Custo Total</p>
+                        <p className="text-xl font-bold text-green-800 mt-1">R$ {fmtNum(tot, 2)}</p>
+                        <p className="text-[10px] text-green-700 mt-0.5">{totDiasAt + totDiasAc} dia(s)</p>
+                      </CardContent></Card>
+                    </div>
+
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-100 text-gray-700 text-xs uppercase">
+                          <tr>
+                            <th className="text-left p-2 w-10">#</th>
+                            <th className="text-left p-2">Colaborador</th>
+                            <th className="text-left p-2">Função</th>
+                            <th className="text-right p-2">Salário-base</th>
+                            <th className="text-right p-2">Valor/dia</th>
+                            <th className="text-right p-2 text-blue-700">Dias atest.</th>
+                            <th className="text-right p-2 text-red-700">Dias acid.</th>
+                            <th className="text-right p-2 text-blue-700">Custo atest.</th>
+                            <th className="text-right p-2 text-red-700">Custo acid.</th>
+                            <th className="text-right p-2 text-green-700">Custo total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {det.map((r: any, i: number) => (
+                            <tr
+                              key={r.employeeId}
+                              className="border-t hover:bg-gray-50 cursor-pointer"
+                              onClick={() => { setShowCustoDetalhe(false); setSelectedEmployeeId(r.employeeId); }}
+                              title="Ver detalhamento do colaborador"
+                            >
+                              <td className="p-2 text-gray-500">{i + 1}</td>
+                              <td className="p-2">
+                                <div className="font-medium text-gray-800">{r.nome}</div>
+                                <div className="text-[10px] text-gray-500">#{r.codigoInterno || r.matricula || r.employeeId}</div>
+                              </td>
+                              <td className="p-2 text-gray-600 text-xs">{r.funcao || "—"}</td>
+                              <td className="p-2 text-right tabular-nums">R$ {fmtNum(r.salarioBase, 2)}</td>
+                              <td className="p-2 text-right tabular-nums text-gray-600">R$ {fmtNum(r.valorDia, 2)}</td>
+                              <td className="p-2 text-right tabular-nums text-blue-700">{r.diasAtestado || 0}</td>
+                              <td className="p-2 text-right tabular-nums text-red-700">{r.diasAcidente || 0}</td>
+                              <td className="p-2 text-right tabular-nums text-blue-700">R$ {fmtNum(r.custoAtestado, 2)}</td>
+                              <td className="p-2 text-right tabular-nums text-red-700">R$ {fmtNum(r.custoAcidente, 2)}</td>
+                              <td className="p-2 text-right tabular-nums font-semibold text-green-700">R$ {fmtNum(r.custoTotal, 2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-50 font-semibold text-sm">
+                          <tr className="border-t-2">
+                            <td colSpan={5} className="p-2 text-right text-gray-700">TOTAIS</td>
+                            <td className="p-2 text-right tabular-nums text-blue-700">{totDiasAt}</td>
+                            <td className="p-2 text-right tabular-nums text-red-700">{totDiasAc}</td>
+                            <td className="p-2 text-right tabular-nums text-blue-700">R$ {fmtNum(totAt, 2)}</td>
+                            <td className="p-2 text-right tabular-nums text-red-700">R$ {fmtNum(totAc, 2)}</td>
+                            <td className="p-2 text-right tabular-nums text-green-800">R$ {fmtNum(tot, 2)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    <p className="text-[11px] text-gray-500 mt-3">
+                      Dica: clique em uma linha para abrir o detalhamento completo do colaborador (atestados, acidentes e documentos).
+                    </p>
+                  </>
+                );
+              })()}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

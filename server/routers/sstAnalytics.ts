@@ -459,7 +459,71 @@ export const sstAnalyticsRouter = router({
       for (const e of empSal) salMap.set(e.id, parseBRLSalario(e.salario));
       const custoAtestados = atRows.reduce((s, r) => s + ((salMap.get(r.employeeId) || 0) / 30) * (r.diasAfastamento || 0), 0);
       const custoAcidentes = acRows.reduce((s, r) => s + ((salMap.get(r.employeeId) || 0) / 30) * (r.diasAfastamento || 0), 0);
-      const custoEstimadoAfastamento = { atestados: custoAtestados, acidentes: custoAcidentes, total: custoAtestados + custoAcidentes };
+
+      // Memória de cálculo por colaborador
+      type CustoDet = {
+        employeeId: number;
+        nome: string;
+        codigoInterno: string | null;
+        matricula: string | null;
+        funcao: string | null;
+        salarioBase: number;
+        valorDia: number;
+        diasAtestado: number;
+        diasAcidente: number;
+        diasTotal: number;
+        custoAtestado: number;
+        custoAcidente: number;
+        custoTotal: number;
+      };
+      const detMap = new Map<number, CustoDet>();
+      const ensureDet = (empId: number, nome: string, codigoInterno: string | null, matricula: string | null, funcao: string | null): CustoDet => {
+        let d = detMap.get(empId);
+        if (!d) {
+          const sal = salMap.get(empId) || 0;
+          d = {
+            employeeId: empId,
+            nome: nome || `Funcionário #${empId}`,
+            codigoInterno,
+            matricula,
+            funcao,
+            salarioBase: sal,
+            valorDia: sal / 30,
+            diasAtestado: 0,
+            diasAcidente: 0,
+            diasTotal: 0,
+            custoAtestado: 0,
+            custoAcidente: 0,
+            custoTotal: 0,
+          };
+          detMap.set(empId, d);
+        }
+        return d;
+      };
+      for (const r of atRows) {
+        const dias = r.diasAfastamento || 0;
+        if (!dias) continue;
+        const det = ensureDet(r.employeeId, r.employeeNome || "", r.employeeCodigoInterno || null, r.employeeMatricula || null, r.employeeFuncao || r.employeeCargo || null);
+        det.diasAtestado += dias;
+        det.custoAtestado += det.valorDia * dias;
+      }
+      for (const r of acRows) {
+        const dias = r.diasAfastamento || 0;
+        if (!dias) continue;
+        const det = ensureDet(r.employeeId, r.employeeNome || "", r.employeeCodigoInterno || null, r.employeeMatricula || null, r.employeeFuncao || r.employeeCargo || null);
+        det.diasAcidente += dias;
+        det.custoAcidente += det.valorDia * dias;
+      }
+      const custoDetalhe = Array.from(detMap.values())
+        .map((d) => ({ ...d, diasTotal: d.diasAtestado + d.diasAcidente, custoTotal: d.custoAtestado + d.custoAcidente }))
+        .sort((a, b) => b.custoTotal - a.custoTotal);
+
+      const custoEstimadoAfastamento = {
+        atestados: custoAtestados,
+        acidentes: custoAcidentes,
+        total: custoAtestados + custoAcidentes,
+        detalhe: custoDetalhe,
+      };
 
       // últimos eventos (combinados)
       const ultimosAtestados = atRows.slice(0, 8).map((r) => ({

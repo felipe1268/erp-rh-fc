@@ -9284,6 +9284,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 03:00:00",
   },
   {
+    version: 1376,
+    titulo: "SST Dashboard: memória de cálculo do Custo Estimado de Afastamento",
+    descricao: "O card 'Custo Estimado de Afastamento' agora é clicável. Ao clicar, abre um modal em tela cheia com a memória de cálculo detalhada por colaborador: salário-base, valor/dia (sal÷30), dias de atestado, dias de acidente, custo de cada e custo total — ordenado do maior para o menor. KPIs no topo somam custo de atestados, acidentes e total. Clicar em uma linha abre o detalhamento completo do colaborador. Backend `sstAnalytics.dashboardAtestadosAcidentes` retorna `custoEstimadoAfastamento.detalhe` com a quebra por funcionário.",
+    tipo: "melhoria",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 05:30:00",
+  },
+  {
     version: 1375,
     titulo: "SST: diálogos em tela cheia de fato (fix da prop resizable do DialogContent)",
     descricao: "Bug visual: as telas 'Detalhamento do Funcionário', 'Visualizador de Documento' e 'Novo Registro de Acidente' ficavam estreitas (~512 px) mesmo com `w-[98vw] h-[96vh]`. Causa: o componente `DialogContent` do shadcn aplica um `style` inline com `width: min(512px, calc(100vw - 2rem))` quando `resizable` é `true` (padrão), e estilo inline vence sobre classe Tailwind. Fix: passar `resizable={false}` nos 3 diálogos. Em telas pequenas, agora ocupam 100vw × 100vh; em desktops, 98vw × 96vh como já era a intenção.",
