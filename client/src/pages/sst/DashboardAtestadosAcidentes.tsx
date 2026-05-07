@@ -110,8 +110,9 @@ export default function DashboardAtestadosAcidentes() {
   }, [d]);
 
   // Helpers de drill-down nos gráficos
+  const fmtDateBR = (s: string | null | undefined) => (s ? s.split("-").reverse().join("/") : "—");
   const drillCols = [
-    { key: "dataEmissao", label: "Data" },
+    { key: "dataEmissao", label: "Data", render: (r: any) => fmtDateBR(r.dataEmissao) },
     { key: "nome", label: "Funcionário", render: (r: any) => (
       <span>{r.nome}{r.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{r.codigoInterno}</span> : null}</span>
     )},
@@ -122,7 +123,7 @@ export default function DashboardAtestadosAcidentes() {
     { key: "dias", label: "Dias", align: "right" as const },
   ];
   const drillColsAcid = [
-    { key: "dataAcidente", label: "Data" },
+    { key: "dataAcidente", label: "Data", render: (r: any) => fmtDateBR(r.dataAcidente) },
     { key: "nome", label: "Funcionário", render: (r: any) => (
       <span>{r.nome}{r.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{r.codigoInterno}</span> : null}</span>
     )},

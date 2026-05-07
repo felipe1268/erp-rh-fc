@@ -9383,6 +9383,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 07:00:00",
   },
   {
+    version: 1379,
+    titulo: "SST Dashboard: datas no drill-down em formato brasileiro (dd/MM/aaaa)",
+    descricao: "Regra de ouro do ERP: TODAS as datas exibidas para o usuário devem estar no padrão brasileiro dd/MM/aaaa (jamais YYYY-MM-DD). Corrigido o drill-down dos gráficos de Atestados/Acidentes (painel azul de colaboradores que abre ao clicar numa linha da tabela detalhada): as colunas Data agora renderizam via fmtDateBR (split('-').reverse().join('/')). Vale para 7 gráficos com drill-down: Atestados por Tipo, Top 10 CIDs, Top 10 Motivos, Acidentes por Gravidade/Tipo/Parte do Corpo/Local.",
+    tipo: "bugfix",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 05:45:00",
+  },
+  {
     version: 1378,
     titulo: "SST Registro de Acidentes: campo livre quando Tipo='Outro' + correção de sobreposição do badge de Gravidade",
     descricao: "(1) Quando o usuário escolhe Tipo='Outro' no formulário de Novo Registro de Acidente, agora aparece imediatamente um campo de texto obrigatório 'Descreva o tipo de acidente' (autoFocus, max 120 caracteres) com placeholder de exemplos. O valor é gravado no banco como 'Outro: <texto>' (sem mudança de schema), e na edição é reconstituído de volta para o select 'Outro' + campo livre. Validação no submit bloqueia o salvamento se o texto estiver vazio. (2) BUGFIX visual: o badge de gravidade (ex.: 'Leve sem afastamento') estava transbordando o card e sobrepondo a próxima seção 'Local, Lesão e Agente Causador'. Adicionado max-w-full + truncate + inline-block no Badge e min-w-0 + w-full nos contêineres do grid de 4 colunas, eliminando definitivamente a sobreposição.",
