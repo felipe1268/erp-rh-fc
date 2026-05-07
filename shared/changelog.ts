@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1392,
+    titulo: "Compras — Aprovações Pendentes: seleção múltipla com aprovar/recusar em lote",
+    descricao: "MELHORIA em /compras/aprovacoes: nova coluna de checkbox (linha + cabeçalho com select-all/indeterminate) permite selecionar várias Solicitações de Compra de uma vez. Quando há seleção, aparece uma barra fixa no topo (sticky) com botões 'Aprovar selecionadas' (executa em série mostrando progresso N/M) e 'Recusar selecionadas' (abre modal único pedindo justificativa que é aplicada em lote). Tratamento de falhas individuais sem abortar o lote (ok/fail contabilizados, toast resume o resultado). Linha selecionada destacada com ring azul. Ações individuais (Aprovar/Recusar por linha) seguem disponíveis e ficam desabilitadas durante execução em lote.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 22:05:00",
+  },
+  {
     version: 1391,
     titulo: "Terceiros — Advertências: corrigida listagem de advertências com colaborador digitado manualmente",
     descricao: "BUGFIX em /terceiros/advertencias: advertências criadas com nome de colaborador digitado manualmente (sem vínculo a cadastro de Funcionário Terceiro) não apareciam na tabela. Causa: a query de listagem usava INNER JOIN com funcionarios_terceiros e empresas_terceiras, descartando linhas onde funcionario_terceiro_id era NULL (caso do nome digitado livremente, introduzido na Rev. 1388). Trocado para LEFT JOIN, mantendo COALESCE para nome/CPF/função vir do cadastro quando vinculado, ou das colunas auxiliares (funcionario_nome_manual/cpf_manual/funcao_manual) quando digitado.",
