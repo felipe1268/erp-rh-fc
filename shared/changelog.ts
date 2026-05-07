@@ -9284,6 +9284,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 03:00:00",
   },
   {
+    version: 1372,
+    titulo: "SST Dashboard: exibe Código Interno do funcionário (em vez do código externo de OAuth)",
+    descricao: "Nas tabelas Top 10 Atestados, Top 10 Acidentes e Funcionários com Atestados Recorrentes, o número exibido abaixo/ao lado do nome do funcionário agora é o **Código Interno** (`employees.codigoInterno`) em vez da matrícula externa (que vinha como COL... do OAuth). O código interno também é mostrado no cabeçalho da tela ampliada de detalhamento do funcionário. Quando o funcionário não tem código interno cadastrado, mantém a matrícula como fallback. Procedure `sstAnalytics.porFuncionario` e queries de top funcionários atualizadas para retornar `codigoInterno`.",
+    tipo: "melhoria",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 03:00:00",
+  },
+  {
     version: 1371,
     titulo: "SST Dashboard: tela de detalhamento do funcionário (atestados & acidentes) agora em tela cheia",
     descricao: "Ao clicar no nome do funcionário no Dashboard de Atestados & Acidentes, o painel de detalhamento (atestados/acidentes do período) agora abre em tela cheia (98vw × 96vh) em vez do layout 1200px anterior. Cabeçalho com borda inferior e padding consistente; corpo com scroll independente e padding lateral. Mais espaço para os cartões-resumo e listagens de atestados/acidentes, melhor leitura em monitores grandes.",

@@ -411,7 +411,7 @@ export default function DashboardAtestadosAcidentes() {
                               >
                                 {f.nome}
                               </button>
-                              {f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null}
+                              {f.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{f.codigoInterno}</span> : (f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null)}
                             </td>
                             <td className="px-3 py-2 text-gray-600">{f.funcao || "—"}</td>
                             <td className="px-3 py-2 text-right font-semibold text-emerald-700">{f.quantidade}</td>
@@ -554,7 +554,7 @@ export default function DashboardAtestadosAcidentes() {
                               >
                                 {f.nome}
                               </button>
-                              {f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null}
+                              {f.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{f.codigoInterno}</span> : (f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null)}
                             </td>
                             <td className="px-3 py-2 text-gray-600">{f.funcao || "—"}</td>
                             <td className="px-3 py-2 text-right font-semibold text-red-700">{f.quantidade}</td>
@@ -772,7 +772,7 @@ export default function DashboardAtestadosAcidentes() {
                               >
                                 {f.nome}
                               </button>
-                              {f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null}
+                              {f.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{f.codigoInterno}</span> : (f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null)}
                             </td>
                             <td className="px-3 py-2 text-gray-600">{f.funcao || "—"}</td>
                             <td className="px-3 py-2 text-right font-semibold text-purple-700">{f.quantidade}</td>

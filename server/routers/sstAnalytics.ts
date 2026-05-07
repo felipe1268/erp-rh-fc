@@ -63,6 +63,7 @@ export const sstAnalyticsRouter = router({
           employeeId: atestados.employeeId,
           employeeNome: employees.nomeCompleto,
           employeeMatricula: employees.matricula,
+          employeeCodigoInterno: employees.codigoInterno,
           employeeFuncao: employees.funcao,
           employeeCargo: employees.cargo,
         })
@@ -121,13 +122,14 @@ export const sstAnalyticsRouter = router({
       // top funcionários (atestados)
       const funcMap = new Map<
         number,
-        { employeeId: number; nome: string; matricula: string | null; funcao: string | null; quantidade: number; dias: number }
+        { employeeId: number; nome: string; matricula: string | null; codigoInterno: string | null; funcao: string | null; quantidade: number; dias: number }
       >();
       for (const r of atRows) {
         const cur = funcMap.get(r.employeeId) ?? {
           employeeId: r.employeeId,
           nome: r.employeeNome || `Funcionário #${r.employeeId}`,
           matricula: r.employeeMatricula || null,
+          codigoInterno: r.employeeCodigoInterno || null,
           funcao: r.employeeFuncao || r.employeeCargo || null,
           quantidade: 0,
           dias: 0,
@@ -163,6 +165,7 @@ export const sstAnalyticsRouter = router({
           employeeId: accidents.employeeId,
           employeeNome: employees.nomeCompleto,
           employeeMatricula: employees.matricula,
+          employeeCodigoInterno: employees.codigoInterno,
           employeeFuncao: employees.funcao,
           employeeCargo: employees.cargo,
         })
@@ -378,13 +381,14 @@ export const sstAnalyticsRouter = router({
       // top funcionários (acidentes)
       const funcAcMap = new Map<
         number,
-        { employeeId: number; nome: string; matricula: string | null; funcao: string | null; quantidade: number; dias: number }
+        { employeeId: number; nome: string; matricula: string | null; codigoInterno: string | null; funcao: string | null; quantidade: number; dias: number }
       >();
       for (const r of acRows) {
         const cur = funcAcMap.get(r.employeeId) ?? {
           employeeId: r.employeeId,
           nome: r.employeeNome || `Funcionário #${r.employeeId}`,
           matricula: r.employeeMatricula || null,
+          codigoInterno: r.employeeCodigoInterno || null,
           funcao: r.employeeFuncao || r.employeeCargo || null,
           quantidade: 0,
           dias: 0,
@@ -539,6 +543,7 @@ export const sstAnalyticsRouter = router({
         id: employees.id,
         nome: employees.nomeCompleto,
         matricula: employees.matricula,
+        codigoInterno: employees.codigoInterno,
         funcao: employees.funcao,
         cargo: employees.cargo,
       }).from(employees).where(eq(employees.id, input.employeeId));
@@ -606,7 +611,7 @@ export const sstAnalyticsRouter = router({
       const totalDiasAcidente = acs.reduce((s, r) => s + (r.diasAfastamento || 0), 0);
 
       return {
-        funcionario: emp || { id: input.employeeId, nome: `Funcionário #${input.employeeId}`, matricula: null, funcao: null, cargo: null },
+        funcionario: emp || { id: input.employeeId, nome: `Funcionário #${input.employeeId}`, matricula: null, codigoInterno: null, funcao: null, cargo: null },
         periodo: { dataInicio, dataFim },
         atestados: ats,
         acidentes: acs,

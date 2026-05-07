@@ -61,9 +61,11 @@ export function EmployeeDetailDialog({ open, onOpenChange, employeeId, dataInici
           <DialogTitle className="flex items-center gap-2 text-lg">
             <User className="h-5 w-5 text-blue-600" />
             {d?.funcionario.nome || "Carregando..."}
-            {d?.funcionario.matricula && (
+            {(d?.funcionario as any)?.codigoInterno ? (
+              <span className="text-sm text-gray-400 font-normal">#{(d!.funcionario as any).codigoInterno}</span>
+            ) : d?.funcionario.matricula ? (
               <span className="text-sm text-gray-400 font-normal">#{d.funcionario.matricula}</span>
-            )}
+            ) : null}
           </DialogTitle>
           {d?.funcionario.funcao && (
             <p className="text-sm text-gray-600 flex items-center gap-1">
