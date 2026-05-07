@@ -763,7 +763,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1386.1-2026-05-07";
+    const COLFIX_VERSION = "v1386.2-2026-05-07-atestado-horas-numeric";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -923,6 +923,8 @@ Regras:
             ALTER TABLE seguro_vida_importacoes ADD COLUMN IF NOT EXISTS pdf_dados TEXT;
             ALTER TABLE compras_ordens_itens ADD COLUMN IF NOT EXISTS cotacao_item_id INTEGER;
             ALTER TABLE planejamento_medicao_config ADD COLUMN IF NOT EXISTS reter_sinal BOOLEAN DEFAULT FALSE;
+            -- Atestados: horas_afastamento agora suporta minutos (1.75 = 1h45min)
+            ALTER TABLE atestados ALTER COLUMN horas_afastamento TYPE NUMERIC(5,2) USING horas_afastamento::numeric;
           EXCEPTION WHEN OTHERS THEN NULL;
           END $$
         `);

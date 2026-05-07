@@ -226,8 +226,13 @@ async function abonarPontoPorAtestado(
         ne(pontoDescontos.status, "abonado"),
       ));
 
+    const fmtHoras = (h: number) => {
+      const hh = Math.floor(h);
+      const mm = Math.round((h - hh) * 60);
+      return mm > 0 ? `${hh}h${String(mm).padStart(2,"0")}` : `${hh}h`;
+    };
     const motivoBase = afastamentoTipo === "horas"
-      ? `Abono automático — Atestado médico (${horasAfastamento}h)`
+      ? `Abono automático — Atestado médico (${fmtHoras(Number(horasAfastamento) || 0)})`
       : `Abono automático — Atestado médico (${diasAfastamento} dia${diasAfastamento > 1 ? "s" : ""})`;
 
     let abonados = 0;
@@ -702,7 +707,7 @@ export const controleDocumentosRouter = router({
           tipo: z.string(),
           dataEmissao: z.string(),
           diasAfastamento: z.number().default(0),
-          horasAfastamento: z.number().default(0),
+          horasAfastamento: z.coerce.number().default(0),
           afastamentoTipo: z.enum(["dia", "horas"]).default("dia"),
           dataRetorno: z.string().optional(),
           cid: z.string().optional(),
@@ -749,7 +754,7 @@ export const controleDocumentosRouter = router({
           tipo: z.string().optional(),
           dataEmissao: z.string().optional(),
           diasAfastamento: z.number().optional(),
-          horasAfastamento: z.number().optional(),
+          horasAfastamento: z.coerce.number().optional(),
           afastamentoTipo: z.enum(["dia", "horas"]).optional(),
           dataRetorno: z.string().optional(),
           cid: z.string().optional(),

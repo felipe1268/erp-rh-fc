@@ -166,8 +166,8 @@ export function EmployeeDetailDialog({ open, onOpenChange, employeeId, dataInici
                                 )}
                                 <span className="flex items-center gap-1">
                                   <Clock className="h-3 w-3" />
-                                  {a.afastamentoTipo === "hora"
-                                    ? <><strong>{a.horasAfastamento || 0}</strong> h</>
+                                  {(a.afastamentoTipo === "hora" || a.afastamentoTipo === "horas")
+                                    ? (() => { const h = Number(a.horasAfastamento || 0); const hh = Math.floor(h); const mm = Math.round((h - hh) * 60); return <strong>{mm > 0 ? `${hh}h${String(mm).padStart(2,"0")}` : `${hh}h`}</strong>; })()
                                     : <><strong>{a.diasAfastamento || 0}</strong> dia(s)</>}
                                 </span>
                               </p>

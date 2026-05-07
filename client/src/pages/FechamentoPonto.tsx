@@ -529,7 +529,7 @@ function DescontosCLTPanel({ companyId, companyIds, mesAno, isMaster }: { compan
                             </td>
                             <td className="p-2.5 text-center">
                               {afTipo === "horas"
-                                ? <span className="font-medium">{a.horasAfastamento}h</span>
+                                ? <span className="font-medium">{(() => { const h = Number(a.horasAfastamento || 0); const hh = Math.floor(h); const mm = Math.round((h - hh) * 60); return mm > 0 ? `${hh}h${String(mm).padStart(2,"0")}` : `${hh}h`; })()}</span>
                                 : <span className="font-medium">{dias} dia{dias > 1 ? "s" : ""}</span>
                               }
                             </td>
