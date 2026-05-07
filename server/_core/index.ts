@@ -763,7 +763,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1387.0-2026-05-07-warnings-terceiros";
+    const COLFIX_VERSION = "v1387.1-2026-05-07-warnings-terceiros-manual";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -823,7 +823,10 @@ Regras:
               id SERIAL PRIMARY KEY,
               company_id INTEGER NOT NULL,
               empresa_terceira_id INTEGER NOT NULL,
-              funcionario_terceiro_id INTEGER NOT NULL,
+              funcionario_terceiro_id INTEGER,
+              funcionario_nome_manual VARCHAR(255),
+              funcionario_cpf_manual VARCHAR(20),
+              funcionario_funcao_manual VARCHAR(120),
               tipo_advertencia TEXT NOT NULL,
               data_ocorrencia DATE NOT NULL,
               motivo TEXT NOT NULL,
@@ -845,6 +848,10 @@ Regras:
             CREATE INDEX IF NOT EXISTS wt_empresa ON warnings_terceiros (empresa_terceira_id);
             CREATE INDEX IF NOT EXISTS wt_func ON warnings_terceiros (funcionario_terceiro_id);
             CREATE INDEX IF NOT EXISTS wt_data ON warnings_terceiros (data_ocorrencia);
+            ALTER TABLE warnings_terceiros ALTER COLUMN funcionario_terceiro_id DROP NOT NULL;
+            ALTER TABLE warnings_terceiros ADD COLUMN IF NOT EXISTS funcionario_nome_manual VARCHAR(255);
+            ALTER TABLE warnings_terceiros ADD COLUMN IF NOT EXISTS funcionario_cpf_manual VARCHAR(20);
+            ALTER TABLE warnings_terceiros ADD COLUMN IF NOT EXISTS funcionario_funcao_manual VARCHAR(120);
 
             ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS diferencas TEXT;
             ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS consolidado BOOLEAN DEFAULT FALSE;

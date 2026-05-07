@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1388,
+    titulo: "Terceiros — Advertências: colaborador agora opcional e com campo digitável",
+    descricao: "AJUSTE em /terceiros/advertencias: o campo Colaborador Terceirizado deixou de ser obrigatório e agora é um combobox digitável (input + datalist) — o usuário pode selecionar um colaborador previamente cadastrado OU digitar o nome livremente. Quando o nome digitado não corresponde a um cadastrado, dois campos opcionais aparecem (CPF e Função) que ficam armazenados em colunas auxiliares (funcionario_nome_manual, funcionario_cpf_manual, funcionario_funcao_manual) e são usados no PDF e na listagem via COALESCE. Apenas a Empresa Prestadora permanece obrigatória. Cálculo de sequência (1ª/2ª/3ª) também passou a funcionar para nomes digitados (agrupamento por nome+empresa). Schema, ColFix e backend atualizados (funcionario_terceiro_id virou nullable; novas 3 colunas). Bump de COLFIX_VERSION para v1387.1.",
+    tipo: "ajuste",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 19:30:00",
+  },
+  {
     version: 1387,
     titulo: "Terceiros — nova página de Advertências para funcionários terceirizados",
     descricao: "FEATURE no módulo Terceiros: nova página /terceiros/advertencias (menu lateral em 'Conformidade') para registrar Notificações, Advertências, Suspensões de Acesso à Obra e Solicitações de Substituição dirigidas à empresa prestadora de serviços e ao colaborador terceirizado. Nova tabela warnings_terceiros (com empresa_terceira_id + funcionario_terceiro_id), sub-router terceiros.advertencias (list/create/update/delete/uploadDoc) com cálculo automático de sequência e alerta a partir da 3ª ocorrência. PDF formal A4 gerado no cliente, com texto deixando explícito que NÃO há vínculo empregatício entre a CONTRATANTE e o colaborador (a empresa prestadora é responsável pelas medidas disciplinares internas), incluindo bloco com qualificação completa das três partes (CONTRATANTE, EMPRESA PRESTADORA, COLABORADOR), descrição da ocorrência, fundamentos contratuais, áreas de assinatura para as três partes + 3 testemunhas e rodapé LGPD. Suporta filtros por empresa, tipo e busca livre, além de upload do PDF assinado.",

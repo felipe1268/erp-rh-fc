@@ -3563,7 +3563,10 @@ export const warningsTerceiros = pgTable("warnings_terceiros", {
   id: serial().primaryKey(),
   companyId: integer("company_id").notNull(),
   empresaTerceiraId: integer("empresa_terceira_id").notNull(),
-  funcionarioTerceiroId: integer("funcionario_terceiro_id").notNull(),
+  funcionarioTerceiroId: integer("funcionario_terceiro_id"),
+  funcionarioNomeManual: varchar("funcionario_nome_manual", { length: 255 }),
+  funcionarioCpfManual: varchar("funcionario_cpf_manual", { length: 20 }),
+  funcionarioFuncaoManual: varchar("funcionario_funcao_manual", { length: 120 }),
   tipoAdvertencia: text("tipo_advertencia").notNull(), // Notificacao, Advertencia, Suspensao, SolicitacaoSubstituicao
   dataOcorrencia: date("data_ocorrencia", { mode: "string" }).notNull(),
   motivo: text().notNull(),

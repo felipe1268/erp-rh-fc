@@ -117,6 +117,9 @@ export default function AdvertenciasTerceiros() {
     setForm({
       empresaTerceiraId: a.empresaTerceiraId,
       funcionarioTerceiroId: a.funcionarioTerceiroId,
+      funcionarioNomeInput: a.funcionarioNome || "",
+      funcionarioCpfManual: a.funcionarioTerceiroId ? "" : (a.funcionarioCpf || ""),
+      funcionarioFuncaoManual: a.funcionarioTerceiroId ? "" : (a.funcionarioFuncao || ""),
       tipoAdvertencia: a.tipoAdvertencia,
       dataOcorrencia: String(a.dataOcorrencia || "").slice(0, 10),
       motivo: a.motivo,
@@ -128,7 +131,8 @@ export default function AdvertenciasTerceiros() {
     setShowDialog(true);
   }
   function handleSubmit() {
-    if (!form.empresaTerceiraId || !form.funcionarioTerceiroId) { toast.error("Selecione empresa e colaborador."); return; }
+    if (!form.empresaTerceiraId) { toast.error("Selecione a empresa prestadora."); return; }
+    if (!form.funcionarioTerceiroId && !(form.funcionarioNomeInput || "").trim()) { toast.error("Informe o nome do colaborador (cadastrado ou digitado)."); return; }
     if (!form.tipoAdvertencia || !form.dataOcorrencia || !form.motivo) { toast.error("Preencha tipo, data e motivo."); return; }
     if (form.tipoAdvertencia === "Suspensao" && !form.diasSuspensao) { toast.error("Informe os dias de suspensão."); return; }
     if (editingId) {
@@ -146,7 +150,10 @@ export default function AdvertenciasTerceiros() {
       createMut.mutate({
         companyId,
         empresaTerceiraId: Number(form.empresaTerceiraId),
-        funcionarioTerceiroId: Number(form.funcionarioTerceiroId),
+        funcionarioTerceiroId: form.funcionarioTerceiroId ? Number(form.funcionarioTerceiroId) : undefined,
+        funcionarioNomeManual: form.funcionarioTerceiroId ? undefined : (form.funcionarioNomeInput || "").trim(),
+        funcionarioCpfManual: form.funcionarioTerceiroId ? undefined : (form.funcionarioCpfManual || undefined),
+        funcionarioFuncaoManual: form.funcionarioTerceiroId ? undefined : (form.funcionarioFuncaoManual || undefined),
         tipoAdvertencia: form.tipoAdvertencia,
         dataOcorrencia: form.dataOcorrencia,
         motivo: form.motivo,
@@ -404,15 +411,46 @@ export default function AdvertenciasTerceiros() {
                 </Select>
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-600">Colaborador Terceirizado *</label>
-                <Select value={form.funcionarioTerceiroId ? String(form.funcionarioTerceiroId) : ""} onValueChange={v => setForm({ ...form, funcionarioTerceiroId: parseInt(v) })} disabled={!form.empresaTerceiraId}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder={form.empresaTerceiraId ? "Selecione o colaborador" : "Selecione a empresa primeiro"} /></SelectTrigger>
-                  <SelectContent>
-                    {(funcionarios as any[]).map(f => <SelectItem key={f.id} value={String(f.id)}>{f.nome}{f.cpf ? ` — ${formatCPF(f.cpf)}` : ""}{f.funcao ? ` (${f.funcao})` : ""}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <label className="text-xs font-medium text-gray-600">Colaborador Terceirizado <span className="text-gray-400 font-normal">(opcional)</span></label>
+                <Input
+                  className="mt-1"
+                  list="lista-funcionarios-terceiros"
+                  disabled={!form.empresaTerceiraId}
+                  placeholder={form.empresaTerceiraId ? "Selecione um cadastrado ou digite o nome" : "Selecione a empresa primeiro"}
+                  value={form.funcionarioNomeInput || ""}
+                  onChange={e => {
+                    const v = e.target.value;
+                    const match = (funcionarios as any[]).find(f => f.nome === v);
+                    setForm({
+                      ...form,
+                      funcionarioNomeInput: v,
+                      funcionarioTerceiroId: match ? match.id : undefined,
+                      funcionarioNomeManual: match ? undefined : v,
+                      funcionarioCpfManual: match ? undefined : (form.funcionarioCpfManual || ""),
+                      funcionarioFuncaoManual: match ? undefined : (form.funcionarioFuncaoManual || ""),
+                    });
+                  }}
+                />
+                <datalist id="lista-funcionarios-terceiros">
+                  {(funcionarios as any[]).map(f => (
+                    <option key={f.id} value={f.nome}>{f.cpf ? formatCPF(f.cpf) : ""}{f.funcao ? ` — ${f.funcao}` : ""}</option>
+                  ))}
+                </datalist>
               </div>
             </div>
+            {form.funcionarioNomeInput && !form.funcionarioTerceiroId && (
+              <div className="grid grid-cols-2 gap-4 mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                <div className="col-span-2 text-xs text-amber-800 font-medium">Colaborador não cadastrado — informe os dados abaixo (opcional, mas úteis no PDF):</div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600">CPF</label>
+                  <Input className="mt-1" value={form.funcionarioCpfManual || ""} onChange={e => setForm({ ...form, funcionarioCpfManual: e.target.value })} placeholder="000.000.000-00" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Função</label>
+                  <Input className="mt-1" value={form.funcionarioFuncaoManual || ""} onChange={e => setForm({ ...form, funcionarioFuncaoManual: e.target.value })} placeholder="Função na obra" />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="rounded-xl border bg-white p-4">

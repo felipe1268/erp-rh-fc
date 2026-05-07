@@ -570,9 +570,9 @@ Seja rigoroso na validação. Verifique se o tipo do documento corresponde ao es
             companyId: warningsTerceiros.companyId,
             empresaTerceiraId: warningsTerceiros.empresaTerceiraId,
             funcionarioTerceiroId: warningsTerceiros.funcionarioTerceiroId,
-            funcionarioNome: funcionariosTerceiros.nome,
-            funcionarioCpf: funcionariosTerceiros.cpf,
-            funcionarioFuncao: funcionariosTerceiros.funcao,
+            funcionarioNome: sql<string>`COALESCE(${funcionariosTerceiros.nome}, ${warningsTerceiros.funcionarioNomeManual})`,
+            funcionarioCpf: sql<string>`COALESCE(${funcionariosTerceiros.cpf}, ${warningsTerceiros.funcionarioCpfManual})`,
+            funcionarioFuncao: sql<string>`COALESCE(${funcionariosTerceiros.funcao}, ${warningsTerceiros.funcionarioFuncaoManual})`,
             empresaRazaoSocial: empresasTerceiras.razaoSocial,
             empresaCnpj: empresasTerceiras.cnpj,
             empresaResponsavel: empresasTerceiras.responsavelNome,
@@ -600,7 +600,10 @@ Seja rigoroso na validação. Verifique se o tipo do documento corresponde ao es
       .input(z.object({
         companyId: z.number(),
         empresaTerceiraId: z.number(),
-        funcionarioTerceiroId: z.number(),
+        funcionarioTerceiroId: z.number().optional().nullable(),
+        funcionarioNomeManual: z.string().optional(),
+        funcionarioCpfManual: z.string().optional(),
+        funcionarioFuncaoManual: z.string().optional(),
         tipoAdvertencia: z.enum(["Notificacao", "Advertencia", "Suspensao", "SolicitacaoSubstituicao"]),
         dataOcorrencia: z.string(),
         motivo: z.string().min(3),
@@ -613,13 +616,27 @@ Seja rigoroso na validação. Verifique se o tipo do documento corresponde ao es
       }))
       .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
-        const existentes = await db.select({ id: warningsTerceiros.id }).from(warningsTerceiros)
-          .where(and(eq(warningsTerceiros.funcionarioTerceiroId, input.funcionarioTerceiroId), eq(warningsTerceiros.companyId, input.companyId), isNull(warningsTerceiros.deletedAt)));
-        const sequencia = existentes.length + 1;
+        if (!input.funcionarioTerceiroId && !(input.funcionarioNomeManual && input.funcionarioNomeManual.trim().length > 0)) {
+          throw new Error("Informe um colaborador cadastrado ou digite o nome do colaborador.");
+        }
+        let sequencia = 1;
+        if (input.funcionarioTerceiroId) {
+          const existentes = await db.select({ id: warningsTerceiros.id }).from(warningsTerceiros)
+            .where(and(eq(warningsTerceiros.funcionarioTerceiroId, input.funcionarioTerceiroId), eq(warningsTerceiros.companyId, input.companyId), isNull(warningsTerceiros.deletedAt)));
+          sequencia = existentes.length + 1;
+        } else if (input.funcionarioNomeManual) {
+          const nomeKey = input.funcionarioNomeManual.trim().toLowerCase();
+          const existentes = await db.select({ nome: warningsTerceiros.funcionarioNomeManual }).from(warningsTerceiros)
+            .where(and(eq(warningsTerceiros.empresaTerceiraId, input.empresaTerceiraId), eq(warningsTerceiros.companyId, input.companyId), isNull(warningsTerceiros.deletedAt)));
+          sequencia = existentes.filter((e: any) => (e.nome || "").trim().toLowerCase() === nomeKey).length + 1;
+        }
         const [row] = await db.insert(warningsTerceiros).values({
           companyId: input.companyId,
           empresaTerceiraId: input.empresaTerceiraId,
-          funcionarioTerceiroId: input.funcionarioTerceiroId,
+          funcionarioTerceiroId: input.funcionarioTerceiroId || null,
+          funcionarioNomeManual: input.funcionarioTerceiroId ? null : (input.funcionarioNomeManual || null),
+          funcionarioCpfManual: input.funcionarioTerceiroId ? null : (input.funcionarioCpfManual || null),
+          funcionarioFuncaoManual: input.funcionarioTerceiroId ? null : (input.funcionarioFuncaoManual || null),
           tipoAdvertencia: input.tipoAdvertencia,
           dataOcorrencia: input.dataOcorrencia,
           motivo: input.motivo,
