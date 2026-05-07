@@ -2,11 +2,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useState } from "react";
 import {
   User, Stethoscope, AlertTriangle, FileText, Calendar, Clock,
-  MapPin, FileWarning, Briefcase, Loader2, ExternalLink,
+  MapPin, FileWarning, Briefcase, Loader2, ExternalLink, Eye, X,
 } from "lucide-react";
 
 type Props = {
@@ -53,6 +55,7 @@ export function EmployeeDetailDialog({ open, onOpenChange, employeeId, dataInici
   );
 
   const d = detailQuery.data;
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -178,14 +181,13 @@ export function EmployeeDetailDialog({ open, onOpenChange, employeeId, dataInici
                               )}
                             </div>
                             {a.documentoUrl && (
-                              <a
-                                href={a.documentoUrl}
-                                target="_blank"
-                                rel="noreferrer"
+                              <button
+                                type="button"
+                                onClick={() => setViewerUrl(a.documentoUrl)}
                                 className="text-xs text-blue-600 hover:underline flex items-center gap-1 flex-shrink-0"
                               >
-                                <FileText className="h-3 w-3" /> Documento <ExternalLink className="h-3 w-3" />
-                              </a>
+                                <FileText className="h-3 w-3" /> Documento <Eye className="h-3 w-3" />
+                              </button>
                             )}
                           </div>
                         </CardContent>
@@ -252,14 +254,13 @@ export function EmployeeDetailDialog({ open, onOpenChange, employeeId, dataInici
                               )}
                             </div>
                             {a.documentoUrl && (
-                              <a
-                                href={a.documentoUrl}
-                                target="_blank"
-                                rel="noreferrer"
+                              <button
+                                type="button"
+                                onClick={() => setViewerUrl(a.documentoUrl)}
                                 className="text-xs text-blue-600 hover:underline flex items-center gap-1 flex-shrink-0"
                               >
-                                <FileText className="h-3 w-3" /> Documento <ExternalLink className="h-3 w-3" />
-                              </a>
+                                <FileText className="h-3 w-3" /> Documento <Eye className="h-3 w-3" />
+                              </button>
                             )}
                           </div>
                         </CardContent>
@@ -272,6 +273,35 @@ export function EmployeeDetailDialog({ open, onOpenChange, employeeId, dataInici
           )}
         </div>
       </DialogContent>
+
+      <Dialog open={!!viewerUrl} onOpenChange={(v) => !v && setViewerUrl(null)}>
+        <DialogContent className="max-w-none w-[95vw] h-[95vh] p-0 overflow-hidden flex flex-col bg-white sm:rounded-xl">
+          <DialogHeader className="px-4 py-2 border-b flex-row items-center justify-between space-y-0">
+            <DialogTitle className="text-sm font-medium flex items-center gap-2">
+              <FileText className="h-4 w-4 text-blue-600" /> Visualizar documento
+            </DialogTitle>
+            <div className="flex items-center gap-2">
+              {viewerUrl && (
+                <Button asChild variant="outline" size="sm" className="h-7 text-xs">
+                  <a href={viewerUrl} target="_blank" rel="noreferrer">
+                    <ExternalLink className="h-3 w-3 mr-1" /> Abrir em nova aba
+                  </a>
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewerUrl(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </DialogHeader>
+          {viewerUrl && (
+            <iframe
+              src={viewerUrl}
+              title="Documento"
+              className="flex-1 w-full border-0 bg-gray-100"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

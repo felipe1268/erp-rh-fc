@@ -9284,6 +9284,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 03:00:00",
   },
   {
+    version: 1374,
+    titulo: "SST Detalhamento: documento do atestado/acidente abre em visualizador (não baixa)",
+    descricao: "Na tela de detalhamento do funcionário (Atestados & Acidentes), o link 'Documento' agora abre o arquivo em um visualizador interno (modal com iframe 95vw × 95vh) em vez de baixar/abrir nova aba. O modal traz botão 'Abrir em nova aba' como alternativa e botão de fechar. Funciona para PDFs e imagens renderizados nativamente pelo navegador.",
+    tipo: "melhoria",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 04:45:00",
+  },
+  {
     version: 1373,
     titulo: "SST Dashboard: BUGFIX no Custo Estimado de Afastamento (parser de salário BR)",
     descricao: "Bug crítico: o cálculo de Custo Estimado de Afastamento usava `parseFloat` direto no `salarioBase`, que retorna 1.5 para valores em formato brasileiro como '1.500,00' (porque o ponto vira separador decimal e a vírgula é descartada). Resultado: 111 dias de afastamento × ~R$ 0,05/dia = R$ 8,76 absurdo. Corrigido com novo helper `parseBRLSalario` (igual ao parseBRLLocal do payrollEngine) que detecta formato BR ('2.774,20') vs decimal ('6200.00') antes de parsear. Agora o custo retorna o valor real (salário base ÷ 30 × dias afastados, somado por funcionário).",
