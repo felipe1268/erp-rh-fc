@@ -132,10 +132,28 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
       const legendConfig = {
         display: datasets.length > 1 || isPieOrDoughnut,
         position: isPieOrDoughnut ? (isMobile ? "bottom" as const : "right" as const) : "top" as const,
+        // Clique na legenda → habilita/desabilita a série/fatia.
+        onClick: function (e: any, legendItem: any, legend: any) {
+          const ci = legend.chart;
+          if (isPieOrDoughnut) {
+            // Pie/Doughnut: toggle do índice da fatia
+            ci.toggleDataVisibility(legendItem.index);
+          } else {
+            // Linha/Barra: toggle do dataset inteiro
+            const idx = legendItem.datasetIndex;
+            const meta = ci.getDatasetMeta(idx);
+            meta.hidden = meta.hidden === null ? !ci.data.datasets[idx].hidden : null;
+          }
+          ci.update();
+        },
+        onHover: (e: any) => { if (e?.native?.target) e.native.target.style.cursor = "pointer"; },
+        onLeave: (e: any) => { if (e?.native?.target) e.native.target.style.cursor = "default"; },
         labels: {
           font: { size: isMobile ? 10 : 11 },
           padding: isMobile ? 6 : 8,
           boxWidth: isMobile ? 10 : 40,
+          usePointStyle: true,
+          pointStyle: "rectRounded" as const,
           ...(isPieOrDoughnut && showPercentage ? {
             generateLabels: function (chart: any) {
               const data = chart.data;
