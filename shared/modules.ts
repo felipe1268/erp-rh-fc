@@ -397,7 +397,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     icon: "ShoppingCart",
     features: [
       { key: "compras-painel",         label: "Painel",              route: "/compras/painel",         icon: "LayoutDashboard" },
-      { key: "compras-fornecedores",   label: "Fornecedores",        route: "/compras/fornecedores",   icon: "Truck" },
+      { key: "compras-fornecedores",   label: "Empresas",            route: "/compras/fornecedores",   icon: "Truck" },
       { key: "compras-solicitacoes",   label: "Solicitações (SC)",   route: "/compras/solicitacoes",   icon: "ClipboardList" },
       { key: "compras-cotacoes",       label: "Cotações",            route: "/compras/cotacoes",       icon: "FileSearch" },
       { key: "compras-ordens",         label: "Ordens de Compra",    route: "/compras/ordens",         icon: "ShoppingBag" },

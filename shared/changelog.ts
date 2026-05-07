@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1394,
+    titulo: "Compras — Renomeação de 'Fornecedores' para 'Empresas'",
+    descricao: "MELHORIA: rótulo do módulo /compras/fornecedores renomeado de 'Fornecedores' para 'Empresas' em todos os pontos visíveis ao usuário (cabeçalho da página, abas, botão 'Nova Empresa', estado vazio, modal de cadastro/edição, toasts e itens de menu lateral em DashboardLayout, Configurações e shared/modules). A rota e os procedures tRPC permanecem inalterados (/compras/fornecedores) por compatibilidade. A classificação 'PRESTAÇÃO DE SERVIÇO / FORNECEDOR' (Rev. 1393) define se cada empresa cadastrada é um fornecedor de materiais, prestador de serviço, ou ambos.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 22:55:00",
+  },
+  {
     version: 1393,
     titulo: "Compras — Fornecedores: classificação 'Prestação de Serviço' e 'Fornecedor' no cadastro",
     descricao: "MELHORIA em /compras/fornecedores: dois novos campos selecionáveis (PRESTAÇÃO DE SERVIÇO e FORNECEDOR) adicionados ao topo do modal de cadastro/edição, permitindo classificar a empresa em uma ou nas duas categorias. Persistido nas colunas is_prestador_servico (default false) e is_fornecedor (default true) na tabela fornecedores. Backend (criarFornecedor/atualizarFornecedor) aceita os novos booleanos e o frontend carrega/edita normalmente. Cadastros existentes ficam marcados como 'FORNECEDOR' por padrão (compatibilidade retroativa).",

@@ -302,7 +302,7 @@ const menuSectionsTerceiros: MenuSection[] = [
     title: "Cadastro de Terceiros",
     items: [
       { icon: LayoutDashboard, label: "Painel Terceiros", path: "/terceiros/painel" },
-      { icon: Building2, label: "Fornecedores / Terceiros", path: "/compras/fornecedores" },
+      { icon: Building2, label: "Empresas / Terceiros", path: "/compras/fornecedores" },
       { icon: Users, label: "Funcionários Terceiros", path: "/terceiros/funcionarios" },
     ],
   },
@@ -405,7 +405,7 @@ const menuSectionsCompras: MenuSection[] = [
   {
     title: "Cadastros",
     items: [
-      { icon: Users,           label: "Fornecedores",         path: "/compras/fornecedores"     },
+      { icon: Users,           label: "Empresas",             path: "/compras/fornecedores"     },
     ],
   },
   {
@@ -626,7 +626,7 @@ const menuSectionsCadastro: MenuSection[] = [
       { icon: Scale,         label: "Convenções Coletivas",path: "/convencoes-coletivas" },
       { icon: Wrench,        label: "Habilidades",         path: "/habilidades"          },
       { icon: ClipboardList, label: "Contas Bancárias",    path: "/contas-bancarias"     },
-      { icon: Truck,         label: "Fornecedores",        path: "/compras/fornecedores" },
+      { icon: Truck,         label: "Empresas",            path: "/compras/fornecedores" },
     ],
   },
   {
