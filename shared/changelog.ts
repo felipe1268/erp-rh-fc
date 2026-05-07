@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1402,
+    titulo: "Advertência (CLT) — corrigido erro 'expected number, received undefined' ao salvar assinaturas digitais",
+    descricao: "CORREÇÃO em /controle-documentos > Advertências CLT: ao criar uma nova advertência e clicar imediatamente em 'Assinaturas Digitais' no preview, o backend recusava com 'Invalid input: expected number, received undefined' no campo advertenciaId. Causa: o create rodava com .mutate() (fire-and-forget) e o preview abria 300ms depois sem garantia de que o ID já tinha chegado. Fix: o submit agora usa await mutateAsync, captura o ID retornado e o injeta diretamente em previewAdvData.id antes de abrir o preview. Como cinto e suspensório, o botão 'Assinaturas Digitais' do preview agora bloqueia o clique caso o ID ainda não esteja disponível e mostra aviso ao usuário em vez de enviar undefined.",
+    tipo: "correcao",
+    modulos: "ControleDocumentos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 18:30:00",
+  },
+  {
     version: 1401,
     titulo: "Atestado Médico (parcial) — campo 'Horas de Afastamento' aceita atestados curtos (ex.: 0h48min)",
     descricao: "CORREÇÃO em /controle-documentos > Novo Atestado > Horas (parcial): o antigo campo único 'HH:MM' interpretava digitação simples como horas (ex.: ao digitar '48' o sistema entendia 48 horas e travava em 12h, impedindo registro de atestados abaixo de 1h). Agora o campo foi dividido em dois inputs numéricos separados — HORAS (0–12) e MINUTOS (0–59) — eliminando ambiguidade. É possível registrar atestados curtos como 0h48min (consulta/atendimento de menos de 1 hora) sem qualquer travamento. Backend já aceitava valores fracionários (z.coerce.number); o problema era exclusivo da parsing de UI.",

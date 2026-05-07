@@ -1554,7 +1554,7 @@ export default function ControleDocumentos() {
     setShowAtestDialog(false); setAtestForm({}); setEditingAtestId(null);
   };
 
-  const handleSubmitAdv = () => {
+  const handleSubmitAdv = async () => {
     if (!advForm.employeeId || !advForm.tipoAdvertencia || !advForm.dataOcorrencia || !advForm.motivo) { toast.error("Preencha os campos obrigatórios"); return; }
     // Montar testemunhas como string JSON estruturada para o backend
     const testemunhasArr = [1, 2, 3].map(n => ({
@@ -1567,15 +1567,24 @@ export default function ControleDocumentos() {
     delete payload.testemunha1Nome; delete payload.testemunha1Doc;
     delete payload.testemunha2Nome; delete payload.testemunha2Doc;
     delete payload.testemunha3Nome; delete payload.testemunha3Doc;
-    if (editingAdvId) {
-      updateAdv.mutate({ id: editingAdvId, ...payload });
-    } else {
-      createAdv.mutate({ companyId, companyIds, ...payload, aplicadoPor: authUser?.name || authUser?.username || undefined });
+    let novaAdvId: number | null = null;
+    try {
+      if (editingAdvId) {
+        await updateAdv.mutateAsync({ id: editingAdvId, ...payload });
+      } else {
+        const res: any = await createAdv.mutateAsync({ companyId, companyIds, ...payload, aplicadoPor: authUser?.name || authUser?.username || undefined });
+        novaAdvId = res?.id || null;
+        if (novaAdvId) setLastCreatedAdvId(novaAdvId);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao salvar advertência.");
+      return;
     }
     if (!editingAdvId && advForm.tipoAdvertencia !== "Verbal") {
       const emp = (allEmployees as any[]).find((e: any) => e.id === advForm.employeeId);
       const empAdvs = (advList as any[]).filter((x: any) => x.employeeId === advForm.employeeId);
       setPreviewAdvData({
+        id: novaAdvId,
         nomeCompleto: emp?.nomeCompleto || "",
         cpf: emp?.cpf || "",
         funcao: emp?.funcao || "",
@@ -1590,7 +1599,7 @@ export default function ControleDocumentos() {
         anteriores: empAdvs.sort((a: any, b: any) => (a.dataOcorrencia || "").localeCompare(b.dataOcorrencia || "")),
         employeeId: advForm.employeeId,
       });
-      setTimeout(() => setShowAdvPreview(true), 300);
+      setTimeout(() => setShowAdvPreview(true), 50);
     }
     setShowAdvDialog(false); setAdvForm({}); setEditingAdvId(null); setAdvEmployeeCount(null);
   };
@@ -3268,8 +3277,13 @@ export default function ControleDocumentos() {
               </div>
               <div className="flex items-center gap-2">
                 <Button size="sm" className="gap-2 bg-white text-blue-800 hover:bg-blue-50" onClick={() => {
+                  const advId = a.id || lastCreatedAdvId;
+                  if (!advId) {
+                    toast.error("Aguarde o salvamento da advertência terminar antes de assinar.");
+                    return;
+                  }
                   setAdvAssinaturasData({
-                    advertenciaId: lastCreatedAdvId || a.id,
+                    advertenciaId: advId,
                     nomeFuncionario: a.nomeCompleto,
                     nomeAplicador: a.aplicadoPor || authUser?.name || "Responsável",
                     testemunhasIniciais: testemunhasArr,
