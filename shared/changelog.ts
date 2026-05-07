@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1396,
+    titulo: "Terceiros — KPI 'Empresas Terceiras' abre as empresas COM CONTRATO ATIVO",
+    descricao: "BUGFIX: o card 'Empresas Terceiras' no Painel Terceiros mostra 4 (empresas com contrato ativo, da tabela empresas_terceiras isolada por tenant), mas ao clicar abria a lista do catálogo global /compras/fornecedores (1186 registros, tabela compartilhada do módulo Compras), gerando inconsistência entre o número exibido e o conteúdo da página. Solução: a rota /terceiros/empresas agora renderiza EmpresasTerceiras.tsx (que consome terceiros.empresas.list — as 4 empresas com contrato ativo da empresa selecionada no header), mantendo coerência com o KPI. O catálogo global /compras/fornecedores (1186) permanece acessível via menu Compras → 'Empresas Terceiras' e RH/Cadastro → 'Empresas Terceiras'. Lógicas e tabelas existentes preservadas — apenas o destino do clique foi corrigido.",
+    tipo: "bugfix",
+    modulos: "Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 15:15:00",
+  },
+  {
     version: 1395,
     titulo: "Terceiros — sidebar mantém contexto + rótulo 'Empresas Terceiras' (desambiguar grupo)",
     descricao: "BUGFIX + MELHORIA: (1) Ao clicar em 'Empresas Terceiras' no menu lateral do módulo Terceiros, o sidebar morfava para o menu RH/Cadastros (porque a rota /compras/fornecedores estava mapeada para o módulo 'cadastro' em ROUTE_MODULE_MAP). Como o menu RH/Cadastros tem 'Empresas' → /empresas (grupo FC/Hotel/Locnow) no topo, o usuário acabava sendo levado para a página errada no clique seguinte. Solução: criada a rota dedicada /terceiros/empresas (já mapeada para o módulo 'terceiros') que renderiza o mesmo componente Fornecedores; o item do sidebar Terceiros agora aponta para /terceiros/empresas, preservando o contexto do menu Terceiros após o clique. Cards e atalhos do Painel Terceiros (PainelTerceiros.tsx) também atualizados para a nova rota. (2) Para eliminar a ambiguidade entre 'Empresas do grupo' (FC, Hotel Consagrado, Locnow) e 'fornecedores/prestadores cadastrados (1186 empresas)', o módulo /compras/fornecedores foi renomeado de 'Empresas' para 'Empresas Terceiras' em todos os pontos visíveis ao usuário (cabeçalho da página, abas, botão 'Nova Empresa Terceira', estado vazio, modal de cadastro/edição, toasts e itens de menu lateral em DashboardLayout, Configurações e shared/modules). A página /empresas (Empresas.tsx) mantém o rótulo 'Empresas' para o grupo. A rota e os procedures tRPC de fornecedores permanecem inalterados (/compras/fornecedores, criarFornecedor, etc.) por compatibilidade.",

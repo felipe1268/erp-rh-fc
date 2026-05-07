@@ -427,7 +427,7 @@ function Router() {
         <Route path={"/dashboards/habilidades"} component={() => <RouteGuard component={DashHabilidades} route="/dashboards/habilidades" />} />
         {/* Terceiros */}
         <Route path="/terceiros" component={() => <RouteGuard component={PainelTerceiros} route="/terceiros/painel" />} />
-        <Route path="/terceiros/empresas" component={() => <RouteGuard component={Fornecedores} route="/terceiros/empresas" />} />
+        <Route path="/terceiros/empresas" component={() => <RouteGuard component={EmpresasTerceiras} route="/terceiros/empresas" />} />
         <Route path="/terceiros/funcionarios" component={() => <RouteGuard component={FuncionariosTerceiros} route="/terceiros/funcionarios" />} />
         <Route path="/terceiros/obrigacoes-mensais" component={() => <RouteGuard component={ObrigacoesMensais} route="/terceiros/obrigacoes" />} />
         <Route path="/terceiros/obrigacoes" component={() => <RouteGuard component={ObrigacoesMensais} route="/terceiros/obrigacoes" />} />
