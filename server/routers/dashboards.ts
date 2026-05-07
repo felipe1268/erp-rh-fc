@@ -518,14 +518,32 @@ async function getDashFolhaPagamento(companyId: number, mesRef?: string, company
   // Mantém o KPI "Custo Total" diferente de "Total Proventos".
   const custoTotalMes = totalProventosMes + totalProventosMes * 0.20 + totalFgtsMes;
 
+  // Detalhamento por funcionário (todos os funcionários, todos os campos)
+  const detalhesPorFuncionario = pagamentosMes.map(s => {
+    const proventos = parseFloat(s.totalProventos || "0");
+    const descBruto = parseFloat(s.totalDescontos || "0");
+    const adiant    = parseFloat(s.descontoAdiantamento || "0");
+    return {
+      employeeId: s.employeeId,
+      nome:       s.nomeCompleto || "Desconhecido",
+      funcao:     s.funcao || "-",
+      banco:      s.bancoNome || s.banco || s.bancoDestino || "Não informado",
+      bruto:      proventos,
+      proventos,
+      adiantamento:    adiant,
+      descontosSemVale: Math.max(0, descBruto - adiant),
+      faltas:     parseFloat(s.descontoFaltas || "0"),
+      vrFaltas:   parseFloat(s.descontoVrFaltas || "0"),
+      vtFaltas:   parseFloat(s.descontoVtFaltas || "0"),
+      inss:       parseFloat(s.descontoInss || "0"),
+      irrf:       parseFloat(s.descontoIrrf || "0"),
+      fgts:       parseFloat(s.descontoFgts || "0"),
+      liquido:    parseFloat(s.salarioLiquido || "0"),
+    };
+  });
+
   // Top 10 maiores salários
-  const topSalarios = pagamentosMes
-    .map(s => ({
-      nome: s.nomeCompleto || "Desconhecido",
-      funcao: s.funcao || "-",
-      liquido: parseFloat(s.salarioLiquido || "0"),
-      bruto: parseFloat(s.totalProventos || "0"),
-    }))
+  const topSalarios = [...detalhesPorFuncionario]
     .sort((a, b) => b.bruto - a.bruto).slice(0, 10);
 
   // Distribuição por banco (líquido pago por banco)
@@ -568,6 +586,7 @@ async function getDashFolhaPagamento(companyId: number, mesRef?: string, company
       funcionarios: Number(r.funcionarios),
     })),
     topSalarios,
+    detalhesPorFuncionario,
     porBanco: Object.entries(porBanco).map(([banco, d]) => ({ banco, count: d.count, valor: Math.round(d.valor * 100) / 100 })).sort((a, b) => b.valor - a.valor),
     porFuncao: Object.entries(porFuncao).map(([funcao, d]) => ({ funcao, count: d.count, custo: Math.round(d.custo * 100) / 100 })).sort((a, b) => b.custo - a.custo).slice(0, 10),
     mesReferencia: mes,
