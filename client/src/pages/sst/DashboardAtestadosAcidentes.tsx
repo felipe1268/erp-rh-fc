@@ -89,6 +89,8 @@ export default function DashboardAtestadosAcidentes() {
   const [dataFim, setDataFim] = useState(defaultFim());
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
   const [showCustoDetalhe, setShowCustoDetalhe] = useState(false);
+  const [indicadorDetalhe, setIndicadorDetalhe] = useState<{ titulo: string; descricao: string; lista: any[] } | null>(null);
+  const [reincidenciaDetalhe, setReincidenciaDetalhe] = useState(false);
 
   const dash = trpc.sstAnalytics.atestadosAcidentes.useQuery(
     {
@@ -106,6 +108,47 @@ export default function DashboardAtestadosAcidentes() {
       ...m, mesLabel: mesLabel(m.mes),
     }));
   }, [d]);
+
+  // Helpers de drill-down nos gráficos
+  const drillCols = [
+    { key: "dataEmissao", label: "Data" },
+    { key: "nome", label: "Funcionário", render: (r: any) => (
+      <span>{r.nome}{r.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{r.codigoInterno}</span> : null}</span>
+    )},
+    { key: "funcao", label: "Função", render: (r: any) => r.funcao || "—" },
+    { key: "tipo", label: "Tipo" },
+    { key: "cid", label: "CID", render: (r: any) => r.cid || "—" },
+    { key: "motivo", label: "Motivo" },
+    { key: "dias", label: "Dias", align: "right" as const },
+  ];
+  const drillColsAcid = [
+    { key: "dataAcidente", label: "Data" },
+    { key: "nome", label: "Funcionário", render: (r: any) => (
+      <span>{r.nome}{r.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{r.codigoInterno}</span> : null}</span>
+    )},
+    { key: "funcao", label: "Função", render: (r: any) => r.funcao || "—" },
+    { key: "tipo", label: "Tipo" },
+    { key: "gravidade", label: "Gravidade" },
+    { key: "parteCorpo", label: "Parte do corpo" },
+    { key: "local", label: "Local" },
+    { key: "dias", label: "Dias", align: "right" as const },
+  ];
+
+  const drillAtestadosBy = (field: keyof NonNullable<typeof d>["atestadosLista"][number], labelOf: (r: any) => string) => ({
+    getRows: (row: any) => (d?.atestadosLista ?? []).filter((a: any) => a[field] === labelOf(row)),
+    columns: drillCols,
+    labelKey: ((row: any) => labelOf(row)) as any,
+    onRowClick: (r: any) => setSelectedEmployeeId(r.employeeId),
+    emptyMessage: "Nenhum atestado nesta categoria.",
+  });
+
+  const drillAcidentesBy = (field: keyof NonNullable<typeof d>["acidentesLista"][number], labelOf: (r: any) => string) => ({
+    getRows: (row: any) => (d?.acidentesLista ?? []).filter((a: any) => a[field] === labelOf(row)),
+    columns: drillColsAcid,
+    labelKey: ((row: any) => labelOf(row)) as any,
+    onRowClick: (r: any) => setSelectedEmployeeId(r.employeeId),
+    emptyMessage: "Nenhum acidente nesta categoria.",
+  });
 
   const setRange = (months: number) => {
     const fim = new Date();
@@ -320,7 +363,9 @@ export default function DashboardAtestadosAcidentes() {
                   tableColumns={[
                     { key: "tipo", label: "Tipo" },
                     { key: "quantidade", label: "Quantidade", align: "right" },
+                    { key: "dias", label: "Dias", align: "right" },
                   ]}
+                  drillDown={drillAtestadosBy("tipo", (r: any) => r.tipo)}
                   renderChart={(h) => (
                     <ResponsiveContainer width="100%" height={h}>
                       <PieChart>
@@ -342,7 +387,9 @@ export default function DashboardAtestadosAcidentes() {
                   tableColumns={[
                     { key: "cid", label: "CID" },
                     { key: "quantidade", label: "Quantidade", align: "right" },
+                    { key: "dias", label: "Dias", align: "right" },
                   ]}
+                  drillDown={drillAtestadosBy("cid", (r: any) => r.cid)}
                   renderChart={(h) => (
                     <ResponsiveContainer width="100%" height={h}>
                       <BarChart data={d.atestados.topCIDs} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
@@ -368,6 +415,7 @@ export default function DashboardAtestadosAcidentes() {
                   { key: "quantidade", label: "Quantidade", align: "right" },
                   { key: "dias", label: "Dias", align: "right" },
                 ]}
+                drillDown={drillAtestadosBy("motivo", (r: any) => r.motivo)}
                 renderChart={(h) => (
                   <ResponsiveContainer width="100%" height={h}>
                     <BarChart data={(d.atestados.porMotivo ?? []).map((m: any) => ({ ...m, motivoCurto: truncate(m.motivo, 16) }))} margin={{ top: 10, right: 20, left: 0, bottom: 70 }}>
@@ -446,6 +494,7 @@ export default function DashboardAtestadosAcidentes() {
                     { key: "gravidade", label: "Gravidade" },
                     { key: "quantidade", label: "Quantidade", align: "right" },
                   ]}
+                  drillDown={drillAcidentesBy("gravidade", (r: any) => r.gravidade)}
                   renderChart={(h) => (
                     <ResponsiveContainer width="100%" height={h}>
                       <PieChart>
@@ -467,6 +516,7 @@ export default function DashboardAtestadosAcidentes() {
                     { key: "tipo", label: "Tipo" },
                     { key: "quantidade", label: "Quantidade", align: "right" },
                   ]}
+                  drillDown={drillAcidentesBy("tipo", (r: any) => r.tipo)}
                   renderChart={(h) => (
                     <ResponsiveContainer width="100%" height={h}>
                       <BarChart data={(d.acidentes.porTipo ?? []).map((x: any) => ({ ...x, tipoCurto: truncate(x.tipo, 22) }))} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
@@ -491,6 +541,7 @@ export default function DashboardAtestadosAcidentes() {
                     { key: "parte", label: "Parte do corpo" },
                     { key: "quantidade", label: "Quantidade", align: "right" },
                   ]}
+                  drillDown={drillAcidentesBy("parteCorpo", (r: any) => r.parte)}
                   renderChart={(h) => (
                     <ResponsiveContainer width="100%" height={h}>
                       <BarChart data={(d.acidentes.porParteCorpo ?? []).map((x: any) => ({ ...x, parteCurto: truncate(x.parte, 22) }))} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
@@ -512,6 +563,7 @@ export default function DashboardAtestadosAcidentes() {
                     { key: "local", label: "Local" },
                     { key: "quantidade", label: "Quantidade", align: "right" },
                   ]}
+                  drillDown={drillAcidentesBy("local", (r: any) => r.local)}
                   renderChart={(h) => (
                     <ResponsiveContainer width="100%" height={h}>
                       <BarChart data={(d.acidentes.porLocal ?? []).map((x: any) => ({ ...x, localCurto: truncate(x.local, 22) }))} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
@@ -572,6 +624,65 @@ export default function DashboardAtestadosAcidentes() {
 
             {/* ============ AVANÇADO ============ */}
             <TabsContent value="avancado" className="space-y-4">
+              {/* Indicadores Acionáveis para reduzir absenteísmo */}
+              {d.indicadoresAcionaveis && (
+                <Card className="border-blue-200">
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-blue-600" /> Indicadores Acionáveis — Foco em Reduzir Absenteísmo
+                    </CardTitle>
+                    <p className="text-xs text-gray-500 mt-1">Sinais de alerta para investigar causas. Clique em cada card para ver os colaboradores envolvidos.</p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <Card className="bg-rose-50 border-rose-200 cursor-pointer hover:shadow transition" onClick={() => setIndicadorDetalhe({ titulo: "Atestados de curta duração (1–2 dias)", descricao: "Atestados curtos repetidos podem indicar absenteísmo voluntário. Avalie políticas de bonificação por assiduidade.", lista: d.indicadoresAcionaveis.atestadosCurtaDuracao.lista })}>
+                        <CardContent className="p-3">
+                          <p className="text-[11px] uppercase text-gray-600">Curta duração (1–2 dias)</p>
+                          <p className="text-2xl font-bold text-rose-700">{d.indicadoresAcionaveis.atestadosCurtaDuracao.quantidade}</p>
+                          <p className="text-[11px] text-gray-500">{d.indicadoresAcionaveis.atestadosCurtaDuracao.dias} dias afastados</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-purple-50 border-purple-200 cursor-pointer hover:shadow transition" onClick={() => setIndicadorDetalhe({ titulo: "Atestados de longa duração (≥15 dias / INSS)", descricao: "Afastamentos longos a partir do 16º dia caem para o INSS. Reabilitação e adaptação de função reduzem custo.", lista: d.indicadoresAcionaveis.atestadosLongaDuracao.lista })}>
+                        <CardContent className="p-3">
+                          <p className="text-[11px] uppercase text-gray-600">Longa duração (≥15 dias)</p>
+                          <p className="text-2xl font-bold text-purple-700">{d.indicadoresAcionaveis.atestadosLongaDuracao.quantidade}</p>
+                          <p className="text-[11px] text-gray-500">{d.indicadoresAcionaveis.atestadosLongaDuracao.dias} dias afastados</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-amber-50 border-amber-200 cursor-pointer hover:shadow transition" onClick={() => setIndicadorDetalhe({ titulo: "Atestados em segunda-feira", descricao: "Concentração às segundas é forte indício de absenteísmo de fim-de-semana estendido. Avalie clima organizacional e turno.", lista: d.indicadoresAcionaveis.atestadosSegundaFeira.lista })}>
+                        <CardContent className="p-3">
+                          <p className="text-[11px] uppercase text-gray-600">Atestados na 2ª-feira</p>
+                          <p className="text-2xl font-bold text-amber-700">{d.indicadoresAcionaveis.atestadosSegundaFeira.quantidade} <span className="text-sm font-normal text-amber-600">({fmtNum(d.indicadoresAcionaveis.atestadosSegundaFeira.pct, 1)}%)</span></p>
+                          <p className="text-[11px] text-gray-500">do total de atestados</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-orange-50 border-orange-200 cursor-pointer hover:shadow transition" onClick={() => setIndicadorDetalhe({ titulo: "Atestados em sexta-feira", descricao: "Picos às sextas também sinalizam fim-de-semana estendido.", lista: d.indicadoresAcionaveis.atestadosSextaFeira.lista })}>
+                        <CardContent className="p-3">
+                          <p className="text-[11px] uppercase text-gray-600">Atestados na 6ª-feira</p>
+                          <p className="text-2xl font-bold text-orange-700">{d.indicadoresAcionaveis.atestadosSextaFeira.quantidade} <span className="text-sm font-normal text-orange-600">({fmtNum(d.indicadoresAcionaveis.atestadosSextaFeira.pct, 1)}%)</span></p>
+                          <p className="text-[11px] text-gray-500">do total de atestados</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-red-50 border-red-200 cursor-pointer hover:shadow transition" onClick={() => setReincidenciaDetalhe(true)}>
+                        <CardContent className="p-3">
+                          <p className="text-[11px] uppercase text-gray-600">Reincidência mesmo CID</p>
+                          <p className="text-2xl font-bold text-red-700">{d.indicadoresAcionaveis.reincidenciaCID.length}</p>
+                          <p className="text-[11px] text-gray-500">colaborador(es) com 2+ atestados do mesmo CID</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-blue-50 border-blue-200">
+                        <CardContent className="p-3">
+                          <p className="text-[11px] uppercase text-gray-600">Absenteísmo médio</p>
+                          <p className="text-2xl font-bold text-blue-700">{fmtNum(d.indicadoresAcionaveis.absenteismoPct, 2)}%</p>
+                          <p className="text-[11px] text-gray-500">% de HH perdidas no período</p>
+                          <p className="text-[10px] text-gray-500 mt-1">Cadência média: 1 atestado a cada {fmtNum(d.indicadoresAcionaveis.cadenciaMediaDias, 1)} dias</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Comparativo período anterior */}
               {d.comparativoPeriodoAnterior && (
                 <Card>
@@ -1029,6 +1140,106 @@ export default function DashboardAtestadosAcidentes() {
                   </>
                 );
               })()}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Detalhe de Indicador Acionável */}
+        <Dialog open={!!indicadorDetalhe} onOpenChange={(v) => { if (!v) setIndicadorDetalhe(null); }}>
+          <DialogContent
+            resizable={false}
+            className="max-w-none w-screen h-screen sm:w-[98vw] sm:h-[96vh] p-0 overflow-hidden flex flex-col bg-white sm:rounded-xl border-0 sm:border"
+          >
+            <DialogHeader className="px-6 pt-5 pb-3 border-b">
+              <DialogTitle className="flex items-center gap-2 text-lg">
+                <AlertTriangle className="h-5 w-5 text-blue-600" />
+                {indicadorDetalhe?.titulo}
+              </DialogTitle>
+              <p className="text-xs text-gray-500 mt-1">{indicadorDetalhe?.descricao}</p>
+            </DialogHeader>
+            <div className="flex-1 overflow-auto px-6 py-4">
+              {(indicadorDetalhe?.lista ?? []).length === 0 ? (
+                <p className="text-sm text-gray-500 py-12 text-center">Nenhum registro neste indicador.</p>
+              ) : (
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 text-xs uppercase font-semibold text-gray-600 border-b flex justify-between">
+                    <span>Colaboradores envolvidos — clique para ver o detalhe completo</span>
+                    <span>{indicadorDetalhe?.lista.length} registro(s)</span>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-700">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Data</th>
+                        <th className="px-3 py-2 text-left">Funcionário</th>
+                        <th className="px-3 py-2 text-left">Função</th>
+                        <th className="px-3 py-2 text-left">Tipo</th>
+                        <th className="px-3 py-2 text-left">CID</th>
+                        <th className="px-3 py-2 text-left">Motivo</th>
+                        <th className="px-3 py-2 text-right">Dias</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {(indicadorDetalhe?.lista ?? []).map((a: any, i: number) => (
+                        <tr key={i} className="hover:bg-blue-50 cursor-pointer" onClick={() => { setIndicadorDetalhe(null); setSelectedEmployeeId(a.employeeId); }}>
+                          <td className="px-3 py-2 text-gray-600">{a.dataEmissao?.split("-").reverse().join("/")}</td>
+                          <td className="px-3 py-2 font-medium text-blue-700">{a.nome}{a.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{a.codigoInterno}</span> : null}</td>
+                          <td className="px-3 py-2 text-gray-600">{a.funcao || "—"}</td>
+                          <td className="px-3 py-2">{a.tipo}</td>
+                          <td className="px-3 py-2">{a.cid || "—"}</td>
+                          <td className="px-3 py-2">{a.motivo}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{a.dias}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Detalhe de Reincidência por CID */}
+        <Dialog open={reincidenciaDetalhe} onOpenChange={setReincidenciaDetalhe}>
+          <DialogContent
+            resizable={false}
+            className="max-w-none w-screen h-screen sm:w-[98vw] sm:h-[96vh] p-0 overflow-hidden flex flex-col bg-white sm:rounded-xl border-0 sm:border"
+          >
+            <DialogHeader className="px-6 pt-5 pb-3 border-b">
+              <DialogTitle className="flex items-center gap-2 text-lg">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+                Reincidência — Mesmo Colaborador / Mesmo CID
+              </DialogTitle>
+              <p className="text-xs text-gray-500 mt-1">Colaboradores com 2 ou mais atestados do mesmo CID no período. Indicação clara de necessidade de avaliação ocupacional, exame complementar ou mudança de função.</p>
+            </DialogHeader>
+            <div className="flex-1 overflow-auto px-6 py-4">
+              {(d?.indicadoresAcionaveis?.reincidenciaCID ?? []).length === 0 ? (
+                <p className="text-sm text-gray-500 py-12 text-center">Nenhum caso de reincidência detectado no período.</p>
+              ) : (
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-700">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Funcionário</th>
+                        <th className="px-3 py-2 text-left">Função</th>
+                        <th className="px-3 py-2 text-left">CID</th>
+                        <th className="px-3 py-2 text-right">Atestados</th>
+                        <th className="px-3 py-2 text-right">Dias afastados</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {(d?.indicadoresAcionaveis?.reincidenciaCID ?? []).map((r: any, i: number) => (
+                        <tr key={i} className="hover:bg-red-50 cursor-pointer" onClick={() => { setReincidenciaDetalhe(false); setSelectedEmployeeId(r.employeeId); }}>
+                          <td className="px-3 py-2 font-medium text-blue-700">{r.nome}{r.codigoInterno ? <span className="text-xs text-gray-400 ml-1">#{r.codigoInterno}</span> : null}</td>
+                          <td className="px-3 py-2 text-gray-600">{r.funcao || "—"}</td>
+                          <td className="px-3 py-2 font-mono">{r.cid}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-red-700">{r.quantidade}</td>
+                          <td className="px-3 py-2 text-right">{r.dias}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>

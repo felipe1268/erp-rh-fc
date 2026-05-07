@@ -9383,6 +9383,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 07:00:00",
   },
   {
+    version: 1377,
+    titulo: "SST Dashboard: drill-down clicável nos gráficos + Indicadores Acionáveis para reduzir absenteísmo",
+    descricao: "Resposta direta à demanda de gestão: '3 meses, 89 atestados — preciso saber QUEM e PORQUÊ para agir'. (1) DRILL-DOWN nos 7 principais gráficos (Atestados por Tipo, Top 10 CIDs, Top 10 Motivos, Acidentes por Gravidade/Tipo/Parte do Corpo/Local): ao clicar numa linha da tabela detalhada (dentro do modal de tela cheia), expande um painel azul abaixo listando TODOS os colaboradores daquela categoria com Data, Funcionário (#código interno), Função, Tipo, CID, Motivo e Dias afastados. Cada linha do drill é clicável e abre o detalhe completo do colaborador (atestados/acidentes/documentos anexos). (2) Nova seção 'Indicadores Acionáveis — Foco em Reduzir Absenteísmo' no topo da aba Indicadores Avançados com 6 KPIs clicáveis: (a) Curta duração 1-2 dias (sinal de absenteísmo voluntário), (b) Longa duração ≥15 dias (afastamento INSS), (c) Atestados em 2ª-feira com %, (d) Atestados em 6ª-feira com % (sinais de fim-de-semana estendido), (e) Reincidência mesmo CID (lista de colaboradores com 2+ atestados do mesmo código diagnóstico — indicação para avaliação ocupacional/mudança de função), (f) Absenteísmo médio % (HH perdidas/HH disponíveis) + cadência média de dias entre atestados. Cada card abre modal em tela cheia com lista de colaboradores envolvidos. (3) Backend (sstAnalytics.atestadosAcidentes): novos campos atestadosLista, acidentesLista (slim) e indicadoresAcionaveis. (4) ChartCard ganhou prop opcional drillDown {getRows, columns, labelKey, onRowClick} e passou a usar tela cheia (98vw × 96vh) também via resizable=false.",
+    tipo: "feature",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 05:00:00",
+  },
+  {
     version: 1350,
     titulo: "Sinal sobre Mão de Obra: usa MDO no preço de VENDA (com BDI) e oculta campo de FD",
     descricao: "Quando a base do sinal é 'Mão de Obra', o valor utilizado agora é o MDO no preço de venda (custo × valorVenda/totalCusto) — alinhado ao mesmo padrão do orçamento (vendaMdo = custoMdo / bdiDivisor). Antes era usado o MDO ao custo, gerando uma base subdimensionada (ex.: R$ 139.313,80 em vez do equivalente com BDI aplicado). Cruzamento orç×cronograma agora retorna `totalMdoVenda`; getContasReceberMatrix calcula MDO@venda inline na query SQL via CASE WHEN totalCusto > 0 THEN totalMdo * valorNegociado/totalCusto. Adicionalmente, o campo 'Faturamento Direto (R$)' é visualmente desabilitado (opacity 30%, sem cliques) quando a base é MDO, pois FD não se aplica nesse modo.",

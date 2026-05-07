@@ -525,6 +525,102 @@ export const sstAnalyticsRouter = router({
         detalhe: custoDetalhe,
       };
 
+      // ---- Listas brutas para drill-down nos gráficos ----
+      const atestadosLista = atRows.map((r) => ({
+        id: r.id,
+        dataEmissao: r.dataEmissao,
+        dataRetorno: r.dataRetorno,
+        employeeId: r.employeeId,
+        nome: r.employeeNome || `Funcionário #${r.employeeId}`,
+        codigoInterno: r.employeeCodigoInterno || null,
+        matricula: r.employeeMatricula || null,
+        funcao: r.employeeFuncao || r.employeeCargo || null,
+        tipo: (r.tipo || "Não informado").trim() || "Não informado",
+        cid: (r.cid || "").trim().toUpperCase() || null,
+        motivo: (r.motivo || "").trim() || "Não informado",
+        dias: r.diasAfastamento || 0,
+        afastamentoINSS: r.afastamentoINSS || 0,
+      }));
+
+      const acidentesLista = acRows.map((r) => ({
+        id: r.id,
+        dataAcidente: r.dataAcidente,
+        horaAcidente: r.horaAcidente,
+        employeeId: r.employeeId,
+        nome: r.employeeNome || `Funcionário #${r.employeeId}`,
+        codigoInterno: r.employeeCodigoInterno || null,
+        matricula: r.employeeMatricula || null,
+        funcao: r.employeeFuncao || r.employeeCargo || null,
+        tipo: (r.tipoAcidente || "Não informado").trim() || "Não informado",
+        gravidade: (r.gravidade || "Não informado").trim() || "Não informado",
+        parteCorpo: (r.parteCorpoAtingida || "Não informado").trim() || "Não informado",
+        local: (r.localAcidente || "Não informado").trim() || "Não informado",
+        obraNome: r.obraNome || null,
+        dias: r.diasAfastamento || 0,
+        catNumero: r.catNumero || null,
+        houveCAT: r.houveCAT || 0,
+        descricao: (r.descricao || "").trim() || null,
+      }));
+
+      // ---- Indicadores acionáveis adicionais ----
+      // Curta duração (1-2 dias) e longa duração (>=15 dias = INSS) — Lei 8.213/91
+      const atestadosCurtaDuracao = atestadosLista.filter((a) => a.dias >= 1 && a.dias <= 2);
+      const atestadosLongaDuracao = atestadosLista.filter((a) => a.dias >= 15);
+
+      // Atestados em segunda-feira / sexta-feira (sinal de absenteísmo "fim de semana estendido")
+      const dowOf = (s: string) => new Date(s + "T12:00:00").getDay();
+      const atestadosSegundaFeira = atestadosLista.filter((a) => dowOf(a.dataEmissao) === 1);
+      const atestadosSextaFeira = atestadosLista.filter((a) => dowOf(a.dataEmissao) === 5);
+      const pctSegunda = totalAtestados > 0 ? (atestadosSegundaFeira.length / totalAtestados) * 100 : 0;
+      const pctSexta = totalAtestados > 0 ? (atestadosSextaFeira.length / totalAtestados) * 100 : 0;
+
+      // Reincidência mesmo CID (mesmo funcionário com 2+ atestados do mesmo CID)
+      const cidEmpKey = (a: typeof atestadosLista[number]) => `${a.employeeId}|${a.cid || ""}`;
+      const reincCount = new Map<string, number>();
+      for (const a of atestadosLista) if (a.cid) reincCount.set(cidEmpKey(a), (reincCount.get(cidEmpKey(a)) || 0) + 1);
+      const reincidenciaCID = atestadosLista
+        .filter((a) => a.cid && (reincCount.get(cidEmpKey(a)) || 0) >= 2)
+        .reduce((acc, a) => {
+          const k = cidEmpKey(a);
+          let row = acc.find((r) => r.key === k);
+          if (!row) {
+            row = { key: k, employeeId: a.employeeId, nome: a.nome, codigoInterno: a.codigoInterno, funcao: a.funcao, cid: a.cid!, quantidade: 0, dias: 0 };
+            acc.push(row);
+          }
+          row.quantidade += 1;
+          row.dias += a.dias;
+          return acc;
+        }, [] as Array<{ key: string; employeeId: number; nome: string; codigoInterno: string | null; funcao: string | null; cid: string; quantidade: number; dias: number }>)
+        .sort((a, b) => b.quantidade - a.quantidade)
+        .slice(0, 25);
+
+      // Absenteísmo % = (dias afastados × 8h) / HH disponíveis
+      const horasAfastamentoTotal = (totalDiasAfastamento + totalDiasAfastamentoAcid) * 8;
+      const absenteismoPct = horasHomem > 0 ? (horasAfastamentoTotal / horasHomem) * 100 : 0;
+
+      // Dias entre eventos (cadência) - dias entre o atestado mais recente e o próximo (média)
+      const datasOrd = atestadosLista.map((a) => a.dataEmissao).sort();
+      let cadenciaMediaDias = 0;
+      if (datasOrd.length >= 2) {
+        const diffs: number[] = [];
+        for (let i = 1; i < datasOrd.length; i++) {
+          const d1 = new Date(datasOrd[i - 1] + "T00:00:00").getTime();
+          const d2 = new Date(datasOrd[i] + "T00:00:00").getTime();
+          diffs.push((d2 - d1) / (1000 * 60 * 60 * 24));
+        }
+        cadenciaMediaDias = diffs.reduce((s, x) => s + x, 0) / diffs.length;
+      }
+
+      const indicadoresAcionaveis = {
+        absenteismoPct,
+        atestadosCurtaDuracao: { quantidade: atestadosCurtaDuracao.length, dias: atestadosCurtaDuracao.reduce((s, a) => s + a.dias, 0), lista: atestadosCurtaDuracao },
+        atestadosLongaDuracao: { quantidade: atestadosLongaDuracao.length, dias: atestadosLongaDuracao.reduce((s, a) => s + a.dias, 0), lista: atestadosLongaDuracao },
+        atestadosSegundaFeira: { quantidade: atestadosSegundaFeira.length, pct: pctSegunda, lista: atestadosSegundaFeira },
+        atestadosSextaFeira: { quantidade: atestadosSextaFeira.length, pct: pctSexta, lista: atestadosSextaFeira },
+        reincidenciaCID,
+        cadenciaMediaDias,
+      };
+
       // últimos eventos (combinados)
       const ultimosAtestados = atRows.slice(0, 8).map((r) => ({
         id: r.id,
@@ -601,6 +697,9 @@ export const sstAnalyticsRouter = router({
         acoesCorretivas,
         comparativoPeriodoAnterior,
         custoEstimadoAfastamento,
+        atestadosLista,
+        acidentesLista,
+        indicadoresAcionaveis,
       };
     }),
 
