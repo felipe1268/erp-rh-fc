@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { atestados, accidents, employees, obras, employeeSiteHistory } from "../../drizzle/schema";
-import { and, eq, gte, lte, isNull, sql, desc } from "drizzle-orm";
+import { and, eq, gte, lte, isNull, sql, desc, inArray } from "drizzle-orm";
 import { companyFilter } from "../companyHelper";
 
 // Salário pode estar em formato BR ("2.774,20") ou decimal ("6200.00") — parseFloat direto retornaria 1.5 para "1.500,00".
@@ -279,7 +279,7 @@ export const sstAnalyticsRouter = router({
             .from(employeeSiteHistory)
             .where(and(
               companyFilter(employeeSiteHistory.companyId, input),
-              sql`${employeeSiteHistory.employeeId} = ANY(${empIdsAt})`,
+              inArray(employeeSiteHistory.employeeId, empIdsAt),
             ))
         : [];
       const eshByEmp = new Map<number, { obraId: number; dataInicio: string; dataFim: string | null }[]>();
