@@ -3559,6 +3559,29 @@ export const funcionariosTerceiros = pgTable("funcionarios_terceiros", {
   deletedAt: timestamp("deleted_at", { mode: "string" }),
 });
 
+export const warningsTerceiros = pgTable("warnings_terceiros", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  empresaTerceiraId: integer("empresa_terceira_id").notNull(),
+  funcionarioTerceiroId: integer("funcionario_terceiro_id").notNull(),
+  tipoAdvertencia: text("tipo_advertencia").notNull(), // Notificacao, Advertencia, Suspensao, SolicitacaoSubstituicao
+  dataOcorrencia: date("data_ocorrencia", { mode: "string" }).notNull(),
+  motivo: text().notNull(),
+  descricao: text(),
+  testemunhas: text(), // JSON
+  documentoUrl: text("documento_url"),
+  sequencia: integer().default(1),
+  aplicadoPor: varchar("aplicado_por", { length: 255 }),
+  diasSuspensao: integer("dias_suspensao"),
+  obraId: integer("obra_id"),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  createdBy: varchar("created_by", { length: 255 }),
+  deletedAt: timestamp("deleted_at", { mode: "string" }),
+  deletedBy: varchar("deleted_by", { length: 255 }),
+});
+
 export const obrigacoesMensaisTerceiros = pgTable("obrigacoes_mensais_terceiros", {
   id: serial().primaryKey(),
   empresaTerceiraId: integer().notNull(),

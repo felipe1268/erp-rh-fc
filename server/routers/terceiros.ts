@@ -8,6 +8,7 @@ import {
   obrigacoesMensaisTerceiros,
   alertasTerceiros,
   obras,
+  warningsTerceiros,
 } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull, like, gte, lte, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -549,6 +550,133 @@ Seja rigoroso na validação. Verifique se o tipo do documento corresponde ao es
             confianca: 0
           };
         }
+      }),
+  }),
+
+  // ============================================================
+  // ADVERTÊNCIAS DE FUNCIONÁRIOS TERCEIROS
+  // ============================================================
+  advertencias: router({
+    list: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), empresaTerceiraId: z.number().optional(), funcionarioTerceiroId: z.number().optional() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const conds: any[] = [companyFilter(warningsTerceiros.companyId, input), isNull(warningsTerceiros.deletedAt)];
+        if (input.empresaTerceiraId) conds.push(eq(warningsTerceiros.empresaTerceiraId, input.empresaTerceiraId));
+        if (input.funcionarioTerceiroId) conds.push(eq(warningsTerceiros.funcionarioTerceiroId, input.funcionarioTerceiroId));
+        return db
+          .select({
+            id: warningsTerceiros.id,
+            companyId: warningsTerceiros.companyId,
+            empresaTerceiraId: warningsTerceiros.empresaTerceiraId,
+            funcionarioTerceiroId: warningsTerceiros.funcionarioTerceiroId,
+            funcionarioNome: funcionariosTerceiros.nome,
+            funcionarioCpf: funcionariosTerceiros.cpf,
+            funcionarioFuncao: funcionariosTerceiros.funcao,
+            empresaRazaoSocial: empresasTerceiras.razaoSocial,
+            empresaCnpj: empresasTerceiras.cnpj,
+            empresaResponsavel: empresasTerceiras.responsavelNome,
+            tipoAdvertencia: warningsTerceiros.tipoAdvertencia,
+            dataOcorrencia: warningsTerceiros.dataOcorrencia,
+            motivo: warningsTerceiros.motivo,
+            descricao: warningsTerceiros.descricao,
+            testemunhas: warningsTerceiros.testemunhas,
+            documentoUrl: warningsTerceiros.documentoUrl,
+            sequencia: warningsTerceiros.sequencia,
+            aplicadoPor: warningsTerceiros.aplicadoPor,
+            diasSuspensao: warningsTerceiros.diasSuspensao,
+            obraId: warningsTerceiros.obraId,
+            obraNome: warningsTerceiros.obraNome,
+            createdAt: warningsTerceiros.createdAt,
+          })
+          .from(warningsTerceiros)
+          .innerJoin(funcionariosTerceiros, eq(warningsTerceiros.funcionarioTerceiroId, funcionariosTerceiros.id))
+          .innerJoin(empresasTerceiras, eq(warningsTerceiros.empresaTerceiraId, empresasTerceiras.id))
+          .where(and(...conds))
+          .orderBy(desc(warningsTerceiros.dataOcorrencia));
+      }),
+
+    create: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        empresaTerceiraId: z.number(),
+        funcionarioTerceiroId: z.number(),
+        tipoAdvertencia: z.enum(["Notificacao", "Advertencia", "Suspensao", "SolicitacaoSubstituicao"]),
+        dataOcorrencia: z.string(),
+        motivo: z.string().min(3),
+        descricao: z.string().optional(),
+        testemunhas: z.string().optional(),
+        aplicadoPor: z.string().optional(),
+        diasSuspensao: z.number().optional(),
+        obraId: z.number().optional(),
+        obraNome: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const existentes = await db.select({ id: warningsTerceiros.id }).from(warningsTerceiros)
+          .where(and(eq(warningsTerceiros.funcionarioTerceiroId, input.funcionarioTerceiroId), eq(warningsTerceiros.companyId, input.companyId), isNull(warningsTerceiros.deletedAt)));
+        const sequencia = existentes.length + 1;
+        const [row] = await db.insert(warningsTerceiros).values({
+          companyId: input.companyId,
+          empresaTerceiraId: input.empresaTerceiraId,
+          funcionarioTerceiroId: input.funcionarioTerceiroId,
+          tipoAdvertencia: input.tipoAdvertencia,
+          dataOcorrencia: input.dataOcorrencia,
+          motivo: input.motivo,
+          descricao: input.descricao || null,
+          testemunhas: input.testemunhas || null,
+          aplicadoPor: input.aplicadoPor || ctx.user?.name || null,
+          diasSuspensao: input.diasSuspensao || null,
+          obraId: input.obraId || null,
+          obraNome: input.obraNome || null,
+          sequencia,
+          createdBy: ctx.user?.name || null,
+        } as any).returning({ id: warningsTerceiros.id });
+        let alerta: string | null = null;
+        if (sequencia >= 3) alerta = `Atenção: este colaborador já possui ${sequencia} ocorrências. Avalie solicitar substituição junto à empresa prestadora.`;
+        return { success: true, id: row.id, sequencia, alerta };
+      }),
+
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        tipoAdvertencia: z.enum(["Notificacao", "Advertencia", "Suspensao", "SolicitacaoSubstituicao"]).optional(),
+        dataOcorrencia: z.string().optional(),
+        motivo: z.string().optional(),
+        descricao: z.string().optional(),
+        testemunhas: z.string().optional(),
+        aplicadoPor: z.string().optional(),
+        diasSuspensao: z.number().optional(),
+        obraId: z.number().optional(),
+        obraNome: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const { id, ...rest } = input;
+        const updateData: any = { updatedAt: sql`NOW()` };
+        Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
+        await db.update(warningsTerceiros).set(updateData).where(eq(warningsTerceiros.id, id));
+        return { success: true };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        await db.update(warningsTerceiros).set({ deletedAt: sql`NOW()` as any, deletedBy: ctx.user?.name || "Sistema" } as any).where(eq(warningsTerceiros.id, input.id));
+        return { success: true };
+      }),
+
+    uploadDoc: protectedProcedure
+      .input(z.object({ id: z.number(), fileBase64: z.string(), fileName: z.string() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const buffer = Buffer.from(input.fileBase64, "base64");
+        const ext = (input.fileName.split(".").pop() || "pdf").toLowerCase();
+        const key = `documentos/advertencias-terceiros/${input.id}-${Date.now()}.${ext}`;
+        const { url } = await storagePut(key, buffer, ext === "pdf" ? "application/pdf" : "application/octet-stream");
+        await db.update(warningsTerceiros).set({ documentoUrl: url } as any).where(eq(warningsTerceiros.id, input.id));
+        return { url };
       }),
   }),
 });

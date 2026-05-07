@@ -205,6 +205,7 @@ const ContratoDetalhe = lazy(() => import("./pages/terceiros/contratos/ContratoD
 const ContratoTemplate = lazy(() => import("./pages/terceiros/contratos/ContratoTemplate"));
 const MedicoesTerceiros = lazy(() => import("./pages/terceiros/Medicoes"));
 const PrevisaoCaixaTerceiros = lazy(() => import("./pages/terceiros/PrevisaoCaixa"));
+const AdvertenciasTerceiros = lazy(() => import("./pages/terceiros/AdvertenciasTerceiros"));
 
 // Parceiros
 const PainelParceiros = lazy(() => import("./pages/parceiros/PainelParceiros"));
@@ -443,6 +444,7 @@ function Router() {
         <Route path="/terceiros/contratos/:id" component={() => <RouteGuard component={ContratoDetalhe} route="/terceiros/painel" />} />
         <Route path="/terceiros/medicoes" component={() => <RouteGuard component={MedicoesTerceiros} route="/terceiros/painel" />} />
         <Route path="/terceiros/previsao-caixa" component={() => <RouteGuard component={PrevisaoCaixaTerceiros} route="/terceiros/painel" />} />
+        <Route path="/terceiros/advertencias" component={() => <RouteGuard component={AdvertenciasTerceiros} route="/terceiros/advertencias" />} />
         <Route path="/terceiros/painel" component={() => <RouteGuard component={PainelTerceiros} route="/terceiros/painel" />} />
         {/* Parceiros */}
         <Route path="/parceiros" component={() => <RouteGuard component={PainelParceiros} route="/parceiros/cadastro" />} />

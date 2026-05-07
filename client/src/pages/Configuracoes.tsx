@@ -2239,6 +2239,7 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Conformidade", label: "Obrigações Mensais", path: "/terceiros/obrigacoes" },
     { section: "Conformidade", label: "Painel de Conformidade", path: "/terceiros/conformidade" },
     { section: "Conformidade", label: "Alertas e Cobranças", path: "/terceiros/alertas" },
+    { section: "Conformidade", label: "Advertências", path: "/terceiros/advertencias" },
     { section: "Operacional", label: "Portal Externo", path: "/terceiros/portal" },
     { section: "IA", label: "Validação IA de Docs", path: "/terceiros/validacao-ia" },
   ],

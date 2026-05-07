@@ -321,6 +321,7 @@ const menuSectionsTerceiros: MenuSection[] = [
       { icon: ClipboardCheck, label: "Obrigações Mensais", path: "/terceiros/obrigacoes" },
       { icon: ShieldCheck, label: "Painel de Conformidade", path: "/terceiros/conformidade" },
       { icon: BellIcon, label: "Alertas e Cobranças", path: "/terceiros/alertas" },
+      { icon: ShieldAlert, label: "Advertências", path: "/terceiros/advertencias" },
     ],
   },
   {

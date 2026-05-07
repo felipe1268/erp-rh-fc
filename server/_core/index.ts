@@ -763,7 +763,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1386.2-2026-05-07-atestado-horas-numeric";
+    const COLFIX_VERSION = "v1387.0-2026-05-07-warnings-terceiros";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -817,6 +817,34 @@ Regras:
             CREATE INDEX IF NOT EXISTS crl_company ON compras_reservas_log (company_id);
             CREATE INDEX IF NOT EXISTS crl_reserva ON compras_reservas_log (reserva_id);
             CREATE INDEX IF NOT EXISTS crl_acao ON compras_reservas_log (acao);
+
+            -- Rev. 1387 — Advertências para Funcionários Terceiros
+            CREATE TABLE IF NOT EXISTS warnings_terceiros (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              empresa_terceira_id INTEGER NOT NULL,
+              funcionario_terceiro_id INTEGER NOT NULL,
+              tipo_advertencia TEXT NOT NULL,
+              data_ocorrencia DATE NOT NULL,
+              motivo TEXT NOT NULL,
+              descricao TEXT,
+              testemunhas TEXT,
+              documento_url TEXT,
+              sequencia INTEGER DEFAULT 1,
+              aplicado_por VARCHAR(255),
+              dias_suspensao INTEGER,
+              obra_id INTEGER,
+              obra_nome VARCHAR(255),
+              created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+              created_by VARCHAR(255),
+              deleted_at TIMESTAMP,
+              deleted_by VARCHAR(255)
+            );
+            CREATE INDEX IF NOT EXISTS wt_company ON warnings_terceiros (company_id);
+            CREATE INDEX IF NOT EXISTS wt_empresa ON warnings_terceiros (empresa_terceira_id);
+            CREATE INDEX IF NOT EXISTS wt_func ON warnings_terceiros (funcionario_terceiro_id);
+            CREATE INDEX IF NOT EXISTS wt_data ON warnings_terceiros (data_ocorrencia);
 
             ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS diferencas TEXT;
             ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS consolidado BOOLEAN DEFAULT FALSE;
