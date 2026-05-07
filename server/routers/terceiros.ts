@@ -1,7 +1,22 @@
 import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb } from "../db";
+import { getDb, getCompaniesForUser } from "../db";
+
+/** Garante que o usuário autenticado tem acesso à companyId/companyIds. */
+async function _assertCompanyAccess(ctxUser: any, input: { companyId: number; companyIds?: number[] }) {
+  if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  const allowed = await getCompaniesForUser(ctxUser.id, ctxUser.role);
+  const allowedSet = new Set(allowed);
+  if (!allowedSet.has(input.companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  }
+  if (input.companyIds && input.companyIds.length > 0) {
+    for (const cid of input.companyIds) {
+      if (!allowedSet.has(cid)) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a uma das empresas do grupo." });
+    }
+  }
+}
 import {
   empresasTerceiras,
   funcionariosTerceiros,
@@ -87,6 +102,47 @@ export const terceirosRouter = router({
 
         out.sort((a, b) => a.razaoSocial.localeCompare(b.razaoSocial, "pt-BR"));
         return out;
+      }),
+
+    // Verifica se já existe cadastro com o mesmo CNPJ/CPF (em fornecedores ou
+    // empresas_terceiras) no tenant. Usado pelos formulários de Compras e
+    // Terceiros para impedir duplicidade e oferecer replicação cross-módulo.
+    verificarCadastroDuplicado: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        companyIds: z.array(z.number()).optional(),
+        cnpj: z.string().optional(),
+        cpf: z.string().optional(),
+        excludeFornecedorId: z.number().optional(),
+        excludeEmpresaTerceiraId: z.number().optional(),
+      }))
+      .query(async ({ input, ctx }) => {
+        await _assertCompanyAccess(ctx.user, input);
+        const norm = (s?: string | null) => (s || "").replace(/\D/g, "");
+        const target = norm(input.cnpj || input.cpf);
+        if (!target || (target.length !== 11 && target.length !== 14)) {
+          return { found: false as const };
+        }
+        const db = (await getDb())!;
+        const forns = await db.select().from(fornecedores).where(
+          companyFilter(fornecedores.companyId, input)
+        );
+        const fornecedorMatch = (forns as any[]).find(f =>
+          norm(f.cnpj) === target && f.id !== input.excludeFornecedorId
+        );
+        const ters = await db.select().from(empresasTerceiras).where(and(
+          companyFilter(empresasTerceiras.companyId, input),
+          isNull(empresasTerceiras.deletedAt),
+        ));
+        const empresaTerceiraMatch = (ters as any[]).find(t =>
+          norm(t.cnpj) === target && t.id !== input.excludeEmpresaTerceiraId
+        );
+        if (!fornecedorMatch && !empresaTerceiraMatch) return { found: false as const };
+        return {
+          found: true as const,
+          fornecedor: fornecedorMatch || null,
+          empresaTerceira: empresaTerceiraMatch || null,
+        };
       }),
 
     // Garante que exista um registro empresas_terceiras para o fornecedorId
@@ -224,7 +280,25 @@ export const terceirosRouter = router({
         observacoes: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
+        await _assertCompanyAccess(ctx.user, input);
         const db = (await getDb())!;
+        // Anti-duplicidade no MESMO módulo (empresas_terceiras): rejeita se já
+        // existir registro ativo com o mesmo CNPJ no tenant.
+        const norm = (s?: string | null) => (s || "").replace(/\D/g, "");
+        const cnpjN = norm(input.cnpj);
+        if (cnpjN) {
+          const candidatos = await db.select().from(empresasTerceiras).where(and(
+            eq(empresasTerceiras.companyId, input.companyId),
+            isNull(empresasTerceiras.deletedAt),
+          ));
+          const dup = (candidatos as any[]).find(c => norm(c.cnpj) === cnpjN);
+          if (dup) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: `Já existe uma empresa terceira cadastrada com este CNPJ (#${dup.id} — ${dup.razaoSocial}). Não é permitido duplicar.`,
+            });
+          }
+        }
         const [result] = await db.insert(empresasTerceiras).values({
           ...input,
           createdBy: ctx.user?.name || "Sistema",
@@ -277,17 +351,39 @@ export const terceirosRouter = router({
         seguroVidaUrl: z.string().optional(),
         seguroVidaValidade: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
         const { id, ...data } = input;
+        // Tenant auth + anti-duplicidade no MESMO módulo (empresas_terceiras) ao editar.
+        const [existing] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, id));
+        if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Empresa terceira não encontrada." });
+        await _assertCompanyAccess(ctx.user, { companyId: (existing as any).companyId });
+        const norm = (s?: string | null) => (s || "").replace(/\D/g, "");
+        const novoCnpj = (data as any).cnpj !== undefined ? norm((data as any).cnpj) : norm((existing as any).cnpj);
+        if (novoCnpj && novoCnpj !== norm((existing as any).cnpj)) {
+          const candidatos = await db.select().from(empresasTerceiras).where(and(
+            eq(empresasTerceiras.companyId, (existing as any).companyId),
+            isNull(empresasTerceiras.deletedAt),
+          ));
+          const dup = (candidatos as any[]).find(c => c.id !== id && norm(c.cnpj) === novoCnpj);
+          if (dup) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: `Já existe outra empresa terceira cadastrada com este CNPJ (#${dup.id} — ${dup.razaoSocial}). Não é permitido duplicar.`,
+            });
+          }
+        }
         await db.update(empresasTerceiras).set(data as any).where(eq(empresasTerceiras.id, id));
         return { success: true };
       }),
 
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
+        const [existing] = await db.select().from(empresasTerceiras).where(eq(empresasTerceiras.id, input.id));
+        if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Empresa terceira não encontrada." });
+        await _assertCompanyAccess(ctx.user, { companyId: (existing as any).companyId });
         await db.update(empresasTerceiras).set({ deletedAt: new Date().toISOString() }).where(eq(empresasTerceiras.id, input.id));
         return { success: true };
       }),

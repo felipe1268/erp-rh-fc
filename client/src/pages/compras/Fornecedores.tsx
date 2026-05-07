@@ -298,7 +298,12 @@ export default function Fornecedores() {
     { enabled: false, retry: false }
   );
 
-  const criarMut    = trpc.compras.criarFornecedor.useMutation({ onSuccess: () => { refetch(); fecharModal(); toast.success("Empresa terceira cadastrada!"); } });
+  const criarMut    = trpc.compras.criarFornecedor.useMutation({ onSuccess: () => { refetch(); fecharModal(); toast.success("Empresa terceira cadastrada!"); }, onError: (e) => toast.error(e.message) });
+  const verificarDup = trpc.terceiros.empresas.verificarCadastroDuplicado.useQuery(
+    { companyId, cnpj: form.cnpj.replace(/\D/g, "") },
+    { enabled: false, retry: false }
+  );
+  const [dupDialog, setDupDialog] = useState<null | { mode: "block-same"; nome: string } | { mode: "replicate-from-terceira"; terceira: any }>(null);
   const atualizarMut = trpc.compras.atualizarFornecedor.useMutation({ onSuccess: () => { refetch(); fecharModal(); toast.success("Empresa terceira atualizada!"); } });
   const excluirMut  = trpc.compras.excluirFornecedor.useMutation({ onSuccess: () => { refetch(); toast.success("Empresa terceira desativada."); } });
 
@@ -485,6 +490,71 @@ export default function Fornecedores() {
       return () => clearTimeout(timer);
     }
   }, [form.cnpj, modalAberto, editando, buscarCNPJ]);
+
+  // Verificação anti-duplicidade cross-módulo (fornecedores + empresas_terceiras)
+  const lastCheckedDupCNPJ = useRef("");
+  // Reset do cache sempre que o modal abre/fecha — evita pular a checagem ao reabrir o form com o mesmo CNPJ.
+  useEffect(() => {
+    if (!modalAberto) {
+      lastCheckedDupCNPJ.current = "";
+      setDupDialog(null);
+    }
+  }, [modalAberto]);
+  useEffect(() => {
+    const cnpjDigits = form.cnpj.replace(/\D/g, "");
+    if (!modalAberto || editando) return;
+    if (cnpjDigits.length !== 14) return;
+    if (cnpjDigits === lastCheckedDupCNPJ.current) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await verificarDup.refetch();
+        // Proteção contra resposta stale: confirma se o CNPJ ainda corresponde
+        const cnpjAtual = form.cnpj.replace(/\D/g, "");
+        if (cancelled || cnpjAtual !== cnpjDigits) return;
+        lastCheckedDupCNPJ.current = cnpjDigits;
+        const d: any = res.data;
+        if (!d?.found) return;
+        if (d.fornecedor) {
+          setDupDialog({ mode: "block-same", nome: `${d.fornecedor.razaoSocial} (#${d.fornecedor.id})` });
+          return;
+        }
+        if (d.empresaTerceira) {
+          setDupDialog({ mode: "replicate-from-terceira", terceira: d.empresaTerceira });
+        }
+      } catch { /* silencioso — não bloqueia o usuário */ }
+    }, 500);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [form.cnpj, modalAberto, editando]);
+
+  function aplicarDadosDeTerceira(t: any) {
+    setForm(prev => ({
+      ...prev,
+      cnpj: prev.cnpj || (t.cnpj ? formatCNPJ(t.cnpj) : prev.cnpj),
+      razaoSocial: t.razaoSocial || prev.razaoSocial,
+      nomeFantasia: t.nomeFantasia || prev.nomeFantasia,
+      endereco: t.logradouro || prev.endereco,
+      numero: t.numero || prev.numero,
+      complemento: t.complemento || prev.complemento,
+      bairro: t.bairro || prev.bairro,
+      cidade: t.cidade || prev.cidade,
+      estado: t.estado || prev.estado,
+      cep: t.cep || prev.cep,
+      telefone: t.telefone ? maskPhone(t.telefone) : prev.telefone,
+      email: t.email || prev.email,
+      contatoNome: t.responsavelNome || prev.contatoNome,
+      contatoCelular: t.celular ? maskPhone(t.celular) : prev.contatoCelular,
+      contatoEmail: t.emailFinanceiro || prev.contatoEmail,
+      banco: t.banco || prev.banco,
+      agencia: t.agencia || prev.agencia,
+      conta: t.conta || prev.conta,
+      pix: t.pixChave || prev.pix,
+      inscricaoEstadual: t.inscricaoEstadual || prev.inscricaoEstadual,
+      inscricaoMunicipal: t.inscricaoMunicipal || prev.inscricaoMunicipal,
+      isPrestadorServico: true,
+    }));
+    toast.success("Dados replicados da Empresa Terceira. Revise e salve.");
+  }
 
   function toggleCategoria(c: string) {
     setForm(prev => ({
@@ -1338,6 +1408,48 @@ export default function Fornecedores() {
               </div>
               <Button className="w-full" onClick={() => { const loginCnpj = acessoResult.cnpj || acessoFornecedor?.cnpj || ""; const msg = `Portal do Fornecedor - FC Gestão Integrada\n\nOlá ${nomeResp},\n\nSeu acesso ao portal foi criado:\n\nLink: ${window.location.origin}/portal/login\nLogin (CNPJ): ${loginCnpj}\nSenha: ${acessoResult.senhaTemporaria}\n\nNo primeiro acesso, você será solicitado a trocar a senha.`; navigator.clipboard.writeText(msg); toast.success("Mensagem copiada!"); }}><Copy className="w-4 h-4 mr-2" /> Copiar Mensagem Completa</Button>
               <Button variant="outline" className="w-full" onClick={() => setAcessoDialogOpen(false)}>Fechar</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo Anti-Duplicidade Cross-Módulo */}
+      <Dialog open={!!dupDialog} onOpenChange={v => !v && setDupDialog(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-amber-700">Empresa já cadastrada</DialogTitle>
+          </DialogHeader>
+          {dupDialog?.mode === "block-same" && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-700">
+                Já existe um cadastro em <strong>Compras</strong> com este CNPJ:
+                <br /><span className="font-semibold">{dupDialog.nome}</span>.
+              </p>
+              <p className="text-xs text-gray-500">
+                Não é permitido duplicar empresas. Use o cadastro existente ou edite-o pelo catálogo de Fornecedores.
+              </p>
+              <DialogFooter>
+                <Button onClick={() => { setDupDialog(null); fecharModal(); }}>Entendi</Button>
+              </DialogFooter>
+            </div>
+          )}
+          {dupDialog?.mode === "replicate-from-terceira" && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-700">
+                Esta empresa já está cadastrada em <strong>Terceiros</strong>:
+                <br /><span className="font-semibold">{dupDialog.terceira.razaoSocial}</span>
+                {dupDialog.terceira.cnpj ? <> — <span className="font-mono">{formatCNPJ(dupDialog.terceira.cnpj)}</span></> : null}.
+              </p>
+              <p className="text-sm text-gray-700">
+                Deseja adicioná-la também ao módulo <strong>Compras</strong>? Os dados de cadastro serão replicados automaticamente.
+              </p>
+              <p className="text-xs text-gray-500">
+                Ao clicar em <strong>Não</strong>, o cadastro não prosseguirá — empresas não podem ser duplicadas.
+              </p>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => { setDupDialog(null); fecharModal(); }}>Não</Button>
+                <Button onClick={() => { aplicarDadosDeTerceira((dupDialog as any).terceira); setDupDialog(null); }}>Sim, replicar</Button>
+              </DialogFooter>
             </div>
           )}
         </DialogContent>

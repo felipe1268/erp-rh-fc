@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -59,9 +59,101 @@ export default function EmpresasTerceiras() {
     gerarAcessoMut.mutate({ tipo: "terceiro", empresaTerceiraId: acessoEmpresa.id, companyId, cnpj: cnpjLimpo, emailResponsavel: emailResp, nomeResponsavel: nomeResp, nomeEmpresa: acessoEmpresa.razaoSocial });
   };
 
+  const verificarDup = trpc.terceiros.empresas.verificarCadastroDuplicado.useQuery(
+    { companyId: companyId ?? 0, cnpj: (form.cnpj || "").replace(/\D/g, ""), excludeEmpresaTerceiraId: editingId ?? undefined },
+    { enabled: false, retry: false }
+  );
+  const [dupDialog, setDupDialog] = useState<null | { mode: "block-same"; nome: string } | { mode: "replicate-from-fornecedor"; fornecedor: any }>(null);
+
+  const lastCheckedDupCNPJ = useRef("");
+  // Reset do cache ao abrir/fechar o form — evita pular checagem em reabertura.
+  useEffect(() => {
+    if (!showForm) {
+      lastCheckedDupCNPJ.current = "";
+      setDupDialog(null);
+    }
+  }, [showForm]);
+  // Disparo automático da checagem quando o CNPJ atinge 14 dígitos (debounce 500ms).
+  useEffect(() => {
+    const cnpjDigits = (form.cnpj || "").replace(/\D/g, "");
+    if (!showForm || editingId || !companyId) return;
+    if (cnpjDigits.length !== 14) return;
+    if (cnpjDigits === lastCheckedDupCNPJ.current) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await verificarDup.refetch();
+        const cnpjAtual = (form.cnpj || "").replace(/\D/g, "");
+        if (cancelled || cnpjAtual !== cnpjDigits) return;
+        lastCheckedDupCNPJ.current = cnpjDigits;
+        const d: any = res.data;
+        if (!d?.found) return;
+        if (d.empresaTerceira) {
+          setDupDialog({ mode: "block-same", nome: `${d.empresaTerceira.razaoSocial} (#${d.empresaTerceira.id})` });
+        } else if (d.fornecedor) {
+          setDupDialog({ mode: "replicate-from-fornecedor", fornecedor: d.fornecedor });
+        }
+      } catch { /* silencioso */ }
+    }, 500);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [form.cnpj, showForm, editingId, companyId]);
+
+  const checarDuplicidade = async (cnpjDigits: string) => {
+    if (!companyId || cnpjDigits.length !== 14 || editingId) return false;
+    try {
+      const res = await verificarDup.refetch();
+      // Proteção contra resposta stale
+      const cnpjAtual = (form.cnpj || "").replace(/\D/g, "");
+      if (cnpjAtual !== cnpjDigits) return false;
+      lastCheckedDupCNPJ.current = cnpjDigits;
+      const d: any = res.data;
+      if (!d?.found) return false;
+      if (d.empresaTerceira) {
+        setDupDialog({ mode: "block-same", nome: `${d.empresaTerceira.razaoSocial} (#${d.empresaTerceira.id})` });
+        return true;
+      }
+      if (d.fornecedor) {
+        setDupDialog({ mode: "replicate-from-fornecedor", fornecedor: d.fornecedor });
+        return true;
+      }
+      return false;
+    } catch { return false; }
+  };
+
+  const aplicarDadosDeFornecedor = (f: any) => {
+    setForm((prev: any) => ({
+      ...prev,
+      cnpj: prev.cnpj || (f.cnpj ? cnpjMask(f.cnpj) : prev.cnpj),
+      razaoSocial: f.razaoSocial || prev.razaoSocial,
+      nomeFantasia: f.nomeFantasia || prev.nomeFantasia,
+      inscricaoEstadual: f.inscricaoEstadual || prev.inscricaoEstadual,
+      inscricaoMunicipal: f.inscricaoMunicipal || prev.inscricaoMunicipal,
+      cep: f.cep || prev.cep,
+      logradouro: f.endereco || prev.logradouro,
+      numero: f.numero || prev.numero,
+      complemento: f.complemento || prev.complemento,
+      bairro: f.bairro || prev.bairro,
+      cidade: f.cidade || prev.cidade,
+      estado: f.estado || prev.estado,
+      telefone: f.telefone || prev.telefone,
+      celular: f.contatoCelular || prev.celular,
+      email: f.email || prev.email,
+      emailFinanceiro: f.contatoEmail || prev.emailFinanceiro,
+      responsavelNome: f.contatoNome || f.representanteLegal || prev.responsavelNome,
+      banco: f.banco || prev.banco,
+      agencia: f.agencia || prev.agencia,
+      conta: f.conta || prev.conta,
+      pixChave: f.pix || prev.pixChave,
+    }));
+    toast.success("Dados replicados do cadastro de Compras. Revise e salve.");
+  };
+
   const buscarCNPJ = async (cnpj: string) => {
     const clean = cnpj.replace(/\D/g, "");
     if (clean.length !== 14) return;
+    // Anti-duplicidade primeiro: se existir, não preenche dados externos
+    const dup = await checarDuplicidade(clean);
+    if (dup) return;
     setCnpjLoading(true);
     try {
       const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${clean}`);
@@ -476,6 +568,48 @@ export default function EmpresasTerceiras() {
               </div>
               <Button className="w-full" onClick={() => { const loginCnpj = acessoResult.cnpj || acessoEmpresa?.cnpj || ""; const msg = `Portal do Terceiro - FC Gestão Integrada\n\nOlá ${nomeResp},\n\nSeu acesso ao portal foi criado:\n\nLink: ${window.location.origin}/portal/login\nLogin (CNPJ): ${loginCnpj}\nSenha: ${acessoResult.senhaTemporaria}\n\nNo primeiro acesso, você será solicitado a trocar a senha.`; navigator.clipboard.writeText(msg); toast.success("Mensagem copiada!"); }}><Copy className="w-4 h-4 mr-2" /> Copiar Mensagem Completa</Button>
               <Button variant="outline" className="w-full" onClick={() => setAcessoDialogOpen(false)}>Fechar</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo Anti-Duplicidade Cross-Módulo */}
+      <Dialog open={!!dupDialog} onOpenChange={v => !v && setDupDialog(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-amber-700">Empresa já cadastrada</DialogTitle>
+          </DialogHeader>
+          {dupDialog?.mode === "block-same" && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-700">
+                Já existe uma empresa terceira cadastrada com este CNPJ:
+                <br /><span className="font-semibold">{dupDialog.nome}</span>.
+              </p>
+              <p className="text-xs text-gray-500">
+                Não é permitido duplicar empresas. Use o cadastro existente ou edite-o pela lista.
+              </p>
+              <DialogFooter>
+                <Button onClick={() => { setDupDialog(null); setShowForm(false); }}>Entendi</Button>
+              </DialogFooter>
+            </div>
+          )}
+          {dupDialog?.mode === "replicate-from-fornecedor" && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-700">
+                Esta empresa já está cadastrada em <strong>Compras</strong>:
+                <br /><span className="font-semibold">{dupDialog.fornecedor.razaoSocial}</span>
+                {dupDialog.fornecedor.cnpj ? <> — <span className="font-mono">{formatCNPJ(dupDialog.fornecedor.cnpj)}</span></> : null}.
+              </p>
+              <p className="text-sm text-gray-700">
+                Deseja adicioná-la também ao módulo <strong>Terceiros</strong>? Os dados de cadastro serão replicados automaticamente.
+              </p>
+              <p className="text-xs text-gray-500">
+                Ao clicar em <strong>Não</strong>, o cadastro não prosseguirá — empresas não podem ser duplicadas.
+              </p>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => { setDupDialog(null); setShowForm(false); }}>Não</Button>
+                <Button onClick={() => { aplicarDadosDeFornecedor((dupDialog as any).fornecedor); setDupDialog(null); }}>Sim, replicar</Button>
+              </DialogFooter>
             </div>
           )}
         </DialogContent>

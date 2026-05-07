@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1398,
+    titulo: "Anti-duplicidade cross-módulo no cadastro de Empresas (Compras ↔ Terceiros)",
+    descricao: "MELHORIA: ao cadastrar uma empresa nos módulos COMPRAS (/compras/fornecedores) ou TERCEIROS (/terceiros/empresas), o sistema agora verifica automaticamente se já existe cadastro com o mesmo CNPJ em qualquer um dos dois módulos do tenant. Se a empresa já existir no MESMO módulo, o cadastro é bloqueado com aviso (não é permitido duplicar). Se a empresa já existir no OUTRO módulo, abre uma caixa de diálogo: 'Empresa já está cadastrada! Deseja adicioná-la neste módulo?'. Ao clicar em SIM, todos os dados de cadastro (razão social, endereço, contato, dados bancários etc.) são replicados automaticamente do registro existente para o novo formulário (revisar e salvar). Ao clicar em NÃO, o cadastro é cancelado. Backend: nova procedure terceiros.empresas.verificarCadastroDuplicado (consulta cross-tabela) e proteção server-side em compras.criarFornecedor e terceiros.empresas.create rejeitando duplicidade dentro do mesmo módulo (CONFLICT).",
+    tipo: "melhoria",
+    modulos: "Compras,Terceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 16:10:00",
+  },
+  {
     version: 1397,
     titulo: "Advertências Terceiros — dropdown inclui prestadores cadastrados em Compras",
     descricao: "MELHORIA: o seletor 'Empresa Prestadora' do formulário de Nova Advertência/Notificação (Funcionário Terceiro) passou a listar, além das empresas já cadastradas em empresas_terceiras, também todos os fornecedores marcados como 'PRESTAÇÃO DE SERVIÇO' (Rev. 1393) no catálogo Compras (/compras/fornecedores) que ainda não tinham vínculo com uma empresa terceira. Itens vindos do catálogo Compras aparecem com o selo '(prestador — Compras)'. Ao selecionar um prestador, o sistema cria automaticamente o registro correspondente em empresas_terceiras (vinculando via fornecedorId) ou reaproveita um existente por CNPJ, sem precisar duplicar cadastro. Backend: novas procedures terceiros.empresas.listPrestadores (lista unificada) e terceiros.empresas.ensureFromFornecedor (auto-vínculo/criação a partir do fornecedor).",

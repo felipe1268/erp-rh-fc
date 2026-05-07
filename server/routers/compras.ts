@@ -887,8 +887,24 @@ export const comprasRouter = router({
       isFornecedor:    z.boolean().optional(),
       observacoes:     z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
+      // Anti-duplicidade no MESMO módulo (fornecedores): rejeita se já existir
+      // registro ativo com o mesmo CNPJ no tenant.
+      const cnpjN = (input.cnpj || "").replace(/\D/g, "");
+      if (cnpjN) {
+        const existentes = await db.select().from(fornecedores).where(
+          eq(fornecedores.companyId, input.companyId),
+        );
+        const dup = (existentes as any[]).find(f => (f.cnpj || "").replace(/\D/g, "") === cnpjN);
+        if (dup) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Já existe um cadastro em Compras com este CNPJ (#${dup.id} — ${dup.razaoSocial}). Não é permitido duplicar.`,
+          });
+        }
+      }
       const [f] = await db.insert(fornecedores).values({
         companyId:       input.companyId,
         cnpj:            input.cnpj ?? null,
@@ -975,9 +991,25 @@ export const comprasRouter = router({
       observacoes:     z.string().optional(),
       ativo:           z.boolean().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const { id, categorias, socios, ...rest } = input;
+      // Tenant auth + anti-duplicidade no MESMO módulo (fornecedores) ao editar.
+      const [existing] = await db.select().from(fornecedores).where(eq(fornecedores.id, id));
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Fornecedor não encontrado." });
+      await _assertCompanyAccess(ctx.user, (existing as any).companyId);
+      const norm = (s?: string | null) => (s || "").replace(/\D/g, "");
+      const novoCnpj = rest.cnpj !== undefined ? norm(rest.cnpj) : norm((existing as any).cnpj);
+      if (novoCnpj && novoCnpj !== norm((existing as any).cnpj)) {
+        const candidatos = await db.select().from(fornecedores).where(eq(fornecedores.companyId, (existing as any).companyId));
+        const dup = (candidatos as any[]).find(c => c.id !== id && norm(c.cnpj) === novoCnpj && c.ativo !== false);
+        if (dup) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Já existe outro fornecedor cadastrado com este CNPJ (#${dup.id} — ${dup.razaoSocial}). Não é permitido duplicar.`,
+          });
+        }
+      }
       const data: any = { ...rest, atualizadoEm: new Date().toISOString() };
       if (categorias !== undefined) {
         data.categorias = sql`${JSON.stringify(categorias)}::json`;
@@ -993,8 +1025,11 @@ export const comprasRouter = router({
 
   excluirFornecedor: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      const [existing] = await db.select().from(fornecedores).where(eq(fornecedores.id, input.id));
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Fornecedor não encontrado." });
+      await _assertCompanyAccess(ctx.user, (existing as any).companyId);
       await db.update(fornecedores)
         .set({ ativo: false, atualizadoEm: new Date().toISOString() })
         .where(eq(fornecedores.id, input.id));
