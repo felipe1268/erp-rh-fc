@@ -314,24 +314,72 @@ export default function DashFolhaPagamento() {
               />
             )}
 
-            {/* Variação Mês a Mês (R$) — aumento ou redução em valor absoluto */}
-            {variacao && variacao.labels.length > 0 && (
-              <DashChart
-                title="Variação Mês a Mês (R$ vs mês anterior) — aumento ou redução por item"
-                type="bar"
-                labels={variacao.labels}
-                datasets={[
-                  { label: "Proventos", data: variacao.vProv, backgroundColor: SEMANTIC_COLORS.proventos },
-                  { label: "Descontos", data: variacao.vDesc, backgroundColor: SEMANTIC_COLORS.descontos },
-                  { label: "Líquido",   data: variacao.vLiq,  backgroundColor: SEMANTIC_COLORS.liquido },
-                  { label: "FGTS",      data: variacao.vFgts, backgroundColor: SEMANTIC_COLORS.fgts },
-                  { label: "INSS",      data: variacao.vInss, backgroundColor: SEMANTIC_COLORS.inss },
-                ]}
-                height={300}
-                showPercentage={false}
-                valueFormatter={(v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${fmtBRL(Math.abs(v))}`}
-              />
-            )}
+            {/* Variação Mês a Mês — cards claros e diretos */}
+            {comparativo.length >= 2 && (() => {
+              const ult = comparativo[comparativo.length - 1];
+              const ante = comparativo[comparativo.length - 2];
+              const itens = [
+                { key: "proventos", label: "Proventos", color: "green",  invertido: false, hint: "Subir é normal (HE, reajustes). Acima do esperado pode indicar custo de mão de obra crescendo." },
+                { key: "descontos", label: "Descontos", color: "red",    invertido: true,  hint: "Subir indica mais faltas, atrasos ou descontos manuais — atenção." },
+                { key: "liquido",   label: "Líquido",   color: "blue",   invertido: false, hint: "Subir é favorável. Cair pode indicar afastamentos ou aumento de descontos." },
+                { key: "fgts",      label: "FGTS",      color: "teal",   invertido: true,  hint: "Sobe junto com proventos. Crescimento desproporcional merece análise." },
+                { key: "inss",      label: "INSS",      color: "purple", invertido: true,  hint: "Sobe junto com proventos. Crescimento desproporcional merece análise." },
+              ] as const;
+              const corMap: Record<string, { bg: string; bd: string; tx: string }> = {
+                green:  { bg: "bg-green-50",  bd: "border-l-green-500",  tx: "text-green-700" },
+                red:    { bg: "bg-red-50",    bd: "border-l-red-500",    tx: "text-red-700" },
+                blue:   { bg: "bg-blue-50",   bd: "border-l-blue-500",   tx: "text-blue-700" },
+                teal:   { bg: "bg-teal-50",   bd: "border-l-teal-500",   tx: "text-teal-700" },
+                purple: { bg: "bg-purple-50", bd: "border-l-purple-500", tx: "text-purple-700" },
+              };
+              return (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-blue-500" />
+                      Variação Mês a Mês — {ante.label} → {ult.label}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
+                      <Info className="h-3.5 w-3.5 text-blue-500" />
+                      Comparação direta entre os dois últimos meses fechados. Verde = movimento favorável; vermelho = atenção. Passe o mouse para entender cada métrica.
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                      {itens.map((it) => {
+                        const cur = ult[it.key], prev = ante[it.key];
+                        const abs = cur - prev;
+                        const pct = prev === 0 ? (cur > 0 ? 100 : 0) : (abs / Math.abs(prev)) * 100;
+                        const subiu = abs > 0;
+                        const estavel = Math.abs(abs) < 0.01;
+                        const ruim = !estavel && (it.invertido ? subiu : !subiu);
+                        const corDelta = estavel ? "text-muted-foreground" : ruim ? "text-red-600" : "text-green-600";
+                        const Arrow = estavel ? Minus : subiu ? ArrowUp : ArrowDown;
+                        const c = corMap[it.color];
+                        return (
+                          <div key={it.key} className={`rounded-lg border ${c.bd} border-l-4 ${c.bg} p-3`} title={it.hint}>
+                            <p className={`text-xs font-semibold uppercase tracking-wide ${c.tx}`}>{it.label}</p>
+                            <div className={`flex items-center gap-1.5 mt-2 ${corDelta}`}>
+                              <Arrow className="h-5 w-5" />
+                              <span className="text-2xl font-bold tabular-nums leading-none">
+                                {pct >= 0 ? "+" : ""}{pct.toFixed(1)}%
+                              </span>
+                            </div>
+                            <p className={`text-sm font-semibold tabular-nums mt-1 ${corDelta}`}>
+                              {subiu ? "+" : estavel ? "" : "−"}{fmtBRL(Math.abs(abs))}
+                            </p>
+                            <div className="border-t border-border/60 mt-2 pt-2 space-y-0.5 text-[11px] text-muted-foreground tabular-nums">
+                              <div className="flex justify-between"><span>{ante.label}:</span><span>{fmtBRL(prev)}</span></div>
+                              <div className="flex justify-between font-semibold text-foreground"><span>{ult.label}:</span><span>{fmtBRL(cur)}</span></div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             {/* Tabela Comparativa Mês a Mês */}
             {comparativo.length > 0 && (
