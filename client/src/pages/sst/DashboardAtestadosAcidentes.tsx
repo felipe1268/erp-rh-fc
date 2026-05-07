@@ -235,15 +235,16 @@ export default function DashboardAtestadosAcidentes() {
 
         {/* Filtros */}
         <Card>
-          <CardContent className="p-4">
-            <div className="flex flex-col md:flex-row md:items-end gap-3">
-              <div className="flex-1 min-w-0">
+          <CardContent className="p-4 space-y-4">
+            {/* Linha 1: Período personalizado (datas) + atalhos */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+              <div className="min-w-0">
                 <Label className="text-xs text-gray-600">Data Início</Label>
-                <Input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
+                <Input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="w-full" />
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0">
                 <Label className="text-xs text-gray-600">Data Fim</Label>
-                <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
+                <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="w-full" />
               </div>
               <div className="flex flex-wrap gap-1.5">
                 <Button size="sm" variant="outline" onClick={() => setRange(1)}>Mês</Button>
@@ -254,31 +255,32 @@ export default function DashboardAtestadosAcidentes() {
               </div>
             </div>
 
-            {/* Período fixo: Ano / Mês / Trimestre / Semestre */}
-            <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-x-4 gap-y-2">
-              <div className="flex items-center gap-2">
-                <Label className="text-xs text-gray-600 whitespace-nowrap">Ano de referência</Label>
-                <select
-                  className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  value={anoSel}
-                  onChange={(e) => setAnoSel(parseInt(e.target.value, 10))}
-                >
-                  {anosDisp.map((y) => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-                <Button
-                  size="sm"
-                  variant={anoCheioAtivo(anoSel) ? "default" : "outline"}
-                  onClick={() => setAnoCheio(anoSel)}
-                  title={`Período: 01/01/${anoSel} a 31/12/${anoSel}`}
-                >
-                  Ano todo
-                </Button>
-              </div>
+            {/* Linha 2: Ano de referência + Ano todo */}
+            <div className="pt-3 border-t border-gray-100 flex flex-wrap items-center gap-2">
+              <Label className="text-xs text-gray-600 whitespace-nowrap">Ano de referência</Label>
+              <select
+                className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                value={anoSel}
+                onChange={(e) => setAnoSel(parseInt(e.target.value, 10))}
+              >
+                {anosDisp.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+              <Button
+                size="sm"
+                variant={anoCheioAtivo(anoSel) ? "default" : "outline"}
+                onClick={() => setAnoCheio(anoSel)}
+                title={`Período: 01/01/${anoSel} a 31/12/${anoSel}`}
+              >
+                Ano todo
+              </Button>
+            </div>
 
+            {/* Linha 3: Trimestre / Semestre / Mês — grid para evitar sobreposição */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-xs text-gray-500 mr-1">Trimestre:</span>
+                <span className="text-xs text-gray-500 mr-1 whitespace-nowrap">Trimestre:</span>
                 {([1, 2, 3, 4] as const).map((q) => (
                   <Button
                     key={`t${q}`}
@@ -293,7 +295,7 @@ export default function DashboardAtestadosAcidentes() {
               </div>
 
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-xs text-gray-500 mr-1">Semestre:</span>
+                <span className="text-xs text-gray-500 mr-1 whitespace-nowrap">Semestre:</span>
                 {([1, 2] as const).map((s) => (
                   <Button
                     key={`s${s}`}
@@ -310,7 +312,7 @@ export default function DashboardAtestadosAcidentes() {
               <div className="flex items-center gap-2">
                 <Label className="text-xs text-gray-600 whitespace-nowrap">Mês:</Label>
                 <select
-                  className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="h-8 rounded-md border border-gray-300 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 flex-1 min-w-0"
                   value={mesAtivoIdx}
                   onChange={(e) => {
                     const idx = parseInt(e.target.value, 10);

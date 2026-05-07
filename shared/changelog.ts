@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1389,
+    titulo: "SST — Atestados & Acidentes: filtros sem sobreposição em tablet",
+    descricao: "AJUSTE de layout em /sst/dashboard-atestados-acidentes: cabeçalho de filtros refeito com grid responsivo. Antes, em telas de tablet (~768-1024px) os campos Data Início/Data Fim invadiam os botões de atalho (Mês/3M/6M/12M/24M) causando sobreposição visual. Agora a primeira linha usa grid 1fr 1fr auto (datas + atalhos) e a linha de Trimestre/Semestre/Mês usa grid 3 colunas com whitespace-nowrap nos rótulos, garantindo alinhamento limpo em mobile, tablet e desktop.",
+    tipo: "ajuste",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 20:30:00",
+  },
+  {
     version: 1388,
     titulo: "Terceiros — Advertências: colaborador agora opcional e com campo digitável",
     descricao: "AJUSTE em /terceiros/advertencias: o campo Colaborador Terceirizado deixou de ser obrigatório e agora é um combobox digitável (input + datalist) — o usuário pode selecionar um colaborador previamente cadastrado OU digitar o nome livremente. Quando o nome digitado não corresponde a um cadastrado, dois campos opcionais aparecem (CPF e Função) que ficam armazenados em colunas auxiliares (funcionario_nome_manual, funcionario_cpf_manual, funcionario_funcao_manual) e são usados no PDF e na listagem via COALESCE. Apenas a Empresa Prestadora permanece obrigatória. Cálculo de sequência (1ª/2ª/3ª) também passou a funcionar para nomes digitados (agrupamento por nome+empresa). Schema, ColFix e backend atualizados (funcionario_terceiro_id virou nullable; novas 3 colunas). Bump de COLFIX_VERSION para v1387.1.",
