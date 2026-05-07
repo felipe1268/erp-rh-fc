@@ -9,6 +9,7 @@ import {
   alertasTerceiros,
   obras,
   warningsTerceiros,
+  fornecedores,
 } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull, like, gte, lte, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -27,6 +28,159 @@ export const terceirosRouter = router({
         return db.select().from(empresasTerceiras)
           .where(and(companyFilter(empresasTerceiras.companyId, input), isNull(empresasTerceiras.deletedAt)))
           .orderBy(empresasTerceiras.razaoSocial);
+      }),
+
+    // Lista UNIFICADA: empresas_terceiras + fornecedores marcados como prestadores
+    // de serviço (que ainda não têm registro em empresas_terceiras). Usado em
+    // Advertências/Notificações para permitir notificar qualquer prestador
+    // cadastrado no catálogo Compras.
+    listPrestadores: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const terceiras = await db.select().from(empresasTerceiras)
+          .where(and(companyFilter(empresasTerceiras.companyId, input), isNull(empresasTerceiras.deletedAt)))
+          .orderBy(empresasTerceiras.razaoSocial);
+
+        const prestadores = await db.select().from(fornecedores)
+          .where(and(
+            companyFilter(fornecedores.companyId, input),
+            eq(fornecedores.isPrestadorServico, true),
+            eq(fornecedores.ativo, true),
+          ))
+          .orderBy(fornecedores.razaoSocial);
+
+        const norm = (s?: string | null) => (s || "").replace(/\D/g, "");
+        const cnpjsTerceiras = new Set(terceiras.map((t: any) => norm(t.cnpj)).filter(Boolean));
+        const idsTerceirasPorFornecedor = new Set(
+          terceiras.map((t: any) => t.fornecedorId).filter((v: any) => v != null)
+        );
+
+        const out: Array<{
+          source: "terceira" | "fornecedor";
+          id: number | null;            // empresaTerceiraId (null se source=fornecedor sem terceira)
+          fornecedorId: number | null;  // fornecedorId (se houver)
+          razaoSocial: string;
+          cnpj: string | null;
+          nomeFantasia: string | null;
+        }> = terceiras.map((t: any) => ({
+          source: "terceira" as const,
+          id: t.id,
+          fornecedorId: t.fornecedorId ?? null,
+          razaoSocial: t.razaoSocial,
+          cnpj: t.cnpj ?? null,
+          nomeFantasia: t.nomeFantasia ?? null,
+        }));
+
+        for (const f of prestadores as any[]) {
+          if (idsTerceirasPorFornecedor.has(f.id)) continue;
+          if (f.cnpj && cnpjsTerceiras.has(norm(f.cnpj))) continue;
+          out.push({
+            source: "fornecedor",
+            id: null,
+            fornecedorId: f.id,
+            razaoSocial: f.razaoSocial,
+            cnpj: f.cnpj ?? null,
+            nomeFantasia: f.nomeFantasia ?? null,
+          });
+        }
+
+        out.sort((a, b) => a.razaoSocial.localeCompare(b.razaoSocial, "pt-BR"));
+        return out;
+      }),
+
+    // Garante que exista um registro empresas_terceiras para o fornecedorId
+    // informado. Se não existir (por fornecedorId nem por CNPJ), cria a partir
+    // dos dados do fornecedor. Retorna o id da empresa_terceira.
+    ensureFromFornecedor: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        companyIds: z.array(z.number()).optional(),
+        fornecedorId: z.number(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+
+        // SEGURANÇA: o fornecedor deve pertencer ao tenant atual (ou ao grupo
+        // permitido via companyIds). Sem isso, um fornecedorId arbitrário de
+        // outro tenant poderia ser materializado como empresa_terceira local.
+        const [forn] = await db.select().from(fornecedores).where(and(
+          eq(fornecedores.id, input.fornecedorId),
+          companyFilter(fornecedores.companyId, input),
+        ));
+        if (!forn) throw new TRPCError({ code: "NOT_FOUND", message: "Fornecedor não encontrado neste tenant" });
+        if (!forn.isPrestadorServico) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Este fornecedor não está marcado como Prestador de Serviço." });
+        }
+        if (forn.ativo === false) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Fornecedor inativo." });
+        }
+
+        const norm = (s?: string | null) => (s || "").replace(/\D/g, "");
+        const cnpjN = norm(forn.cnpj);
+
+        // Tenta achar por fornecedorId no tenant
+        const [byFornId] = await db.select().from(empresasTerceiras).where(and(
+          eq(empresasTerceiras.companyId, input.companyId),
+          eq(empresasTerceiras.fornecedorId, input.fornecedorId),
+          isNull(empresasTerceiras.deletedAt),
+        ));
+        if (byFornId) return { id: byFornId.id, created: false };
+
+        // Tenta achar por CNPJ no tenant
+        if (cnpjN) {
+          const candidatos = await db.select().from(empresasTerceiras).where(and(
+            eq(empresasTerceiras.companyId, input.companyId),
+            isNull(empresasTerceiras.deletedAt),
+          ));
+          const match = (candidatos as any[]).find(c => norm(c.cnpj) === cnpjN);
+          if (match) {
+            // Só faz auto-vínculo se a terceira ainda não estiver atrelada a outro fornecedor.
+            // Evita "rebind" silencioso de uma empresa terceira já vinculada.
+            if (match.fornecedorId == null) {
+              await db.update(empresasTerceiras)
+                .set({ fornecedorId: input.fornecedorId } as any)
+                .where(eq(empresasTerceiras.id, match.id));
+            }
+            return { id: match.id, created: false };
+          }
+        }
+
+        // Mitigação best-effort de race: re-checa por fornecedorId imediatamente
+        // antes do INSERT (não há constraint única no banco, mas reduz a janela).
+        const [recheck] = await db.select().from(empresasTerceiras).where(and(
+          eq(empresasTerceiras.companyId, input.companyId),
+          eq(empresasTerceiras.fornecedorId, input.fornecedorId),
+          isNull(empresasTerceiras.deletedAt),
+        ));
+        if (recheck) return { id: recheck.id, created: false };
+
+        // Cria novo registro a partir do fornecedor
+        const [created] = await db.insert(empresasTerceiras).values({
+          companyId: input.companyId,
+          razaoSocial: forn.razaoSocial,
+          nomeFantasia: forn.nomeFantasia ?? undefined,
+          cnpj: forn.cnpj || "",
+          inscricaoEstadual: forn.inscricaoEstadual ?? undefined,
+          inscricaoMunicipal: forn.inscricaoMunicipal ?? undefined,
+          cep: forn.cep ?? undefined,
+          logradouro: forn.endereco ?? undefined,
+          numero: forn.numero ?? undefined,
+          complemento: forn.complemento ?? undefined,
+          bairro: forn.bairro ?? undefined,
+          cidade: forn.cidade ?? undefined,
+          estado: forn.estado ?? undefined,
+          telefone: forn.telefone ?? undefined,
+          email: forn.email ?? undefined,
+          responsavelNome: forn.contatoNome ?? forn.representanteLegal ?? undefined,
+          banco: forn.banco ?? undefined,
+          agencia: forn.agencia ?? undefined,
+          conta: forn.conta ?? undefined,
+          fornecedorId: input.fornecedorId,
+          createdBy: ctx.user?.name || "Sistema (auto-vínculo Fornecedor→Terceira)",
+        } as any).returning({ id: empresasTerceiras.id });
+
+        return { id: created.id, created: true };
       }),
 
     getById: protectedProcedure
@@ -618,6 +772,25 @@ Seja rigoroso na validação. Verifique se o tipo do documento corresponde ao es
         const db = (await getDb())!;
         if (!input.funcionarioTerceiroId && !(input.funcionarioNomeManual && input.funcionarioNomeManual.trim().length > 0)) {
           throw new Error("Informe um colaborador cadastrado ou digite o nome do colaborador.");
+        }
+        // SEGURANÇA: validar que empresaTerceiraId pertence ao tenant da advertência.
+        const [empOk] = await db.select({ id: empresasTerceiras.id })
+          .from(empresasTerceiras)
+          .where(and(
+            eq(empresasTerceiras.id, input.empresaTerceiraId),
+            eq(empresasTerceiras.companyId, input.companyId),
+            isNull(empresasTerceiras.deletedAt),
+          ));
+        if (!empOk) throw new TRPCError({ code: "FORBIDDEN", message: "Empresa terceira não pertence a este tenant." });
+        if (input.funcionarioTerceiroId) {
+          const [funcOk] = await db.select({ id: funcionariosTerceiros.id })
+            .from(funcionariosTerceiros)
+            .where(and(
+              eq(funcionariosTerceiros.id, input.funcionarioTerceiroId),
+              eq(funcionariosTerceiros.companyId, input.companyId),
+              eq(funcionariosTerceiros.empresaTerceiraId, input.empresaTerceiraId),
+            ));
+          if (!funcOk) throw new TRPCError({ code: "FORBIDDEN", message: "Colaborador não pertence à empresa terceira informada neste tenant." });
         }
         let sequencia = 1;
         if (input.funcionarioTerceiroId) {

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1397,
+    titulo: "Advertências Terceiros — dropdown inclui prestadores cadastrados em Compras",
+    descricao: "MELHORIA: o seletor 'Empresa Prestadora' do formulário de Nova Advertência/Notificação (Funcionário Terceiro) passou a listar, além das empresas já cadastradas em empresas_terceiras, também todos os fornecedores marcados como 'PRESTAÇÃO DE SERVIÇO' (Rev. 1393) no catálogo Compras (/compras/fornecedores) que ainda não tinham vínculo com uma empresa terceira. Itens vindos do catálogo Compras aparecem com o selo '(prestador — Compras)'. Ao selecionar um prestador, o sistema cria automaticamente o registro correspondente em empresas_terceiras (vinculando via fornecedorId) ou reaproveita um existente por CNPJ, sem precisar duplicar cadastro. Backend: novas procedures terceiros.empresas.listPrestadores (lista unificada) e terceiros.empresas.ensureFromFornecedor (auto-vínculo/criação a partir do fornecedor).",
+    tipo: "melhoria",
+    modulos: "Terceiros,Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 15:35:00",
+  },
+  {
     version: 1396,
     titulo: "Terceiros — KPI 'Empresas Terceiras' abre as empresas COM CONTRATO ATIVO",
     descricao: "BUGFIX: o card 'Empresas Terceiras' no Painel Terceiros mostra 4 (empresas com contrato ativo, da tabela empresas_terceiras isolada por tenant), mas ao clicar abria a lista do catálogo global /compras/fornecedores (1186 registros, tabela compartilhada do módulo Compras), gerando inconsistência entre o número exibido e o conteúdo da página. Solução: a rota /terceiros/empresas agora renderiza EmpresasTerceiras.tsx (que consome terceiros.empresas.list — as 4 empresas com contrato ativo da empresa selecionada no header), mantendo coerência com o KPI. O catálogo global /compras/fornecedores (1186) permanece acessível via menu Compras → 'Empresas Terceiras' e RH/Cadastro → 'Empresas Terceiras'. Lógicas e tabelas existentes preservadas — apenas o destino do clique foi corrigido.",

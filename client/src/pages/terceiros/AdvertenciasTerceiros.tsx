@@ -68,10 +68,11 @@ export default function AdvertenciasTerceiros() {
     { companyId, companyIds },
     { enabled: !!companyId }
   );
-  const { data: empresas = [] } = trpc.terceiros.empresas.list.useQuery(
+  const { data: empresas = [], refetch: refetchEmpresas } = trpc.terceiros.empresas.listPrestadores.useQuery(
     { companyId, companyIds },
     { enabled: !!companyId }
   );
+  const ensureFromFornecedorMut = trpc.terceiros.empresas.ensureFromFornecedor.useMutation();
   const { data: funcionarios = [] } = trpc.terceiros.funcionarios.list.useQuery(
     { companyId, companyIds, empresaTerceiraId: form.empresaTerceiraId || undefined } as any,
     { enabled: !!companyId && !!form.empresaTerceiraId }
@@ -403,10 +404,42 @@ export default function AdvertenciasTerceiros() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-medium text-gray-600">Empresa Prestadora *</label>
-                <Select value={form.empresaTerceiraId ? String(form.empresaTerceiraId) : ""} onValueChange={v => setForm({ ...form, empresaTerceiraId: parseInt(v), funcionarioTerceiroId: undefined })}>
+                <Select
+                  value={
+                    form.empresaTerceiraId ? `t:${form.empresaTerceiraId}`
+                    : form.fornecedorPendenteId ? `f:${form.fornecedorPendenteId}`
+                    : ""
+                  }
+                  onValueChange={async v => {
+                    if (v.startsWith("t:")) {
+                      setForm({ ...form, empresaTerceiraId: parseInt(v.slice(2)), fornecedorPendenteId: undefined, funcionarioTerceiroId: undefined });
+                    } else if (v.startsWith("f:")) {
+                      const fornecedorId = parseInt(v.slice(2));
+                      setForm({ ...form, fornecedorPendenteId: fornecedorId, empresaTerceiraId: undefined, funcionarioTerceiroId: undefined });
+                      try {
+                        const r = await ensureFromFornecedorMut.mutateAsync({ companyId, companyIds, fornecedorId });
+                        setForm((prev: any) => ({ ...prev, empresaTerceiraId: r.id, fornecedorPendenteId: undefined }));
+                        if (r.created) toast.success("Empresa terceira vinculada ao prestador.");
+                        refetchEmpresas();
+                      } catch (e: any) {
+                        toast.error(e?.message || "Erro ao vincular fornecedor a empresa terceira");
+                        setForm((prev: any) => ({ ...prev, fornecedorPendenteId: undefined }));
+                      }
+                    }
+                  }}
+                >
                   <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a empresa" /></SelectTrigger>
                   <SelectContent>
-                    {(empresas as any[]).map(e => <SelectItem key={e.id} value={String(e.id)}>{e.razaoSocial}{e.cnpj ? ` — ${formatCNPJ(e.cnpj)}` : ""}</SelectItem>)}
+                    {(empresas as any[]).map(e => {
+                      const key = e.source === "terceira" ? `t:${e.id}` : `f:${e.fornecedorId}`;
+                      const label = `${e.razaoSocial}${e.cnpj ? ` — ${formatCNPJ(e.cnpj)}` : ""}`;
+                      return (
+                        <SelectItem key={key} value={key}>
+                          {label}
+                          {e.source === "fornecedor" ? <span className="text-[10px] text-blue-600 ml-2">(prestador — Compras)</span> : null}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
