@@ -2600,6 +2600,15 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       // 6. Deletar itens da cotação
       await db.delete(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.id));
 
+      // 6b. FIX: estornar débitos de Reserva de Risco (DI-08) e realocações de
+      // sobras vinculados a esta cotação. Sem isso, ficavam débitos órfãos
+      // descontando o saldo da reserva indefinidamente.
+      await db.delete(comprasRiscoDebitos).where(eq(comprasRiscoDebitos.cotacaoId, input.id));
+      await db.delete(budgetReallocations).where(and(
+        sql`${budgetReallocations.origemEapItemNome} LIKE 'Economia OC:%'`,
+        sql`${budgetReallocations.destinoEapItemNome} = ${`Cotação #${input.id}`}`,
+      ));
+
       // 7. Deletar a cotação
       await db.delete(comprasCotacoes).where(eq(comprasCotacoes.id, input.id));
 
@@ -2632,6 +2641,13 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       await db.delete(comprasCotacaoRespostas).where(inArray(comprasCotacaoRespostas.cotacaoId, ownedIds));
       await db.delete(comprasCotacaoFornecedores).where(inArray(comprasCotacaoFornecedores.cotacaoId, ownedIds));
       await db.delete(comprasCotacoesItens).where(inArray(comprasCotacoesItens.cotacaoId, ownedIds));
+      // FIX: estornar débitos de risco e realocações de sobras vinculados às cotações em lote.
+      await db.delete(comprasRiscoDebitos).where(inArray(comprasRiscoDebitos.cotacaoId, ownedIds));
+      const destinosCot = ownedIds.map(id => `Cotação #${id}`);
+      await db.delete(budgetReallocations).where(and(
+        sql`${budgetReallocations.origemEapItemNome} LIKE 'Economia OC:%'`,
+        inArray(budgetReallocations.destinoEapItemNome, destinosCot),
+      ));
       await db.delete(comprasCotacoes).where(inArray(comprasCotacoes.id, ownedIds));
       return { ok: true, count: ownedIds.length };
     }),
@@ -3691,13 +3707,15 @@ Retorne APENAS um JSON válido neste formato:
       const db = await getDb();
 
       // ── 1. DI-08: pega o latest orcamento por obra ─────────────────────
+      // FIX: filtrar isNull(deletedAt) e padronizar ordering por createdAt (igual a listarEconomiasOC).
       const orcs = await db.select({ id: orcamentos.id, obraId: orcamentos.obraId })
         .from(orcamentos)
         .where(and(
           eq(orcamentos.companyId, input.companyId),
+          isNull(orcamentos.deletedAt),
           input.obraId ? eq(orcamentos.obraId, input.obraId) : undefined,
         ))
-        .orderBy(desc(orcamentos.id));
+        .orderBy(desc(orcamentos.createdAt), desc(orcamentos.id));
 
       // latest per obra (ignora orçamentos sem obraId)
       const latestPerObra = new Map<number, number>();
@@ -3714,20 +3732,28 @@ Retorne APENAS um JSON válido neste formato:
       }
       const di08Total = di08Rows.reduce((s, r) => s + n(r.valorAbsoluto), 0);
 
-      // débitos de risco
-      let allDebitos: { valor: string | null }[] = [];
-      if (latestOrcIds.length > 0) {
-        allDebitos = await db.select({ valor: comprasRiscoDebitos.valor })
-          .from(comprasRiscoDebitos)
-          .where(inArray(comprasRiscoDebitos.orcamentoId, latestOrcIds));
-      }
+      // ── débitos de risco ───────────────────────────────────────────────
+      // FIX CRÍTICO: o cálculo anterior filtrava por `orcamentoId IN latestOrcIds`,
+      // mas a tela "Realocações" (listarDebitosRisco) mostra TODOS os débitos da
+      // empresa/obra. Quando um débito foi feito contra uma versão antiga do
+      // orçamento (revisão), `Utilizado` aparecia R$ 0 enquanto o histórico
+      // mostrava débitos reais. Agora alinhamos: somamos TODOS os débitos
+      // por companyId (+ obraId quando filtrado), espelhando exatamente o
+      // total mostrado em listarDebitosRisco.
+      const debConds: any[] = [eq(comprasRiscoDebitos.companyId, input.companyId)];
+      if (input.obraId) debConds.push(eq(comprasRiscoDebitos.obraId, input.obraId));
+      const allDebitos = await db.select({ valor: comprasRiscoDebitos.valor })
+        .from(comprasRiscoDebitos)
+        .where(and(...debConds));
       const di08Usado = allDebitos.reduce((s, r) => s + n(r.valor), 0);
       const di08Disponivel = Math.max(0, di08Total - di08Usado);
 
       // ── 2. Sobras das compras: comparação item-a-item (meta × qty vs comprado) ─
+      // FIX: removido "aguardando_aprovacao_extra" — OCs nesse estado ainda não
+      // foram efetivamente aprovadas e geravam economia falsa.
       const ocsConds: any[] = [
         eq(comprasOrdens.companyId, input.companyId),
-        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida", "aguardando_aprovacao_extra"]),
+        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida"]),
       ];
       if (input.obraId) ocsConds.push(eq(comprasOrdens.obraId, input.obraId));
       const ocs = await db.select({ id: comprasOrdens.id, obraId: comprasOrdens.obraId }).from(comprasOrdens).where(and(...ocsConds));
@@ -3844,12 +3870,28 @@ Retorne APENAS um JSON válido neste formato:
         }
       }
 
+      // ── FIX double-spending: descontar sobras já consumidas via confirmarRealocacaoSobras ──
+      // Cada chamada de confirmarRealocacaoSobras grava em budget_reallocations com
+      // origemEapItemNome começando com "Economia OC:". Sem este desconto, a mesma
+      // economia poderia ser usada para cobrir várias cotações deficitárias.
+      const realocConds: any[] = [
+        eq(budgetReallocations.companyId, input.companyId),
+        sql`${budgetReallocations.origemEapItemNome} LIKE 'Economia OC:%'`,
+      ];
+      if (input.obraId) realocConds.push(eq(budgetReallocations.obraId, input.obraId));
+      const realocConsumidas = await db.select({ valor: budgetReallocations.valorRealocado })
+        .from(budgetReallocations).where(and(...realocConds));
+      const sobrasJaConsumidas = realocConsumidas.reduce((s, r) => s + n(r.valor), 0);
+      const sobrasLiquidas = Math.max(0, totalSobras - sobrasJaConsumidas);
+
       return {
         di08Total,
         di08Usado,
         di08Disponivel,
-        totalSobras,
-        totalDisponivel: di08Disponivel + totalSobras,
+        totalSobras: sobrasLiquidas,
+        totalSobrasBruto: totalSobras,
+        sobrasJaConsumidas,
+        totalDisponivel: di08Disponivel + sobrasLiquidas,
       };
     }),
 
@@ -3862,10 +3904,11 @@ Retorne APENAS um JSON válido neste formato:
       let riscoInicial = 0;
       let riscoOrcamentoId: number | null = null;
       if (input.obraId) {
+        // FIX: filtrar isNull(deletedAt) e padronizar ordering por createdAt
         const [orc] = await db.select({ id: orcamentos.id })
           .from(orcamentos)
-          .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, input.obraId)))
-          .orderBy(desc(orcamentos.id))
+          .where(and(eq(orcamentos.companyId, input.companyId), eq(orcamentos.obraId, input.obraId), isNull(orcamentos.deletedAt)))
+          .orderBy(desc(orcamentos.createdAt), desc(orcamentos.id))
           .limit(1);
         if (orc) {
           riscoOrcamentoId = orc.id;
@@ -3875,22 +3918,29 @@ Retorne APENAS um JSON válido neste formato:
           riscoInicial = n(di08?.valorAbsoluto ?? 0);
         }
       }
-      const debitosRisco = riscoOrcamentoId
+      // FIX CRÍTICO: somar TODOS os débitos da obra (não só os do orçamento atual),
+      // para alinhar com listarDebitosRisco e evitar mostrar "Utilizado: R$ 0"
+      // quando há débitos vinculados a versões antigas do orçamento.
+      const debitosRisco = input.obraId
         ? await db.select({ valor: comprasRiscoDebitos.valor })
             .from(comprasRiscoDebitos)
-            .where(eq(comprasRiscoDebitos.orcamentoId, riscoOrcamentoId))
+            .where(and(
+              eq(comprasRiscoDebitos.companyId, input.companyId),
+              eq(comprasRiscoDebitos.obraId, input.obraId),
+            ))
         : [];
       const riscoUsado = debitosRisco.reduce((s, x) => s + n(x.valor), 0);
       const riscoDisponivel = Math.max(0, riscoInicial - riscoUsado);
 
       // ── 2. SOBRAS DE OCs APROVADAS ─────────────────────────────────────
+      // FIX: removido "aguardando_aprovacao_extra" — sobras só de OCs efetivamente aprovadas.
       const ocs = await db.select({
         id: comprasOrdens.id,
         numeroOc: comprasOrdens.numeroOc,
         obraId: comprasOrdens.obraId,
       }).from(comprasOrdens).where(and(
         eq(comprasOrdens.companyId, input.companyId),
-        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida", "aguardando_aprovacao_extra"]),
+        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida"]),
         input.obraId ? eq(comprasOrdens.obraId, input.obraId) : undefined,
       ));
 
@@ -3978,7 +4028,17 @@ Retorne APENAS um JSON válido neste formato:
         sobras.sort((a, b) => b.sobra - a.sobra);
       }
 
-      const totalSobras = sobras.reduce((s, x) => s + x.sobra, 0);
+      const totalSobrasBruto = sobras.reduce((s, x) => s + x.sobra, 0);
+      // FIX double-spending: descontar sobras já realocadas via confirmarRealocacaoSobras
+      const realocCondsBR: any[] = [
+        eq(budgetReallocations.companyId, input.companyId),
+        sql`${budgetReallocations.origemEapItemNome} LIKE 'Economia OC:%'`,
+      ];
+      if (input.obraId) realocCondsBR.push(eq(budgetReallocations.obraId, input.obraId));
+      const realocBR = await db.select({ valor: budgetReallocations.valorRealocado })
+        .from(budgetReallocations).where(and(...realocCondsBR));
+      const sobrasJaConsumidas = realocBR.reduce((s, r) => s + n(r.valor), 0);
+      const totalSobras = Math.max(0, totalSobrasBruto - sobrasJaConsumidas);
       const totalCobertura = riscoDisponivel + totalSobras;
 
       // Verifica débitos de risco feitos especificamente para esta cotação
@@ -4093,13 +4153,16 @@ Retorne APENAS um JSON válido neste formato:
     .mutation(async ({ input }) => {
       const db = await getDb();
 
+      // FIX: removido "aguardando_aprovacao_extra" para alinhar com getSaldosRealocacaoGeral/buscarSaldosRealocacao.
+      // Mantê-lo aqui causava: (a) sobra "falsa" de OC ainda não aprovada, e (b) descasamento dos índices
+      // entre o que a UI lista (sem aguardando_aprovacao_extra) e o que esta mutation reconstrói.
       const q = await db.select({
         id: comprasOrdens.id,
         numeroOc: comprasOrdens.numeroOc,
         obraId: comprasOrdens.obraId,
       }).from(comprasOrdens).where(and(
         eq(comprasOrdens.companyId, input.companyId),
-        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida", "aguardando_aprovacao_extra"]),
+        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida"]),
         eq(comprasOrdens.obraId, input.obraId),
       ));
 
@@ -4182,6 +4245,26 @@ Retorne APENAS um JSON válido neste formato:
           totalSobrasSel += sobras[idx].sobra;
           sobrasDesc.push(`${sobras[idx].ocNumero}: ${sobras[idx].descricao} (${sobras[idx].sobra.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})`);
         }
+      }
+
+      // FIX double-spending server-side: validar que o valor a realocar
+      // não excede a economia LÍQUIDA disponível (sobras totais − já consumidas).
+      // Se outro usuário consumiu sobras simultaneamente, esta mutation falha
+      // ao invés de criar realocações inválidas.
+      const totalSobrasOcs = sobras.reduce((s, x) => s + x.sobra, 0);
+      const consumidasRows = await db.select({ valor: budgetReallocations.valorRealocado })
+        .from(budgetReallocations).where(and(
+          eq(budgetReallocations.companyId, input.companyId),
+          eq(budgetReallocations.obraId, input.obraId),
+          sql`${budgetReallocations.origemEapItemNome} LIKE 'Economia OC:%'`,
+        ));
+      const consumido = consumidasRows.reduce((s, r) => s + n(r.valor), 0);
+      const economiaLiquida = Math.max(0, totalSobrasOcs - consumido);
+      if (totalSobrasSel > economiaLiquida + 0.01) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Saldo de Economia em Compras insuficiente. Disponível: ${economiaLiquida.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} | Solicitado: ${totalSobrasSel.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Recarregue a tela — outro usuário pode ter consumido essas sobras.`,
+        });
       }
 
       if (totalSobrasSel > 0) {
@@ -4312,9 +4395,10 @@ Retorne APENAS um JSON válido neste formato:
     .query(async ({ input }) => {
       const db = await getDb();
 
+      // FIX: removido "aguardando_aprovacao_extra" — só conta economia de OCs efetivamente aprovadas.
       const ocsConds: any[] = [
         eq(comprasOrdens.companyId, input.companyId),
-        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida", "aguardando_aprovacao_extra"]),
+        inArray(comprasOrdens.status as any, ["aprovada", "recebida", "parcialmente_recebida"]),
       ];
       if (input.obraId) ocsConds.push(eq(comprasOrdens.obraId, input.obraId));
 
@@ -5436,6 +5520,15 @@ Retorne APENAS um JSON válido neste formato:
         .set({ status: "cancelada" })
         .where(eq(comprasCotacoes.id, input.cotacaoId));
 
+      // FIX: estornar débitos de Reserva de Risco e realocações de sobras
+      // vinculados a esta cotação. Cancelar a cotação sem estornar deixa
+      // a reserva consumida indevidamente.
+      await db.delete(comprasRiscoDebitos).where(eq(comprasRiscoDebitos.cotacaoId, input.cotacaoId));
+      await db.delete(budgetReallocations).where(and(
+        sql`${budgetReallocations.origemEapItemNome} LIKE 'Economia OC:%'`,
+        sql`${budgetReallocations.destinoEapItemNome} = ${`Cotação #${input.cotacaoId}`}`,
+      ));
+
       if (cot.solicitacaoId) {
         const otherActive = await db.select({ id: comprasCotacoes.id }).from(comprasCotacoes)
           .where(and(
@@ -6159,8 +6252,29 @@ Retorne APENAS um JSON válido neste formato:
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+      // FIX: se esta OC era a última OC ativa de uma cotação que tinha débito
+      // de risco/realocação de sobras, estornar — para manter o saldo da
+      // Reserva de Risco e da Economia em Compras coerente.
+      const [oc] = await db.select({ cotacaoId: comprasOrdens.cotacaoId })
+        .from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
       await db.delete(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
       await db.delete(comprasOrdens).where(eq(comprasOrdens.id, input.id));
+      if (oc?.cotacaoId) {
+        // FIX: considerar apenas OCs ATIVAS (ignorar canceladas/recusadas).
+        // Se a única OC ativa foi excluída, estorna débito/realocação da cotação.
+        const ativas = await db.select({ id: comprasOrdens.id }).from(comprasOrdens)
+          .where(and(
+            eq(comprasOrdens.cotacaoId, oc.cotacaoId),
+            sql`COALESCE(${comprasOrdens.status}, '') NOT IN ('cancelada', 'recusada')`,
+          ));
+        if (ativas.length === 0) {
+          await db.delete(comprasRiscoDebitos).where(eq(comprasRiscoDebitos.cotacaoId, oc.cotacaoId));
+          await db.delete(budgetReallocations).where(and(
+            sql`${budgetReallocations.origemEapItemNome} LIKE 'Economia OC:%'`,
+            sql`${budgetReallocations.destinoEapItemNome} = ${`Cotação #${oc.cotacaoId}`}`,
+          ));
+        }
+      }
       return { ok: true };
     }),
 
@@ -6171,11 +6285,28 @@ Retorne APENAS um JSON válido neste formato:
       const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
       const allowedIds = allowedCompanies.map((c: any) => c.id);
       if (!allowedIds.includes(input.companyId)) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa" });
-      const owned = await db.select({ id: comprasOrdens.id }).from(comprasOrdens).where(and(inArray(comprasOrdens.id, input.ids), eq(comprasOrdens.companyId, input.companyId)));
+      const owned = await db.select({ id: comprasOrdens.id, cotacaoId: comprasOrdens.cotacaoId }).from(comprasOrdens).where(and(inArray(comprasOrdens.id, input.ids), eq(comprasOrdens.companyId, input.companyId)));
       const ownedIds = owned.map(o => o.id);
       if (ownedIds.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Nenhuma OC encontrada" });
+      const cotacaoIds = [...new Set(owned.map(o => o.cotacaoId).filter(Boolean) as number[])];
       await db.delete(comprasOrdensItens).where(inArray(comprasOrdensItens.ordemId, ownedIds));
       await db.delete(comprasOrdens).where(inArray(comprasOrdens.id, ownedIds));
+      // FIX: estornar débitos/realocações para cotações que ficaram sem nenhuma OC ATIVA
+      // (ignora canceladas/recusadas que continuam na tabela).
+      for (const cotId of cotacaoIds) {
+        const ativas = await db.select({ id: comprasOrdens.id }).from(comprasOrdens)
+          .where(and(
+            eq(comprasOrdens.cotacaoId, cotId),
+            sql`COALESCE(${comprasOrdens.status}, '') NOT IN ('cancelada', 'recusada')`,
+          ));
+        if (ativas.length === 0) {
+          await db.delete(comprasRiscoDebitos).where(eq(comprasRiscoDebitos.cotacaoId, cotId));
+          await db.delete(budgetReallocations).where(and(
+            sql`${budgetReallocations.origemEapItemNome} LIKE 'Economia OC:%'`,
+            sql`${budgetReallocations.destinoEapItemNome} = ${`Cotação #${cotId}`}`,
+          ));
+        }
+      }
       return { ok: true, count: ownedIds.length };
     }),
 

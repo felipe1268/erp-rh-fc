@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1385,
+    titulo: "Compras — correção de 7 bugs em Reserva de Risco DI-08 e Economia em Compras",
+    descricao: "BUGFIX no módulo Compras (tela Realocações + cálculo de saldos): (1) 'DI-08 Utilizado' mostrava R$ 0,00 mesmo havendo débitos no histórico — getSaldosRealocacaoGeral e buscarSaldosRealocacao filtravam por 'orcamentoId IN latestOrcIds', somindo débitos vinculados a versões antigas do orçamento; agora somam TODOS os débitos por companyId/obraId, alinhando com listarDebitosRisco. (2) Excluir cotação (individual e em lote) agora estorna débitos de risco e realocações de sobras vinculados — antes ficavam órfãos consumindo a reserva. (3) Cancelar cotação agora também estorna débitos e realocações. (4) Excluir OC (individual e em lote) estorna débitos da cotação se for a última OC ativa. (5) Double-spending de 'Economia em Compras' eliminado — getSaldosRealocacaoGeral.totalSobras e buscarSaldosRealocacao.totalSobras agora descontam o valor já realocado em budget_reallocations (origem 'Economia OC:%'). (6) OCs com status 'aguardando_aprovacao_extra' não geram mais economia falsa — só OCs efetivamente aprovadas/recebidas. (7) Padronizada a escolha do orçamento atual (isNull(deletedAt) + desc(createdAt)) entre getSaldosRealocacaoGeral, buscarSaldosRealocacao, listarEconomiasOC e confirmarRealocacaoSobras.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 11:00:00",
+  },
+  {
     version: 1365,
     titulo: "Dashboard SST 'Atestados & Acidentes' agora aparece no menu lateral SST > Dashboards",
     descricao: "AJUSTE: o novo dashboard /sst/dashboard-atestados-acidentes (criado na Rev. 1364) estava registrado apenas no menu de Configurações. Agora também aparece na sidebar do módulo SST, na seção 'Dashboards', logo abaixo de 'EPIs', com ícone HeartPulse.",
