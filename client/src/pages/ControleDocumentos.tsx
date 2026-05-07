@@ -2915,11 +2915,49 @@ export default function ControleDocumentos() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-medium text-blue-700">Dias de Afastamento</label>
-                      <Input type="number" min={0} className="mt-1 border-blue-200 focus:border-blue-400" value={atestForm.diasAfastamento || 0} onChange={e => setAtestForm({ ...atestForm, diasAfastamento: parseInt(e.target.value) || 0 })} />
+                      <Input
+                        type="number" min={0}
+                        className="mt-1 border-blue-200 focus:border-blue-400"
+                        value={atestForm.diasAfastamento || 0}
+                        onChange={e => {
+                          const dias = parseInt(e.target.value) || 0;
+                          const patch: any = { diasAfastamento: dias };
+                          // Auto-calcula Data Retorno = Data Emissão + dias
+                          if (atestForm.dataEmissao && dias > 0) {
+                            const [y, m, d] = atestForm.dataEmissao.split("-").map(Number);
+                            const base = new Date(Date.UTC(y, m - 1, d));
+                            base.setUTCDate(base.getUTCDate() + dias);
+                            patch.dataRetorno = base.toISOString().slice(0, 10);
+                          } else if (dias === 0) {
+                            patch.dataRetorno = "";
+                          }
+                          setAtestForm({ ...atestForm, ...patch });
+                        }}
+                      />
+                      <p className="text-[10px] text-blue-500 mt-1">Calcula a Data de Retorno automaticamente.</p>
                     </div>
                     <div>
                       <label className="text-xs font-medium text-blue-700">Data Retorno</label>
-                      <Input type="date" className="mt-1 border-blue-200 focus:border-blue-400" value={atestForm.dataRetorno || ""} onChange={e => setAtestForm({ ...atestForm, dataRetorno: e.target.value })} />
+                      <Input
+                        type="date"
+                        className="mt-1 border-blue-200 focus:border-blue-400"
+                        value={atestForm.dataRetorno || ""}
+                        onChange={e => {
+                          const ret = e.target.value;
+                          const patch: any = { dataRetorno: ret };
+                          // Auto-calcula Dias = Retorno − Emissão
+                          if (atestForm.dataEmissao && ret) {
+                            const [ey, em, ed] = atestForm.dataEmissao.split("-").map(Number);
+                            const [ry, rm, rd] = ret.split("-").map(Number);
+                            const ini = Date.UTC(ey, em - 1, ed);
+                            const fim = Date.UTC(ry, rm - 1, rd);
+                            const diff = Math.round((fim - ini) / 86400000);
+                            patch.diasAfastamento = diff > 0 ? diff : 0;
+                          }
+                          setAtestForm({ ...atestForm, ...patch });
+                        }}
+                      />
+                      <p className="text-[10px] text-blue-500 mt-1">Calcula os Dias de Afastamento automaticamente.</p>
                     </div>
                   </div>
                   {(atestForm.diasAfastamento || 0) > 15 && (
