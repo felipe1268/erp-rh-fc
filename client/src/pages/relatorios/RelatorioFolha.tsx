@@ -9,7 +9,7 @@ import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Wallet, Search, Users, DollarSign, TrendingDown, TrendingUp } from "lucide-react";
+import { Wallet, Search, Users, DollarSign, TrendingDown, TrendingUp, HandCoins } from "lucide-react";
 import AlertaDivergenciaFolha from "@/components/AlertaDivergenciaFolha";
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -45,14 +45,20 @@ export default function RelatorioFolha() {
   }, [data, search]);
 
   const totals = useMemo(() => {
-    let bruto = 0, liquido = 0, descontos = 0, he = 0;
+    let bruto = 0, liquido = 0, descontos = 0, he = 0, adiantamento = 0;
     for (const p of filtered) {
       bruto += parseFloat(p.salarioBrutoMes || "0");
       liquido += parseFloat(p.salarioLiquido || "0");
-      descontos += parseFloat(p.totalDescontos || "0");
+      // O adiantamento (vale) já foi pago ao funcionário antes da folha,
+      // então NÃO entra em "Total Descontos" da folha. Apenas faltas, VR,
+      // VT, INSS, IRRF e demais descontos reais. Pago total = vale + líquido.
+      const totalDescBruto = parseFloat(p.totalDescontos || "0");
+      const adiant = parseFloat(p.descontoAdiantamento || "0");
+      descontos += Math.max(0, totalDescBruto - adiant);
+      adiantamento += adiant;
       he += parseFloat(p.horasExtrasValor || "0");
     }
-    return { bruto, liquido, descontos, he };
+    return { bruto, liquido, descontos, he, adiantamento };
   }, [filtered]);
 
   return (
@@ -95,7 +101,7 @@ export default function RelatorioFolha() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="bg-blue-50 rounded-lg p-3">
             <div className="flex items-center gap-2 text-blue-700 text-xs font-medium mb-1"><Users className="w-4 h-4" /> Funcionários</div>
             <div className="text-xl font-bold text-blue-700">{filtered.length}</div>
@@ -104,15 +110,23 @@ export default function RelatorioFolha() {
             <div className="flex items-center gap-2 text-green-700 text-xs font-medium mb-1"><TrendingUp className="w-4 h-4" /> Total Bruto</div>
             <div className="text-xl font-bold text-green-700">{formatBRL(totals.bruto)}</div>
           </div>
-          <div className="bg-red-50 rounded-lg p-3">
-            <div className="flex items-center gap-2 text-red-700 text-xs font-medium mb-1"><TrendingDown className="w-4 h-4" /> Total Descontos</div>
+          <div className="bg-amber-50 rounded-lg p-3" title="Vale/adiantamento já pago ao funcionário antes da folha. Não é desconto real — soma com o líquido para total pago.">
+            <div className="flex items-center gap-2 text-amber-700 text-xs font-medium mb-1"><HandCoins className="w-4 h-4" /> Adiantamento (Vale)</div>
+            <div className="text-xl font-bold text-amber-700">{formatBRL(totals.adiantamento)}</div>
+          </div>
+          <div className="bg-red-50 rounded-lg p-3" title="Apenas descontos reais: faltas, VR/VT, INSS, IRRF e demais. Não inclui adiantamento.">
+            <div className="flex items-center gap-2 text-red-700 text-xs font-medium mb-1"><TrendingDown className="w-4 h-4" /> Descontos (sem vale)</div>
             <div className="text-xl font-bold text-red-700">{formatBRL(totals.descontos)}</div>
           </div>
-          <div className="bg-emerald-50 rounded-lg p-3">
+          <div className="bg-emerald-50 rounded-lg p-3" title="Líquido a pagar na folha. Total pago ao funcionário no mês = vale + líquido.">
             <div className="flex items-center gap-2 text-emerald-700 text-xs font-medium mb-1"><DollarSign className="w-4 h-4" /> Total Líquido</div>
             <div className="text-xl font-bold text-emerald-700">{formatBRL(totals.liquido)}</div>
           </div>
         </div>
+        <p className="text-xs text-muted-foreground -mt-2 px-1">
+          <strong>Pago total</strong> ao funcionário no mês = <strong>Adiantamento (vale)</strong> + <strong>Total Líquido</strong> = {formatBRL(totals.adiantamento + totals.liquido)}.
+          Os descontos exibidos são apenas os reais (faltas, VR, VT, INSS, IRRF).
+        </p>
 
         {/* Alerta de Divergência */}
         <AlertaDivergenciaFolha mesReferencia={mesRef} mesLabel={`${MESES[mes - 1]}/${ano}`} variant="full" />
@@ -131,7 +145,7 @@ export default function RelatorioFolha() {
                 <th className="text-right px-3 py-2 font-medium">Desc. Faltas</th>
                 <th className="text-right px-3 py-2 font-medium">Desc. VR</th>
                 <th className="text-right px-3 py-2 font-medium">Desc. VT</th>
-                <th className="text-right px-3 py-2 font-medium">Total Desc.</th>
+                <th className="text-right px-3 py-2 font-medium" title="Apenas descontos reais (faltas, VR, VT, INSS, IRRF). Não inclui adiantamento.">Desc. Reais</th>
                 <th className="text-right px-3 py-2 font-medium font-bold">Líquido</th>
               </tr>
             </thead>
@@ -147,7 +161,7 @@ export default function RelatorioFolha() {
                   <td className="px-3 py-2 text-right text-red-600">-{formatBRL(p.descontoFaltas)}</td>
                   <td className="px-3 py-2 text-right text-red-600">-{formatBRL(p.descontoVrFalta)}</td>
                   <td className="px-3 py-2 text-right text-red-600">-{formatBRL(p.descontoVtFalta)}</td>
-                  <td className="px-3 py-2 text-right text-red-700 font-medium">-{formatBRL(p.totalDescontos)}</td>
+                  <td className="px-3 py-2 text-right text-red-700 font-medium">-{formatBRL(Math.max(0, parseFloat(p.totalDescontos || "0") - parseFloat(p.descontoAdiantamento || "0")))}</td>
                   <td className="px-3 py-2 text-right font-bold text-blue-700">{formatBRL(p.salarioLiquido)}</td>
                 </tr>
               ))}
