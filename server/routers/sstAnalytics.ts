@@ -5,6 +5,19 @@ import { atestados, accidents, employees, obras } from "../../drizzle/schema";
 import { and, eq, gte, lte, isNull, sql, desc } from "drizzle-orm";
 import { companyFilter } from "../companyHelper";
 
+// Salário pode estar em formato BR ("2.774,20") ou decimal ("6200.00") — parseFloat direto retornaria 1.5 para "1.500,00".
+function parseBRLSalario(v: string | null | undefined): number {
+  if (v === null || v === undefined) return 0;
+  const s = String(v).trim();
+  if (!s) return 0;
+  if (s.includes(",")) {
+    const n = parseFloat(s.replace(/\./g, "").replace(",", "."));
+    return isNaN(n) ? 0 : n;
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
 const inputSchema = z.object({
   companyId: z.number(),
   companyIds: z.array(z.number()).optional(),
@@ -443,7 +456,7 @@ export const sstAnalyticsRouter = router({
         .from(employees)
         .where(and(companyFilter(employees.companyId, input), isNull(employees.deletedAt)));
       const salMap = new Map<number, number>();
-      for (const e of empSal) salMap.set(e.id, parseFloat(String(e.salario || "0")) || 0);
+      for (const e of empSal) salMap.set(e.id, parseBRLSalario(e.salario));
       const custoAtestados = atRows.reduce((s, r) => s + ((salMap.get(r.employeeId) || 0) / 30) * (r.diasAfastamento || 0), 0);
       const custoAcidentes = acRows.reduce((s, r) => s + ((salMap.get(r.employeeId) || 0) / 30) * (r.diasAfastamento || 0), 0);
       const custoEstimadoAfastamento = { atestados: custoAtestados, acidentes: custoAcidentes, total: custoAtestados + custoAcidentes };

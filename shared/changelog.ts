@@ -9284,6 +9284,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 03:00:00",
   },
   {
+    version: 1373,
+    titulo: "SST Dashboard: BUGFIX no Custo Estimado de Afastamento (parser de salário BR)",
+    descricao: "Bug crítico: o cálculo de Custo Estimado de Afastamento usava `parseFloat` direto no `salarioBase`, que retorna 1.5 para valores em formato brasileiro como '1.500,00' (porque o ponto vira separador decimal e a vírgula é descartada). Resultado: 111 dias de afastamento × ~R$ 0,05/dia = R$ 8,76 absurdo. Corrigido com novo helper `parseBRLSalario` (igual ao parseBRLLocal do payrollEngine) que detecta formato BR ('2.774,20') vs decimal ('6200.00') antes de parsear. Agora o custo retorna o valor real (salário base ÷ 30 × dias afastados, somado por funcionário).",
+    tipo: "bugfix",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 03:30:00",
+  },
+  {
     version: 1372,
     titulo: "SST Dashboard: exibe Código Interno do funcionário (em vez do código externo de OAuth)",
     descricao: "Nas tabelas Top 10 Atestados, Top 10 Acidentes e Funcionários com Atestados Recorrentes, o número exibido abaixo/ao lado do nome do funcionário agora é o **Código Interno** (`employees.codigoInterno`) em vez da matrícula externa (que vinha como COL... do OAuth). O código interno também é mostrado no cabeçalho da tela ampliada de detalhamento do funcionário. Quando o funcionário não tem código interno cadastrado, mantém a matrícula como fallback. Procedure `sstAnalytics.porFuncionario` e queries de top funcionários atualizadas para retornar `codigoInterno`.",
