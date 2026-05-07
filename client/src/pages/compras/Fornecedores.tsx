@@ -298,9 +298,9 @@ export default function Fornecedores() {
     { enabled: false, retry: false }
   );
 
-  const criarMut    = trpc.compras.criarFornecedor.useMutation({ onSuccess: () => { refetch(); fecharModal(); toast.success("Empresa cadastrada!"); } });
-  const atualizarMut = trpc.compras.atualizarFornecedor.useMutation({ onSuccess: () => { refetch(); fecharModal(); toast.success("Empresa atualizada!"); } });
-  const excluirMut  = trpc.compras.excluirFornecedor.useMutation({ onSuccess: () => { refetch(); toast.success("Empresa desativada."); } });
+  const criarMut    = trpc.compras.criarFornecedor.useMutation({ onSuccess: () => { refetch(); fecharModal(); toast.success("Empresa terceira cadastrada!"); } });
+  const atualizarMut = trpc.compras.atualizarFornecedor.useMutation({ onSuccess: () => { refetch(); fecharModal(); toast.success("Empresa terceira atualizada!"); } });
+  const excluirMut  = trpc.compras.excluirFornecedor.useMutation({ onSuccess: () => { refetch(); toast.success("Empresa terceira desativada."); } });
 
   const avaliarMut  = trpc.compras.avaliarFornecedor.useMutation({
     onSuccess: () => {
@@ -520,19 +520,19 @@ export default function Fornecedores() {
           <div>
             <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
               <Building2 className="h-5 w-5 text-blue-600" />
-              Empresas
+              Empresas Terceiras
             </h1>
             <p className="text-sm text-slate-500 mt-0.5">
               {fornecedores.length} empresa{fornecedores.length !== 1 ? "s" : ""} cadastrada{fornecedores.length !== 1 ? "s" : ""}
             </p>
           </div>
           <DraggableCommandBar barId="fornecedores" items={[
-            { id: "novo", node: <Button onClick={abrirNovo} className="bg-blue-600 hover:bg-blue-700 text-white"><Plus className="h-4 w-4 mr-2" /> Nova Empresa</Button> },
+            { id: "novo", node: <Button onClick={abrirNovo} className="bg-blue-600 hover:bg-blue-700 text-white"><Plus className="h-4 w-4 mr-2" /> Nova Empresa Terceira</Button> },
           ]} />
         </div>
         {/* Tabs */}
         <div className="max-w-7xl mx-auto mt-3 flex gap-1">
-          {([["lista", "Lista de Empresas", Building2], ["ranking", "Ranking de Avaliações", Trophy]] as const).map(([id, label, Icon]) => (
+          {([["lista", "Lista de Empresas Terceiras", Building2], ["ranking", "Ranking de Avaliações", Trophy]] as const).map(([id, label, Icon]) => (
             <button
               key={id}
               onClick={() => setAba(id)}
@@ -554,7 +554,7 @@ export default function Fornecedores() {
           <div>
             <div className="flex items-center gap-3 mb-4">
               <Trophy className="h-5 w-5 text-amber-500" />
-              <h2 className="text-base font-bold text-slate-800">Ranking de Melhores Empresas</h2>
+              <h2 className="text-base font-bold text-slate-800">Ranking de Melhores Empresas Terceiras</h2>
               <span className="text-xs text-slate-400">por média de estrelas</span>
             </div>
             {ranking.length === 0 ? (
@@ -630,7 +630,7 @@ export default function Fornecedores() {
           <div className="bg-white rounded-xl border border-dashed border-slate-200 p-12 text-center">
             <Building2 className="h-10 w-10 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500 font-medium">Nenhuma empresa encontrada</p>
-            <p className="text-sm text-slate-400 mt-1">Cadastre sua primeira empresa clicando em "Nova Empresa"</p>
+            <p className="text-sm text-slate-400 mt-1">Cadastre sua primeira empresa terceira clicando em "Nova Empresa Terceira"</p>
           </div>
         ) : (
           <div className="grid gap-3">
@@ -790,7 +790,7 @@ export default function Fornecedores() {
       {/* Modal de Cadastro/Edição — Tela Paisagem */}
       <Dialog open={modalAberto} onOpenChange={v => !v && fecharModal()}>
         <DialogContent className="max-w-[95vw] w-[1200px] max-h-[90vh] overflow-hidden p-0 gap-0 [&>[data-slot=dialog-close]]:top-6 [&>[data-slot=dialog-close]]:right-5" resizable={false} showCloseButton={false}>
-          <DialogHeader className="sr-only"><DialogTitle>{editando ? "Editar Empresa" : "Cadastro de Empresa"}</DialogTitle></DialogHeader>
+          <DialogHeader className="sr-only"><DialogTitle>{editando ? "Editar Empresa Terceira" : "Cadastro de Empresa Terceira"}</DialogTitle></DialogHeader>
 
           <div className="overflow-y-auto bg-slate-50" style={{ maxHeight: "90vh" }}>
             {/* Header com info do fornecedor */}
@@ -801,7 +801,7 @@ export default function Fornecedores() {
                 </button>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-bold text-slate-800">{editando ? "Editar Empresa" : "Nova Empresa"}</h2>
+                    <h2 className="text-lg font-bold text-slate-800">{editando ? "Editar Empresa Terceira" : "Nova Empresa Terceira"}</h2>
                     {form.situacaoReceita && (
                       <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
                         form.situacaoReceita.toUpperCase().includes("ATIVA") ? "bg-emerald-100 text-emerald-700"
@@ -1278,7 +1278,7 @@ export default function Fornecedores() {
                 <Button variant="outline" onClick={fecharModal}>Cancelar</Button>
                 <Button onClick={salvar} disabled={criarMut.isPending || atualizarMut.isPending} className="bg-blue-600 hover:bg-blue-700 text-white px-6 gap-2">
                   {(criarMut.isPending || atualizarMut.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  {editando ? "Salvar Alterações" : "Cadastrar Empresa"}
+                  {editando ? "Salvar Alterações" : "Cadastrar Empresa Terceira"}
                 </Button>
               </div>
             </div>

@@ -35,7 +35,7 @@ export default function PainelTerceiros() {
       color: "bg-orange-500",
       textColor: "text-orange-600",
       bgLight: "bg-orange-50",
-      onClick: () => setLocation("/compras/fornecedores"),
+      onClick: () => setLocation("/terceiros/empresas"),
     },
     {
       title: "Funcionários Terceiros",
@@ -226,7 +226,7 @@ export default function PainelTerceiros() {
           <h3 className="font-semibold text-foreground mb-4">Ações Rápidas</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <button
-              onClick={() => setLocation("/compras/fornecedores")}
+              onClick={() => setLocation("/terceiros/empresas")}
               className="flex flex-col items-center gap-2 p-4 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors"
             >
               <Building2 className="h-6 w-6 text-orange-600" />

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1395,
+    titulo: "Terceiros — sidebar mantém contexto + rótulo 'Empresas Terceiras' (desambiguar grupo)",
+    descricao: "BUGFIX + MELHORIA: (1) Ao clicar em 'Empresas Terceiras' no menu lateral do módulo Terceiros, o sidebar morfava para o menu RH/Cadastros (porque a rota /compras/fornecedores estava mapeada para o módulo 'cadastro' em ROUTE_MODULE_MAP). Como o menu RH/Cadastros tem 'Empresas' → /empresas (grupo FC/Hotel/Locnow) no topo, o usuário acabava sendo levado para a página errada no clique seguinte. Solução: criada a rota dedicada /terceiros/empresas (já mapeada para o módulo 'terceiros') que renderiza o mesmo componente Fornecedores; o item do sidebar Terceiros agora aponta para /terceiros/empresas, preservando o contexto do menu Terceiros após o clique. Cards e atalhos do Painel Terceiros (PainelTerceiros.tsx) também atualizados para a nova rota. (2) Para eliminar a ambiguidade entre 'Empresas do grupo' (FC, Hotel Consagrado, Locnow) e 'fornecedores/prestadores cadastrados (1186 empresas)', o módulo /compras/fornecedores foi renomeado de 'Empresas' para 'Empresas Terceiras' em todos os pontos visíveis ao usuário (cabeçalho da página, abas, botão 'Nova Empresa Terceira', estado vazio, modal de cadastro/edição, toasts e itens de menu lateral em DashboardLayout, Configurações e shared/modules). A página /empresas (Empresas.tsx) mantém o rótulo 'Empresas' para o grupo. A rota e os procedures tRPC de fornecedores permanecem inalterados (/compras/fornecedores, criarFornecedor, etc.) por compatibilidade.",
+    tipo: "bugfix",
+    modulos: "Terceiros,Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 14:50:00",
+  },
+  {
     version: 1394,
     titulo: "Compras — Renomeação de 'Fornecedores' para 'Empresas'",
     descricao: "MELHORIA: rótulo do módulo /compras/fornecedores renomeado de 'Fornecedores' para 'Empresas' em todos os pontos visíveis ao usuário (cabeçalho da página, abas, botão 'Nova Empresa', estado vazio, modal de cadastro/edição, toasts e itens de menu lateral em DashboardLayout, Configurações e shared/modules). A rota e os procedures tRPC permanecem inalterados (/compras/fornecedores) por compatibilidade. A classificação 'PRESTAÇÃO DE SERVIÇO / FORNECEDOR' (Rev. 1393) define se cada empresa cadastrada é um fornecedor de materiais, prestador de serviço, ou ambos.",

@@ -2231,7 +2231,7 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
   ],
   terceiros: [
     { section: "Terceiros", label: "Painel Terceiros", path: "/terceiros/painel" },
-    { section: "Terceiros", label: "Empresas / Terceiros", path: "/compras/fornecedores" },
+    { section: "Terceiros", label: "Empresas Terceiras", path: "/compras/fornecedores" },
     { section: "Terceiros", label: "Funcionários Terceiros", path: "/terceiros/funcionarios" },
     { section: "Contratos", label: "Contratos de Serviço", path: "/terceiros/contratos" },
     { section: "Contratos", label: "Medições", path: "/terceiros/medicoes" },
@@ -2291,7 +2291,7 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Cadastro", label: "Convenções Coletivas", path: "/convencoes-coletivas" },
     { section: "Cadastro", label: "Habilidades", path: "/habilidades" },
     { section: "Cadastro", label: "Contas Bancárias", path: "/contas-bancarias" },
-    { section: "Cadastro", label: "Empresas", path: "/compras/fornecedores" },
+    { section: "Cadastro", label: "Empresas Terceiras", path: "/compras/fornecedores" },
   ],
   compras: [
     { section: "Painel", label: "Painel de Controle", path: "/compras/painel" },
@@ -2304,7 +2304,7 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
 
     { section: "Financeiro", label: "Realocação de Verba", path: "/compras/realocacao" },
     { section: "Financeiro", label: "Comissões", path: "/compras/comissoes" },
-    { section: "Cadastros", label: "Empresas", path: "/compras/fornecedores" },
+    { section: "Cadastros", label: "Empresas Terceiras", path: "/compras/fornecedores" },
     { section: "Sistema", label: "Configurações", path: "/compras/configuracoes" },
     { section: "Sistema", label: "Mas Controle ERP", path: "/integracoes/mas-controle" },
   ],
