@@ -726,7 +726,7 @@ export const controleDocumentosRouter = router({
           tipo: input.tipo,
           dataEmissao: input.dataEmissao,
           diasAfastamento: input.diasAfastamento,
-          horasAfastamento: input.horasAfastamento || 0,
+          horasAfastamento: String(input.horasAfastamento || 0) as any,
           afastamentoTipo: input.afastamentoTipo || "dia",
           dataRetorno: input.dataRetorno || null,
           cid: input.cid || null,
@@ -770,6 +770,10 @@ export const controleDocumentosRouter = router({
         const { id, ...rest } = input;
         const updateData: any = {};
         Object.entries(rest).forEach(([k, v]) => { if (v !== undefined) updateData[k] = v; });
+        // numeric column: Drizzle requer string em INSERT/UPDATE
+        if (updateData.horasAfastamento !== undefined) {
+          updateData.horasAfastamento = String(updateData.horasAfastamento);
+        }
         await db.update(atestados).set(updateData).where(eq(atestados.id, id));
 
         const [at] = await db.select().from(atestados).where(eq(atestados.id, id)).limit(1);
