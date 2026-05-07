@@ -9284,6 +9284,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 03:00:00",
   },
   {
+    version: 1366,
+    titulo: "SST: Registro completo de Acidentes/Incidentes + Dashboard com indicadores avançados (Pirâmide de Bird, dias sem acidente, heatmap, ações vencidas, custo)",
+    descricao: "PACOTE COMPLETO B do módulo SST. (1) Nova tela /sst/acidentes para CRUD de acidentes e incidentes com gravidade ampliada (Quase-acidente, Primeiros Socorros, Leve s/afast, Leve c/afast, Moderado, Grave, Gravíssimo, Fatal), tipo (15 categorias), parte do corpo (21 opções), agente causador, descrição, testemunhas, dias afastamento, vínculo opcional com obra, controle de CAT (Sim/Não com nº+data ou justificativa obrigatória), ação corretiva com status (Pendente/Em andamento/Concluída/Cancelada)/responsável/prazo. Lista com KPIs (total, com afastamento, sem CAT exigida, ações em aberto), filtros por gravidade/obra e busca livre. (2) Novas colunas via ColFix v1366: obra_id, agente_causador, houve_cat, motivo_sem_cat, status_acao_corretiva, prazo_acao_corretiva, responsavel_acao, atestado_id, anexos_urls, deleted_at, deleted_by. Soft-delete adicionado à tabela accidents. (3) Novo router tRPC `acidentes` com list/getById/save/delete (CRUD completo, isolamento por companyId, suporte a Construtoras consolidadas). (4) Dashboard /sst/dashboard-atestados-acidentes ganhou 2 novas abas: 'Indicadores Avançados' (Comparativo com período anterior atual×anterior+%var; Pirâmide de Bird invertida — graves/moderados/leves/quase; Cobertura CAT %; Custo Estimado de Afastamento R$ usando salário-base÷30×dias; Heatmap dia da semana × hora; Atestados/Acidentes por dia da semana; Funcionários com atestados recorrentes 3+) e 'Obras / Ações' (Dias sem Acidente por obra com badges Excelente/Bom/Atenção; Ranking de obras com mais acidentes; KPIs de ações corretivas total/abertas/vencidas; Lista de ações vencidas com dias de atraso). Item adicionado na sidebar SST > Incidentes & Acidentes.",
+    tipo: "feature",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-06 07:00:00",
+  },
+  {
     version: 1350,
     titulo: "Sinal sobre Mão de Obra: usa MDO no preço de VENDA (com BDI) e oculta campo de FD",
     descricao: "Quando a base do sinal é 'Mão de Obra', o valor utilizado agora é o MDO no preço de venda (custo × valorVenda/totalCusto) — alinhado ao mesmo padrão do orçamento (vendaMdo = custoMdo / bdiDivisor). Antes era usado o MDO ao custo, gerando uma base subdimensionada (ex.: R$ 139.313,80 em vez do equivalente com BDI aplicado). Cruzamento orç×cronograma agora retorna `totalMdoVenda`; getContasReceberMatrix calcula MDO@venda inline na query SQL via CASE WHEN totalCusto > 0 THEN totalMdo * valorNegociado/totalCusto. Adicionalmente, o campo 'Faturamento Direto (R$)' é visualmente desabilitado (opacity 30%, sem cliques) quando a base é MDO, pois FD não se aplica nesse modo.",

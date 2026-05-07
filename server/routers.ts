@@ -127,6 +127,7 @@ import { smoRouter } from "./routers/smo";
 import { sstDocumentsRouter } from "./routers/sstDocuments";
 import { integracaoSSTRouter } from "./routers/integracaoSST";
 import { sstAnalyticsRouter } from "./routers/sstAnalytics";
+import { acidentesRouter } from "./routers/acidentes";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -197,6 +198,7 @@ export const appRouter = router({
   sstDocuments: sstDocumentsRouter,
   integracaoSST: integracaoSSTRouter,
   sstAnalytics: sstAnalyticsRouter,
+  acidentes: acidentesRouter,
   auth: router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;

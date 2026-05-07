@@ -2202,6 +2202,7 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Segurança", label: "Transferências EPI", path: "/epis?tab=transferencias" },
     { section: "Segurança", label: "Config EPI", path: "/epis?tab=config" },
     { section: "Segurança", label: "CIPA", path: "/cipa" },
+    { section: "Incidentes & Acidentes", label: "Registro de Acidentes", path: "/sst/acidentes" },
     { section: "Dashboards", label: "EPIs", path: "/dashboards/epis" },
     { section: "Dashboards", label: "Atestados & Acidentes", path: "/sst/dashboard-atestados-acidentes" },
   ],

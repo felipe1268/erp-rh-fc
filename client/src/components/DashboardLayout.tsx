@@ -181,6 +181,12 @@ const menuSectionsSST: MenuSection[] = [
     ],
   },
   {
+    title: "Incidentes & Acidentes",
+    items: [
+      { icon: AlertTriangle, label: "Registro de Acidentes", path: "/sst/acidentes" },
+    ],
+  },
+  {
     title: "Programas Legais",
     items: [
       { icon: FileText, label: "PGR", path: "/programas-sst?tab=PGR" },

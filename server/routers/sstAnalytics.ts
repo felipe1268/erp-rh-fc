@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { atestados, accidents, employees } from "../../drizzle/schema";
+import { atestados, accidents, employees, obras } from "../../drizzle/schema";
 import { and, eq, gte, lte, isNull, sql, desc } from "drizzle-orm";
 import { companyFilter } from "../companyHelper";
 
@@ -42,6 +42,7 @@ export const sstAnalyticsRouter = router({
 
       const acidentesBase = and(
         companyFilter(accidents.companyId, input),
+        isNull(accidents.deletedAt),
         gte(accidents.dataAcidente, dataInicio),
         lte(accidents.dataAcidente, dataFim),
       );
@@ -151,9 +152,14 @@ export const sstAnalyticsRouter = router({
           parteCorpoAtingida: accidents.parteCorpoAtingida,
           catNumero: accidents.catNumero,
           catData: accidents.catData,
+          houveCAT: accidents.houveCAT,
           diasAfastamento: accidents.diasAfastamento,
           descricao: accidents.descricao,
           acaoCorretiva: accidents.acaoCorretiva,
+          statusAcaoCorretiva: accidents.statusAcaoCorretiva,
+          prazoAcaoCorretiva: accidents.prazoAcaoCorretiva,
+          obraId: accidents.obraId,
+          obraNome: obras.nome,
           employeeId: accidents.employeeId,
           employeeNome: employees.nomeCompleto,
           employeeMatricula: employees.matricula,
@@ -162,16 +168,115 @@ export const sstAnalyticsRouter = router({
         })
         .from(accidents)
         .leftJoin(employees, eq(accidents.employeeId, employees.id))
+        .leftJoin(obras, eq(accidents.obraId, obras.id))
         .where(acidentesBase)
         .orderBy(desc(accidents.dataAcidente));
 
       const totalAcidentes = acRows.length;
       const totalDiasAfastamentoAcid = acRows.reduce((s, r) => s + (r.diasAfastamento || 0), 0);
       const colaboradoresAfetadosAc = new Set(acRows.map((r) => r.employeeId)).size;
-      const acidentesComCAT = acRows.filter((r) => (r.catNumero || "").trim().length > 0).length;
+      const acidentesComCAT = acRows.filter((r) => (r.houveCAT ?? 0) > 0 || (r.catNumero || "").trim().length > 0).length;
       const acidentesSemCAT = totalAcidentes - acidentesComCAT;
       const acidentesComAfastamento = acRows.filter((r) => (r.diasAfastamento || 0) > 0).length;
       const acidentesSemAfastamento = totalAcidentes - acidentesComAfastamento;
+
+      // ---- Pirâmide de Bird (referência clássica de SST) ----
+      // Graves+: Grave, Gravíssimo, Fatal | Moderados: Moderado, Leve c/ afastamento
+      // Leves: Leve sem afastamento, Primeiros Socorros | Quase: Quase-acidente
+      const isGraveBird = (g: string) => /grav|fatal/i.test(g);
+      const isModeradoBird = (g: string) => /moderad|leve com afast/i.test(g);
+      const isQuaseBird = (g: string) => /quase/i.test(g);
+      const piramideBird = {
+        graves: acRows.filter((r) => isGraveBird(r.gravidade || "")).length,
+        moderados: acRows.filter((r) => isModeradoBird(r.gravidade || "")).length,
+        leves: acRows.filter((r) => !isGraveBird(r.gravidade || "") && !isModeradoBird(r.gravidade || "") && !isQuaseBird(r.gravidade || "")).length,
+        quaseAcidentes: acRows.filter((r) => isQuaseBird(r.gravidade || "")).length,
+      };
+
+      // ---- Heatmap dia/hora ----
+      const weekdayName = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+      const heatmapMap = new Map<string, { dia: string; diaIdx: number; hora: number; qtd: number }>();
+      for (const r of acRows) {
+        const d = new Date(r.dataAcidente + "T00:00:00");
+        const diaIdx = d.getDay();
+        const dia = weekdayName[diaIdx];
+        const hh = r.horaAcidente ? parseInt((r.horaAcidente).split(":")[0] || "0", 10) : 0;
+        const k = `${diaIdx}_${hh}`;
+        const cur = heatmapMap.get(k) ?? { dia, diaIdx, hora: hh, qtd: 0 };
+        cur.qtd += 1;
+        heatmapMap.set(k, cur);
+      }
+      const heatmapDiaHora = Array.from(heatmapMap.values()).sort((a, b) => a.diaIdx - b.diaIdx || a.hora - b.hora);
+
+      // ---- Acidentes por dia da semana ----
+      const dowAcMap = new Map<number, { diaIdx: number; dia: string; qtd: number }>();
+      for (let i = 0; i < 7; i++) dowAcMap.set(i, { diaIdx: i, dia: weekdayName[i], qtd: 0 });
+      for (const r of acRows) {
+        const d = new Date(r.dataAcidente + "T00:00:00");
+        const cur = dowAcMap.get(d.getDay())!;
+        cur.qtd += 1;
+      }
+      const acidentesPorDiaSemana = Array.from(dowAcMap.values());
+
+      // ---- Acidentes por obra + dias sem acidente ----
+      const obraMap = new Map<string, { obraId: number | null; obraNome: string; qtd: number; dias: number; ultimaData: string | null }>();
+      for (const r of acRows) {
+        const k = String(r.obraId ?? "0");
+        const cur = obraMap.get(k) ?? { obraId: r.obraId ?? null, obraNome: r.obraNome || "Sem obra", qtd: 0, dias: 0, ultimaData: null };
+        cur.qtd += 1;
+        cur.dias += r.diasAfastamento || 0;
+        if (!cur.ultimaData || r.dataAcidente > cur.ultimaData) cur.ultimaData = r.dataAcidente;
+        obraMap.set(k, cur);
+      }
+      const hoje = new Date();
+      const rankingObras = Array.from(obraMap.values())
+        .map((o) => ({
+          ...o,
+          diasSemAcidente: o.ultimaData
+            ? Math.max(0, Math.floor((hoje.getTime() - new Date(o.ultimaData + "T00:00:00").getTime()) / (1000 * 60 * 60 * 24)))
+            : null,
+        }))
+        .sort((a, b) => b.qtd - a.qtd)
+        .slice(0, 15);
+
+      // Dias sem acidente — incluir TODAS as obras ativas (mesmo sem registro)
+      const obrasAtivas = await db
+        .select({ id: obras.id, nome: obras.nome })
+        .from(obras)
+        .where(and(companyFilter(obras.companyId, input), isNull(obras.deletedAt)));
+      const diasSemAcidente = obrasAtivas
+        .map((o) => {
+          const reg = obraMap.get(String(o.id));
+          if (reg?.ultimaData) {
+            return {
+              obraId: o.id, obraNome: o.nome, ultimaData: reg.ultimaData,
+              dias: Math.max(0, Math.floor((hoje.getTime() - new Date(reg.ultimaData + "T00:00:00").getTime()) / (1000 * 60 * 60 * 24))),
+            };
+          }
+          return { obraId: o.id, obraNome: o.nome, ultimaData: null, dias: null as number | null };
+        })
+        .sort((a, b) => (b.dias ?? 99999) - (a.dias ?? 99999))
+        .slice(0, 15);
+
+      // Cobertura CAT (% acidentes que exigem CAT e têm CAT)
+      const exigeCAT = acRows.filter((r) => !/quase|primeiros socorros/i.test(r.gravidade || ""));
+      const exigeCATComCAT = exigeCAT.filter((r) => (r.houveCAT ?? 0) > 0 || (r.catNumero || "").trim().length > 0).length;
+      const coberturaCAT = exigeCAT.length > 0 ? (exigeCATComCAT / exigeCAT.length) * 100 : 100;
+
+      // Ações corretivas — abertas / vencidas
+      const hojeISO = hoje.toISOString().slice(0, 10);
+      const acoesAbertas = acRows.filter((r) => r.statusAcaoCorretiva && !/conclu|cancel/i.test(r.statusAcaoCorretiva));
+      const acoesVencidas = acoesAbertas.filter((r) => r.prazoAcaoCorretiva && r.prazoAcaoCorretiva < hojeISO);
+      const acoesCorretivas = {
+        total: acRows.filter((r) => (r.acaoCorretiva || "").trim().length > 0).length,
+        abertas: acoesAbertas.length,
+        vencidas: acoesVencidas.length,
+        listaVencidas: acoesVencidas.slice(0, 10).map((r) => ({
+          id: r.id, employeeNome: r.employeeNome, obraNome: r.obraNome,
+          acao: r.acaoCorretiva, status: r.statusAcaoCorretiva,
+          prazo: r.prazoAcaoCorretiva, dataAcidente: r.dataAcidente,
+        })),
+      };
 
       // por gravidade
       const gravMap = new Map<string, { gravidade: string; quantidade: number; dias: number }>();
@@ -292,6 +397,53 @@ export const sstAnalyticsRouter = router({
         .sort((a, b) => b.quantidade - a.quantidade || b.dias - a.dias)
         .slice(0, 10);
 
+      // ---- Atestados por dia da semana ----
+      const dowAtMap = new Map<number, { diaIdx: number; dia: string; qtd: number; dias: number }>();
+      for (let i = 0; i < 7; i++) dowAtMap.set(i, { diaIdx: i, dia: weekdayName[i], qtd: 0, dias: 0 });
+      for (const r of atRows) {
+        const d = new Date(r.dataEmissao + "T00:00:00");
+        const cur = dowAtMap.get(d.getDay())!;
+        cur.qtd += 1;
+        cur.dias += r.diasAfastamento || 0;
+      }
+      const atestadosPorDiaSemana = Array.from(dowAtMap.values());
+
+      // ---- Atestados recorrentes (3+ no período) ----
+      const atestadosRecorrentes = Array.from(funcMap.values())
+        .filter((f) => f.quantidade >= 3)
+        .sort((a, b) => b.quantidade - a.quantidade)
+        .slice(0, 15);
+
+      // ---- Comparativo período anterior (mesmo nº de dias antes do dataInicio) ----
+      const diff = (new Date(dataFim + "T00:00:00").getTime() - new Date(dataInicio + "T00:00:00").getTime()) / (1000 * 60 * 60 * 24);
+      const periodoAntFim = new Date(new Date(dataInicio + "T00:00:00").getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const periodoAntIni = new Date(new Date(periodoAntFim + "T00:00:00").getTime() - diff * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const [atAntCnt] = await db.select({ c: sql<number>`COUNT(*)::int`, d: sql<number>`COALESCE(SUM(${atestados.diasAfastamento}), 0)::int` })
+        .from(atestados)
+        .where(and(companyFilter(atestados.companyId, input), isNull(atestados.deletedAt), gte(atestados.dataEmissao, periodoAntIni), lte(atestados.dataEmissao, periodoAntFim)));
+      const [acAntCnt] = await db.select({ c: sql<number>`COUNT(*)::int`, d: sql<number>`COALESCE(SUM(${accidents.diasAfastamento}), 0)::int` })
+        .from(accidents)
+        .where(and(companyFilter(accidents.companyId, input), isNull(accidents.deletedAt), gte(accidents.dataAcidente, periodoAntIni), lte(accidents.dataAcidente, periodoAntFim)));
+      const varPct = (atual: number, ant: number) => ant === 0 ? (atual > 0 ? 100 : 0) : ((atual - ant) / ant) * 100;
+      const comparativoPeriodoAnterior = {
+        periodoAnterior: { dataInicio: periodoAntIni, dataFim: periodoAntFim },
+        atestados: { atual: totalAtestados, anterior: atAntCnt?.c || 0, varPct: varPct(totalAtestados, atAntCnt?.c || 0) },
+        diasAtestado: { atual: totalDiasAfastamento, anterior: atAntCnt?.d || 0, varPct: varPct(totalDiasAfastamento, atAntCnt?.d || 0) },
+        acidentes: { atual: totalAcidentes, anterior: acAntCnt?.c || 0, varPct: varPct(totalAcidentes, acAntCnt?.c || 0) },
+        diasAcidente: { atual: totalDiasAfastamentoAcid, anterior: acAntCnt?.d || 0, varPct: varPct(totalDiasAfastamentoAcid, acAntCnt?.d || 0) },
+      };
+
+      // ---- Custo estimado de afastamento (R$ — usando salário-base / 30) ----
+      const empSal = await db
+        .select({ id: employees.id, salario: employees.salarioBase })
+        .from(employees)
+        .where(and(companyFilter(employees.companyId, input), isNull(employees.deletedAt)));
+      const salMap = new Map<number, number>();
+      for (const e of empSal) salMap.set(e.id, parseFloat(String(e.salario || "0")) || 0);
+      const custoAtestados = atRows.reduce((s, r) => s + ((salMap.get(r.employeeId) || 0) / 30) * (r.diasAfastamento || 0), 0);
+      const custoAcidentes = acRows.reduce((s, r) => s + ((salMap.get(r.employeeId) || 0) / 30) * (r.diasAfastamento || 0), 0);
+      const custoEstimadoAfastamento = { atestados: custoAtestados, acidentes: custoAcidentes, total: custoAtestados + custoAcidentes };
+
       // últimos eventos (combinados)
       const ultimosAtestados = atRows.slice(0, 8).map((r) => ({
         id: r.id,
@@ -356,6 +508,18 @@ export const sstAnalyticsRouter = router({
         evolucaoMensal,
         ultimosAtestados,
         ultimosAcidentes,
+        // Indicadores avançados
+        piramideBird,
+        heatmapDiaHora,
+        acidentesPorDiaSemana,
+        atestadosPorDiaSemana,
+        atestadosRecorrentes,
+        rankingObras,
+        diasSemAcidente,
+        coberturaCAT,
+        acoesCorretivas,
+        comparativoPeriodoAnterior,
+        custoEstimadoAfastamento,
       };
     }),
 });

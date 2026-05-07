@@ -10,8 +10,9 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
   HeartPulse, AlertTriangle, FileWarning, Activity, Users, Clock,
-  TrendingUp, Stethoscope, ShieldAlert, FileCheck2, Calendar, RefreshCw,
-  BarChart3, ArrowDown, ArrowUp,
+  TrendingUp, TrendingDown, Stethoscope, ShieldAlert, FileCheck2, Calendar, RefreshCw,
+  BarChart3, ArrowDown, ArrowUp, Layers, MapPin, AlarmClock, DollarSign,
+  CalendarClock, Repeat, CalendarDays,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -175,6 +176,8 @@ export default function DashboardAtestadosAcidentes() {
               <TabsTrigger value="visaoGeral">Visão Geral</TabsTrigger>
               <TabsTrigger value="atestados">Atestados</TabsTrigger>
               <TabsTrigger value="acidentes">Acidentes</TabsTrigger>
+              <TabsTrigger value="avancado">Indicadores Avançados</TabsTrigger>
+              <TabsTrigger value="obras">Obras / Ações</TabsTrigger>
             </TabsList>
 
             {/* ============ VISÃO GERAL ============ */}
@@ -479,6 +482,304 @@ export default function DashboardAtestadosAcidentes() {
                             <td className="px-3 py-2 text-right text-orange-700">{f.dias}</td>
                           </tr>
                         ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* ============ AVANÇADO ============ */}
+            <TabsContent value="avancado" className="space-y-4">
+              {/* Comparativo período anterior */}
+              {d.comparativoPeriodoAnterior && (
+                <Card>
+                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><CalendarClock className="h-4 w-4" /> Comparativo com Período Anterior</CardTitle></CardHeader>
+                  <CardContent>
+                    <p className="text-xs text-gray-500 mb-3">Período anterior: {d.comparativoPeriodoAnterior.periodoAnterior.dataInicio} → {d.comparativoPeriodoAnterior.periodoAnterior.dataFim}</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {[
+                        { label: "Atestados", k: d.comparativoPeriodoAnterior.atestados, color: "text-emerald-700" },
+                        { label: "Dias Atestado", k: d.comparativoPeriodoAnterior.diasAtestado, color: "text-blue-700" },
+                        { label: "Acidentes", k: d.comparativoPeriodoAnterior.acidentes, color: "text-red-700" },
+                        { label: "Dias Acidente", k: d.comparativoPeriodoAnterior.diasAcidente, color: "text-orange-700" },
+                      ].map((it) => {
+                        const up = it.k.varPct > 0;
+                        const down = it.k.varPct < 0;
+                        const isAtestadoOuAcidente = /Atestado|Acidente/i.test(it.label);
+                        const ruim = isAtestadoOuAcidente ? up : up;
+                        return (
+                          <div key={it.label} className="border rounded-lg p-3">
+                            <p className="text-xs uppercase text-gray-500">{it.label}</p>
+                            <p className={`text-2xl font-bold ${it.color}`}>{fmtNum(it.k.atual)}</p>
+                            <p className="text-[11px] text-gray-500">vs. {fmtNum(it.k.anterior)} anterior</p>
+                            <div className={`mt-1 inline-flex items-center gap-1 text-xs font-semibold ${ruim ? "text-red-600" : down ? "text-emerald-600" : "text-gray-500"}`}>
+                              {up ? <ArrowUp className="h-3 w-3" /> : down ? <ArrowDown className="h-3 w-3" /> : null}
+                              {fmtNum(Math.abs(it.k.varPct), 1)}%
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Pirâmide de Bird + Cobertura CAT + Custo */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><Layers className="h-4 w-4 text-amber-600" /> Pirâmide de Bird</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {[
+                        { label: "Graves / Fatal", v: d.piramideBird?.graves ?? 0, color: "bg-red-600", w: "w-1/4" },
+                        { label: "Moderados / Leve c/ Afast", v: d.piramideBird?.moderados ?? 0, color: "bg-orange-500", w: "w-2/4" },
+                        { label: "Leves / Primeiros Socorros", v: d.piramideBird?.leves ?? 0, color: "bg-yellow-500", w: "w-3/4" },
+                        { label: "Quase-acidentes", v: d.piramideBird?.quaseAcidentes ?? 0, color: "bg-blue-500", w: "w-full" },
+                      ].map((it, i) => (
+                        <div key={i} className="flex items-center gap-3">
+                          <div className="flex-1">
+                            <div className={`mx-auto ${it.w} ${it.color} text-white text-center py-2 rounded-md font-bold text-lg shadow`}>{it.v}</div>
+                          </div>
+                          <div className="w-56 text-xs text-gray-700">{it.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-3">A pirâmide invertida mostra que pequenos eventos (base) prenunciam os graves (topo). Quanto maior a base reportada, melhor a maturidade SST.</p>
+                  </CardContent>
+                </Card>
+
+                <div className="space-y-3">
+                  <Card className="bg-amber-50 border-amber-200 border">
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs uppercase text-gray-600">Cobertura CAT</p>
+                        <p className="text-3xl font-bold text-amber-700">{fmtNum(d.coberturaCAT ?? 0, 1)}%</p>
+                        <p className="text-[11px] text-gray-500 mt-1">% de acidentes (que exigem) com CAT emitida</p>
+                      </div>
+                      <FileWarning className="h-10 w-10 text-amber-600" />
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-green-50 border-green-200 border">
+                    <CardContent className="p-4">
+                      <p className="text-xs uppercase text-gray-600 flex items-center gap-1"><DollarSign className="h-3 w-3" /> Custo Estimado de Afastamento</p>
+                      <p className="text-2xl font-bold text-green-700 mt-1">R$ {fmtNum(d.custoEstimadoAfastamento?.total ?? 0, 2)}</p>
+                      <div className="text-[11px] text-gray-600 mt-2 grid grid-cols-2 gap-1">
+                        <div>Atestados: <span className="font-semibold">R$ {fmtNum(d.custoEstimadoAfastamento?.atestados ?? 0, 2)}</span></div>
+                        <div>Acidentes: <span className="font-semibold">R$ {fmtNum(d.custoEstimadoAfastamento?.acidentes ?? 0, 2)}</span></div>
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-2">Base: salário-base ÷ 30 × dias afastados (não inclui encargos)</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              {/* Heatmap dia/hora */}
+              <Card>
+                <CardHeader><CardTitle className="text-base flex items-center gap-2"><AlarmClock className="h-4 w-4" /> Mapa de Calor — Acidentes por Dia da Semana × Hora</CardTitle></CardHeader>
+                <CardContent>
+                  {(d.heatmapDiaHora ?? []).length === 0 ? <p className="text-sm text-gray-500">Sem registros com hora informada.</p> : (() => {
+                    const max = Math.max(1, ...(d.heatmapDiaHora ?? []).map((c: any) => c.qtd));
+                    const dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+                    const cellMap = new Map<string, number>();
+                    for (const c of d.heatmapDiaHora ?? []) cellMap.set(`${c.diaIdx}_${c.hora}`, c.qtd);
+                    return (
+                      <div className="overflow-x-auto">
+                        <table className="text-xs border-collapse">
+                          <thead><tr><th className="p-1"></th>{Array.from({ length: 24 }, (_, h) => <th key={h} className="p-1 text-gray-500 font-normal">{h}h</th>)}</tr></thead>
+                          <tbody>
+                            {dias.map((dia, di) => (
+                              <tr key={dia}>
+                                <td className="p-1 pr-2 font-semibold text-gray-700">{dia}</td>
+                                {Array.from({ length: 24 }, (_, h) => {
+                                  const v = cellMap.get(`${di}_${h}`) || 0;
+                                  const op = v === 0 ? 0 : 0.15 + (v / max) * 0.85;
+                                  return (
+                                    <td key={h} className="p-0.5">
+                                      <div className="w-7 h-7 rounded text-center text-[10px] font-bold flex items-center justify-center"
+                                        style={{ backgroundColor: v > 0 ? `rgba(220, 38, 38, ${op})` : "#f3f4f6", color: op > 0.5 ? "white" : "#374151" }}
+                                        title={`${dia} ${h}h: ${v} acidente(s)`}>
+                                        {v || ""}
+                                      </div>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+
+              {/* Atestados/Acidentes por dia da semana */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><CalendarDays className="h-4 w-4 text-emerald-600" /> Atestados por Dia da Semana</CardTitle></CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={d.atestadosPorDiaSemana ?? []}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="dia" tick={{ fontSize: 12 }} />
+                        <YAxis tick={{ fontSize: 12 }} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="qtd" name="Atestados" fill="#10b981" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="dias" name="Dias" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle className="text-base flex items-center gap-2"><CalendarDays className="h-4 w-4 text-red-600" /> Acidentes por Dia da Semana</CardTitle></CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={d.acidentesPorDiaSemana ?? []}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="dia" tick={{ fontSize: 12 }} />
+                        <YAxis tick={{ fontSize: 12 }} />
+                        <Tooltip />
+                        <Bar dataKey="qtd" name="Acidentes" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Atestados recorrentes */}
+              <Card>
+                <CardHeader><CardTitle className="text-base flex items-center gap-2"><Repeat className="h-4 w-4 text-purple-600" /> Funcionários com Atestados Recorrentes (3+)</CardTitle></CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 text-gray-600">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Funcionário</th>
+                          <th className="px-3 py-2 text-left">Função</th>
+                          <th className="px-3 py-2 text-right">Qtd Atestados</th>
+                          <th className="px-3 py-2 text-right">Dias Acumulados</th>
+                          <th className="px-3 py-2 text-right">Média/Atestado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {(d.atestadosRecorrentes ?? []).length === 0 && (<tr><td colSpan={5} className="p-4 text-center text-gray-500">Nenhum funcionário com atestado recorrente no período.</td></tr>)}
+                        {(d.atestadosRecorrentes ?? []).map((f: any) => (
+                          <tr key={f.employeeId} className="hover:bg-gray-50">
+                            <td className="px-3 py-2 font-medium">{f.nome}{f.matricula ? <span className="text-xs text-gray-400 ml-1">#{f.matricula}</span> : null}</td>
+                            <td className="px-3 py-2 text-gray-600">{f.funcao || "—"}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-purple-700">{f.quantidade}</td>
+                            <td className="px-3 py-2 text-right text-blue-700">{f.dias}</td>
+                            <td className="px-3 py-2 text-right text-gray-700">{fmtNum(f.dias / Math.max(1, f.quantidade), 1)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* ============ OBRAS / AÇÕES ============ */}
+            <TabsContent value="obras" className="space-y-4">
+              {/* Dias sem acidente */}
+              <Card>
+                <CardHeader><CardTitle className="text-base flex items-center gap-2"><MapPin className="h-4 w-4 text-emerald-600" /> Dias sem Acidente — por Obra</CardTitle></CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 text-gray-600">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Obra</th>
+                          <th className="px-3 py-2 text-left">Último Acidente</th>
+                          <th className="px-3 py-2 text-right">Dias sem Acidente</th>
+                          <th className="px-3 py-2 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {(d.diasSemAcidente ?? []).length === 0 && (<tr><td colSpan={4} className="p-4 text-center text-gray-500">Sem obras cadastradas.</td></tr>)}
+                        {(d.diasSemAcidente ?? []).map((o: any) => (
+                          <tr key={o.obraId} className="hover:bg-gray-50">
+                            <td className="px-3 py-2 font-medium">{o.obraNome}</td>
+                            <td className="px-3 py-2 text-gray-600">{o.ultimaData || <span className="text-emerald-600">Nunca</span>}</td>
+                            <td className="px-3 py-2 text-right">
+                              {o.dias === null
+                                ? <span className="font-bold text-emerald-600">— </span>
+                                : <span className={`font-bold text-lg ${o.dias >= 90 ? "text-emerald-600" : o.dias >= 30 ? "text-blue-600" : "text-orange-600"}`}>{o.dias}</span>}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {o.dias === null
+                                ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300" variant="outline">Sem registros</Badge>
+                                : o.dias >= 90 ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300" variant="outline">Excelente</Badge>
+                                  : o.dias >= 30 ? <Badge className="bg-blue-100 text-blue-700 border-blue-300" variant="outline">Bom</Badge>
+                                    : <Badge className="bg-orange-100 text-orange-700 border-orange-300" variant="outline">Atenção</Badge>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Ranking de obras por nº acidentes */}
+              <Card>
+                <CardHeader><CardTitle className="text-base flex items-center gap-2"><BarChart3 className="h-4 w-4 text-red-600" /> Ranking de Obras com Mais Acidentes</CardTitle></CardHeader>
+                <CardContent>
+                  {(d.rankingObras ?? []).length === 0 ? <p className="text-sm text-gray-500">Sem acidentes vinculados a obras no período.</p> : (
+                    <ResponsiveContainer width="100%" height={Math.max(220, (d.rankingObras ?? []).length * 30)}>
+                      <BarChart data={d.rankingObras} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis type="number" tick={{ fontSize: 11 }} />
+                        <YAxis dataKey="obraNome" type="category" tick={{ fontSize: 11 }} width={150} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="qtd" name="Acidentes" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="dias" name="Dias Perdidos" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Ações corretivas */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <KPI icon={Activity} label="Ações Corretivas (total)" value={fmtNum(d.acoesCorretivas?.total ?? 0)} color="text-blue-600" bg="bg-blue-50" border="border-blue-200" />
+                <KPI icon={ShieldAlert} label="Ações em Aberto" value={fmtNum(d.acoesCorretivas?.abertas ?? 0)} color="text-amber-600" bg="bg-amber-50" border="border-amber-200" />
+                <KPI icon={AlertTriangle} label="Ações Vencidas" value={fmtNum(d.acoesCorretivas?.vencidas ?? 0)} color="text-red-600" bg="bg-red-50" border="border-red-200" />
+              </div>
+
+              <Card>
+                <CardHeader><CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-red-600" /> Ações Corretivas Vencidas</CardTitle></CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 text-gray-600">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Funcionário</th>
+                          <th className="px-3 py-2 text-left">Obra</th>
+                          <th className="px-3 py-2 text-left">Ação</th>
+                          <th className="px-3 py-2 text-left">Status</th>
+                          <th className="px-3 py-2 text-right">Prazo</th>
+                          <th className="px-3 py-2 text-right">Dias Vencido</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {(d.acoesCorretivas?.listaVencidas ?? []).length === 0 && (<tr><td colSpan={6} className="p-4 text-center text-emerald-600">Nenhuma ação vencida 🎉</td></tr>)}
+                        {(d.acoesCorretivas?.listaVencidas ?? []).map((a: any) => {
+                          const dv = Math.floor((new Date().getTime() - new Date(a.prazo + "T00:00:00").getTime()) / (1000 * 60 * 60 * 24));
+                          return (
+                            <tr key={a.id} className="hover:bg-red-50">
+                              <td className="px-3 py-2">{a.employeeNome || "—"}</td>
+                              <td className="px-3 py-2 text-gray-700">{a.obraNome || "—"}</td>
+                              <td className="px-3 py-2 text-gray-700 max-w-md truncate">{a.acao}</td>
+                              <td className="px-3 py-2"><Badge variant="outline" className="text-xs">{a.status}</Badge></td>
+                              <td className="px-3 py-2 text-right text-gray-700">{a.prazo}</td>
+                              <td className="px-3 py-2 text-right font-bold text-red-600">{dv} dia(s)</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

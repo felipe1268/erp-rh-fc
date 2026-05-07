@@ -721,7 +721,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1358-2026-05-06";
+    const COLFIX_VERSION = "v1366-2026-05-06";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -766,6 +766,17 @@ Regras:
             ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "dataCancelamento" TIMESTAMP WITHOUT TIME ZONE;
             ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS "revisao" VARCHAR(10) DEFAULT '01';
             ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS "revisaoMotivo" TEXT;
+            ALTER TABLE accidents ADD COLUMN IF NOT EXISTS obra_id INTEGER;
+            ALTER TABLE accidents ADD COLUMN IF NOT EXISTS agente_causador VARCHAR(255);
+            ALTER TABLE accidents ADD COLUMN IF NOT EXISTS houve_cat SMALLINT DEFAULT 0;
+            ALTER TABLE accidents ADD COLUMN IF NOT EXISTS motivo_sem_cat TEXT;
+            ALTER TABLE accidents ADD COLUMN IF NOT EXISTS status_acao_corretiva VARCHAR(50) DEFAULT 'Pendente';
+            ALTER TABLE accidents ADD COLUMN IF NOT EXISTS prazo_acao_corretiva DATE;
+            ALTER TABLE accidents ADD COLUMN IF NOT EXISTS responsavel_acao VARCHAR(255);
+            ALTER TABLE accidents ADD COLUMN IF NOT EXISTS atestado_id INTEGER;
+            ALTER TABLE accidents ADD COLUMN IF NOT EXISTS anexos_urls TEXT;
+            ALTER TABLE accidents ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITHOUT TIME ZONE;
+            ALTER TABLE accidents ADD COLUMN IF NOT EXISTS deleted_by VARCHAR(255);
             ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS ajuste_inss VARCHAR(20);
             ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS valor_liquido VARCHAR(20);
             ALTER TABLE vacation_periods ADD COLUMN IF NOT EXISTS bonus_valor VARCHAR(20);

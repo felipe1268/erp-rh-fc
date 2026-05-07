@@ -5,6 +5,7 @@ export const accidents = pgTable("accidents", {
         id: serial().notNull(),
         companyId: integer().notNull(),
         employeeId: integer().notNull(),
+        obraId: integer("obra_id"),
         // you can use { mode: 'date' }, if you want to have Date as type for this column
         dataAcidente: date({ mode: 'string' }).notNull(),
         horaAcidente: varchar({ length: 10 }),
@@ -13,15 +14,25 @@ export const accidents = pgTable("accidents", {
         localAcidente: varchar({ length: 255 }),
         descricao: text(),
         parteCorpoAtingida: varchar({ length: 255 }),
+        agenteCausador: varchar("agente_causador", { length: 255 }),
         catNumero: varchar({ length: 50 }),
         // you can use { mode: 'date' }, if you want to have Date as type for this column
         catData: date({ mode: 'string' }),
+        houveCAT: smallint("houve_cat").default(0),
+        motivoSemCAT: text("motivo_sem_cat"),
         diasAfastamento: integer().default(0),
         testemunhas: text(),
         acaoCorretiva: text(),
+        statusAcaoCorretiva: varchar("status_acao_corretiva", { length: 50 }).default('Pendente'),
+        prazoAcaoCorretiva: date("prazo_acao_corretiva", { mode: 'string' }),
+        responsavelAcao: varchar("responsavel_acao", { length: 255 }),
+        atestadoId: integer("atestado_id"),
         documentoUrl: text(),
+        anexosUrls: text("anexos_urls"),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        deletedAt: timestamp("deleted_at", { mode: 'string' }),
+        deletedBy: varchar("deleted_by", { length: 255 }),
 });
 
 export const actionPlans = pgTable("action_plans", {
