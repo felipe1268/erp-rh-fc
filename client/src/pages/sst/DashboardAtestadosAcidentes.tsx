@@ -20,6 +20,7 @@ import {
   PieChart, Pie, Cell, Legend, LineChart, Line, ComposedChart, Area, AreaChart,
 } from "recharts";
 import { ChartCard } from "@/components/sst/ChartCard";
+import { cidDescricao } from "@shared/cid10";
 import { EmployeeDetailDialog } from "@/components/sst/EmployeeDetailDialog";
 
 function truncate(s: string, n = 22) {
@@ -118,7 +119,16 @@ export default function DashboardAtestadosAcidentes() {
     )},
     { key: "funcao", label: "Função", render: (r: any) => r.funcao || "—" },
     { key: "tipo", label: "Tipo" },
-    { key: "cid", label: "CID", render: (r: any) => r.cid || "—" },
+    { key: "cid", label: "CID", render: (r: any) => {
+      if (!r.cid) return "—";
+      const desc = cidDescricao(r.cid);
+      return (
+        <span className="inline-flex flex-col">
+          <span className="font-mono text-xs">{r.cid}</span>
+          {desc && <span className="text-[11px] text-gray-500">{desc}</span>}
+        </span>
+      );
+    }},
     { key: "motivo", label: "Motivo" },
     { key: "dias", label: "Dias", align: "right" as const },
   ];
@@ -384,9 +394,10 @@ export default function DashboardAtestadosAcidentes() {
                   height={280}
                   emptyMessage="Nenhum CID registrado."
                   isEmpty={d.atestados.topCIDs.length === 0}
-                  tableData={d.atestados.topCIDs}
+                  tableData={(d.atestados.topCIDs ?? []).map((r: any) => ({ ...r, descricao: cidDescricao(r.cid) || "—" }))}
                   tableColumns={[
                     { key: "cid", label: "CID" },
+                    { key: "descricao", label: "Descrição (CID-10)" },
                     { key: "quantidade", label: "Quantidade", align: "right" },
                     { key: "dias", label: "Dias", align: "right" },
                   ]}
@@ -397,7 +408,13 @@ export default function DashboardAtestadosAcidentes() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                         <YAxis dataKey="cid" type="category" tick={{ fontSize: 11 }} width={80} />
-                        <Tooltip />
+                        <Tooltip
+                          formatter={(v: any) => v}
+                          labelFormatter={(l: any) => {
+                            const desc = cidDescricao(l);
+                            return desc ? `${l} — ${desc}` : String(l);
+                          }}
+                        />
                         <Bar dataKey="quantidade" name="Qtd" fill="#3b82f6" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>

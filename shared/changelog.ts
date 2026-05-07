@@ -9383,6 +9383,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 07:00:00",
   },
   {
+    version: 1383,
+    titulo: "SST: descrição oficial do CID-10 ao lado do código (DataSUS V2008 — base nacional completa)",
+    descricao: "Atendendo solicitação do usuário, o ERP agora exibe a descrição oficial de cada código CID ao lado do código. Foi baixada e empacotada a base oficial CID-10 do DataSUS V2008 (cid10.datasus.gov.br) — 2.045 categorias + 12.451 subcategorias = 14.233 verbetes em pt-BR — em shared/cid10.ts (offline, sem chamada externa). Helper cidDescricao(code) faz fallback automático: se a subcategoria (4 chars, ex: J039) não estiver mapeada, volta para a categoria (3 chars, ex: J03 = Amigdalite aguda). Aplicado em (1) tabela 'Top 10 CIDs' (nova coluna 'Descrição (CID-10)' + tooltip do gráfico mostra 'J03 — Amigdalite aguda'); (2) coluna CID dos drill-downs em todos os gráficos de atestados (mostra código + descrição abaixo, em cinza).",
+    tipo: "feature",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 06:35:00",
+  },
+  {
     version: 1382,
     titulo: "SST Dashboard: drill-down clicável no card 'Atestados & Afastamentos — por Obra'",
     descricao: "Atendendo solicitação do usuário, agora é possível clicar em qualquer linha da tabela 'Atestados & Afastamentos — por Obra' para ver, em tela cheia, todos os atestados daquela obra: data (dd/MM/aaaa), funcionário, função, tipo, CID, motivo e dias. Cada linha do drill-down também é clicável e abre o histórico individual do colaborador. Para sustentar isso, atestadosLista no backend agora carrega obraId/obraNome resolvidos via employee_site_history (mesma regra do agregado).",
