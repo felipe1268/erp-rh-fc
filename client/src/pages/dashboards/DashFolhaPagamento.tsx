@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { DollarSign, TrendingUp, TrendingDown, Wallet, Building2, Landmark, ArrowLeft, HandCoins, Search, ArrowUp, ArrowDown, Minus, X, AlertTriangle, Lightbulb } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Wallet, Building2, Landmark, ArrowLeft, HandCoins, Search, ArrowUp, ArrowDown, Minus, X, AlertTriangle, Lightbulb, Eye, Calculator, Info } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useMemo } from "react";
@@ -86,6 +86,7 @@ export default function DashFolhaPagamento() {
   const [, navigate] = useLocation();
   const [openKpi, setOpenKpi] = useState<KpiKey | null>(null);
   const [busca, setBusca] = useState("");
+  const [mesDetalhe, setMesDetalhe] = useState<string | null>(null);
 
   const mesLabel = useMemo(() => {
     const [y, m] = mes.split("-");
@@ -340,6 +341,10 @@ export default function DashFolhaPagamento() {
                     <TrendingUp className="h-4 w-4 text-blue-500" />
                     Comparativo Mês a Mês — Folha vs período anterior
                   </CardTitle>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
+                    <Info className="h-3.5 w-3.5 text-blue-500" />
+                    Clique em qualquer linha para abrir a <strong>memória de cálculo completa</strong> daquele mês (todos os funcionários, todos os componentes).
+                  </p>
                 </CardHeader>
                 <CardContent className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -385,8 +390,19 @@ export default function DashFolhaPagamento() {
                           );
                         };
                         return (
-                          <tr key={r.mes} className={`border-b ${isUlt ? "bg-blue-50/50 font-semibold" : "hover:bg-muted/30"}`}>
-                            <td className="py-2 px-3">{r.label}{isUlt && <span className="ml-2 text-[10px] uppercase text-blue-700">atual</span>}</td>
+                          <tr
+                            key={r.mes}
+                            onClick={() => setMesDetalhe(r.mes)}
+                            className={`border-b cursor-pointer transition-colors ${isUlt ? "bg-blue-50/50 font-semibold hover:bg-blue-100/60" : "hover:bg-blue-50/40"}`}
+                            title={`Ver memória de cálculo completa de ${r.label}`}
+                          >
+                            <td className="py-2 px-3">
+                              <div className="flex items-center gap-2">
+                                <Eye className="h-3.5 w-3.5 text-blue-500 opacity-60" />
+                                <span>{r.label}</span>
+                                {isUlt && <span className="text-[10px] uppercase text-blue-700">atual</span>}
+                              </div>
+                            </td>
                             <td className="py-2 px-3 text-right tabular-nums hidden md:table-cell">{r.funcionarios}</td>
                             <td className="py-2 px-3 text-right tabular-nums">{fmtBRL(r.proventos)}</td>
                             <td className="py-2 px-3 text-right">{renderDelta(r.deltas.proventos, false)}</td>
@@ -658,7 +674,289 @@ export default function DashFolhaPagamento() {
         </DialogContent>
       </Dialog>
 
+      {/* Modal — Memória de Cálculo Completa por Mês */}
+      <MemoriaCalculoMesModal
+        mes={mesDetalhe}
+        queryCompanyId={queryCompanyId}
+        companyIds={companyIds}
+        isConstrutoras={isConstrutoras}
+        comparativo={comparativo}
+        onClose={() => setMesDetalhe(null)}
+      />
+
       <PrintFooterLGPD />
     </DashboardLayout>
+  );
+}
+
+// ============================================================
+// Modal — Memória de Cálculo Completa do Mês
+// Abre ao clicar em uma linha da Tabela Comparativa Mês a Mês.
+// Carrega os detalhes daquele mês e mostra: KPIs, comparação com
+// mês anterior (composição) e a tabela detalhada por funcionário.
+// ============================================================
+function MemoriaCalculoMesModal({
+  mes, queryCompanyId, companyIds, isConstrutoras, comparativo, onClose,
+}: {
+  mes: string | null;
+  queryCompanyId: number;
+  companyIds: number[];
+  isConstrutoras: boolean;
+  comparativo: any[];
+  onClose: () => void;
+}) {
+  const [busca, setBusca] = useState("");
+  const open = !!mes;
+  const { data, isLoading } = trpc.dashboards.folhaPagamento.useQuery(
+    { companyId: queryCompanyId, mesReferencia: mes || "", ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: open && (isConstrutoras ? companyIds.length > 0 : queryCompanyId > 0) }
+  );
+
+  const mesLabel = useMemo(() => {
+    if (!mes) return "";
+    const [y, m] = mes.split("-");
+    const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    return `${meses[parseInt(m) - 1]}/${y}`;
+  }, [mes]);
+
+  // Linha do comparativo correspondente ao mês aberto (já contém deltas vs anterior)
+  const linha = useMemo(() => comparativo.find((c: any) => c.mes === mes) || null, [comparativo, mes]);
+  const linhaAnt = useMemo(() => {
+    if (!mes) return null;
+    const idx = comparativo.findIndex((c: any) => c.mes === mes);
+    return idx > 0 ? comparativo[idx - 1] : null;
+  }, [comparativo, mes]);
+
+  const detalhes: any[] = (data as any)?.detalhesPorFuncionario || [];
+  const detalhesFiltrados = useMemo(() => {
+    const term = busca.trim().toLowerCase();
+    const arr = term
+      ? detalhes.filter(d => (d.nome || "").toLowerCase().includes(term) || (d.funcao || "").toLowerCase().includes(term) || (d.banco || "").toLowerCase().includes(term))
+      : detalhes;
+    return [...arr].sort((a, b) => (b.bruto || 0) - (a.bruto || 0));
+  }, [detalhes, busca]);
+
+  const totais = useMemo(() => {
+    const sum = (k: string) => detalhesFiltrados.reduce((a, d) => a + (d[k] || 0), 0);
+    return {
+      bruto: sum("bruto"), adiantamento: sum("adiantamento"), descontosSemVale: sum("descontosSemVale"),
+      faltas: sum("faltas"), vrFaltas: sum("vrFaltas"), vtFaltas: sum("vtFaltas"),
+      inss: sum("inss"), irrf: sum("irrf"), fgts: sum("fgts"), liquido: sum("liquido"),
+    };
+  }, [detalhesFiltrados]);
+
+  // Mini-card de comparação: valor + delta vs mês anterior
+  const CompCard = ({ label, valor, ant, color, invertido = false, hint }: { label: string; valor: number; ant: number | null; color: string; invertido?: boolean; hint?: string }) => {
+    const diff = ant != null ? valor - ant : 0;
+    const pct = ant != null && ant !== 0 ? (diff / Math.abs(ant)) * 100 : 0;
+    const subiu = diff > 0;
+    const ruim = ant != null && Math.abs(diff) >= 0.01 ? (invertido ? subiu : !subiu) : false;
+    const corDelta = ant == null || Math.abs(diff) < 0.01 ? "text-muted-foreground" : ruim ? "text-red-600" : "text-green-600";
+    return (
+      <div className={`rounded-lg border bg-card p-3 border-l-4 ${color}`} title={hint}>
+        <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+        <p className="text-lg font-bold tabular-nums mt-1">{fmtBRL(valor)}</p>
+        {ant != null && (
+          <p className={`text-[11px] mt-1 inline-flex items-center gap-1 ${corDelta} tabular-nums`}>
+            {Math.abs(diff) < 0.01 ? <Minus className="h-3 w-3" /> : subiu ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+            {pct >= 0 ? "+" : ""}{pct.toFixed(1)}% ({subiu ? "+" : "−"}{fmtBRL(Math.abs(diff))}) vs ant.
+          </p>
+        )}
+        {hint && <p className="text-[10px] text-muted-foreground mt-1.5 leading-tight">{hint}</p>}
+      </div>
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); setBusca(""); } }}>
+      <DialogContent
+        showCloseButton={false}
+        resizable={false}
+        className="!w-screen !max-w-none h-screen p-0 gap-0 rounded-none flex flex-col"
+      >
+        <DialogHeader className="px-6 py-4 border-b flex-row items-center justify-between space-y-0 bg-gradient-to-r from-blue-50 to-white">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
+              <Calculator className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <DialogTitle className="text-lg">Memória de Cálculo Completa — {mesLabel}</DialogTitle>
+              <DialogDescription className="text-xs">
+                Composição detalhada da folha do mês, comparação vs mês anterior e detalhamento por funcionário.
+              </DialogDescription>
+            </div>
+          </div>
+          <Button variant="ghost" size="icon" onClick={() => { onClose(); setBusca(""); }} aria-label="Fechar">
+            <X className="h-5 w-5" />
+          </Button>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-auto px-6 py-4 space-y-5">
+          {isLoading || !data ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <>
+              {/* Resumo no topo */}
+              <div className="rounded-lg border bg-muted/30 p-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+                <div><strong>{(data.resumo as any).totalFuncionarios ?? 0}</strong> funcionários processados</div>
+                <div className="text-muted-foreground">Mês de referência: <strong className="text-foreground">{mesLabel}</strong></div>
+                {linhaAnt && <div className="text-muted-foreground">Comparado com: <strong className="text-foreground">{linhaAnt.label}</strong></div>}
+              </div>
+
+              {/* Composição (cards com delta vs anterior) */}
+              <div>
+                <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+                  <Calculator className="h-4 w-4 text-blue-500" />
+                  Composição da Folha — valor + variação vs mês anterior
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <CompCard label="Custo Total" valor={(data.resumo as any).custoTotalMes || 0}
+                            ant={null} color="border-l-red-500"
+                            hint="Proventos + INSS patronal estimado (~20%) + FGTS (8%)." />
+                  <CompCard label="Total Proventos" valor={(data.resumo as any).totalProventosMes || 0}
+                            ant={linhaAnt?.proventos ?? null} color="border-l-green-500"
+                            hint="Salário base + horas extras + adicionais." />
+                  <CompCard label="Adiantamento (Vale)" valor={(data.resumo as any).totalAdiantamentoMes || 0}
+                            ant={null} color="border-l-orange-500" invertido
+                            hint="Vale pago antes da folha. Não é desconto real." />
+                  <CompCard label="Descontos (sem vale)" valor={(data.resumo as any).totalDescontosMes || 0}
+                            ant={linhaAnt?.descontos ?? null} color="border-l-red-500" invertido
+                            hint="Faltas, VR, VT, INSS, IRRF e demais descontos." />
+                  <CompCard label="Líquido Total" valor={(data.resumo as any).totalLiquidoMes || 0}
+                            ant={linhaAnt?.liquido ?? null} color="border-l-blue-500"
+                            hint="Líquido a pagar. Pago total = vale + líquido." />
+                  <CompCard label="FGTS" valor={(data.resumo as any).totalFgtsMes || 0}
+                            ant={linhaAnt?.fgts ?? null} color="border-l-teal-500" invertido
+                            hint="FGTS calculado sobre os proventos do mês." />
+                  <CompCard label="INSS" valor={(data.resumo as any).totalInssMes || 0}
+                            ant={linhaAnt?.inss ?? null} color="border-l-purple-500" invertido
+                            hint="INSS retido do empregado." />
+                  <CompCard label="IRRF" valor={(data.resumo as any).totalIrrfMes || 0}
+                            ant={null} color="border-l-slate-500" invertido
+                            hint="Imposto de Renda Retido na Fonte." />
+                </div>
+              </div>
+
+              {/* Equação Pago Total */}
+              <div className="rounded-lg border-2 border-dashed border-blue-200 bg-blue-50/40 p-3 text-sm">
+                <p className="font-semibold text-blue-900 mb-1 flex items-center gap-1.5"><Info className="h-4 w-4" /> Como o pago total é calculado</p>
+                <p className="text-blue-900 tabular-nums">
+                  <strong>Pago total ao funcionário</strong> = Adiantamento (Vale) + Líquido Total ={" "}
+                  <span className="font-bold">
+                    {fmtBRL(((data.resumo as any).totalAdiantamentoMes ?? 0) + ((data.resumo as any).totalLiquidoMes ?? 0))}
+                  </span>
+                </p>
+                <p className="text-blue-800/70 text-xs mt-1">
+                  O <em>vale</em> não aparece em "Descontos" porque já foi pago. Se aparecesse, o valor seria contado em dobro.
+                </p>
+              </div>
+
+              {/* Legenda de colunas */}
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                  Legenda das colunas da tabela abaixo
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+                  <div><strong className="text-foreground">Bruto</strong>: total de proventos antes de descontos.</div>
+                  <div><strong className="text-orange-600">Vale</strong>: adiantamento pago durante o mês.</div>
+                  <div><strong className="text-red-600">Desc. Reais</strong>: descontos da folha excluindo o vale.</div>
+                  <div><strong className="text-foreground">Faltas</strong>: desconto por faltas/atrasos.</div>
+                  <div><strong className="text-foreground">VR/VT Faltas</strong>: desconto de vale-refeição/transporte por faltas.</div>
+                  <div><strong className="text-purple-700">INSS</strong>: contribuição previdenciária do empregado.</div>
+                  <div><strong className="text-slate-700">IRRF</strong>: imposto de renda retido.</div>
+                  <div><strong className="text-teal-700">FGTS</strong>: depósito do mês (8% sobre os proventos).</div>
+                  <div><strong className="text-blue-600">Líquido</strong>: valor a receber na folha (sem o vale).</div>
+                </div>
+              </div>
+
+              {/* Busca */}
+              <div className="flex items-center gap-2 sticky top-0 bg-background py-1 z-10">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por nome, função ou banco..."
+                    value={busca}
+                    onChange={(e) => setBusca(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                <span className="text-sm text-muted-foreground">{detalhesFiltrados.length} de {detalhes.length}</span>
+              </div>
+
+              {/* Tabela detalhada por funcionário */}
+              {detalhesFiltrados.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">Nenhum funcionário encontrado neste mês.</div>
+              ) : (
+                <div className="border rounded-lg overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40 sticky top-0">
+                      <tr className="text-left">
+                        <th className="py-2 px-3 font-medium text-muted-foreground">#</th>
+                        <th className="py-2 px-3 font-medium text-muted-foreground">Nome</th>
+                        <th className="py-2 px-3 font-medium text-muted-foreground hidden md:table-cell">Função</th>
+                        <th className="py-2 px-3 font-medium text-muted-foreground hidden xl:table-cell">Banco</th>
+                        <th className="py-2 px-3 font-medium text-muted-foreground text-right">Bruto</th>
+                        <th className="py-2 px-3 font-medium text-orange-600 text-right hidden sm:table-cell">Vale</th>
+                        <th className="py-2 px-3 font-medium text-red-600 text-right hidden sm:table-cell">Desc. Reais</th>
+                        <th className="py-2 px-3 font-medium text-muted-foreground text-right hidden lg:table-cell">Faltas</th>
+                        <th className="py-2 px-3 font-medium text-muted-foreground text-right hidden lg:table-cell">VR Faltas</th>
+                        <th className="py-2 px-3 font-medium text-muted-foreground text-right hidden lg:table-cell">VT Faltas</th>
+                        <th className="py-2 px-3 font-medium text-purple-700 text-right hidden xl:table-cell">INSS</th>
+                        <th className="py-2 px-3 font-medium text-slate-700 text-right hidden xl:table-cell">IRRF</th>
+                        <th className="py-2 px-3 font-medium text-teal-700 text-right hidden xl:table-cell">FGTS</th>
+                        <th className="py-2 px-3 font-bold text-blue-600 text-right">Líquido</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detalhesFiltrados.map((d: any, i: number) => (
+                        <tr key={d.employeeId ?? i} className="border-t hover:bg-muted/30">
+                          <td className="py-2 px-3 text-muted-foreground tabular-nums">{i + 1}</td>
+                          <td className="py-2 px-3 font-medium">
+                            <div>{d.nome}</div>
+                            <div className="text-xs text-muted-foreground md:hidden">{d.funcao}</div>
+                          </td>
+                          <td className="py-2 px-3 text-muted-foreground hidden md:table-cell">{d.funcao}</td>
+                          <td className="py-2 px-3 text-muted-foreground hidden xl:table-cell">{d.banco}</td>
+                          <td className="py-2 px-3 text-right tabular-nums">{fmtBRL(d.bruto)}</td>
+                          <td className="py-2 px-3 text-right tabular-nums text-orange-600 hidden sm:table-cell">{fmtBRL(d.adiantamento)}</td>
+                          <td className="py-2 px-3 text-right tabular-nums text-red-600 hidden sm:table-cell">{fmtBRL(d.descontosSemVale)}</td>
+                          <td className="py-2 px-3 text-right tabular-nums hidden lg:table-cell">{fmtBRL(d.faltas)}</td>
+                          <td className="py-2 px-3 text-right tabular-nums hidden lg:table-cell">{fmtBRL(d.vrFaltas)}</td>
+                          <td className="py-2 px-3 text-right tabular-nums hidden lg:table-cell">{fmtBRL(d.vtFaltas)}</td>
+                          <td className="py-2 px-3 text-right tabular-nums text-purple-700 hidden xl:table-cell">{fmtBRL(d.inss)}</td>
+                          <td className="py-2 px-3 text-right tabular-nums text-slate-700 hidden xl:table-cell">{fmtBRL(d.irrf)}</td>
+                          <td className="py-2 px-3 text-right tabular-nums text-teal-700 hidden xl:table-cell">{fmtBRL(d.fgts)}</td>
+                          <td className="py-2 px-3 text-right tabular-nums text-blue-600 font-bold">{fmtBRL(d.liquido)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-muted/40 sticky bottom-0">
+                      <tr className="border-t font-bold">
+                        <td colSpan={2} className="py-2 px-3">Totais</td>
+                        <td className="py-2 px-3 hidden md:table-cell" />
+                        <td className="py-2 px-3 hidden xl:table-cell" />
+                        <td className="py-2 px-3 text-right tabular-nums">{fmtBRL(totais.bruto)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums text-orange-600 hidden sm:table-cell">{fmtBRL(totais.adiantamento)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums text-red-600 hidden sm:table-cell">{fmtBRL(totais.descontosSemVale)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums hidden lg:table-cell">{fmtBRL(totais.faltas)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums hidden lg:table-cell">{fmtBRL(totais.vrFaltas)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums hidden lg:table-cell">{fmtBRL(totais.vtFaltas)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums text-purple-700 hidden xl:table-cell">{fmtBRL(totais.inss)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums text-slate-700 hidden xl:table-cell">{fmtBRL(totais.irrf)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums text-teal-700 hidden xl:table-cell">{fmtBRL(totais.fgts)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums text-blue-600">{fmtBRL(totais.liquido)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
