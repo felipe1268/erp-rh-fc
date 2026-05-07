@@ -13,7 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeftRight, Plus, Loader2, Building2, ShieldAlert, Undo2, TrendingDown, Lock, Wallet, CheckCircle, PackageSearch, HardHat, FileText } from "lucide-react";
+import { ArrowLeftRight, Plus, Loader2, Building2, ShieldAlert, Undo2, TrendingDown, Lock, Wallet, CheckCircle, PackageSearch, HardHat, FileText, Clock, Hourglass, UserCog } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ReservasBanner } from "@/components/compras/ReservasAlertModal";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -76,6 +78,26 @@ export default function ComprasRealocacao() {
       { enabled: !!companyId }
     );
   const economias = economiasData ?? [];
+
+  // ── Rev. 1386 — Reservas Preventivas ──
+  const { data: reservasData, isLoading: loadingReservas, refetch: refetchReservas } =
+    trpc.compras.listarReservasAtivas.useQuery(
+      { companyId, obraId: obraIdNum },
+      { enabled: !!companyId }
+    );
+  const reservas = reservasData ?? [];
+
+  const [estenderModal, setEstenderModal] = useState<{ id: number; cotacaoId: number } | null>(null);
+  const [diasEstender, setDiasEstender] = useState("3");
+  const [motivoEstender, setMotivoEstender] = useState("");
+  const estenderMut = trpc.compras.estenderPrazoReserva.useMutation({
+    onSuccess: () => {
+      toast.success("Prazo estendido com sucesso!");
+      setEstenderModal(null); setDiasEstender("3"); setMotivoEstender("");
+      refetchReservas();
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   // ── Mutations ──────────────────────────────────────────────────────
   const criarMut = trpc.purchase.criarRealocacao.useMutation({
@@ -165,7 +187,7 @@ export default function ComprasRealocacao() {
           </div>
 
           <TooltipProvider delayDuration={200}>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="bg-white rounded-xl border border-blue-100 p-4 shadow-sm cursor-help">
@@ -219,18 +241,37 @@ export default function ComprasRealocacao() {
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="bg-emerald-600 rounded-xl p-4 shadow-sm cursor-help">
+                <div className="bg-white rounded-xl border border-amber-200 p-4 shadow-sm cursor-help">
                   <div className="flex items-center gap-2 mb-1">
-                    <CheckCircle className="h-4 w-4 text-emerald-100" />
-                    <p className="text-xs text-emerald-100 font-medium">Total Disponível</p>
+                    <Hourglass className="h-4 w-4 text-amber-500" />
+                    <p className="text-xs text-gray-500 font-medium">Reservado</p>
                   </div>
-                  <p className="text-xl font-extrabold text-white">{fmt(saldos?.totalDisponivel ?? 0)}</p>
-                  <p className="text-[10px] text-emerald-200 mt-0.5">DI-08 disponível + economias</p>
+                  <p className="text-base font-bold text-amber-700">{fmt((saldos as any)?.totalReservado ?? 0)}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    DI-08 {fmt((saldos as any)?.di08Reservado ?? 0)} + Eco. {fmt((saldos as any)?.sobrasReservadas ?? 0)}
+                  </p>
                 </div>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-xs text-xs">
-                <p className="font-semibold mb-1">Saldo total disponível</p>
-                <p>Soma do saldo restante do DI-08 (Orçado − Utilizado) com as economias de compras. Esse é o valor que você pode usar para cobrir déficits em cotações com estouro.</p>
+                <p className="font-semibold mb-1">Saldo reservado preventivamente</p>
+                <p>Cotações deficitárias em aberto travam saldo de DI-08 e Economia até serem resolvidas (prazo padrão: 7 dias). Veja a aba "Reservas em Andamento".</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-emerald-600 rounded-xl p-4 shadow-sm cursor-help">
+                  <div className="flex items-center gap-2 mb-1">
+                    <CheckCircle className="h-4 w-4 text-emerald-100" />
+                    <p className="text-xs text-emerald-100 font-medium">Disponível Real</p>
+                  </div>
+                  <p className="text-xl font-extrabold text-white">{fmt((saldos as any)?.totalDisponivelReal ?? saldos?.totalDisponivel ?? 0)}</p>
+                  <p className="text-[10px] text-emerald-200 mt-0.5">Já descontadas as reservas</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                <p className="font-semibold mb-1">Saldo realmente disponível</p>
+                <p>Saldo total (DI-08 + Economia) já descontadas as reservas preventivas em aberto. Esse é o valor que você pode efetivamente comprometer hoje.</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -255,8 +296,11 @@ export default function ComprasRealocacao() {
           )}
         </div>
 
+        {/* ── Banner de Reservas pendentes (Rev. 1386) ─────────────── */}
+        <ReservasBanner />
+
         {/* ── Tabs (usam o mesmo filtro de obra) ───────────────────── */}
-        <Tabs defaultValue="risco">
+        <Tabs defaultValue={reservas.length > 0 ? "reservas" : "risco"}>
           <TabsList className="mb-4">
             <TabsTrigger value="verba" className="gap-2">
               <ArrowLeftRight className="h-4 w-4" /> Realocação de Verba
@@ -269,6 +313,16 @@ export default function ComprasRealocacao() {
               {economias.length > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 text-[10px] font-bold">
                   {economias.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="reservas" className="gap-2">
+              <Hourglass className="h-4 w-4" /> Reservas em Andamento
+              {reservas.length > 0 && (
+                <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                  reservas.some((r: any) => r.vencida) ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                }`}>
+                  {reservas.length}
                 </span>
               )}
             </TabsTrigger>
@@ -549,7 +603,173 @@ export default function ComprasRealocacao() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* ── ABA 4: RESERVAS EM ANDAMENTO (Rev. 1386) ─── */}
+          <TabsContent value="reservas" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="border-amber-200 bg-amber-50">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-center gap-3">
+                    <Hourglass className="h-7 w-7 text-amber-600" />
+                    <div>
+                      <p className="text-xl font-bold text-amber-700">{reservas.length}</p>
+                      <p className="text-xs text-amber-600">Reservas ativas</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-red-200 bg-red-50">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-center gap-3">
+                    <Lock className="h-7 w-7 text-red-600" />
+                    <div>
+                      <p className="text-xl font-bold text-red-700">{reservas.filter((r: any) => r.vencida).length}</p>
+                      <p className="text-xs text-red-600">Vencidas (travam novas OCs)</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-orange-200 bg-orange-50">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-center gap-3">
+                    <TrendingDown className="h-7 w-7 text-orange-600" />
+                    <div>
+                      <p className="text-base font-bold text-orange-700">
+                        {fmt(reservas.reduce((s: number, r: any) => s + Number(r.valorTotal), 0))}
+                      </p>
+                      <p className="text-xs text-orange-600">Total reservado preventivamente</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Hourglass className="h-5 w-5 text-amber-600" />
+                  Reservas Preventivas em Andamento
+                  {obraAtual && <span className="ml-2 text-sm font-normal text-gray-500">— {obraAtual.nome}</span>}
+                </CardTitle>
+                <p className="text-xs text-gray-500 mt-1">
+                  Cada cotação deficitária reserva DI-08 e/ou Economia em Compras por até 7 dias. Resolva (cobrindo o déficit) ou estenda o prazo antes do vencimento.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {loadingReservas ? (
+                  <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
+                ) : reservas.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <CheckCircle className="h-12 w-12 mx-auto mb-2 text-emerald-300" />
+                    <p>Nenhuma reserva preventiva ativa{obraAtual ? ` para ${obraAtual.nome}` : ""}.</p>
+                    <p className="text-xs mt-1">Reservas são criadas automaticamente quando uma cotação fecha com déficit.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Cotação</TableHead>
+                        <TableHead>Responsável</TableHead>
+                        <TableHead className="text-right">DI-08</TableHead>
+                        <TableHead className="text-right">Economia</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead>Prazo</TableHead>
+                        <TableHead className="text-center">Status</TableHead>
+                        <TableHead className="text-center">Ação</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {reservas.map((r: any) => (
+                        <TableRow key={r.id} className={r.vencida ? "bg-red-50" : r.diasRestantes <= 2 ? "bg-amber-50" : undefined}>
+                          <TableCell className="font-mono text-blue-700">#{r.cotacaoId}</TableCell>
+                          <TableCell className="text-xs text-gray-700">{r.responsavelNome ?? "—"}</TableCell>
+                          <TableCell className="text-right text-blue-700 font-medium">{fmt(Number(r.valorDi08))}</TableCell>
+                          <TableCell className="text-right text-teal-700 font-medium">{fmt(Number(r.valorEconomia))}</TableCell>
+                          <TableCell className="text-right text-orange-700 font-bold">{fmt(Number(r.valorTotal))}</TableCell>
+                          <TableCell className="text-xs text-gray-600">
+                            {r.prazoLimite ? format(new Date(r.prazoLimite), "dd/MM/yy", { locale: ptBR }) : "—"}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {r.vencida ? (
+                              <Badge variant="destructive" className="text-[10px]">VENCIDA</Badge>
+                            ) : r.diasRestantes <= 2 ? (
+                              <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 text-[10px]">
+                                <Clock className="h-3 w-3 mr-0.5" />{r.diasRestantes}d
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px]">
+                                <Clock className="h-3 w-3 mr-0.5" />{r.diasRestantes}d
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {["admin_master", "diretor", "gerente_compras"].includes((user as any)?.role) ? (
+                              <Button
+                                size="sm" variant="ghost"
+                                onClick={() => setEstenderModal({ id: r.id, cotacaoId: r.cotacaoId })}
+                                className="h-7 text-xs text-amber-700 hover:bg-amber-50 gap-1"
+                              >
+                                <UserCog className="h-3 w-3" /> Estender
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-gray-300">—</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
+
+        {/* ── Modal Estender Prazo de Reserva ─────────────────── */}
+        <Dialog open={!!estenderModal} onOpenChange={(o) => { if (!o) { setEstenderModal(null); setDiasEstender("3"); setMotivoEstender(""); } }}>
+          <DialogContent className="bg-white">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-amber-700">
+                <Hourglass className="h-5 w-5" /> Estender Prazo da Reserva
+              </DialogTitle>
+            </DialogHeader>
+            {estenderModal && (
+              <div className="space-y-4">
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                  <p>Reserva da cotação <strong>#{estenderModal.cotacaoId}</strong></p>
+                  <p className="mt-1 text-xs">
+                    Limite por perfil — admin_master: 60d • diretor: 7d • gerente_compras: 3d
+                  </p>
+                </div>
+                <div>
+                  <Label>Dias adicionais <span className="text-red-500">*</span></Label>
+                  <Input type="number" min="1" max="60" className="mt-1"
+                    value={diasEstender} onChange={e => setDiasEstender(e.target.value)} />
+                </div>
+                <div>
+                  <Label>Justificativa <span className="text-red-500">*</span></Label>
+                  <Textarea rows={3} className="mt-1" placeholder="Por que está estendendo este prazo?"
+                    value={motivoEstender} onChange={e => setMotivoEstender(e.target.value)} />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => { setEstenderModal(null); setDiasEstender("3"); setMotivoEstender(""); }}>Cancelar</Button>
+                  <Button
+                    className="bg-amber-600 hover:bg-amber-700 text-white"
+                    disabled={!diasEstender || !motivoEstender.trim() || estenderMut.isPending}
+                    onClick={() => estenderMut.mutate({
+                      reservaId: estenderModal.id,
+                      diasAdicionais: parseInt(diasEstender) || 0,
+                      motivo: motivoEstender.trim(),
+                    })}
+                  >
+                    {estenderMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+                    Confirmar Extensão
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* ── Dialog Nova Realocação ────────────────────────────────── */}
         <Dialog open={showNova} onOpenChange={setShowNova}>

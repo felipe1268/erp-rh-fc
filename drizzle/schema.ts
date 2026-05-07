@@ -5804,6 +5804,53 @@ export const comprasRiscoDebitos = pgTable("compras_risco_debitos", {
 });
 
 // ============================================================
+// RESERVAS DE SALDO + TRAVAMENTO PROGRESSIVO (Rev. 1386)
+// Reserva preventiva de DI-08/Economia quando uma cotação fecha
+// com déficit. Se não resolver em 7 dias, novas cotações
+// deficitárias ficam bloqueadas para a equipe de compras.
+// ============================================================
+export const comprasReservasSaldo = pgTable("compras_reservas_saldo", {
+  id:                       serial().primaryKey(),
+  companyId:                integer("company_id").notNull(),
+  obraId:                   integer("obra_id"),
+  cotacaoId:                integer("cotacao_id"),
+  ordemId:                  integer("ordem_id"),
+  responsavelOriginalId:    integer("responsavel_original_id"),
+  responsavelOriginalNome:  varchar("responsavel_original_nome", { length: 255 }),
+  valorDi08Reservado:       numeric("valor_di08_reservado", { precision: 14, scale: 2 }).notNull().default("0"),
+  valorEconomiaReservada:   numeric("valor_economia_reservada", { precision: 14, scale: 2 }).notNull().default("0"),
+  prazoLimite:              timestamp("prazo_limite", { mode: "string" }).notNull(),
+  status:                   varchar({ length: 20 }).notNull().default("ativa"), // ativa | consumida | liberada | expirada
+  motivo:                   text(),
+  criadoEm:                 timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm:             timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  index("crs_company").on(table.companyId),
+  index("crs_obra").on(table.obraId),
+  index("crs_cotacao").on(table.cotacaoId),
+  index("crs_status").on(table.status),
+  index("crs_responsavel").on(table.responsavelOriginalId),
+]);
+
+export const comprasReservasLog = pgTable("compras_reservas_log", {
+  id:                serial().primaryKey(),
+  companyId:         integer("company_id").notNull(),
+  reservaId:         integer("reserva_id").notNull(),
+  acao:              varchar({ length: 30 }).notNull(), // criada | estendida | transferida | consumida | liberada | expirada | sc_emergencia | override_master
+  executadoPorId:    integer("executado_por_id"),
+  executadoPorNome:  varchar("executado_por_nome", { length: 255 }),
+  prazoAdicionalDias:integer("prazo_adicional_dias"),
+  motivo:            text(),
+  valorImpactado:    numeric("valor_impactado", { precision: 14, scale: 2 }),
+  detalhes:          text(),
+  criadoEm:          timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  index("crl_company").on(table.companyId),
+  index("crl_reserva").on(table.reservaId),
+  index("crl_acao").on(table.acao),
+]);
+
+// ============================================================
 // MÓDULO ALMOXARIFADO — WAREHOUSE (adicionado Rev. 297)
 // Usa almoxarifado_itens e almoxarifado_movimentacoes existentes.
 // Novas tabelas: empréstimos e inventário semanal.

@@ -665,6 +665,48 @@ Regras:
           // Rev. 1327: anexos (nome original do arquivo) + flag de notificação por e-mail
           await db.execute(sql`ALTER TABLE pj_conformidade ADD COLUMN IF NOT EXISTS "arquivoNome" VARCHAR(255)`);
           await db.execute(sql`ALTER TABLE notification_recipients ADD COLUMN IF NOT EXISTS "notificarConformidadePJ" SMALLINT NOT NULL DEFAULT 1`);
+
+          // Rev. 1386 — Reservas Preventivas + Travamento Progressivo
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS compras_reservas_saldo (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              obra_id INTEGER,
+              cotacao_id INTEGER,
+              ordem_id INTEGER,
+              responsavel_original_id INTEGER,
+              responsavel_original_nome VARCHAR(255),
+              valor_di08_reservado NUMERIC(14,2) NOT NULL DEFAULT 0,
+              valor_economia_reservada NUMERIC(14,2) NOT NULL DEFAULT 0,
+              prazo_limite TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+              status VARCHAR(20) NOT NULL DEFAULT 'ativa',
+              motivo TEXT,
+              criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+              atualizado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+            );
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS crs_company ON compras_reservas_saldo (company_id);`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS crs_obra ON compras_reservas_saldo (obra_id);`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS crs_cotacao ON compras_reservas_saldo (cotacao_id);`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS crs_status ON compras_reservas_saldo (status);`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS crs_responsavel ON compras_reservas_saldo (responsavel_original_id);`);
+
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS compras_reservas_log (
+              id SERIAL PRIMARY KEY,
+              reserva_id INTEGER NOT NULL,
+              acao VARCHAR(30) NOT NULL,
+              executado_por_id INTEGER,
+              executado_por_nome VARCHAR(255),
+              prazo_adicional_dias INTEGER,
+              motivo TEXT,
+              valor_impactado NUMERIC(14,2),
+              detalhes TEXT,
+              criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+            );
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS crl_reserva ON compras_reservas_log (reserva_id);`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS crl_acao ON compras_reservas_log (acao);`);
           await db.execute(sql`
             CREATE TABLE IF NOT EXISTS pj_conformidade_alertas (
               id SERIAL PRIMARY KEY,
@@ -721,7 +763,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1366-2026-05-06";
+    const COLFIX_VERSION = "v1386.1-2026-05-07";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -734,6 +776,48 @@ Regras:
         const { sql } = await import("drizzle-orm");
         await db.execute(sql`
           DO $$ BEGIN
+            -- Rev. 1386 — Reservas Preventivas (criadas no ColFix síncrono para garantir disponibilidade antes de servir requests)
+            CREATE TABLE IF NOT EXISTS compras_reservas_saldo (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              obra_id INTEGER,
+              cotacao_id INTEGER,
+              ordem_id INTEGER,
+              responsavel_original_id INTEGER,
+              responsavel_original_nome VARCHAR(255),
+              valor_di08_reservado NUMERIC(14,2) NOT NULL DEFAULT 0,
+              valor_economia_reservada NUMERIC(14,2) NOT NULL DEFAULT 0,
+              prazo_limite TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+              status VARCHAR(20) NOT NULL DEFAULT 'ativa',
+              motivo TEXT,
+              criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW(),
+              atualizado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS crs_company ON compras_reservas_saldo (company_id);
+            CREATE INDEX IF NOT EXISTS crs_obra ON compras_reservas_saldo (obra_id);
+            CREATE INDEX IF NOT EXISTS crs_cotacao ON compras_reservas_saldo (cotacao_id);
+            CREATE INDEX IF NOT EXISTS crs_status ON compras_reservas_saldo (status);
+            CREATE INDEX IF NOT EXISTS crs_responsavel ON compras_reservas_saldo (responsavel_original_id);
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_crs_cotacao_ativa ON compras_reservas_saldo (cotacao_id) WHERE status = 'ativa';
+
+            CREATE TABLE IF NOT EXISTS compras_reservas_log (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL DEFAULT 0,
+              reserva_id INTEGER NOT NULL,
+              acao VARCHAR(30) NOT NULL,
+              executado_por_id INTEGER,
+              executado_por_nome VARCHAR(255),
+              prazo_adicional_dias INTEGER,
+              motivo TEXT,
+              valor_impactado NUMERIC(14,2),
+              detalhes TEXT,
+              criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+            );
+            ALTER TABLE compras_reservas_log ADD COLUMN IF NOT EXISTS company_id INTEGER NOT NULL DEFAULT 0;
+            CREATE INDEX IF NOT EXISTS crl_company ON compras_reservas_log (company_id);
+            CREATE INDEX IF NOT EXISTS crl_reserva ON compras_reservas_log (reserva_id);
+            CREATE INDEX IF NOT EXISTS crl_acao ON compras_reservas_log (acao);
+
             ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS diferencas TEXT;
             ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS consolidado BOOLEAN DEFAULT FALSE;
             ALTER TABLE user_groups ADD COLUMN IF NOT EXISTS module_access TEXT;

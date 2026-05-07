@@ -44,6 +44,7 @@ import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
+import { ReservasAlertModal } from './compras/ReservasAlertModal';
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -857,8 +858,14 @@ export default function DashboardLayout({
       <DashboardLayoutContent setSidebarWidth={setSidebarWidth} noPadding={noPadding}>
         {children}
       </DashboardLayoutContent>
+      <ReservasAlertModalGlobal />
     </SidebarProvider>
   );
+}
+
+// Rev. 1386 — Modal global de aviso de Reservas Preventivas pendentes (perfis Compras).
+function ReservasAlertModalGlobal() {
+  return <ReservasAlertModal />;
 }
 
 type DashboardLayoutContentProps = {

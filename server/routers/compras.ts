@@ -23,6 +23,7 @@ import {
   comprasCotacaoPropostas, comprasCondicoesPagamento,
   comprasOrdens, comprasOrdensItens, comprasEntregasProgramadas,
   comprasRiscoDebitos,
+  comprasReservasSaldo, comprasReservasLog,
   users,
   obras,
   orcamentos, orcamentoItens, orcamentoInsumos,
@@ -578,6 +579,219 @@ async function calcScoreFornecedor(db: any, fornecedorId: number, companyId: num
     taxaSemDivergencia: Math.round(taxaSemDivergencia * 100),
     ultimasAvaliacoes,
   };
+}
+
+// ══════════════════════════════════════════════════════════════
+// RESERVAS PREVENTIVAS DE SALDO (Rev. 1386)
+// Helpers que orquestram a criação, consumo e liberação de reservas
+// quando uma cotação fecha com déficit (DI-08 + Economia em Compras).
+// ══════════════════════════════════════════════════════════════
+
+const RESERVA_PRAZO_DIAS = 7;
+
+async function _registrarLogReserva(opts: {
+  reservaId: number;
+  acao: string;
+  companyId?: number | null;          // se não informado, derivamos da reserva
+  executadoPorId?: number | null;
+  executadoPorNome?: string | null;
+  prazoAdicionalDias?: number | null;
+  motivo?: string | null;
+  valorImpactado?: number | null;
+  detalhes?: string | null;
+}) {
+  try {
+    const db = await getDb();
+    let companyId = opts.companyId ?? null;
+    if (!companyId && opts.reservaId > 0) {
+      const [r] = await db.select({ companyId: comprasReservasSaldo.companyId })
+        .from(comprasReservasSaldo).where(eq(comprasReservasSaldo.id, opts.reservaId));
+      companyId = r?.companyId ?? 0;
+    }
+    await db.insert(comprasReservasLog).values({
+      companyId:          companyId ?? 0,
+      reservaId:          opts.reservaId,
+      acao:               opts.acao,
+      executadoPorId:     opts.executadoPorId ?? null,
+      executadoPorNome:   opts.executadoPorNome ?? null,
+      prazoAdicionalDias: opts.prazoAdicionalDias ?? null,
+      motivo:             opts.motivo ?? null,
+      valorImpactado:     opts.valorImpactado != null ? String(opts.valorImpactado) : null,
+      detalhes:           opts.detalhes ?? null,
+    } as any);
+  } catch (e: any) {
+    console.warn("[ReservasLog] Falha ao registrar log:", e?.message);
+  }
+}
+
+/** Garante que o usuário tem acesso à companyId solicitada. */
+async function _assertCompanyAccess(ctxUser: any, companyId: number) {
+  if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
+  const allowed = await getCompaniesForUser(ctxUser.id, ctxUser.role);
+  if (!allowed.includes(companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  }
+}
+
+async function _criarOuAtualizarReserva(opts: {
+  companyId: number;
+  obraId?: number | null;
+  cotacaoId: number;
+  ordemId?: number | null;
+  valorDi08: number;
+  valorEconomia: number;
+  responsavelId?: number | null;
+  responsavelNome?: string | null;
+  motivo?: string;
+}) {
+  const db = await getDb();
+  const totalReservado = (opts.valorDi08 || 0) + (opts.valorEconomia || 0);
+  if (totalReservado <= 0.01) return null;
+
+  const [existing] = await db.select().from(comprasReservasSaldo)
+    .where(and(
+      eq(comprasReservasSaldo.cotacaoId, opts.cotacaoId),
+      eq(comprasReservasSaldo.status, "ativa"),
+    ))
+    .limit(1);
+
+  if (existing) {
+    await db.update(comprasReservasSaldo).set({
+      valorDi08Reservado:     String(opts.valorDi08.toFixed(2)),
+      valorEconomiaReservada: String(opts.valorEconomia.toFixed(2)),
+      ordemId:                opts.ordemId ?? existing.ordemId ?? null,
+      atualizadoEm:           new Date().toISOString(),
+    } as any).where(eq(comprasReservasSaldo.id, existing.id));
+    await _registrarLogReserva({
+      reservaId: existing.id, acao: "atualizada",
+      valorImpactado: totalReservado,
+      detalhes: `DI-08: R$ ${opts.valorDi08.toFixed(2)} | Economia: R$ ${opts.valorEconomia.toFixed(2)}`,
+    });
+    return existing.id;
+  }
+
+  const prazo = new Date();
+  prazo.setDate(prazo.getDate() + RESERVA_PRAZO_DIAS);
+
+  const [nova] = await db.insert(comprasReservasSaldo).values({
+    companyId:               opts.companyId,
+    obraId:                  opts.obraId ?? null,
+    cotacaoId:               opts.cotacaoId,
+    ordemId:                 opts.ordemId ?? null,
+    responsavelOriginalId:   opts.responsavelId ?? null,
+    responsavelOriginalNome: opts.responsavelNome ?? null,
+    valorDi08Reservado:      String(opts.valorDi08.toFixed(2)),
+    valorEconomiaReservada:  String(opts.valorEconomia.toFixed(2)),
+    prazoLimite:             prazo.toISOString(),
+    status:                  "ativa",
+    motivo:                  opts.motivo ?? null,
+  } as any).returning({ id: comprasReservasSaldo.id });
+
+  if (nova?.id) {
+    await _registrarLogReserva({
+      reservaId: nova.id, acao: "criada",
+      executadoPorId: opts.responsavelId, executadoPorNome: opts.responsavelNome,
+      valorImpactado: totalReservado,
+      motivo: opts.motivo,
+      detalhes: `DI-08: R$ ${opts.valorDi08.toFixed(2)} | Economia: R$ ${opts.valorEconomia.toFixed(2)} | Prazo: ${prazo.toISOString().slice(0,10).split("-").reverse().join("/")}`,
+    });
+  }
+  return nova?.id ?? null;
+}
+
+async function _liberarReservasDaCotacao(opts: {
+  cotacaoId: number;
+  acao: "consumida" | "liberada" | "expirada";
+  motivo?: string;
+  executadoPorId?: number | null;
+  executadoPorNome?: string | null;
+}) {
+  const db = await getDb();
+  const ativas = await db.select().from(comprasReservasSaldo)
+    .where(and(
+      eq(comprasReservasSaldo.cotacaoId, opts.cotacaoId),
+      eq(comprasReservasSaldo.status, "ativa"),
+    ));
+  for (const r of ativas) {
+    await db.update(comprasReservasSaldo).set({
+      status: opts.acao,
+      atualizadoEm: new Date().toISOString(),
+    } as any).where(eq(comprasReservasSaldo.id, r.id));
+    await _registrarLogReserva({
+      reservaId: r.id, acao: opts.acao,
+      executadoPorId: opts.executadoPorId, executadoPorNome: opts.executadoPorNome,
+      motivo: opts.motivo,
+      valorImpactado: n(r.valorDi08Reservado) + n(r.valorEconomiaReservada),
+    });
+  }
+  return ativas.length;
+}
+
+async function _liberarReservasDeCotacoes(cotacaoIds: number[], acao: "consumida" | "liberada" | "expirada", motivo?: string) {
+  if (cotacaoIds.length === 0) return 0;
+  let total = 0;
+  for (const id of cotacaoIds) {
+    total += await _liberarReservasDaCotacao({ cotacaoId: id, acao, motivo });
+  }
+  return total;
+}
+
+/**
+ * Verifica se um usuário (perfil de Compras) está travado para criar
+ * novas operações deficitárias. Retorna lista de reservas pendentes da empresa.
+ * Travamento ocorre quando há ≥1 reserva ativa cujo prazo expirou (≥7 dias).
+ */
+async function _statusTravamentoCompras(companyId: number) {
+  const db = await getDb();
+  const agora = new Date();
+  const reservas = await db.select().from(comprasReservasSaldo)
+    .where(and(
+      eq(comprasReservasSaldo.companyId, companyId),
+      eq(comprasReservasSaldo.status, "ativa"),
+    ))
+    .orderBy(asc(comprasReservasSaldo.prazoLimite));
+  const enriched = reservas.map(r => {
+    const prazo = new Date(r.prazoLimite);
+    const diffMs = prazo.getTime() - agora.getTime();
+    const diasRestantes = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    const diasDecorridos = Math.max(0, RESERVA_PRAZO_DIAS - diasRestantes);
+    return {
+      id: r.id,
+      cotacaoId: r.cotacaoId,
+      obraId: r.obraId,
+      ordemId: r.ordemId,
+      responsavelId: r.responsavelOriginalId,
+      responsavelNome: r.responsavelOriginalNome,
+      valorDi08: n(r.valorDi08Reservado),
+      valorEconomia: n(r.valorEconomiaReservada),
+      valorTotal: n(r.valorDi08Reservado) + n(r.valorEconomiaReservada),
+      prazoLimite: r.prazoLimite,
+      diasRestantes,
+      diasDecorridos,
+      vencida: diasRestantes <= 0,
+      criadoEm: r.criadoEm,
+      motivo: r.motivo,
+    };
+  });
+  const vencidas = enriched.filter(r => r.vencida);
+  return {
+    travado: vencidas.length > 0,
+    reservasAtivas: enriched,
+    vencidas,
+    totalReservadoDi08: enriched.reduce((s, r) => s + r.valorDi08, 0),
+    totalReservadoEconomia: enriched.reduce((s, r) => s + r.valorEconomia, 0),
+  };
+}
+
+const PERFIS_COMPRAS = new Set([
+  "comprador", "compras", "gerente_compras", "diretor_compras",
+  "lider_compras", "supervisor_compras",
+]);
+
+function _isPerfilCompras(role?: string | null): boolean {
+  if (!role) return false;
+  if (role === "admin_master" || role === "diretor") return true; // master/diretor sempre veem
+  return PERFIS_COMPRAS.has(role);
 }
 
 export const comprasRouter = router({
@@ -2609,6 +2823,9 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         sql`${budgetReallocations.destinoEapItemNome} = ${`Cotação #${input.id}`}`,
       ));
 
+      // Rev. 1386 — libera reservas preventivas da cotação excluída.
+      await _liberarReservasDaCotacao({ cotacaoId: input.id, acao: "liberada", motivo: "Cotação excluída" });
+
       // 7. Deletar a cotação
       await db.delete(comprasCotacoes).where(eq(comprasCotacoes.id, input.id));
 
@@ -2648,6 +2865,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         sql`${budgetReallocations.origemEapItemNome} LIKE 'Economia OC:%'`,
         inArray(budgetReallocations.destinoEapItemNome, destinosCot),
       ));
+      // Rev. 1386 — libera reservas preventivas das cotações excluídas em lote.
+      await _liberarReservasDeCotacoes(ownedIds, "liberada", "Cotação excluída em lote");
       await db.delete(comprasCotacoes).where(inArray(comprasCotacoes.id, ownedIds));
       return { ok: true, count: ownedIds.length };
     }),
@@ -3884,14 +4103,36 @@ Retorne APENAS um JSON válido neste formato:
       const sobrasJaConsumidas = realocConsumidas.reduce((s, r) => s + n(r.valor), 0);
       const sobrasLiquidas = Math.max(0, totalSobras - sobrasJaConsumidas);
 
+      // ── Rev. 1386 — Saldo reservado por cotações deficitárias em aberto ──
+      const reservasConds: any[] = [
+        eq(comprasReservasSaldo.companyId, input.companyId),
+        eq(comprasReservasSaldo.status, "ativa"),
+      ];
+      if (input.obraId) reservasConds.push(eq(comprasReservasSaldo.obraId, input.obraId));
+      const reservasAtivas = await db.select({
+        di08: comprasReservasSaldo.valorDi08Reservado,
+        eco:  comprasReservasSaldo.valorEconomiaReservada,
+      }).from(comprasReservasSaldo).where(and(...reservasConds));
+      const di08Reservado = reservasAtivas.reduce((s, r) => s + n(r.di08), 0);
+      const sobrasReservadas = reservasAtivas.reduce((s, r) => s + n(r.eco), 0);
+      const di08DisponivelReal = Math.max(0, di08Disponivel - di08Reservado);
+      const sobrasDisponivelReal = Math.max(0, sobrasLiquidas - sobrasReservadas);
+
       return {
         di08Total,
         di08Usado,
         di08Disponivel,
+        di08Reservado,
+        di08DisponivelReal,
         totalSobras: sobrasLiquidas,
         totalSobrasBruto: totalSobras,
         sobrasJaConsumidas,
+        sobrasReservadas,
+        sobrasDisponivelReal,
+        totalReservado: di08Reservado + sobrasReservadas,
         totalDisponivel: di08Disponivel + sobrasLiquidas,
+        totalDisponivelReal: di08DisponivelReal + sobrasDisponivelReal,
+        totalReservasAtivas: reservasAtivas.length,
       };
     }),
 
@@ -4051,6 +4292,55 @@ Retorne APENAS um JSON válido neste formato:
       const totalDebitadoEstaCotacao = debitosEstaCotacao.reduce((s, x) => s + n(x.valor), 0);
       const cobertoPorRisco = totalDebitadoEstaCotacao >= input.deficit - 0.01;
 
+      // ── Rev. 1386 — Cria/atualiza reserva preventiva para esta cotação ──
+      // Quando o usuário consulta saldos para cobrir um déficit, criamos uma
+      // reserva ativa que protege o saldo até a cotação ser resolvida.
+      if (input.cotacaoId && input.deficit > 0.01 && !cobertoPorRisco) {
+        try {
+          const [cotInfo] = await db.select({
+            criadoPorId:   comprasCotacoes.criadoPorId,
+            criadoPorNome: comprasCotacoes.criadoPorNome,
+            obraId:        comprasCotacoes.obraId,
+          }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId)).limit(1);
+
+          // Já existe reserva ativa? Se sim, o helper apenas atualiza valores.
+          // O dono da reserva é (a) quem gerou a OC com déficit, ou
+          // (b) fallback para criadoPor da cotação.
+          const [ocAguardando] = await db.select({
+            id: comprasOrdens.id,
+            criadoPorId: comprasOrdens.criadoPorId,
+            criadoPorNome: comprasOrdens.criadoPorNome,
+          }).from(comprasOrdens)
+            .where(and(
+              eq(comprasOrdens.cotacaoId, input.cotacaoId),
+              eq(comprasOrdens.status as any, "aguardando_aprovacao_extra"),
+            ))
+            .limit(1);
+
+          const respId = ocAguardando?.criadoPorId ?? cotInfo?.criadoPorId ?? null;
+          const respNome = ocAguardando?.criadoPorNome ?? cotInfo?.criadoPorNome ?? null;
+
+          // Distribui déficit entre DI-08 (até disponível) e Economia (resto).
+          const restanteAposRisco = Math.max(0, input.deficit - totalDebitadoEstaCotacao);
+          const reservarDi08 = Math.min(restanteAposRisco, riscoDisponivel);
+          const reservarEconomia = Math.max(0, restanteAposRisco - reservarDi08);
+
+          await _criarOuAtualizarReserva({
+            companyId:      input.companyId,
+            obraId:         cotInfo?.obraId ?? input.obraId ?? null,
+            cotacaoId:      input.cotacaoId,
+            ordemId:        ocAguardando?.id ?? null,
+            valorDi08:      reservarDi08,
+            valorEconomia:  reservarEconomia,
+            responsavelId:  respId,
+            responsavelNome: respNome,
+            motivo:         `Déficit detectado em Cotação #${input.cotacaoId}: R$ ${restanteAposRisco.toFixed(2)}`,
+          });
+        } catch (e: any) {
+          console.warn("[buscarSaldosRealocacao] Falha ao criar reserva:", e?.message);
+        }
+      }
+
       return {
         risco: { inicial: riscoInicial, usado: riscoUsado, disponivel: riscoDisponivel, orcamentoId: riscoOrcamentoId },
         sobras: sobras.slice(0, 20),
@@ -4133,6 +4423,14 @@ Retorne APENAS um JSON válido neste formato:
               .where(and(eq(comprasOrdens.id, oc.id), eq(comprasOrdens.companyId, input.companyId)));
           }
           ocsAprovadas = ocsAguardando.length > 0;
+        }
+        // Rev. 1386 — Se cotação totalmente coberta, libera reserva como consumida.
+        if (totalDebCot >= input.deficit - 0.01) {
+          await _liberarReservasDaCotacao({
+            cotacaoId: input.cotacaoId,
+            acao: "consumida",
+            motivo: `Déficit coberto via débito de Reserva de Risco (DI-08): R$ ${totalDebCot.toFixed(2)}`,
+          });
         }
       }
 
@@ -4327,6 +4625,17 @@ Retorne APENAS um JSON válido neste formato:
             } as any)
             .where(and(eq(comprasOrdens.id, oc.id), eq(comprasOrdens.companyId, input.companyId)));
         }
+      }
+
+      // Rev. 1386 — libera reserva como consumida se cotação foi coberta.
+      if (cobreDeficit) {
+        await _liberarReservasDaCotacao({
+          cotacaoId: input.cotacaoId,
+          acao: "consumida",
+          motivo: `Déficit coberto via realocação de sobras${riscoDebitado > 0 ? " + DI-08" : ""}: R$ ${totalCoberto.toFixed(2)}`,
+          executadoPorId: input.usuarioId,
+          executadoPorNome: input.usuarioNome,
+        });
       }
 
       return {
@@ -4804,7 +5113,7 @@ Retorne APENAS um JSON válido neste formato:
       autorizacaoSemVerba: z.object({ adminId: z.number(), adminNome: z.string(), justificativa: z.string() }).optional(),
       comoRascunho: z.boolean().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
@@ -4916,6 +5225,18 @@ Retorne APENAS um JSON válido neste formato:
       const subtotalItens = n(cot.total) - freteParaTotal;
       const subtotal = Math.max(subtotalItens, 0);
       const totalOC = subtotal + freteParaTotal;
+
+      // ── Rev. 1386 — Travamento Cirúrgico (Opção C) ──
+      // Bloqueia APENAS criação de novas OCs deficitárias quando há reserva
+      // vencida (>7 dias) na empresa. Operações saudáveis seguem livres.
+      // Hierarquia: admin_master e diretor passam direto. Para perfis de
+      // Compras, verifica travamento e impede a geração até reserva ser
+      // resolvida ou prazo estendido.
+      // (A verificação fina por estouro vem logo abaixo; aqui só preparamos
+      //  o flag travamento se o estouro existir, evitando consulta inútil.)
+      const userRoleCheck: string | undefined = (ctx?.user as any)?.role;
+      const podeIgnorarTravamento = userRoleCheck === "admin_master" || userRoleCheck === "diretor";
+
       let extraAprovacaoRequerida = false;
       let extraMotivo = "";
       if (cot.obraId) {
@@ -4978,12 +5299,41 @@ Retorne APENAS um JSON válido neste formato:
                   if (estouros.length > 0) {
                     extraAprovacaoRequerida = true;
                     extraMotivo = `Insumos acima do orçamento:\n${estouros.join("\n")}`;
+                    // Rev. 1386 — Travamento Cirúrgico
+                    if (!podeIgnorarTravamento && _isPerfilCompras(userRoleCheck)) {
+                      const status = await _statusTravamentoCompras(input.companyId);
+                      if (status.travado) {
+                        const lista = status.vencidas.slice(0, 3).map(r =>
+                          `• Cot. #${r.cotacaoId} (${r.diasDecorridos}d) — R$ ${r.valorTotal.toFixed(2)}`
+                        ).join("\n");
+                        throw new TRPCError({
+                          code: "FORBIDDEN",
+                          message:
+`🔒 NOVAS COTAÇÕES DEFICITÁRIAS BLOQUEADAS
+
+Há ${status.vencidas.length} reserva(s) preventiva(s) vencida(s) (>7 dias) que precisam ser resolvidas pela equipe de Compras antes de criar novas OCs com déficit:
+
+${lista}
+
+Como destravar:
+1) Resolver as reservas pendentes (cobrir o déficit em Realocações)
+2) Solicitar a um gerente/diretor a extensão de prazo
+3) Em emergência: usar SC de Emergência (dupla aprovação)
+
+Operações saudáveis (sem déficit) continuam liberadas normalmente.`
+                        });
+                      }
+                    }
                   }
                 }
               }
             }
           }
-        } catch (e: any) { console.warn("[criarOrdemDeCotacao] Erro na verificação de saldo:", e?.message); }
+        } catch (e: any) {
+          // Rev. 1386 — Travamento: o FORBIDDEN deve propagar e bloquear a criação da OC.
+          if (e instanceof TRPCError) throw e;
+          console.warn("[criarOrdemDeCotacao] Erro na verificação de saldo:", e?.message);
+        }
       }
 
       const [oc] = await db.insert(comprasOrdens).values({
@@ -5528,6 +5878,8 @@ Retorne APENAS um JSON válido neste formato:
         sql`${budgetReallocations.origemEapItemNome} LIKE 'Economia OC:%'`,
         sql`${budgetReallocations.destinoEapItemNome} = ${`Cotação #${input.cotacaoId}`}`,
       ));
+      // Rev. 1386 — libera reservas preventivas da cotação cancelada.
+      await _liberarReservasDaCotacao({ cotacaoId: input.cotacaoId, acao: "liberada", motivo: "Cotação cancelada" });
 
       if (cot.solicitacaoId) {
         const otherActive = await db.select({ id: comprasCotacoes.id }).from(comprasCotacoes)
@@ -5939,6 +6291,29 @@ Retorne APENAS um JSON válido neste formato:
         } : {}),
       } as any).where(eq(comprasOrdens.id, input.id));
 
+      // Rev. 1386 — Reservas preventivas:
+      // - cancelada/recusada → libera reserva (não consumiu nada)
+      // - aprovada (de aguardando_aprovacao_extra) → consome reserva
+      if (input.status === "cancelada" || input.status === "recusada") {
+        const [ocLink] = await db.select({ cotacaoId: comprasOrdens.cotacaoId }).from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
+        if (ocLink?.cotacaoId) {
+          await _liberarReservasDaCotacao({
+            cotacaoId: ocLink.cotacaoId, acao: "liberada",
+            motivo: `OC ${input.status}`,
+            executadoPorId: ctx.user?.id, executadoPorNome: ctx.user?.name ?? ctx.user?.email,
+          });
+        }
+      } else if (isAprovacao && ocCurrent?.aprovacaoExtraRequerida) {
+        const [ocLink] = await db.select({ cotacaoId: comprasOrdens.cotacaoId }).from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
+        if (ocLink?.cotacaoId) {
+          await _liberarReservasDaCotacao({
+            cotacaoId: ocLink.cotacaoId, acao: "consumida",
+            motivo: "OC com aprovação extra aprovada",
+            executadoPorId: ctx.user?.id, executadoPorNome: ctx.user?.name ?? ctx.user?.email,
+          });
+        }
+      }
+
       // ── Integração financeira ─────────────────────────────────────────
       if (input.status === "aprovada" || input.status === "entregue" || input.status === "entregue_parcial") {
         const [ocFin] = await db.select().from(comprasOrdens).where(eq(comprasOrdens.id, input.id));
@@ -6273,6 +6648,8 @@ Retorne APENAS um JSON válido neste formato:
             sql`${budgetReallocations.origemEapItemNome} LIKE 'Economia OC:%'`,
             sql`${budgetReallocations.destinoEapItemNome} = ${`Cotação #${oc.cotacaoId}`}`,
           ));
+          // Rev. 1386 — libera reserva da cotação que ficou sem OC ativa.
+          await _liberarReservasDaCotacao({ cotacaoId: oc.cotacaoId, acao: "liberada", motivo: "Última OC excluída" });
         }
       }
       return { ok: true };
@@ -6305,6 +6682,8 @@ Retorne APENAS um JSON válido neste formato:
             sql`${budgetReallocations.origemEapItemNome} LIKE 'Economia OC:%'`,
             sql`${budgetReallocations.destinoEapItemNome} = ${`Cotação #${cotId}`}`,
           ));
+          // Rev. 1386 — libera reserva da cotação cuja última OC foi excluída em lote.
+          await _liberarReservasDaCotacao({ cotacaoId: cotId, acao: "liberada", motivo: "Última OC excluída em lote" });
         }
       }
       return { ok: true, count: ownedIds.length };
@@ -10968,4 +11347,209 @@ Responda APENAS com JSON válido, sem markdown, no formato:
 
     return { ok: true };
   }),
+
+  // ══════════════════════════════════════════════════════════════
+  // RESERVAS PREVENTIVAS DE SALDO (Rev. 1386)
+  // ══════════════════════════════════════════════════════════════
+
+  listarReservasAtivas: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const conds: any[] = [
+        eq(comprasReservasSaldo.companyId, input.companyId),
+        eq(comprasReservasSaldo.status, "ativa"),
+      ];
+      if (input.obraId) conds.push(eq(comprasReservasSaldo.obraId, input.obraId));
+      const rows = await db.select().from(comprasReservasSaldo)
+        .where(and(...conds))
+        .orderBy(asc(comprasReservasSaldo.prazoLimite));
+      const agora = new Date();
+      return rows.map(r => {
+        const prazo = new Date(r.prazoLimite);
+        const diasRestantes = Math.ceil((prazo.getTime() - agora.getTime()) / 86400000);
+        const diasDecorridos = Math.max(0, RESERVA_PRAZO_DIAS - diasRestantes);
+        return {
+          id: r.id,
+          companyId: r.companyId,
+          obraId: r.obraId,
+          cotacaoId: r.cotacaoId,
+          ordemId: r.ordemId,
+          responsavelId: r.responsavelOriginalId,
+          responsavelNome: r.responsavelOriginalNome,
+          valorDi08: n(r.valorDi08Reservado),
+          valorEconomia: n(r.valorEconomiaReservada),
+          valorTotal: n(r.valorDi08Reservado) + n(r.valorEconomiaReservada),
+          prazoLimite: r.prazoLimite,
+          diasRestantes,
+          diasDecorridos,
+          vencida: diasRestantes <= 0,
+          motivo: r.motivo,
+          criadoEm: r.criadoEm,
+          atualizadoEm: r.atualizadoEm,
+        };
+      });
+    }),
+
+  verificarTravamentoCompras: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      return _statusTravamentoCompras(input.companyId);
+    }),
+
+  estenderPrazoReserva: protectedProcedure
+    .input(z.object({
+      reservaId: z.number(),
+      diasAdicionais: z.number().min(1).max(60),
+      motivo: z.string().min(3, "Justificativa obrigatória"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const role: string | undefined = (ctx?.user as any)?.role;
+      const limites: Record<string, number> = {
+        admin_master: 60,
+        diretor: 7,
+        gerente_compras: 3,
+      };
+      const limite = limites[role ?? ""];
+      if (!limite) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin_master, diretor ou gerente_compras podem estender prazos." });
+      }
+      if (input.diasAdicionais > limite) {
+        throw new TRPCError({ code: "FORBIDDEN", message: `Seu perfil pode estender no máximo ${limite} dia(s).` });
+      }
+      const [r] = await db.select().from(comprasReservasSaldo).where(eq(comprasReservasSaldo.id, input.reservaId));
+      if (!r) throw new TRPCError({ code: "NOT_FOUND", message: "Reserva não encontrada." });
+      await _assertCompanyAccess(ctx.user, r.companyId);
+      if (r.status !== "ativa") throw new TRPCError({ code: "BAD_REQUEST", message: "Reserva não está ativa." });
+      const novoPrazo = new Date(r.prazoLimite);
+      novoPrazo.setDate(novoPrazo.getDate() + input.diasAdicionais);
+      await db.update(comprasReservasSaldo).set({
+        prazoLimite: novoPrazo.toISOString(),
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(eq(comprasReservasSaldo.id, input.reservaId));
+      await _registrarLogReserva({
+        reservaId: input.reservaId, acao: "estendida", companyId: r.companyId,
+        executadoPorId: ctx.user?.id, executadoPorNome: ctx.user?.name ?? ctx.user?.email,
+        prazoAdicionalDias: input.diasAdicionais, motivo: input.motivo,
+        detalhes: `Novo prazo: ${novoPrazo.toISOString().slice(0,10).split("-").reverse().join("/")}`,
+      });
+      return { ok: true, novoPrazo: novoPrazo.toISOString() };
+    }),
+
+  /** Override em lote — admin_master libera todas reservas pendentes de um usuário. */
+  estenderPrazoUsuario: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      responsavelId: z.number(),
+      diasAdicionais: z.number().min(1).max(60),
+      motivo: z.string().min(3),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if ((ctx?.user as any)?.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin_master pode usar override em lote." });
+      }
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const reservas = await db.select().from(comprasReservasSaldo).where(and(
+        eq(comprasReservasSaldo.companyId, input.companyId),
+        eq(comprasReservasSaldo.responsavelOriginalId, input.responsavelId),
+        eq(comprasReservasSaldo.status, "ativa"),
+      ));
+      let total = 0;
+      for (const r of reservas) {
+        const novoPrazo = new Date(r.prazoLimite);
+        novoPrazo.setDate(novoPrazo.getDate() + input.diasAdicionais);
+        await db.update(comprasReservasSaldo).set({
+          prazoLimite: novoPrazo.toISOString(),
+          atualizadoEm: new Date().toISOString(),
+        } as any).where(eq(comprasReservasSaldo.id, r.id));
+        await _registrarLogReserva({
+          reservaId: r.id, acao: "override_master", companyId: input.companyId,
+          executadoPorId: ctx.user?.id, executadoPorNome: ctx.user?.name ?? ctx.user?.email,
+          prazoAdicionalDias: input.diasAdicionais, motivo: input.motivo,
+          detalhes: `Override em lote para usuário #${input.responsavelId}`,
+        });
+        total++;
+      }
+      return { ok: true, reservasEstendidas: total };
+    }),
+
+  transferirResponsavelReserva: protectedProcedure
+    .input(z.object({
+      reservaId: z.number(),
+      novoResponsavelId: z.number(),
+      novoResponsavelNome: z.string().min(1),
+      motivo: z.string().min(3),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const role: string | undefined = (ctx?.user as any)?.role;
+      if (!["admin_master", "diretor", "gerente_compras"].includes(role ?? "")) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para transferir reservas." });
+      }
+      const db = await getDb();
+      const [r] = await db.select().from(comprasReservasSaldo).where(eq(comprasReservasSaldo.id, input.reservaId));
+      if (!r) throw new TRPCError({ code: "NOT_FOUND", message: "Reserva não encontrada." });
+      await _assertCompanyAccess(ctx.user, r.companyId);
+      const antigo = r.responsavelOriginalNome ?? `#${r.responsavelOriginalId}`;
+      await db.update(comprasReservasSaldo).set({
+        responsavelOriginalId: input.novoResponsavelId,
+        responsavelOriginalNome: input.novoResponsavelNome,
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(eq(comprasReservasSaldo.id, input.reservaId));
+      await _registrarLogReserva({
+        reservaId: input.reservaId, acao: "transferida", companyId: r.companyId,
+        executadoPorId: ctx.user?.id, executadoPorNome: ctx.user?.name ?? ctx.user?.email,
+        motivo: input.motivo,
+        detalhes: `De: ${antigo} → Para: ${input.novoResponsavelNome}`,
+      });
+      return { ok: true };
+    }),
+
+  /** Marca uma SC como Emergência — sempre liberada mesmo com travamento. Requer dupla aprovação posterior. */
+  criarSCEmergencia: protectedProcedure
+    .input(z.object({
+      solicitacaoId: z.number(),
+      companyId: z.number(),
+      justificativa: z.string().min(10, "Justificativa de emergência obrigatória (mín. 10 caracteres)"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const [sc] = await db.select().from(comprasSolicitacoes).where(and(
+        eq(comprasSolicitacoes.id, input.solicitacaoId),
+        eq(comprasSolicitacoes.companyId, input.companyId),
+      ));
+      if (!sc) throw new TRPCError({ code: "NOT_FOUND", message: "SC não encontrada." });
+      await db.update(comprasSolicitacoes).set({
+        prioridade: "urgente",
+        observacoes: `[EMERGÊNCIA — Rev.1386] ${input.justificativa}\n\n${sc.observacoes ?? ""}`.trim(),
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(eq(comprasSolicitacoes.id, input.solicitacaoId));
+      // Log auditável (reservaId=0 para rastreabilidade global, companyId preservado).
+      await _registrarLogReserva({
+        reservaId: 0, acao: "sc_emergencia", companyId: input.companyId,
+        executadoPorId: ctx.user?.id, executadoPorNome: ctx.user?.name ?? ctx.user?.email,
+        motivo: input.justificativa,
+        detalhes: `SC #${input.solicitacaoId} marcada como Emergência (dupla aprovação posterior)`,
+      });
+      return { ok: true };
+    }),
+
+  listarLogsReserva: protectedProcedure
+    .input(z.object({ reservaId: z.number().optional(), companyId: z.number(), limite: z.number().min(1).max(200).default(50) }))
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      // Filtro multi-tenant rigoroso por companyId; opcionalmente por reservaId.
+      const conds: any[] = [eq(comprasReservasLog.companyId, input.companyId)];
+      if (input.reservaId) conds.push(eq(comprasReservasLog.reservaId, input.reservaId));
+      const rows = await db.select().from(comprasReservasLog)
+        .where(and(...conds))
+        .orderBy(desc(comprasReservasLog.criadoEm))
+        .limit(input.limite);
+      return rows;
+    }),
 });
