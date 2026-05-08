@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1405,
+    titulo: "Dashboard Atestados & Acidentes — contagem de dias agora também para obras 'Sem registros'",
+    descricao: "MELHORIA em /sst/dashboard-atestados-acidentes > tabela 'Dias sem Acidente — por Obra': obras que nunca tiveram acidente registrado agora exibem o número de dias desde o INÍCIO da obra (data_inicio, ou created_at como fallback) em vez de apenas '—'. Status 'Sem registros' continua sendo determinado pela ausência de acidentes (não pela quantidade de dias), e a ordenação foi ajustada para mostrar primeiro as obras COM acidente (mais recentes no topo) e depois as obras sem registros ordenadas pelo MAIOR período sem acidente.",
+    tipo: "melhoria",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 22:45:00",
+  },
+  {
     version: 1404,
     titulo: "Dashboard Atestados & Acidentes — coluna 'Último Acidente' agora em formato brasileiro (dd/MM/aaaa)",
     descricao: "AJUSTE em /sst/dashboard-atestados-acidentes > tabela 'Dias sem Acidente — por Obra': a coluna 'Último Acidente' exibia a data crua do banco no formato YYYY-MM-DD (ex.: 2026-05-05). Agora exibe no padrão brasileiro dd/MM/aaaa (ex.: 05/05/2026), seguindo a regra de ouro de datas do sistema.",

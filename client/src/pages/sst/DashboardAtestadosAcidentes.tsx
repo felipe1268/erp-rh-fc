@@ -1141,11 +1141,13 @@ export default function DashboardAtestadosAcidentes() {
                             <td className="px-3 py-2 text-gray-600">{o.ultimaData ? o.ultimaData.split("-").reverse().join("/") : <span className="text-emerald-600">Nunca</span>}</td>
                             <td className="px-3 py-2 text-right">
                               {o.dias === null
-                                ? <span className="font-bold text-emerald-600">— </span>
-                                : <span className={`font-bold text-lg ${o.dias >= 90 ? "text-emerald-600" : o.dias >= 30 ? "text-blue-600" : "text-orange-600"}`}>{o.dias}</span>}
+                                ? <span className="font-bold text-gray-400">—</span>
+                                : o.ultimaData
+                                  ? <span className={`font-bold text-lg ${o.dias >= 90 ? "text-emerald-600" : o.dias >= 30 ? "text-blue-600" : "text-orange-600"}`}>{o.dias}</span>
+                                  : <span className="font-bold text-lg text-emerald-600">{o.dias}</span>}
                             </td>
                             <td className="px-3 py-2 text-center">
-                              {o.dias === null
+                              {!o.ultimaData
                                 ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300" variant="outline">Sem registros</Badge>
                                 : o.dias >= 90 ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300" variant="outline">Excelente</Badge>
                                   : o.dias >= 30 ? <Badge className="bg-blue-100 text-blue-700 border-blue-300" variant="outline">Bom</Badge>

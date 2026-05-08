@@ -257,11 +257,17 @@ export const sstAnalyticsRouter = router({
 
       // Dias sem acidente — incluir TODAS as obras ativas (mesmo sem registro)
       const obrasAtivas = await db
-        .select({ id: obras.id, nome: obras.nome })
+        .select({ id: obras.id, nome: obras.nome, dataInicio: obras.dataInicio, createdAt: obras.createdAt })
         .from(obras)
         .where(and(companyFilter(obras.companyId, input), isNull(obras.deletedAt)));
       const obraNomeById = new Map<number, string>();
-      for (const o of obrasAtivas) obraNomeById.set(o.id, o.nome);
+      const obraInicioById = new Map<number, string | null>();
+      for (const o of obrasAtivas) {
+        obraNomeById.set(o.id, o.nome);
+        // dataInicio (preferida) ou createdAt como fallback. Normaliza para YYYY-MM-DD.
+        const ref = (o.dataInicio || (o.createdAt ? String(o.createdAt).slice(0, 10) : null));
+        obraInicioById.set(o.id, ref);
+      }
 
       // ==== Atestados & Afastamentos por Obra ====
       // Atestados não têm obraId direto. Resolução via employee_site_history:
@@ -369,15 +375,24 @@ export const sstAnalyticsRouter = router({
               dias: Math.max(0, Math.floor((hoje.getTime() - new Date(reg.ultimaData + "T00:00:00").getTime()) / (1000 * 60 * 60 * 24))),
             };
           }
-          return { obraId: id, obraNome: nome, ultimaData: null, dias: null as number | null };
+          // Sem acidentes registrados: contar dias desde o início da obra
+          // (ou createdAt como fallback). Se nenhum existir, dias=null.
+          const inicio = obraInicioById.get(id) ?? null;
+          const dias = inicio
+            ? Math.max(0, Math.floor((hoje.getTime() - new Date(inicio + "T00:00:00").getTime()) / (1000 * 60 * 60 * 24)))
+            : null;
+          return { obraId: id, obraNome: nome, ultimaData: null, dias };
         })
         // Ordenação: obras COM acidente primeiro (acidente mais recente no topo),
-        // depois as "Nunca" em ordem alfabética.
+        // depois as obras sem registro (maior tempo "limpo" no topo).
         .sort((a, b) => {
-          if (a.dias === null && b.dias === null) return a.obraNome.localeCompare(b.obraNome);
-          if (a.dias === null) return 1;
-          if (b.dias === null) return -1;
-          return a.dias - b.dias;
+          const aTeve = a.ultimaData != null;
+          const bTeve = b.ultimaData != null;
+          if (aTeve && bTeve) return (a.dias ?? 0) - (b.dias ?? 0);
+          if (aTeve) return -1;
+          if (bTeve) return 1;
+          // Ambos sem registro: mais dias "limpos" primeiro
+          return (b.dias ?? -1) - (a.dias ?? -1);
         });
 
       // Cobertura CAT (% acidentes que exigem CAT e têm CAT)
