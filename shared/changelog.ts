@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1433,
+    titulo: "Modal 'Gerenciar acessos do Portal' — full screen real (sem corte horizontal)",
+    descricao: "Ajuste no modal de gestão de acessos do Portal do Cliente: a versão anterior fixava 1200px de largura, o que em telas de notebook (~1024px) ultrapassava a viewport e causava barra de rolagem horizontal cortando a coluna da direita (lista de usuários ficava esmagada, mostrando só o avatar). Agora o modal usa 98vw × 96vh sempre (95vw × 92vh em monitores grandes XL), sem cap de pixels — ocupa praticamente toda a tela em qualquer resolução. As 2 colunas começam a aparecer já a partir de telas md (768px) com 360px na esquerda + minmax(0,1fr) na direita (o minmax(0,1fr) impede que o conteúdo da direita force a coluna a ficar maior que disponível). Em XL a coluna esquerda volta a ser 420px. Resultado: nenhum scroll horizontal, lista de usuários sempre visível por completo.",
+    tipo: "fix",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 20:50:00",
+  },
+  {
     version: 1432,
     titulo: "Modal 'Registrar Integração de Pessoal' — fix de corte vertical (rolagem interna + header/footer fixos)",
     descricao: "O modal estava cortando o título e os botões em telas com altura limitada (notebooks, navegadores com várias barras): agora o modal usa altura máxima de 92% da tela e o conteúdo do meio rola SOZINHO, mantendo o cabeçalho 'Registrar Integração de Pessoal' e o rodapé com os botões 'Cancelar/Registrar' SEMPRE visíveis. A largura também foi aumentada de max-w-lg (~32rem) para max-w-2xl (~42rem) para acomodar melhor as duas colunas de Data de Realização + Validade. O rodapé ganhou um indicador discreto à esquerda mostrando 'Pronto para registrar N integrações' (ou orientação quando nenhum selecionado). Sem mudanças funcionais — só layout/estrutura de scroll.",

@@ -375,7 +375,7 @@ export default function ClientesPortalAdmin() {
 
         {/* Modal: Gerenciar acessos do cliente */}
         <Dialog open={!!gerenciarTarget} onOpenChange={(o) => { if (!o) { setGerenciarTarget(null); setResultadoAcesso(null); } }}>
-          <DialogContent className="!max-w-[96vw] w-[96vw] h-[94vh] sm:!max-w-[1200px] sm:w-[1200px] sm:h-[88vh] bg-white p-0 overflow-hidden gap-0 flex flex-col">
+          <DialogContent className="!max-w-none w-[98vw] h-[96vh] xl:w-[95vw] xl:h-[92vh] bg-white p-0 overflow-hidden gap-0 flex flex-col">
             {gerenciarTarget && (() => {
               const submitNovo = () => {
                 if (!novoNome.trim()) { toast.error("Informe o nome do usuário"); return; }
@@ -425,7 +425,7 @@ export default function ClientesPortalAdmin() {
                   </div>
 
                   {/* Conteúdo: 2 colunas em telas grandes */}
-                  <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-0 overflow-hidden">
+                  <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[360px_minmax(0,1fr)] xl:grid-cols-[420px_minmax(0,1fr)] gap-0 overflow-hidden">
                     {/* COLUNA ESQUERDA: cadastro */}
                     <div className="border-r bg-slate-50/40 p-6 overflow-y-auto">
                       <div className="flex items-center gap-2 mb-4">
