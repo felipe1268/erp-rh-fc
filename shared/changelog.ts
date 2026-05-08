@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1414,
+    titulo: "Raio-X do Colaborador: Complemento Salarial (por fora) com valores separados e totais",
+    descricao: "MELHORIA NO RAIO-X DO COLABORADOR: agora a ficha exibe o complemento salarial pago 'por fora' da folha CLT quando o funcionário tem essa configuração ativa no cadastro (campos recebeComplemento, valorComplemento, descricaoComplemento). (1) HEADER — adicionados dois itens ao card-resumo: 'Complemento (por fora)' com o valor mensal e 'Salário TOTAL (Base + Complemento)' com a soma. (2) ABA FOLHA — adicionado bloco destacado em laranja/âmbar 'Complemento Salarial (por fora)' com 4 KPIs: Salário Base CLT, Complemento Mensal, Total Mensal (Base + Compl.) e Acumulado do Complemento (×N folhas), incluindo a observação cadastrada. (3) TABELA DE HOLERITES — quando há complemento, ganham duas novas colunas: 'Compl. (fora)' e 'TOTAL Recebido' (líquido CLT + complemento), permitindo visualizar mês a mês o valor real recebido pelo colaborador. Tudo deixa claro que o complemento é pago fora da folha CLT e somado pelo financeiro.",
+    tipo: "melhoria",
+    modulos: "RaioX,Folha,RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 15:00:00",
+  },
+  {
     version: 1413,
     titulo: "Dashboard Parceiros + Raio-X do Colaborador: drill por colaborador, comprovantes, aba Parceiros e timeline com compras",
     descricao: "MELHORIAS PARA AVALIAÇÃO INDIVIDUAL DE COLABORADORES: (1) DASHBOARD PARCEIROS — agora cada nome de colaborador (na tabela de drill-down e no card 'Top Colaboradores por Valor') é clicável e abre o detalhamento completo de TODOS os lançamentos daquele colaborador no período, com seus comprovantes, descrição dos itens, valor, data, parceiro, tipo, status e competência. A tabela do drill ganhou as colunas 'Itens / Descrição' e 'Comprovante' (link 'Ver' que abre a foto/PDF em nova aba quando o colaborador anexou comprovante). (2) RAIO-X DO COLABORADOR — nova aba 'Parceiros / Convênios' dentro do grupo Benefícios trazendo: KPIs (qtd lançamentos, valor total, aprovados, pendentes/rejeitados) e tabela completa com data, parceiro, tipo de convênio, descrição, valor, status (com motivo de rejeição quando houver), competência de desconto, data de aprovação e link para o comprovante. (3) TIMELINE — cada compra em parceiro conveniado virou um evento na linha do tempo do colaborador, com data, parceiro, valor, status (aprovado/pendente/rejeitado + motivo) e competência de desconto, ao lado dos demais eventos (admissão, ASOs, treinamentos, EPIs, advertências, etc.). Backend: dashboards.parceiros.detalhes agora inclui employeeId, parceiroId, descricaoItens, comprovanteUrl, motivoRejeicao; controleDocumentos.raioX retorna parceirosLancamentos (com join em parceiros_conveniados) e injeta esses eventos na timeline. Tudo registrado para facilitar a análise do colaborador.",

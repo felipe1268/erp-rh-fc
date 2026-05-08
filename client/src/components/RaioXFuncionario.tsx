@@ -813,7 +813,9 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         emp.telefone ? { icon: Phone, label: "Telefone", value: maskPII(emp.telefone) } : null,
                         emp.dataAdmissao ? { icon: Calendar, label: "Admissão", value: formatDate(emp.dataAdmissao) } : null,
                         emp.dataAdmissao ? { icon: Timer, label: "Tempo de Empresa", value: tempoEmp } : null,
-                        emp.salarioBase ? { icon: DollarSign, label: "Salário", value: formatSalario(emp.salarioBase) } : null,
+                        emp.salarioBase ? { icon: DollarSign, label: "Salário Base", value: formatSalario(emp.salarioBase) } : null,
+                        (emp.recebeComplemento && emp.valorComplemento) ? { icon: Plus, label: "Complemento (por fora)", value: formatSalario(emp.valorComplemento) } : null,
+                        (emp.recebeComplemento && emp.valorComplemento && emp.salarioBase) ? { icon: TrendingUp, label: "Salário TOTAL (Base + Complemento)", value: formatSalario(String((Number(String(emp.salarioBase).replace(/\./g,"").replace(",",".")) || 0) + (Number(String(emp.valorComplemento).replace(/\./g,"").replace(",",".")) || 0))) } : null,
                         emp.valorHora ? { icon: Clock, label: "Valor/Hora", value: formatSalario(emp.valorHora) } : null,
                         emp.dataNascimento ? { icon: User, label: "Idade", value: calcIdadeSafe(emp.dataNascimento) } : null,
                         emp.dataNascimento ? { icon: Gift, label: "Aniversário", value: hidePersonal ? PII_MASK : `${anivInfo.aniversario} (${anivInfo.texto})` } : null,
@@ -1563,9 +1565,54 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
 
               {/* ============ FOLHA ============ */}
               <TabsContent value="folha" className="mt-4">
+                {/* ===== Complemento Salarial (por fora) ===== */}
+                {emp?.recebeComplemento === 1 && emp?.valorComplemento ? (() => {
+                  const baseNum = Number(String(emp.salarioBase || "0").replace(/\./g,"").replace(",",".")) || 0;
+                  const compNum = Number(String(emp.valorComplemento).replace(/\./g,"").replace(",",".")) || 0;
+                  const totalNum = baseNum + compNum;
+                  const folhaCount = folhaPagamento.length;
+                  const totalAcumComp = compNum * folhaCount;
+                  return (
+                    <div className="mb-4 bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-300 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-base font-bold text-amber-900 flex items-center gap-2">
+                          <Plus className="w-5 h-5 text-amber-600" /> Complemento Salarial (por fora)
+                        </h3>
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 font-semibold">Pago fora da folha CLT</span>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="bg-white border border-amber-200 rounded-lg p-3">
+                          <p className="text-[10px] uppercase font-bold text-amber-700 tracking-wider">Salário Base CLT</p>
+                          <p className="text-xl font-bold text-amber-900 mt-1 font-mono">{formatSalario(emp.salarioBase)}</p>
+                        </div>
+                        <div className="bg-white border border-amber-200 rounded-lg p-3">
+                          <p className="text-[10px] uppercase font-bold text-amber-700 tracking-wider">Complemento Mensal</p>
+                          <p className="text-xl font-bold text-orange-700 mt-1 font-mono">{formatSalario(emp.valorComplemento)}</p>
+                        </div>
+                        <div className="bg-white border-2 border-amber-400 rounded-lg p-3">
+                          <p className="text-[10px] uppercase font-bold text-amber-800 tracking-wider">Total Mensal (Base + Compl.)</p>
+                          <p className="text-xl font-bold text-green-700 mt-1 font-mono">{formatSalario(String(totalNum.toFixed(2)))}</p>
+                        </div>
+                        <div className="bg-white border border-amber-200 rounded-lg p-3">
+                          <p className="text-[10px] uppercase font-bold text-amber-700 tracking-wider">Acumulado Compl. ({folhaCount} folhas)</p>
+                          <p className="text-xl font-bold text-orange-700 mt-1 font-mono">{formatSalario(String(totalAcumComp.toFixed(2)))}</p>
+                        </div>
+                      </div>
+                      {emp.descricaoComplemento && (
+                        <p className="text-xs text-amber-800 mt-3"><strong>Observação:</strong> {emp.descricaoComplemento}</p>
+                      )}
+                      <p className="text-[11px] text-amber-700 mt-2 italic">Este valor é somado ao líquido da folha pelo financeiro e não consta nos holerites CLT abaixo.</p>
+                    </div>
+                  );
+                })() : null}
+
                 {folhaPagamento.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">Nenhum registro de folha de pagamento</div>
-                ) : (
+                ) : (() => {
+                  const compNum = (emp?.recebeComplemento === 1 && emp?.valorComplemento)
+                    ? (Number(String(emp.valorComplemento).replace(/\./g,"").replace(",",".")) || 0)
+                    : 0;
+                  return (
                   <div className="overflow-x-auto rounded-lg border bg-white">
                     <table className="w-full text-sm">
                       <thead><tr className="bg-indigo-50 border-b">
@@ -1573,24 +1620,33 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         <th className="p-3 text-right font-semibold text-indigo-900">Salário Base</th>
                         <th className="p-3 text-right font-semibold text-indigo-900">H. Extras</th>
                         <th className="p-3 text-right font-semibold text-indigo-900">Descontos</th>
-                        <th className="p-3 text-right font-semibold text-indigo-900">Líquido</th>
+                        <th className="p-3 text-right font-semibold text-indigo-900">Líquido CLT</th>
+                        {compNum > 0 && <th className="p-3 text-right font-semibold text-amber-800 bg-amber-50">Compl. (fora)</th>}
+                        {compNum > 0 && <th className="p-3 text-right font-semibold text-green-800 bg-green-50">TOTAL Recebido</th>}
                         <th className="p-3 text-center font-semibold text-indigo-900">Status</th>
                       </tr></thead>
                       <tbody>
-                        {folhaPagamento.map((f: any) => (
-                          <tr key={f.id} className="border-b last:border-0 hover:bg-muted/30">
-                            <td className="p-3 font-medium">{f.mesReferencia}</td>
-                            <td className="p-3 text-right font-mono">{formatSalario(f.salarioBase)}</td>
-                            <td className="p-3 text-right font-mono text-green-600">{formatSalario(f.horasExtrasValor)}</td>
-                            <td className="p-3 text-right font-mono text-red-600">{formatSalario(f.totalDescontos)}</td>
-                            <td className="p-3 text-right font-mono font-bold text-lg">{formatSalario(f.salarioLiquido)}</td>
-                            <td className="p-3 text-center"><Badge variant={f.status === "Pago" ? "default" : "secondary"}>{f.status}</Badge></td>
-                          </tr>
-                        ))}
+                        {folhaPagamento.map((f: any) => {
+                          const liq = Number(String(f.salarioLiquido || "0").replace(/\./g,"").replace(",",".")) || 0;
+                          const totalReceb = liq + compNum;
+                          return (
+                            <tr key={f.id} className="border-b last:border-0 hover:bg-muted/30">
+                              <td className="p-3 font-medium">{f.mesReferencia}</td>
+                              <td className="p-3 text-right font-mono">{formatSalario(f.salarioBase)}</td>
+                              <td className="p-3 text-right font-mono text-green-600">{formatSalario(f.horasExtrasValor)}</td>
+                              <td className="p-3 text-right font-mono text-red-600">{formatSalario(f.totalDescontos)}</td>
+                              <td className="p-3 text-right font-mono font-bold text-lg">{formatSalario(f.salarioLiquido)}</td>
+                              {compNum > 0 && <td className="p-3 text-right font-mono text-orange-700 bg-amber-50/40">{formatSalario(String(compNum.toFixed(2)))}</td>}
+                              {compNum > 0 && <td className="p-3 text-right font-mono font-bold text-green-700 bg-green-50/40">{formatSalario(String(totalReceb.toFixed(2)))}</td>}
+                              <td className="p-3 text-center"><Badge variant={f.status === "Pago" ? "default" : "secondary"}>{f.status}</Badge></td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
-                )}
+                  );
+                })()}
               </TabsContent>
 
               {/* ============ HORAS EXTRAS / ADICIONAIS PJ ============ */}
