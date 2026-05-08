@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1416,
+    titulo: "Dashboard Parceiros: clique na linha abre detalhe da compra (itens + comprovante embedded)",
+    descricao: "MELHORIA: na tabela de drill-down do Dashboard Parceiros, a coluna 'Itens' agora é clicável (ícone de olho + texto) e abre um modal com o detalhe completo da compra: parceiro, data, colaborador, valor, tipo de convênio, status (com motivo de rejeição quando houver), competência de desconto, descrição completa dos itens (sem truncar) e o COMPROVANTE EMBEDADO no próprio modal — imagem renderizada inline ou PDF em iframe, conforme o tipo do arquivo. Inclui link 'Abrir em nova aba' como fallback. Permite revisar visualmente a compra do colaborador sem precisar abrir uma aba separada.",
+    tipo: "melhoria",
+    modulos: "Dashboards,Parceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 17:00:00",
+  },
+  {
     version: 1415,
     titulo: "Dashboard Parceiros: valores em reais completos (R$ 2.700,00) nos KPIs e tabela comparativa",
     descricao: "AJUSTE DE FORMATAÇÃO: removida a abreviação 'R$ 2,7 mil / R$ 1,3 mi' nos KPIs e na tabela 'Comparativo Mês a Mês' do Dashboard Parceiros — agora todos os valores aparecem em reais completos (R$ 2.700,00). A abreviação foi mantida APENAS nos eixos dos gráficos (onde o espaço é apertado e a leitura ficaria prejudicada).",

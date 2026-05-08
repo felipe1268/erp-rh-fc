@@ -12,11 +12,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import FullScreenDialog from "@/components/FullScreenDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   Handshake, Store, Receipt, CreditCard, CheckCircle, Clock, XCircle,
   DollarSign, Users, TrendingUp, Loader2, ArrowLeft, Filter, Wallet,
   Timer, BarChart3, Download, ArrowUp, ArrowDown, Minus, Eye,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, ShoppingCart, FileText,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -64,6 +65,7 @@ export default function DashParceiros() {
   const [parceiroId, setParceiroId] = useState<string>("todos");
   const [tipoConvenio, setTipoConvenio] = useState<string>("todos");
   const [drillDialog, setDrillDialog] = useState<{ title: string; items: any[] } | null>(null);
+  const [detalheLanc, setDetalheLanc] = useState<any | null>(null);
 
   const { data, isLoading } = trpc.dashboards.parceiros.useQuery(
     {
@@ -710,7 +712,17 @@ export default function DashParceiros() {
                                 <Eye className="h-3 w-3 opacity-50" />{d.employeeNome}
                               </button>
                             </td>
-                            <td className="py-1.5 px-3 text-xs text-muted-foreground max-w-[260px] truncate" title={d.descricaoItens || ""}>{d.descricaoItens || "—"}</td>
+                            <td className="py-1.5 px-3 text-xs">
+                              <button
+                                type="button"
+                                onClick={() => setDetalheLanc(d)}
+                                className="text-left hover:text-purple-700 hover:underline inline-flex items-center gap-1 max-w-[260px]"
+                                title="Clique para ver o que o funcionário comprou (itens + comprovante)"
+                              >
+                                <Eye className="h-3 w-3 opacity-50 shrink-0" />
+                                <span className="truncate text-muted-foreground">{d.descricaoItens || "Ver compra"}</span>
+                              </button>
+                            </td>
                             <td className="text-right py-1.5 px-3 font-medium">{fmtBRL(d.valor)}</td>
                             <td className="text-center py-1.5 px-3">
                               <Badge variant="outline" className={`text-[10px] ${st.className}`}>{st.label}</Badge>
@@ -756,6 +768,112 @@ export default function DashParceiros() {
           </CardContent>
         </Card>
       </FullScreenDialog>
+
+      {/* ===== Sub-dialog: detalhes da compra (o que o funcionário comprou) ===== */}
+      <Dialog open={!!detalheLanc} onOpenChange={(o) => !o && setDetalheLanc(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          {detalheLanc && (() => {
+            const st = STATUS_LANC[detalheLanc.status] || { label: detalheLanc.status, className: "bg-muted" };
+            const url: string = detalheLanc.comprovanteUrl || "";
+            const isPdf = /\.pdf(\?|$)/i.test(url);
+            const isImg = /\.(png|jpe?g|webp|gif|bmp|heic|heif)(\?|$)/i.test(url);
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Receipt className="h-5 w-5 text-purple-600" />
+                    Compra em {detalheLanc.parceiroNome}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {fmtDateBR(detalheLanc.dataCompra)} — {detalheLanc.employeeNome}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                  {/* Resumo */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                      <p className="text-[10px] uppercase font-bold text-purple-700">Valor</p>
+                      <p className="text-xl font-bold text-purple-900 mt-1 font-mono">{fmtBRL(detalheLanc.valor)}</p>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-[10px] uppercase font-bold text-blue-700">Tipo</p>
+                      <p className="text-sm font-semibold text-blue-900 mt-2">{TIPO_LBL[detalheLanc.tipoConvenio] || detalheLanc.tipoConvenio || "—"}</p>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <p className="text-[10px] uppercase font-bold text-amber-700">Status</p>
+                      <Badge variant="outline" className={`mt-2 ${st.className}`}>{st.label}</Badge>
+                    </div>
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <p className="text-[10px] uppercase font-bold text-green-700">Competência Desconto</p>
+                      <p className="text-sm font-semibold text-green-900 mt-2">
+                        {detalheLanc.competenciaDesconto ? detalheLanc.competenciaDesconto.split("-").reverse().join("/") : "—"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Itens / Descrição */}
+                  <div className="border rounded-lg p-4 bg-gray-50">
+                    <p className="text-xs font-bold text-gray-700 uppercase mb-2 flex items-center gap-1">
+                      <ShoppingCart className="h-4 w-4" /> Itens / Descrição da compra
+                    </p>
+                    {detalheLanc.descricaoItens ? (
+                      <p className="text-sm text-gray-800 whitespace-pre-wrap">{detalheLanc.descricaoItens}</p>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">O colaborador não informou a descrição dos itens. Confira no comprovante abaixo.</p>
+                    )}
+                  </div>
+
+                  {/* Motivo de rejeição */}
+                  {detalheLanc.status === "rejeitado" && detalheLanc.motivoRejeicao && (
+                    <div className="border border-red-200 bg-red-50 rounded-lg p-3">
+                      <p className="text-xs font-bold text-red-700 uppercase mb-1">Motivo da rejeição</p>
+                      <p className="text-sm text-red-800">{detalheLanc.motivoRejeicao}</p>
+                    </div>
+                  )}
+
+                  {/* Aprovação */}
+                  {detalheLanc.aprovadoEm && (
+                    <p className="text-xs text-muted-foreground">Aprovado em <strong>{fmtDateBR(detalheLanc.aprovadoEm)}</strong></p>
+                  )}
+
+                  {/* Comprovante */}
+                  <div className="border rounded-lg overflow-hidden bg-gray-100">
+                    <div className="flex items-center justify-between px-3 py-2 bg-white border-b">
+                      <p className="text-xs font-bold text-gray-700 uppercase flex items-center gap-1">
+                        <FileText className="h-4 w-4" /> Comprovante
+                      </p>
+                      {url && (
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                        >
+                          <Eye className="h-3.5 w-3.5" /> Abrir em nova aba
+                        </a>
+                      )}
+                    </div>
+                    {!url ? (
+                      <div className="p-8 text-center text-sm text-gray-500">
+                        Nenhum comprovante anexado a este lançamento.
+                      </div>
+                    ) : isImg ? (
+                      <img src={url} alt="Comprovante" className="w-full max-h-[60vh] object-contain bg-white" />
+                    ) : isPdf ? (
+                      <iframe src={url} className="w-full h-[60vh] bg-white" title="Comprovante PDF" />
+                    ) : (
+                      <div className="p-6 text-center text-sm text-gray-600">
+                        Tipo de arquivo não suportado para visualização inline. Use o link "Abrir em nova aba".
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
