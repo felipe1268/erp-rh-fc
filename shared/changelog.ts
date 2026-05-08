@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1409,
+    titulo: "Novo Dashboard de Parceiros — gestão integrada (Lançamentos, Aprovações, Guia de Descontos, Pagamentos)",
+    descricao: "FEATURE: novo dashboard /dashboards/parceiros consolidando todo o módulo Parceiros num único painel analítico, no mesmo padrão dos demais dashboards (Cartão de Ponto, Folha, HE, EPIs etc.). Filtros de Ano, Mês, Tipo de Convênio e Parceiro específico. KPIs principais: Parceiros Ativos, Lançamentos, Valor Total, Pendentes/Aprovados/Rejeitados (clicáveis para drill-down). KPIs secundários: Taxa de Aprovação, SLA Aprovação (dias entre createdAt e aprovadoEm), Total Pago e Total a Pagar. Gráficos: Evolução Mensal de Lançamentos (barras empilhadas por status, clique no mês abre drill-down), Status (doughnut), Valor Aprovado por Mês (linha), Pagamentos Pago vs A Pagar (barras), Top 10 Parceiros por Valor (barra horizontal clicável), Top 10 Colaboradores por Valor. Tabela 'Análise por Tipo de Convênio' com parceiros, lançamentos, valor e ticket médio. Tabela 'Lançamentos Recentes' (top 100 do período filtrado, datas em dd/MM/aaaa). Backend: nova procedure dashboards.parceiros (server/routers/dashboards.ts) que agrega parceiros_conveniados (vivos) + lancamentos_parceiros + pagamentos_parceiros do ano selecionado, respeita tenant isolation (companyWhere) e suporta CONSTRUTORAS via companyIds. Card 'Parceiros' (Handshake roxo) adicionado ao /dashboards e DASH_TO_ROUTE aponta para /parceiros/painel.",
+    tipo: "feature",
+    modulos: "Dashboards,Parceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 10:30:00",
+  },
+  {
     version: 1408,
     titulo: "Dashboard Horas Extras: ranking por obra usa a obra vigente no mês da HE (não a obra atual)",
     descricao: "BUGFIX no Dashboard de Horas Extras (/dashboards → Horas Extras). O ranking 'Custo de Horas Extras por Obra' e a coluna Obra do Detalhamento atribuíam toda a HE histórica à obra ATUAL do funcionário (vínculo isActive=1 em obra_funcionarios), o que distorcia os totais quando alguém mudava de obra. Exemplo real reportado: REVTE-CIVIL aparecia com 32,42h e R$ 569,47 em Mar/2026, mas as 7 pessoas só foram alocadas à REVTE-CIVIL em 06/05/2026 — em Mar/2026 elas estavam em LUCIANA, QIU 2 e HOTEL DO PAPA. Correção: o backend agora carrega TODAS as alocações de obra_funcionarios (ativas e encerradas) e, para cada linha de HE, resolve a obra vigente no mesReferencia da própria HE (alocação cujo intervalo [dataInicio, dataFim] intersecta o mês; em empate, a alocação com dataInicio mais recente / ativa). O filtro por obra do dashboard segue o mesmo critério, mantendo coerência com KPIs, ranking e detalhamento. Ranking por funcionário e por setor não mudam.",

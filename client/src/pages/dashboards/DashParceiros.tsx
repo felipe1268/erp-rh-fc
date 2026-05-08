@@ -1,0 +1,471 @@
+import { useState, useMemo } from "react";
+import DashboardLayout from "@/components/DashboardLayout";
+import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
+import PrintActions from "@/components/PrintActions";
+import PrintFooterLGPD from "@/components/PrintFooterLGPD";
+import { trpc } from "@/lib/trpc";
+import { useCompany } from "@/contexts/CompanyContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Handshake, Store, Receipt, CreditCard, CheckCircle, Clock, XCircle,
+  DollarSign, Users, TrendingUp, Loader2, ArrowLeft, Filter, Wallet,
+  Timer, BarChart3,
+} from "lucide-react";
+import { Link } from "wouter";
+
+const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const fmtBRLShort = (v: number) => {
+  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
+  if (v >= 1_000) return `R$ ${(v / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
+  return fmtBRL(v);
+};
+const fmtDateBR = (s: string | null | undefined) => {
+  if (!s) return "—";
+  const d = String(s).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  return d.split("-").reverse().join("/");
+};
+
+const MESES_LBL = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const MESES_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+const STATUS_LANC: Record<string, { label: string; className: string }> = {
+  pendente: { label: "Pendente", className: "bg-amber-100 text-amber-700 border-amber-300" },
+  aprovado: { label: "Aprovado", className: "bg-emerald-100 text-emerald-700 border-emerald-300" },
+  rejeitado: { label: "Rejeitado", className: "bg-red-100 text-red-700 border-red-300" },
+};
+
+const TIPO_LBL: Record<string, string> = {
+  farmacia: "Farmácia",
+  posto_combustivel: "Posto",
+  restaurante: "Restaurante",
+  mercado: "Mercado",
+  outros: "Outros",
+};
+
+export default function DashParceiros() {
+  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
+  const companyId = Number(selectedCompanyId) || 0;
+  const companyIds = getCompanyIdsForQuery();
+  const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
+
+  const [ano, setAno] = useState(new Date().getFullYear());
+  const [mes, setMes] = useState<string>("todos");
+  const [parceiroId, setParceiroId] = useState<string>("todos");
+  const [tipoConvenio, setTipoConvenio] = useState<string>("todos");
+  const [drillDialog, setDrillDialog] = useState<{ title: string; items: any[] } | null>(null);
+
+  const { data, isLoading } = trpc.dashboards.parceiros.useQuery(
+    {
+      companyId: queryCompanyId,
+      ano,
+      mes: mes !== "todos" ? Number(mes) : undefined,
+      parceiroId: parceiroId !== "todos" ? Number(parceiroId) : undefined,
+      tipoConvenio: tipoConvenio !== "todos" ? tipoConvenio : undefined,
+      ...(isConstrutoras ? { companyIds } : {}),
+    },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+  );
+
+  const anoOptions = useMemo(() => {
+    const curr = new Date().getFullYear();
+    const fromData = data?.filtros?.anosDisponiveis ?? [];
+    const merged = new Set<number>([curr - 1, curr, curr + 1, ...fromData]);
+    return [...merged].sort((a, b) => b - a);
+  }, [data]);
+
+  const drillByStatus = (status: string) => {
+    if (!data?.detalhes) return;
+    const items = data.detalhes.filter((d: any) => d.status === status);
+    setDrillDialog({ title: `Lançamentos — ${STATUS_LANC[status]?.label || status}`, items });
+  };
+
+  const drillByParceiro = (info: ChartClickInfo) => {
+    if (!data?.rankingParceiros || !data?.detalhes) return;
+    const p = data.rankingParceiros[info.dataIndex];
+    if (!p) return;
+    const items = data.detalhes.filter((d: any) => d.parceiroNome === p.nome);
+    setDrillDialog({ title: `Lançamentos — ${p.nome}`, items });
+  };
+
+  const drillByMes = (info: ChartClickInfo) => {
+    if (!data?.detalhes) return;
+    const mIdx = info.dataIndex;
+    const items = data.detalhes.filter((d: any) => Number(String(d.dataCompra).slice(5, 7)) === mIdx + 1);
+    setDrillDialog({ title: `Lançamentos — ${MESES_FULL[mIdx]}/${ano}`, items });
+  };
+
+  if (isLoading || !data) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const { resumo } = data;
+
+  return (
+    <DashboardLayout>
+      <div className="w-full max-w-7xl mx-auto px-4 py-6 space-y-6 print:py-2">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 print:hidden">
+          <div className="flex items-center gap-3">
+            <Link href="/dashboards">
+              <Button variant="ghost" size="sm" className="gap-1.5">
+                <ArrowLeft className="h-4 w-4" /> Dashboards
+              </Button>
+            </Link>
+            <div className="h-10 w-10 rounded-xl bg-purple-500 flex items-center justify-center">
+              <Handshake className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground">Dashboard Parceiros</h1>
+              <p className="text-sm text-muted-foreground">
+                Gestão integrada — Lançamentos, Aprovações, Guia de Descontos e Pagamentos
+              </p>
+            </div>
+          </div>
+          <PrintActions title={`Dashboard Parceiros — ${ano}`} />
+        </div>
+
+        {/* Filtros */}
+        <Card className="print:hidden">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Filter className="h-4 w-4" /> Filtros:
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Ano</label>
+                <Select value={String(ano)} onValueChange={(v) => setAno(Number(v))}>
+                  <SelectTrigger className="w-28 h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {anoOptions.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Mês</label>
+                <Select value={mes} onValueChange={setMes}>
+                  <SelectTrigger className="w-36 h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    {MESES_FULL.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Tipo de Convênio</label>
+                <Select value={tipoConvenio} onValueChange={setTipoConvenio}>
+                  <SelectTrigger className="w-44 h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    {(data.filtros.tipos as any[]).map(t => (
+                      <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="min-w-[220px]">
+                <label className="text-xs text-muted-foreground mb-1 block">Parceiro</label>
+                <Select value={parceiroId} onValueChange={setParceiroId}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os parceiros</SelectItem>
+                    {(data.filtros.parceiros as any[]).map(p => (
+                      <SelectItem key={p.id} value={String(p.id)}>{p.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {(mes !== "todos" || parceiroId !== "todos" || tipoConvenio !== "todos") && (
+                <Button
+                  variant="outline" size="sm"
+                  onClick={() => { setMes("todos"); setParceiroId("todos"); setTipoConvenio("todos"); }}
+                >Limpar</Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* KPIs principais */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <DashKpi label="Parceiros Ativos" value={resumo.parceirosAtivos} sub={`${resumo.parceirosCadastrados} cadastrados`} icon={Store} color="purple" />
+          <DashKpi label="Lançamentos" value={resumo.totalLancamentos} sub={`${resumo.colaboradoresUtilizando} colaboradores`} icon={Receipt} color="blue" />
+          <DashKpi label="Valor Total" value={fmtBRLShort(resumo.valorTotal)} sub={`${ano}${mes !== "todos" ? "/" + String(mes).padStart(2, "0") : ""}`} icon={DollarSign} color="indigo" />
+          <DashKpi label="Pendentes" value={resumo.pendentes} sub={fmtBRLShort(resumo.valorPendente)} icon={Clock} color="yellow" onClick={() => drillByStatus("pendente")} />
+          <DashKpi label="Aprovados" value={resumo.aprovados} sub={fmtBRLShort(resumo.valorAprovado)} icon={CheckCircle} color="green" onClick={() => drillByStatus("aprovado")} />
+          <DashKpi label="Rejeitados" value={resumo.rejeitados} sub={fmtBRLShort(resumo.valorRejeitado)} icon={XCircle} color="red" onClick={() => drillByStatus("rejeitado")} />
+        </div>
+
+        {/* KPIs secundários */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <DashKpi label="Taxa de Aprovação" value={`${resumo.taxaAprovacao.toFixed(1)}%`} sub="Aprovados / decididos" icon={TrendingUp} color="teal" />
+          <DashKpi label="SLA Aprovação" value={`${resumo.slaDias.toFixed(1)} dias`} sub="Lançamento → aprovação" icon={Timer} color="slate" />
+          <DashKpi label="Total Pago" value={fmtBRLShort(resumo.valorPago)} sub={`${resumo.pagamentosPagos} pagamentos`} icon={Wallet} color="green" />
+          <DashKpi label="A Pagar" value={fmtBRLShort(resumo.valorAPagar)} sub={`${resumo.pagamentosPendentes} pendentes`} icon={CreditCard} color="orange" />
+        </div>
+
+        {/* Charts: Evolução + Status */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2">
+            <DashChart
+              title="Evolução Mensal de Lançamentos"
+              type="bar"
+              labels={data.evolucaoMensal.map((m: any) => m.label)}
+              datasets={[
+                { label: "Aprovados", data: data.evolucaoMensal.map((m: any) => m.aprovados), backgroundColor: "#10B981" },
+                { label: "Pendentes", data: data.evolucaoMensal.map((m: any) => m.pendentes), backgroundColor: "#F59E0B" },
+                { label: "Rejeitados", data: data.evolucaoMensal.map((m: any) => m.rejeitados), backgroundColor: "#DC2626" },
+              ]}
+              height={280}
+              onChartClick={drillByMes}
+            />
+          </div>
+          <DashChart
+            title="Status dos Lançamentos"
+            type="doughnut"
+            labels={["Aprovados", "Pendentes", "Rejeitados"]}
+            datasets={[{
+              data: [resumo.aprovados, resumo.pendentes, resumo.rejeitados],
+              backgroundColor: ["#10B981", "#F59E0B", "#DC2626"],
+            }]}
+            height={280}
+            onChartClick={(info) => {
+              const map: Record<string, string> = { Aprovados: "aprovado", Pendentes: "pendente", Rejeitados: "rejeitado" };
+              drillByStatus(map[info.label]);
+            }}
+          />
+        </div>
+
+        {/* Valor mensal + Pagamentos */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <DashChart
+            title="Valor Aprovado por Mês"
+            type="line"
+            labels={data.evolucaoMensal.map((m: any) => m.label)}
+            datasets={[{
+              label: "Valor Aprovado (R$)",
+              data: data.evolucaoMensal.map((m: any) => m.valorAprovado),
+              borderColor: "#8B5CF6", backgroundColor: "rgba(139,92,246,0.15)", fill: true, tension: 0.3,
+            }]}
+            valueFormatter={fmtBRLShort}
+            height={260}
+          />
+          <DashChart
+            title="Pagamentos a Parceiros (Pago vs A Pagar)"
+            type="bar"
+            labels={data.pagamentosPorMes.map((m: any) => m.label)}
+            datasets={[
+              { label: "Pago", data: data.pagamentosPorMes.map((m: any) => m.valorPago), backgroundColor: "#059669" },
+              { label: "A Pagar", data: data.pagamentosPorMes.map((m: any) => m.valorAPagar), backgroundColor: "#F97316" },
+            ]}
+            valueFormatter={fmtBRLShort}
+            height={260}
+          />
+        </div>
+
+        {/* Rankings + Tipo */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Store className="h-4 w-4 text-purple-500" /> Top Parceiros por Valor
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {data.rankingParceiros.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">Nenhum lançamento no período.</p>
+              ) : (
+                <DashChart
+                  title=""
+                  type="horizontalBar"
+                  labels={data.rankingParceiros.map((p: any) => p.nome)}
+                  datasets={[{
+                    label: "Valor (R$)",
+                    data: data.rankingParceiros.map((p: any) => p.valor),
+                    backgroundColor: "#8B5CF6",
+                  }]}
+                  valueFormatter={fmtBRLShort}
+                  height={Math.max(220, data.rankingParceiros.length * 32)}
+                  onChartClick={drillByParceiro}
+                />
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4 text-blue-500" /> Top Colaboradores por Valor
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {data.rankingColaboradores.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-6 text-center">Nenhum lançamento no período.</p>
+              ) : (
+                <div className="space-y-2 max-h-[340px] overflow-y-auto">
+                  {data.rankingColaboradores.map((c: any, i: number) => (
+                    <div key={c.employeeId} className="flex items-center justify-between gap-3 p-2 rounded-lg hover:bg-muted/50">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs font-bold text-muted-foreground w-5 text-right">{i + 1}</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{c.nome}</p>
+                          <p className="text-xs text-muted-foreground">{c.lancamentos} lanç.</p>
+                        </div>
+                      </div>
+                      <span className="text-sm font-bold text-purple-600 shrink-0">{fmtBRL(c.valor)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Por Tipo de Convênio */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-purple-500" /> Análise por Tipo de Convênio
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data.porTipoConvenio.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">Nenhum dado por tipo de convênio.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-xs uppercase text-muted-foreground border-b">
+                    <tr>
+                      <th className="text-left py-2 px-2">Tipo</th>
+                      <th className="text-right py-2 px-2">Parceiros</th>
+                      <th className="text-right py-2 px-2">Lançamentos</th>
+                      <th className="text-right py-2 px-2">Valor Total</th>
+                      <th className="text-right py-2 px-2">Ticket Médio</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.porTipoConvenio.map((t: any) => (
+                      <tr key={t.tipo} className="border-b last:border-0 hover:bg-muted/30">
+                        <td className="py-2 px-2 font-medium">{t.label}</td>
+                        <td className="text-right py-2 px-2">{t.parceiros}</td>
+                        <td className="text-right py-2 px-2">{t.lancamentos}</td>
+                        <td className="text-right py-2 px-2 font-semibold text-purple-600">{fmtBRL(t.valor)}</td>
+                        <td className="text-right py-2 px-2 text-muted-foreground">
+                          {t.lancamentos > 0 ? fmtBRL(t.valor / t.lancamentos) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Detalhes (top 100) */}
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Receipt className="h-4 w-4 text-purple-500" /> Lançamentos Recentes
+            </CardTitle>
+            <Badge variant="secondary" className="text-xs">{data.detalhes.length} de {resumo.totalLancamentos}</Badge>
+          </CardHeader>
+          <CardContent>
+            {data.detalhes.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">Nenhum lançamento no período filtrado.</p>
+            ) : (
+              <div className="overflow-x-auto max-h-[480px]">
+                <table className="w-full text-sm">
+                  <thead className="text-xs uppercase text-muted-foreground border-b sticky top-0 bg-card">
+                    <tr>
+                      <th className="text-left py-2 px-2">Data</th>
+                      <th className="text-left py-2 px-2">Parceiro</th>
+                      <th className="text-left py-2 px-2">Tipo</th>
+                      <th className="text-left py-2 px-2">Colaborador</th>
+                      <th className="text-right py-2 px-2">Valor</th>
+                      <th className="text-center py-2 px-2">Status</th>
+                      <th className="text-center py-2 px-2">Competência</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.detalhes.map((d: any) => {
+                      const st = STATUS_LANC[d.status] || { label: d.status, className: "bg-muted" };
+                      return (
+                        <tr key={d.id} className="border-b last:border-0 hover:bg-muted/30">
+                          <td className="py-1.5 px-2 whitespace-nowrap">{fmtDateBR(d.dataCompra)}</td>
+                          <td className="py-1.5 px-2 truncate max-w-[200px]" title={d.parceiroNome}>{d.parceiroNome}</td>
+                          <td className="py-1.5 px-2 text-xs text-muted-foreground">{TIPO_LBL[d.tipoConvenio] || d.tipoConvenio}</td>
+                          <td className="py-1.5 px-2 truncate max-w-[200px]" title={d.employeeNome}>{d.employeeNome}</td>
+                          <td className="text-right py-1.5 px-2 font-medium">{fmtBRL(d.valor)}</td>
+                          <td className="text-center py-1.5 px-2">
+                            <Badge variant="outline" className={`text-[10px] ${st.className}`}>{st.label}</Badge>
+                          </td>
+                          <td className="text-center py-1.5 px-2 text-xs text-muted-foreground">
+                            {d.competenciaDesconto ? d.competenciaDesconto.split("-").reverse().join("/") : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <PrintFooterLGPD />
+      </div>
+
+      {/* Drill-down dialog */}
+      <Dialog open={!!drillDialog} onOpenChange={(o) => !o && setDrillDialog(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{drillDialog?.title}</DialogTitle>
+          </DialogHeader>
+          {drillDialog?.items?.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">Nenhum lançamento.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-xs uppercase text-muted-foreground border-b">
+                <tr>
+                  <th className="text-left py-2 px-2">Data</th>
+                  <th className="text-left py-2 px-2">Parceiro</th>
+                  <th className="text-left py-2 px-2">Colaborador</th>
+                  <th className="text-right py-2 px-2">Valor</th>
+                  <th className="text-center py-2 px-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {drillDialog?.items?.map((d: any) => {
+                  const st = STATUS_LANC[d.status] || { label: d.status, className: "bg-muted" };
+                  return (
+                    <tr key={d.id} className="border-b last:border-0">
+                      <td className="py-1.5 px-2 whitespace-nowrap">{fmtDateBR(d.dataCompra)}</td>
+                      <td className="py-1.5 px-2">{d.parceiroNome}</td>
+                      <td className="py-1.5 px-2">{d.employeeNome}</td>
+                      <td className="text-right py-1.5 px-2 font-medium">{fmtBRL(d.valor)}</td>
+                      <td className="text-center py-1.5 px-2">
+                        <Badge variant="outline" className={`text-[10px] ${st.className}`}>{st.label}</Badge>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </DialogContent>
+      </Dialog>
+    </DashboardLayout>
+  );
+}

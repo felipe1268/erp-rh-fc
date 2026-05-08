@@ -7,6 +7,7 @@ import { useMenuVisibility } from "@/hooks/useMenuVisibility";
 import {
   Users, Clock, Wallet, Timer, HardHat, Gavel, AlertTriangle, Palmtree,
   ArrowRight, Eye, Activity, ChevronRight, Building2, ShieldCheck, CalendarDays,
+  Handshake,
 } from "lucide-react";
 
 /* ─── Data ─── */
@@ -140,6 +141,18 @@ const dashboards = [
     hoverBg: "hover:bg-indigo-50/80",
     stats: "Anual & Rateio",
   },
+  {
+    path: "/dashboards/parceiros",
+    title: "Parceiros",
+    desc: "Gestão integrada do módulo Parceiros: lançamentos, aprovações, guia de descontos, pagamentos, ranking de parceiros e colaboradores.",
+    icon: Handshake,
+    color: "#A855F7",
+    bgLight: "bg-purple-50",
+    textColor: "text-purple-600",
+    borderColor: "border-purple-200",
+    hoverBg: "hover:bg-purple-50/80",
+    stats: "Convênios & Descontos",
+  },
 ];
 
 // Map dashboard paths to the main route they relate to
@@ -156,6 +169,7 @@ const DASH_TO_ROUTE: Record<string, string> = {
   "/dashboards/controle-documentos": "/controle-documentos",
   "/dashboards/competencias": "/gestao-competencias",
   "/dashboards/visao-panoramica": "/dashboards",
+  "/dashboards/parceiros": "/parceiros/painel",
 };
 
 export default function DashboardIndex() {

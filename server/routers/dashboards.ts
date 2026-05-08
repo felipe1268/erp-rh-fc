@@ -10,6 +10,7 @@ import {
   epiDiscountAlerts, terminationNotices, vacationPeriods, goldenRules,
   asos, trainings, employeeDocuments, obraFuncionarios,
   hePeriods, hePeriodEmployees,
+  parceirosConveniados, lancamentosParceiros, pagamentosParceiros,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count, asc, isNull, inArray } from "drizzle-orm";
 import { parseBRL } from "../utils/parseBRL";
@@ -3226,6 +3227,260 @@ async function getFuncionariosParaMapa(companyId: number, companyIds?: number[],
   return results;
 }
 
+// ============================================================
+// DASHBOARD PARCEIROS — Gestão Integrada (Lançamentos, Aprovações,
+// Guia de Descontos e Pagamentos do módulo Parceiros).
+// Agrega dados do ano selecionado, com filtros opcionais por
+// parceiro / tipo de convênio / mês. Retorna shape consumido por
+// client/src/pages/dashboards/DashParceiros.tsx.
+// ============================================================
+async function getDashParceiros(
+  companyId: number,
+  ano: number,
+  companyIds?: number[],
+  parceiroId?: number,
+  tipoConvenio?: string,
+  mes?: number,
+) {
+  const db = (await getDb())!;
+  const ids = resolveIds(companyId, companyIds);
+
+  const yearStart = `${ano}-01-01`;
+  const yearEnd = `${ano}-12-31`;
+
+  // Parceiros conveniados (vivos)
+  const parceirosRows: any[] = await db
+    .select()
+    .from(parceirosConveniados)
+    .where(and(
+      companyWhere(parceirosConveniados, companyId, companyIds),
+      isNull(parceirosConveniados.deletedAt),
+    ));
+
+  // Lançamentos do ano
+  const lancConditions: any[] = [
+    companyWhere(lancamentosParceiros, companyId, companyIds),
+    gte(lancamentosParceiros.dataCompra, yearStart),
+    lte(lancamentosParceiros.dataCompra, `${yearEnd} 23:59:59`),
+  ];
+  if (parceiroId) lancConditions.push(eq(lancamentosParceiros.parceiroId, parceiroId));
+  const lancamentosRows: any[] = await db
+    .select()
+    .from(lancamentosParceiros)
+    .where(and(...lancConditions));
+
+  // Pagamentos do ano (competencia LIKE 'YYYY-%')
+  const pagConditions: any[] = [
+    companyWhere(pagamentosParceiros, companyId, companyIds),
+    sql`${pagamentosParceiros.competencia} LIKE ${ano + '-%'}`,
+  ];
+  if (parceiroId) pagConditions.push(eq(pagamentosParceiros.parceiroId, parceiroId));
+  const pagamentosRows: any[] = await db
+    .select()
+    .from(pagamentosParceiros)
+    .where(and(...pagConditions));
+
+  // Mapa parceiroId → metadados
+  const parceiroMap = new Map<number, any>();
+  for (const p of parceirosRows) parceiroMap.set(p.id, p);
+
+  // Aplica filtro de tipoConvenio nos lançamentos / pagamentos
+  const matchTipo = (pid: number) => {
+    if (!tipoConvenio || tipoConvenio === "todos") return true;
+    const p = parceiroMap.get(pid);
+    return p?.tipoConvenio === tipoConvenio;
+  };
+  const lancFiltrados = lancamentosRows.filter(l => matchTipo(l.parceiroId));
+  const pagFiltrados = pagamentosRows.filter(p => matchTipo(p.parceiroId));
+
+  // Filtro adicional por mês (se informado)
+  const inMes = (dataCompra: string | null | undefined) => {
+    if (!mes) return true;
+    if (!dataCompra) return false;
+    const m = Number(String(dataCompra).slice(5, 7));
+    return m === mes;
+  };
+  const lancMes = lancFiltrados.filter(l => inMes(l.dataCompra));
+  const pagMes = pagFiltrados.filter(p => {
+    if (!mes) return true;
+    const m = Number(String(p.competencia ?? '').slice(5, 7));
+    return m === mes;
+  });
+
+  const valor = (v: any) => Number.parseFloat(String(v ?? '0')) || 0;
+
+  // ----- Resumo (KPIs) -----
+  const lancByStatus = (st: string) => lancMes.filter(l => l.status === st);
+  const pagByStatus = (st: string) => pagMes.filter(p => p.status === st);
+  const sum = (arr: any[], k = 'valor') => arr.reduce((s, x) => s + valor(x[k]), 0);
+
+  const resumo = {
+    parceirosCadastrados: parceirosRows.length,
+    parceirosAtivos: parceirosRows.filter(p => p.status === 'ativo').length,
+    parceirosSuspensos: parceirosRows.filter(p => p.status === 'suspenso').length,
+    parceirosInativos: parceirosRows.filter(p => p.status === 'inativo').length,
+    totalLancamentos: lancMes.length,
+    valorTotal: sum(lancMes),
+    pendentes: lancByStatus('pendente').length,
+    valorPendente: sum(lancByStatus('pendente')),
+    aprovados: lancByStatus('aprovado').length,
+    valorAprovado: sum(lancByStatus('aprovado')),
+    rejeitados: lancByStatus('rejeitado').length,
+    valorRejeitado: sum(lancByStatus('rejeitado')),
+    colaboradoresUtilizando: new Set(lancMes.map(l => l.employeeId)).size,
+    pagamentosTotal: pagMes.length,
+    pagamentosPagos: pagByStatus('pago').length,
+    pagamentosPendentes: pagByStatus('pendente').length,
+    valorPago: sum(pagByStatus('pago'), 'valorTotal'),
+    valorAPagar: sum(pagByStatus('pendente'), 'valorTotal'),
+  };
+
+  // Taxa aprovação (ignora pendentes)
+  const decididos = resumo.aprovados + resumo.rejeitados;
+  const taxaAprovacao = decididos > 0 ? (resumo.aprovados / decididos) * 100 : 0;
+
+  // SLA aprovação: dias médios entre createdAt e aprovadoEm (apenas aprovados)
+  const slaDias = (() => {
+    const aprov = lancMes.filter(l => l.status === 'aprovado' && l.aprovadoEm && l.createdAt);
+    if (aprov.length === 0) return 0;
+    const totalMs = aprov.reduce((s, l) => {
+      const a = new Date(l.aprovadoEm as string).getTime();
+      const c = new Date(l.createdAt as string).getTime();
+      return s + Math.max(0, a - c);
+    }, 0);
+    return totalMs / aprov.length / (1000 * 60 * 60 * 24);
+  })();
+
+  // ----- Evolução mensal (12 meses do ano) -----
+  const evolucaoMensal = Array.from({ length: 12 }, (_, i) => ({
+    mes: i + 1,
+    label: ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][i],
+    lancamentos: 0, valor: 0, aprovados: 0, pendentes: 0, rejeitados: 0,
+    valorAprovado: 0, valorPendente: 0,
+  }));
+  for (const l of lancFiltrados) {
+    const d = String(l.dataCompra ?? '');
+    const m = Number(d.slice(5, 7));
+    if (!m || m < 1 || m > 12) continue;
+    const row = evolucaoMensal[m - 1];
+    row.lancamentos += 1;
+    row.valor += valor(l.valor);
+    if (l.status === 'aprovado') { row.aprovados += 1; row.valorAprovado += valor(l.valor); }
+    else if (l.status === 'pendente') { row.pendentes += 1; row.valorPendente += valor(l.valor); }
+    else if (l.status === 'rejeitado') row.rejeitados += 1;
+  }
+
+  // Pagamentos por mês (competencia)
+  const pagamentosPorMes = Array.from({ length: 12 }, (_, i) => ({
+    mes: i + 1,
+    label: ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][i],
+    total: 0, pagos: 0, pendentes: 0, valorPago: 0, valorAPagar: 0,
+  }));
+  for (const p of pagFiltrados) {
+    const m = Number(String(p.competencia ?? '').slice(5, 7));
+    if (!m || m < 1 || m > 12) continue;
+    const row = pagamentosPorMes[m - 1];
+    row.total += 1;
+    if (p.status === 'pago') { row.pagos += 1; row.valorPago += valor(p.valorTotal); }
+    else if (p.status === 'pendente') { row.pendentes += 1; row.valorAPagar += valor(p.valorTotal); }
+  }
+
+  // ----- Ranking parceiros (por valor total no período filtrado) -----
+  const byParceiro = new Map<number, { id: number; nome: string; tipo: string; lancamentos: number; valor: number; aprovados: number; pendentes: number }>();
+  for (const l of lancMes) {
+    const p = parceiroMap.get(l.parceiroId);
+    const nome = p?.nomeFantasia || p?.razaoSocial || `Parceiro #${l.parceiroId}`;
+    const tipo = p?.tipoConvenio || '—';
+    let r = byParceiro.get(l.parceiroId);
+    if (!r) { r = { id: l.parceiroId, nome, tipo, lancamentos: 0, valor: 0, aprovados: 0, pendentes: 0 }; byParceiro.set(l.parceiroId, r); }
+    r.lancamentos += 1;
+    r.valor += valor(l.valor);
+    if (l.status === 'aprovado') r.aprovados += 1;
+    else if (l.status === 'pendente') r.pendentes += 1;
+  }
+  const rankingParceiros = [...byParceiro.values()].sort((a, b) => b.valor - a.valor).slice(0, 10);
+
+  // ----- Ranking colaboradores -----
+  const byColab = new Map<number, { employeeId: number; nome: string; lancamentos: number; valor: number }>();
+  for (const l of lancMes) {
+    let r = byColab.get(l.employeeId);
+    if (!r) { r = { employeeId: l.employeeId, nome: l.employeeNome ?? `Colab #${l.employeeId}`, lancamentos: 0, valor: 0 }; byColab.set(l.employeeId, r); }
+    r.lancamentos += 1;
+    r.valor += valor(l.valor);
+  }
+  const rankingColaboradores = [...byColab.values()].sort((a, b) => b.valor - a.valor).slice(0, 10);
+
+  // ----- Por tipo de convênio -----
+  const TIPOS = [
+    { key: 'farmacia', label: 'Farmácia' },
+    { key: 'posto_combustivel', label: 'Posto de Combustível' },
+    { key: 'restaurante', label: 'Restaurante' },
+    { key: 'mercado', label: 'Mercado' },
+    { key: 'outros', label: 'Outros' },
+  ];
+  const porTipoConvenio = TIPOS.map(t => {
+    const parc = parceirosRows.filter(p => p.tipoConvenio === t.key);
+    const lancs = lancMes.filter(l => parceiroMap.get(l.parceiroId)?.tipoConvenio === t.key);
+    return {
+      tipo: t.key,
+      label: t.label,
+      parceiros: parc.length,
+      lancamentos: lancs.length,
+      valor: lancs.reduce((s, l) => s + valor(l.valor), 0),
+    };
+  }).filter(t => t.parceiros > 0 || t.lancamentos > 0);
+
+  // ----- Detalhes (top 100 mais recentes do período filtrado) -----
+  const detalhes = [...lancMes]
+    .sort((a, b) => String(b.dataCompra).localeCompare(String(a.dataCompra)))
+    .slice(0, 100)
+    .map(l => {
+      const p = parceiroMap.get(l.parceiroId);
+      return {
+        id: l.id,
+        dataCompra: String(l.dataCompra ?? '').slice(0, 10),
+        parceiroNome: p?.nomeFantasia || p?.razaoSocial || `Parceiro #${l.parceiroId}`,
+        tipoConvenio: p?.tipoConvenio || '—',
+        employeeNome: l.employeeNome,
+        valor: valor(l.valor),
+        status: l.status,
+        competenciaDesconto: l.competenciaDesconto,
+        descricaoItens: l.descricaoItens,
+      };
+    });
+
+  // ----- Filtros disponíveis -----
+  const parceirosFiltro = parceirosRows
+    .map(p => ({ id: p.id, nome: p.nomeFantasia || p.razaoSocial, tipo: p.tipoConvenio }))
+    .sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+
+  const anosDisponiveis = (() => {
+    const set = new Set<number>();
+    set.add(new Date().getFullYear());
+    set.add(ano);
+    for (const l of lancamentosRows) {
+      const y = Number(String(l.dataCompra ?? '').slice(0, 4));
+      if (y) set.add(y);
+    }
+    return [...set].sort((a, b) => b - a);
+  })();
+
+  return {
+    ano,
+    mes: mes ?? null,
+    parceiroId: parceiroId ?? null,
+    tipoConvenio: tipoConvenio ?? 'todos',
+    resumo: { ...resumo, taxaAprovacao, slaDias },
+    evolucaoMensal,
+    pagamentosPorMes,
+    rankingParceiros,
+    rankingColaboradores,
+    porTipoConvenio,
+    detalhes,
+    filtros: { parceiros: parceirosFiltro, anosDisponiveis, tipos: TIPOS },
+  };
+}
+
 export const dashboardsRouter = router({
   funcionarios: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => {
     const cacheKey = `dash:func:${input.companyId}:${(input.companyIds ?? []).join(',')}`;
@@ -3256,4 +3511,21 @@ export const dashboardsRouter = router({
   controleDocumentos: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashControleDocumentos(input.companyId, input.companyIds)),
   competenciasAnual: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashCompetenciasAnual(input.companyId, input.ano, input.companyIds)),
   funcionariosParaMapa: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), statusFiltros: z.array(z.string()).optional() })).query(({ input }) => getFuncionariosParaMapa(input.companyId, input.companyIds, input.statusFiltros)),
+  parceiros: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      ano: z.number().optional(),
+      mes: z.number().min(1).max(12).optional(),
+      parceiroId: z.number().optional(),
+      tipoConvenio: z.string().optional(),
+    }))
+    .query(({ input }) => getDashParceiros(
+      input.companyId,
+      input.ano ?? new Date().getFullYear(),
+      input.companyIds,
+      input.parceiroId,
+      input.tipoConvenio,
+      input.mes,
+    )),
 });
