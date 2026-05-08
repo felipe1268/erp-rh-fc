@@ -10049,6 +10049,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 02:30:00",
   },
   {
+    version: 1455,
+    titulo: "Portal do Cliente — Reordenação das abas por arrastar e soltar",
+    descricao: "Na barra lateral da tela /portal/cliente/obra/:obraId, agora é possível clicar no nome da aba, segurar e arrastar para reorganizar a ordem dos itens do menu. A nova ordem é salva no navegador (localStorage por obra), de modo que cada cliente personaliza o seu próprio menu sem afetar os demais. Indicadores visuais: cursor 'grab' ao passar sobre o item, item em arraste fica semi-transparente, uma linha azul indica o ponto de inserção. O drag-and-drop é desativado enquanto a busca 'Buscar no menu...' estiver preenchida (para não confundir com filtragem).",
+    tipo: "ux",
+    modulos: "Portal Cliente,Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 16:00:00",
+  },
+  {
     version: 1454,
     titulo: "Portal do Cliente — Curva S agora idêntica à versão interna",
     descricao: "A aba 'Curva S' do Portal do Cliente foi reformulada para ficar visualmente igual à tela interna do Planejamento. Agora exibe: (1) switcher 'Curva S de Trabalho' / 'Curva S Financeira' (Financeira disponível apenas no app interno — no portal redireciona o usuário para a aba 'Crono. Financeiro'); (2) legenda dinâmica com toggles para ligar/desligar cada série; (3) quatro séries no gráfico — Baseline (Rev 00, azul), Revisão Atual (vermelho, quando difere da baseline), Realizado (verde) e Tendência/projeção (verde tracejado, regressão linear sobre o realizado); (4) linha tracejada 'Hoje'; (5) bloco 'Como interpretar' explicando cada série. O backend (portalExterno.planejamentoObra) passou a calcular e devolver o objeto curvaData com as 4 séries, replicando exatamente a lógica de planejamento.getCurvaS interno (toMondayStr, regra usarIgual, regressão linear de 16 semanas).",

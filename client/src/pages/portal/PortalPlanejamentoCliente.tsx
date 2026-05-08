@@ -85,7 +85,7 @@ export default function PortalPlanejamentoCliente() {
   const revisoes = ((data as any)?.revisoes || []) as any[];
   const abasLiberadas = ((data as any)?.abasLiberadas || ["visao_geral"]) as PortalClienteAbaKey[];
 
-  const abasVisiveis = useMemo(() => {
+  const abasVisiveisBase = useMemo(() => {
     const liber = new Set(abasLiberadas);
     return PORTAL_CLIENTE_ABAS.filter((a) => liber.has(a.key));
   }, [abasLiberadas]);
@@ -94,6 +94,29 @@ export default function PortalPlanejamentoCliente() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [buscaAba, setBuscaAba] = useState("");
+
+  // Ordem customizada das abas (persistida no localStorage por obra)
+  const ordemKey = `portalCliente_ordemAbas_${obraId}`;
+  const [ordemAbas, setOrdemAbas] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ordemKey);
+      if (raw) setOrdemAbas(JSON.parse(raw));
+    } catch {/* ignora */}
+  }, [ordemKey]);
+  const persistOrdem = (nova: string[]) => {
+    setOrdemAbas(nova);
+    try { localStorage.setItem(ordemKey, JSON.stringify(nova)); } catch {/* ignora */}
+  };
+
+  const abasVisiveis = useMemo(() => {
+    if (!ordemAbas.length) return abasVisiveisBase;
+    const idx = (k: string) => {
+      const i = ordemAbas.indexOf(k);
+      return i === -1 ? 9999 : i;
+    };
+    return [...abasVisiveisBase].sort((a, b) => idx(a.key) - idx(b.key));
+  }, [abasVisiveisBase, ordemAbas]);
 
   useEffect(() => {
     if (abasVisiveis.length > 0 && !abasVisiveis.find((a) => a.key === aba)) {
@@ -106,6 +129,24 @@ export default function PortalPlanejamentoCliente() {
     if (!q) return abasVisiveis;
     return abasVisiveis.filter((a) => a.label.toLowerCase().includes(q));
   }, [abasVisiveis, buscaAba]);
+
+  // Drag-and-drop para reordenar (só ativo quando não há busca)
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [overKey, setOverKey] = useState<string | null>(null);
+  const podeDrag = buscaAba.trim() === "";
+  const onDropAba = (alvoKey: string) => {
+    if (!dragKey || dragKey === alvoKey) { setDragKey(null); setOverKey(null); return; }
+    const keys = abasVisiveis.map((a) => a.key);
+    const fromIdx = keys.indexOf(dragKey);
+    const toIdx = keys.indexOf(alvoKey);
+    if (fromIdx === -1 || toIdx === -1) { setDragKey(null); setOverKey(null); return; }
+    const nova = [...keys];
+    nova.splice(fromIdx, 1);
+    nova.splice(toIdx, 0, dragKey);
+    persistOrdem(nova);
+    setDragKey(null);
+    setOverKey(null);
+  };
 
   // Dias restantes (estilo interno)
   const diasRestantes = useMemo(() => {
@@ -120,23 +161,45 @@ export default function PortalPlanejamentoCliente() {
     const Icon = ABA_ICONS[a.key] || TrendingUp;
     const isActive = aba === a.key;
     const isEmBreve = a.status === "em_breve";
+    const isDragging = dragKey === a.key;
+    const isOver = overKey === a.key && dragKey && dragKey !== a.key;
     return (
-      <button
+      <div
         key={a.key}
-        onClick={() => { setAba(a.key); setMobileSidebarOpen(false); }}
-        className={`group flex items-center gap-2.5 w-full px-3 py-2 text-[13px] font-medium rounded-lg text-left transition-all duration-150 ${
-          isActive
-            ? "bg-blue-600 text-white shadow-sm"
-            : "text-slate-200 hover:bg-slate-700/60 hover:text-white"
-        }`}
-        title={a.label}
+        draggable={podeDrag}
+        onDragStart={(e) => {
+          if (!podeDrag) return;
+          setDragKey(a.key);
+          e.dataTransfer.effectAllowed = "move";
+          try { e.dataTransfer.setData("text/plain", a.key); } catch {/* ignora */}
+        }}
+        onDragOver={(e) => {
+          if (!podeDrag || !dragKey) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          if (overKey !== a.key) setOverKey(a.key);
+        }}
+        onDragLeave={() => { if (overKey === a.key) setOverKey(null); }}
+        onDrop={(e) => { if (!podeDrag) return; e.preventDefault(); onDropAba(a.key); }}
+        onDragEnd={() => { setDragKey(null); setOverKey(null); }}
+        className={`relative ${isDragging ? "opacity-40" : ""} ${isOver ? "before:absolute before:inset-x-0 before:-top-0.5 before:h-0.5 before:bg-blue-400 before:rounded-full" : ""}`}
       >
-        <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-white" : "text-slate-400 group-hover:text-white"}`} />
-        <span className="truncate flex-1">{a.label}</span>
-        {isEmBreve && (
-          <span className="text-[9px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">em breve</span>
-        )}
-      </button>
+        <button
+          onClick={() => { setAba(a.key); setMobileSidebarOpen(false); }}
+          className={`group flex items-center gap-2.5 w-full px-3 py-2 text-[13px] font-medium rounded-lg text-left transition-all duration-150 ${
+            isActive
+              ? "bg-blue-600 text-white shadow-sm"
+              : "text-slate-200 hover:bg-slate-700/60 hover:text-white"
+          } ${podeDrag ? "cursor-grab active:cursor-grabbing" : ""}`}
+          title={podeDrag ? `${a.label} — arraste para reordenar` : a.label}
+        >
+          <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-white" : "text-slate-400 group-hover:text-white"}`} />
+          <span className="truncate flex-1">{a.label}</span>
+          {isEmBreve && (
+            <span className="text-[9px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">em breve</span>
+          )}
+        </button>
+      </div>
     );
   };
 
