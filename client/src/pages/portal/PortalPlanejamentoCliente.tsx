@@ -313,6 +313,11 @@ export default function PortalPlanejamentoCliente() {
           if (aba === "refis") return <AbaRefis refisLista={refisLista} />;
           if (aba === "caminho_critico") return <AbaCaminhoCritico criticas={caminhoCritico} />;
           if (aba === "efetivo") return <AbaEfetivo efetivoMensal={efetivoMensal} />;
+          if (aba === "crono_financeiro") return <AbaCronoFinanceiro curvaS={curvaS} valorContrato={projeto?.valorContrato || 0} />;
+          if (aba === "prev_medicao") return <AbaPrevMedicao curvaS={curvaS} valorContrato={projeto?.valorContrato || 0} />;
+          if (aba === "diagrama_rede") return <AbaDiagramaRede atividades={atividadesTodas} />;
+          if (aba === "custo_rh") return <AbaCustoRh efetivoMensal={efetivoMensal} />;
+          if (aba === "bim_3d") return <AbaBim3D obra={obra} />;
           if (aba === "revisoes") return <AbaRevisoes revisoes={revisoes} />;
           return null;
         })()}
@@ -895,6 +900,234 @@ function AbaEfetivo({ efetivoMensal }: { efetivoMensal: any[] }) {
             </tfoot>
           </table>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────── ABA: CRONO. FINANCEIRO ─────────────────────────
+function AbaCronoFinanceiro({ curvaS, valorContrato }: { curvaS: any[]; valorContrato: number }) {
+  const fmtMoeda = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const dados = useMemo(() => curvaS.map((p: any) => ({
+    semana: fmtBR(p.semana),
+    previstoR$: (p.previsto / 100) * valorContrato,
+    realizadoR$: p.realizado != null ? (p.realizado / 100) * valorContrato : null,
+  })), [curvaS, valorContrato]);
+  if (!valorContrato || curvaS.length === 0) {
+    return <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 text-sm">Sem valor de contrato cadastrado ou sem dados de Curva S.</div>;
+  }
+  return (
+    <div className="space-y-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <div className="flex items-center gap-2 mb-1">
+          <DollarSign className="h-4 w-4 text-emerald-600" />
+          <h3 className="font-semibold text-slate-800">Cronograma Financeiro</h3>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">Baseado em Curva S × Valor de Contrato ({fmtMoeda(valorContrato)})</p>
+        <div className="h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={dados}>
+              <defs>
+                <linearGradient id="prevR" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3b82f6" stopOpacity={0.25}/><stop offset="100%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient>
+                <linearGradient id="realR" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={0.25}/><stop offset="100%" stopColor="#10b981" stopOpacity={0}/></linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="semana" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => (v / 1000).toFixed(0) + "k"} />
+              <Tooltip formatter={(v: any) => v == null ? "—" : fmtMoeda(Number(v))} />
+              <Area type="monotone" dataKey="previstoR$" stroke="none" fill="url(#prevR)" />
+              <Area type="monotone" dataKey="realizadoR$" stroke="none" fill="url(#realR)" />
+              <Line type="monotone" dataKey="previstoR$" stroke="#3b82f6" strokeWidth={2} dot={false} name="Previsto R$" />
+              <Line type="monotone" dataKey="realizadoR$" stroke="#10b981" strokeWidth={2} dot={false} name="Realizado R$" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────── ABA: PREV. MEDIÇÃO ─────────────────────────────
+function AbaPrevMedicao({ curvaS, valorContrato }: { curvaS: any[]; valorContrato: number }) {
+  const fmtMoeda = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  // Agrupa curva S por mês — pega a última semana de cada mês como acumulado
+  const porMes = useMemo(() => {
+    const m: Record<string, { mes: string; prevAcum: number; realAcum: number | null }> = {};
+    for (const p of curvaS) {
+      const ym = p.semana.slice(0, 7);
+      m[ym] = { mes: ym, prevAcum: p.previsto, realAcum: p.realizado };
+    }
+    const arr = Object.values(m).sort((a, b) => a.mes.localeCompare(b.mes));
+    let prevPrevAcum = 0; let prevRealAcum = 0;
+    return arr.map((x) => {
+      const prevMes = x.prevAcum - prevPrevAcum;
+      const realMes = x.realAcum != null ? x.realAcum - prevRealAcum : null;
+      prevPrevAcum = x.prevAcum;
+      if (x.realAcum != null) prevRealAcum = x.realAcum;
+      return {
+        mes: x.mes,
+        previstoPct: prevMes,
+        realizadoPct: realMes,
+        previstoR$: (prevMes / 100) * valorContrato,
+        realizadoR$: realMes != null ? (realMes / 100) * valorContrato : null,
+      };
+    });
+  }, [curvaS, valorContrato]);
+  if (porMes.length === 0) {
+    return <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 text-sm">Sem dados de medição prevista.</div>;
+  }
+  const fmtMes = (m: string) => { const [y, mm] = m.split("-"); return `${mm}/${y}`; };
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-indigo-50/60 to-white flex items-center gap-2">
+        <FileText className="h-4 w-4 text-indigo-600" />
+        <h3 className="font-semibold text-slate-800">Previsão de Medição (mensal)</h3>
+        <span className="text-xs text-slate-500 ml-auto">Contrato: {fmtMoeda(valorContrato)}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50/80">
+            <tr className="text-slate-500">
+              <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Mês</th>
+              <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">% Prev.</th>
+              <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">R$ Previsto</th>
+              <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">% Real.</th>
+              <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">R$ Realizado</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {porMes.map((m) => (
+              <tr key={m.mes} className="hover:bg-slate-50/60">
+                <td className="px-4 py-2.5 font-semibold text-slate-700">{fmtMes(m.mes)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{fmtPct(m.previstoPct)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{fmtMoeda(m.previstoR$)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{m.realizadoPct == null ? "—" : fmtPct(m.realizadoPct)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-emerald-700">{m.realizadoR$ == null ? "—" : fmtMoeda(m.realizadoR$)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────── ABA: DIAGRAMA DE REDE ──────────────────────────
+function AbaDiagramaRede({ atividades }: { atividades: any[] }) {
+  const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo), [atividades]);
+  const comDep = folhas.filter((a: any) => a.predecessora && String(a.predecessora).trim());
+  return (
+    <div className="space-y-4">
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+        <GitBranch className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+        <div className="text-xs text-blue-800">
+          <strong className="block mb-1">Diagrama de Rede — Dependências entre Atividades</strong>
+          Mostra a sequência lógica de execução: cada atividade lista as predecessoras (atividades que devem terminar antes).
+        </div>
+      </div>
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50/60 to-white flex items-center gap-2">
+          <GitBranch className="h-4 w-4 text-blue-600" />
+          <h3 className="font-semibold text-slate-800">Rede de Dependências</h3>
+          <span className="text-xs text-slate-500 ml-auto">{comDep.length} de {folhas.length} com predecessora</span>
+        </div>
+        {comDep.length === 0 ? (
+          <div className="p-12 text-center text-slate-400 text-sm">Nenhuma atividade com predecessora cadastrada.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-50/80">
+                <tr className="text-slate-500">
+                  <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">EAP</th>
+                  <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Atividade</th>
+                  <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Predecessora(s)</th>
+                  <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">% Real.</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {comDep.map((a: any) => (
+                  <tr key={a.id} className="hover:bg-slate-50/60">
+                    <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{a.eapCodigo || "—"}</td>
+                    <td className="px-4 py-2.5 text-slate-800 max-w-md truncate" title={a.nome}>{a.nome}</td>
+                    <td className="px-4 py-2.5 text-slate-700 font-mono text-[11px]">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                        ← {a.predecessora}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-slate-700">{fmtPct(a.percentRealizado ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────── ABA: CUSTO RH ──────────────────────────────────
+function AbaCustoRh({ efetivoMensal }: { efetivoMensal: any[] }) {
+  const fmtMoeda = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const fmtMes = (m: string) => { const [y, mm] = m.split("-"); return `${mm}/${y}`; };
+  if (efetivoMensal.length === 0) {
+    return <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 text-sm">Sem custos de RH lançados.</div>;
+  }
+  const dadosGrafico = efetivoMensal.map((m: any) => ({
+    mes: fmtMes(m.mesReferencia),
+    Direto: m.direto,
+    Indireto: m.indireto,
+    Central: m.central,
+  }));
+  return (
+    <div className="space-y-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <DollarSign className="h-4 w-4 text-emerald-600" />
+          <h3 className="font-semibold text-slate-800">Evolução do Custo RH (mensal)</h3>
+        </div>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={dadosGrafico}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => (v / 1000).toFixed(0) + "k"} />
+              <Tooltip formatter={(v: any) => fmtMoeda(Number(v))} />
+              <Line type="monotone" dataKey="Direto" stroke="#3b82f6" strokeWidth={2} />
+              <Line type="monotone" dataKey="Indireto" stroke="#f59e0b" strokeWidth={2} />
+              <Line type="monotone" dataKey="Central" stroke="#a855f7" strokeWidth={2} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+      <AbaEfetivo efetivoMensal={efetivoMensal} />
+    </div>
+  );
+}
+
+// ─────────────────────── ABA: BIM 3D ────────────────────────────────────
+function AbaBim3D({ obra }: { obra: any }) {
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-cyan-50/60 to-white flex items-center gap-2">
+        <BarChart3 className="h-4 w-4 text-cyan-600" />
+        <h3 className="font-semibold text-slate-800">Modelo BIM 3D</h3>
+      </div>
+      <div className="p-12 text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-cyan-50 text-cyan-600 mb-4">
+          <BarChart3 className="h-8 w-8" />
+        </div>
+        <h4 className="text-base font-semibold text-slate-800 mb-2">Visualização 3D da Obra</h4>
+        <p className="text-sm text-slate-500 max-w-md mx-auto mb-4">
+          O modelo BIM 3D desta obra está sendo preparado pelo gestor.
+          Para acessá-lo, entre em contato com o responsável técnico do projeto.
+        </p>
+        {obra?.nome && (
+          <div className="inline-flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200">
+            <Building2 className="h-3.5 w-3.5" />
+            {obra.nome}
+          </div>
+        )}
       </div>
     </div>
   );

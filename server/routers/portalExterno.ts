@@ -1322,6 +1322,7 @@ export const portalExternoRouter = router({
         projeto: {
           id: projeto.id, nome: projeto.nome, dataInicio: projeto.dataInicio,
           dataTerminoContratual: projeto.dataTerminoContratual, status: projeto.status,
+          valorContrato: _n((projeto as any).valorContrato),
           revisaoNumero: revisao.numero, revisaoData: revisao.dataRevisao,
         },
         kpis: {
