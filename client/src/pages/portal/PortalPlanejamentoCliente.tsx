@@ -489,7 +489,7 @@ export default function PortalPlanejamentoCliente() {
               nomeCliente={obra?.cliente ?? ""}
             />
           );
-          if (aba === "curva_s") return <AbaCurvaS curvaData={curvaData} kpis={kpis} projeto={projeto} />;
+          if (aba === "curva_s") return <AbaCurvaS curvaData={curvaData} kpis={kpis} projeto={projeto} curvaMedicoes={curvaMedicoes} />;
           if (aba === "gantt") return <AbaGantt atividades={atividadesTodas} />;
           if (aba === "refis") return <AbaRefis refisLista={refisLista} atividades={atividadesTodas} curvaData={curvaData} curvaMedicoes={curvaMedicoes} obra={obra} projeto={projeto} />;
           if (aba === "caminho_critico") return <AbaCaminhoCritico criticas={caminhoCritico} />;
@@ -915,7 +915,7 @@ function AbaProgSemanal({
   );
 }
 
-function AbaCurvaS({ curvaData, kpis, projeto: _projeto }: any) {
+function AbaCurvaS({ curvaData, kpis, projeto, curvaMedicoes = [] }: any) {
   // Réplica visual da Curva S de Trabalho interna (PlanejamentoDetalhe.tsx ~3697).
   // Mantém: switcher Trabalho/Financeira (Financeira desabilitada no portal),
   // legenda dinâmica com toggles de séries (baseline/realizado/tendência),
@@ -974,7 +974,7 @@ function AbaCurvaS({ curvaData, kpis, projeto: _projeto }: any) {
       <div className="flex bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
         {[
           { id: "trabalho",   label: "Curva S de Trabalho",  icon: "📐", disabled: false },
-          { id: "financeira", label: "Curva S Financeira",   icon: "💰", disabled: true  },
+          { id: "financeira", label: "Curva S Financeira",   icon: "💰", disabled: false },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -1094,15 +1094,167 @@ function AbaCurvaS({ curvaData, kpis, projeto: _projeto }: any) {
         </>
       ))}
 
-      {curvaTipo === "financeira" && (
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-12 flex flex-col items-center gap-3 text-slate-400">
-          <DollarSign className="h-10 w-10 opacity-30" />
-          <p className="text-sm font-semibold text-slate-500">Curva S Financeira</p>
-          <p className="text-xs text-center max-w-md">
-            Esta visão está disponível apenas no app interno. No Portal do Cliente, consulte a aba "Crono. Financeiro" para a projeção de faturamento.
-          </p>
-        </div>
-      )}
+      {curvaTipo === "financeira" && (() => {
+        const totalContrato = Number(projeto?.valorContrato ?? 0);
+        if (!totalContrato || merged.length === 0) {
+          return (
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-12 flex flex-col items-center gap-3 text-slate-400">
+              <DollarSign className="h-10 w-10 opacity-30" />
+              <p className="text-sm font-semibold text-slate-500">Curva S Financeira</p>
+              <p className="text-xs text-center max-w-md">
+                {!totalContrato ? "Sem valor de contrato cadastrado." : "Sem dados suficientes para gerar a Curva S Financeira."}
+              </p>
+            </div>
+          );
+        }
+        const fatPorSemana = new Map<string, number>();
+        for (const m of (curvaMedicoes as any[])) {
+          const [yy, mm] = String(m.competencia).split("-");
+          if (!yy || !mm) continue;
+          const lastDay = new Date(Number(yy), Number(mm), 0).toISOString().slice(0, 10);
+          fatPorSemana.set(lastDay, m.valorAcumulado);
+        }
+        const dataFin = merged.map((r: any) => {
+          let fat: number | null = null;
+          for (const [d, v] of fatPorSemana.entries()) if (d <= r.semana) fat = v;
+          return {
+            semana: r.semana,
+            baseline:  r.baseline  != null ? +(r.baseline  * totalContrato / 100).toFixed(2) : null,
+            planejada: r.planejada != null ? +(r.planejada * totalContrato / 100).toFixed(2) : null,
+            realizada: r.realizada != null ? +(r.realizada * totalContrato / 100).toFixed(2) : null,
+            tendencia: r.tendencia != null ? +(r.tendencia * totalContrato / 100).toFixed(2) : null,
+            faturado:  fat,
+          };
+        });
+        const cfHasFaturado = (curvaMedicoes as any[]).length > 0;
+        const faturadoAcumulado = cfHasFaturado ? (curvaMedicoes as any[])[(curvaMedicoes as any[]).length - 1].valorAcumulado : 0;
+        const prevAcumFin = totalContrato * Number(kpis.previsto || 0) / 100;
+        const realAcumFin = totalContrato * Number(kpis.realizado || 0) / 100;
+        const desvioFin = realAcumFin - prevAcumFin;
+        const brl = (v: any) => Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        const finTickFmt = (v: number) => v === 0 ? "0" : v.toLocaleString("pt-BR");
+        return (
+          <>
+            {/* Legenda dinâmica financeira */}
+            <div className="flex flex-wrap gap-4 text-xs bg-white rounded-xl border border-slate-100 shadow-sm p-3">
+              {[
+                { key: "baseline",  show: hasBaseline,  color: "#1e40af", dash: false, width: 2,   label: "Baseline (Rev 00)" },
+                { key: "planejada", show: hasPlanejada, color: "#ef4444", dash: false, width: 2,   label: "Faturamento Previsto" },
+                { key: "realizada", show: hasRealizada, color: "#22c55e", dash: false, width: 3,   label: "Faturamento Realizado (Físico)" },
+                { key: "faturado",  show: cfHasFaturado, color: "#7c3aed", dash: false, width: 2.5, label: "Faturado Real (Medições)" },
+                { key: "tendencia", show: hasTendencia, color: "#16a34a", dash: true,  width: 2,   label: "Tendência (projeção)" },
+              ].filter((l) => l.show).map((l, i) => {
+                const ativo = seriesVisiveis[l.key] !== false;
+                return (
+                  <button key={i} type="button" onClick={() => toggleSerie(l.key)}
+                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border transition-all cursor-pointer select-none ${ativo ? "border-transparent" : "border-slate-200 bg-slate-50 opacity-40"}`}
+                    title={ativo ? `Ocultar ${l.label}` : `Mostrar ${l.label}`}>
+                    <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5"
+                      stroke={ativo ? l.color : "#94a3b8"} strokeWidth={l.width} strokeDasharray={l.dash ? "4 2" : "0"} /></svg>
+                    <span className={ativo ? "text-slate-600" : "text-slate-400 line-through"}>{l.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* KPIs financeiros */}
+            <div className={`grid gap-2 ${cfHasFaturado ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-4"}`}>
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Contrato Total</p>
+                <p className="text-base font-bold text-slate-700">{brl(totalContrato)}</p>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Faturamento Previsto</p>
+                <p className="text-base font-bold text-red-600">{brl(prevAcumFin)}</p>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Faturamento Realizado (Físico)</p>
+                <p className="text-base font-bold text-emerald-700">{brl(realAcumFin)}</p>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2 text-center">
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Desvio (Real − Prev)</p>
+                <p className={`text-base font-bold ${desvioFin >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                  {desvioFin >= 0 ? "+" : ""}{brl(desvioFin)}
+                </p>
+              </div>
+              {cfHasFaturado && (
+                <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Faturado Real</p>
+                  <p className="text-base font-bold" style={{ color: "#7c3aed" }}>{brl(faturadoAcumulado)}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Gráfico financeiro */}
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 relative">
+              <p className="text-sm font-semibold text-slate-700 mb-1">
+                Curva S Financeira — Faturamento Acumulado (R$)
+              </p>
+              <p className="text-xs text-slate-400 mb-3">
+                Baseado em Curva S × Valor de Contrato ({brl(totalContrato)})
+              </p>
+              <ResponsiveContainer width="100%" height={420}>
+                <ComposedChart data={dataFin} margin={{ left: 5, right: 20, top: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="semana" tick={{ fontSize: 10, fill: "#64748b" }} angle={-30} textAnchor="end"
+                    height={50} interval={"preserveStartEnd"} stroke="#cbd5e1"
+                    tickFormatter={(v) => semanaLabel[v] ?? v} />
+                  <YAxis tickFormatter={finTickFmt} tick={{ fontSize: 10, fill: "#64748b" }} width={90} stroke="#cbd5e1" />
+                  <Tooltip
+                    cursor={{ stroke: "#cbd5e1", strokeWidth: 1, strokeDasharray: "3 3" }}
+                    content={({ payload, label }: any) => {
+                      if (!payload?.length) return null;
+                      const [y, m, d] = String(label).split("-");
+                      const get = (k: string) => payload.find((p: any) => p.dataKey === k)?.value;
+                      const items = [
+                        { k: "baseline",  lbl: "Baseline",                       color: "#1e40af" },
+                        { k: "planejada", lbl: "Faturamento Previsto",           color: "#ef4444" },
+                        { k: "realizada", lbl: "Faturamento Realizado (Físico)", color: "#22c55e" },
+                        { k: "faturado",  lbl: "Faturado Real",                  color: "#7c3aed" },
+                        { k: "tendencia", lbl: "Tendência",                      color: "#16a34a" },
+                      ].filter((it) => get(it.k) != null && seriesVisiveis[it.k] !== false);
+                      if (items.length === 0) return null;
+                      return (
+                        <div className="bg-white border border-slate-200 rounded-xl shadow-xl p-3 text-xs min-w-[260px]">
+                          <p className="font-bold text-slate-900 mb-2 pb-2 border-b border-slate-100">
+                            {semanaLabel[label] ?? label}
+                            <span className="text-slate-400 font-normal ml-2">({d}/{m}/{y})</span>
+                          </p>
+                          {items.map((it) => (
+                            <p key={it.k} className="flex items-center justify-between py-0.5" style={{ color: it.color }}>
+                              <span>● {it.lbl}</span>
+                              <strong className="tabular-nums">{brl(get(it.k))}</strong>
+                            </p>
+                          ))}
+                        </div>
+                      );
+                    }}
+                  />
+                  {refHoje && (
+                    <ReferenceLine x={refHoje} stroke="#94a3b8" strokeDasharray="2 2"
+                      label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
+                  )}
+                  {seriesVisiveis.baseline  !== false && hasBaseline  && <Line type="monotone" dataKey="baseline"  name="Baseline"               stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls />}
+                  {seriesVisiveis.planejada !== false && hasPlanejada && <Line type="monotone" dataKey="planejada" name="Faturamento Previsto"   stroke="#ef4444" strokeWidth={2}   dot={false} connectNulls />}
+                  {seriesVisiveis.realizada !== false && hasRealizada && <Line type="monotone" dataKey="realizada" name="Faturamento Realizado"  stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} connectNulls />}
+                  {seriesVisiveis.faturado  !== false && cfHasFaturado && <Line type="monotone" dataKey="faturado"  name="Faturado Real"          stroke="#7c3aed" strokeWidth={2.5} dot={{ r: 4 }} connectNulls />}
+                  {seriesVisiveis.tendencia !== false && hasTendencia && <Line type="monotone" dataKey="tendencia" name="Tendência"              stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />}
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Interpretação financeira */}
+            <div className="bg-slate-50 rounded-xl border border-slate-100 p-4 text-xs text-slate-600 space-y-1">
+              <p className="font-semibold text-slate-700 mb-2">Como interpretar</p>
+              {hasBaseline   && <p>🔵 <strong>Baseline</strong>: Curva financeira do plano original (Rev 00) × valor de contrato.</p>}
+              {hasPlanejada  && <p>🔴 <strong>Faturamento Previsto</strong>: Cronograma vigente convertido em R$.</p>}
+              {hasRealizada  && <p>🟢 <strong>Faturamento Realizado (Físico)</strong>: Avanço físico real × valor de contrato.</p>}
+              {cfHasFaturado && <p>🟣 <strong>Faturado Real</strong>: Boletins de medição efetivamente emitidos/aprovados.</p>}
+              {hasTendencia  && <p>🟢 <strong>Tendência</strong>: Projeção financeira baseada no ritmo atual.</p>}
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

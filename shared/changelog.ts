@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1460,
+    titulo: "Portal do Cliente — Curva S Financeira habilitada na aba Curva S",
+    descricao: "A aba 'Curva S' do Portal do Cliente agora exibe de fato a Curva S Financeira ao clicar no switcher 'Curva S Financeira' (antes desabilitado). O gráfico converte os percentuais da Curva S (Baseline, Faturamento Previsto, Faturamento Realizado Físico e Tendência) em R$ multiplicando pelo Valor de Contrato do projeto, e plota também a série 'Faturado Real' a partir das medições efetivamente emitidas/aprovadas (curvaMedicoes do backend). Inclui legenda dinâmica com toggles por série, KPIs financeiros (Contrato Total, Faturamento Previsto, Faturamento Realizado Físico, Desvio e Faturado Real quando houver medições), tooltip em BRL e bloco 'Como interpretar'. Quando o projeto não tiver valor de contrato cadastrado ou não houver dados de Curva S, exibe placeholder explicativo.",
+    tipo: "feature",
+    modulos: "Portal do Cliente,Planejamento",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-05-08 18:30:00",
+  },
+  {
     version: 1449,
     titulo: "Controle de Integrações — botão Editar em cada linha da tabela",
     descricao: "Adicionado botão de edição (ícone lápis) ao lado do botão de exclusão em cada linha da tabela de Integrações (módulo Controle de Integrações). Ao clicar, abre o mesmo modal usado para cadastro, agora em modo edição, pré-preenchido com os dados da integração selecionada. No modo edição, o colaborador, o tipo (interna/externa) e o cliente PJ ficam fixos (read-only) — para alterá-los basta excluir e criar uma nova integração; permanecem editáveis a Data de Realização, Validade (período), Data de Vencimento, Evidência/Protocolo, Observações e, no caso de integração interna, a Referência. O título do modal muda para 'Editar Integração' e o botão de ação para 'Salvar alterações'. Backend já possuía a procedure trpc integracoes.atualizar — agora exposta na UI.",
