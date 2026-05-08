@@ -350,19 +350,35 @@ export const sstAnalyticsRouter = router({
         }))
         .sort((a, b) => b.diasAfastamento - a.diasAfastamento || b.qtdAtestados - a.qtdAtestados);
 
-      const diasSemAcidente = obrasAtivas
-        .map((o) => {
-          const reg = obraMap.get(String(o.id));
+      // Lista TODAS as obras ativas. Inclui também obras que aparecem em acRows
+      // mas que não estão na lista de obras ativas (defensivo, evita
+      // inconsistência com o "Ranking de Obras com Mais Acidentes" abaixo).
+      const obrasParaListagem = new Map<number, string>();
+      for (const o of obrasAtivas) obrasParaListagem.set(o.id, o.nome);
+      for (const r of acRows) {
+        if (r.obraId != null && !obrasParaListagem.has(r.obraId)) {
+          obrasParaListagem.set(r.obraId, r.obraNome || `Obra #${r.obraId}`);
+        }
+      }
+      const diasSemAcidente = Array.from(obrasParaListagem.entries())
+        .map(([id, nome]) => {
+          const reg = obraMap.get(String(id));
           if (reg?.ultimaData) {
             return {
-              obraId: o.id, obraNome: o.nome, ultimaData: reg.ultimaData,
+              obraId: id, obraNome: nome, ultimaData: reg.ultimaData,
               dias: Math.max(0, Math.floor((hoje.getTime() - new Date(reg.ultimaData + "T00:00:00").getTime()) / (1000 * 60 * 60 * 24))),
             };
           }
-          return { obraId: o.id, obraNome: o.nome, ultimaData: null, dias: null as number | null };
+          return { obraId: id, obraNome: nome, ultimaData: null, dias: null as number | null };
         })
-        .sort((a, b) => (b.dias ?? 99999) - (a.dias ?? 99999))
-        .slice(0, 15);
+        // Ordenação: obras COM acidente primeiro (acidente mais recente no topo),
+        // depois as "Nunca" em ordem alfabética.
+        .sort((a, b) => {
+          if (a.dias === null && b.dias === null) return a.obraNome.localeCompare(b.obraNome);
+          if (a.dias === null) return 1;
+          if (b.dias === null) return -1;
+          return a.dias - b.dias;
+        });
 
       // Cobertura CAT (% acidentes que exigem CAT e têm CAT)
       const exigeCAT = acRows.filter((r) => !/quase|primeiros socorros/i.test(r.gravidade || ""));

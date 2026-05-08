@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1403,
+    titulo: "Dashboard Atestados & Acidentes — corrigida inconsistência entre 'Dias sem Acidente' e 'Ranking de Obras com Mais Acidentes'",
+    descricao: "CORREÇÃO em /sst/dashboard-atestados-acidentes: a tabela 'Dias sem Acidente — por Obra' mostrava 'Nunca' para todas as obras enquanto o gráfico 'Ranking de Obras com Mais Acidentes' logo abaixo apresentava obras com acidentes (ex.: LUCIANA - FINAL BLOCO B, QIU 2 - FASE 4). Causa: a ordenação no backend era por dias decrescente (b.dias ?? 99999) - (a.dias ?? 99999), o que jogava as obras 'Nunca' (null) para o topo, e o slice(0, 15) cortava justamente as obras que tinham acidentes registrados. Fix em server/routers/sstAnalytics.ts: (1) ordenação invertida — obras COM acidente vêm primeiro (acidente mais recente no topo, sort asc por dias), depois as 'Nunca' em ordem alfabética; (2) removido o limite de 15 — agora lista TODAS as obras ativas; (3) defensivamente inclui obras presentes em acRows mesmo se ausentes da lista de obras ativas, garantindo paridade absoluta com o ranking. Resultado: obras com acidentes agora aparecem corretamente no topo da tabela com badges Atenção/Bom/Excelente conforme dias decorridos.",
+    tipo: "correcao",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 22:30:00",
+  },
+  {
     version: 1402,
     titulo: "Advertência (CLT) — corrigido erro 'expected number, received undefined' ao salvar assinaturas digitais",
     descricao: "CORREÇÃO em /controle-documentos > Advertências CLT: ao criar uma nova advertência e clicar imediatamente em 'Assinaturas Digitais' no preview, o backend recusava com 'Invalid input: expected number, received undefined' no campo advertenciaId. Causa: o create rodava com .mutate() (fire-and-forget) e o preview abria 300ms depois sem garantia de que o ID já tinha chegado. Fix: o submit agora usa await mutateAsync, captura o ID retornado e o injeta diretamente em previewAdvData.id antes de abrir o preview. Como cinto e suspensório, o botão 'Assinaturas Digitais' do preview agora bloqueia o clique caso o ID ainda não esteja disponível e mostra aviso ao usuário em vez de enviar undefined.",
