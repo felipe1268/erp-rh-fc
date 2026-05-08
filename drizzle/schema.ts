@@ -3955,8 +3955,8 @@ export const portalCredentials = pgTable("portal_credentials", {
 // Tokens de redefinição de senha (esqueci minha senha) — para todos os tipos do portal
 export const portalPasswordResets = pgTable("portal_password_resets", {
   id: serial().primaryKey(),
-  credId: integer("cred_id").notNull(), // FK -> portal_credentials.id
-  token: varchar({ length: 80 }).notNull(),
+  credId: integer("cred_id").notNull().references(() => portalCredentials.id, { onDelete: "cascade" }),
+  token: varchar({ length: 128 }).notNull(),
   expiresAt: timestamp("expires_at", { mode: "string" }).notNull(),
   usadoEm: timestamp("usado_em", { mode: "string" }),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
@@ -3968,9 +3968,9 @@ export const portalPasswordResets = pgTable("portal_password_resets", {
 // Comentários cliente <-> empresa (NÃO anônimo — comunicação rastreável)
 export const clienteComentarios = pgTable("cliente_comentarios", {
   id: serial().primaryKey(),
-  companyId: integer("company_id").notNull(),
-  clienteId: integer("cliente_id").notNull(),
-  obraId: integer("obra_id"),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  clienteId: integer("cliente_id").notNull().references(() => clientes.id, { onDelete: "cascade" }),
+  obraId: integer("obra_id").references(() => obras.id, { onDelete: "set null" }),
   autorTipo: varchar("autor_tipo", { length: 20 }).notNull(), // 'cliente' | 'fc'
   autorNome: varchar("autor_nome", { length: 255 }),
   mensagem: text().notNull(),
@@ -3986,8 +3986,8 @@ export const clienteComentarios = pgTable("cliente_comentarios", {
 // Não armazena clienteId/credId/IP — apenas obra (opcional) e companyId
 export const clienteAvaliacoes = pgTable("cliente_avaliacoes", {
   id: serial().primaryKey(),
-  companyId: integer("company_id").notNull(),
-  obraId: integer("obra_id"),
+  companyId: integer("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  obraId: integer("obra_id").references(() => obras.id, { onDelete: "set null" }),
   obraNome: varchar("obra_nome", { length: 255 }),
   // Notas 0-10 (NPS). null = não respondeu o critério
   notaEquipe: integer("nota_equipe"),

@@ -68,6 +68,13 @@ export default function PortalDashboardCliente() {
     { token, obraId: obraFiltro },
     { enabled: !!token && tipo === "cliente" }
   );
+  const marcarLidosMut = trpc.portalExterno.cliente.marcarComentariosLidos.useMutation();
+  useEffect(() => {
+    if (token && tipo === "cliente" && tab === "comentarios" && comentarios.length > 0) {
+      const naoLidos = (comentarios as any[]).some((c) => c.autorTipo === "fc" && !c.lidoEm);
+      if (naoLidos) marcarLidosMut.mutate({ token, obraId: obraFiltro });
+    }
+  }, [tab, comentarios, obraFiltro]);
   const [novoMsg, setNovoMsg] = useState("");
   const criarMsg = trpc.portalExterno.cliente.criarComentario.useMutation({
     onSuccess: () => { setNovoMsg(""); utils.portalExterno.cliente.listarComentarios.invalidate(); toast.success("Mensagem enviada!"); },

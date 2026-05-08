@@ -827,12 +827,24 @@ export const portalExternoRouter = router({
       ];
       if (input.obraId) conds.push(eq(clienteComentarios.obraId, input.obraId));
       const rows = await db.select().from(clienteComentarios).where(and(...conds)).orderBy(desc(clienteComentarios.criadoEm));
-      // Marca como lidos os da empresa
-      try {
-        await db.update(clienteComentarios).set({ lidoEm: new Date().toISOString().slice(0, 19).replace("T", " ") })
-          .where(and(...conds, eq(clienteComentarios.autorTipo, "fc"), isNull(clienteComentarios.lidoEm)));
-      } catch {}
       return rows;
+    }),
+
+    marcarComentariosLidos: publicProcedure.input(z.object({ token: z.string(), obraId: z.number().nullable().optional() })).mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+      const conds: any[] = [
+        eq(clienteComentarios.companyId, decoded.companyId),
+        eq(clienteComentarios.clienteId, decoded.clienteId),
+        eq(clienteComentarios.autorTipo, "fc"),
+        isNull(clienteComentarios.lidoEm),
+      ];
+      if (input.obraId) conds.push(eq(clienteComentarios.obraId, input.obraId));
+      await db.update(clienteComentarios).set({ lidoEm: new Date().toISOString().slice(0, 19).replace("T", " ") }).where(and(...conds));
+      return { success: true };
     }),
 
     criarComentario: publicProcedure.input(z.object({
