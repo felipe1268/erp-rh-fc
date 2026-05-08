@@ -687,24 +687,28 @@ export default function ClientesPortalAdmin() {
 
         {/* Modal: Liberar abas do Portal por usuário */}
         <Dialog open={!!abasTarget} onOpenChange={(o) => { if (!o) setAbasTarget(null); }}>
-          <DialogContent className="max-w-[95vw] w-[95vw] sm:max-w-5xl bg-white max-h-[92vh] overflow-hidden flex flex-col">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
+          <DialogContent className="bg-white p-0 gap-0 flex flex-col !max-w-none w-screen h-screen !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 sm:!max-w-none"
+            style={{ width: "100vw", height: "100vh", maxWidth: "100vw", maxHeight: "100vh", top: 0, left: 0, transform: "none", borderRadius: 0 }}>
+            <DialogHeader className="px-6 py-4 border-b shrink-0">
+              <DialogTitle className="flex items-center gap-2 text-lg">
                 <SlidersHorizontal className="w-5 h-5 text-indigo-600" />
                 Abas liberadas no Portal do Cliente
               </DialogTitle>
             </DialogHeader>
             {abasTarget && (
-              <div className="space-y-3">
-                <div className="bg-slate-50 rounded-lg p-3 text-sm">
-                  <div className="font-semibold text-slate-800">{abasTarget.nomeResponsavel || abasTarget.emailResponsavel}</div>
-                  <div className="text-xs text-slate-500">{abasTarget.emailResponsavel}</div>
+              <div className="flex flex-col flex-1 min-h-0 px-6 py-4 gap-3">
+                <div className="bg-slate-50 rounded-lg p-3 text-sm flex flex-wrap items-center justify-between gap-2 shrink-0">
+                  <div>
+                    <div className="font-semibold text-slate-800">{abasTarget.nomeResponsavel || abasTarget.emailResponsavel}</div>
+                    <div className="text-xs text-slate-500">{abasTarget.emailResponsavel}</div>
+                  </div>
+                  <Badge variant="outline" className="text-xs">{abasSel.size} de {PORTAL_CLIENTE_ABAS.length} abas selecionadas</Badge>
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 shrink-0">
                   Selecione quais abas este usuário verá ao abrir uma obra (<b>/portal/cliente/obra/...</b>).
                   A aba <b>Visão Geral</b> é obrigatória — sem ela o usuário não vê nada da obra clicada.
                 </p>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 flex-1 overflow-y-auto pr-1">
+                <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 flex-1 overflow-y-auto pr-1 content-start">
                   {PORTAL_CLIENTE_ABAS.map((aba) => {
                     const checked = abasSel.has(aba.key);
                     const obrig = aba.key === ABA_OBRIGATORIA;
@@ -726,19 +730,19 @@ export default function ClientesPortalAdmin() {
                     );
                   })}
                 </div>
-                <DialogFooter className="gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setAbasSel(new Set(PORTAL_CLIENTE_ABAS.map((a) => a.key)))}>Selecionar todas</Button>
-                  <Button variant="outline" size="sm" onClick={() => setAbasSel(new Set([ABA_OBRIGATORIA]))}>Apenas a obrigatória</Button>
-                  <div className="flex-1" />
-                  <Button variant="outline" onClick={() => setAbasTarget(null)}>Cancelar</Button>
-                  <Button onClick={() => setAbasMut.mutate({ id: abasTarget.id, companyId, abas: Array.from(abasSel) })}
-                    disabled={setAbasMut.isPending} className="bg-indigo-600 hover:bg-indigo-700 gap-2">
-                    {setAbasMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                    Salvar
-                  </Button>
-                </DialogFooter>
               </div>
             )}
+            <DialogFooter className="gap-2 px-6 py-4 border-t bg-slate-50 shrink-0 flex-row flex-wrap">
+              <Button variant="outline" size="sm" onClick={() => setAbasSel(new Set(PORTAL_CLIENTE_ABAS.map((a) => a.key)))}>Selecionar todas</Button>
+              <Button variant="outline" size="sm" onClick={() => setAbasSel(new Set([ABA_OBRIGATORIA]))}>Apenas a obrigatória</Button>
+              <div className="flex-1" />
+              <Button variant="outline" onClick={() => setAbasTarget(null)}>Cancelar</Button>
+              <Button onClick={() => abasTarget && setAbasMut.mutate({ id: abasTarget.id, companyId, abas: Array.from(abasSel) })}
+                disabled={setAbasMut.isPending || !abasTarget} className="bg-indigo-600 hover:bg-indigo-700 gap-2">
+                {setAbasMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                Salvar
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 
