@@ -11,8 +11,8 @@ import {
   Search, Menu, X, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import {
-  ResponsiveContainer, ComposedChart, Line, Area, CartesianGrid, XAxis, YAxis,
-  Tooltip, ReferenceLine,
+  ResponsiveContainer, ComposedChart, LineChart, BarChart, Bar, Cell,
+  Line, Area, CartesianGrid, XAxis, YAxis, Tooltip, ReferenceLine, LabelList,
 } from "recharts";
 import { PORTAL_CLIENTE_ABAS, type PortalClienteAbaKey } from "@shared/portalClienteAbas";
 import { ProgramacaoSemanal } from "@/pages/planejamento/ProgramacaoSemanal";
@@ -80,6 +80,7 @@ export default function PortalPlanejamentoCliente() {
   };
   const atividadesTodas = ((data as any)?.atividadesTodas || []) as any[];
   const refisLista = ((data as any)?.refisLista || []) as any[];
+  const curvaMedicoes = ((data as any)?.curvaMedicoes || []) as { competencia: string; valorMedido: number; valorAcumulado: number; status: string }[];
   const caminhoCritico = ((data as any)?.caminhoCritico || []) as any[];
   const efetivoMensal = ((data as any)?.efetivoMensal || []) as any[];
   const revisoes = ((data as any)?.revisoes || []) as any[];
@@ -490,7 +491,7 @@ export default function PortalPlanejamentoCliente() {
           );
           if (aba === "curva_s") return <AbaCurvaS curvaData={curvaData} kpis={kpis} projeto={projeto} />;
           if (aba === "gantt") return <AbaGantt atividades={atividadesTodas} />;
-          if (aba === "refis") return <AbaRefis refisLista={refisLista} />;
+          if (aba === "refis") return <AbaRefis refisLista={refisLista} atividades={atividadesTodas} curvaData={curvaData} curvaMedicoes={curvaMedicoes} obra={obra} projeto={projeto} />;
           if (aba === "caminho_critico") return <AbaCaminhoCritico criticas={caminhoCritico} />;
           if (aba === "efetivo") return <AbaEfetivo token={token} obraId={obraId} />;
           if (aba === "crono_financeiro") return <AbaCronoFinanceiro curvaS={curvaS} valorContrato={projeto?.valorContrato || 0} />;
@@ -1246,55 +1247,653 @@ function AbaGantt({ atividades }: { atividades: any[] }) {
 }
 
 // ─────────────────────── ABA: REFIS ─────────────────────────────────────
-function AbaRefis({ refisLista }: { refisLista: any[] }) {
-  if (refisLista.length === 0) {
+// Réplica visual da tela interna (PlanejamentoDetalhe.tsx → função Refis)
+// Read-only: sem toolbar, sem edição, sem IA, sem observações.
+function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, projeto }: {
+  refisLista: any[];
+  atividades: any[];
+  curvaData: null | {
+    curvaBaseline: { semana: string; acumulado: number }[];
+    curvaPlanejada: { semana: string; acumulado: number }[];
+    curvaRealizada: { semana: string; acumulado: number }[];
+    curvaTendencia: { semana: string; acumulado: number }[];
+  };
+  curvaMedicoes: { competencia: string; valorMedido: number; valorAcumulado: number; status: string }[];
+  obra: any;
+  projeto: any;
+}) {
+  if (!refisLista || refisLista.length === 0) {
     return <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 text-sm">Nenhum REFIS emitido ainda.</div>;
   }
+
+  // ── Refis ordenados (mais antigo → mais recente) e refis "atual" = mais recente
+  const refisOrd = [...refisLista].sort((a, b) => String(a.semana).localeCompare(String(b.semana)));
+  const refisAtual = refisOrd[refisOrd.length - 1];
+  const refisAnterior = refisOrd.length > 1 ? refisOrd[refisOrd.length - 2] : null;
+
+  const semanaRef = refisAtual.semana as string;          // "YYYY-MM-DD"
+  const numeroRef = refisAtual.numero ?? refisOrd.length;
+  const mesSemana = semanaRef.slice(0, 7);                 // "YYYY-MM"
+
+  const fmt = (v: number) => Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const fPct_ = (v: number) => `${Number(v || 0).toFixed(2)}%`;
+
+  const totalContrato = Number(projeto?.valorContrato ?? 0);
+
+  // ── Reconstroi grupos/etapas a partir das atividades + valores acumulados na semanaRef
+  // (replica a lógica de cálculo de "grupos" da função interna usando acumPrev/acumReal já gravados em refis)
+  // Para simplificação: usa atividades não-disabled, não-grupo, não-indireta.
+  const folhas = (atividades || []).filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
+
+  // Helper: progresso previsto linear em data específica
+  const progPrevistoNa = (a: any, dataStr: string) => {
+    if (!a.dataInicio || !a.dataFim) return 0;
+    if (dataStr >= a.dataFim) return 100;
+    if (dataStr < a.dataInicio) return 0;
+    const ini = new Date(a.dataInicio + "T12:00:00Z").getTime();
+    const fim = new Date(a.dataFim + "T12:00:00Z").getTime();
+    const tod = new Date(dataStr + "T12:00:00Z").getTime();
+    return ((tod - ini) / (fim - ini)) * 100;
+  };
+
+  // Agrupa por nível-1 do EAP
+  const grupoMap = new Map<string, { id: string; eapCodigo: string; nome: string; dataInicio: string | null; dataFim: string | null; pesos: number; pPrev: number; pReal: number; etapasMap: Map<string, any> }>();
+  for (const a of folhas) {
+    const eap = String(a.eapCodigo || "").trim();
+    const partes = eap.split(".");
+    const grpKey = partes[0] || "—";
+    const etpKey = partes.slice(0, 2).join(".") || grpKey;
+    const peso = Number(a.pesoFinanceiro ?? 0) || 0;
+    const realA = Number(a.percentRealizado ?? 0);
+    const prevA = progPrevistoNa(a, semanaRef);
+
+    if (!grupoMap.has(grpKey)) {
+      // Nome do grupo: tenta achar atividade pai (isGrupo) com mesmo eap_codigo = grpKey
+      const pai = (atividades || []).find((x: any) => x.eapCodigo === grpKey && x.isGrupo);
+      grupoMap.set(grpKey, {
+        id: grpKey, eapCodigo: grpKey,
+        nome: pai?.nome || a.grupo || `Grupo ${grpKey}`,
+        dataInicio: null, dataFim: null,
+        pesos: 0, pPrev: 0, pReal: 0,
+        etapasMap: new Map(),
+      });
+    }
+    const g = grupoMap.get(grpKey)!;
+    g.pesos += peso;
+    g.pPrev += peso * prevA;
+    g.pReal += peso * realA;
+    if (a.dataInicio && (!g.dataInicio || a.dataInicio < g.dataInicio)) g.dataInicio = a.dataInicio;
+    if (a.dataFim && (!g.dataFim || a.dataFim > g.dataFim)) g.dataFim = a.dataFim;
+
+    if (!g.etapasMap.has(etpKey)) {
+      const paiE = (atividades || []).find((x: any) => x.eapCodigo === etpKey && x.isGrupo);
+      g.etapasMap.set(etpKey, {
+        id: etpKey, eapCodigo: etpKey,
+        nome: paiE?.nome || (partes.length >= 2 ? `Etapa ${etpKey}` : a.nome),
+        pesos: 0, pPrev: 0, pReal: 0,
+      });
+    }
+    const e = g.etapasMap.get(etpKey)!;
+    e.pesos += peso;
+    e.pPrev += peso * prevA;
+    e.pReal += peso * realA;
+  }
+  const grupos = Array.from(grupoMap.values()).map((g) => {
+    const previsto = g.pesos > 0 ? g.pPrev / g.pesos : 0;
+    const realizado = g.pesos > 0 ? g.pReal / g.pesos : 0;
+    const etapas = Array.from(g.etapasMap.values()).map((e: any) => ({
+      id: e.id, eapCodigo: e.eapCodigo, nome: e.nome,
+      previsto: e.pesos > 0 ? e.pPrev / e.pesos : 0,
+      realizado: e.pesos > 0 ? e.pReal / e.pesos : 0,
+    })).sort((a, b) => String(a.eapCodigo).localeCompare(String(b.eapCodigo)));
+    return {
+      id: g.id, eapCodigo: g.eapCodigo, nome: g.nome,
+      dataInicio: g.dataInicio, dataFim: g.dataFim,
+      previsto, realizado, etapas,
+    };
+  }).sort((a, b) => String(a.eapCodigo).localeCompare(String(b.eapCodigo)));
+
+  // ── Métricas globais (usar valores do refis para garantir paridade com o emitido)
+  const avancoPrevisto  = Number(refisAtual.avancoPrevisto ?? 0);
+  const avancoRealAtual = Number(refisAtual.avancoRealizado ?? 0);
+  const avancoSemPrev   = Number(refisAtual.avancoSemanalPrevisto ?? (refisAnterior ? avancoPrevisto - Number(refisAnterior.avancoPrevisto) : 0));
+  const avancoSemReal   = Number(refisAtual.avancoSemanalRealizado ?? (refisAnterior ? avancoRealAtual - Number(refisAnterior.avancoRealizado) : 0));
+  const desvioFisico    = avancoRealAtual - avancoPrevisto;
+  const spi = Number(refisAtual.spi ?? (avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0));
+
+  // ── Curva S Física: usa curvaData do backend, recortando até o último ponto realizado/projetado
+  const curvaFiltrada = (() => {
+    if (!curvaData) return [] as any[];
+    const semanasSet = new Set<string>();
+    [...curvaData.curvaBaseline, ...curvaData.curvaPlanejada, ...curvaData.curvaRealizada, ...curvaData.curvaTendencia]
+      .forEach(p => semanasSet.add(p.semana));
+    const semanas = Array.from(semanasSet).sort();
+    const baseMap = new Map(curvaData.curvaBaseline.map(p => [p.semana, p.acumulado]));
+    const planMap = new Map(curvaData.curvaPlanejada.map(p => [p.semana, p.acumulado]));
+    const realMap = new Map(curvaData.curvaRealizada.map(p => [p.semana, p.acumulado]));
+    const tendMap = new Map(curvaData.curvaTendencia.map(p => [p.semana, p.acumulado]));
+    return semanas.map(s => {
+      const [y, m, d] = s.split("-");
+      return {
+        semana: s,
+        label: `${d}/${m}/${y.slice(2)}`,
+        baseline: baseMap.get(s) ?? null,
+        planejada: planMap.get(s) ?? null,
+        realizada: realMap.get(s) ?? null,
+        tendencia: tendMap.get(s) ?? null,
+      };
+    });
+  })();
+  const cfHasBaseline  = curvaFiltrada.some((r: any) => r.baseline != null);
+  const cfHasPlanejada = curvaFiltrada.some((r: any) => r.planejada != null);
+  const today = new Date().toISOString().slice(0, 10);
+  const cfHojeRow = curvaFiltrada.find((r: any) => r.semana >= today) || curvaFiltrada[curvaFiltrada.length - 1];
+  const cfHojeLabel = cfHojeRow?.label;
+  const rPrev = avancoPrevisto;
+  const rReal = avancoRealAtual;
+
+  // ── Curva S Financeira: escala % * totalContrato; usa curvaMedicoes p/ "faturado"
+  const fatPorSemana = new Map<string, number>();
+  for (const m of curvaMedicoes) {
+    // converte competência YYYY-MM em fim de mês como semana de referência
+    const [yy, mm] = m.competencia.split("-");
+    if (!yy || !mm) continue;
+    const lastDay = new Date(Number(yy), Number(mm), 0).toISOString().slice(0, 10);
+    fatPorSemana.set(lastDay, m.valorAcumulado);
+  }
+  const curvaFinanceiraFull = curvaFiltrada.map((r: any) => {
+    // pega o último "faturado" cuja data <= r.semana
+    let fat: number | null = null;
+    for (const [d, v] of fatPorSemana.entries()) {
+      if (d <= r.semana) fat = v;
+    }
+    return {
+      ...r,
+      baseline:  r.baseline  != null ? +(r.baseline  * totalContrato / 100).toFixed(2) : null,
+      planejada: r.planejada != null ? +(r.planejada * totalContrato / 100).toFixed(2) : null,
+      realizada: r.realizada != null ? +(r.realizada * totalContrato / 100).toFixed(2) : null,
+      tendencia: r.tendencia != null ? +(r.tendencia * totalContrato / 100).toFixed(2) : null,
+      faturado:  fat,
+    };
+  });
+  const faturadoAcumulado = curvaMedicoes.length > 0 ? curvaMedicoes[curvaMedicoes.length - 1].valorAcumulado : 0;
+  const cfHasFaturado = curvaMedicoes.length > 0;
+  const cfFinHasBaseline  = cfHasBaseline;
+  const cfFinHasPlanejada = cfHasPlanejada;
+
+  // ── Estado collapse por bloco (apenas UI)
+  const [colBloco3A, setColBloco3A] = useState(false);
+  const [colBloco3B, setColBloco3B] = useState(false);
+  const [colBloco4, setColBloco4]   = useState(false);
+  const [collapsedGrupos, setCollapsedGrupos] = useState<Set<string>>(new Set());
+  const toggleGrupo = (id: string) => setCollapsedGrupos(prev => {
+    const s = new Set(prev); if (s.has(id)) s.delete(id); else s.add(id); return s;
+  });
+
+  const stBadgeAtual = refisAtual.status === "consolidado" ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+    : refisAtual.status === "emitido" ? "bg-blue-100 text-blue-700 border-blue-200"
+    : "bg-slate-100 text-slate-600 border-slate-200";
+
+  const TRUNC4 = 36;
+  const gruposChart = grupos.map((g: any) => ({
+    ...g,
+    nomeChart: g.nome?.length > TRUNC4 ? g.nome.substring(0, TRUNC4 - 1) + "…" : (g.nome ?? ""),
+  }));
+  const maxLenG = Math.max(8, ...gruposChart.map((g: any) => (g.nomeChart || "").length));
+  const yWidthG = Math.min(260, Math.max(140, maxLenG * 6.4));
+  const rowHG = 72;
+
   return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-purple-50/60 to-white flex items-center gap-2">
-        <FileText className="h-4 w-4 text-purple-600" />
-        <h3 className="font-semibold text-slate-800">REFIS — Relatórios de Fiscalização</h3>
-        <span className="text-xs text-slate-500 ml-auto">{refisLista.length} emitidos</span>
+    <div className="space-y-4">
+      {/* ══════ BLOCO 1 — CABEÇALHO ══════ */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-r from-slate-800 to-slate-700 text-white px-5 py-3 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <FileText className="h-5 w-5 text-slate-300" />
+            <div>
+              <p className="text-xs uppercase tracking-wider text-slate-300">Relatório Evolução Física</p>
+              <p className="text-sm font-bold">Nº {String(numeroRef).padStart(3, "0")} · Semana {fmtBR(semanaRef)}</p>
+            </div>
+          </div>
+          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border capitalize ${stBadgeAtual}`}>{refisAtual.status || "—"}</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
+          <div className="px-5 py-3">
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">Obra / Cliente</p>
+            <p className="text-sm font-semibold text-slate-700 mt-0.5">{obra?.nome || "—"}</p>
+            <p className="text-[11px] text-slate-500">{obra?.cliente || "—"}</p>
+          </div>
+          <div className="px-5 py-3">
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">Local</p>
+            <p className="text-sm font-semibold text-slate-700 mt-0.5">{obra?.cidade || obra?.endereco || "—"}</p>
+          </div>
+          <div className="px-5 py-3 grid grid-cols-3 gap-2">
+            <div>
+              <p className="text-[10px] uppercase text-slate-400">Início</p>
+              <p className="text-xs font-semibold text-slate-700">{fmtBR(projeto?.dataInicio)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase text-slate-400">Status em</p>
+              <p className="text-xs font-semibold text-slate-700">{fmtBR(semanaRef)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase text-slate-400">Término</p>
+              <p className="text-xs font-semibold text-slate-700">{fmtBR(projeto?.dataTerminoContratual)}</p>
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead className="bg-slate-50/80">
-            <tr className="text-slate-500">
-              <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Nº</th>
-              <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Semana</th>
-              <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Emissão</th>
-              <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">% Prev. Acum.</th>
-              <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">% Real. Acum.</th>
-              <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">SPI</th>
-              <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">CPI</th>
-              <th className="text-center px-4 py-2.5 font-semibold uppercase tracking-wider">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {refisLista.map((r: any) => {
-              const desvio = r.avancoRealizado - r.avancoPrevisto;
-              const cls = desvio >= 0 ? "text-emerald-700" : "text-red-700";
-              const stBadge = r.status === "consolidado" ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                : r.status === "emitido" ? "bg-blue-100 text-blue-700 border-blue-200"
-                : "bg-slate-100 text-slate-600 border-slate-200";
-              return (
-                <tr key={r.id} className="hover:bg-slate-50/60">
-                  <td className="px-4 py-2.5 font-semibold text-slate-700">#{r.numero || "—"}</td>
-                  <td className="px-4 py-2.5 text-slate-700">{fmtBR(r.semana)}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{fmtBR(r.dataEmissao)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{fmtPct(r.avancoPrevisto)}</td>
-                  <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${cls}`}>{fmtPct(r.avancoRealizado)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{r.spi.toFixed(2).replace(".", ",")}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{r.cpi.toFixed(2).replace(".", ",")}</td>
-                  <td className="px-4 py-2.5 text-center">
-                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border capitalize ${stBadge}`}>{r.status || "—"}</span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+
+      {/* ══════ BLOCO 2 — EVOLUÇÃO FÍSICA GLOBAL ══════ */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-slate-100 border-b border-slate-200 px-5 py-2">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-600">Evolução Física Global</p>
+        </div>
+        <div className="p-4 space-y-4">
+          {/* Barras Previsto/Realizado */}
+          <div className="space-y-2">
+            <div>
+              <div className="flex justify-between text-[11px] mb-0.5">
+                <span className="text-slate-500 font-medium">Previsto Acumulado</span>
+                <span className="font-bold text-red-600 tabular-nums">{fPct_(avancoPrevisto)}</span>
+              </div>
+              <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${Math.min(100, avancoPrevisto)}%` }} />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-[11px] mb-0.5">
+                <span className="text-slate-500 font-medium">Realizado Acumulado</span>
+                <span className="font-bold text-emerald-700 tabular-nums">{fPct_(avancoRealAtual)}</span>
+              </div>
+              <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${Math.min(100, avancoRealAtual)}%` }} />
+              </div>
+            </div>
+          </div>
+          {/* 4 KPIs */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="text-[9px] uppercase tracking-wide text-amber-700 font-semibold">Av. Sem. Previsto</p>
+              <p className="text-base font-bold text-amber-800 mt-0.5">{fPct_(avancoSemPrev)}</p>
+            </div>
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+              <p className="text-[9px] uppercase tracking-wide text-blue-700 font-semibold">Av. Sem. Realizado</p>
+              <p className="text-base font-bold text-blue-800 mt-0.5">{fPct_(avancoSemReal)}</p>
+            </div>
+            <div className={`rounded-lg border px-3 py-2 ${spi >= 1 ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
+              <p className={`text-[9px] uppercase tracking-wide font-semibold ${spi >= 1 ? "text-emerald-700" : "text-red-700"}`}>SPI</p>
+              <p className={`text-base font-bold mt-0.5 ${spi >= 1 ? "text-emerald-800" : "text-red-800"}`}>{spi.toFixed(2).replace(".", ",")}</p>
+            </div>
+            <div className={`rounded-lg border px-3 py-2 ${desvioFisico >= 0 ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
+              <p className={`text-[9px] uppercase tracking-wide font-semibold ${desvioFisico >= 0 ? "text-emerald-700" : "text-red-700"}`}>Desvio Físico</p>
+              <p className={`text-base font-bold mt-0.5 ${desvioFisico >= 0 ? "text-emerald-800" : "text-red-800"}`}>
+                {desvioFisico >= 0 ? "+" : ""}{fPct_(desvioFisico)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ══════ BLOCO 3A — Curva S Física ══════ */}
+      {curvaFiltrada.length > 1 && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-700 border-b border-slate-600 px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" onClick={() => setColBloco3A(v => !v)}>
+            <p className="text-xs font-bold uppercase tracking-wider text-white">Curva S Física — Avanço Acumulado (%)</p>
+            <div className="flex gap-4 text-[11px] text-slate-300 flex-wrap items-center">
+              {cfHasBaseline  && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#1e40af" }} /> Baseline</span>}
+              {cfHasPlanejada && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#ef4444" }} /> Faturamento Previsto</span>}
+              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#22c55e" }} /> Faturamento Realizado (Físico)</span>
+              <span className="flex items-center gap-1.5">
+                <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#16a34a" strokeWidth="2" strokeDasharray="4 2" /></svg>
+                Tendência
+              </span>
+              <ChevronRight className={`h-3.5 w-3.5 text-slate-400 transition-transform ${colBloco3A ? "" : "rotate-90"}`} />
+            </div>
+          </div>
+          {!colBloco3A && (
+            <>
+              <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
+                <div className="px-5 py-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Revisão Atual</p>
+                  <p className="text-lg font-bold text-red-600">{fPct_(avancoPrevisto)}</p>
+                </div>
+                <div className="px-5 py-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Realizado</p>
+                  <p className="text-lg font-bold text-emerald-700">{fPct_(avancoRealAtual)}</p>
+                </div>
+                <div className="px-5 py-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Desvio Físico</p>
+                  <p className={`text-lg font-bold ${desvioFisico >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {desvioFisico >= 0 ? "+" : ""}{fPct_(desvioFisico)}
+                  </p>
+                </div>
+              </div>
+              <div className="px-5 py-4" style={{ height: 360 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={curvaFiltrada} margin={{ top: 5, right: 60, bottom: curvaFiltrada.length > 10 ? 50 : 20, left: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" height={50}
+                      interval={Math.max(0, Math.floor(curvaFiltrada.length / 10) - 1)} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
+                    <Tooltip
+                      content={({ payload, label }: any) => {
+                        if (!payload?.length) return null;
+                        const get = (k: string) => payload.find((p: any) => p.dataKey === k)?.value;
+                        const base = get("baseline"); const plan = get("planejada"); const real = get("realizada"); const tend = get("tendencia");
+                        const row = curvaFiltrada.find((r: any) => r.label === label);
+                        const [y, m, d] = String(row?.semana ?? "").split("-");
+                        return (
+                          <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs min-w-[210px]">
+                            <p className="font-semibold text-slate-700 mb-2">{label}{row?.semana ? ` (${d}/${m}/${y})` : ""}</p>
+                            {base != null && <p style={{ color: "#1e40af" }}>Baseline : <strong>{Number(base).toFixed(1)}%</strong></p>}
+                            {plan != null && <p style={{ color: "#ef4444" }}>Revisão Atual : <strong>{Number(plan).toFixed(1)}%</strong></p>}
+                            {real != null && <p style={{ color: "#22c55e" }}>Realizado : <strong>{Number(real).toFixed(1)}%</strong></p>}
+                            {tend != null && <p style={{ color: "#16a34a" }}>Tendência : <strong>{Number(tend).toFixed(1)}%</strong></p>}
+                          </div>
+                        );
+                      }}
+                    />
+                    {cfHojeLabel && (
+                      <ReferenceLine x={cfHojeLabel} stroke="#94a3b8" strokeDasharray="2 2"
+                        label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
+                    )}
+                    <ReferenceLine y={rPrev} stroke="#ef4444" strokeDasharray="5 4" strokeWidth={1}
+                      label={{ value: `${rPrev.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#dc2626", fontWeight: 700 }} />
+                    <ReferenceLine y={rReal} stroke="#22c55e" strokeDasharray="5 4" strokeWidth={1}
+                      label={{ value: `${rReal.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#16a34a", fontWeight: 700 }} />
+                    {cfHasBaseline  && <Line type="monotone" dataKey="baseline"  stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls name="baseline" />}
+                    {cfHasPlanejada && <Line type="monotone" dataKey="planejada" stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls name="planejada" />}
+                    <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls name="realizada" />
+                    <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ══════ BLOCO 3B — Curva S Financeira ══════ */}
+      {curvaFinanceiraFull.length > 1 && totalContrato > 0 && (() => {
+        const prevAcumFin = totalContrato * avancoPrevisto / 100;
+        const realAcumFin = totalContrato * avancoRealAtual / 100;
+        const desvioFin = realAcumFin - prevAcumFin;
+        const desvioFatVsReal = cfHasFaturado ? faturadoAcumulado - realAcumFin : null;
+        const finTickFmt = (v: number) => v === 0 ? "0" : v.toLocaleString("pt-BR");
+        return (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-slate-700 border-b border-slate-600 px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" onClick={() => setColBloco3B(v => !v)}>
+              <p className="text-xs font-bold uppercase tracking-wider text-white">Curva S Financeira — Faturamento Acumulado (R$)</p>
+              <div className="flex gap-4 text-[11px] text-slate-300 flex-wrap items-center">
+                {cfFinHasBaseline  && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#1e40af" }} /> Baseline</span>}
+                {cfFinHasPlanejada && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#ef4444" }} /> Faturamento Previsto</span>}
+                <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#22c55e" }} /> Faturamento Realizado (Físico)</span>
+                {cfHasFaturado && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#7c3aed" }} /> Faturado Real</span>}
+                <ChevronRight className={`h-3.5 w-3.5 text-slate-400 transition-transform ${colBloco3B ? "" : "rotate-90"}`} />
+              </div>
+            </div>
+            {!colBloco3B && (
+              <>
+                <div className={`grid divide-x divide-slate-100 border-b border-slate-100 ${cfHasFaturado ? "grid-cols-6" : "grid-cols-4"}`}>
+                  <div className="px-4 py-3 text-center">
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Contrato Total</p>
+                    <p className="text-base font-bold text-slate-700">{fmt(totalContrato)}</p>
+                  </div>
+                  <div className="px-4 py-3 text-center">
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Faturamento Previsto</p>
+                    <p className="text-base font-bold text-red-600">{fmt(prevAcumFin)}</p>
+                  </div>
+                  <div className="px-4 py-3 text-center">
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Faturamento Realizado (Físico)</p>
+                    <p className="text-base font-bold text-emerald-700">{fmt(realAcumFin)}</p>
+                  </div>
+                  <div className="px-4 py-3 text-center">
+                    <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Desvio (Prev. − Real.)</p>
+                    <p className={`text-base font-bold ${desvioFin >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      {desvioFin >= 0 ? "+" : ""}{fmt(desvioFin)}
+                    </p>
+                  </div>
+                  {cfHasFaturado && (
+                    <>
+                      <div className="px-4 py-3 text-center">
+                        <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Faturado Real</p>
+                        <p className="text-base font-bold" style={{ color: "#7c3aed" }}>{fmt(faturadoAcumulado)}</p>
+                      </div>
+                      <div className="px-4 py-3 text-center">
+                        <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">Fat. vs Físico</p>
+                        <p className={`text-base font-bold ${(desvioFatVsReal ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                          {(desvioFatVsReal ?? 0) >= 0 ? "+" : ""}{fmt(desvioFatVsReal ?? 0)}
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="px-5 py-4" style={{ height: 360 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={curvaFinanceiraFull as any[]} margin={{ top: 5, right: 90, bottom: (curvaFinanceiraFull as any[]).length > 10 ? 50 : 20, left: 10 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="label" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" height={50}
+                        interval={Math.max(0, Math.floor((curvaFinanceiraFull as any[]).length / 10) - 1)} />
+                      <YAxis tickFormatter={finTickFmt} tick={{ fontSize: 10 }} width={90} />
+                      <Tooltip
+                        content={({ payload, label }: any) => {
+                          if (!payload?.length) return null;
+                          const get = (k: string) => payload.find((p: any) => p.dataKey === k)?.value;
+                          const base = get("baseline"); const plan = get("planejada"); const real = get("realizada"); const fat = get("faturado"); const tend = get("tendencia");
+                          const row = (curvaFinanceiraFull as any[]).find((r: any) => r.label === label);
+                          const [y, m, d] = String(row?.semana ?? "").split("-");
+                          const brl = (v: any) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                          return (
+                            <div className="bg-white border border-slate-200 rounded-lg shadow-xl p-3 text-xs min-w-[230px]">
+                              <p className="font-bold text-slate-700 mb-2 pb-1.5 border-b border-slate-100">{label}{row?.semana ? ` · ${d}/${m}/${y}` : ""}</p>
+                              {base != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#1e40af" }}>Baseline</span><strong>{brl(base)}</strong></p>}
+                              {plan != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#ef4444" }}>Faturamento Previsto</span><strong>{brl(plan)}</strong></p>}
+                              {real != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#22c55e" }}>Faturamento Realizado (Físico)</span><strong>{brl(real)}</strong></p>}
+                              {fat  != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#7c3aed" }}>Faturado Real</span><strong>{brl(fat)}</strong></p>}
+                              {tend != null && <p className="flex justify-between gap-4 mb-1"><span style={{ color: "#16a34a" }}>Tendência</span><strong>{brl(tend)}</strong></p>}
+                            </div>
+                          );
+                        }}
+                      />
+                      {cfHojeLabel && (
+                        <ReferenceLine x={cfHojeLabel} stroke="#94a3b8" strokeDasharray="2 2"
+                          label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
+                      )}
+                      <ReferenceLine y={prevAcumFin} stroke="#ef4444" strokeDasharray="5 4" strokeWidth={1}
+                        label={{ value: finTickFmt(prevAcumFin), position: "right", fontSize: 9, fill: "#dc2626", fontWeight: 700 }} />
+                      <ReferenceLine y={realAcumFin} stroke="#22c55e" strokeDasharray="5 4" strokeWidth={1}
+                        label={{ value: finTickFmt(realAcumFin), position: "right", fontSize: 9, fill: "#16a34a", fontWeight: 700 }} />
+                      {cfFinHasBaseline  && <Line type="monotone" dataKey="baseline"  stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls name="baseline" />}
+                      {cfFinHasPlanejada && <Line type="monotone" dataKey="planejada" stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls name="planejada" />}
+                      <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls name="realizada" />
+                      <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
+                      {cfHasFaturado && (
+                        <Line type="stepAfter" dataKey="faturado" stroke="#7c3aed" strokeWidth={2.5}
+                          dot={{ r: 5, fill: "#7c3aed", strokeWidth: 0 }} activeDot={{ r: 7 }}
+                          connectNulls name="faturado" />
+                      )}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ══════ BLOCO 4 — Avanço Físico por Grupo ══════ */}
+      {grupos.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-slate-100 border-b border-slate-200 px-5 py-2 flex items-center justify-between cursor-pointer select-none" onClick={() => setColBloco4(v => !v)}>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-600">Avanço Físico por Grupo</p>
+            <ChevronRight className={`h-3.5 w-3.5 text-slate-400 transition-transform ${colBloco4 ? "" : "rotate-90"}`} />
+          </div>
+          {!colBloco4 && (
+            <div className="px-4 py-3" style={{ height: Math.max(200, grupos.length * rowHG + 40) }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={gruposChart} layout="vertical" margin={{ top: 4, right: 64, bottom: 4, left: 4 }} barCategoryGap="28%" barGap={3}>
+                  <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="nomeChart" tick={{ fontSize: 10, fill: "#475569" }} width={yWidthG} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    formatter={(v: any, name: string) => [`${Number(v).toFixed(1)}%`, name === "previsto" ? "Previsto" : "Realizado"]}
+                    labelFormatter={(label: string) => {
+                      const g = grupos.find((x: any) => x.nome?.substring(0, TRUNC4 - 1) + "…" === label || x.nome === label);
+                      return g?.nome ?? label;
+                    }}
+                  />
+                  <Bar dataKey="previsto" name="previsto" fill="#FFB800" radius={[0, 3, 3, 0]} maxBarSize={14}>
+                    <LabelList dataKey="previsto" position="right" formatter={(v: any) => `${Number(v).toFixed(1)}%`} style={{ fontSize: 10, fill: "#CC9000", fontWeight: 600 }} />
+                  </Bar>
+                  <Bar dataKey="realizado" name="realizado" fill="#1A3461" radius={[0, 3, 3, 0]} maxBarSize={14}>
+                    <LabelList dataKey="realizado" position="right" formatter={(v: any) => `${Number(v).toFixed(1)}%`} style={{ fontSize: 10, fill: "#1A3461", fontWeight: 600 }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══════ BLOCO 5 — Avanço por Etapa dentro de cada Grupo ══════ */}
+      {grupos.filter((g: any) => g.etapas?.length > 0).map((g: any) => {
+        const isCollapsed = collapsedGrupos.has(g.id);
+        const TRUNC5 = 32;
+        const etapasChart = g.etapas.map((e: any) => ({
+          ...e,
+          nomeChart: e.nome?.length > TRUNC5 ? e.nome.substring(0, TRUNC5 - 1) + "…" : (e.nome ?? ""),
+        }));
+        const maxLenE = Math.max(8, ...etapasChart.map((e: any) => (e.nomeChart || "").length));
+        const yWidthE = Math.min(240, Math.max(130, maxLenE * 6.2));
+        const rowHE = 64;
+        return (
+          <div key={g.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-slate-700 text-white px-5 py-2.5 flex items-center justify-between cursor-pointer select-none" onClick={() => toggleGrupo(g.id)}>
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-xs font-mono bg-slate-600 rounded px-2 py-0.5 shrink-0">{g.eapCodigo}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold uppercase tracking-wide">{g.nome}</p>
+                  {(g.dataInicio || g.dataFim) && (
+                    <div className="flex items-center gap-1.5 mt-1">
+                      {g.dataInicio && (
+                        <span className="inline-flex items-center gap-1 bg-slate-600 rounded px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
+                          <CalendarDays className="h-2.5 w-2.5" />
+                          Início: {fmtBR(g.dataInicio)}
+                        </span>
+                      )}
+                      {g.dataInicio && g.dataFim && <span className="text-slate-500 text-[10px] font-bold">→</span>}
+                      {g.dataFim && (
+                        <span className="inline-flex items-center gap-1 bg-slate-600 rounded px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
+                          <CalendarDays className="h-2.5 w-2.5" />
+                          Fim: {fmtBR(g.dataFim)}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-4 shrink-0">
+                <div className="flex gap-4 text-xs">
+                  <span className="text-blue-300">Previsto: <strong className="text-white">{fPct_(g.previsto)}</strong></span>
+                  <span className="text-emerald-300">Realizado: <strong className="text-white">{fPct_(g.realizado)}</strong></span>
+                  <span className={g.realizado >= g.previsto ? "text-emerald-300" : "text-red-300"}>
+                    Desvio: <strong className="text-white">{g.realizado >= g.previsto ? "+" : ""}{fPct_(g.realizado - g.previsto)}</strong>
+                  </span>
+                </div>
+                <div className="flex items-center justify-center h-6 w-6 rounded-full bg-slate-600 hover:bg-slate-500 transition-colors text-white font-bold text-sm shrink-0">
+                  {isCollapsed ? "+" : "−"}
+                </div>
+              </div>
+            </div>
+            {!isCollapsed && (
+              <>
+                <div className="px-4 py-3" style={{ height: Math.max(160, g.etapas.length * rowHE + 40) }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={etapasChart} layout="vertical" margin={{ top: 4, right: 64, bottom: 4, left: 4 }} barCategoryGap="26%" barGap={3}>
+                      <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="#f8fafc" />
+                      <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <YAxis type="category" dataKey="nomeChart" tick={{ fontSize: 10, fill: "#475569" }} width={yWidthE} tickLine={false} axisLine={false} />
+                      <Tooltip
+                        formatter={(v: any, name: string) => [`${Number(v).toFixed(1)}%`, name === "previsto" ? "Previsto" : "Realizado"]}
+                        labelFormatter={(label: string) => {
+                          const e = g.etapas.find((x: any) => x.nome?.substring(0, TRUNC5 - 1) + "…" === label || x.nome === label);
+                          return e?.nome ?? label;
+                        }}
+                      />
+                      <Bar dataKey="previsto" name="previsto" fill="#6097f8" radius={[0, 3, 3, 0]} maxBarSize={12}>
+                        <LabelList dataKey="previsto" position="right" formatter={(v: any) => `${Number(v).toFixed(1)}%`} style={{ fontSize: 9, fill: "#3b82f6", fontWeight: 600 }} />
+                      </Bar>
+                      <Bar dataKey="realizado" name="realizado" fill="#34d399" radius={[0, 3, 3, 0]} maxBarSize={12}>
+                        <LabelList dataKey="realizado" position="right" formatter={(v: any) => `${Number(v).toFixed(1)}%`} style={{ fontSize: 9, fill: "#059669", fontWeight: 600 }} />
+                        {etapasChart.map((e: any) => (
+                          <Cell key={e.id} fill={e.realizado >= e.previsto ? "#34d399" : e.previsto - e.realizado > 10 ? "#f87171" : "#fbbf24"} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                {g.etapas.some((e: any) => e.previsto - e.realizado > 5) && (
+                  <div className="border-t border-slate-100 px-4 py-2 flex flex-wrap gap-2">
+                    {g.etapas.filter((e: any) => e.previsto - e.realizado > 5).map((e: any) => (
+                      <span key={e.id} className="inline-flex items-center gap-1 text-[11px] bg-red-50 text-red-700 border border-red-200 rounded px-2 py-0.5">
+                        ⚠ {e.nome}: −{fPct_(e.previsto - e.realizado)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })}
+
+      {/* ══════ BLOCO 7 — Histórico de REFIs Anteriores (mantido) ══════ */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-slate-800 text-white px-5 py-2.5 flex items-center gap-2">
+          <History className="h-4 w-4 text-slate-300" />
+          <p className="text-xs font-bold uppercase tracking-wider">Histórico de Relatórios Emitidos</p>
+          <span className="text-[10px] text-slate-400 ml-auto">{refisLista.length} emitidos</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50/80">
+              <tr className="text-slate-500">
+                <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Nº</th>
+                <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Semana</th>
+                <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Emissão</th>
+                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">% Prev. Acum.</th>
+                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">% Real. Acum.</th>
+                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">SPI</th>
+                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">CPI</th>
+                <th className="text-center px-4 py-2.5 font-semibold uppercase tracking-wider">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {refisLista.map((r: any) => {
+                const desvio = r.avancoRealizado - r.avancoPrevisto;
+                const cls = desvio >= 0 ? "text-emerald-700" : "text-red-700";
+                const stBadge = r.status === "consolidado" ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                  : r.status === "emitido" ? "bg-blue-100 text-blue-700 border-blue-200"
+                  : "bg-slate-100 text-slate-600 border-slate-200";
+                return (
+                  <tr key={r.id} className="hover:bg-slate-50/60">
+                    <td className="px-4 py-2.5 font-semibold text-slate-700">#{r.numero || "—"}</td>
+                    <td className="px-4 py-2.5 text-slate-700">{fmtBR(r.semana)}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{fmtBR(r.dataEmissao)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{fmtPct(r.avancoPrevisto)}</td>
+                    <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${cls}`}>{fmtPct(r.avancoRealizado)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{Number(r.spi).toFixed(2).replace(".", ",")}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{Number(r.cpi).toFixed(2).replace(".", ",")}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border capitalize ${stBadge}`}>{r.status || "—"}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

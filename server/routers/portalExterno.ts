@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb, getEquipeObra } from "../db";
-import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo } from "../../drizzle/schema";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1432,6 +1432,21 @@ export const portalExternoRouter = router({
       }
       const efetivoMensal = Object.values(efetivoPorMes).sort((a, b) => a.mesReferencia.localeCompare(b.mesReferencia));
 
+      // ── Curva de Medições (faturamento mensal real) ─────────────────────
+      const medRows = await db.select().from(planejamentoMedicoes)
+        .where(eq(planejamentoMedicoes.projetoId, projeto.id))
+        .orderBy(planejamentoMedicoes.competencia);
+      let acumMed = 0;
+      const curvaMedicoes = medRows.map((m: any) => {
+        acumMed += _n(m.valorMedido);
+        return {
+          competencia: m.competencia,
+          valorMedido: _n(m.valorMedido),
+          valorAcumulado: +acumMed.toFixed(2),
+          status: m.status ?? "pendente",
+        };
+      });
+
       // Próximas 3 semanas (para "Prog. Semanal") — janela seg→domingo+14
       const tresSemanasFim = new Date(sunday); tresSemanasFim.setDate(sunday.getDate() + 14);
       const tresSemFimStr = tresSemanasFim.toISOString().slice(0, 10);
@@ -1464,6 +1479,7 @@ export const portalExternoRouter = router({
         progSemanal,
         curvaS,
         curvaData,
+        curvaMedicoes,
         refisLista,
         caminhoCritico,
         efetivoMensal,
