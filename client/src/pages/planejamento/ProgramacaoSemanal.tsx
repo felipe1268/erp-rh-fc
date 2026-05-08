@@ -154,9 +154,16 @@ function tipoIcon(tipo: string) {
 
 export function ProgramacaoSemanal({
   projetoId, revisaoId, orcamentoId, companyId,
-  nomeProjeto, nomeCliente, atividades, avancosMap,
+  nomeProjeto, nomeCliente, atividades: atividadesProp, avancosMap,
   refisLista = [],
 }: Props) {
+  // Atividades desativadas (a.disabled === true) NÃO devem aparecer em nenhuma
+  // parte da Programação Semanal — nem em totais, nem em listagens, nem nos
+  // alertas de IA. Filtramos uma única vez aqui para garantir consistência.
+  const atividades = useMemo(
+    () => (atividadesProp || []).filter((a: any) => !a.disabled),
+    [atividadesProp]
+  );
   const semanas  = useMemo(() => computeWeeks(atividades), [atividades]);
   const refisSemanas = useMemo(() => {
     const s = new Set<string>();

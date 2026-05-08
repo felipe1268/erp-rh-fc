@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1438,
+    titulo: "Planejamento — Programação Semanal não exibe mais atividades desativadas",
+    descricao: "Antes, atividades marcadas como desativadas no cronograma (campo a.disabled = true, geralmente desativadas em bloco pela ação 'Desativar selecionadas' na aba Cronograma) ainda apareciam na aba 'Prog. Semanal' — listagem de atividades da semana, totais (Peso da Semana, atividades diretas/indiretas), maior peso, e até nos dados enviados para a IA gerar alertas. Isso causava distorção dos KPIs semanais e poluía o relatório de 3 semanas. Correção em client/src/pages/planejamento/ProgramacaoSemanal.tsx: o componente agora filtra (atividadesProp || []).filter(a => !a.disabled) uma única vez no início, antes de qualquer cálculo (computeWeeks, atividadesDaSemana, somaSemana, IA, relatório PDF). Atividades desativadas continuam visíveis somente na aba Cronograma (com line-through), onde podem ser reativadas. Demais abas (Gantt, Avanço Semanal, Curva S, Caminho Crítico) já filtravam corretamente desde antes.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 22:55:00",
+  },
+  {
     version: 1437,
     titulo: "Gestão de Documentos — fix erro ao criar Documento Técnico (datas vazias)",
     descricao: "Ao salvar um 'Novo Documento' em /gestao-documentos, o sistema retornava 'Failed query: insert into gd_documentos' com erro 'invalid input syntax for type date: \"\"'. Causa: o formulário enviava dataEmissao e dataValidade como string vazia (\"\") quando o usuário não preenchia esses campos, e o PostgreSQL rejeita string vazia em colunas do tipo date (gd_documentos.data_emissao e data_validade). Correção: as procedures createDocumento, updateDocumento, createArt e updateArt (server/routers/gestaodocumentos.ts) agora usam z.preprocess para converter string vazia em undefined (create) ou null (update) antes da validação Zod, garantindo que o Drizzle não tente inserir/atualizar colunas date com valor inválido. Agora documentos e ARTs são criados normalmente mesmo sem datas preenchidas.",
