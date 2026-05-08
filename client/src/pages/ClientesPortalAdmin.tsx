@@ -91,6 +91,7 @@ export default function ClientesPortalAdmin() {
   // ===== Modal: liberar abas do Portal por usuário =====
   const [abasTarget, setAbasTarget] = useState<any | null>(null);
   const [abasSel, setAbasSel] = useState<Set<PortalClienteAbaKey>>(new Set());
+  const [abasPicker, setAbasPicker] = useState<{ cliente: any; usuarios: any[] } | null>(null);
   const abrirAbas = (a: any) => {
     setAbasTarget(a);
     setAbasSel(new Set(parseAbasLiberadas(a.abasLiberadas)));
@@ -234,9 +235,23 @@ export default function ClientesPortalAdmin() {
                           </td>
                           <td className="px-4 py-2.5 text-xs text-slate-600">{ultimoLogin ? fmtBR(ultimoLogin) : "—"}</td>
                           <td className="px-4 py-2.5 text-right">
-                            <Button size="sm" variant="outline" onClick={() => abrirGerenciar(c)} className="gap-1.5">
-                              <Users className="w-3.5 h-3.5" /> Gerenciar acessos
-                            </Button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {ativos.length > 0 && (
+                                <Button size="sm" variant="outline"
+                                  onClick={() => {
+                                    if (ativos.length === 1) abrirAbas(ativos[0]);
+                                    else setAbasPicker({ cliente: c, usuarios: ativos });
+                                  }}
+                                  className="gap-1.5 text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+                                  title="Liberar abas do Portal por usuário"
+                                >
+                                  <SlidersHorizontal className="w-3.5 h-3.5" /> Abas
+                                </Button>
+                              )}
+                              <Button size="sm" variant="outline" onClick={() => abrirGerenciar(c)} className="gap-1.5">
+                                <Users className="w-3.5 h-3.5" /> Gerenciar acessos
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -626,6 +641,47 @@ export default function ClientesPortalAdmin() {
                 </>
               );
             })()}
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal: Picker — escolher usuário para liberar abas (atalho da lista de clientes) */}
+        <Dialog open={!!abasPicker} onOpenChange={(o) => { if (!o) setAbasPicker(null); }}>
+          <DialogContent className="max-w-lg bg-white">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <SlidersHorizontal className="w-5 h-5 text-indigo-600" />
+                Liberar abas — escolha o usuário
+              </DialogTitle>
+            </DialogHeader>
+            {abasPicker && (
+              <div className="space-y-2">
+                <div className="bg-slate-50 rounded-lg p-3 text-sm">
+                  <div className="font-semibold text-slate-800">{abasPicker.cliente.razaoSocial}</div>
+                  {abasPicker.cliente.nomeFantasia && <div className="text-xs text-slate-500">{abasPicker.cliente.nomeFantasia}</div>}
+                </div>
+                <p className="text-xs text-slate-500">Selecione o usuário ativo para configurar quais abas ele verá no Portal:</p>
+                <div className="space-y-1.5 max-h-[55vh] overflow-y-auto">
+                  {abasPicker.usuarios.map((u: any) => {
+                    const liber = parseAbasLiberadas(u.abasLiberadas);
+                    return (
+                      <button key={u.id}
+                        onClick={() => { setAbasPicker(null); abrirAbas(u); }}
+                        className="w-full text-left border rounded-lg p-3 hover:bg-indigo-50 hover:border-indigo-200 transition flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-medium text-slate-800 truncate">{u.nomeResponsavel || u.emailResponsavel}</div>
+                          <div className="text-xs text-slate-500 truncate">{u.emailResponsavel}</div>
+                        </div>
+                        <Badge variant="outline" className="shrink-0 text-[10px]">{liber.length} aba{liber.length === 1 ? "" : "s"}</Badge>
+                      </button>
+                    );
+                  })}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setAbasPicker(null)}>Fechar</Button>
+                </DialogFooter>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
 
