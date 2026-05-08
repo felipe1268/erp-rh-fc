@@ -775,7 +775,23 @@ Regras:
         if (!db) return;
         const { sql } = await import("drizzle-orm");
         await db.execute(sql`
+          -- Rev. 1434 — employee_integrations: garantir colunas novas (cliente_id, cliente_nome, data_vencimento, evidencia, registrado_por)
+          ALTER TABLE IF EXISTS employee_integrations
+            ADD COLUMN IF NOT EXISTS cliente_id      integer,
+            ADD COLUMN IF NOT EXISTS cliente_nome    varchar(255),
+            ADD COLUMN IF NOT EXISTS data_vencimento varchar(10),
+            ADD COLUMN IF NOT EXISTS evidencia       text,
+            ADD COLUMN IF NOT EXISTS registrado_por  integer;
+        `);
+        await db.execute(sql`
           DO $$ BEGIN
+            BEGIN
+              ALTER TABLE employee_integrations ALTER COLUMN tipo SET DEFAULT 'externa';
+              ALTER TABLE employee_integrations ALTER COLUMN tipo TYPE varchar(20);
+            EXCEPTION WHEN others THEN NULL; END;
+            BEGIN
+              ALTER TABLE employee_integrations ALTER COLUMN data_realizacao TYPE varchar(10) USING to_char(data_realizacao::date, 'YYYY-MM-DD');
+            EXCEPTION WHEN others THEN NULL; END;
             -- Rev. 1386 — Reservas Preventivas (criadas no ColFix síncrono para garantir disponibilidade antes de servir requests)
             CREATE TABLE IF NOT EXISTS compras_reservas_saldo (
               id SERIAL PRIMARY KEY,

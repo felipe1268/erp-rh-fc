@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1434,
+    titulo: "Controle de Integrações — fix do erro ao cadastrar (colunas faltando no banco)",
+    descricao: "Erro ao registrar integração de pessoal: 'column employee_integrations.cliente_id does not exist'. A tabela no banco estava com o schema antigo (obra_id, status, plataforma, data_validade) enquanto o código novo já espera cliente_id, cliente_nome, data_vencimento, evidencia e registrado_por. Aplicado ALTER TABLE no Neon adicionando as 5 colunas novas, ajustando 'tipo' para varchar(20) com default 'externa', e convertendo 'data_realizacao' de date para varchar(10) (formato YYYY-MM-DD usado pelo Drizzle string mode). Também adicionado bloco no ColFix síncrono do startup para garantir que qualquer ambiente (dev/staging/prod) que ainda esteja no schema antigo seja migrado automaticamente — idempotente, não destrói dados existentes (faz backfill de cliente_nome a partir de plataforma e de data_vencimento a partir de data_validade quando aplicável).",
+    tipo: "fix",
+    modulos: "Controle de Integrações",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 21:10:00",
+  },
+  {
     version: 1433,
     titulo: "Modal 'Gerenciar acessos do Portal' — full screen real (sem corte horizontal)",
     descricao: "Ajuste no modal de gestão de acessos do Portal do Cliente: a versão anterior fixava 1200px de largura, o que em telas de notebook (~1024px) ultrapassava a viewport e causava barra de rolagem horizontal cortando a coluna da direita (lista de usuários ficava esmagada, mostrando só o avatar). Agora o modal usa 98vw × 96vh sempre (95vw × 92vh em monitores grandes XL), sem cap de pixels — ocupa praticamente toda a tela em qualquer resolução. As 2 colunas começam a aparecer já a partir de telas md (768px) com 360px na esquerda + minmax(0,1fr) na direita (o minmax(0,1fr) impede que o conteúdo da direita force a coluna a ficar maior que disponível). Em XL a coluna esquerda volta a ser 420px. Resultado: nenhum scroll horizontal, lista de usuários sempre visível por completo.",
