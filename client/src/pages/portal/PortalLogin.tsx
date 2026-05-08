@@ -31,9 +31,10 @@ export default function PortalLogin() {
   });
 
   const formatDoc = (v: string) => {
+    // Se contiver @ ou letra (não dígito/pontuação), trata como e-mail e não formata
+    if (/[@a-zA-Z]/.test(v)) return v.trim();
     const n = v.replace(/\D/g, "").slice(0, 14);
     if (n.length <= 11) {
-      // CPF parcial
       if (n.length <= 3) return n;
       if (n.length <= 6) return `${n.slice(0,3)}.${n.slice(3)}`;
       if (n.length <= 9) return `${n.slice(0,3)}.${n.slice(3,6)}.${n.slice(6)}`;
@@ -44,8 +45,10 @@ export default function PortalLogin() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cnpj || !senha) { toast.error("Preencha CNPJ/CPF e senha"); return; }
-    loginMut.mutate({ cnpj: cnpj.replace(/\D/g, ""), senha });
+    if (!cnpj || !senha) { toast.error("Preencha CNPJ/CPF/e-mail e senha"); return; }
+    const isEmail = cnpj.includes("@");
+    const ident = isEmail ? cnpj.trim() : cnpj.replace(/\D/g, "");
+    loginMut.mutate({ cnpj: ident, senha });
   };
 
   return (
@@ -61,11 +64,12 @@ export default function PortalLogin() {
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <Label className="text-gray-700 font-medium">CNPJ ou CPF</Label>
+              <Label className="text-gray-700 font-medium">CNPJ, CPF ou E-mail</Label>
               <div className="relative mt-1">
                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input value={cnpj} onChange={(e) => setCnpj(formatDoc(e.target.value))} placeholder="00.000.000/0000-00 ou 000.000.000-00" className="pl-10 h-12 text-lg" />
+                <Input value={cnpj} onChange={(e) => setCnpj(formatDoc(e.target.value))} placeholder="CNPJ, CPF ou seu e-mail cadastrado" className="pl-10 h-12 text-lg" autoComplete="username" />
               </div>
+              <p className="text-[11px] text-gray-500 mt-1">Você pode entrar com seu CNPJ/CPF ou com o e-mail cadastrado pelo administrador.</p>
             </div>
             <div>
               <Label className="text-gray-700 font-medium">Senha</Label>

@@ -29,6 +29,7 @@ export default function PortalLoginCliente() {
   });
 
   const formatDoc = (v: string) => {
+    if (/[@a-zA-Z]/.test(v)) return v.trim();
     const n = v.replace(/\D/g, "").slice(0, 14);
     if (n.length <= 11) {
       if (n.length <= 3) return n;
@@ -41,8 +42,10 @@ export default function PortalLoginCliente() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cnpj || !senha) { toast.error("Preencha CNPJ/CPF e senha"); return; }
-    loginMut.mutate({ cnpj: cnpj.replace(/\D/g, ""), senha, tipoEsperado: "cliente" });
+    if (!cnpj || !senha) { toast.error("Preencha CNPJ/CPF/e-mail e senha"); return; }
+    const isEmail = cnpj.includes("@");
+    const ident = isEmail ? cnpj.trim() : cnpj.replace(/\D/g, "");
+    loginMut.mutate({ cnpj: ident, senha, tipoEsperado: "cliente" });
   };
 
   return (
@@ -109,17 +112,19 @@ export default function PortalLoginCliente() {
           <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 p-7">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label className="text-slate-700 text-sm font-medium">CNPJ ou CPF</Label>
+                <Label className="text-slate-700 text-sm font-medium">CNPJ, CPF ou E-mail</Label>
                 <div className="relative mt-1.5">
                   <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input
                     autoFocus
                     value={cnpj}
                     onChange={(e) => setCnpj(formatDoc(e.target.value))}
-                    placeholder="00.000.000/0000-00 ou 000.000.000-00"
+                    placeholder="CNPJ, CPF ou seu e-mail cadastrado"
                     className="pl-10 h-11"
+                    autoComplete="username"
                   />
                 </div>
+                <p className="text-[11px] text-slate-500 mt-1">Você pode entrar com o CNPJ/CPF do cliente ou com seu e-mail cadastrado.</p>
               </div>
               <div>
                 <Label className="text-slate-700 text-sm font-medium">Senha</Label>

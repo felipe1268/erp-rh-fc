@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1436,
+    titulo: "Portal Externo + Portal do Cliente — login agora aceita E-MAIL além de CNPJ/CPF",
+    descricao: "Antes, para entrar nos portais (externo e do cliente) o usuário precisava obrigatoriamente digitar o CNPJ ou CPF do cliente/empresa. Agora cada usuário pode entrar diretamente com o E-MAIL que foi cadastrado para ele pelo administrador (visto na tela 'Acessos do Portal'). O backend (mutation portalExterno.auth.login) detecta automaticamente se o identificador contém @ — se sim, busca a credencial por LOWER(email_responsavel) = email digitado; se não, mantém a busca por CNPJ. Frontend: ambas as telas (/portal/login e /portal/cliente/login) tiveram o label trocado para 'CNPJ, CPF ou E-mail', placeholder atualizado, helper text explicando, e o formatador de documento agora não interfere quando o usuário digita um e-mail (detecta @ ou letras). A senha continua sendo a mesma já cadastrada — login funciona com qualquer um dos identificadores. Mensagens de erro também trocam dinamicamente entre 'CNPJ não encontrado' e 'E-mail não encontrado' para guiar melhor o usuário.",
+    tipo: "feature",
+    modulos: "Portal do Cliente,Portal Externo",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 21:50:00",
+  },
+  {
     version: 1435,
     titulo: "Modal 'Gerenciar acessos do Portal' — full screen DEFINITIVO (resizable=false + style inline)",
     descricao: "Por que ainda aparecia pequeno na Rev. 1433/1434: o componente DialogContent do shadcn aplicava por padrão um style INLINE 'width: min(512px, calc(100vw - 2rem))' — vindo do prop resizable=true ativado por padrão para permitir arrastar a borda. Esse style inline sempre vence as classes Tailwind (w-[98vw]) por especificidade. Agora o modal passa explicitamente resizable={false} (não tem por que arrastar borda em modal full-screen) e força width/height via style inline próprio (98vw × 96vh, maxWidth: 98vw). Resultado: modal ocupa 98% da largura e 96% da altura da tela em qualquer resolução, sem barra horizontal e com a coluna direita (lista de usuários do portal) totalmente visível.",

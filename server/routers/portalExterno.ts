@@ -35,17 +35,25 @@ export const portalExternoRouter = router({
       tipoEsperado: z.enum(["cliente", "terceiro", "parceiro"]).optional(),
     })).mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      const cnpjClean = input.cnpj.replace(/\D/g, "");
+      // Identificador pode ser CNPJ/CPF (só números) OU e-mail cadastrado
+      const raw = (input.cnpj || "").trim();
+      const isEmail = raw.includes("@");
+      const cnpjClean = raw.replace(/\D/g, "");
+      const emailNorm = raw.toLowerCase();
       // Pode haver vários acessos para o mesmo CNPJ (até 4 usuários por cliente).
       // Tentamos validar a senha contra cada credencial ativa — a senha é o discriminador.
-      const baseFilter = input.tipoEsperado
-        ? and(eq(portalCredentials.cnpj, cnpjClean), eq(portalCredentials.ativo, 1), eq(portalCredentials.tipo, input.tipoEsperado))
-        : and(eq(portalCredentials.cnpj, cnpjClean), eq(portalCredentials.ativo, 1));
+      const tipoCond = input.tipoEsperado ? eq(portalCredentials.tipo, input.tipoEsperado) : undefined;
+      const ativoCond = eq(portalCredentials.ativo, 1);
+      const idCond = isEmail
+        ? sql`LOWER(${portalCredentials.emailResponsavel}) = ${emailNorm}`
+        : eq(portalCredentials.cnpj, cnpjClean);
+      const baseFilter = tipoCond ? and(idCond, ativoCond, tipoCond) : and(idCond, ativoCond);
       const creds = await db.select().from(portalCredentials).where(baseFilter);
       if (creds.length === 0) {
+        const tipoLabel = isEmail ? "E-mail" : "CNPJ";
         const msg = input.tipoEsperado === "cliente"
-          ? "CNPJ não encontrado entre os clientes cadastrados ou acesso inativo."
-          : "CNPJ não encontrado ou acesso inativo";
+          ? `${tipoLabel} não encontrado entre os clientes cadastrados ou acesso inativo.`
+          : `${tipoLabel} não encontrado ou acesso inativo`;
         throw new TRPCError({ code: "UNAUTHORIZED", message: msg });
       }
       let cred: typeof creds[number] | undefined;
@@ -74,7 +82,7 @@ export const portalExternoRouter = router({
         primeiroAcesso: cred.primeiroAcesso === 1,
         tipo: cred.tipo,
         nomeEmpresa: cred.nomeEmpresa,
-        cnpj: cnpjClean,
+        cnpj: cred.cnpj,
       };
     }),
 
