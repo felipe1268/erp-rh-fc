@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1406,
+    titulo: "Seguro de Vida — controle ano-a-ano e mês-a-mês (snapshot histórico por competência)",
+    descricao: "FEATURE em /seguro-vida: novo seletor global de competência (MonthSelector com ChevronLeft/Right e clique-no-mês para voltar ao corrente), seguindo o mesmo padrão de Folha de Pagamento e Cartão de Ponto. Para o mês corrente o comportamento permanece idêntico (dados ao vivo de seguro_vida_coberturas). Para meses passados, a tela exibe o snapshot histórico reconstruído a partir do json_resultado armazenado em seguro_vida_importacoes — cards (Segurados Ativos / Pend. Inclusão / Pend. Cancelamento / Sem Cobertura / Custo Mensal) e tabela de Coberturas Ativas refletem a foto da carteira na competência selecionada, com badge 'Histórico (somente leitura)'. Quando não houver importação para o mês escolhido, mostra aviso orientando importar o relatório daquela competência. Backend: nova procedure seguroVida.snapshotPorCompetencia que agrega importações por (company, competência) e mapeia status do cruzamento (ok/sem_seguro/pagar_indevido/novo) para o formato consumido pela tela.",
+    tipo: "feature",
+    modulos: "Seguro de Vida",
+    criadoPor: "Manus",
+    dataPublicacao: "2026-05-08 10:00:00",
+  },
+  {
     version: 1405,
     titulo: "Dashboard Atestados & Acidentes — contagem de dias agora também para obras 'Sem registros'",
     descricao: "MELHORIA em /sst/dashboard-atestados-acidentes > tabela 'Dias sem Acidente — por Obra': obras que nunca tiveram acidente registrado agora exibem o número de dias desde o INÍCIO da obra (data_inicio, ou created_at como fallback) em vez de apenas '—'. Status 'Sem registros' continua sendo determinado pela ausência de acidentes (não pela quantidade de dias), e a ordenação foi ajustada para mostrar primeiro as obras COM acidente (mais recentes no topo) e depois as obras sem registros ordenadas pelo MAIOR período sem acidente.",

@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import MonthSelector from "@/components/MonthSelector";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -806,17 +807,35 @@ export default function SeguroVida() {
   const [mesFiltro, setMesFiltro] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
+  // Rev. 1406: seletor global de competência (padrão YYYY-MM, default = mês corrente)
+  const [competencia, setCompetencia] = useState<string>(getDefaultComp());
+  const isMesCorrente = competencia === getDefaultComp();
+  const isHistorico   = !isMesCorrente;
+
   const utils = trpc.useUtils();
 
-  const resumoQ = trpc.seguroVida.getResumo.useQuery(
+  const resumoLiveQ = trpc.seguroVida.getResumo.useQuery(
     { companyId, companyIds },
-    { enabled: companyId > 0 || companyIds.length > 0 }
+    { enabled: (companyId > 0 || companyIds.length > 0) && isMesCorrente }
   );
 
-  const funcionariosQ = trpc.seguroVida.listarFuncionariosComStatus.useQuery(
+  const funcionariosLiveQ = trpc.seguroVida.listarFuncionariosComStatus.useQuery(
     { companyId, companyIds },
-    { enabled: companyId > 0 || companyIds.length > 0 }
+    { enabled: (companyId > 0 || companyIds.length > 0) && isMesCorrente }
   );
+
+  const snapshotQ = trpc.seguroVida.snapshotPorCompetencia.useQuery(
+    { companyId, companyIds, competencia },
+    { enabled: (companyId > 0 || companyIds.length > 0) && isHistorico }
+  );
+
+  // Aliases unificados — abaixo o resto da página continua usando "resumoQ" e "funcionariosQ"
+  const resumoQ = isHistorico
+    ? { data: snapshotQ.data?.resumo, isLoading: snapshotQ.isLoading } as any
+    : resumoLiveQ;
+  const funcionariosQ = isHistorico
+    ? { data: snapshotQ.data?.funcionarios ?? [], isLoading: snapshotQ.isLoading } as any
+    : funcionariosLiveQ;
 
   const importacoesQ = trpc.seguroVida.listarImportacoes.useQuery(
     { companyId, companyIds },
@@ -1045,6 +1064,29 @@ export default function SeguroVida() {
   return (
     <DashboardLayout title="Seguro de Vida">
       <div className="space-y-5">
+
+        {/* Rev. 1406: Seletor de competência (ano-a-ano e mês-a-mês) */}
+        <div className="flex items-center justify-between flex-wrap gap-3 px-3 py-2.5 bg-gradient-to-r from-indigo-50 to-slate-50 border border-indigo-100 rounded-lg">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-indigo-600" />
+            <span className="text-sm font-semibold text-slate-700">Competência:</span>
+            <MonthSelector value={competencia} onChange={setCompetencia} />
+            {isMesCorrente
+              ? <span className="text-[10px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-semibold">Mês corrente — dados ao vivo</span>
+              : <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full font-semibold">Histórico (somente leitura)</span>
+            }
+          </div>
+          {isHistorico && snapshotQ.isFetched && !snapshotQ.data?.temDados && (
+            <span className="text-xs text-amber-700 font-medium">
+              ⚠️ Sem importação registrada para esta competência. Os cards e a tabela ficam vazios até importar o relatório do corretor para {competencia.split("-").reverse().join("/")}.
+            </span>
+          )}
+          {isHistorico && snapshotQ.data?.temDados && (
+            <span className="text-xs text-slate-600">
+              Snapshot reconstruído a partir do relatório importado em {fmtDate((snapshotQ.data?.resumo?.ultimaImportacao?.data_importacao as string | undefined)?.split?.("T")?.[0] ?? null)}.
+            </span>
+          )}
+        </div>
 
         {/* Aviso importante */}
         <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">

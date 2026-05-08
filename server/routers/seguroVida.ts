@@ -713,6 +713,174 @@ export const seguroVidaRouter = router({
       return funcionarios;
     }),
 
+  // Rev. 1406: snapshot histórico por competência — reconstrói a foto da carteira
+  // a partir do json_resultado armazenado em seguro_vida_importacoes.
+  // Usado quando o usuário seleciona um mês passado no MonthSelector da tela /seguro-vida.
+  snapshotPorCompetencia: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      competencia: z.string().regex(/^\d{4}-\d{2}$/),
+    }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      const ids = resolveCompanyIds(input);
+
+      const importacoes = rows(await db.execute(sql`
+        SELECT DISTINCT ON (company_id)
+          id, company_id, competencia, data_importacao, importado_por,
+          total_segurados, total_ativos, total_ok, total_sem_seguro,
+          total_pagar_indevido, total_novos, json_resultado
+        FROM seguro_vida_importacoes
+        WHERE company_id ${inIds(ids)} AND competencia = ${input.competencia}
+        ORDER BY company_id, criado_em DESC
+      `));
+
+      if (importacoes.length === 0) {
+        return {
+          temDados: false as const,
+          competencia: input.competencia,
+          funcionarios: [],
+          resumo: {
+            totalSeguradosAtivos: 0,
+            totalPendenteInclusao: 0,
+            totalPendenteCancelamento: 0,
+            totalSemSeguro: 0,
+            totalPremioMensal: 0,
+            totalSeguradosCorretora: 0,
+            totalPagarIndevido: 0,
+            totalNovos: 0,
+            ultimaImportacao: null,
+          },
+          importacoes: [],
+        };
+      }
+
+      const STATUS_MAP: Record<string, string> = {
+        ok: "ativo",
+        sem_seguro: "sem_cobertura",
+        pagar_indevido: "pendente_cancelamento",
+        novo: "pendente_inclusao",
+        na_lista_sem_cadastro: "pendente_cancelamento",
+      };
+
+      const parseBr = (s: string | null | undefined): number => {
+        if (!s) return 0;
+        const n = parseFloat(String(s).replace(/\./g, "").replace(",", "."));
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      let totalAtivos = 0;
+      let totalPendInclusao = 0;
+      let totalPendCancel = 0;
+      let totalSemSeguro = 0;
+      let totalSeguradosCorretora = 0;
+      let totalPagarIndevido = 0;
+      let totalNovos = 0;
+      let totalPremioMensal = 0;
+      let dataImportacaoMaisRecente: string | null = null;
+
+      const funcionarios: any[] = [];
+      let nextSyntheticId = -1;
+
+      for (const imp of importacoes) {
+        totalSeguradosCorretora += Number(imp.total_segurados ?? 0);
+        totalPagarIndevido     += Number(imp.total_pagar_indevido ?? 0);
+        totalNovos             += Number(imp.total_novos ?? 0);
+        if (!dataImportacaoMaisRecente || (imp.data_importacao ?? "") > dataImportacaoMaisRecente) {
+          dataImportacaoMaisRecente = (imp.data_importacao ?? null) as string | null;
+        }
+
+        let resultado: any[] = [];
+        try { resultado = JSON.parse((imp.json_resultado as string) ?? "[]"); } catch { resultado = []; }
+
+        for (const r of resultado) {
+          const statusSeguro = STATUS_MAP[r.status] ?? "sem_cobertura";
+          if (statusSeguro === "ativo") totalAtivos += 1;
+          else if (statusSeguro === "pendente_inclusao") totalPendInclusao += 1;
+          else if (statusSeguro === "pendente_cancelamento") totalPendCancel += 1;
+          else if (statusSeguro === "sem_cobertura") totalSemSeguro += 1;
+
+          // valores: [MN, MA, IA, (ID?), VG, APC]
+          const vals: string[] = Array.isArray(r.valores) ? r.valores : [];
+          const hasID = vals.length >= 6;
+          const off = hasID ? 1 : 0;
+          const morteNatural     = vals[0] ?? null;
+          const morteAcidental   = vals[1] ?? null;
+          const invAcidente      = vals[2] ?? null;
+          const invDoenca        = hasID ? vals[3] : null;
+          const premioVg         = vals[3 + off] ?? null;
+          const premioApc        = vals[4 + off] ?? null;
+
+          // Mesmo critério do live (getResumo): conta prêmios de ativo + pendente_inclusao
+          if (statusSeguro === "ativo" || statusSeguro === "pendente_inclusao") {
+            totalPremioMensal += parseBr(premioVg) + parseBr(premioApc);
+          }
+
+          funcionarios.push({
+            id: r.employeeId ?? nextSyntheticId--,
+            nomeCompleto: r.nomeHR ?? r.nome ?? "—",
+            cargo: null,
+            funcao: null,
+            dataAdmissao: r.dataAdmissao ?? null,
+            tipoContrato: r.tipoContrato ?? "CLT",
+            emp_status: "Ativo",
+            // Visão histórica é somente leitura: nunca expõe cobertura_id real,
+            // garantindo que ações de cancelamento/confirmação não atinjam dados atuais.
+            cobertura_id: null,
+            seguro_status: statusSeguro,
+            item_segurador: r.item ?? null,
+            apolice_vg: null,
+            apolice_apc: null,
+            data_adesao: null,
+            data_cancelamento: null,
+            observacoes: r.status === "pagar_indevido" ? "PDF: indevido" : null,
+            morte_natural:    morteNatural,
+            morte_acidental:  morteAcidental,
+            invalidez_acidente: invAcidente,
+            invalidez_doenca: invDoenca,
+            premio_vg:        premioVg,
+            premio_apc:       premioApc,
+            seguradora:       r.seguradora ?? null,
+            data_vencimento_apolice: null,
+            _historico: true,
+            _statusOriginal: r.status,
+          });
+        }
+      }
+
+      funcionarios.sort((a, b) => String(a.nomeCompleto).localeCompare(String(b.nomeCompleto), "pt-BR"));
+
+      return {
+        temDados: true as const,
+        competencia: input.competencia,
+        funcionarios,
+        resumo: {
+          totalSeguradosAtivos: totalAtivos,
+          totalPendenteInclusao: totalPendInclusao,
+          totalPendenteCancelamento: totalPendCancel,
+          totalSemSeguro,
+          totalPremioMensal,
+          totalSeguradosCorretora,
+          totalPagarIndevido,
+          totalNovos,
+          ultimaImportacao: {
+            competencia: input.competencia,
+            data_importacao: dataImportacaoMaisRecente,
+            total_segurados: totalSeguradosCorretora,
+            total_sem_seguro: totalSemSeguro,
+            total_pagar_indevido: totalPagarIndevido,
+          },
+        },
+        importacoes: importacoes.map((i: any) => ({
+          id: i.id,
+          competencia: i.competencia,
+          data_importacao: i.data_importacao,
+          importado_por: i.importado_por,
+        })),
+      };
+    }),
+
   getCoberturaByEmployee: protectedProcedure
     .input(z.object({ companyId: z.number(), employeeId: z.number() }))
     .query(async ({ input }) => {
