@@ -208,7 +208,7 @@ export default function PortalPlanejamentoCliente() {
     <>
       {/* Header logo / título */}
       <div className="px-4 py-4 border-b border-slate-700/60">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 mb-3">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow text-slate-900 font-bold text-sm">
             FC
           </div>
@@ -217,6 +217,14 @@ export default function PortalPlanejamentoCliente() {
             <p className="text-sm font-bold text-white leading-tight truncate">FC Engenharia</p>
           </div>
         </div>
+        <button
+          onClick={() => navigate("/portal/cliente/hub")}
+          className="flex items-center justify-center gap-2 w-full px-3 py-2 text-[12px] font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-sm"
+          title="Voltar para a tela inicial do portal"
+        >
+          <Home className="h-3.5 w-3.5" />
+          Tela Inicial do Portal
+        </button>
       </div>
 
       {/* Pílula da obra */}
@@ -366,11 +374,22 @@ export default function PortalPlanejamentoCliente() {
                 </div>
               </div>
             </div>
-            {obra?.status && (
-              <Badge className="text-[10px] uppercase tracking-wider font-semibold shrink-0 bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
-                {obra.status}
-              </Badge>
-            )}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => navigate("/portal/cliente/hub")}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-sm"
+                title="Voltar para a tela inicial do portal"
+              >
+                <Home className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Tela Inicial do Portal</span>
+                <span className="sm:hidden">Início</span>
+              </button>
+              {obra?.status && (
+                <Badge className="text-[10px] uppercase tracking-wider font-semibold bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+                  {obra.status}
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
 

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1464,
+    titulo: "Portal do Cliente — Botão 'Tela Inicial do Portal' sempre visível na tela de Planejamento",
+    descricao: "Em telas curtas (iPad, notebooks pequenos) e quando havia muitas abas no menu lateral do Planejamento (Visão Geral, Cronograma, Avanço Semanal, Prog. Semanal, Curva S, Gantt, REFIS, Caminho Crítico, Efetivo, Revisões), o botão 'Tela Inicial do Portal' ficava no rodapé da sidebar e era cortado pelo scroll, deixando o cliente sem caminho óbvio para voltar ao hub de módulos. Agora o botão azul 'Tela Inicial do Portal' aparece em DOIS pontos sempre visíveis: (1) no topo da sidebar, logo abaixo do logo FC Engenharia (largura total, fixo, não sai com scroll); (2) no header da página principal, ao lado do badge de status da obra (com texto completo em desktop e abreviado 'Início' em mobile). O botão antigo no rodapé da sidebar continua existindo como atalho secundário.",
+    tipo: "melhoria",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 19:35:00",
+  },
+  {
     version: 1463,
     titulo: "Raio-X do Funcionário — Detecção dinâmica de férias em curso (status efetivo por data)",
     descricao: "Corrigido bug em que o sistema não reconhecia o funcionário como 'em férias' quando o registro em vacation_periods continuava marcado como 'agendada' mesmo após a data de início ter passado. Agora o cálculo do status efetivo (server/db.ts em getEmployeesWithAllocations e getEfetivoFuncionarios) considera 'em férias agora' qualquer período com status IN ('em_gozo','agendada') cujo intervalo [dataInicio, dataFim] contenha a data de hoje — não depende mais de alguém alterar manualmente o status para 'em_gozo'. No Raio-X do Funcionário, a aba Férias passa a destacar visualmente o período em curso: linha com fundo ciano claro, badge ciano pulsante 'EM FÉRIAS AGORA' substituindo o status 'agendada', mantendo os demais períodos com seus rótulos originais (concluída, vencida, etc.). Caso real corrigido: Reginaldo Vitoriano Lourenço, período aquisitivo 14/05/2024 a 13/05/2025 com gozo 13/04/2026 a 12/05/2026 — em 08/05/2026 agora aparece corretamente como em férias.",
