@@ -4,10 +4,18 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb } from "../db";
-import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies } from "../../drizzle/schema";
-import { eq, and, inArray, desc } from "drizzle-orm";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets } from "../../drizzle/schema";
+import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
+import { sendEmail } from "../services/smtpService";
+import crypto from "crypto";
+
+function getPortalBaseUrl(): string {
+  return process.env.REPLIT_DEV_DOMAIN
+    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+    : (process.env.APP_URL || "");
+}
 
 function generateTempPassword(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -46,6 +54,7 @@ export const portalExternoRouter = router({
         companyId: cred.companyId,
         empresaTerceiraId: cred.empresaTerceiraId,
         parceiroId: cred.parceiroId,
+        clienteId: (cred as any).clienteId,
         nomeEmpresa: cred.nomeEmpresa,
       }, secret, { expiresIn: "24h" });
       return {
@@ -86,6 +95,74 @@ export const portalExternoRouter = router({
       } catch {
         return { valid: false, data: null };
       }
+    }),
+
+    // ========== ESQUECI MINHA SENHA — todos os tipos ==========
+    solicitarRedefinicao: publicProcedure.input(z.object({
+      cnpj: z.string(),
+    })).mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const cnpjClean = input.cnpj.replace(/\D/g, "");
+      const [cred] = await db.select().from(portalCredentials).where(
+        and(eq(portalCredentials.cnpj, cnpjClean), eq(portalCredentials.ativo, 1))
+      );
+      // Resposta sempre genérica para não vazar quem está cadastrado
+      if (!cred || !cred.emailResponsavel) {
+        return { success: true, mensagem: "Se houver cadastro, enviaremos um e-mail com instruções." };
+      }
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
+      await db.insert(portalPasswordResets).values({
+        credId: cred.id,
+        token,
+        expiresAt: expiresAt.toISOString().slice(0, 19).replace("T", " "),
+      });
+      const link = `${getPortalBaseUrl()}/portal/redefinir-senha/${token}`;
+      try {
+        await sendEmail({
+          to: cred.emailResponsavel,
+          subject: "Redefinição de senha — Portal Externo",
+          html: `
+            <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0f172a">
+              <h2 style="color:#1e3a8a;margin:0 0 12px">Redefinição de senha</h2>
+              <p>Olá${cred.nomeResponsavel ? `, <b>${cred.nomeResponsavel}</b>` : ""},</p>
+              <p>Recebemos uma solicitação para redefinir a senha do acesso vinculado ao identificador <b>${cnpjClean}</b>.</p>
+              <p>Clique no botão abaixo para criar uma nova senha (link válido por 1 hora):</p>
+              <p style="text-align:center;margin:24px 0">
+                <a href="${link}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Redefinir senha</a>
+              </p>
+              <p style="font-size:12px;color:#64748b">Se você não solicitou, ignore este e-mail. Sua senha continua a mesma.</p>
+              <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+              <p style="font-size:11px;color:#94a3b8">FC Engenharia — Portal Externo. Não responda a este e-mail.</p>
+            </div>
+          `,
+          text: `Acesse: ${link} (válido por 1 hora)`,
+        });
+      } catch (e) {
+        console.error("[solicitarRedefinicao] SMTP falhou:", e);
+      }
+      return { success: true, mensagem: "Se houver cadastro, enviaremos um e-mail com instruções." };
+    }),
+
+    redefinirSenha: publicProcedure.input(z.object({
+      token: z.string(),
+      novaSenha: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
+    })).mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const [reset] = await db.select().from(portalPasswordResets).where(eq(portalPasswordResets.token, input.token));
+      if (!reset) throw new TRPCError({ code: "NOT_FOUND", message: "Link inválido" });
+      if (reset.usadoEm) throw new TRPCError({ code: "BAD_REQUEST", message: "Este link já foi utilizado" });
+      if (new Date(reset.expiresAt) < new Date()) throw new TRPCError({ code: "BAD_REQUEST", message: "Link expirado. Solicite um novo." });
+      const senhaHash = await bcrypt.hash(input.novaSenha, 10);
+      await db.update(portalCredentials).set({
+        senhaHash,
+        primeiroAcesso: 0,
+        updatedAt: new Date().toISOString(),
+      }).where(eq(portalCredentials.id, reset.credId));
+      await db.update(portalPasswordResets).set({
+        usadoEm: new Date().toISOString().slice(0, 19).replace("T", " "),
+      }).where(eq(portalPasswordResets.id, reset.id));
+      return { success: true };
     }),
   }),
 
@@ -306,6 +383,192 @@ export const portalExternoRouter = router({
       return { success: true };
     }),
 
+    // ========== PORTAL DO CLIENTE — Admin ==========
+    gerarAcessoCliente: protectedProcedure.input(z.object({
+      clienteId: z.number(),
+      companyId: z.number(),
+      enviarEmail: z.boolean().default(true),
+    })).mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const [cli] = await db.select().from(clientes).where(and(
+        eq(clientes.id, input.clienteId),
+        eq(clientes.companyId, input.companyId),
+      ));
+      if (!cli) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado" });
+      const idDoc = (cli.cnpj || cli.cpf || "").replace(/\D/g, "");
+      if (!idDoc) throw new TRPCError({ code: "BAD_REQUEST", message: "Cliente sem CNPJ/CPF cadastrado — preencha antes de gerar acesso." });
+      const emailDestino = cli.contatoEmail || cli.email;
+      if (input.enviarEmail && !emailDestino) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cliente sem e-mail (contato/principal) — cadastre antes de enviar boas-vindas." });
+      }
+      const senhaTemp = generateTempPassword();
+      const senhaHash = await bcrypt.hash(senhaTemp, 10);
+      const [existing] = await db.select().from(portalCredentials).where(and(
+        eq(portalCredentials.tipo, "cliente"),
+        eq(portalCredentials.clienteId, input.clienteId),
+        eq(portalCredentials.companyId, input.companyId),
+      ));
+      if (existing) {
+        await db.update(portalCredentials).set({
+          senhaHash,
+          primeiroAcesso: 1,
+          ativo: 1,
+          cnpj: idDoc,
+          emailResponsavel: emailDestino || existing.emailResponsavel,
+          nomeResponsavel: cli.contatoNome || existing.nomeResponsavel,
+          nomeEmpresa: cli.nomeFantasia || cli.razaoSocial,
+          updatedAt: new Date().toISOString(),
+        }).where(eq(portalCredentials.id, existing.id));
+      } else {
+        await db.insert(portalCredentials).values({
+          tipo: "cliente",
+          clienteId: input.clienteId,
+          companyId: input.companyId,
+          cnpj: idDoc,
+          senhaHash,
+          nomeEmpresa: cli.nomeFantasia || cli.razaoSocial,
+          emailResponsavel: emailDestino || null,
+          nomeResponsavel: cli.contatoNome || null,
+          primeiroAcesso: 1,
+          ativo: 1,
+        });
+      }
+      let emailEnviado = false;
+      let emailErro: string | undefined;
+      if (input.enviarEmail && emailDestino) {
+        const link = `${getPortalBaseUrl()}/portal/login`;
+        const r = await sendEmail({
+          to: emailDestino,
+          subject: "Bem-vindo ao Portal do Cliente — FC Engenharia",
+          html: `
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#0f172a">
+              <h2 style="color:#1e3a8a;margin:0 0 12px">Bem-vindo ao Portal do Cliente</h2>
+              <p>Olá${cli.contatoNome ? `, <b>${cli.contatoNome}</b>` : ""},</p>
+              <p>A <b>FC Engenharia</b> liberou o acesso da empresa <b>${cli.razaoSocial}</b> ao Portal do Cliente.</p>
+              <p>No portal você pode acompanhar suas obras, registrar comentários e enviar uma avaliação anônima da equipe e dos serviços prestados.</p>
+              <div style="background:#f1f5f9;border-radius:10px;padding:16px;margin:20px 0">
+                <p style="margin:4px 0"><b>Identificador (CNPJ/CPF):</b> ${idDoc}</p>
+                <p style="margin:4px 0"><b>Senha provisória:</b> <span style="font-family:Menlo,monospace;background:#fef3c7;padding:4px 8px;border-radius:6px">${senhaTemp}</span></p>
+                <p style="margin:4px 0;font-size:12px;color:#475569">No primeiro acesso, será solicitada a criação de uma nova senha.</p>
+              </div>
+              <p style="text-align:center;margin:24px 0">
+                <a href="${link}" style="background:#2563eb;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600">Acessar o Portal</a>
+              </p>
+              <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+              <p style="font-size:11px;color:#94a3b8">FC Engenharia — Portal do Cliente. Caso não esperasse este e-mail, ignore-o.</p>
+            </div>
+          `,
+          text: `Acesse ${link} com o identificador ${idDoc} e a senha provisória ${senhaTemp}.`,
+        });
+        emailEnviado = r.success;
+        emailErro = r.error;
+      }
+      return { senhaTemporaria: senhaTemp, identificador: idDoc, emailEnviado, emailErro, emailDestino };
+    }),
+
+    listarAcessosCliente: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const rows = await db.select().from(portalCredentials).where(and(
+        companyFilter(portalCredentials.companyId, input),
+        eq(portalCredentials.tipo, "cliente"),
+      ));
+      return rows.map((c: any) => ({ ...c, senhaHash: undefined }));
+    }),
+
+    listarComentariosCliente: protectedProcedure.input(z.object({
+      companyId: z.number(), companyIds: z.array(z.number()).optional(),
+      clienteId: z.number().optional(), apenasNaoLidos: z.boolean().optional(),
+    })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const conds: any[] = [companyFilter(clienteComentarios.companyId, input)];
+      if (input.clienteId) conds.push(eq(clienteComentarios.clienteId, input.clienteId));
+      if (input.apenasNaoLidos) conds.push(and(eq(clienteComentarios.autorTipo, "cliente"), isNull(clienteComentarios.lidoEm))!);
+      const rows = await db.select().from(clienteComentarios).where(and(...conds)).orderBy(desc(clienteComentarios.criadoEm)).limit(500);
+      return rows;
+    }),
+
+    marcarComentarioLido: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      await db.update(clienteComentarios).set({ lidoEm: new Date().toISOString().slice(0, 19).replace("T", " ") })
+        .where(eq(clienteComentarios.id, input.id));
+      return { success: true };
+    }),
+
+    responderComentarioCliente: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      clienteId: z.number(),
+      obraId: z.number().nullable().optional(),
+      mensagem: z.string().min(1),
+    })).mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      await db.insert(clienteComentarios).values({
+        companyId: input.companyId,
+        clienteId: input.clienteId,
+        obraId: input.obraId ?? null,
+        autorTipo: "fc",
+        autorNome: ctx.user.name ?? "FC Engenharia",
+        mensagem: input.mensagem,
+      });
+      return { success: true };
+    }),
+
+    dashboardAvaliacoesCliente: protectedProcedure.input(z.object({
+      companyId: z.number(), companyIds: z.array(z.number()).optional(),
+      dataInicio: z.string().optional(), dataFim: z.string().optional(),
+    })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const conds: any[] = [companyFilter(clienteAvaliacoes.companyId, input)];
+      if (input.dataInicio) conds.push(sql`${clienteAvaliacoes.criadoEm} >= ${input.dataInicio}`);
+      if (input.dataFim)    conds.push(sql`${clienteAvaliacoes.criadoEm} <= ${input.dataFim + " 23:59:59"}`);
+      const rows = await db.select().from(clienteAvaliacoes).where(and(...conds)).orderBy(desc(clienteAvaliacoes.criadoEm));
+      const total = rows.length;
+      const med = (k: string) => {
+        const vals = rows.map((r: any) => r[k]).filter((v: any) => v !== null && v !== undefined);
+        if (!vals.length) return null;
+        return Math.round((vals.reduce((s: number, x: number) => s + x, 0) / vals.length) * 10) / 10;
+      };
+      const notas = rows.map((r: any) => r.notaGeral).filter((v: any) => v !== null && v !== undefined) as number[];
+      const promotores = notas.filter(n => n >= 9).length;
+      const detratores = notas.filter(n => n <= 6).length;
+      const neutros = notas.filter(n => n === 7 || n === 8).length;
+      const nps = notas.length ? Math.round(((promotores - detratores) / notas.length) * 100) : null;
+      // Por obra
+      const porObra = new Map<string, { obraNome: string; obraId: number | null; respostas: number; mediaGeral: number; nps: number }>();
+      for (const r of rows as any[]) {
+        const key = r.obraId ? `o${r.obraId}` : `n_${r.obraNome ?? "Sem obra"}`;
+        const cur = porObra.get(key) || { obraNome: r.obraNome ?? "Sem obra", obraId: r.obraId, respostas: 0, mediaGeral: 0, nps: 0 };
+        cur.respostas += 1;
+        cur.mediaGeral += r.notaGeral ?? 0;
+        porObra.set(key, cur);
+      }
+      const obrasList = Array.from(porObra.values()).map((o) => {
+        const subset = (rows as any[]).filter(r => (o.obraId ? r.obraId === o.obraId : r.obraNome === o.obraNome));
+        const ns = subset.map(r => r.notaGeral).filter((v: any) => v !== null) as number[];
+        const p = ns.filter(n => n >= 9).length;
+        const d = ns.filter(n => n <= 6).length;
+        return {
+          obraId: o.obraId, obraNome: o.obraNome, respostas: o.respostas,
+          mediaGeral: Math.round((o.mediaGeral / o.respostas) * 10) / 10,
+          nps: ns.length ? Math.round(((p - d) / ns.length) * 100) : null,
+        };
+      }).sort((a, b) => b.respostas - a.respostas);
+      return {
+        total,
+        nps,
+        promotores, neutros, detratores,
+        medias: {
+          geral:        med("notaGeral"),
+          equipe:       med("notaEquipe"),
+          obra:         med("notaObra"),
+          atendimento:  med("notaAtendimento"),
+          prazo:        med("notaPrazo"),
+          qualidade:    med("notaQualidade"),
+        },
+        porObra: obrasList,
+        avaliacoes: rows.slice(0, 100),
+      };
+    }),
+
     // Approve/reject funcionario from portal
     aprovarFuncionario: protectedProcedure.input(z.object({
       id: z.number(),
@@ -516,6 +779,123 @@ export const portalExternoRouter = router({
         const cpf = (e.cpf || "").replace(/\D/g, "");
         return nome.includes(input.busca!.toLowerCase()) || cpf.includes(term);
       });
+    }),
+  }),
+
+  // ========== PORTAL DO CLIENTE ==========
+  cliente: router({
+    meusDados: publicProcedure.input(z.object({ token: z.string() })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+      const [c] = await db.select().from(clientes).where(eq(clientes.id, decoded.clienteId));
+      return c || null;
+    }),
+
+    minhasObras: publicProcedure.input(z.object({ token: z.string() })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+      const [c] = await db.select().from(clientes).where(eq(clientes.id, decoded.clienteId));
+      if (!c) return [];
+      const nomes = [c.razaoSocial, c.nomeFantasia].filter(Boolean) as string[];
+      // Filtra obras da company onde obras.cliente bate com razaoSocial ou nomeFantasia (case-insensitive)
+      const conds: any[] = [eq(obras.companyId, decoded.companyId), isNull(obras.deletedAt)];
+      if (nomes.length === 0) return [];
+      const orConds = nomes.map((n) => ilike(obras.cliente, n));
+      const list = await db.select().from(obras).where(and(...conds, or(...orConds)!)).orderBy(desc(obras.createdAt));
+      return list.map((o: any) => ({
+        id: o.id, nome: o.nome, codigo: o.codigo, cidade: o.cidade, estado: o.estado,
+        status: o.status, dataInicio: o.dataInicio, dataPrevisaoFim: o.dataPrevisaoFim,
+        clienteLogoUrl: o.clienteLogoUrl, gerenciadoraNome: o.gerenciadoraNome,
+      }));
+    }),
+
+    listarComentarios: publicProcedure.input(z.object({ token: z.string(), obraId: z.number().nullable().optional() })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+      const conds: any[] = [
+        eq(clienteComentarios.companyId, decoded.companyId),
+        eq(clienteComentarios.clienteId, decoded.clienteId),
+      ];
+      if (input.obraId) conds.push(eq(clienteComentarios.obraId, input.obraId));
+      const rows = await db.select().from(clienteComentarios).where(and(...conds)).orderBy(desc(clienteComentarios.criadoEm));
+      // Marca como lidos os da empresa
+      try {
+        await db.update(clienteComentarios).set({ lidoEm: new Date().toISOString().slice(0, 19).replace("T", " ") })
+          .where(and(...conds, eq(clienteComentarios.autorTipo, "fc"), isNull(clienteComentarios.lidoEm)));
+      } catch {}
+      return rows;
+    }),
+
+    criarComentario: publicProcedure.input(z.object({
+      token: z.string(),
+      obraId: z.number().nullable().optional(),
+      mensagem: z.string().min(1),
+    })).mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+      const [c] = await db.select().from(clientes).where(eq(clientes.id, decoded.clienteId));
+      await db.insert(clienteComentarios).values({
+        companyId: decoded.companyId,
+        clienteId: decoded.clienteId,
+        obraId: input.obraId ?? null,
+        autorTipo: "cliente",
+        autorNome: c?.nomeFantasia || c?.razaoSocial || c?.contatoNome || "Cliente",
+        mensagem: input.mensagem,
+      });
+      return { success: true };
+    }),
+
+    criarAvaliacao: publicProcedure.input(z.object({
+      token: z.string(),
+      obraId: z.number().nullable().optional(),
+      notaEquipe: z.number().int().min(0).max(10).nullable().optional(),
+      notaObra: z.number().int().min(0).max(10).nullable().optional(),
+      notaAtendimento: z.number().int().min(0).max(10).nullable().optional(),
+      notaPrazo: z.number().int().min(0).max(10).nullable().optional(),
+      notaQualidade: z.number().int().min(0).max(10).nullable().optional(),
+      notaGeral: z.number().int().min(0).max(10),
+      comentarioPositivo: z.string().optional(),
+      comentarioMelhoria: z.string().optional(),
+      recomendaria: z.number().int().min(0).max(2).nullable().optional(),
+    })).mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+      // ANÔNIMA: NÃO armazena clienteId, credId, IP nem user-agent.
+      let obraNome: string | null = null;
+      if (input.obraId) {
+        const [o] = await db.select().from(obras).where(eq(obras.id, input.obraId));
+        obraNome = o?.nome ?? null;
+      }
+      await db.insert(clienteAvaliacoes).values({
+        companyId: decoded.companyId,
+        obraId: input.obraId ?? null,
+        obraNome,
+        notaEquipe: input.notaEquipe ?? null,
+        notaObra: input.notaObra ?? null,
+        notaAtendimento: input.notaAtendimento ?? null,
+        notaPrazo: input.notaPrazo ?? null,
+        notaQualidade: input.notaQualidade ?? null,
+        notaGeral: input.notaGeral,
+        comentarioPositivo: input.comentarioPositivo || null,
+        comentarioMelhoria: input.comentarioMelhoria || null,
+        recomendaria: input.recomendaria ?? null,
+      });
+      return { success: true };
     }),
   }),
 

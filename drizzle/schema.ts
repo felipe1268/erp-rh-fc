@@ -3929,6 +3929,7 @@ export const portalCredentials = pgTable("portal_credentials", {
   tipo: text().notNull(),
   empresaTerceiraId: integer(),
   parceiroId: integer(),
+  clienteId: integer("cliente_id"),
   companyId: integer().notNull(),
   cnpj: varchar({ length: 20 }).notNull(),
   senhaHash: varchar("senha_hash", { length: 255 }).notNull(),
@@ -3944,6 +3945,65 @@ export const portalCredentials = pgTable("portal_credentials", {
   index("pc_cnpj").on(table.cnpj),
   index("pc_tipo_empresa").on(table.tipo, table.empresaTerceiraId),
   index("pc_tipo_parceiro").on(table.tipo, table.parceiroId),
+  index("pc_tipo_cliente").on(table.tipo, table.clienteId),
+]);
+
+// ============================================================
+// PORTAL DO CLIENTE — Rev. 1424
+// ============================================================
+
+// Tokens de redefinição de senha (esqueci minha senha) — para todos os tipos do portal
+export const portalPasswordResets = pgTable("portal_password_resets", {
+  id: serial().primaryKey(),
+  credId: integer("cred_id").notNull(), // FK -> portal_credentials.id
+  token: varchar({ length: 80 }).notNull(),
+  expiresAt: timestamp("expires_at", { mode: "string" }).notNull(),
+  usadoEm: timestamp("usado_em", { mode: "string" }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("ppr_token").on(t.token),
+  index("ppr_cred").on(t.credId),
+]);
+
+// Comentários cliente <-> empresa (NÃO anônimo — comunicação rastreável)
+export const clienteComentarios = pgTable("cliente_comentarios", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  clienteId: integer("cliente_id").notNull(),
+  obraId: integer("obra_id"),
+  autorTipo: varchar("autor_tipo", { length: 20 }).notNull(), // 'cliente' | 'fc'
+  autorNome: varchar("autor_nome", { length: 255 }),
+  mensagem: text().notNull(),
+  lidoEm: timestamp("lido_em", { mode: "string" }),
+  criadoEm: timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("cc_company").on(t.companyId),
+  index("cc_cliente").on(t.clienteId),
+  index("cc_obra").on(t.obraId),
+]);
+
+// Avaliações ANÔNIMAS — pesquisa de satisfação (NPS)
+// Não armazena clienteId/credId/IP — apenas obra (opcional) e companyId
+export const clienteAvaliacoes = pgTable("cliente_avaliacoes", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  obraId: integer("obra_id"),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  // Notas 0-10 (NPS). null = não respondeu o critério
+  notaEquipe: integer("nota_equipe"),
+  notaObra: integer("nota_obra"),
+  notaAtendimento: integer("nota_atendimento"),
+  notaPrazo: integer("nota_prazo"),
+  notaQualidade: integer("nota_qualidade"),
+  notaGeral: integer("nota_geral"), // 0-10 — pergunta NPS
+  comentarioPositivo: text("comentario_positivo"),
+  comentarioMelhoria: text("comentario_melhoria"),
+  recomendaria: smallint(), // 0=não, 1=talvez, 2=sim
+  criadoEm: timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("ca_company").on(t.companyId),
+  index("ca_obra").on(t.obraId),
+  index("ca_data").on(t.criadoEm),
 ]);
 
 

@@ -21,6 +21,8 @@ export default function PortalLogin() {
       localStorage.setItem("portal_cnpj", data.cnpj);
       if (data.primeiroAcesso) {
         navigate("/portal/trocar-senha");
+      } else if (data.tipo === "cliente") {
+        navigate("/portal/cliente/dashboard");
       } else {
         navigate("/portal/dashboard");
       }
@@ -28,18 +30,21 @@ export default function PortalLogin() {
     onError: (e) => toast.error(e.message),
   });
 
-  const formatCNPJ = (v: string) => {
+  const formatDoc = (v: string) => {
     const n = v.replace(/\D/g, "").slice(0, 14);
-    if (n.length <= 2) return n;
-    if (n.length <= 5) return `${n.slice(0,2)}.${n.slice(2)}`;
-    if (n.length <= 8) return `${n.slice(0,2)}.${n.slice(2,5)}.${n.slice(5)}`;
-    if (n.length <= 12) return `${n.slice(0,2)}.${n.slice(2,5)}.${n.slice(5,8)}/${n.slice(8)}`;
+    if (n.length <= 11) {
+      // CPF parcial
+      if (n.length <= 3) return n;
+      if (n.length <= 6) return `${n.slice(0,3)}.${n.slice(3)}`;
+      if (n.length <= 9) return `${n.slice(0,3)}.${n.slice(3,6)}.${n.slice(6)}`;
+      return `${n.slice(0,3)}.${n.slice(3,6)}.${n.slice(6,9)}-${n.slice(9)}`;
+    }
     return `${n.slice(0,2)}.${n.slice(2,5)}.${n.slice(5,8)}/${n.slice(8,12)}-${n.slice(12)}`;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cnpj || !senha) { toast.error("Preencha CNPJ e senha"); return; }
+    if (!cnpj || !senha) { toast.error("Preencha CNPJ/CPF e senha"); return; }
     loginMut.mutate({ cnpj: cnpj.replace(/\D/g, ""), senha });
   };
 
@@ -50,16 +55,16 @@ export default function PortalLogin() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-orange-500 mb-4">
             <Building2 className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Portal do Terceiro</h1>
-          <p className="text-blue-200 mt-1">FC Gestão Integrada</p>
+          <h1 className="text-2xl font-bold text-white">Portal Externo</h1>
+          <p className="text-blue-200 mt-1">FC Engenharia — Acesso de terceiros, parceiros e clientes</p>
         </div>
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <Label className="text-gray-700 font-medium">CNPJ</Label>
+              <Label className="text-gray-700 font-medium">CNPJ ou CPF</Label>
               <div className="relative mt-1">
                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input value={cnpj} onChange={(e) => setCnpj(formatCNPJ(e.target.value))} placeholder="00.000.000/0000-00" className="pl-10 h-12 text-lg" />
+                <Input value={cnpj} onChange={(e) => setCnpj(formatDoc(e.target.value))} placeholder="00.000.000/0000-00 ou 000.000.000-00" className="pl-10 h-12 text-lg" />
               </div>
             </div>
             <div>
@@ -75,9 +80,18 @@ export default function PortalLogin() {
             <Button type="submit" className="w-full h-12 bg-orange-500 hover:bg-orange-600 text-lg font-semibold" disabled={loginMut.isPending}>
               {loginMut.isPending ? "Entrando..." : <span className="flex items-center gap-2"><LogIn className="w-5 h-5" /> Entrar</span>}
             </Button>
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => navigate("/portal/esqueci-senha")}
+                className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                Esqueci minha senha
+              </button>
+            </div>
           </form>
           <div className="mt-6 pt-4 border-t text-center">
-            <p className="text-xs text-gray-400">Acesso exclusivo para empresas terceirizadas e parceiros cadastrados pela FC Engenharia.</p>
+            <p className="text-xs text-gray-400">Acesso exclusivo para empresas terceirizadas, parceiros e clientes cadastrados pela FC Engenharia.</p>
           </div>
         </div>
       </div>

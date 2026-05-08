@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1424,
+    titulo: "Portal do Cliente — Fase 1: cadastro unitário, e-mail de boas-vindas, esqueci minha senha e avaliação anônima (NPS)",
+    descricao: "Lançamento da Fase 1 do Portal do Cliente. (1) ADMINISTRAÇÃO em /clientes/portal: tela com 3 abas (Acessos, Comentários, Avaliações NPS). Botão 'Gerar acesso' cria credencial individual para o cliente, gera senha provisória e envia AUTOMATICAMENTE e-mail de boas-vindas via SMTP (com link, identificador CNPJ/CPF e senha temporária). Reenvio funciona da mesma forma. (2) RECUPERAÇÃO DE SENHA universal (/portal/esqueci-senha + /portal/redefinir-senha/:token): usuário informa CNPJ/CPF, recebe link por e-mail válido por 1h e define nova senha. Resposta sempre genérica para não vazar quem está cadastrado. (3) PORTAL DO CLIENTE em /portal/cliente/dashboard com 3 abas: 'Minhas Obras' (cards das obras vinculadas, filtradas por razão social/nome fantasia em obras.cliente — case-insensitive), 'Comentários' (chat bidirecional cliente↔FC por obra, com marcação de lido), 'Avaliação Anônima' (formulário NPS 0-10: nota geral + 5 critérios — equipe, obra, atendimento, prazo, qualidade — recomendaria SIM/TALVEZ/NÃO + 2 comentários abertos). (4) AVALIAÇÃO 100% ANÔNIMA por design: a tabela cliente_avaliacoes NÃO armazena clienteId, credId, IP nem user-agent — apenas companyId+obraId+notas+textos. Garantido no backend. (5) Dashboard NPS no admin: cards (Respostas, NPS, Média geral, Promotores/Neutros/Detratores), barras por critério, tabela por obra (com NPS individual) e lista dos comentários escritos. (6) Login (/portal/login) atualizado: aceita CNPJ ou CPF (com formatação dinâmica), título genérico 'Portal Externo', link 'Esqueci minha senha'. JWT de login agora inclui clienteId. PortalDashboard redireciona automaticamente clientes para o dashboard correto. (7) Schema: portalCredentials.clienteId + 3 novas tabelas (portalPasswordResets, clienteComentarios, clienteAvaliacoes) garantidas via ColFix Rev.1424.",
+    tipo: "feature",
+    modulos: "Clientes,Portal Externo,Comunicação",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 09:30:00",
+  },
+  {
     version: 1423,
     titulo: "Compras: rota alias /compras/ordens-compra para evitar 404 em links antigos da OC",
     descricao: "BUGFIX/COMPATIBILIDADE: o caminho legado /compras/ordens-compra (usado em links antigos para abrir OC, e que estava em uso por algumas telas até a Rev. 1422) agora é uma rota alias que renderiza o mesmo componente da rota oficial /compras/ordens. Resolve o problema de 'a página cai' ao abrir uma OC a partir da Solicitação de Compra em ambientes/abas com a versão antiga em cache, e protege futuros links que ainda apontem para o caminho legado.",

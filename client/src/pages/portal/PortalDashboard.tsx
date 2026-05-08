@@ -49,12 +49,13 @@ export default function PortalDashboard() {
 
   useEffect(() => {
     if (!token) { navigate("/portal/login"); return; }
+    if (tipo === "cliente") { navigate("/portal/cliente/dashboard"); return; }
     if (tokenCheck.data && !tokenCheck.data.valid) {
       localStorage.removeItem("portal_token");
       toast.error("Sessão expirada. Faça login novamente.");
       navigate("/portal/login");
     }
-  }, [token, tokenCheck.data]);
+  }, [token, tokenCheck.data, tipo]);
 
   // Close dropdown on outside click
   useEffect(() => {

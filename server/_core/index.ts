@@ -862,6 +862,56 @@ Regras:
             ALTER TABLE module_config ADD COLUMN IF NOT EXISTS disabled_pages TEXT;
             ALTER TABLE epis ADD COLUMN IF NOT EXISTS "fotoUrl" TEXT;
             ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "previsaoRescisaoComplementar" TEXT;
+
+            -- Rev. 1424 — Portal do Cliente (Fase 1)
+            ALTER TABLE portal_credentials ADD COLUMN IF NOT EXISTS cliente_id INTEGER;
+            CREATE INDEX IF NOT EXISTS pc_tipo_cliente ON portal_credentials (tipo, cliente_id);
+
+            CREATE TABLE IF NOT EXISTS portal_password_resets (
+              id SERIAL PRIMARY KEY,
+              cred_id INTEGER NOT NULL,
+              token VARCHAR(80) NOT NULL,
+              expires_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+              usado_em TIMESTAMP WITHOUT TIME ZONE,
+              created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS ppr_token ON portal_password_resets (token);
+            CREATE INDEX IF NOT EXISTS ppr_cred ON portal_password_resets (cred_id);
+
+            CREATE TABLE IF NOT EXISTS cliente_comentarios (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              cliente_id INTEGER NOT NULL,
+              obra_id INTEGER,
+              autor_tipo VARCHAR(20) NOT NULL,
+              autor_nome VARCHAR(255),
+              mensagem TEXT NOT NULL,
+              lido_em TIMESTAMP WITHOUT TIME ZONE,
+              criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS cc_company ON cliente_comentarios (company_id);
+            CREATE INDEX IF NOT EXISTS cc_cliente ON cliente_comentarios (cliente_id);
+            CREATE INDEX IF NOT EXISTS cc_obra ON cliente_comentarios (obra_id);
+
+            CREATE TABLE IF NOT EXISTS cliente_avaliacoes (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              obra_id INTEGER,
+              obra_nome VARCHAR(255),
+              nota_equipe INTEGER,
+              nota_obra INTEGER,
+              nota_atendimento INTEGER,
+              nota_prazo INTEGER,
+              nota_qualidade INTEGER,
+              nota_geral INTEGER,
+              comentario_positivo TEXT,
+              comentario_melhoria TEXT,
+              recomendaria SMALLINT,
+              criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS ca_company ON cliente_avaliacoes (company_id);
+            CREATE INDEX IF NOT EXISTS ca_obra ON cliente_avaliacoes (obra_id);
+            CREATE INDEX IF NOT EXISTS ca_data ON cliente_avaliacoes (criado_em);
             CREATE TABLE IF NOT EXISTS notification_views (
               user_id INTEGER NOT NULL,
               notification_key VARCHAR(100) NOT NULL,
