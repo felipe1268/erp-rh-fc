@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1446,
+    titulo: "Portal do Cliente — % Previsto agora bate EXATAMENTE com o valor da tela interna",
+    descricao: "BUG CORRIGIDO: o portal do cliente exibia % Previsto com 2 casas decimais (ex: 1,84%) enquanto a tela interna PlanejamentoDetalhe mostrava 1,80% para o mesmo projeto, gerando desconfiança no cliente. CAUSA: o helper `avancoPrevistoDia` interno aplica `+soma.toFixed(1)` (arredonda para 1 casa decimal antes de armazenar), o que transforma 1.84 em 1.8 — e o display formata como '1,80%' (2 casas no display, mas valor base com 1 casa). O portal estava usando `+somaPrevisto.toFixed(2)` (2 casas armazenadas), preservando o 1.84 e mostrando '1,84%'. CORREÇÃO: backend `cliente.planejamentoObra` agora também usa `.toFixed(1)` no Previsto, idêntico ao interno. O Realizado mantém a precisão original (Math.min(100, ponderado)) pois o interno também não arredonda. O Desvio passa a ser calculado a partir do Previsto já arredondado, garantindo que -0,75% no interno = -0,75% no portal (e não mais -0,79%). Resultado: cliente vê EXATAMENTE os mesmos números do gestor.",
+    tipo: "bugfix",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 02:00:00",
+  },
+  {
     version: 1445,
     titulo: "Portal do Cliente — TODAS as 9 abas restantes do Planejamento liberadas e funcionais",
     descricao: "Liberadas e implementadas as últimas 5 abas do portal do cliente, completando a paridade com a tela interna de Planejamento: (1) CRONO. FINANCEIRO — gráfico ComposedChart (linhas + áreas degradê) com Previsto R$ vs Realizado R$ por semana, calculado a partir da Curva S × valorContrato do projeto; (2) PREV. MEDIÇÃO — tabela mensal com %Prev, R$ Previsto, %Real, R$ Realizado, calculada por agrupamento da Curva S por mês × valorContrato; (3) DIAGRAMA DE REDE — tabela das atividades com predecessoras (campo planejamento_atividades.predecessora), exibindo EAP, atividade, badge da predecessora e % realizado; (4) CUSTO RH — gráfico de linhas evolutivo (Direto/Indireto/Central por mês) + tabela completa do Efetivo; (5) BIM 3D — placeholder informativo orientando a entrar em contato com o responsável técnico (não há viewer BIM público no portal). MUDANÇA DE DEFAULT: ABAS_LIBERADAS_DEFAULT agora retorna TODAS as abas implementadas em vez de apenas 'visao_geral' — credenciais sem configuração explícita verão tudo automaticamente (admin pode restringir em Configurações). Backend: projeto agora retorna valorContrato. Resultado: o portal do cliente agora tem cópia funcional de todas as 14 abas do planejamento interno (Visão Geral, Cronograma, Avanço Semanal, Prog. Semanal, Curva S, Revisões, Gantt, REFIS, Caminho Crítico, Efetivo, Crono. Financeiro, Prev. Medição, Diagrama de Rede, Custo RH, BIM 3D) — apenas Custo RH e BIM 3D usam dados parciais/placeholder.",
