@@ -658,8 +658,8 @@ export const gestaoDocumentosRouter = router({
       descricao: z.string().optional(),
       emitente: z.string().optional(),
       responsavelId: z.number().nullable().optional(),
-      dataEmissao: z.string().optional(),
-      dataValidade: z.string().optional(),
+      dataEmissao: z.preprocess(v => (v === "" ? undefined : v), z.string().optional()),
+      dataValidade: z.preprocess(v => (v === "" ? undefined : v), z.string().optional()),
       tags: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -732,8 +732,8 @@ export const gestaoDocumentosRouter = router({
       revisaoAtual: z.string().nullable().optional(),
       emitente: z.string().nullable().optional(),
       responsavelId: z.number().nullable().optional(),
-      dataEmissao: z.string().nullable().optional(),
-      dataValidade: z.string().nullable().optional(),
+      dataEmissao: z.preprocess(v => (v === "" ? null : v), z.string().nullable().optional()),
+      dataValidade: z.preprocess(v => (v === "" ? null : v), z.string().nullable().optional()),
       tags: z.string().nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -1240,8 +1240,8 @@ export const gestaoDocumentosRouter = router({
       numero: z.string().min(1),
       profissional: z.string().min(1),
       creaOuCau: z.string().optional(),
-      dataEmissao: z.string().optional(),
-      dataValidade: z.string().optional(),
+      dataEmissao: z.preprocess(v => (v === "" ? undefined : v), z.string().optional()),
+      dataValidade: z.preprocess(v => (v === "" ? undefined : v), z.string().optional()),
       arquivoUrl: z.string().optional(),
       observacoes: z.string().optional(),
     }))
@@ -1264,8 +1264,8 @@ export const gestaoDocumentosRouter = router({
       numero: z.string().optional(),
       profissional: z.string().optional(),
       creaOuCau: z.string().nullable().optional(),
-      dataEmissao: z.string().nullable().optional(),
-      dataValidade: z.string().nullable().optional(),
+      dataEmissao: z.preprocess(v => (v === "" ? null : v), z.string().nullable().optional()),
+      dataValidade: z.preprocess(v => (v === "" ? null : v), z.string().nullable().optional()),
       status: z.string().optional(),
       arquivoUrl: z.string().nullable().optional(),
       observacoes: z.string().nullable().optional(),

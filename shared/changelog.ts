@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1437,
+    titulo: "Gestão de Documentos — fix erro ao criar Documento Técnico (datas vazias)",
+    descricao: "Ao salvar um 'Novo Documento' em /gestao-documentos, o sistema retornava 'Failed query: insert into gd_documentos' com erro 'invalid input syntax for type date: \"\"'. Causa: o formulário enviava dataEmissao e dataValidade como string vazia (\"\") quando o usuário não preenchia esses campos, e o PostgreSQL rejeita string vazia em colunas do tipo date (gd_documentos.data_emissao e data_validade). Correção: as procedures createDocumento, updateDocumento, createArt e updateArt (server/routers/gestaodocumentos.ts) agora usam z.preprocess para converter string vazia em undefined (create) ou null (update) antes da validação Zod, garantindo que o Drizzle não tente inserir/atualizar colunas date com valor inválido. Agora documentos e ARTs são criados normalmente mesmo sem datas preenchidas.",
+    tipo: "bugfix",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 22:30:00",
+  },
+  {
     version: 1436,
     titulo: "Portal Externo + Portal do Cliente — login agora aceita E-MAIL além de CNPJ/CPF",
     descricao: "Antes, para entrar nos portais (externo e do cliente) o usuário precisava obrigatoriamente digitar o CNPJ ou CPF do cliente/empresa. Agora cada usuário pode entrar diretamente com o E-MAIL que foi cadastrado para ele pelo administrador (visto na tela 'Acessos do Portal'). O backend (mutation portalExterno.auth.login) detecta automaticamente se o identificador contém @ — se sim, busca a credencial por LOWER(email_responsavel) = email digitado; se não, mantém a busca por CNPJ. Frontend: ambas as telas (/portal/login e /portal/cliente/login) tiveram o label trocado para 'CNPJ, CPF ou E-mail', placeholder atualizado, helper text explicando, e o formatador de documento agora não interfere quando o usuário digita um e-mail (detecta @ ou letras). A senha continua sendo a mesma já cadastrada — login funciona com qualquer um dos identificadores. Mensagens de erro também trocam dinamicamente entre 'CNPJ não encontrado' e 'E-mail não encontrado' para guiar melhor o usuário.",
