@@ -371,16 +371,14 @@ export function ProgramacaoSemanal({
               ))}
             </div>
           )}
-          {!portalMode && (
-            <Button
-              variant="outline" size="sm"
-              className="gap-1.5 text-xs"
-              onClick={() => { setModoRelatorio(!modoRelatorio); }}
-            >
-              {modoRelatorio ? <Home className="h-3.5 w-3.5" /> : <CalendarRange className="h-3.5 w-3.5" />}
-              {modoRelatorio ? "Visão Semanal" : `Relatório ${qtdSemanas} Semana${qtdSemanas !== 1 ? "s" : ""}`}
-            </Button>
-          )}
+          <Button
+            variant="outline" size="sm"
+            className="gap-1.5 text-xs"
+            onClick={() => { setModoRelatorio(!modoRelatorio); }}
+          >
+            {modoRelatorio ? <Home className="h-3.5 w-3.5" /> : <CalendarRange className="h-3.5 w-3.5" />}
+            {modoRelatorio ? "Visão Semanal" : `Relatório ${qtdSemanas} Semana${qtdSemanas !== 1 ? "s" : ""}`}
+          </Button>
           {modoRelatorio && (
             <Button size="sm" className="gap-1.5 text-xs bg-blue-600 hover:bg-blue-700" onClick={imprimir}>
               <Printer className="h-3.5 w-3.5" /> Imprimir / PDF
@@ -677,6 +675,7 @@ export function ProgramacaoSemanal({
           iaErro={iaErro}
           onGerarAlertas={gerarAlertas}
           hierarquiaOf={hierarquiaOf}
+          portalMode={portalMode}
         />
       )}
     </div>
@@ -980,7 +979,7 @@ function AlertasBlock({ alertas, semanas }: { alertas: any; semanas: Week[] }) {
 function RelatorioTresSemanas({
   proximas3, avancosMap, today, nomeProjeto, nomeCliente,
   recursos, equipDisponiveis, alertas, loadIA, iaErro, onGerarAlertas,
-  hierarquiaOf,
+  hierarquiaOf, portalMode = false,
 }: {
   proximas3: { semana: Week; atividades: any[] }[];
   avancosMap: Record<number, number>;
@@ -994,13 +993,14 @@ function RelatorioTresSemanas({
   iaErro: string | null;
   onGerarAlertas: () => void;
   hierarquiaOf: (eap: string | null | undefined) => string[];
+  portalMode?: boolean;
 }) {
   const dataGeracao = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 
   return (
     <div className="space-y-3">
       {/* Gerar alertas antes de imprimir */}
-      {!alertas && !iaErro && (
+      {!portalMode && !alertas && !iaErro && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-blue-700">
             <Brain className="h-4 w-4" />
@@ -1012,7 +1012,7 @@ function RelatorioTresSemanas({
           </Button>
         </div>
       )}
-      {iaErro && !loadIA && (
+      {!portalMode && iaErro && !loadIA && (
         <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex items-start justify-between gap-3">
           <div className="flex items-start gap-2 text-sm text-red-600">
             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />

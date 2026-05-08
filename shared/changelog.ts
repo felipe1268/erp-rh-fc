@@ -10049,6 +10049,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 02:30:00",
   },
   {
+    version: 1452,
+    titulo: "Portal do Cliente — botão 'Relatório N Semanas' habilitado na aba Prog. Semanal",
+    descricao: "O botão 'Relatório N Semanas' (toggle Visão Semanal ↔ Relatório) e o botão 'Imprimir / PDF' agora aparecem também no Portal do Cliente, dentro da aba 'Prog. Semanal'. O relatório imprimível usa exatamente o mesmo layout da tela interna (cabeçalho azul, colunas por semana, lista de atividades com % de avanço, recursos por EAP quando disponíveis, rodapé padrão FC Engenharia). No portal, ficam ocultos apenas os blocos que dependem de rotas autenticadas: o cartão 'Gerar alertas IA do JULINHO' e o painel de erro da IA — preservando uma experiência limpa para o cliente final.",
+    tipo: "melhoria",
+    modulos: "Portal Cliente,Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 13:30:00",
+  },
+  {
     version: 1451,
     titulo: "Portal do Cliente — aba 'Efetivo' agora é cópia 100% da tela interna (Equipe da Obra)",
     descricao: "A aba 'Efetivo' do Portal do Cliente passou a reutilizar o mesmo componente visual da tela interna `EfetivoObraTab` (PlanejamentoDetalhe). Foi extraído `EfetivoObraView` (puramente visual) que recebe a equipe já carregada e renderiza: pills de filtro por status (Ativo / Aviso Prévio / Dispensado / Férias / Afastado / Licença / Recluso) com contagens, distribuição por função (gráfico de barras), busca por nome/função/status e tabela com Nome, Função, Status e Tempo de Empresa. Backend: nova rota pública `portalExterno.cliente.efetivoObra({ token, obraId })` que valida o JWT do cliente, confere que a obra pertence ao cliente (mesma regra usada em `planejamentoObra`) e delega para `getEquipeObra(obraId, companyId)` — reaproveitando a lógica de cruzamento com termination_notices (Aviso Prévio / Dispensado) e vacation_periods (Férias em gozo). A antiga aba 'Efetivo' do portal (tabela mensal de custo de mão de obra) virou `AbaEfetivoMensal` e segue acessível dentro de 'Custo MO'.",
