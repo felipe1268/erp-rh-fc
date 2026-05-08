@@ -308,6 +308,7 @@ const ClimaPublicoPage = lazy(() => import("./pages/PesquisaPublica").then(m => 
 
 // Portal Externo
 const PortalLogin = lazy(() => import("./pages/portal/PortalLogin"));
+const PortalLoginCliente = lazy(() => import("./pages/portal/PortalLoginCliente"));
 const PortalEsqueciSenha = lazy(() => import("./pages/portal/PortalEsqueciSenha"));
 const PortalRedefinirSenha = lazy(() => import("./pages/portal/PortalRedefinirSenha"));
 const PortalDashboardCliente = lazy(() => import("./pages/portal/PortalDashboardCliente"));
@@ -543,6 +544,8 @@ function Router() {
         <Route path="/pesquisa-publica/pesquisa/:token" component={PesquisaPublicaPage} />
         {/* Portal Externo (Terceiros/Parceiros) */}
         <Route path="/portal/login" component={PortalLogin} />
+        <Route path="/portal/cliente/login" component={PortalLoginCliente} />
+        <Route path="/portal/cliente" component={PortalLoginCliente} />
         <Route path="/portal/esqueci-senha" component={PortalEsqueciSenha} />
         <Route path="/portal/redefinir-senha/:token" component={PortalRedefinirSenha} />
         <Route path="/portal/trocar-senha" component={PortalTrocarSenha} />

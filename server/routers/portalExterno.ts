@@ -32,15 +32,22 @@ export const portalExternoRouter = router({
     login: publicProcedure.input(z.object({
       cnpj: z.string(),
       senha: z.string(),
+      tipoEsperado: z.enum(["cliente", "terceiro", "parceiro"]).optional(),
     })).mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const cnpjClean = input.cnpj.replace(/\D/g, "");
       // Pode haver vários acessos para o mesmo CNPJ (até 4 usuários por cliente).
       // Tentamos validar a senha contra cada credencial ativa — a senha é o discriminador.
-      const creds = await db.select().from(portalCredentials).where(
-        and(eq(portalCredentials.cnpj, cnpjClean), eq(portalCredentials.ativo, 1))
-      );
-      if (creds.length === 0) throw new TRPCError({ code: "UNAUTHORIZED", message: "CNPJ não encontrado ou acesso inativo" });
+      const baseFilter = input.tipoEsperado
+        ? and(eq(portalCredentials.cnpj, cnpjClean), eq(portalCredentials.ativo, 1), eq(portalCredentials.tipo, input.tipoEsperado))
+        : and(eq(portalCredentials.cnpj, cnpjClean), eq(portalCredentials.ativo, 1));
+      const creds = await db.select().from(portalCredentials).where(baseFilter);
+      if (creds.length === 0) {
+        const msg = input.tipoEsperado === "cliente"
+          ? "CNPJ não encontrado entre os clientes cadastrados ou acesso inativo."
+          : "CNPJ não encontrado ou acesso inativo";
+        throw new TRPCError({ code: "UNAUTHORIZED", message: msg });
+      }
       let cred: typeof creds[number] | undefined;
       for (const c of creds) {
         if (await bcrypt.compare(input.senha, c.senhaHash)) { cred = c; break; }

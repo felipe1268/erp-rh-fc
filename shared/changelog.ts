@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1431,
+    titulo: "Portal do Cliente — tela de login DEDICADA (separada de fornecedor/terceiro/parceiro)",
+    descricao: "Criada uma tela de login EXCLUSIVA para clientes em /portal/cliente/login (também acessível por /portal/cliente). Diferente do Portal Externo genérico (que continua existindo em /portal/login para terceiros e parceiros), a tela do cliente tem identidade visual própria: layout em duas colunas no desktop — coluna esquerda com gradiente azul/índigo, mensagem 'Acompanhe sua obra de ponta a ponta' e mini-cards destacando o que ele encontrará lá dentro (Documentos, Medições, RDO, Cronograma); coluna direita com formulário em fundo claro, botão azul 'Entrar como cliente'. Em mobile o layout vira coluna única. Backend: a mutation portalExterno.auth.login agora aceita um parâmetro opcional 'tipoEsperado' que filtra credenciais pelo tipo — quando o cliente entra por /portal/cliente/login, o backend só procura credenciais do tipo 'cliente' e devolve mensagem específica ('CNPJ não encontrado entre os clientes cadastrados') se não achar. Isso impede que um terceirizado entre acidentalmente pela URL do cliente. Há um link discreto no rodapé para terceiros/parceiros usarem o portal genérico.",
+    tipo: "feature",
+    modulos: "Portal do Cliente,Portal Externo",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 20:00:00",
+  },
+  {
     version: 1430,
     titulo: "Portal do Cliente — modal 'Gerenciar acessos' em tela cheia (2 colunas)",
     descricao: "O modal de gestão de acessos do Portal do Cliente foi ampliado para usar praticamente toda a tela (até 1200px de largura por 88vh de altura) e reorganizado em DUAS COLUNAS para aproveitar melhor o espaço: (1) COLUNA ESQUERDA — Cadastro: formulário de novo usuário com Nome e E-mail empilhados (mais espaço para digitar), checkbox 'Enviar e-mail de boas-vindas' como bloco clicável com descrição, botão grande 'Adicionar acesso' (full-width). Quando uma senha é gerada, o card de resultado aparece logo abaixo com a senha em destaque e botão copiar. (2) COLUNA DIREITA — Lista: cards de usuários com avatar maior (12×12), nome destacado, e-mail e último login lado a lado, ações como ícones (40×40) com hover. (3) HEADER ampliado: ícone, título 'Acessos do Portal do Cliente', razão social em fonte maior, CNPJ em monospace e — à direita do header — contador grande '1/4' (ou similar) com 'usuários ativos' e barra de progresso colorida (verde/âmbar). (4) FOOTER reformulado: lembrete do limite à esquerda + botão Fechar à direita. Em telas pequenas as colunas viram empilhadas (responsivo). Sem mudanças no backend.",
