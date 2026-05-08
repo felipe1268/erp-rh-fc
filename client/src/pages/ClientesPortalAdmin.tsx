@@ -12,7 +12,7 @@ import {
   Mail, KeyRound, Send, Search, MessageSquare, Star,
   Loader2, ShieldCheck, CheckCircle2, AlertCircle, Copy, Reply,
   Smile, Frown, TrendingUp, Users, Plus, Trash2, RefreshCw, UserPlus,
-  Lock, UnlockKeyhole, SlidersHorizontal,
+  Lock, UnlockKeyhole, SlidersHorizontal, ExternalLink,
 } from "lucide-react";
 import { PORTAL_CLIENTE_ABAS, parseAbasLiberadas, ABA_OBRIGATORIA, type PortalClienteAbaKey } from "@shared/portalClienteAbas";
 
@@ -152,10 +152,16 @@ export default function ClientesPortalAdmin() {
           <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center text-white">
             <ShieldCheck className="w-5 h-5" />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold text-slate-800">Portal do Cliente — Administração</h1>
             <p className="text-xs text-slate-500">Gere acessos (até {LIMITE_SUGERIDO} usuários por cliente), responda comentários e acompanhe a satisfação (NPS) dos clientes.</p>
           </div>
+          <a href="/portal/cliente/login" target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm shrink-0"
+            title="Abrir o Portal do Cliente em nova aba">
+            <ExternalLink className="w-4 h-4" />
+            Abrir Portal do Cliente
+          </a>
         </div>
 
         {/* Tabs */}
