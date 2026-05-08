@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1418,
+    titulo: "Lançamentos Parceiros: seletor de competência (Ano + 12 meses) acima dos filtros",
+    descricao: "MELHORIA: adicionado um seletor visual de COMPETÊNCIA na tela de Lançamentos do módulo Parceiros, no estilo das outras telas (linha com 12 meses + setas para mudar de ano). Ao clicar num mês, o sistema aplica automaticamente o ciclo 16→15 daquela competência (ex: Mai/2026 = 16/04/2026 a 15/05/2026). O mês selecionado fica destacado em roxo, o mês atual fica com borda destacada, e há legenda mostrando exatamente o intervalo de datas da competência selecionada.",
+    tipo: "melhoria",
+    modulos: "Parceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 17:45:00",
+  },
+  {
     version: 1417,
     titulo: "Lançamentos Parceiros: campo de busca por nome (colaborador, parceiro ou item)",
     descricao: "MELHORIA: na tela de Lançamentos do módulo Parceiros, adicionado campo de BUSCA na barra de filtros. A busca filtra em tempo real pelo nome do colaborador, nome do parceiro/conveniado e descrição dos itens. Tem ícone de lupa, placeholder explicativo e botão ✕ para limpar rapidamente.",

@@ -10,7 +10,24 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Receipt, Plus, Search, CheckCircle, XCircle, Clock, Upload, FileText, Eye, Store } from "lucide-react";
+import { Receipt, Plus, Search, CheckCircle, XCircle, Clock, Upload, FileText, Eye, Store, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+
+const MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+// Detecta a competência (mês/ano) cujo ciclo 16→15 cai sobre `dataFim`
+function competenciaDoFim(dataFim: string): { ano: number; mes: number } {
+  const [y, m] = dataFim.split("-").map(Number);
+  return { ano: y, mes: m };
+}
+
+// Aplica o ciclo 16→15 do mês/ano selecionado:
+//   competência Mai/2026 → 16/04/2026 a 15/05/2026
+function ciclo16a15(ano: number, mes: number): { inicio: string; fim: string } {
+  const fim = new Date(ano, mes - 1, 15);
+  const inicio = new Date(ano, mes - 2, 16);
+  const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return { inicio: fmt(inicio), fim: fmt(fim) };
+}
 
 // Calcula a competência do desconto a partir da data da compra.
 // Regra (mesma do servidor em `parceiros.lancamentos.create`):
@@ -188,6 +205,70 @@ export default function LancamentosParceiros() {
             <Plus className="h-4 w-4 mr-1" /> Novo Lançamento
           </Button>
         </div>
+
+        {/* Seletor de Competência (Ano + Meses) */}
+        {(() => {
+          const comp = competenciaDoFim(dataFim);
+          const hoje = new Date();
+          const isMesAtual = (m: number) => comp.ano === hoje.getFullYear() && m === hoje.getMonth() + 1;
+          const isSelecionado = (m: number) => m === comp.mes;
+          return (
+            <div className="rounded-xl border bg-card p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { const p = ciclo16a15(comp.ano - 1, comp.mes); setDataInicio(p.inicio); setDataFim(p.fim); }}
+                    className="p-1 rounded hover:bg-muted"
+                    title="Ano anterior"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="font-bold text-base flex items-center gap-1.5">
+                    <Calendar className="h-4 w-4 text-purple-500" />
+                    {comp.ano}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { const p = ciclo16a15(comp.ano + 1, comp.mes); setDataInicio(p.inicio); setDataFim(p.fim); }}
+                    className="p-1 rounded hover:bg-muted"
+                    title="Próximo ano"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  Competência: ciclo 16/{String(((comp.mes - 2 + 12) % 12) + 1).padStart(2, "0")} a 15/{String(comp.mes).padStart(2, "0")}/{comp.ano}
+                </span>
+              </div>
+              <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+                {MESES_ABREV.map((nome, i) => {
+                  const m = i + 1;
+                  const sel = isSelecionado(m);
+                  const atual = isMesAtual(m);
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => { const p = ciclo16a15(comp.ano, m); setDataInicio(p.inicio); setDataFim(p.fim); }}
+                      className={[
+                        "px-2 py-1.5 rounded-md text-xs font-medium border transition-colors",
+                        sel
+                          ? "bg-purple-500 text-white border-purple-600 ring-2 ring-purple-300"
+                          : atual
+                          ? "bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100"
+                          : "bg-card text-foreground border-border hover:bg-muted",
+                      ].join(" ")}
+                      title={`Competência ${nome}/${comp.ano} (16/${String(((m - 2 + 12) % 12) + 1).padStart(2, "0")} a 15/${String(m).padStart(2, "0")})`}
+                    >
+                      {nome}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Filters */}
         <div className="flex flex-wrap items-end gap-3">
