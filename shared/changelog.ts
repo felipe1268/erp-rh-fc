@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1420,
+    titulo: "Lançamentos Parceiros: meses no seletor coloridos por status (verde/âmbar/vermelho) + contador",
+    descricao: "MELHORIA visual no seletor de competência da tela de Lançamentos: cada mês agora tem cor própria baseada no mix de status dos lançamentos daquela competência: VERDE quando todos aprovados, ÂMBAR quando há pendentes, VERMELHO quando há rejeitados, e cinza quando não há lançamentos. Cada mês com dados também ganha um badge roxo no canto superior direito mostrando a QUANTIDADE de lançamentos. Ao passar o mouse, o tooltip mostra qtd, valor total e o detalhamento (✓ aprovados, ⏳ pendentes, ✗ rejeitados). Adicionada legenda explicativa abaixo. A consulta busca todos os lançamentos do ano selecionado para popular as cores.",
+    tipo: "melhoria",
+    modulos: "Parceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 18:15:00",
+  },
+  {
     version: 1419,
     titulo: "Lançamentos Parceiros: valores em pt-BR, edição/exclusão por clique e comprovante OBRIGATÓRIO",
     descricao: "MELHORIAS na tela de Lançamentos do módulo Parceiros: (1) todos os valores agora aparecem no padrão pt-BR (R$ 1.268,50 com ponto de milhar e vírgula decimal) — tanto nos KPIs (Pendentes/Aprovados/Total Geral) quanto em cada linha; (2) clicar no card de um lançamento abre o modal de EDIÇÃO (colaborador, data, valor, descrição) com botões 'Editar' e 'Excluir' também disponíveis nos botões de ação; (3) modal de confirmação ao excluir; (4) badge vermelho 'Sem comprovante' nas linhas que não têm anexo; (5) COMPROVANTE OBRIGATÓRIO ao criar um novo lançamento — o formulário não permite salvar sem anexar arquivo (PDF, JPG, PNG ou WEBP), garantindo a veracidade do desconto em folha. O upload acontece automaticamente após criar o lançamento.",

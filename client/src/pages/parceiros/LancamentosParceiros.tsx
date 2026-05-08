@@ -101,6 +101,36 @@ export default function LancamentosParceiros() {
     { companyId: companyId ?? 0, dataInicio, dataFim, parceiroId: filterParceiro !== "all" ? parseInt(filterParceiro) : undefined },
     { enabled: !!companyId }
   );
+
+  // Query auxiliar: TODOS os lançamentos do ano selecionado (para colorir meses com dados)
+  const compSel = competenciaDoFim(dataFim);
+  const anoIni = `${compSel.ano - 1}-12-16`;   // ciclo Jan/anoSel começa em 16/12/(ano-1)
+  const anoFim = `${compSel.ano}-12-15`;       // ciclo Dez/anoSel termina em 15/12/(ano)
+  const { data: lancamentosAno = [] } = trpc.parceiros.lancamentos.list.useQuery(
+    { companyId: companyId ?? 0, dataInicio: anoIni, dataFim: anoFim },
+    { enabled: !!companyId }
+  );
+  const resumoPorMes = useMemo(() => {
+    // Mapa mes (1..12) → { qtd, total, statuses }
+    const mapa = new Map<number, { qtd: number; total: number; pend: number; aprov: number; rej: number }>();
+    for (const l of lancamentosAno as any[]) {
+      const iso = String(l.dataCompra || "").slice(0, 10);
+      if (!iso) continue;
+      const [yS, mS, dS] = iso.split("-");
+      let y = Number(yS); let m = Number(mS); const d = Number(dS);
+      // Ciclo 16→15: dia ≥ 16 vira competência do mês seguinte
+      if (d >= 16) { m += 1; if (m > 12) { m = 1; y += 1; } }
+      if (y !== compSel.ano) continue;
+      const cur = mapa.get(m) || { qtd: 0, total: 0, pend: 0, aprov: 0, rej: 0 };
+      cur.qtd += 1;
+      cur.total += parseFloat(l.valor || "0");
+      if (l.status === "pendente") cur.pend += 1;
+      else if (l.status === "aprovado") cur.aprov += 1;
+      else if (l.status === "rejeitado") cur.rej += 1;
+      mapa.set(m, cur);
+    }
+    return mapa;
+  }, [lancamentosAno, compSel.ano]);
   const { data: parceiros = [] } = trpc.parceiros.cadastro.list.useQuery(
     { companyId: companyId ?? 0 },
     { enabled: !!companyId }
@@ -305,25 +335,51 @@ export default function LancamentosParceiros() {
                   const m = i + 1;
                   const sel = isSelecionado(m);
                   const atual = isMesAtual(m);
+                  const info = resumoPorMes.get(m);
+                  const temDados = !!info && info.qtd > 0;
+                  // Cor do mês com base no mix de status
+                  let corClasse = "bg-card text-foreground border-border hover:bg-muted";
+                  if (sel) {
+                    corClasse = "bg-purple-500 text-white border-purple-600 ring-2 ring-purple-300";
+                  } else if (temDados) {
+                    if (info!.rej > 0) {
+                      corClasse = "bg-red-50 text-red-700 border-red-300 hover:bg-red-100";
+                    } else if (info!.pend > 0) {
+                      corClasse = "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100";
+                    } else {
+                      corClasse = "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100";
+                    }
+                  } else if (atual) {
+                    corClasse = "bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100";
+                  }
+                  const tooltip = temDados
+                    ? `${nome}/${comp.ano}: ${info!.qtd} lanç. — ${fmtBRL(info!.total)} ` +
+                      `(✓${info!.aprov} ⏳${info!.pend} ✗${info!.rej})`
+                    : `Competência ${nome}/${comp.ano} (sem lançamentos)`;
                   return (
                     <button
                       key={m}
                       type="button"
                       onClick={() => { const p = ciclo16a15(comp.ano, m); setDataInicio(p.inicio); setDataFim(p.fim); }}
-                      className={[
-                        "px-2 py-1.5 rounded-md text-xs font-medium border transition-colors",
-                        sel
-                          ? "bg-purple-500 text-white border-purple-600 ring-2 ring-purple-300"
-                          : atual
-                          ? "bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100"
-                          : "bg-card text-foreground border-border hover:bg-muted",
-                      ].join(" ")}
-                      title={`Competência ${nome}/${comp.ano} (16/${String(((m - 2 + 12) % 12) + 1).padStart(2, "0")} a 15/${String(m).padStart(2, "0")})`}
+                      className={`relative px-2 py-1.5 rounded-md text-xs font-medium border transition-colors ${corClasse}`}
+                      title={tooltip}
                     >
                       {nome}
+                      {temDados && !sel && (
+                        <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-purple-600 text-white text-[10px] font-bold flex items-center justify-center shadow">
+                          {info!.qtd}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
+              </div>
+              {/* Legenda */}
+              <div className="flex flex-wrap items-center gap-3 mt-2 text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-200 border border-emerald-300"></span>Todos aprovados</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-200 border border-amber-300"></span>Tem pendente</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-200 border border-red-300"></span>Tem rejeitado</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-purple-500"></span>Selecionado</span>
               </div>
             </div>
           );
