@@ -177,7 +177,22 @@ export default function PortalRhDocumentosCliente() {
                             {expanded ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
                           </button>
                         </td>
-                        <td className="px-4 py-2 font-medium text-slate-800 text-[13px]">{f.nome}</td>
+                        <td className="px-4 py-2 font-medium text-slate-800 text-[13px]">
+                          <div className="flex items-center gap-2.5">
+                            {f.fotoUrl ? (
+                              <img
+                                src={f.fotoUrl}
+                                alt={f.nome}
+                                className="w-8 h-8 rounded-full object-cover object-top border border-slate-200 shrink-0"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+                                {(f.nome || "?").split(" ").filter(Boolean).slice(0, 2).map((p: string) => p[0]).join("").toUpperCase()}
+                              </div>
+                            )}
+                            <span>{f.nome}</span>
+                          </div>
+                        </td>
                         <td className="px-4 py-2 text-slate-600 text-[13px]">{f.funcao || "—"}</td>
                         <td className="px-4 py-2 text-center">
                           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${asoColor}`}>

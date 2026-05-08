@@ -1631,6 +1631,7 @@ export const portalExternoRouter = router({
           nome: e.nomeCompleto,
           funcao: e.funcao || e.cargo,
           status: e.status,
+          fotoUrl: e.fotoUrl || null,
           aso: aso ? { tipo: aso.tipo, dataExame: aso.dataExame, dataValidade: aso.dataValidade, resultado: aso.resultado, status: asoStatus } : null,
           asoStatus,
           atestadosUltimos12m: atest.length,

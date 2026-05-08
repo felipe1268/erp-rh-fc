@@ -2694,6 +2694,7 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
     status: employees.status,
     dataAdmissao: employees.dataAdmissao,
     cpf: employees.cpf,
+    fotoUrl: employees.fotoUrl,
   }).from(employees).where(and(
     sql`${employees.id} IN (${sql.raw(empIdsAll.join(","))})`,
     sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra', 'Inativo')`,

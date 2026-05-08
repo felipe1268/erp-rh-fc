@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1465,
+    titulo: "Portal do Cliente — Foto do funcionário ao lado do nome em RH/Controle de Documentos",
+    descricao: "Na tabela de funcionários da tela RH/Controle de Documentos do portal do cliente, agora aparece a foto do colaborador (avatar circular 32px) ao lado do nome. Quando o funcionário não tem foto cadastrada, mostra um círculo verde com as iniciais do nome (até 2 letras). Backend: getEquipeObra (server/db.ts) passa a incluir o campo fotoUrl no SELECT, e a procedure portalExterno.cliente.documentosRhObra repassa fotoUrl no payload de cada funcionário. Frontend: célula 'Funcionário' renderiza foto/iniciais + nome em flex horizontal.",
+    tipo: "melhoria",
+    modulos: "Portal do Cliente, RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 19:40:00",
+  },
+  {
     version: 1464,
     titulo: "Portal do Cliente — Botão 'Tela Inicial do Portal' sempre visível na tela de Planejamento",
     descricao: "Em telas curtas (iPad, notebooks pequenos) e quando havia muitas abas no menu lateral do Planejamento (Visão Geral, Cronograma, Avanço Semanal, Prog. Semanal, Curva S, Gantt, REFIS, Caminho Crítico, Efetivo, Revisões), o botão 'Tela Inicial do Portal' ficava no rodapé da sidebar e era cortado pelo scroll, deixando o cliente sem caminho óbvio para voltar ao hub de módulos. Agora o botão azul 'Tela Inicial do Portal' aparece em DOIS pontos sempre visíveis: (1) no topo da sidebar, logo abaixo do logo FC Engenharia (largura total, fixo, não sai com scroll); (2) no header da página principal, ao lado do badge de status da obra (com texto completo em desktop e abreviado 'Início' em mobile). O botão antigo no rodapé da sidebar continua existindo como atalho secundário.",
