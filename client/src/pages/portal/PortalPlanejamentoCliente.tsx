@@ -72,6 +72,12 @@ export default function PortalPlanejamentoCliente() {
   const proximas = (data?.proximas || []) as any[];
   const progSemanal = ((data as any)?.progSemanal || []) as any[];
   const curvaS = ((data as any)?.curvaS || []) as { semana: string; previsto: number; realizado: number }[];
+  const curvaData = ((data as any)?.curvaData || null) as null | {
+    curvaBaseline: { semana: string; acumulado: number }[];
+    curvaPlanejada: { semana: string; acumulado: number }[];
+    curvaRealizada: { semana: string; acumulado: number }[];
+    curvaTendencia: { semana: string; acumulado: number }[];
+  };
   const atividadesTodas = ((data as any)?.atividadesTodas || []) as any[];
   const refisLista = ((data as any)?.refisLista || []) as any[];
   const caminhoCritico = ((data as any)?.caminhoCritico || []) as any[];
@@ -419,7 +425,7 @@ export default function PortalPlanejamentoCliente() {
               nomeCliente={obra?.cliente ?? ""}
             />
           );
-          if (aba === "curva_s") return <AbaCurvaS curvaS={curvaS} kpis={kpis} projeto={projeto} />;
+          if (aba === "curva_s") return <AbaCurvaS curvaData={curvaData} kpis={kpis} projeto={projeto} />;
           if (aba === "gantt") return <AbaGantt atividades={atividadesTodas} />;
           if (aba === "refis") return <AbaRefis refisLista={refisLista} />;
           if (aba === "caminho_critico") return <AbaCaminhoCritico criticas={caminhoCritico} />;
@@ -845,35 +851,51 @@ function AbaProgSemanal({
   );
 }
 
-function AbaCurvaS({ curvaS, kpis, projeto }: any) {
-  if (!curvaS || curvaS.length === 0) {
-    return (
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-3 text-slate-400">
-        <TrendingUp className="h-10 w-10 opacity-30" />
-        <p className="text-sm">Sem dados suficientes para gerar a Curva S.</p>
-      </div>
-    );
-  }
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const semanaLabel: Record<string, string> = {};
-  curvaS.forEach((p: any, i: number) => {
-    semanaLabel[p.semana] = `Sem ${String(i + 1).padStart(2, "0")}`;
+function AbaCurvaS({ curvaData, kpis, projeto: _projeto }: any) {
+  // Réplica visual da Curva S de Trabalho interna (PlanejamentoDetalhe.tsx ~3697).
+  // Mantém: switcher Trabalho/Financeira (Financeira desabilitada no portal),
+  // legenda dinâmica com toggles de séries (baseline/realizado/tendência),
+  // gráfico com Hoje, e bloco "Como interpretar".
+  const [curvaTipo, setCurvaTipo] = useState<"trabalho" | "financeira">("trabalho");
+  const [seriesVisiveis, setSeriesVisiveis] = useState<Record<string, boolean>>({
+    baseline: true, planejada: true, realizada: true, tendencia: true,
   });
-  // Trunca "realizado" a partir de hoje (não mostra realizado futuro)
-  const data = curvaS.map((p: any) => ({
-    semana: p.semana,
-    previsto: p.previsto,
-    realizado: p.semana <= todayStr ? p.realizado : null,
-  }));
-  const semanas = data.map((p) => p.semana);
-  // Acha a semana de "hoje" mais próxima (>=)
-  const refHoje = semanas.find((s) => s >= todayStr) || semanas[semanas.length - 1];
+  const toggleSerie = (key: string) =>
+    setSeriesVisiveis((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const merged = useMemo(() => {
+    if (!curvaData) return [];
+    const map: Record<string, any> = {};
+    const add = (arr: any[], key: string) => arr?.forEach((p: any) => {
+      if (!map[p.semana]) map[p.semana] = { semana: p.semana };
+      map[p.semana][key] = p.acumulado;
+    });
+    add(curvaData.curvaBaseline, "baseline");
+    add(curvaData.curvaPlanejada, "planejada");
+    add(curvaData.curvaRealizada, "realizada");
+    add(curvaData.curvaTendencia, "tendencia");
+    return Object.values(map).sort((a: any, b: any) => a.semana.localeCompare(b.semana));
+  }, [curvaData]);
+
+  const semanaLabel = useMemo(() => {
+    const m: Record<string, string> = {};
+    merged.forEach((p: any, i: number) => { m[p.semana] = `Sem ${String(i + 1).padStart(2, "0")}`; });
+    return m;
+  }, [merged]);
+
+  const semanas = merged.map((p: any) => p.semana);
+  const hoje = new Date().toISOString().slice(0, 10);
+  const refHoje = semanas.find((s: string) => s >= hoje) || semanas[semanas.length - 1];
+  const hasBaseline   = merged.some((p: any) => p.baseline   != null);
+  const hasPlanejada  = merged.some((p: any) => p.planejada  != null);
+  const hasRealizada  = merged.some((p: any) => p.realizada  != null);
+  const hasTendencia  = merged.some((p: any) => p.tendencia  != null);
 
   return (
     <div className="space-y-4">
       {/* KPIs resumo */}
       <div className="grid gap-3 sm:grid-cols-3">
-        <KpiCard label="Previsto" value={fmtPct(kpis.previsto)} icon={<TrendingUp className="w-5 h-5" style={{ color: "#9A7408" }} />} accent="bg-gradient-to-br from-amber-50/50 to-white" />
+        <KpiCard label="Previsto"  value={fmtPct(kpis.previsto)}  icon={<TrendingUp  className="w-5 h-5" style={{ color: "#9A7408" }} />} accent="bg-gradient-to-br from-amber-50/50 to-white" />
         <KpiCard label="Realizado" value={fmtPct(kpis.realizado)} icon={<CheckCircle2 className="w-5 h-5" style={{ color: "#1B3A8A" }} />} accent="bg-gradient-to-br from-blue-50/50 to-white" />
         <KpiCard
           label="Desvio"
@@ -884,97 +906,139 @@ function AbaCurvaS({ curvaS, kpis, projeto }: any) {
         />
       </div>
 
-      {/* Gráfico — moderno com áreas degradê */}
-      <div className="bg-white rounded-2xl border border-slate-200/70 shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)] p-5">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <div>
-            <h3 className="text-base font-bold text-slate-900 tracking-tight">Curva S</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Avanço Físico Acumulado (%)</p>
-          </div>
-          <div className="flex flex-wrap gap-2 text-xs">
-            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 ring-1 ring-amber-200">
-              <span className="w-3 h-0.5" style={{ background: "#D4AF37" }} />
-              <span className="font-semibold" style={{ color: "#9A7408" }}>Previsto</span>
-            </span>
-            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 ring-1 ring-blue-200">
-              <span className="w-3 h-0.5" style={{ background: "#1B3A8A" }} />
-              <span className="font-semibold" style={{ color: "#1B3A8A" }}>Realizado</span>
-            </span>
-          </div>
-        </div>
-        <ResponsiveContainer width="100%" height={400}>
-          <ComposedChart data={data} margin={{ left: 5, right: 20, top: 10, bottom: 5 }}>
-            <defs>
-              <linearGradient id="prevGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#D4AF37" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="#D4AF37" stopOpacity={0.02} />
-              </linearGradient>
-              <linearGradient id="realGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#1B3A8A" stopOpacity={0.30} />
-                <stop offset="100%" stopColor="#1B3A8A" stopOpacity={0.02} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-            <XAxis dataKey="semana" tick={{ fontSize: 10, fill: "#64748b" }} angle={-30} textAnchor="end"
-              height={50} interval={"preserveStartEnd"} stroke="#cbd5e1"
-              tickFormatter={(v) => semanaLabel[v] ?? v} />
-            <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "#64748b" }} unit="%" stroke="#cbd5e1" />
-            <Tooltip
-              cursor={{ stroke: "#cbd5e1", strokeWidth: 1, strokeDasharray: "3 3" }}
-              content={({ payload, label }: any) => {
-                if (!payload?.length) return null;
-                const get = (key: string) => payload.find((p: any) => p.dataKey === key)?.value;
-                const prev = get("previsto");
-                const real = get("realizado");
-                const desv = prev != null && real != null ? real - prev : null;
-                const [y, m, d] = String(label).split("-");
-                return (
-                  <div className="bg-white border border-slate-200 rounded-xl shadow-xl p-3 text-xs min-w-[220px]">
-                    <p className="font-bold text-slate-900 mb-2 pb-2 border-b border-slate-100">
-                      {semanaLabel[label] ?? label}
-                      <span className="text-slate-400 font-normal ml-2">({d}/{m}/{y})</span>
-                    </p>
-                    {prev != null && (
-                      <p className="flex items-center justify-between py-0.5" style={{ color: "#9A7408" }}>
-                        <span>● Previsto</span><strong className="tabular-nums">{Number(prev).toFixed(2)}%</strong>
-                      </p>
-                    )}
-                    {real != null && (
-                      <p className="flex items-center justify-between py-0.5" style={{ color: "#1B3A8A" }}>
-                        <span>● Realizado</span><strong className="tabular-nums">{Number(real).toFixed(2)}%</strong>
-                      </p>
-                    )}
-                    {desv != null && (
-                      <p className={`mt-2 pt-2 border-t border-slate-100 flex items-center justify-between font-semibold ${desv >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                        <span>↔ Desvio</span>
-                        <span className="tabular-nums">{desv >= 0 ? "+" : ""}{desv.toFixed(2)}%</span>
-                      </p>
-                    )}
-                  </div>
-                );
-              }}
-            />
-            {refHoje && (
-              <ReferenceLine x={refHoje} stroke="#64748b" strokeDasharray="3 3" strokeWidth={1.5}
-                label={{ value: "Hoje", fontSize: 10, fill: "#475569", position: "top", offset: 8 }} />
-            )}
-            <Area type="monotone" dataKey="previsto" stroke="none" fill="url(#prevGrad)" connectNulls isAnimationActive={false} />
-            <Area type="monotone" dataKey="realizado" stroke="none" fill="url(#realGrad)" connectNulls isAnimationActive={false} />
-            <Line type="monotone" dataKey="previsto" name="Previsto" stroke="#D4AF37" strokeWidth={2.5} dot={false} connectNulls />
-            <Line type="monotone" dataKey="realizado" name="Realizado" stroke="#1B3A8A" strokeWidth={3}
-              dot={{ r: 3, fill: "#1B3A8A", stroke: "#fff", strokeWidth: 1.5 }}
-              activeDot={{ r: 5, fill: "#1B3A8A", stroke: "#fff", strokeWidth: 2 }} connectNulls />
-          </ComposedChart>
-        </ResponsiveContainer>
+      {/* Switcher Trabalho / Financeira (Financeira desabilitada no portal) */}
+      <div className="flex bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+        {[
+          { id: "trabalho",   label: "Curva S de Trabalho",  icon: "📐", disabled: false },
+          { id: "financeira", label: "Curva S Financeira",   icon: "💰", disabled: true  },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => !tab.disabled && setCurvaTipo(tab.id as "trabalho" | "financeira")}
+            disabled={tab.disabled}
+            title={tab.disabled ? "Disponível apenas no app interno" : undefined}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-all
+              ${curvaTipo === tab.id
+                ? "bg-blue-600 text-white"
+                : tab.disabled
+                  ? "text-slate-300 cursor-not-allowed bg-slate-50"
+                  : "text-slate-500 hover:bg-slate-50"}`}
+          >
+            <span>{tab.icon}</span>
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Interpretação */}
-      <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-2xl border border-slate-200/70 p-5 text-xs text-slate-600 space-y-1.5">
-        <p className="font-bold text-slate-800 mb-2">Como interpretar</p>
-        <p><span className="font-bold" style={{ color: "#9A7408" }}>● Previsto</span> — curva planejada acumulada (peso financeiro × prazo de cada atividade).</p>
-        <p><span className="font-bold" style={{ color: "#1B3A8A" }}>● Realizado</span> — avanço físico efetivamente lançado a cada semana. Acima do previsto = adiantado.</p>
-        <p>A linha tracejada cinza marca a <strong>semana atual</strong>. A linha de Realizado para em "hoje" — não exibe progresso futuro.</p>
-      </div>
+      {curvaTipo === "trabalho" && ((!curvaData || merged.length === 0) ? (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-3 text-slate-400">
+          <TrendingUp className="h-10 w-10 opacity-30" />
+          <p className="text-sm">Sem dados suficientes para gerar a Curva S de Trabalho.</p>
+        </div>
+      ) : (
+        <>
+          {/* Legenda dinâmica com toggles */}
+          <div className="flex flex-wrap gap-4 text-xs bg-white rounded-xl border border-slate-100 shadow-sm p-3">
+            {[
+              { key: "baseline",  show: hasBaseline,  color: "#1e40af", dash: false, width: 2,   label: "Baseline (Rev 00)" },
+              { key: "planejada", show: hasPlanejada, color: "#ef4444", dash: false, width: 2,   label: "Revisão Atual" },
+              { key: "realizada", show: hasRealizada, color: "#22c55e", dash: false, width: 3,   label: "Realizado" },
+              { key: "tendencia", show: hasTendencia, color: "#16a34a", dash: true,  width: 2,   label: "Tendência (projeção)" },
+            ].filter((l) => l.show).map((l, i) => {
+              const ativo = seriesVisiveis[l.key] !== false;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => toggleSerie(l.key)}
+                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border transition-all cursor-pointer select-none ${ativo ? "border-transparent" : "border-slate-200 bg-slate-50 opacity-40"}`}
+                  title={ativo ? `Ocultar ${l.label}` : `Mostrar ${l.label}`}
+                >
+                  <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5"
+                    stroke={ativo ? l.color : "#94a3b8"} strokeWidth={l.width} strokeDasharray={l.dash ? "4 2" : "0"} /></svg>
+                  <span className={ativo ? "text-slate-600" : "text-slate-400 line-through"}>{l.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Gráfico */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 relative">
+            <p className="text-sm font-semibold text-slate-700 mb-1">
+              Curva S de Trabalho — Avanço Físico Acumulado (%)
+            </p>
+            <p className="text-xs text-slate-400 mb-3">
+              Realizado atual: <strong className="text-slate-700">{fmtPct(kpis.realizado)}</strong>
+            </p>
+            <ResponsiveContainer width="100%" height={420}>
+              <ComposedChart data={merged} margin={{ left: 5, right: 20, top: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="semana" tick={{ fontSize: 10, fill: "#64748b" }} angle={-30} textAnchor="end"
+                  height={50} interval={"preserveStartEnd"} stroke="#cbd5e1"
+                  tickFormatter={(v) => semanaLabel[v] ?? v} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "#64748b" }} unit="%" stroke="#cbd5e1" />
+                <Tooltip
+                  cursor={{ stroke: "#cbd5e1", strokeWidth: 1, strokeDasharray: "3 3" }}
+                  content={({ payload, label }: any) => {
+                    if (!payload?.length) return null;
+                    const [y, m, d] = String(label).split("-");
+                    const get = (k: string) => payload.find((p: any) => p.dataKey === k)?.value;
+                    const items = [
+                      { k: "baseline",  lbl: "Baseline",     color: "#1e40af" },
+                      { k: "planejada", lbl: "Revisão Atual", color: "#ef4444" },
+                      { k: "realizada", lbl: "Realizado",    color: "#22c55e" },
+                      { k: "tendencia", lbl: "Tendência",    color: "#16a34a" },
+                    ].filter((it) => get(it.k) != null && seriesVisiveis[it.k] !== false);
+                    if (items.length === 0) return null;
+                    return (
+                      <div className="bg-white border border-slate-200 rounded-xl shadow-xl p-3 text-xs min-w-[220px]">
+                        <p className="font-bold text-slate-900 mb-2 pb-2 border-b border-slate-100">
+                          {semanaLabel[label] ?? label}
+                          <span className="text-slate-400 font-normal ml-2">({d}/{m}/{y})</span>
+                        </p>
+                        {items.map((it) => (
+                          <p key={it.k} className="flex items-center justify-between py-0.5" style={{ color: it.color }}>
+                            <span>● {it.lbl}</span>
+                            <strong className="tabular-nums">{Number(get(it.k)).toFixed(2)}%</strong>
+                          </p>
+                        ))}
+                      </div>
+                    );
+                  }}
+                />
+                {refHoje && (
+                  <ReferenceLine x={refHoje} stroke="#94a3b8" strokeDasharray="2 2"
+                    label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8" }} />
+                )}
+                {seriesVisiveis.baseline  !== false && <Line type="monotone" dataKey="baseline"  name="Baseline"      stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls />}
+                {seriesVisiveis.planejada !== false && <Line type="monotone" dataKey="planejada" name="Revisão Atual" stroke="#ef4444" strokeWidth={2}   dot={false} connectNulls />}
+                {seriesVisiveis.realizada !== false && <Line type="monotone" dataKey="realizada" name="Realizado"     stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} connectNulls />}
+                {seriesVisiveis.tendencia !== false && <Line type="monotone" dataKey="tendencia" name="Tendência"     stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls />}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Interpretação */}
+          <div className="bg-slate-50 rounded-xl border border-slate-100 p-4 text-xs text-slate-600 space-y-1">
+            <p className="font-semibold text-slate-700 mb-2">Como interpretar</p>
+            {hasBaseline  && <p>🔵 <strong>Baseline</strong>: Plano original congelado (Rev 00). Referência imutável.</p>}
+            {hasPlanejada && <p>🔴 <strong>Revisão Atual</strong>: Cronograma vigente aprovado.</p>}
+            {hasRealizada && <p>🟢 <strong>Realizado</strong>: Progresso físico lançado semanalmente. Acima da revisão = adiantado.</p>}
+            {hasTendencia && <p>🟢 <strong>Tendência</strong>: Projeção baseada no ritmo atual. Indica data estimada de conclusão.</p>}
+          </div>
+        </>
+      ))}
+
+      {curvaTipo === "financeira" && (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-12 flex flex-col items-center gap-3 text-slate-400">
+          <DollarSign className="h-10 w-10 opacity-30" />
+          <p className="text-sm font-semibold text-slate-500">Curva S Financeira</p>
+          <p className="text-xs text-center max-w-md">
+            Esta visão está disponível apenas no app interno. No Portal do Cliente, consulte a aba "Crono. Financeiro" para a projeção de faturamento.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

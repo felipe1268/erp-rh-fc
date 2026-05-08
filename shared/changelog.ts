@@ -10049,6 +10049,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 02:30:00",
   },
   {
+    version: 1454,
+    titulo: "Portal do Cliente — Curva S agora idêntica à versão interna",
+    descricao: "A aba 'Curva S' do Portal do Cliente foi reformulada para ficar visualmente igual à tela interna do Planejamento. Agora exibe: (1) switcher 'Curva S de Trabalho' / 'Curva S Financeira' (Financeira disponível apenas no app interno — no portal redireciona o usuário para a aba 'Crono. Financeiro'); (2) legenda dinâmica com toggles para ligar/desligar cada série; (3) quatro séries no gráfico — Baseline (Rev 00, azul), Revisão Atual (vermelho, quando difere da baseline), Realizado (verde) e Tendência/projeção (verde tracejado, regressão linear sobre o realizado); (4) linha tracejada 'Hoje'; (5) bloco 'Como interpretar' explicando cada série. O backend (portalExterno.planejamentoObra) passou a calcular e devolver o objeto curvaData com as 4 séries, replicando exatamente a lógica de planejamento.getCurvaS interno (toMondayStr, regra usarIgual, regressão linear de 16 semanas).",
+    tipo: "ux",
+    modulos: "Portal Cliente,Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 15:00:00",
+  },
+  {
     version: 1453,
     titulo: "Portal do Cliente — Barra lateral de navegação (sidebar) na tela da Obra",
     descricao: "A tela /portal/cliente/obra/:obraId ganhou uma barra lateral fixa (sidebar escura, estilo do app interno) para facilitar a navegação entre as abas (Visão Geral, Cronograma, Avanço Semanal, Prog. Semanal, Curva S, Revisões, Gantt, REFIS, Caminho Crítico, Efetivo, Crono. Financeiro, Prev. Medição, Diagrama de Rede, Custo RH, BIM 3D — apenas as liberadas pelo admin). A sidebar inclui: (1) cabeçalho com logo FC + 'Portal do Cliente', (2) pílula com o nome da obra atual, (3) busca textual 'Buscar no menu...' que filtra as abas, (4) lista de abas com ícone, label, indicador 'em breve' e destaque azul para a aba ativa, (5) botão 'Voltar para Obras'. No desktop a sidebar fica sticky à esquerda (264px) e pode ser recolhida via botão no header (PanelLeftClose/Open). No mobile/tablet aparece como overlay deslizante acionado pelo botão de menu (hamburger). O bloco antigo de 'tabs em 2 linhas' foi substituído por um indicador compacto da aba atual no topo do conteúdo.",

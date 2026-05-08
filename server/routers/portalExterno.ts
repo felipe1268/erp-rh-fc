@@ -1266,6 +1266,95 @@ export const portalExternoRouter = router({
         curvaS.push({ semana: sem, previsto: prevAcumLast, realizado: realizadoOut });
       }
 
+      // ── Curva S de Trabalho (4 séries, alinhada ao getCurvaS interno) ──
+      const baselineRev = revisoesHist.find((r: any) => r.isBaseline) || revisoesHist[revisoesHist.length - 1];
+      const isBaselineCurrent = baselineRev?.id === revisao.id;
+      async function computeCurvaPlanejada(revId: number) {
+        const ativs = await db.select().from(planejamentoAtividades)
+          .where(and(eq(planejamentoAtividades.revisaoId, revId), eq(planejamentoAtividades.disabled, false)));
+        const folhasL = ativs.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
+        if (!folhasL.length) return [];
+        const pesoBrutoL = folhasL.reduce((s: number, a: any) => s + _n(a.pesoFinanceiro), 0);
+        const ativComPesoL = folhasL.filter((a: any) => _n(a.pesoFinanceiro) > 0).length;
+        const usarIgualL = pesoBrutoL === 0 || ativComPesoL < folhasL.length * 0.2;
+        const pesoTotalL = usarIgualL ? folhasL.length : pesoBrutoL;
+        const datesL: Map<string, number> = new Map();
+        for (const a of folhasL as any[]) {
+          const ini = new Date(_toDateStr(a.dataInicio) + "T12:00:00Z");
+          const fim = new Date(_toDateStr(a.dataFim) + "T12:00:00Z");
+          if (isNaN(ini.getTime()) || isNaN(fim.getTime())) continue;
+          const iniSeg = new Date(_toMondayStr(ini) + "T12:00:00Z");
+          const fimSeg = new Date(_toMondayStr(fim) + "T12:00:00Z");
+          const wd = (fimSeg.getTime() - iniSeg.getTime()) / (7 * 86400000);
+          const dur = Math.max(1, wd + 1);
+          const pAtiv = usarIgualL ? 1 : _n(a.pesoFinanceiro);
+          const semVal = (pAtiv / dur / pesoTotalL) * 100;
+          let cur = new Date(iniSeg);
+          for (let i = 0; i < dur; i++) {
+            const key = _toMondayStr(cur);
+            datesL.set(key, (datesL.get(key) ?? 0) + semVal);
+            cur = new Date(cur.getTime() + 7 * 86400000);
+          }
+        }
+        const sortedL = [...datesL.entries()].sort((x, y) => x[0].localeCompare(y[0]));
+        if (sortedL.length === 0) return [];
+        const primeira = sortedL[0][0];
+        const semZero = _toMondayStr(new Date(new Date(primeira + "T12:00:00Z").getTime() - 7 * 86400000));
+        let acumL = 0;
+        const ptsL: { semana: string; acumulado: number }[] = [{ semana: semZero, acumulado: 0 }];
+        for (const [sem, val] of sortedL) {
+          acumL = Math.min(100, acumL + val);
+          ptsL.push({ semana: sem, acumulado: +acumL.toFixed(2) });
+        }
+        return ptsL;
+      }
+      const curvaBaseline = baselineRev ? await computeCurvaPlanejada(baselineRev.id) : [];
+      const curvaPlanejadaSep = (baselineRev && !isBaselineCurrent) ? await computeCurvaPlanejada(revisao.id) : [];
+
+      const curvaRealizadaSerie: { semana: string; acumulado: number }[] = [];
+      for (const sem of semanasComAvanco) {
+        curvaRealizadaSerie.push({ semana: sem, acumulado: realizadoMap[sem] });
+      }
+      if (curvaRealizadaSerie.length > 0 && curvaRealizadaSerie[0].acumulado !== 0) {
+        const prim = new Date(curvaRealizadaSerie[0].semana + "T12:00:00Z");
+        const semAnt = _toMondayStr(new Date(prim.getTime() - 7 * 86400000));
+        curvaRealizadaSerie.unshift({ semana: semAnt, acumulado: 0 });
+      }
+
+      let curvaTendencia: { semana: string; acumulado: number }[] = [];
+      if (curvaRealizadaSerie.length >= 2) {
+        const nn = curvaRealizadaSerie.length;
+        const xs = curvaRealizadaSerie.map((_, i) => i);
+        const ys = curvaRealizadaSerie.map((p) => p.acumulado);
+        const sumX = xs.reduce((a, b) => a + b, 0);
+        const sumY = ys.reduce((a, b) => a + b, 0);
+        const sumXY = xs.reduce((s, x, i) => s + x * ys[i], 0);
+        const sumX2 = xs.reduce((s, x) => s + x * x, 0);
+        const denom = nn * sumX2 - sumX * sumX;
+        if (denom !== 0) {
+          const slope = (nn * sumXY - sumX * sumY) / denom;
+          const inter = (sumY - slope * sumX) / nn;
+          const lastReal = curvaRealizadaSerie[curvaRealizadaSerie.length - 1];
+          const lastDate = new Date(lastReal.semana + "T12:00:00Z");
+          curvaTendencia = curvaRealizadaSerie.map((p) => ({ ...p }));
+          for (let w = 1; w <= 16; w++) {
+            const proj = inter + slope * (nn - 1 + w);
+            if (proj >= 100) break;
+            const d = new Date(lastDate.getTime() + w * 7 * 86400000);
+            curvaTendencia.push({
+              semana: d.toISOString().split("T")[0],
+              acumulado: Math.min(100, +proj.toFixed(2)),
+            });
+          }
+        }
+      }
+      const curvaData = {
+        curvaBaseline,
+        curvaPlanejada: curvaPlanejadaSep,
+        curvaRealizada: curvaRealizadaSerie,
+        curvaTendencia,
+      };
+
       // ── REFIS lançados (mais recentes primeiro) ─────────────────────────
       const refisRows = await db.select().from(planejamentoRefis)
         .where(eq(planejamentoRefis.projetoId, projeto.id))
@@ -1374,6 +1463,7 @@ export const portalExternoRouter = router({
         proximas,
         progSemanal,
         curvaS,
+        curvaData,
         refisLista,
         caminhoCritico,
         efetivoMensal,
