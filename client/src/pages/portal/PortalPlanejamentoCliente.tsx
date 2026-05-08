@@ -5,9 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { useLocation, useRoute } from "wouter";
 import {
   ArrowLeft, Calendar, MapPin, TrendingUp, AlertTriangle, Clock,
-  CheckCircle2, Building2, Lock, ListTree, Activity, BarChart3, History,
-  CalendarDays,
+  CheckCircle2, Building2, ListTree, Activity, BarChart3, History,
+  CalendarDays, User,
 } from "lucide-react";
+import {
+  ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis,
+  Tooltip, ReferenceLine,
+} from "recharts";
 import { PORTAL_CLIENTE_ABAS, type PortalClienteAbaKey } from "@shared/portalClienteAbas";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
@@ -72,45 +76,173 @@ export default function PortalPlanejamentoCliente() {
     }
   }, [abasVisiveis, aba]);
 
+  // Dias restantes (estilo interno)
+  const diasRestantes = useMemo(() => {
+    const fim = projeto?.dataTerminoContratual || obra?.dataPrevisaoFim;
+    if (!fim) return null;
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const fimD = new Date((fim as string).slice(0, 10) + "T00:00:00");
+    return Math.ceil((fimD.getTime() - hoje.getTime()) / 86400000);
+  }, [projeto, obra]);
+
+  // Tabs em 2 linhas (estilo interno)
+  const half = Math.ceil(abasVisiveis.length / 2);
+
+  const renderTabBtn = (a: typeof PORTAL_CLIENTE_ABAS[number]) => {
+    const Icon = ABA_ICONS[a.key] || TrendingUp;
+    const isActive = aba === a.key;
+    const isEmBreve = a.status === "em_breve";
+    return (
+      <button
+        key={a.key}
+        onClick={() => setAba(a.key)}
+        className={`group flex items-center justify-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-all duration-150 ${
+          isActive
+            ? "text-blue-700 bg-blue-50 border border-blue-200/80"
+            : "text-slate-500 hover:text-slate-700 hover:bg-slate-50 border border-transparent"
+        }`}
+      >
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <span>{a.label}</span>
+        {isEmBreve && (
+          <span className="text-[9px] bg-amber-100 text-amber-700 px-1 rounded">em breve</span>
+        )}
+      </button>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <Button variant="outline" size="sm" onClick={() => navigate("/portal/cliente/dashboard")} className="gap-1.5 shrink-0">
-              <ArrowLeft className="w-4 h-4" /> Voltar
+      <div className="max-w-7xl mx-auto p-3 sm:p-4">
+        {/* ── Header (estilo interno) ─────────────────────────────────── */}
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 sm:p-4 mb-3 flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex items-start gap-2 sm:gap-3 min-w-0 flex-1">
+            <Button variant="ghost" size="sm" className="text-muted-foreground -ml-2 mt-0.5 flex-shrink-0"
+              onClick={() => navigate("/portal/cliente/dashboard")}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Voltar
             </Button>
             <div className="min-w-0">
-              <h1 className="font-semibold text-slate-800 text-sm truncate">{obra?.nome || "Carregando..."}</h1>
-              <p className="text-xs text-slate-500 truncate">Planejamento da obra</p>
+              <h1 className="text-base sm:text-lg font-bold text-slate-800 leading-tight break-words">
+                {obra?.nome || "Carregando..."}
+              </h1>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1 text-xs text-slate-500">
+                {obra?.cliente && (
+                  <span className="flex items-center gap-1">
+                    <Building2 className="h-3 w-3 flex-shrink-0" />
+                    <span className="truncate">{obra.cliente}</span>
+                  </span>
+                )}
+                {obra?.responsavel && (
+                  <span className="flex items-center gap-1">
+                    <User className="h-3 w-3 flex-shrink-0" />
+                    <span className="truncate">{obra.responsavel}</span>
+                  </span>
+                )}
+                {(obra?.cidade || obra?.estado) && (
+                  <span className="flex items-center gap-1">
+                    <MapPin className="h-3 w-3 flex-shrink-0" />
+                    <span className="truncate">{[obra.cidade, obra.estado].filter(Boolean).join(" / ")}</span>
+                  </span>
+                )}
+                {diasRestantes !== null && (
+                  <span className={`flex items-center gap-1 font-medium ${diasRestantes < 0 ? "text-red-600" : diasRestantes < 30 ? "text-amber-600" : "text-emerald-600"}`}>
+                    <Clock className="h-3 w-3 flex-shrink-0" />
+                    {diasRestantes < 0 ? `${Math.abs(diasRestantes)}d atrasado` : `${diasRestantes}d restantes`}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-          {obra?.status && <Badge variant="outline" className="text-[10px] shrink-0">{obra.status}</Badge>}
+          {obra?.status && (
+            <Badge variant="outline" className="text-xs shrink-0">{obra.status}</Badge>
+          )}
         </div>
-        {abasVisiveis.length > 1 && (
-          <div className="max-w-7xl mx-auto px-2 overflow-x-auto">
-            <div className="flex gap-0.5 border-t pt-1">
-              {abasVisiveis.map((a) => {
-                const Icon = ABA_ICONS[a.key] || TrendingUp;
-                const ativo = aba === a.key;
-                return (
-                  <button
-                    key={a.key}
-                    onClick={() => setAba(a.key)}
-                    className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 -mb-px whitespace-nowrap transition ${ativo ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-700"}`}
+
+        {/* ── Avanço Físico (barras Previsto/Realizado — estilo interno) ── */}
+        {kpis && (() => {
+          const realizado = kpis.realizado as number;
+          const previsto = kpis.previsto as number;
+          const desvio = realizado - previsto;
+          const desvioPositivo = desvio > 0;
+          const desvioNegativo = desvio < 0;
+          return (
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 mb-3">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <span className="text-xs font-semibold text-slate-600">Avanço Físico</span>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {projeto?.revisaoNumero != null && (
+                    <span className="text-[10px] text-slate-400">
+                      Rev. {String(projeto.revisaoNumero).padStart(2, "0")}
+                    </span>
+                  )}
+                  {Math.abs(desvio) >= 0.1 ? (
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${desvioPositivo ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+                      {desvioPositivo ? "+" : ""}{desvio.toFixed(2)}% {desvioPositivo ? "adiantado" : "atrasado"}
+                    </span>
+                  ) : (
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">No prazo</span>
+                  )}
+                  <span
+                    title="Avanço previsto ponderado pelo peso financeiro de cada atividade."
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded border bg-white text-slate-500 border-slate-300"
                   >
-                    <Icon className="w-3.5 h-3.5" />
-                    {a.label}
-                    {a.status === "em_breve" && <span className="text-[9px] bg-amber-100 text-amber-700 px-1 rounded">em breve</span>}
-                  </button>
-                );
-              })}
+                    💰 Peso Financeiro
+                  </span>
+                </div>
+              </div>
+              {/* Previsto — dourado */}
+              <div className="mb-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] font-medium w-16 shrink-0" style={{ color: "#9A7408" }}>Previsto</span>
+                  <div className="flex-1 rounded-full h-2.5 overflow-hidden" style={{ background: "#F5E9C0" }}>
+                    <div className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, previsto)}%`, background: "#D4AF37" }} />
+                  </div>
+                  <span className="text-xs font-bold w-12 text-right shrink-0" style={{ color: "#9A7408" }}>
+                    {fmtPct(previsto)}
+                  </span>
+                </div>
+              </div>
+              {/* Realizado — azul */}
+              <div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] font-medium w-16 shrink-0" style={{ color: "#1B3A8A" }}>Realizado</span>
+                  <div className="flex-1 bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, realizado)}%`, background: "#1B3A8A" }} />
+                  </div>
+                  <span className="text-xs font-bold w-12 text-right shrink-0" style={{ color: "#1B3A8A" }}>
+                    {fmtPct(realizado)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── Tabs em 2 linhas (estilo interno) ────────────────────── */}
+        {abasVisiveis.length > 1 && (
+          <div className="mb-3 rounded-xl border border-slate-200 select-none bg-white p-1 space-y-0.5">
+            <div className="hidden lg:flex gap-1">
+              {abasVisiveis.slice(0, half).map((a) => (
+                <div key={a.key} className="flex-1">{renderTabBtn(a)}</div>
+              ))}
+            </div>
+            <div className="hidden lg:flex gap-1">
+              {abasVisiveis.slice(half).map((a) => (
+                <div key={a.key} className="flex-1">{renderTabBtn(a)}</div>
+              ))}
+            </div>
+            <div className="flex lg:hidden gap-1.5 overflow-x-auto pb-1">
+              {abasVisiveis.map((a) => (
+                <div key={a.key} className="flex-shrink-0">{renderTabBtn(a)}</div>
+              ))}
             </div>
           </div>
         )}
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 space-y-4">
+        {/* ── Conteúdo ───────────────────────────────────────────── */}
         {isLoading && (
           <div className="bg-white border rounded-xl p-12 text-center text-slate-400">Carregando planejamento...</div>
         )}
@@ -120,56 +252,33 @@ export default function PortalPlanejamentoCliente() {
           </div>
         )}
 
-        {!isLoading && !error && obra && (
-          <>
-            {/* Cabeçalho da obra (sempre visível) */}
-            <div className="bg-white border rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <Building2 className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <h2 className="font-semibold text-slate-800">{obra.nome}</h2>
-                  {obra.codigo && <p className="text-xs text-slate-500 mt-0.5">{obra.codigo}</p>}
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-slate-600">
-                    {(obra.cidade || obra.estado) && (
-                      <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{[obra.cidade, obra.estado].filter(Boolean).join(" / ")}</span>
-                    )}
-                    <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />Início: <strong className="text-slate-800">{fmtBR(obra.dataInicio)}</strong></span>
-                    <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />Previsão fim: <strong className="text-slate-800">{fmtBR(obra.dataPrevisaoFim)}</strong></span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {!projeto && (
-              <Aviso>Esta obra ainda não possui um cronograma de planejamento publicado.</Aviso>
-            )}
-            {projeto && !kpis && (
-              <Aviso>O cronograma desta obra está em elaboração — nenhuma revisão consolidada ainda.</Aviso>
-            )}
-
-            {/* Conteúdo por aba */}
-            {kpis && (() => {
-              const abaInfo = PORTAL_CLIENTE_ABAS.find((x) => x.key === aba);
-              if (abaInfo?.status === "em_breve") {
-                return (
-                  <div className="bg-white border rounded-xl p-12 text-center">
-                    <Clock className="w-10 h-10 text-amber-500 mx-auto mb-3" />
-                    <p className="text-sm font-semibold text-slate-700">Aba “{abaInfo.label}” em breve</p>
-                    <p className="text-xs text-slate-500 mt-1">Esta visão está sendo preparada para o Portal do Cliente.</p>
-                  </div>
-                );
-              }
-              if (aba === "visao_geral") return <AbaVisaoGeral kpis={kpis} projeto={projeto} semanaAtual={semanaAtual} atrasadas={atrasadas} proximas={proximas} />;
-              if (aba === "cronograma") return <AbaCronograma atividades={atividadesTodas} />;
-              if (aba === "avanco_semanal") return <AbaAvancoSemanal kpis={kpis} semanaAtual={semanaAtual} atrasadas={atrasadas} />;
-              if (aba === "prog_semanal") return <AbaProgSemanal kpis={kpis} progSemanal={progSemanal} />;
-              if (aba === "curva_s") return <AbaCurvaS curvaS={curvaS} kpis={kpis} />;
-              if (aba === "revisoes") return <AbaRevisoes revisoes={revisoes} />;
-              return null;
-            })()}
-          </>
+        {!isLoading && !error && obra && !projeto && (
+          <Aviso>Esta obra ainda não possui um cronograma de planejamento publicado.</Aviso>
         )}
-      </main>
+        {!isLoading && !error && projeto && !kpis && (
+          <Aviso>O cronograma desta obra está em elaboração — nenhuma revisão consolidada ainda.</Aviso>
+        )}
+
+        {!isLoading && !error && kpis && (() => {
+          const abaInfo = PORTAL_CLIENTE_ABAS.find((x) => x.key === aba);
+          if (abaInfo?.status === "em_breve") {
+            return (
+              <div className="bg-white border rounded-xl p-12 text-center">
+                <Clock className="w-10 h-10 text-amber-500 mx-auto mb-3" />
+                <p className="text-sm font-semibold text-slate-700">Aba "{abaInfo.label}" em breve</p>
+                <p className="text-xs text-slate-500 mt-1">Esta visão está sendo preparada para o Portal do Cliente.</p>
+              </div>
+            );
+          }
+          if (aba === "visao_geral") return <AbaVisaoGeral kpis={kpis} projeto={projeto} semanaAtual={semanaAtual} atrasadas={atrasadas} proximas={proximas} />;
+          if (aba === "cronograma") return <AbaCronograma atividades={atividadesTodas} />;
+          if (aba === "avanco_semanal") return <AbaAvancoSemanal kpis={kpis} semanaAtual={semanaAtual} atrasadas={atrasadas} />;
+          if (aba === "prog_semanal") return <AbaProgSemanal kpis={kpis} progSemanal={progSemanal} />;
+          if (aba === "curva_s") return <AbaCurvaS curvaS={curvaS} kpis={kpis} projeto={projeto} />;
+          if (aba === "revisoes") return <AbaRevisoes revisoes={revisoes} />;
+          return null;
+        })()}
+      </div>
     </div>
   );
 }
@@ -182,7 +291,7 @@ function Aviso({ children }: { children: React.ReactNode }) {
 
 function AbaVisaoGeral({ kpis, projeto, semanaAtual, atrasadas, proximas }: any) {
   return (
-    <>
+    <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Avanço Previsto" value={fmtPct(kpis.previsto)} icon={<TrendingUp className="w-5 h-5 text-blue-600" />} />
         <KpiCard label="Avanço Realizado" value={fmtPct(kpis.realizado)} icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />} accent={kpis.realizado >= kpis.previsto ? "bg-emerald-50" : undefined} />
@@ -195,20 +304,15 @@ function AbaVisaoGeral({ kpis, projeto, semanaAtual, atrasadas, proximas }: any)
         />
         <KpiCard label="Atividades concluídas" value={`${kpis.atividadesConcluidas}/${kpis.totalAtividades}`} icon={<CheckCircle2 className="w-5 h-5 text-slate-600" />} />
       </div>
-      <div className="bg-white border rounded-xl p-4">
-        <h3 className="text-sm font-semibold text-slate-800 mb-3">Avanço físico geral</h3>
-        <div className="space-y-2">
-          <BarRow label="Previsto" pct={kpis.previsto} cor="bg-amber-400" />
-          <BarRow label="Realizado" pct={kpis.realizado} cor={kpis.realizado >= kpis.previsto ? "bg-emerald-500" : "bg-blue-500"} />
-        </div>
-        <p className="text-xs text-slate-500 mt-3">Revisão {projeto.revisaoNumero} de {fmtBR(projeto.revisaoData)}</p>
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 text-xs text-slate-500">
+        Revisão {String(projeto?.revisaoNumero ?? 0).padStart(2, "0")} de {fmtBR(projeto?.revisaoData)}
       </div>
       <SecaoAtividades titulo={`Atividades da semana atual (${fmtBR(kpis.semanaInicio)} – ${fmtBR(kpis.semanaFim)})`} vazio="Nenhuma atividade prevista para esta semana." itens={semanaAtual} cor="border-blue-200" />
       {atrasadas.length > 0 && (
         <SecaoAtividades titulo={`Atividades atrasadas (${atrasadas.length})`} vazio="" itens={atrasadas} cor="border-red-200" />
       )}
       <SecaoAtividades titulo="Próximas atividades" vazio="Nenhuma próxima atividade cadastrada." itens={proximas} cor="border-slate-200" />
-    </>
+    </div>
   );
 }
 
@@ -221,8 +325,8 @@ function AbaCronograma({ atividades }: { atividades: any[] }) {
     return arr.filter((a) => (a.nome || "").toLowerCase().includes(t) || (a.eapCodigo || "").toLowerCase().includes(t));
   }, [atividades, busca]);
   return (
-    <div className="bg-white border rounded-xl p-4">
-      <div className="flex items-center justify-between mb-3 gap-3">
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-slate-800">Cronograma completo ({atividades.length} itens)</h3>
         <input type="text" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar EAP ou nome..." className="border rounded px-2.5 py-1.5 text-xs w-60" />
       </div>
@@ -291,53 +395,111 @@ function AbaProgSemanal({ kpis, progSemanal }: any) {
   );
 }
 
-function AbaCurvaS({ curvaS, kpis }: any) {
-  if (curvaS.length === 0) {
-    return <div className="bg-white border rounded-xl p-12 text-center text-slate-400">Sem dados suficientes para gerar a Curva S.</div>;
+function AbaCurvaS({ curvaS, kpis, projeto }: any) {
+  if (!curvaS || curvaS.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-8 flex flex-col items-center gap-3 text-slate-400">
+        <TrendingUp className="h-10 w-10 opacity-30" />
+        <p className="text-sm">Sem dados suficientes para gerar a Curva S.</p>
+      </div>
+    );
   }
-  const W = 720, H = 280, P = 36;
-  const xStep = (W - P * 2) / Math.max(1, curvaS.length - 1);
-  const y = (v: number) => H - P - (v / 100) * (H - P * 2);
-  const path = (key: "previsto" | "realizado") =>
-    curvaS.map((p: any, i: number) => `${i === 0 ? "M" : "L"} ${P + i * xStep} ${y(p[key])}`).join(" ");
   const todayStr = new Date().toISOString().slice(0, 10);
-  const idxToday = curvaS.findIndex((p: any) => p.semana >= todayStr);
+  const semanaLabel: Record<string, string> = {};
+  curvaS.forEach((p: any, i: number) => {
+    semanaLabel[p.semana] = `Sem ${String(i + 1).padStart(2, "0")}`;
+  });
+  // Trunca "realizado" a partir de hoje (não mostra realizado futuro)
+  const data = curvaS.map((p: any) => ({
+    semana: p.semana,
+    previsto: p.previsto,
+    realizado: p.semana <= todayStr ? p.realizado : null,
+  }));
+  const semanas = data.map((p) => p.semana);
+  // Acha a semana de "hoje" mais próxima (>=)
+  const refHoje = semanas.find((s) => s >= todayStr) || semanas[semanas.length - 1];
+
   return (
-    <div className="bg-white border rounded-xl p-4 space-y-3">
-      <div className="flex flex-wrap gap-4 items-center">
-        <h3 className="text-sm font-semibold text-slate-800">Curva S — Previsto x Realizado</h3>
-        <div className="flex gap-3 text-xs">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-amber-500 inline-block" /> Previsto</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-blue-600 inline-block" /> Realizado</span>
-        </div>
+    <div className="space-y-4">
+      {/* Legenda */}
+      <div className="flex flex-wrap gap-4 text-xs bg-white rounded-xl border border-slate-100 shadow-sm p-3">
+        <span className="flex items-center gap-1.5 px-2 py-0.5">
+          <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#D4AF37" strokeWidth={2.5} /></svg>
+          <span className="text-slate-600">Previsto</span>
+        </span>
+        <span className="flex items-center gap-1.5 px-2 py-0.5">
+          <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#1B3A8A" strokeWidth={3} /></svg>
+          <span className="text-slate-600">Realizado</span>
+        </span>
       </div>
-      <div className="overflow-x-auto">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[800px] mx-auto bg-slate-50 rounded">
-          {[0, 25, 50, 75, 100].map((v) => (
-            <g key={v}>
-              <line x1={P} x2={W - P} y1={y(v)} y2={y(v)} stroke="#e2e8f0" strokeDasharray="2 3" />
-              <text x={P - 6} y={y(v) + 3} textAnchor="end" fontSize="9" fill="#64748b">{v}%</text>
-            </g>
-          ))}
-          {idxToday > 0 && (
-            <line x1={P + idxToday * xStep} x2={P + idxToday * xStep} y1={P} y2={H - P} stroke="#dc2626" strokeDasharray="3 3" />
-          )}
-          <path d={path("previsto")} fill="none" stroke="#f59e0b" strokeWidth="2" />
-          <path d={path("realizado")} fill="none" stroke="#2563eb" strokeWidth="2.5" />
-          <text x={W / 2} y={H - 8} textAnchor="middle" fontSize="10" fill="#64748b">{curvaS.length} semanas</text>
-        </svg>
+
+      {/* Gráfico */}
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+        <p className="text-sm font-semibold text-slate-700 mb-1">
+          Curva S — Avanço Físico Acumulado (%)
+        </p>
+        <p className="text-xs text-slate-400 mb-3">
+          Realizado atual: <strong style={{ color: "#1B3A8A" }}>{fmtPct(kpis.realizado)}</strong>
+          {projeto?.dataTerminoContratual && ` · Prazo: ${fmtBR(projeto.dataTerminoContratual)}`}
+        </p>
+        <ResponsiveContainer width="100%" height={360}>
+          <LineChart data={data} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+            <XAxis dataKey="semana" tick={{ fontSize: 10 }} angle={-30} textAnchor="end"
+              height={50} interval={"preserveStartEnd"}
+              tickFormatter={(v) => semanaLabel[v] ?? v} />
+            <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
+            <Tooltip
+              content={({ payload, label }: any) => {
+                if (!payload?.length) return null;
+                const get = (key: string) => payload.find((p: any) => p.dataKey === key)?.value;
+                const prev = get("previsto");
+                const real = get("realizado");
+                const desv = prev != null && real != null ? real - prev : null;
+                const [y, m, d] = String(label).split("-");
+                return (
+                  <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs min-w-[200px]">
+                    <p className="font-semibold text-slate-700 mb-2">
+                      {semanaLabel[label] ?? label} ({d}/{m}/{y})
+                    </p>
+                    {prev != null && <p style={{ color: "#9A7408" }}>Previsto: <strong>{Number(prev).toFixed(1)}%</strong></p>}
+                    {real != null && <p style={{ color: "#1B3A8A" }}>Realizado: <strong>{Number(real).toFixed(1)}%</strong></p>}
+                    {desv != null && (
+                      <p className={`mt-1 font-semibold ${desv >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                        ↔ Desvio: {desv >= 0 ? "+" : ""}{desv.toFixed(1)}%
+                      </p>
+                    )}
+                  </div>
+                );
+              }}
+            />
+            {refHoje && (
+              <ReferenceLine x={refHoje} stroke="#94a3b8" strokeDasharray="2 2"
+                label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8", position: "top" }} />
+            )}
+            <Line type="monotone" dataKey="previsto" name="Previsto" stroke="#D4AF37" strokeWidth={2.5} dot={false} connectNulls />
+            <Line type="monotone" dataKey="realizado" name="Realizado" stroke="#1B3A8A" strokeWidth={3} dot={{ r: 3 }} connectNulls />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
-      <p className="text-xs text-slate-500">Hoje ({fmtBR(todayStr)}): previsto <b>{fmtPct(kpis.previsto)}</b> · realizado <b>{fmtPct(kpis.realizado)}</b>.</p>
+
+      {/* Interpretação */}
+      <div className="bg-slate-50 rounded-xl border border-slate-100 p-4 text-xs text-slate-600 space-y-1">
+        <p className="font-semibold text-slate-700 mb-2">Como interpretar</p>
+        <p>🟡 <strong>Previsto</strong>: Curva planejada acumulada (peso financeiro × prazo de cada atividade).</p>
+        <p>🔵 <strong>Realizado</strong>: Avanço físico efetivamente lançado a cada semana. Acima do previsto = adiantado.</p>
+        <p>↔ A linha tracejada cinza marca a semana atual.</p>
+      </div>
     </div>
   );
 }
 
 function AbaRevisoes({ revisoes }: { revisoes: any[] }) {
   if (revisoes.length === 0) {
-    return <div className="bg-white border rounded-xl p-12 text-center text-slate-400">Nenhuma revisão cadastrada.</div>;
+    return <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-12 text-center text-slate-400">Nenhuma revisão cadastrada.</div>;
   }
   return (
-    <div className="bg-white border rounded-xl p-4">
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
       <h3 className="text-sm font-semibold text-slate-800 mb-3">Histórico de revisões</h3>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
@@ -376,21 +538,6 @@ function KpiCard({ label, value, icon, sub, accent }: { label: string; value: st
       </div>
       <div className="text-2xl font-bold text-slate-800">{value}</div>
       {sub && <p className="text-[11px] text-slate-500 mt-0.5">{sub}</p>}
-    </div>
-  );
-}
-
-function BarRow({ label, pct, cor }: { label: string; pct: number; cor: string }) {
-  const w = Math.max(0, Math.min(100, pct));
-  return (
-    <div>
-      <div className="flex justify-between text-xs mb-1">
-        <span className="text-slate-600">{label}</span>
-        <span className="font-semibold text-slate-800">{fmtPct(pct)}</span>
-      </div>
-      <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-        <div className={`h-full ${cor} transition-all`} style={{ width: `${w}%` }} />
-      </div>
     </div>
   );
 }

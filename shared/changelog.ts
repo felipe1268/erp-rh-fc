@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1441,
+    titulo: "Portal do Cliente — Planejamento agora replica o layout interno (Curva S idêntica)",
+    descricao: "A tela /portal/cliente/obra/:obraId foi totalmente reformatada para espelhar o visual da tela interna de Planejamento (PlanejamentoDetalhe). Header em card branco rounded-xl com botão Voltar à esquerda, nome da obra em destaque, badges de cliente, responsável, cidade/UF e dias restantes (verde >30, âmbar <30, vermelho <0), e Badge de status à direita. Card 'Avanço Físico' com barra Previsto dourada (#D4AF37 sobre #F5E9C0) e barra Realizado azul (#1B3A8A sobre slate-100), badge de desvio (+adiantado/atrasado) e tag '💰 Peso Financeiro'. Tabs em 2 linhas no desktop dentro de container white p-1 rounded-xl border-slate-200, cada botão flex-1 com fundo bg-blue-50 + border quando ativo. Curva S agora usa Recharts (mesma biblioteca do interno) com linhas dourada (Previsto) e azul (Realizado), tooltip rico mostrando desvio, ReferenceLine 'Hoje', legenda no padrão interno e bloco 'Como interpretar'. Realizado é truncado a partir de hoje para não exibir progressão futura. As demais abas (Visão Geral, Cronograma, Avanço Semanal, Prog. Semanal, Revisões) mantiveram a funcionalidade da Rev. 1440 com refinamento visual (rounded-xl, shadow-sm, paddings consistentes).",
+    tipo: "melhoria",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 23:55:00",
+  },
+  {
     version: 1440,
     titulo: "Portal do Cliente — múltiplas abas no Planejamento da obra + controle por Admin Master",
     descricao: "Quando o cliente clica em uma obra no /portal/cliente/dashboard, a tela de Planejamento agora oferece múltiplas abas (estilo da tela interna): Visão Geral, Cronograma, Avanço Semanal, Prog. Semanal (3 semanas), Curva S (gráfico SVG previsto x realizado com linha de hoje) e Revisões. Outras abas (Gantt, REFIS, Crono. Financeiro, Prev. Medição, Caminho Crítico, Diagrama de Rede, Custo RH, BIM 3D, Efetivo) já podem ser liberadas pelo admin e mostram placeholder \"em breve\" no portal — serão implementadas em revisões futuras. Controle de visibilidade por Admin Master: cada usuário do Portal do Cliente tem um conjunto independente de abas liberadas (nova coluna portal_credentials.abas_liberadas — JSON). Em Configurações → Portal do Cliente → Acessos, ao gerenciar acessos do cliente, cada usuário ganhou um botão indigo (ícone sliders) que abre um modal com checkboxes para liberar/bloquear cada aba — Visão Geral é obrigatória. Atalhos \"Selecionar todas\" e \"Apenas obrigatória\". Defaults: ao criar acesso, somente Visão Geral fica liberada. Backend: nova procedure admin.setAbasLiberadasCliente; cliente.planejamentoObra agora retorna abasLiberadas, atividadesTodas (cronograma completo), progSemanal (3 semanas), curvaS (buckets semanais acumulados) e revisoes (histórico). Constantes compartilhadas em shared/portalClienteAbas.ts. Datas dd/MM/aaaa.",
