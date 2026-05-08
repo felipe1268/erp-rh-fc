@@ -1133,16 +1133,26 @@ export const portalExternoRouter = router({
         .sort((x: any, y: any) => x.dataInicio!.localeCompare(y.dataInicio!))
         .slice(0, 15);
 
-      // Curva S — buckets semanais a partir do início do projeto até o fim previsto
-      const datasComValor: { dataInicio: string; dataFim: string; peso: number; pctReal: number }[] = folhas.map((a: any) => ({
+      // Curva S — buckets semanais com progressão TEMPORAL correta do realizado.
+      // Para cada semana, o realizado é o acumulado ponderado considerando o ÚLTIMO
+      // avanço lançado de cada atividade ATÉ aquela semana (não o valor final atual).
+      const datasComValor: { id: number; dataInicio: string; dataFim: string; peso: number }[] = folhas.map((a: any) => ({
+        id: a.id,
         dataInicio: a.dataInicio!,
         dataFim: a.dataFim!,
         peso: a.pesoFinanceiro || 0,
-        pctReal: ultimoAvancoPorAtiv[a.id] ?? 0,
       }));
+      // Ordena os avanços por (atividadeId, semana) para snapshot histórico
+      const avancosOrd = avancosRaw
+        .map((av: any) => ({
+          atividadeId: av.atividadeId as number,
+          semana: typeof av.semana === "string" ? av.semana.slice(0, 10) : new Date(av.semana).toISOString().slice(0, 10),
+          pct: Number(av.percentualAcumulado || 0),
+        }))
+        .sort((a, b) => a.semana.localeCompare(b.semana));
       const minIni = datasComValor.reduce((m, x) => (!m || x.dataInicio < m ? x.dataInicio : m), "" as string);
       const maxFim = datasComValor.reduce((m, x) => (!m || x.dataFim > m ? x.dataFim : m), "" as string);
-      const curvaS: { semana: string; previsto: number; realizado: number }[] = [];
+      const curvaS: { semana: string; previsto: number; realizado: number | null }[] = [];
       if (minIni && maxFim && somaPesos > 0) {
         const inicio = new Date(minIni + "T00:00:00");
         const dowI = inicio.getDay();
@@ -1150,11 +1160,12 @@ export const portalExternoRouter = router({
         inicio.setDate(inicio.getDate() + ajustar);
         const fim = new Date(maxFim + "T00:00:00");
         let cursor = new Date(inicio);
-        let acumPrev = 0, acumReal = 0;
         let safety = 0;
+        const todayCap = new Date(todayStr + "T00:00:00").getTime();
         while (cursor <= fim && safety < 520) {
           const semFim = new Date(cursor); semFim.setDate(cursor.getDate() + 6);
           const semFimStr = semFim.toISOString().slice(0, 10);
+          // Previsto acumulado linear até o fim da semana
           let prevSem = 0;
           for (const a of datasComValor) {
             const ini = new Date(a.dataInicio + "T00:00:00").getTime();
@@ -1164,18 +1175,23 @@ export const portalExternoRouter = router({
             const pctNoFim = ate >= fimAt ? 1 : Math.max(0, (ate - ini) / (fimAt - ini));
             prevSem += a.peso * pctNoFim;
           }
-          const todayCap = new Date(todayStr + "T00:00:00").getTime();
-          let realSem = acumReal;
+          const acumPrev = (prevSem / somaPesos) * 100;
+          // Realizado: somente se a semana já passou (até hoje) — usa snapshot dos avanços até semFim
+          let realizadoOut: number | null = null;
           if (new Date(semFimStr + "T00:00:00").getTime() <= todayCap) {
-            realSem = 0;
-            for (const a of datasComValor) realSem += a.peso * (a.pctReal / 100);
+            const snapshot: Record<number, number> = {};
+            for (const av of avancosOrd) {
+              if (av.semana > semFimStr) break;
+              snapshot[av.atividadeId] = av.pct; // último valor até esta semana
+            }
+            let realSem = 0;
+            for (const a of datasComValor) realSem += a.peso * ((snapshot[a.id] ?? 0) / 100);
+            realizadoOut = Math.min(100, (realSem / somaPesos) * 100);
           }
-          acumPrev = (prevSem / somaPesos) * 100;
-          acumReal = (realSem / somaPesos) * 100;
           curvaS.push({
             semana: cursor.toISOString().slice(0, 10),
             previsto: Math.min(100, acumPrev),
-            realizado: Math.min(100, acumReal),
+            realizado: realizadoOut,
           });
           cursor = new Date(cursor); cursor.setDate(cursor.getDate() + 7);
           safety++;
