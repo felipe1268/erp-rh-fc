@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -81,7 +82,7 @@ const CATEGORIAS = [
   { key: "notificacoes_sistema", label: "Notificações do Sistema", icon: Bell, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros";
+type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente";
 
 export default function Configuracoes() {
   const { user } = useAuth();
@@ -90,6 +91,7 @@ export default function Configuracoes() {
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
   const [activeTab, setActiveTab] = useState<TabKey>(isAdmin ? "criterios" : "senha");
+  const [, setLoc] = useLocation();
 
   // Limpeza
   const [showCleanDialog, setShowCleanDialog] = useState(false);
@@ -305,6 +307,7 @@ export default function Configuracoes() {
     { key: "sync_he" as TabKey, label: "Sincronizar HE", icon: RefreshCw, minRole: "admin" },
     { key: "beneficios_alimentacao" as TabKey, label: "Benefícios Alimentação", icon: UtensilsCrossed, minRole: "admin" },
     { key: "terceiros" as TabKey, label: "Terceiros / Gestores", icon: Building2, minRole: "admin" },
+    { key: "portal_cliente" as TabKey, label: "Portal do Cliente", icon: Shield, minRole: "admin" },
     { key: "limpeza" as TabKey, label: "Limpeza de Dados", icon: Trash2, minRole: "admin_master" },
     { key: "backup" as TabKey, label: "Backup do Banco", icon: Database, minRole: "admin" },
   ];
@@ -800,6 +803,42 @@ export default function Configuracoes() {
         {/* TAB: Terceiros - Gestores para Contratos */}
         {activeTab === "terceiros" && (
           <GestoresContratoTab companyId={companyId} />
+        )}
+
+        {/* TAB: Portal do Cliente */}
+        {activeTab === "portal_cliente" && (
+          <Card className="border-indigo-200">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2 text-indigo-700">
+                <Shield className="w-5 h-5" />
+                Portal do Cliente
+              </CardTitle>
+              <CardDescription>
+                Gerenciar acessos do Portal do Cliente, cadastrar usuários, liberar abas por usuário (Visão Geral, Cronograma, Curva S, etc.) e acompanhar comentários e satisfação (NPS).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Button onClick={() => setLoc("/clientes/portal")} className="bg-indigo-600 hover:bg-indigo-700 gap-2 justify-start h-auto py-3">
+                  <Users className="w-5 h-5 shrink-0" />
+                  <div className="text-left">
+                    <div className="font-semibold">Acessos do Portal</div>
+                    <div className="text-xs opacity-90 font-normal">Cadastrar usuários, liberar abas, comentários e NPS</div>
+                  </div>
+                </Button>
+                <Button variant="outline" onClick={() => setLoc("/clientes")} className="gap-2 justify-start h-auto py-3">
+                  <Building2 className="w-5 h-5 shrink-0 text-slate-600" />
+                  <div className="text-left">
+                    <div className="font-semibold">Cadastro de Clientes</div>
+                    <div className="text-xs text-slate-500 font-normal">Empresas e CNPJs vinculados ao Portal</div>
+                  </div>
+                </Button>
+              </div>
+              <div className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3 border">
+                <b>Dica:</b> em <b>Acessos do Portal</b>, na linha de cada cliente, use o botão indigo <b>"Abas"</b> para configurar quais abas cada usuário enxerga ao abrir uma obra (<code>/portal/cliente/obra/...</code>). A aba <b>Visão Geral</b> é obrigatória.
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* TAB: Limpeza */}
