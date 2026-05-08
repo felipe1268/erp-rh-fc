@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1435,
+    titulo: "Modal 'Gerenciar acessos do Portal' — full screen DEFINITIVO (resizable=false + style inline)",
+    descricao: "Por que ainda aparecia pequeno na Rev. 1433/1434: o componente DialogContent do shadcn aplicava por padrão um style INLINE 'width: min(512px, calc(100vw - 2rem))' — vindo do prop resizable=true ativado por padrão para permitir arrastar a borda. Esse style inline sempre vence as classes Tailwind (w-[98vw]) por especificidade. Agora o modal passa explicitamente resizable={false} (não tem por que arrastar borda em modal full-screen) e força width/height via style inline próprio (98vw × 96vh, maxWidth: 98vw). Resultado: modal ocupa 98% da largura e 96% da altura da tela em qualquer resolução, sem barra horizontal e com a coluna direita (lista de usuários do portal) totalmente visível.",
+    tipo: "fix",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 21:25:00",
+  },
+  {
     version: 1434,
     titulo: "Controle de Integrações — fix do erro ao cadastrar (colunas faltando no banco)",
     descricao: "Erro ao registrar integração de pessoal: 'column employee_integrations.cliente_id does not exist'. A tabela no banco estava com o schema antigo (obra_id, status, plataforma, data_validade) enquanto o código novo já espera cliente_id, cliente_nome, data_vencimento, evidencia e registrado_por. Aplicado ALTER TABLE no Neon adicionando as 5 colunas novas, ajustando 'tipo' para varchar(20) com default 'externa', e convertendo 'data_realizacao' de date para varchar(10) (formato YYYY-MM-DD usado pelo Drizzle string mode). Também adicionado bloco no ColFix síncrono do startup para garantir que qualquer ambiente (dev/staging/prod) que ainda esteja no schema antigo seja migrado automaticamente — idempotente, não destrói dados existentes (faz backfill de cliente_nome a partir de plataforma e de data_vencimento a partir de data_validade quando aplicável).",

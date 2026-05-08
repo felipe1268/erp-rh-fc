@@ -375,7 +375,11 @@ export default function ClientesPortalAdmin() {
 
         {/* Modal: Gerenciar acessos do cliente */}
         <Dialog open={!!gerenciarTarget} onOpenChange={(o) => { if (!o) { setGerenciarTarget(null); setResultadoAcesso(null); } }}>
-          <DialogContent className="!max-w-none w-[98vw] h-[96vh] xl:w-[95vw] xl:h-[92vh] bg-white p-0 overflow-hidden gap-0 flex flex-col">
+          <DialogContent
+            resizable={false}
+            className="!max-w-none w-[98vw] h-[96vh] xl:w-[95vw] xl:h-[92vh] bg-white p-0 overflow-hidden gap-0 flex flex-col"
+            style={{ width: "98vw", maxWidth: "98vw", height: "96vh" }}
+          >
             {gerenciarTarget && (() => {
               const submitNovo = () => {
                 if (!novoNome.trim()) { toast.error("Informe o nome do usuário"); return; }
