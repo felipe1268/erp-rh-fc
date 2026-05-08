@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1468,
+    titulo: "Portal do Cliente — Bugfix: enviar comentário falhava com 'relation cliente_comentarios does not exist' no Neon",
+    descricao: "A aba 'Comentários' do Portal do Cliente acusava 'Failed query: insert into cliente_comentarios ...' ao tentar enviar uma nova mensagem. Causa: as tabelas cliente_comentarios e cliente_avaliacoes nunca foram criadas no Neon porque o ColFix de inicialização é pulado quando a versão do banco já está sincronizada ('[ColFix] Versão ok, pulando migrations.'), e o CREATE TABLE IF NOT EXISTS dessas duas tabelas estava SOMENTE dentro do ColFix. Correção: (1) tabelas criadas manualmente no Neon agora; (2) blocos CREATE TABLE IF NOT EXISTS movidos/adicionados para o SyncSchema+ em server/_core/index.ts, que SEMPRE roda em todo startup, garantindo idempotência permanente. Cobre ambas as tabelas (cliente_comentarios e cliente_avaliacoes) com seus índices.",
+    tipo: "bugfix",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 20:05:00",
+  },
+  {
     version: 1467,
     titulo: "Portal do Cliente — Clicar na foto do funcionário abre lightbox em tela cheia",
     descricao: "Na tabela de funcionários da tela RH/Controle de Documentos do portal do cliente, clicar no avatar circular da foto agora abre um lightbox em tela cheia (overlay escuro com blur) mostrando a foto ampliada (até 90vw × 78vh, mantendo proporção), o nome do funcionário abaixo e botões para fechar (X no canto superior direito, botão Fechar embaixo, ou clicar fora). Funcionários sem foto continuam mostrando o círculo verde com iniciais (sem ação de clique).",

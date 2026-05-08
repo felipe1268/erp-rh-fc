@@ -554,6 +554,44 @@ Regras:
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_sst_integ_reg_status ON sst_integracao_registros(status)`);
         console.log(`[SyncSchema+] Tabelas SST Integração garantidas.`);
 
+        // Tabelas do Portal do Cliente (comentários cliente↔FC e avaliações NPS)
+        // Garantidas idempotentemente em todo startup pois o ColFix pode ser pulado
+        // quando "Versão ok" — sem isso a tela de Comentários quebra com FK violation.
+        try {
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS cliente_comentarios (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            cliente_id INTEGER NOT NULL,
+            obra_id INTEGER,
+            autor_tipo VARCHAR(20) NOT NULL,
+            autor_nome VARCHAR(255),
+            mensagem TEXT NOT NULL,
+            lido_em TIMESTAMP WITHOUT TIME ZONE,
+            criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+          )`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cc_company ON cliente_comentarios (company_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cc_cliente ON cliente_comentarios (cliente_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cc_obra ON cliente_comentarios (obra_id)`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS cliente_avaliacoes (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            obra_id INTEGER,
+            obra_nome VARCHAR(255),
+            nota_equipe INTEGER,
+            nota_obra INTEGER,
+            nota_atendimento INTEGER,
+            nota_prazo INTEGER,
+            nota_qualidade INTEGER,
+            nota_geral INTEGER,
+            comentario_positivo TEXT,
+            comentario_negativo TEXT,
+            criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+          )`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS ca_company ON cliente_avaliacoes (company_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS ca_obra ON cliente_avaliacoes (obra_id)`);
+          console.log(`[SyncSchema+] Tabelas Portal Cliente (comentarios + avaliacoes) garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA cliente_comentarios/avaliacoes:`, e?.message || e); }
+
         try {
           const colRows = await db.execute(sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'timecard_daily' AND table_schema = 'public' ORDER BY column_name`);
           const colNames: string[] = ((colRows as any).rows ?? colRows ?? []).map((r: any) => r.column_name);
