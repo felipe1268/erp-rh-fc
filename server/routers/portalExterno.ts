@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb } from "../db";
-import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets } from "../../drizzle/schema";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -518,6 +518,24 @@ export const portalExternoRouter = router({
       return { success: true };
     }),
 
+    setAbasLiberadasCliente: protectedProcedure.input(z.object({
+      id: z.number(), companyId: z.number(),
+      abas: z.array(z.string()),
+    })).mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const { serializeAbasLiberadas } = await import("../../shared/portalClienteAbas");
+      const json = serializeAbasLiberadas(input.abas as any);
+      await db.update(portalCredentials).set({
+        abasLiberadas: json,
+        updatedAt: new Date().toISOString(),
+      }).where(and(
+        eq(portalCredentials.id, input.id),
+        eq(portalCredentials.companyId, input.companyId),
+        eq(portalCredentials.tipo, "cliente"),
+      ));
+      return { success: true, abas: JSON.parse(json) };
+    }),
+
     reativarAcessoCliente: protectedProcedure.input(z.object({
       id: z.number(), companyId: z.number(),
     })).mutation(async ({ input }) => {
@@ -973,6 +991,233 @@ export const portalExternoRouter = router({
         recomendaria: input.recomendaria ?? null,
       });
       return { success: true };
+    }),
+
+    planejamentoObra: publicProcedure.input(z.object({
+      token: z.string(),
+      obraId: z.number(),
+    })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+
+      // Carrega credencial para descobrir abas liberadas
+      const { parseAbasLiberadas } = await import("../../shared/portalClienteAbas");
+      let abasLiberadas: string[] = ["visao_geral"];
+      const credIdJwt = decoded.portalId ?? decoded.credId;
+      if (credIdJwt) {
+        const [cred] = await db.select().from(portalCredentials).where(eq(portalCredentials.id, credIdJwt));
+        if (cred && cred.ativo === 1) abasLiberadas = parseAbasLiberadas((cred as any).abasLiberadas);
+      }
+
+      // Verifica que a obra pertence ao cliente
+      const [c] = await db.select().from(clientes).where(eq(clientes.id, decoded.clienteId));
+      if (!c) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado" });
+      const nomes = [c.razaoSocial, c.nomeFantasia].filter(Boolean) as string[];
+      if (nomes.length === 0) throw new TRPCError({ code: "FORBIDDEN" });
+      const orConds = nomes.map((n) => ilike(obras.cliente, n));
+      const [obra] = await db.select().from(obras).where(and(
+        eq(obras.id, input.obraId),
+        eq(obras.companyId, decoded.companyId),
+        isNull(obras.deletedAt),
+        or(...orConds)!,
+      ));
+      if (!obra) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não vinculada a este cliente" });
+
+      // Encontra o projeto de planejamento dessa obra
+      const [projeto] = await db.select().from(planejamentoProjetos)
+        .where(and(
+          eq(planejamentoProjetos.companyId, decoded.companyId),
+          eq(planejamentoProjetos.obraId, input.obraId),
+        ))
+        .orderBy(desc(planejamentoProjetos.criadoEm))
+        .limit(1);
+
+      if (!projeto) {
+        return { obra, abasLiberadas, projeto: null, atividades: [], avancos: [], kpis: null, revisoes: [] };
+      }
+
+      // Histórico de revisões (para a aba "Revisões")
+      const revisoesHist = await db.select().from(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.projetoId, projeto.id))
+        .orderBy(desc(planejamentoRevisoes.numero));
+      const revisao = revisoesHist[0];
+
+      if (!revisao) {
+        return { obra, abasLiberadas, projeto, atividades: [], avancos: [], kpis: null, revisoes: [] };
+      }
+
+      // Atividades da revisão (excluindo desativadas)
+      const atividadesRaw = await db.select().from(planejamentoAtividades)
+        .where(and(
+          eq(planejamentoAtividades.revisaoId, revisao.id),
+          eq(planejamentoAtividades.disabled, false),
+        ));
+
+      const atividades = atividadesRaw.map((a: any) => ({
+        id: a.id,
+        eapCodigo: a.eapCodigo,
+        nome: a.nome,
+        nivel: a.nivel,
+        dataInicio: a.dataInicio,
+        dataFim: a.dataFim,
+        pesoFinanceiro: Number(a.pesoFinanceiro || 0),
+        recursoPrincipal: a.recursoPrincipal,
+        isGrupo: a.isGrupo,
+        isMarco: a.isMarco,
+        isIndireta: a.isIndireta,
+      }));
+
+      // Avanços (último percentual acumulado por atividade)
+      const avancosRaw = await db.select().from(planejamentoAvancos)
+        .where(eq(planejamentoAvancos.revisaoId, revisao.id));
+
+      const ultimoAvancoPorAtiv: Record<number, number> = {};
+      for (const av of avancosRaw) {
+        const id = av.atividadeId as number;
+        const pct = Number(av.percentualAcumulado || 0);
+        if (ultimoAvancoPorAtiv[id] === undefined || pct > ultimoAvancoPorAtiv[id]) {
+          ultimoAvancoPorAtiv[id] = pct;
+        }
+      }
+
+      // KPIs: % previsto x realizado (folhas, não-grupo, não-indireta, com datas)
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
+      let somaPesos = 0, somaPrevisto = 0, somaRealizado = 0;
+      for (const a of folhas) {
+        const peso = a.pesoFinanceiro || 0;
+        somaPesos += peso;
+        // Previsto linear entre dataInicio e dataFim
+        let pctPrev = 0;
+        if (todayStr >= a.dataFim!) pctPrev = 100;
+        else if (todayStr <= a.dataInicio!) pctPrev = 0;
+        else {
+          const ini = new Date(a.dataInicio + "T00:00:00").getTime();
+          const fim = new Date(a.dataFim + "T00:00:00").getTime();
+          const tod = new Date(todayStr + "T00:00:00").getTime();
+          pctPrev = fim > ini ? ((tod - ini) / (fim - ini)) * 100 : 100;
+        }
+        const pctReal = ultimoAvancoPorAtiv[a.id] ?? 0;
+        somaPrevisto += peso * pctPrev / 100;
+        somaRealizado += peso * pctReal / 100;
+      }
+      const pctTotalPrevisto = somaPesos > 0 ? somaPrevisto / somaPesos * 100 : 0;
+      const pctTotalRealizado = somaPesos > 0 ? somaRealizado / somaPesos * 100 : 0;
+      const desvio = pctTotalRealizado - pctTotalPrevisto;
+
+      // Atividades da semana atual (segunda a sexta)
+      const today = new Date();
+      const dow = today.getDay();
+      const diffToMon = dow === 0 ? -6 : 1 - dow;
+      const monday = new Date(today); monday.setDate(today.getDate() + diffToMon);
+      const friday = new Date(monday); friday.setDate(monday.getDate() + 4);
+      const monStr = monday.toISOString().slice(0, 10);
+      const friStr = friday.toISOString().slice(0, 10);
+
+      const semanaAtual = folhas.filter((a: any) =>
+        a.dataFim! >= monStr && a.dataInicio! <= friStr
+      ).map((a: any) => ({ ...a, percentRealizado: ultimoAvancoPorAtiv[a.id] ?? 0 }));
+
+      // Atrasadas: dataFim < hoje E avanço < 100
+      const atrasadas = folhas.filter((a: any) =>
+        a.dataFim! < todayStr && (ultimoAvancoPorAtiv[a.id] ?? 0) < 100
+      ).map((a: any) => ({ ...a, percentRealizado: ultimoAvancoPorAtiv[a.id] ?? 0 }))
+       .sort((x: any, y: any) => x.dataFim!.localeCompare(y.dataFim!))
+       .slice(0, 20);
+
+      // Próximas: dataInicio > sexta da semana atual, ordenadas por dataInicio
+      const proximas = folhas.filter((a: any) => a.dataInicio! > friStr)
+        .sort((x: any, y: any) => x.dataInicio!.localeCompare(y.dataInicio!))
+        .slice(0, 15);
+
+      // Curva S — buckets semanais a partir do início do projeto até o fim previsto
+      const datasComValor: { dataInicio: string; dataFim: string; peso: number; pctReal: number }[] = folhas.map((a: any) => ({
+        dataInicio: a.dataInicio!,
+        dataFim: a.dataFim!,
+        peso: a.pesoFinanceiro || 0,
+        pctReal: ultimoAvancoPorAtiv[a.id] ?? 0,
+      }));
+      const minIni = datasComValor.reduce((m, x) => (!m || x.dataInicio < m ? x.dataInicio : m), "" as string);
+      const maxFim = datasComValor.reduce((m, x) => (!m || x.dataFim > m ? x.dataFim : m), "" as string);
+      const curvaS: { semana: string; previsto: number; realizado: number }[] = [];
+      if (minIni && maxFim && somaPesos > 0) {
+        const inicio = new Date(minIni + "T00:00:00");
+        const dowI = inicio.getDay();
+        const ajustar = dowI === 0 ? -6 : 1 - dowI;
+        inicio.setDate(inicio.getDate() + ajustar);
+        const fim = new Date(maxFim + "T00:00:00");
+        let cursor = new Date(inicio);
+        let acumPrev = 0, acumReal = 0;
+        let safety = 0;
+        while (cursor <= fim && safety < 520) {
+          const semFim = new Date(cursor); semFim.setDate(cursor.getDate() + 6);
+          const semFimStr = semFim.toISOString().slice(0, 10);
+          let prevSem = 0;
+          for (const a of datasComValor) {
+            const ini = new Date(a.dataInicio + "T00:00:00").getTime();
+            const fimAt = new Date(a.dataFim + "T00:00:00").getTime();
+            if (fimAt <= ini) continue;
+            const ate = Math.min(new Date(semFimStr + "T00:00:00").getTime(), fimAt);
+            const pctNoFim = ate >= fimAt ? 1 : Math.max(0, (ate - ini) / (fimAt - ini));
+            prevSem += a.peso * pctNoFim;
+          }
+          const todayCap = new Date(todayStr + "T00:00:00").getTime();
+          let realSem = acumReal;
+          if (new Date(semFimStr + "T00:00:00").getTime() <= todayCap) {
+            realSem = 0;
+            for (const a of datasComValor) realSem += a.peso * (a.pctReal / 100);
+          }
+          acumPrev = (prevSem / somaPesos) * 100;
+          acumReal = (realSem / somaPesos) * 100;
+          curvaS.push({
+            semana: cursor.toISOString().slice(0, 10),
+            previsto: Math.min(100, acumPrev),
+            realizado: Math.min(100, acumReal),
+          });
+          cursor = new Date(cursor); cursor.setDate(cursor.getDate() + 7);
+          safety++;
+        }
+      }
+
+      // Próximas 3 semanas (para "Prog. Semanal")
+      const tresSemanasFim = new Date(friday); tresSemanasFim.setDate(friday.getDate() + 14);
+      const tresSemFimStr = tresSemanasFim.toISOString().slice(0, 10);
+      const progSemanal = folhas.filter((a: any) =>
+        a.dataInicio! <= tresSemFimStr && a.dataFim! >= monStr
+      ).map((a: any) => ({ ...a, percentRealizado: ultimoAvancoPorAtiv[a.id] ?? 0 }))
+       .sort((x: any, y: any) => x.dataInicio!.localeCompare(y.dataInicio!));
+
+      return {
+        obra,
+        abasLiberadas,
+        projeto: {
+          id: projeto.id, nome: projeto.nome, dataInicio: projeto.dataInicio,
+          dataTerminoContratual: projeto.dataTerminoContratual, status: projeto.status,
+          revisaoNumero: revisao.numero, revisaoData: revisao.dataRevisao,
+        },
+        kpis: {
+          previsto: pctTotalPrevisto,
+          realizado: pctTotalRealizado,
+          desvio,
+          totalAtividades: folhas.length,
+          atividadesConcluidas: folhas.filter((a: any) => (ultimoAvancoPorAtiv[a.id] ?? 0) >= 100).length,
+          semanaInicio: monStr,
+          semanaFim: friStr,
+        },
+        semanaAtual,
+        atrasadas,
+        proximas,
+        progSemanal,
+        curvaS,
+        atividadesTodas: atividades.map((a: any) => ({ ...a, percentRealizado: ultimoAvancoPorAtiv[a.id] ?? 0 })),
+        revisoes: revisoesHist.map((r: any) => ({
+          id: r.id, numero: r.numero, dataRevisao: r.dataRevisao,
+          motivo: r.motivo, consolidado: r.consolidado, criadoEm: r.criadoEm,
+        })),
+      };
     }),
   }),
 

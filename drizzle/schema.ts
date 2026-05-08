@@ -3939,6 +3939,9 @@ export const portalCredentials = pgTable("portal_credentials", {
   primeiroAcesso: smallint().default(1).notNull(),
   ativo: smallint().default(1).notNull(),
   ultimoLogin: timestamp("ultimo_login", { mode: "string" }),
+  // JSON array de chaves de abas liberadas (Portal do Cliente — tela de planejamento por obra).
+  // NULL = default (apenas visao_geral). Ver shared/portalClienteAbas.ts.
+  abasLiberadas: text("abas_liberadas"),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (table) => [

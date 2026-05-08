@@ -25,6 +25,24 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1440,
+    titulo: "Portal do Cliente — múltiplas abas no Planejamento da obra + controle por Admin Master",
+    descricao: "Quando o cliente clica em uma obra no /portal/cliente/dashboard, a tela de Planejamento agora oferece múltiplas abas (estilo da tela interna): Visão Geral, Cronograma, Avanço Semanal, Prog. Semanal (3 semanas), Curva S (gráfico SVG previsto x realizado com linha de hoje) e Revisões. Outras abas (Gantt, REFIS, Crono. Financeiro, Prev. Medição, Caminho Crítico, Diagrama de Rede, Custo RH, BIM 3D, Efetivo) já podem ser liberadas pelo admin e mostram placeholder \"em breve\" no portal — serão implementadas em revisões futuras. Controle de visibilidade por Admin Master: cada usuário do Portal do Cliente tem um conjunto independente de abas liberadas (nova coluna portal_credentials.abas_liberadas — JSON). Em Configurações → Portal do Cliente → Acessos, ao gerenciar acessos do cliente, cada usuário ganhou um botão indigo (ícone sliders) que abre um modal com checkboxes para liberar/bloquear cada aba — Visão Geral é obrigatória. Atalhos \"Selecionar todas\" e \"Apenas obrigatória\". Defaults: ao criar acesso, somente Visão Geral fica liberada. Backend: nova procedure admin.setAbasLiberadasCliente; cliente.planejamentoObra agora retorna abasLiberadas, atividadesTodas (cronograma completo), progSemanal (3 semanas), curvaS (buckets semanais acumulados) e revisoes (histórico). Constantes compartilhadas em shared/portalClienteAbas.ts. Datas dd/MM/aaaa.",
+    tipo: "feature",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 23:50:00",
+  },
+  {
+    version: 1439,
+    titulo: "Portal do Cliente — clicar na obra abre tela de Planejamento",
+    descricao: "Antes, no /portal/cliente/dashboard os cards de obras vinculadas eram apenas visuais e não respondiam ao clique. Agora cada card é um botão que navega para /portal/cliente/obra/:obraId, mostrando uma página de Planejamento dedicada ao cliente: cabeçalho da obra (cidade/UF, datas), KPIs (avanço Previsto, Realizado, Desvio, atividades concluídas/total), barra comparativa Previsto x Realizado com o número da revisão atual, lista de atividades da semana corrente (segunda–sexta), atividades atrasadas (data fim < hoje E avanço < 100%) e próximas atividades. Backend: nova procedure cliente.planejamentoObra (server/routers/portalExterno.ts) que valida o token cliente, confere que a obra pertence ao cliente (match razaoSocial/nomeFantasia em obras.cliente, igual minhasObras), busca o último planejamentoProjetos pela obraId, pega a última revisão (numero desc) e calcula KPIs no servidor: previsto linear por atividade folha (não-grupo, não-indireta, não-disabled) entre dataInicio/dataFim, realizado pelo último percentualAcumulado em planejamentoAvancos. Frontend: nova página PortalPlanejamentoCliente.tsx + rota /portal/cliente/obra/:obraId. Datas em dd/MM/aaaa.",
+    tipo: "feature",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 23:30:00",
+  },
+  {
     version: 1438,
     titulo: "Planejamento — Programação Semanal não exibe mais atividades desativadas",
     descricao: "Antes, atividades marcadas como desativadas no cronograma (campo a.disabled = true, geralmente desativadas em bloco pela ação 'Desativar selecionadas' na aba Cronograma) ainda apareciam na aba 'Prog. Semanal' — listagem de atividades da semana, totais (Peso da Semana, atividades diretas/indiretas), maior peso, e até nos dados enviados para a IA gerar alertas. Isso causava distorção dos KPIs semanais e poluía o relatório de 3 semanas. Correção em client/src/pages/planejamento/ProgramacaoSemanal.tsx: o componente agora filtra (atividadesProp || []).filter(a => !a.disabled) uma única vez no início, antes de qualquer cálculo (computeWeeks, atividadesDaSemana, somaSemana, IA, relatório PDF). Atividades desativadas continuam visíveis somente na aba Cronograma (com line-through), onde podem ser reativadas. Demais abas (Gantt, Avanço Semanal, Curva S, Caminho Crítico) já filtravam corretamente desde antes.",

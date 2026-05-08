@@ -172,7 +172,13 @@ export default function PortalDashboardCliente() {
             ) : (
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                 {minhasObras.map((o: any) => (
-                  <div key={o.id} className="bg-white border rounded-xl p-4 hover:shadow-md transition-shadow">
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => navigate(`/portal/cliente/obra/${o.id}`)}
+                    className="text-left bg-white border rounded-xl p-4 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer"
+                    title="Ver planejamento desta obra"
+                  >
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <h3 className="font-semibold text-slate-800 text-sm leading-tight">{o.nome}</h3>
                       <Badge variant="outline" className="text-[10px]">{o.status}</Badge>
@@ -188,7 +194,8 @@ export default function PortalDashboardCliente() {
                       <p>Início: <span className="font-medium text-slate-700">{fmtBR(o.dataInicio)}</span></p>
                       <p>Previsão fim: <span className="font-medium text-slate-700">{fmtBR(o.dataPrevisaoFim)}</span></p>
                     </div>
-                  </div>
+                    <p className="text-[11px] text-blue-600 font-medium mt-2 pt-2 border-t">Ver planejamento →</p>
+                  </button>
                 ))}
               </div>
             )}

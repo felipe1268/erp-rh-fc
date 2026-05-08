@@ -876,6 +876,7 @@ Regras:
             ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS disabled BOOLEAN DEFAULT FALSE;
             ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS is_indireta BOOLEAN DEFAULT FALSE;
             ALTER TABLE module_config ADD COLUMN IF NOT EXISTS disabled_pages TEXT;
+            ALTER TABLE portal_credentials ADD COLUMN IF NOT EXISTS abas_liberadas TEXT;
             ALTER TABLE epis ADD COLUMN IF NOT EXISTS "fotoUrl" TEXT;
             ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "previsaoRescisaoComplementar" TEXT;
 

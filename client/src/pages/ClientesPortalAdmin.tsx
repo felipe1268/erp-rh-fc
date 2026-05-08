@@ -12,8 +12,9 @@ import {
   Mail, KeyRound, Send, Search, MessageSquare, Star,
   Loader2, ShieldCheck, CheckCircle2, AlertCircle, Copy, Reply,
   Smile, Frown, TrendingUp, Users, Plus, Trash2, RefreshCw, UserPlus,
-  Lock, UnlockKeyhole,
+  Lock, UnlockKeyhole, SlidersHorizontal,
 } from "lucide-react";
+import { PORTAL_CLIENTE_ABAS, parseAbasLiberadas, ABA_OBRIGATORIA, type PortalClienteAbaKey } from "@shared/portalClienteAbas";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
 const fmtCNPJ = (v?: string) => {
@@ -82,6 +83,26 @@ export default function ClientesPortalAdmin() {
     onSuccess: () => { toast.success("Acesso removido"); utils.portalExterno.admin.listarAcessosCliente.invalidate(); },
     onError: (e) => toast.error(e.message),
   });
+  const setAbasMut = trpc.portalExterno.admin.setAbasLiberadasCliente.useMutation({
+    onSuccess: () => { toast.success("Abas atualizadas"); utils.portalExterno.admin.listarAcessosCliente.invalidate(); setAbasTarget(null); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // ===== Modal: liberar abas do Portal por usuário =====
+  const [abasTarget, setAbasTarget] = useState<any | null>(null);
+  const [abasSel, setAbasSel] = useState<Set<PortalClienteAbaKey>>(new Set());
+  const abrirAbas = (a: any) => {
+    setAbasTarget(a);
+    setAbasSel(new Set(parseAbasLiberadas(a.abasLiberadas)));
+  };
+  const toggleAba = (k: PortalClienteAbaKey) => {
+    if (k === ABA_OBRIGATORIA) return;
+    setAbasSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  };
 
   // ===== Responder comentário =====
   const [respondendo, setRespondendo] = useState<any | null>(null);
@@ -552,6 +573,12 @@ export default function ClientesPortalAdmin() {
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0">
+                                    {ativo && (
+                                      <Button size="icon" variant="ghost" className="h-9 w-9 text-indigo-600 hover:bg-indigo-50" title="Liberar abas do Portal"
+                                        onClick={() => abrirAbas(a)}>
+                                        <SlidersHorizontal className="w-4 h-4" />
+                                      </Button>
+                                    )}
                                     {ativo ? (
                                       <>
                                         <Button size="icon" variant="ghost" className="h-9 w-9 text-blue-600 hover:bg-blue-50" title="Reenviar senha provisória"
@@ -599,6 +626,63 @@ export default function ClientesPortalAdmin() {
                 </>
               );
             })()}
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal: Liberar abas do Portal por usuário */}
+        <Dialog open={!!abasTarget} onOpenChange={(o) => { if (!o) setAbasTarget(null); }}>
+          <DialogContent className="max-w-2xl bg-white">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <SlidersHorizontal className="w-5 h-5 text-indigo-600" />
+                Abas liberadas no Portal do Cliente
+              </DialogTitle>
+            </DialogHeader>
+            {abasTarget && (
+              <div className="space-y-3">
+                <div className="bg-slate-50 rounded-lg p-3 text-sm">
+                  <div className="font-semibold text-slate-800">{abasTarget.nomeResponsavel || abasTarget.emailResponsavel}</div>
+                  <div className="text-xs text-slate-500">{abasTarget.emailResponsavel}</div>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Selecione quais abas este usuário verá ao abrir uma obra (<b>/portal/cliente/obra/...</b>).
+                  A aba <b>Visão Geral</b> é obrigatória — sem ela o usuário não vê nada da obra clicada.
+                </p>
+                <div className="grid sm:grid-cols-2 gap-2 max-h-[55vh] overflow-y-auto pr-1">
+                  {PORTAL_CLIENTE_ABAS.map((aba) => {
+                    const checked = abasSel.has(aba.key);
+                    const obrig = aba.key === ABA_OBRIGATORIA;
+                    return (
+                      <label key={aba.key}
+                        className={`flex items-start gap-2 border rounded-lg p-2.5 cursor-pointer text-sm transition ${checked ? "bg-indigo-50 border-indigo-200" : "bg-white hover:bg-slate-50"} ${obrig ? "opacity-90" : ""}`}>
+                        <input type="checkbox" className="mt-0.5" checked={checked} disabled={obrig} onChange={() => toggleAba(aba.key)} />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-slate-800 flex items-center gap-1.5 flex-wrap">
+                            {aba.label}
+                            {obrig && <Badge variant="outline" className="text-[9px]">obrigatória</Badge>}
+                            {aba.status === "em_breve" && <Badge className="bg-amber-500 text-[9px]">em breve</Badge>}
+                          </div>
+                          {aba.status === "em_breve" && (
+                            <div className="text-[10px] text-slate-500 mt-0.5">Aba liberável; conteúdo será disponibilizado em revisões futuras.</div>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+                <DialogFooter className="gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setAbasSel(new Set(PORTAL_CLIENTE_ABAS.map((a) => a.key)))}>Selecionar todas</Button>
+                  <Button variant="outline" size="sm" onClick={() => setAbasSel(new Set([ABA_OBRIGATORIA]))}>Apenas a obrigatória</Button>
+                  <div className="flex-1" />
+                  <Button variant="outline" onClick={() => setAbasTarget(null)}>Cancelar</Button>
+                  <Button onClick={() => setAbasMut.mutate({ id: abasTarget.id, companyId, abas: Array.from(abasSel) })}
+                    disabled={setAbasMut.isPending} className="bg-indigo-600 hover:bg-indigo-700 gap-2">
+                    {setAbasMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    Salvar
+                  </Button>
+                </DialogFooter>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
 

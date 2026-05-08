@@ -312,6 +312,7 @@ const PortalLoginCliente = lazy(() => import("./pages/portal/PortalLoginCliente"
 const PortalEsqueciSenha = lazy(() => import("./pages/portal/PortalEsqueciSenha"));
 const PortalRedefinirSenha = lazy(() => import("./pages/portal/PortalRedefinirSenha"));
 const PortalDashboardCliente = lazy(() => import("./pages/portal/PortalDashboardCliente"));
+const PortalPlanejamentoCliente = lazy(() => import("./pages/portal/PortalPlanejamentoCliente"));
 const ClientesPortalAdmin = lazy(() => import("./pages/ClientesPortalAdmin"));
 const VerificarAptidao = lazy(() => import("./pages/VerificarAptidao"));
 const PortalTrocarSenha = lazy(() => import("./pages/portal/PortalTrocarSenha"));
@@ -551,6 +552,7 @@ function Router() {
         <Route path="/portal/trocar-senha" component={PortalTrocarSenha} />
         <Route path="/portal/dashboard" component={PortalDashboard} />
         <Route path="/portal/cliente/dashboard" component={PortalDashboardCliente} />
+        <Route path="/portal/cliente/obra/:obraId" component={PortalPlanejamentoCliente} />
         <Route path="/clientes/portal" component={ClientesPortalAdmin} />
         <Route path="/pesquisa-publica/clima/:token" component={ClimaPublicoPage} />
         {/* Verificação Pública de Aptidão (QR Code) */}
