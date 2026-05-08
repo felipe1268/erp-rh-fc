@@ -94,6 +94,46 @@ export const integracoesRouter = router({
       return row;
     }),
 
+  criarLote: protectedProcedure
+    .input(z.object({
+      companyId:      z.number(),
+      employeeIds:    z.array(z.number()).min(1),
+      tipo:           z.string().default("externa"),
+      clienteId:      z.number().optional(),
+      clienteNome:    z.string().optional(),
+      dataRealizacao: z.string(),
+      dataVencimento: z.string().optional(),
+      evidencia:      z.string().optional(),
+      observacoes:    z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const userId = (ctx as any).user?.id ?? null;
+
+      let clienteNome = input.clienteNome;
+      if (!clienteNome && input.clienteId) {
+        const [c] = await db.select({ razaoSocial: clientes.razaoSocial }).from(clientes).where(eq(clientes.id, input.clienteId));
+        clienteNome = c?.razaoSocial;
+      }
+      const nomeFinal = clienteNome ?? (input.tipo === "interna" ? "FC Engenharia (Interna)" : null);
+
+      const values = input.employeeIds.map((employeeId) => ({
+        companyId:      input.companyId,
+        employeeId,
+        tipo:           input.tipo,
+        clienteId:      input.clienteId ?? null,
+        clienteNome:    nomeFinal,
+        dataRealizacao: input.dataRealizacao,
+        dataVencimento: input.dataVencimento ?? null,
+        evidencia:      input.evidencia ?? null,
+        observacoes:    input.observacoes ?? null,
+        registradoPor:  userId,
+      }));
+
+      const rows = await db.insert(employeeIntegrations).values(values).returning();
+      return { criados: rows.length, ids: rows.map((r: any) => r.id) };
+    }),
+
   atualizar: protectedProcedure
     .input(z.object({
       id:             z.number(),

@@ -80,6 +80,24 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
     onSuccess: () => { utils.integracoes.listar.invalidate(); utils.integracoes.kpis.invalidate(); setModalForm(null); setEmpSearch(""); toast.success("Integração registrada!"); },
     onError: (e) => toast.error(e.message || "Erro ao registrar"),
   });
+  const criarLoteMut = trpc.integracoes.criarLote.useMutation({
+    onSuccess: (r: any) => { utils.integracoes.listar.invalidate(); utils.integracoes.kpis.invalidate(); setModalForm(null); setEmpSearch(""); toast.success(`${r.criados} integraç${r.criados === 1 ? "ão registrada" : "ões registradas"}!`); },
+    onError: (e) => toast.error(e.message || "Erro ao registrar em lote"),
+  });
+
+  // Helper: soma N meses a uma data "YYYY-MM-DD" e retorna no mesmo formato.
+  function addMonthsISO(dateStr: string, meses: number): string {
+    if (!dateStr || !meses) return "";
+    const [y, m, d] = dateStr.split("-").map(Number);
+    if (!y || !m || !d) return "";
+    const dt = new Date(Date.UTC(y, m - 1 + meses, d));
+    // Trata transbordo (ex.: 31/jan + 1 mês → 02/mar). Recua para o último dia do mês alvo se preciso.
+    if (dt.getUTCMonth() !== ((m - 1 + meses) % 12 + 12) % 12) dt.setUTCDate(0);
+    const yy = dt.getUTCFullYear();
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(dt.getUTCDate()).padStart(2, "0");
+    return `${yy}-${mm}-${dd}`;
+  }
   const excluirMut = trpc.integracoes.excluir.useMutation({
     onSuccess: () => { utils.integracoes.listar.invalidate(); utils.integracoes.kpis.invalidate(); toast.success("Integração removida."); },
   });
@@ -151,7 +169,7 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
           </SelectContent>
         </Select>
         <Button
-          onClick={() => setModalForm({ tipo: "externa", clienteId: "", clienteNome: "", employeeSearch: "", dataRealizacao: "", dataVencimento: "", evidencia: "", observacoes: "" })}
+          onClick={() => setModalForm({ tipo: "externa", clienteId: "", clienteNome: "", employeeIds: [] as number[], employeeNomes: {} as Record<number, string>, validadeMeses: 12, dataRealizacao: "", dataVencimento: "", evidencia: "", observacoes: "" })}
           className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 ml-auto"
           size="sm"
         >
@@ -235,114 +253,208 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
                 <Users className="h-4 w-4" /> Registrar Integração de Pessoal
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-3 mt-2">
-              {/* Seleção de colaborador */}
-              <div>
-                <label className="text-xs font-medium">Colaborador *</label>
-                <div className="relative mt-1">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <input
-                    type="text"
-                    value={empSearch}
-                    onChange={e => { setEmpSearch(e.target.value); setModalForm((f: any) => ({ ...f, employeeId: null, employeeName: "" })); }}
-                    className="w-full border border-gray-200 rounded-md pl-8 pr-3 py-1.5 text-sm"
-                    placeholder="Buscar colaborador..."
-                  />
-                </div>
-                {empSearch.length >= 2 && !modalForm?.employeeId && (
-                  <div className="mt-1 border rounded-md max-h-36 overflow-y-auto bg-white shadow z-20 relative">
-                    {empAtivos.filter((e: any) => (e.nomeCompleto || "").toLowerCase().includes(empSearch.toLowerCase())).slice(0, 8).map((e: any) => (
-                      <button key={e.id} type="button"
-                        onClick={() => { setModalForm((f: any) => ({ ...f, employeeId: e.id, employeeName: e.nomeCompleto })); setEmpSearch(e.nomeCompleto); }}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 transition-colors border-b last:border-b-0">
-                        <span className="font-medium">{e.nomeCompleto}</span>
-                        <span className="text-[10px] text-muted-foreground ml-2">{e.matricula} · {e.funcao}</span>
-                      </button>
-                    ))}
-                    {empAtivos.filter((e: any) => (e.nomeCompleto || "").toLowerCase().includes(empSearch.toLowerCase())).length === 0 && (
-                      <p className="text-xs text-muted-foreground p-2 text-center">Nenhum colaborador encontrado</p>
+            {(() => {
+              const selIds: number[] = modalForm.employeeIds || [];
+              const setVal = (updater: any) => setModalForm((f: any) => ({ ...f, ...(typeof updater === "function" ? updater(f) : updater) }));
+              const onPickEmp = (e: any) => {
+                const ids = new Set<number>(modalForm.employeeIds || []);
+                const nomes = { ...(modalForm.employeeNomes || {}) };
+                if (ids.has(e.id)) { ids.delete(e.id); delete nomes[e.id]; }
+                else { ids.add(e.id); nomes[e.id] = e.nomeCompleto; }
+                setVal({ employeeIds: Array.from(ids), employeeNomes: nomes });
+              };
+              const removerSel = (id: number) => {
+                const ids = (modalForm.employeeIds || []).filter((x: number) => x !== id);
+                const nomes = { ...(modalForm.employeeNomes || {}) }; delete nomes[id];
+                setVal({ employeeIds: ids, employeeNomes: nomes });
+              };
+              const filteredEmps = empAtivos.filter((e: any) => (e.nomeCompleto || "").toLowerCase().includes(empSearch.toLowerCase()));
+              const recalcVencimento = (dataReal: string, meses: number) => {
+                if (dataReal && meses && meses > 0) return addMonthsISO(dataReal, meses);
+                return modalForm.dataVencimento;
+              };
+              const submit = () => {
+                if (!selIds.length) { toast.error("Selecione ao menos um colaborador"); return; }
+                if (!modalForm.dataRealizacao) { toast.error("Data de realização obrigatória"); return; }
+                const payload = {
+                  companyId,
+                  tipo:           modalForm.tipo,
+                  clienteId:      modalForm.clienteId ? parseInt(modalForm.clienteId) : undefined,
+                  clienteNome:    modalForm.clienteNome || undefined,
+                  dataRealizacao: modalForm.dataRealizacao,
+                  dataVencimento: modalForm.dataVencimento || undefined,
+                  evidencia:      modalForm.evidencia || undefined,
+                  observacoes:    modalForm.observacoes || undefined,
+                };
+                if (selIds.length === 1) {
+                  criarMut.mutate({ ...payload, employeeId: selIds[0] });
+                } else {
+                  criarLoteMut.mutate({ ...payload, employeeIds: selIds });
+                }
+              };
+              const isPending = criarMut.isPending || criarLoteMut.isPending;
+              return <>
+                <div className="space-y-3 mt-2">
+                  {/* Seleção de colaboradores (multi) */}
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium">Colaboradores * <span className="text-muted-foreground">(seleção múltipla)</span></label>
+                      <span className="text-[11px] text-indigo-700 font-semibold">{selIds.length} selecionado{selIds.length === 1 ? "" : "s"}</span>
+                    </div>
+                    <div className="relative mt-1">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <input
+                        type="text"
+                        value={empSearch}
+                        onChange={e => setEmpSearch(e.target.value)}
+                        className="w-full border border-gray-200 rounded-md pl-8 pr-3 py-1.5 text-sm"
+                        placeholder="Buscar e marcar colaboradores..."
+                      />
+                    </div>
+
+                    {/* Chips dos selecionados */}
+                    {selIds.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-indigo-50/50 border border-indigo-100 rounded-md">
+                        {selIds.map((id: number) => (
+                          <span key={id} className="inline-flex items-center gap-1 bg-white border border-indigo-200 text-indigo-700 text-[11px] font-medium pl-2 pr-1 py-0.5 rounded-full">
+                            {modalForm.employeeNomes?.[id] || `#${id}`}
+                            <button type="button" onClick={() => removerSel(id)} className="hover:bg-indigo-100 rounded-full p-0.5">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                        <button type="button" onClick={() => setVal({ employeeIds: [], employeeNomes: {} })}
+                          className="text-[10px] text-rose-600 hover:underline ml-1">limpar todos</button>
+                      </div>
+                    )}
+
+                    {/* Lista com checkboxes */}
+                    {(empSearch.length >= 1 || selIds.length === 0) && (
+                      <div className="mt-1 border rounded-md max-h-44 overflow-y-auto bg-white">
+                        {filteredEmps.length > 0 && empSearch.length >= 1 && (
+                          <div className="px-3 py-1.5 bg-slate-50 border-b flex items-center justify-between text-[11px] text-slate-600">
+                            <span>{filteredEmps.length} encontrado{filteredEmps.length === 1 ? "" : "s"}</span>
+                            <button type="button" className="text-indigo-600 hover:underline font-medium"
+                              onClick={() => {
+                                const ids = new Set<number>(modalForm.employeeIds || []);
+                                const nomes = { ...(modalForm.employeeNomes || {}) };
+                                filteredEmps.slice(0, 50).forEach((e: any) => { ids.add(e.id); nomes[e.id] = e.nomeCompleto; });
+                                setVal({ employeeIds: Array.from(ids), employeeNomes: nomes });
+                              }}>
+                              + selecionar todos visíveis
+                            </button>
+                          </div>
+                        )}
+                        {filteredEmps.slice(0, 80).map((e: any) => {
+                          const checked = selIds.includes(e.id);
+                          return (
+                            <label key={e.id} className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer border-b last:border-b-0 transition-colors ${checked ? "bg-indigo-50/70" : "hover:bg-slate-50"}`}>
+                              <input type="checkbox" checked={checked} onChange={() => onPickEmp(e)} className="rounded text-indigo-600" />
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium truncate">{e.nomeCompleto}</div>
+                                <div className="text-[10px] text-muted-foreground">{e.matricula} · {e.funcao}</div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                        {filteredEmps.length === 0 && (
+                          <p className="text-xs text-muted-foreground p-3 text-center">Nenhum colaborador encontrado</p>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-                {modalForm?.employeeId && (
-                  <p className="mt-1 text-xs text-emerald-600 flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" /> {modalForm.employeeName} selecionado
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="text-xs font-medium">Tipo de Integração</label>
-                <div className="flex gap-2 mt-1">
-                  {["externa", "interna"].map(t => (
-                    <button key={t} type="button" onClick={() => setModalForm((f: any) => ({ ...f, tipo: t }))}
-                      className={`flex-1 py-2 rounded-lg border-2 text-xs font-semibold transition-all ${modalForm.tipo === t ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500"}`}>
-                      {t === "externa" ? "Cliente (PJ)" : "Reciclagem Interna"}
-                    </button>
-                  ))}
+
+                  <div>
+                    <label className="text-xs font-medium">Tipo de Integração</label>
+                    <div className="flex gap-2 mt-1">
+                      {["externa", "interna"].map(t => (
+                        <button key={t} type="button" onClick={() => setVal({ tipo: t })}
+                          className={`flex-1 py-2 rounded-lg border-2 text-xs font-semibold transition-all ${modalForm.tipo === t ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-200 text-slate-500"}`}>
+                          {t === "externa" ? "Cliente (PJ)" : "Reciclagem Interna"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <label className="text-xs font-medium">{modalForm.tipo === "externa" ? "Cliente" : "Referência"}</label>
+                      {modalForm.tipo === "externa" ? (
+                        <Select value={modalForm.clienteId} onValueChange={v => {
+                          const c = (allClientes as any[]).find((x: any) => String(x.id) === v);
+                          setVal({ clienteId: v, clienteNome: c?.razaoSocial || "" });
+                        }}>
+                          <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar cliente" /></SelectTrigger>
+                          <SelectContent>
+                            {(allClientes as any[]).filter((c: any) => c.tipo === "PJ").map((c: any) => (
+                              <SelectItem key={c.id} value={String(c.id)}>{c.razaoSocial}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input value={modalForm.clienteNome} onChange={e => setVal({ clienteNome: e.target.value })} className="mt-1" placeholder="Ex: Reciclagem Anual 2025" />
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium">Data de Realização *</label>
+                      <Input type="date" value={modalForm.dataRealizacao}
+                        onChange={e => {
+                          const v = e.target.value;
+                          setVal({ dataRealizacao: v, dataVencimento: recalcVencimento(v, modalForm.validadeMeses || 0) });
+                        }}
+                        className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium">Validade <span className="text-muted-foreground">(período)</span></label>
+                      <Select value={String(modalForm.validadeMeses ?? 0)} onValueChange={v => {
+                        const m = parseInt(v);
+                        setVal({ validadeMeses: m, dataVencimento: recalcVencimento(modalForm.dataRealizacao, m) });
+                      }}>
+                        <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="0">Sem validade definida</SelectItem>
+                          <SelectItem value="3">3 meses</SelectItem>
+                          <SelectItem value="6">6 meses</SelectItem>
+                          <SelectItem value="12">1 ano</SelectItem>
+                          <SelectItem value="24">2 anos</SelectItem>
+                          <SelectItem value="36">3 anos</SelectItem>
+                          <SelectItem value="60">5 anos</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-xs font-medium flex items-center gap-1.5">
+                        Data de Validade
+                        {modalForm.validadeMeses > 0 && modalForm.dataRealizacao && (
+                          <span className="text-[10px] text-emerald-600 font-normal">(preenchida automaticamente — você pode ajustar)</span>
+                        )}
+                      </label>
+                      <Input type="date" value={modalForm.dataVencimento}
+                        onChange={e => setVal({ dataVencimento: e.target.value, validadeMeses: 0 })}
+                        className="mt-1" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-xs font-medium">Evidência / Protocolo</label>
+                      <Input value={modalForm.evidencia} onChange={e => setVal({ evidencia: e.target.value })} className="mt-1" placeholder="Número, link ou documento" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-xs font-medium">Observações</label>
+                      <Textarea value={modalForm.observacoes} onChange={e => setVal({ observacoes: e.target.value })} rows={2} className="mt-1" />
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <label className="text-xs font-medium">{modalForm.tipo === "externa" ? "Cliente" : "Referência"}</label>
-                  {modalForm.tipo === "externa" ? (
-                    <Select value={modalForm.clienteId} onValueChange={v => {
-                      const c = (allClientes as any[]).find((x: any) => String(x.id) === v);
-                      setModalForm((f: any) => ({ ...f, clienteId: v, clienteNome: c?.razaoSocial || "" }));
-                    }}>
-                      <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar cliente" /></SelectTrigger>
-                      <SelectContent>
-                        {(allClientes as any[]).filter((c: any) => c.tipo === "PJ").map((c: any) => (
-                          <SelectItem key={c.id} value={String(c.id)}>{c.razaoSocial}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input value={modalForm.clienteNome} onChange={e => setModalForm((f: any) => ({ ...f, clienteNome: e.target.value }))} className="mt-1" placeholder="Ex: Reciclagem Anual 2025" />
-                  )}
-                </div>
-                <div>
-                  <label className="text-xs font-medium">Data de Realização *</label>
-                  <Input type="date" value={modalForm.dataRealizacao} onChange={e => setModalForm((f: any) => ({ ...f, dataRealizacao: e.target.value }))} className="mt-1" />
-                </div>
-                <div>
-                  <label className="text-xs font-medium">Data de Validade</label>
-                  <Input type="date" value={modalForm.dataVencimento} onChange={e => setModalForm((f: any) => ({ ...f, dataVencimento: e.target.value }))} className="mt-1" />
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs font-medium">Evidência / Protocolo</label>
-                  <Input value={modalForm.evidencia} onChange={e => setModalForm((f: any) => ({ ...f, evidencia: e.target.value }))} className="mt-1" placeholder="Número, link ou documento" />
-                </div>
-                <div className="col-span-2">
-                  <label className="text-xs font-medium">Observações</label>
-                  <Textarea value={modalForm.observacoes} onChange={e => setModalForm((f: any) => ({ ...f, observacoes: e.target.value }))} rows={2} className="mt-1" />
-                </div>
-              </div>
-            </div>
-            <DialogFooter className="mt-4">
-              <Button variant="outline" onClick={() => { setModalForm(null); setEmpSearch(""); }}>Cancelar</Button>
-              <Button
-                disabled={!modalForm.employeeId || !modalForm.dataRealizacao || criarMut.isPending}
-                onClick={() => {
-                  if (!modalForm.employeeId) { toast.error("Selecione um colaborador"); return; }
-                  if (!modalForm.dataRealizacao) { toast.error("Data de realização obrigatória"); return; }
-                  criarMut.mutate({
-                    companyId,
-                    employeeId: modalForm.employeeId,
-                    tipo:           modalForm.tipo,
-                    clienteId:      modalForm.clienteId ? parseInt(modalForm.clienteId) : undefined,
-                    clienteNome:    modalForm.clienteNome || undefined,
-                    dataRealizacao: modalForm.dataRealizacao,
-                    dataVencimento: modalForm.dataVencimento || undefined,
-                    evidencia:      modalForm.evidencia || undefined,
-                    observacoes:    modalForm.observacoes || undefined,
-                  });
-                }}
-                className="bg-indigo-600 hover:bg-indigo-700 gap-1"
-              >
-                {criarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                Registrar
-              </Button>
-            </DialogFooter>
+                <DialogFooter className="mt-4">
+                  <Button variant="outline" onClick={() => { setModalForm(null); setEmpSearch(""); }}>Cancelar</Button>
+                  <Button
+                    disabled={!selIds.length || !modalForm.dataRealizacao || isPending}
+                    onClick={submit}
+                    className="bg-indigo-600 hover:bg-indigo-700 gap-1"
+                  >
+                    {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    {selIds.length > 1 ? `Registrar ${selIds.length} integrações` : "Registrar"}
+                  </Button>
+                </DialogFooter>
+              </>;
+            })()}
           </DialogContent>
         </Dialog>
       )}

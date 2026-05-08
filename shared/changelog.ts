@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1429,
+    titulo: "Controle de Integrações — cadastro em lote + cálculo automático da data de validade",
+    descricao: "Modal 'Registrar Integração de Pessoal' (Controle de Documentos → Integrações) reformulado para acelerar o cadastro: (1) Seleção MÚLTIPLA de colaboradores via checkbox — busca filtrada com botão '+ selecionar todos visíveis' (até 50 por vez), chips dos selecionados em uma área rolável com X para remover individualmente e link 'limpar todos'. Substitui a antiga seleção um-por-um. (2) Novo campo 'Validade (período)' com presets prontos: 3 meses, 6 meses, 1 ano (padrão), 2 anos, 3 anos, 5 anos ou 'sem validade definida'. Ao escolher um período, a 'Data de Validade' é preenchida AUTOMATICAMENTE somando os meses à 'Data de Realização' (e recalcula a cada mudança). Editar a data manualmente desliga o cálculo automático. Trata transbordo de mês corretamente (ex.: 31/jan + 1 mês → 28 ou 29/fev). (3) Backend: nova mutation integracoes.criarLote que insere todas as integrações em uma única operação (mais rápido e atômico que N chamadas). Botão de submit muda dinamicamente para 'Registrar N integrações' quando há mais de um selecionado.",
+    tipo: "feature",
+    modulos: "Controle de Integrações,Documentos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 19:00:00",
+  },
+  {
     version: 1428,
     titulo: "Portal do Cliente — modal 'Gerenciar acessos' redesenhado + fix coluna cliente_id",
     descricao: "Modal de gestão de acessos (/clientes/portal → Gerenciar acessos) redesenhado para ser mais dinâmico e fácil de cadastrar: (a) header com gradiente azul, ícone, razão social e CNPJ formatado; (b) barra de progresso visual mostrando 'X de 4 recomendados' (verde até o limite, âmbar quando atingido); (c) formulário de cadastro rápido FIXO no topo, com autoFocus no nome e submit por Enter — adicionar usuário em 2 cliques; (d) lista de usuários em CARDS (não mais tabela): avatar circular com iniciais coloridas por status (verde=ativo, âmbar=aguardando 1º acesso, cinza=inativo), nome, e-mail e último login em uma linha limpa; (e) ações como ícones (Reenviar/Desativar/Reativar/Remover) com tooltip, sem ocupar espaço; (f) empty state ilustrado quando ainda não há usuários; (g) usuários inativos ficam levemente esmaecidos e ordenados depois dos ativos. FIX importante: a coluna portal_credentials.cliente_id (introduzida na Rev. 1427) não havia sido aplicada no banco — o ColFix foi pulado pelo guard de versão e o modal carregava com erro 'column \"cliente_id\" does not exist'. Coluna criada manualmente no Neon e índice pc_tipo_cliente também.",
