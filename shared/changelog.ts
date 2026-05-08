@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1421,
+    titulo: "Aprovações de Parceiros: mesmo seletor visual de competência (Ano + meses coloridos)",
+    descricao: "PADRONIZAÇÃO: a tela de Aprovações de Parceiros agora usa o mesmo seletor de competência da tela de Lançamentos: linha com 12 meses + setas para mudar de ano. Cada mês fica colorido conforme o status dos lançamentos daquela competência (verde = todos aprovados, âmbar = tem pendente, vermelho = tem rejeitado, cinza = sem dados), com badge roxo mostrando a quantidade. Tooltip rico com detalhamento por status. Substitui o antigo input <month> por um controle visual muito mais informativo.",
+    tipo: "melhoria",
+    modulos: "Parceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 18:30:00",
+  },
+  {
     version: 1420,
     titulo: "Lançamentos Parceiros: meses no seletor coloridos por status (verde/âmbar/vermelho) + contador",
     descricao: "MELHORIA visual no seletor de competência da tela de Lançamentos: cada mês agora tem cor própria baseada no mix de status dos lançamentos daquela competência: VERDE quando todos aprovados, ÂMBAR quando há pendentes, VERMELHO quando há rejeitados, e cinza quando não há lançamentos. Cada mês com dados também ganha um badge roxo no canto superior direito mostrando a QUANTIDADE de lançamentos. Ao passar o mouse, o tooltip mostra qtd, valor total e o detalhamento (✓ aprovados, ⏳ pendentes, ✗ rejeitados). Adicionada legenda explicativa abaixo. A consulta busca todos os lançamentos do ano selecionado para popular as cores.",

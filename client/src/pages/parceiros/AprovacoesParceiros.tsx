@@ -15,8 +15,15 @@ import { toast } from "sonner";
 import {
   CheckCircle, XCircle, AlertTriangle, Search, Clock, Eye,
   ThumbsUp, ThumbsDown, Receipt, DollarSign, User, Calendar,
-  Store, Filter, FileText, ShoppingCart, RotateCcw, MessageSquare
+  Store, Filter, FileText, ShoppingCart, RotateCcw, MessageSquare,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
+
+const MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const fmtBRL = (v: number | string) => {
+  const n = typeof v === "string" ? parseFloat(v || "0") : Number(v || 0);
+  return (Number.isFinite(n) ? n : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+};
 
 // Verifica se uma `dataCompra` (YYYY-MM-DD ou ISO) pertence ao intervalo
 // [cycleStart, cycleEnd] do ciclo retornado pelo backend.
@@ -85,6 +92,46 @@ export default function AprovacoesParceiros() {
     { companyId: companyId ?? 0 },
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
+
+  // === Seletor visual de competência (Ano + 12 meses coloridos) ===
+  const compAno = useMemo(() => {
+    const [y] = (competencia || "").split("-");
+    return Number(y) || new Date().getFullYear();
+  }, [competencia]);
+  const compMes = useMemo(() => {
+    const [, m] = (competencia || "").split("-");
+    return Number(m) || new Date().getMonth() + 1;
+  }, [competencia]);
+  const anoIni = `${compAno - 1}-12-16`;
+  const anoFim = `${compAno}-12-15`;
+  const { data: lancamentosAno = [] } = trpc.parceiros.lancamentos.list.useQuery(
+    {
+      companyId: companyId ?? 0,
+      dataInicio: anoIni,
+      dataFim: anoFim,
+      parceiroId: filtroParceiroId !== "todos" ? parseInt(filtroParceiroId) : undefined,
+    },
+    { enabled: companyId > 0 || companyIds.length > 0 }
+  );
+  const resumoPorMes = useMemo(() => {
+    const mapa = new Map<number, { qtd: number; total: number; pend: number; aprov: number; rej: number }>();
+    for (const l of lancamentosAno as any[]) {
+      const iso = String(l.dataCompra || "").slice(0, 10);
+      if (!iso) continue;
+      const [yS, mS, dS] = iso.split("-");
+      let y = Number(yS); let m = Number(mS); const d = Number(dS);
+      if (d >= 16) { m += 1; if (m > 12) { m = 1; y += 1; } }
+      if (y !== compAno) continue;
+      const cur = mapa.get(m) || { qtd: 0, total: 0, pend: 0, aprov: 0, rej: 0 };
+      cur.qtd += 1;
+      cur.total += parseFloat(l.valor || "0");
+      if (l.status === "pendente") cur.pend += 1;
+      else if (l.status === "aprovado") cur.aprov += 1;
+      else if (l.status === "rejeitado") cur.rej += 1;
+      mapa.set(m, cur);
+    }
+    return mapa;
+  }, [lancamentosAno, compAno]);
 
   // Janela do ciclo (cycleStart..cycleEnd) e dia de corte da empresa
   // calculados pelo backend — mesma fonte de verdade do filtro de listagem.
@@ -216,9 +263,87 @@ export default function AprovacoesParceiros() {
             </h1>
             <p className="text-sm text-muted-foreground mt-1">Aprovação de lançamentos de conveniados para desconto em folha</p>
           </div>
-          <div className="flex items-center gap-3">
-            <label className="text-sm font-medium">Competência:</label>
-            <Input type="month" value={competencia} onChange={(e) => setCompetencia(e.target.value)} className="w-[180px]" />
+          <div className="text-sm text-muted-foreground">
+            Competência atual:{" "}
+            <span className="font-semibold text-foreground">
+              {MESES_ABREV[compMes - 1]}/{compAno}
+            </span>
+          </div>
+        </div>
+
+        {/* Seletor de Competência (Ano + Meses coloridos) */}
+        <div className="rounded-xl border bg-card p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCompetencia(`${compAno - 1}-${String(compMes).padStart(2, "0")}`)}
+                className="p-1 rounded hover:bg-muted"
+                title="Ano anterior"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="font-bold text-base flex items-center gap-1.5">
+                <Calendar className="h-4 w-4 text-purple-500" />
+                {compAno}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCompetencia(`${compAno + 1}-${String(compMes).padStart(2, "0")}`)}
+                className="p-1 rounded hover:bg-muted"
+                title="Próximo ano"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              Ciclo da competência selecionada (16/{String(((compMes - 2 + 12) % 12) + 1).padStart(2, "0")} a 15/{String(compMes).padStart(2, "0")}/{compAno})
+            </span>
+          </div>
+          <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+            {MESES_ABREV.map((nome, i) => {
+              const m = i + 1;
+              const sel = m === compMes;
+              const hoje = new Date();
+              const atual = compAno === hoje.getFullYear() && m === hoje.getMonth() + 1;
+              const info = resumoPorMes.get(m);
+              const temDados = !!info && info.qtd > 0;
+              let corClasse = "bg-card text-foreground border-border hover:bg-muted";
+              if (sel) {
+                corClasse = "bg-purple-500 text-white border-purple-600 ring-2 ring-purple-300";
+              } else if (temDados) {
+                if (info!.rej > 0) corClasse = "bg-red-50 text-red-700 border-red-300 hover:bg-red-100";
+                else if (info!.pend > 0) corClasse = "bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100";
+                else corClasse = "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100";
+              } else if (atual) {
+                corClasse = "bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100";
+              }
+              const tooltip = temDados
+                ? `${nome}/${compAno}: ${info!.qtd} lanç. — ${fmtBRL(info!.total)} (✓${info!.aprov} ⏳${info!.pend} ✗${info!.rej})`
+                : `Competência ${nome}/${compAno} (sem lançamentos)`;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setCompetencia(`${compAno}-${String(m).padStart(2, "0")}`)}
+                  className={`relative px-2 py-1.5 rounded-md text-xs font-medium border transition-colors ${corClasse}`}
+                  title={tooltip}
+                >
+                  {nome}
+                  {temDados && !sel && (
+                    <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-purple-600 text-white text-[10px] font-bold flex items-center justify-center shadow">
+                      {info!.qtd}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 mt-2 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-200 border border-emerald-300"></span>Todos aprovados</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-200 border border-amber-300"></span>Tem pendente</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-200 border border-red-300"></span>Tem rejeitado</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-purple-500"></span>Selecionado</span>
           </div>
         </div>
 
