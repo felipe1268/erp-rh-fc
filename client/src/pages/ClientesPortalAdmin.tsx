@@ -375,7 +375,7 @@ export default function ClientesPortalAdmin() {
 
         {/* Modal: Gerenciar acessos do cliente */}
         <Dialog open={!!gerenciarTarget} onOpenChange={(o) => { if (!o) { setGerenciarTarget(null); setResultadoAcesso(null); } }}>
-          <DialogContent className="max-w-3xl bg-white p-0 overflow-hidden gap-0">
+          <DialogContent className="!max-w-[96vw] w-[96vw] h-[94vh] sm:!max-w-[1200px] sm:w-[1200px] sm:h-[88vh] bg-white p-0 overflow-hidden gap-0 flex flex-col">
             {gerenciarTarget && (() => {
               const submitNovo = () => {
                 if (!novoNome.trim()) { toast.error("Informe o nome do usuário"); return; }
@@ -395,85 +395,99 @@ export default function ClientesPortalAdmin() {
               return (
                 <>
                   {/* Header com gradiente */}
-                  <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white px-6 py-5">
+                  <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white px-8 py-5 shrink-0">
                     <DialogHeader className="space-y-0">
-                      <div className="flex items-start gap-3">
-                        <div className="w-11 h-11 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0">
-                          <Users className="w-5 h-5" />
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0">
+                          <Users className="w-6 h-6" />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <DialogTitle className="text-white text-base font-semibold leading-tight truncate pr-8">
+                        <div className="flex-1 min-w-0 pr-10">
+                          <p className="text-[11px] text-blue-100 uppercase tracking-wider font-semibold mb-0.5">Acessos do Portal do Cliente</p>
+                          <DialogTitle className="text-white text-lg font-semibold leading-tight truncate">
                             {gerenciarTarget.razaoSocial}
                           </DialogTitle>
-                          <p className="text-xs text-blue-100 mt-0.5 font-mono">
+                          <p className="text-xs text-blue-100 mt-1 font-mono">
                             {fmtCNPJ(gerenciarTarget.cnpj || gerenciarTarget.cpf) || <span className="text-rose-200">CNPJ/CPF não cadastrado</span>}
                           </p>
                         </div>
+                        <div className="hidden sm:flex flex-col items-end shrink-0 min-w-[200px]">
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-3xl font-bold tabular-nums leading-none">{ativosDoTarget}</span>
+                            <span className="text-sm text-blue-100">/ {LIMITE_SUGERIDO}</span>
+                          </div>
+                          <p className="text-[10px] text-blue-100 uppercase tracking-wider mt-1">usuários ativos</p>
+                          <div className="h-1.5 w-full bg-white/20 rounded-full overflow-hidden mt-2">
+                            <div className={`h-full ${corBarra} transition-all`} style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
                       </div>
                     </DialogHeader>
-                    {/* Contador visual */}
-                    <div className="mt-4 flex items-center gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-blue-100">Usuários ativos no portal</span>
-                          <span className="font-bold tabular-nums">{ativosDoTarget} de {LIMITE_SUGERIDO} <span className="opacity-70 font-normal">recomendados</span></span>
-                        </div>
-                        <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
-                          <div className={`h-full ${corBarra} transition-all`} style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    </div>
                   </div>
 
-                  <div className="px-6 py-5 max-h-[65vh] overflow-y-auto space-y-5">
-                    {/* Form de cadastro rápido — sempre visível no topo */}
-                    <div className="border rounded-xl bg-gradient-to-br from-blue-50/60 to-white p-4">
-                      <div className="flex items-center gap-2 mb-3">
-                        <UserPlus className="w-4 h-4 text-blue-600" />
-                        <h4 className="text-sm font-semibold text-slate-800">Cadastrar novo usuário</h4>
-                        {atingiuLimite && (
-                          <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 text-[10px] gap-1">
-                            <AlertCircle className="w-3 h-3" /> limite recomendado atingido
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Conteúdo: 2 colunas em telas grandes */}
+                  <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-0 overflow-hidden">
+                    {/* COLUNA ESQUERDA: cadastro */}
+                    <div className="border-r bg-slate-50/40 p-6 overflow-y-auto">
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                          <UserPlus className="w-4 h-4 text-blue-700" />
+                        </div>
                         <div>
-                          <Label className="text-xs text-slate-600">Nome completo</Label>
-                          <Input className="mt-1 h-10" autoFocus value={novoNome} onChange={(e) => setNovoNome(e.target.value)}
+                          <h4 className="text-sm font-semibold text-slate-800">Cadastrar novo usuário</h4>
+                          <p className="text-[11px] text-slate-500">Os campos são salvos imediatamente.</p>
+                        </div>
+                      </div>
+
+                      {atingiuLimite && (
+                        <div className="mb-3 bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex items-start gap-2 text-xs text-amber-800">
+                          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                          <div>Limite recomendado de {LIMITE_SUGERIDO} acessos atingido. Você ainda pode adicionar mais — desative algum se preferir.</div>
+                        </div>
+                      )}
+
+                      <div className="space-y-3">
+                        <div>
+                          <Label className="text-xs text-slate-600 font-medium">Nome completo *</Label>
+                          <Input className="mt-1 h-10 bg-white" autoFocus value={novoNome} onChange={(e) => setNovoNome(e.target.value)}
                             onKeyDown={onKeyDown} placeholder="Ex.: João da Silva" />
                         </div>
                         <div>
-                          <Label className="text-xs text-slate-600">E-mail</Label>
-                          <Input className="mt-1 h-10" type="email" value={novoEmail} onChange={(e) => setNovoEmail(e.target.value)}
+                          <Label className="text-xs text-slate-600 font-medium">E-mail *</Label>
+                          <Input className="mt-1 h-10 bg-white" type="email" value={novoEmail} onChange={(e) => setNovoEmail(e.target.value)}
                             onKeyDown={onKeyDown} placeholder="usuario@empresa.com" />
                         </div>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 mt-3 flex-wrap">
-                        <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
-                          <input type="checkbox" checked={enviarEmail} onChange={(e) => setEnviarEmail(e.target.checked)} className="rounded" />
-                          <Mail className="w-3.5 h-3.5 text-slate-400" />
-                          Enviar e-mail de boas-vindas com a senha provisória
+
+                        <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer select-none bg-white border rounded-lg p-2.5 hover:bg-slate-50">
+                          <input type="checkbox" checked={enviarEmail} onChange={(e) => setEnviarEmail(e.target.checked)} className="rounded mt-0.5" />
+                          <div className="flex-1">
+                            <div className="font-medium flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-slate-500" /> Enviar e-mail de boas-vindas</div>
+                            <div className="text-[11px] text-slate-500 mt-0.5">O usuário receberá a senha provisória por e-mail.</div>
+                          </div>
                         </label>
-                        <Button onClick={submitNovo} disabled={gerarMut.isPending} className="bg-blue-600 hover:bg-blue-700 gap-2 h-9">
+
+                        <Button onClick={submitNovo} disabled={gerarMut.isPending} className="bg-blue-600 hover:bg-blue-700 gap-2 h-11 w-full text-sm">
                           {gerarMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                           Adicionar acesso
                         </Button>
+                        <p className="text-[11px] text-slate-400 text-center">Dica: pressione <kbd className="px-1 py-0.5 bg-white border border-slate-200 rounded text-[10px] font-mono">Enter</kbd> em qualquer campo para adicionar.</p>
                       </div>
-                      <p className="text-[11px] text-slate-400 mt-2">Dica: pressione <kbd className="px-1 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-mono">Enter</kbd> para adicionar rapidamente.</p>
 
                       {resultadoAcesso && (
-                        <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm space-y-1.5 animate-in fade-in slide-in-from-top-1">
+                        <div className="mt-4 bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm space-y-2 animate-in fade-in slide-in-from-top-1">
                           <div className="flex items-center gap-2 text-emerald-700 font-semibold">
-                            <CheckCircle2 className="w-4 h-4" /> Acesso {resultadoAcesso.acao === "reenviado" ? "atualizado" : "criado"} com sucesso!
+                            <CheckCircle2 className="w-4 h-4" /> Acesso {resultadoAcesso.acao === "reenviado" ? "atualizado" : "criado"}!
                           </div>
-                          <div className="text-xs flex items-center gap-2 flex-wrap">
-                            <b>Senha provisória:</b>
-                            <code className="bg-amber-100 px-2 py-0.5 rounded font-mono select-all">{resultadoAcesso.senhaTemporaria}</code>
-                            <button onClick={() => { navigator.clipboard.writeText(resultadoAcesso.senhaTemporaria); toast.success("Copiada!"); }}
-                              className="text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 text-xs"><Copy className="w-3.5 h-3.5" /> copiar</button>
+                          <div className="text-xs">
+                            <div className="text-slate-600 mb-1">Senha provisória:</div>
+                            <div className="flex items-center gap-2">
+                              <code className="bg-amber-100 border border-amber-200 px-2 py-1 rounded font-mono text-sm select-all flex-1">{resultadoAcesso.senhaTemporaria}</code>
+                              <button onClick={() => { navigator.clipboard.writeText(resultadoAcesso.senhaTemporaria); toast.success("Copiada!"); }}
+                                className="text-blue-600 hover:bg-blue-50 inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-blue-200">
+                                <Copy className="w-3.5 h-3.5" /> copiar
+                              </button>
+                            </div>
                           </div>
-                          <div className="text-xs text-slate-600">
+                          <div className="text-xs">
                             {resultadoAcesso.emailEnviado
                               ? <span className="text-emerald-700">✓ E-mail enviado para {resultadoAcesso.emailDestino}</span>
                               : resultadoAcesso.emailErro
@@ -484,18 +498,20 @@ export default function ClientesPortalAdmin() {
                       )}
                     </div>
 
-                    {/* Lista de usuários — cards */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Usuários cadastrados {acessosDoTarget.length > 0 && <span className="text-slate-400 normal-case font-normal">· {acessosDoTarget.length}</span>}
-                        </h4>
+                    {/* COLUNA DIREITA: lista */}
+                    <div className="p-6 overflow-y-auto">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-800">Usuários cadastrados</h4>
+                          <p className="text-[11px] text-slate-500">{acessosDoTarget.length} no total · {ativosDoTarget} ativo{ativosDoTarget === 1 ? "" : "s"}</p>
+                        </div>
                       </div>
+
                       {acessosDoTarget.length === 0 ? (
-                        <div className="border border-dashed border-slate-200 rounded-xl p-8 text-center bg-slate-50/50">
-                          <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                        <div className="border border-dashed border-slate-200 rounded-xl p-12 text-center bg-slate-50/50">
+                          <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                           <p className="text-sm text-slate-500 font-medium">Nenhum usuário cadastrado ainda</p>
-                          <p className="text-xs text-slate-400 mt-1">Use o formulário acima para criar o primeiro acesso.</p>
+                          <p className="text-xs text-slate-400 mt-1">Use o formulário ao lado para criar o primeiro acesso.</p>
                         </div>
                       ) : (
                         <div className="space-y-2">
@@ -511,21 +527,21 @@ export default function ClientesPortalAdmin() {
                                 ? aguardando ? "bg-amber-500" : "bg-emerald-600"
                                 : "bg-slate-400";
                               return (
-                                <div key={a.id} className={`border rounded-xl p-3 flex items-center gap-3 transition hover:shadow-sm ${ativo ? "bg-white" : "bg-slate-50/60 opacity-75"}`}>
-                                  <div className={`w-10 h-10 rounded-full ${corAvatar} text-white flex items-center justify-center text-sm font-semibold shrink-0`}>
+                                <div key={a.id} className={`border rounded-xl p-4 flex items-center gap-4 transition hover:shadow-md hover:border-slate-300 ${ativo ? "bg-white" : "bg-slate-50/60 opacity-75"}`}>
+                                  <div className={`w-12 h-12 rounded-full ${corAvatar} text-white flex items-center justify-center text-base font-semibold shrink-0`}>
                                     {iniciais}
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-semibold text-slate-800 truncate">{a.nomeResponsavel || <span className="italic text-slate-400">sem nome</span>}</span>
+                                      <span className="font-semibold text-slate-800 text-sm truncate">{a.nomeResponsavel || <span className="italic text-slate-400">sem nome</span>}</span>
                                       {ativo
                                         ? (aguardando
                                           ? <Badge className="bg-amber-500 text-[10px]">Aguardando 1º acesso</Badge>
                                           : <Badge className="bg-emerald-600 text-[10px]">Ativo</Badge>)
                                         : <Badge variant="outline" className="text-rose-600 border-rose-200 text-[10px]">Inativo</Badge>}
                                     </div>
-                                    <div className="text-xs text-slate-500 flex items-center gap-3 mt-0.5 flex-wrap">
-                                      <span className="inline-flex items-center gap-1 truncate"><Mail className="w-3 h-3" />{a.emailResponsavel || "—"}</span>
+                                    <div className="text-xs text-slate-500 flex items-center gap-4 mt-1 flex-wrap">
+                                      <span className="inline-flex items-center gap-1 truncate"><Mail className="w-3 h-3 text-slate-400" />{a.emailResponsavel || "—"}</span>
                                       <span className="inline-flex items-center gap-1 text-slate-400">
                                         último login: {a.ultimoLogin ? fmtBR(a.ultimoLogin) : "nunca"}
                                       </span>
@@ -534,7 +550,7 @@ export default function ClientesPortalAdmin() {
                                   <div className="flex items-center gap-1 shrink-0">
                                     {ativo ? (
                                       <>
-                                        <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:bg-blue-50" title="Reenviar senha provisória"
+                                        <Button size="icon" variant="ghost" className="h-9 w-9 text-blue-600 hover:bg-blue-50" title="Reenviar senha provisória"
                                           disabled={gerarMut.isPending}
                                           onClick={() => {
                                             if (!a.emailResponsavel) { toast.error("Acesso sem e-mail cadastrado."); return; }
@@ -548,18 +564,18 @@ export default function ClientesPortalAdmin() {
                                           }}>
                                           <RefreshCw className="w-4 h-4" />
                                         </Button>
-                                        <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:bg-amber-50" title="Desativar"
+                                        <Button size="icon" variant="ghost" className="h-9 w-9 text-amber-600 hover:bg-amber-50" title="Desativar"
                                           onClick={() => { if (confirm("Desativar este acesso? O usuário não conseguirá mais entrar.")) desativarMut.mutate({ id: a.id }); }}>
                                           <Lock className="w-4 h-4" />
                                         </Button>
                                       </>
                                     ) : (
-                                      <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-700 hover:bg-emerald-50" title="Reativar"
+                                      <Button size="icon" variant="ghost" className="h-9 w-9 text-emerald-700 hover:bg-emerald-50" title="Reativar"
                                         onClick={() => reativarMut.mutate({ id: a.id, companyId })}>
                                         <UnlockKeyhole className="w-4 h-4" />
                                       </Button>
                                     )}
-                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-600 hover:bg-rose-50" title="Remover definitivamente"
+                                    <Button size="icon" variant="ghost" className="h-9 w-9 text-rose-600 hover:bg-rose-50" title="Remover definitivamente"
                                       onClick={() => { if (confirm("Remover este acesso DEFINITIVAMENTE? Esta ação não pode ser desfeita.")) removerMut.mutate({ id: a.id, companyId }); }}>
                                       <Trash2 className="w-4 h-4" />
                                     </Button>
@@ -572,7 +588,8 @@ export default function ClientesPortalAdmin() {
                     </div>
                   </div>
 
-                  <div className="border-t bg-slate-50 px-6 py-3 flex justify-end">
+                  <div className="border-t bg-slate-50 px-6 py-3 flex items-center justify-between shrink-0">
+                    <p className="text-xs text-slate-500">Limite recomendado: <b>{LIMITE_SUGERIDO}</b> acessos por cliente.</p>
                     <Button variant="outline" onClick={() => { setGerenciarTarget(null); setResultadoAcesso(null); }}>Fechar</Button>
                   </div>
                 </>

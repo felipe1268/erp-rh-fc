@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1430,
+    titulo: "Portal do Cliente — modal 'Gerenciar acessos' em tela cheia (2 colunas)",
+    descricao: "O modal de gestão de acessos do Portal do Cliente foi ampliado para usar praticamente toda a tela (até 1200px de largura por 88vh de altura) e reorganizado em DUAS COLUNAS para aproveitar melhor o espaço: (1) COLUNA ESQUERDA — Cadastro: formulário de novo usuário com Nome e E-mail empilhados (mais espaço para digitar), checkbox 'Enviar e-mail de boas-vindas' como bloco clicável com descrição, botão grande 'Adicionar acesso' (full-width). Quando uma senha é gerada, o card de resultado aparece logo abaixo com a senha em destaque e botão copiar. (2) COLUNA DIREITA — Lista: cards de usuários com avatar maior (12×12), nome destacado, e-mail e último login lado a lado, ações como ícones (40×40) com hover. (3) HEADER ampliado: ícone, título 'Acessos do Portal do Cliente', razão social em fonte maior, CNPJ em monospace e — à direita do header — contador grande '1/4' (ou similar) com 'usuários ativos' e barra de progresso colorida (verde/âmbar). (4) FOOTER reformulado: lembrete do limite à esquerda + botão Fechar à direita. Em telas pequenas as colunas viram empilhadas (responsivo). Sem mudanças no backend.",
+    tipo: "melhoria",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 19:30:00",
+  },
+  {
     version: 1429,
     titulo: "Controle de Integrações — cadastro em lote + cálculo automático da data de validade",
     descricao: "Modal 'Registrar Integração de Pessoal' (Controle de Documentos → Integrações) reformulado para acelerar o cadastro: (1) Seleção MÚLTIPLA de colaboradores via checkbox — busca filtrada com botão '+ selecionar todos visíveis' (até 50 por vez), chips dos selecionados em uma área rolável com X para remover individualmente e link 'limpar todos'. Substitui a antiga seleção um-por-um. (2) Novo campo 'Validade (período)' com presets prontos: 3 meses, 6 meses, 1 ano (padrão), 2 anos, 3 anos, 5 anos ou 'sem validade definida'. Ao escolher um período, a 'Data de Validade' é preenchida AUTOMATICAMENTE somando os meses à 'Data de Realização' (e recalcula a cada mudança). Editar a data manualmente desliga o cálculo automático. Trata transbordo de mês corretamente (ex.: 31/jan + 1 mês → 28 ou 29/fev). (3) Backend: nova mutation integracoes.criarLote que insere todas as integrações em uma única operação (mais rápido e atômico que N chamadas). Botão de submit muda dinamicamente para 'Registrar N integrações' quando há mais de um selecionado.",
