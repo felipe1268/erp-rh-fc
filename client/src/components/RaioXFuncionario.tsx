@@ -441,7 +441,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
     if (horasExtras.length > 0) {
       html += `<div class="section"><div class="section-title">\u26A1 Horas Extras (${horasExtras.length}) \u2014 Total: ${totalHEHoras.toFixed(1)}h | Custo: ${formatSalario(String(totalHEValor.toFixed(2)))}</div><table><thead><tr><th>Compet\u00EAncia</th><th>Horas</th><th>% Acr\u00E9scimo</th><th>Valor/Hora</th><th>Valor Total</th><th>Descri\u00E7\u00E3o</th></tr></thead><tbody>`;
       horasExtras.forEach((h: any) => {
-        html += `<tr><td>${h.mesReferencia}</td><td style="text-align:right;font-weight:600">${h.quantidadeHoras}h</td><td style="text-align:right">${h.percentualAcrescimo || "50"}%</td><td style="text-align:right">${formatSalario(h.valorHoraBase)}</td><td style="text-align:right;font-weight:700;color:#dc2626">${formatSalario(h.valorTotal)}</td><td>${h.descricao || "-"}</td></tr>`;
+        html += `<tr><td>${h.mesReferencia ? h.mesReferencia.split("-").reverse().join("/") : "—"}</td><td style="text-align:right;font-weight:600">${h.quantidadeHoras}h</td><td style="text-align:right">${h.percentualAcrescimo || "50"}%</td><td style="text-align:right">${formatSalario(h.valorHoraBase)}</td><td style="text-align:right;font-weight:700;color:#dc2626">${formatSalario(h.valorTotal)}</td><td>${h.descricao || "-"}</td></tr>`;
       });
       html += `</tbody></table></div>`;
     }
@@ -503,7 +503,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
         const perc = typeof p.assiduidadePerc === "number" ? p.assiduidadePerc : 100;
         const corP = perc >= 95 ? "#059669" : perc >= 85 ? "#d97706" : "#dc2626";
         const corF = (p.faltas || 0) > 0 ? "#dc2626" : "#9ca3af";
-        html += `<tr><td>${p.mesReferencia}</td><td style="text-align:center">${p.diasTrabalhados}</td><td style="text-align:center;color:${corF};font-weight:600">${p.faltas || 0}</td><td style="text-align:center;color:${corP};font-weight:700">${perc}%</td><td style="text-align:center">${p.ajustesManuais || 0}</td></tr>`;
+        html += `<tr><td>${p.mesReferencia ? p.mesReferencia.split("-").reverse().join("/") : "—"}</td><td style="text-align:center">${p.diasTrabalhados}</td><td style="text-align:center;color:${corF};font-weight:600">${p.faltas || 0}</td><td style="text-align:center;color:${corP};font-weight:700">${perc}%</td><td style="text-align:center">${p.ajustesManuais || 0}</td></tr>`;
       });
       html += `</tbody></table></div>`;
     }
@@ -512,7 +512,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
     if (folhaPagamento.length > 0) {
       html += `<div class="section"><div class="section-title">\u{1F4B0} Folha de Pagamento (${folhaPagamento.length})</div><table><thead><tr><th>Compet\u00EAncia</th><th>Sal\u00E1rio Base</th><th>H. Extras</th><th>Descontos</th><th>L\u00EDquido</th><th>Status</th></tr></thead><tbody>`;
       folhaPagamento.forEach((f: any) => {
-        html += `<tr><td>${f.mesReferencia}</td><td style="text-align:right">${formatSalario(f.salarioBase)}</td><td style="text-align:right;color:#166534">${formatSalario(f.horasExtrasValor)}</td><td style="text-align:right;color:#dc2626">${formatSalario(f.totalDescontos)}</td><td style="text-align:right;font-weight:700;font-size:11px">${formatSalario(f.salarioLiquido)}</td><td>${f.status}</td></tr>`;
+        html += `<tr><td>${f.mesReferencia ? f.mesReferencia.split("-").reverse().join("/") : "—"}</td><td style="text-align:right">${formatSalario(f.salarioBase)}</td><td style="text-align:right;color:#166534">${formatSalario(f.horasExtrasValor)}</td><td style="text-align:right;color:#dc2626">${formatSalario(f.totalDescontos)}</td><td style="text-align:right;font-weight:700;font-size:11px">${formatSalario(f.salarioLiquido)}</td><td>${f.status}</td></tr>`;
       });
       html += `</tbody></table></div>`;
     }
@@ -1468,7 +1468,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                             const corPerc = perc >= 95 ? "text-emerald-600" : perc >= 85 ? "text-amber-600" : "text-red-600";
                             return (
                               <tr key={p.mesReferencia} className="border-b last:border-0 hover:bg-muted/30">
-                                <td className="p-3 font-medium">{p.mesReferencia}</td>
+                                <td className="p-3 font-medium">{p.mesReferencia ? p.mesReferencia.split("-").reverse().join("/") : "—"}</td>
                                 <td className="p-3 text-center">{p.diasTrabalhados}</td>
                                 <td className={`p-3 text-center font-semibold ${(p.faltas || 0) > 0 ? "text-red-600" : "text-gray-400"}`}>{p.faltas || 0}</td>
                                 <td className={`p-3 text-center font-bold ${corPerc}`}>{perc}%</td>
@@ -1631,7 +1631,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                           const totalReceb = liq + compNum;
                           return (
                             <tr key={f.id} className="border-b last:border-0 hover:bg-muted/30">
-                              <td className="p-3 font-medium">{f.mesReferencia}</td>
+                              <td className="p-3 font-medium">{f.mesReferencia ? f.mesReferencia.split("-").reverse().join("/") : "—"}</td>
                               <td className="p-3 text-right font-mono">{formatSalario(f.salarioBase)}</td>
                               <td className="p-3 text-right font-mono text-green-600">{formatSalario(f.horasExtrasValor)}</td>
                               <td className="p-3 text-right font-mono text-red-600">{formatSalario(f.totalDescontos)}</td>
@@ -1683,7 +1683,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                           <tbody>
                             {horasExtras.map((h: any) => (
                               <tr key={h.id} className="border-b last:border-0 hover:bg-muted/30">
-                                <td className="p-3 font-medium">{h.mesReferencia}</td>
+                                <td className="p-3 font-medium">{h.mesReferencia ? h.mesReferencia.split("-").reverse().join("/") : "—"}</td>
                                 <td className="p-3"><span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">{h.descricao?.includes('Comissão') ? 'Comissão' : h.descricao?.includes('Bônus') ? 'Bônus' : 'Adicional'}</span></td>
                                 <td className="p-3 text-right font-mono font-semibold text-purple-600">{h.quantidadeHoras}h</td>
                                 <td className="p-3 text-right font-mono font-bold text-green-600">{formatSalario(h.valorTotal)}</td>
@@ -1728,7 +1728,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                           <tbody>
                             {horasExtras.map((h: any) => (
                               <tr key={h.id} className="border-b last:border-0 hover:bg-muted/30">
-                                <td className="p-3 font-medium">{h.mesReferencia}</td>
+                                <td className="p-3 font-medium">{h.mesReferencia ? h.mesReferencia.split("-").reverse().join("/") : "—"}</td>
                                 <td className="p-3 text-right font-mono font-semibold text-orange-600">{h.quantidadeHoras}h</td>
                                 <td className="p-3 text-right font-mono">{h.percentualAcrescimo || "50"}%</td>
                                 <td className="p-3 text-right font-mono">{formatSalario(h.valorHoraBase)}</td>
@@ -2458,7 +2458,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                         <div className="flex items-center justify-between mb-3">
                           <h4 className={`text-sm font-bold flex items-center gap-2 ${pjConformidade.pendencias > 0 ? 'text-amber-900' : 'text-emerald-900'}`}>
                             <ShieldCheck className="h-4 w-4" />
-                            Conformidade PJ — {pjConformidade.mesReferencia}
+                            Conformidade PJ — {pjConformidade.mesReferencia ? pjConformidade.mesReferencia.split("-").reverse().join("/") : "—"}
                             {pjConformidade.pendencias > 0 ? (
                               <Badge variant="destructive" className="ml-2">{pjConformidade.pendencias} pendência(s)</Badge>
                             ) : (
@@ -2536,7 +2536,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                             <tbody>
                               {pjPagamentos.map((p: any) => (
                                 <tr key={p.id} className="border-b last:border-0">
-                                  <td className="p-2">{p.mesReferencia}</td>
+                                  <td className="p-2">{p.mesReferencia ? p.mesReferencia.split("-").reverse().join("/") : "—"}</td>
                                   <td className="p-2"><Badge variant={p.tipo === 'adiantamento' ? 'secondary' : p.tipo === 'bonificacao' ? 'default' : 'outline'}>{p.tipo}</Badge></td>
                                   <td className="p-2 text-right font-bold">{formatMoeda(p.valor || '0')}</td>
                                   <td className="p-2 text-xs">{formatDate(p.dataPagamento)}</td>
@@ -2653,7 +2653,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       return (
                         <div className="bg-white rounded-xl border p-6">
                           <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                            <Eye className="h-5 w-5 text-amber-500" /> Detalhes da Última Avaliação ({ultima.mesReferencia})
+                            <Eye className="h-5 w-5 text-amber-500" /> Detalhes da Última Avaliação ({ultima.mesReferencia ? ultima.mesReferencia.split("-").reverse().join("/") : "—"})
                           </h3>
                           <div className="grid grid-cols-3 gap-4">
                             {pilares.map((p) => (
