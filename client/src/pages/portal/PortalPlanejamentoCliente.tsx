@@ -7,7 +7,7 @@ import {
   ArrowLeft, Calendar, MapPin, TrendingUp, AlertTriangle, Clock,
   CheckCircle2, Building2, ListTree, Activity, BarChart3, History,
   CalendarDays, User, CalendarCheck, FileText, GitBranch, HardHat,
-  DollarSign, Cloud, Droplets, Wind, Loader2,
+  DollarSign, Cloud, Droplets, Wind, Loader2, ClipboardList, ChevronRight,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, Line, Area, CartesianGrid, XAxis, YAxis,
@@ -304,7 +304,7 @@ export default function PortalPlanejamentoCliente() {
               </div>
             );
           }
-          if (aba === "visao_geral") return <AbaVisaoGeral kpis={kpis} projeto={projeto} obra={obra} semanaAtual={semanaAtual} atrasadas={atrasadas} proximas={proximas} />;
+          if (aba === "visao_geral") return <AbaVisaoGeral kpis={kpis} projeto={projeto} obra={obra} semanaAtual={semanaAtual} atrasadas={atrasadas} proximas={proximas} atividadesTodas={atividadesTodas} refisLista={refisLista} />;
           if (aba === "cronograma") return <AbaCronograma atividades={atividadesTodas} />;
           if (aba === "avanco_semanal") return <AbaAvancoSemanal kpis={kpis} semanaAtual={semanaAtual} atrasadas={atrasadas} />;
           if (aba === "prog_semanal") return <AbaProgSemanal kpis={kpis} progSemanal={progSemanal} />;
@@ -332,31 +332,153 @@ function Aviso({ children }: { children: React.ReactNode }) {
   );
 }
 
-function AbaVisaoGeral({ kpis, projeto, obra, semanaAtual, atrasadas, proximas }: any) {
+function AbaVisaoGeral({ kpis, projeto: _projeto, obra, semanaAtual: _sa, atrasadas: _atr, proximas: _prox, atividadesTodas, refisLista }: any) {
   const localTempo = obra?.cidade || obra?.endereco || null;
+
+  // ── Lógica idêntica à VisaoGeral interna (PlanejamentoDetalhe.tsx ~1297) ──
+  const totalAtiv  = (atividadesTodas || []).filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled).length;
+  const concluidas = (atividadesTodas || []).filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && (a.percentRealizado ?? 0) >= 100).length;
+  const ultimoRefis = (refisLista || [])[0];
+  const cpi = ultimoRefis ? Number(ultimoRefis.cpi || 0) : 1;
+  const realizado = kpis.realizado as number;
+  const previsto  = kpis.previsto as number;
+  const spi = (previsto && previsto > 0) ? realizado / previsto : (realizado > 0 ? 1 : 0);
+  const spiValido = previsto !== null && previsto > 0;
+
+  // Atividades em atraso (deveria > realizado)
+  const hoje = new Date().toISOString().split("T")[0];
+  const progressoEsperadoHoje = (a: any): number => {
+    if (!a.dataInicio || !a.dataFim) return a.dataFim && a.dataFim <= hoje ? 100 : 0;
+    const ini = new Date(a.dataInicio).getTime();
+    const fim = new Date(a.dataFim).getTime();
+    const ag  = new Date(hoje).getTime();
+    if (ag >= fim) return 100;
+    if (ag <= ini) return 0;
+    return Math.round(((ag - ini) / (fim - ini)) * 100);
+  };
+  const criticas = (atividadesTodas || []).filter((a: any) => {
+    if (a.isGrupo || a.disabled) return false;
+    const real = a.percentRealizado ?? 0;
+    if (real >= 100) return false;
+    return progressoEsperadoHoje(a) > real;
+  });
+
+  const kpiCards = [
+    { label: "Atividades",     value: `${concluidas}/${totalAtiv}`,         color: "text-blue-600",    bg: "bg-blue-50",    icon: <ClipboardList className="h-4 w-4" /> },
+    { label: "Avanço Físico",  value: fmtPct(realizado),                     color: "text-emerald-600", bg: "bg-emerald-50", icon: <TrendingUp className="h-4 w-4" /> },
+    { label: "SPI (prazo)",    value: spiValido ? spi.toFixed(2) : "—",      color: !spiValido ? "text-slate-400" : spi >= 1 ? "text-emerald-600" : "text-red-600", bg: !spiValido ? "bg-slate-100" : spi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <Activity className="h-4 w-4" />, detail: spiValido ? `${realizado.toFixed(1)}% ÷ ${previsto.toFixed(1)}%` : undefined },
+    { label: "CPI (custo)",    value: cpi.toFixed(2),                        color: cpi >= 1 ? "text-emerald-600" : "text-red-600", bg: cpi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <DollarSign className="h-4 w-4" /> },
+    { label: "REFIs emitidos", value: String((refisLista || []).length),     color: "text-purple-600",  bg: "bg-purple-50",  icon: <FileText className="h-4 w-4" /> },
+  ];
+
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="Avanço Previsto" value={fmtPct(kpis.previsto)} icon={<TrendingUp className="w-5 h-5 text-blue-600" />} />
-        <KpiCard label="Avanço Realizado" value={fmtPct(kpis.realizado)} icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />} accent={kpis.realizado >= kpis.previsto ? "bg-emerald-50" : undefined} />
-        <KpiCard
-          label="Desvio"
-          value={`${kpis.desvio >= 0 ? "+" : ""}${fmtPct(kpis.desvio)}`}
-          icon={<AlertTriangle className={`w-5 h-5 ${kpis.desvio < 0 ? "text-red-600" : "text-emerald-600"}`} />}
-          accent={kpis.desvio < 0 ? "bg-red-50" : "bg-emerald-50"}
-          sub={kpis.desvio < 0 ? "atrasado" : kpis.desvio > 0 ? "adiantado" : "no prazo"}
-        />
-        <KpiCard label="Atividades concluídas" value={`${kpis.atividadesConcluidas}/${kpis.totalAtividades}`} icon={<CheckCircle2 className="w-5 h-5 text-slate-600" />} />
+    <div className="space-y-5">
+      {/* KPIs (idênticos ao interno) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {kpiCards.map((k, i) => (
+          <div key={i} className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 flex flex-col gap-2">
+            <div className={`w-8 h-8 rounded-lg ${k.bg} ${k.color} flex items-center justify-center`}>{k.icon}</div>
+            <p className="text-[10px] text-slate-500 leading-tight">{k.label}</p>
+            <p className={`text-base font-bold ${k.color} leading-tight`}>{k.value}</p>
+            {(k as any).detail && <p className="text-[9px] text-slate-400 leading-tight -mt-1">{(k as any).detail}</p>}
+          </div>
+        ))}
       </div>
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 text-xs text-slate-500">
-        Revisão {String(projeto?.revisaoNumero ?? 0).padStart(2, "0")} de {fmtBR(projeto?.revisaoData)}
+
+      {/* Atividades em Atraso (com barras Deveria/Hoje) */}
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+            Atividades em Atraso ({criticas.length})
+          </p>
+        </div>
+        {criticas.length === 0 ? (
+          <p className="text-xs text-emerald-600 flex items-center gap-1.5">
+            <CheckCircle2 className="h-4 w-4" /> Nenhuma atividade em atraso
+          </p>
+        ) : (
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {criticas.map((a: any) => {
+              const real = a.percentRealizado ?? 0;
+              const esperado = progressoEsperadoHoje(a);
+              const desvio = real - esperado;
+              return (
+                <div key={a.id} className="p-2 bg-red-50 rounded-lg border border-red-100">
+                  <div className="flex items-center gap-1 mb-1.5">
+                    {a.eapCodigo && <span className="text-[10px] text-red-400 font-mono shrink-0">{a.eapCodigo}</span>}
+                    <span className="text-xs text-slate-700 truncate font-medium">{a.nome}</span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] text-slate-400 w-16 shrink-0">Deveria:</span>
+                      <div className="flex-1 bg-blue-100 rounded-full h-1.5 overflow-hidden">
+                        <div className="bg-blue-500 h-full rounded-full" style={{ width: `${Math.min(esperado, 100)}%` }} />
+                      </div>
+                      <span className="text-[10px] font-bold text-blue-700 w-8 text-right shrink-0">{esperado.toFixed(0)}%</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] text-slate-400 w-16 shrink-0">Hoje:</span>
+                      <div className="flex-1 bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                        <div className="h-full rounded-full" style={{
+                          width: `${Math.min(real, 100)}%`,
+                          background: real === 0 ? '#d1d5db' : desvio >= -5 ? '#22c55e' : desvio >= -20 ? '#f59e0b' : '#ef4444',
+                        }} />
+                      </div>
+                      <span className="text-[10px] font-bold text-red-700 w-8 text-right shrink-0">{real.toFixed(0)}%</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {/* Previsão do tempo */}
       <WeatherWidget local={localTempo} />
-      <SecaoAtividades titulo={`Atividades da semana atual (${fmtBR(kpis.semanaInicio)} – ${fmtBR(kpis.semanaFim)})`} vazio="Nenhuma atividade prevista para esta semana." itens={semanaAtual} cor="border-blue-200" />
-      {atrasadas.length > 0 && (
-        <SecaoAtividades titulo={`Atividades atrasadas (${atrasadas.length})`} vazio="" itens={atrasadas} cor="border-red-200" />
+
+      {/* Histórico de REFIs */}
+      {(refisLista || []).length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 overflow-x-auto">
+          <p className="text-sm font-semibold text-slate-700 mb-3">Histórico de REFIs</p>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-slate-700 text-white">
+                <th className="py-2 px-3 text-left">Nº</th>
+                <th className="py-2 px-3 text-left">Semana</th>
+                <th className="py-2 px-3 text-right">Prev. %</th>
+                <th className="py-2 px-3 text-right">Real. %</th>
+                <th className="py-2 px-3 text-right">SPI</th>
+                <th className="py-2 px-3 text-left">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {refisLista.slice(0, 8).map((r: any, i: number) => {
+                const prev = Number(r.avancoPrevisto || 0);
+                const reali = Number(r.avancoRealizado || 0);
+                const spiR = Number(r.spi || 0);
+                return (
+                  <tr key={r.id ?? i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                    <td className="py-1.5 px-3 font-mono text-slate-600">{String(r.numero ?? i + 1).padStart(3, "0")}</td>
+                    <td className="py-1.5 px-3 text-slate-700">{fmtBR(r.semana)}</td>
+                    <td className="py-1.5 px-3 text-right text-slate-600">{fmtPct(prev)}</td>
+                    <td className="py-1.5 px-3 text-right font-semibold text-emerald-700">{fmtPct(reali)}</td>
+                    <td className={`py-1.5 px-3 text-right font-bold ${prev === 0 ? "text-slate-400" : spiR >= 1 ? "text-emerald-700" : "text-red-600"}`}>
+                      {prev === 0 ? "—" : spiR.toFixed(2)}
+                    </td>
+                    <td className="py-1.5 px-3">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium w-fit inline-block ${r.status === "consolidado" ? "bg-emerald-600 text-white" : r.status === "emitido" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                        {r.status}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
-      <SecaoAtividades titulo="Próximas atividades" vazio="Nenhuma próxima atividade cadastrada." itens={proximas} cor="border-slate-200" />
     </div>
   );
 }

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1448,
+    titulo: "Portal do Cliente — Visão Geral agora é cópia idêntica da tela interna de Planejamento",
+    descricao: "A aba Visão Geral do Portal do Cliente foi totalmente refeita para ficar visualmente IDÊNTICA à tela interna PlanejamentoDetalhe: (1) 5 KPIs no mesmo layout do interno — Atividades concluídas/total (azul), Avanço Físico % (verde), SPI prazo com cor dinâmica + detalhe 'Realizado ÷ Previsto' (vermelho/verde), CPI custo do último REFIS (vermelho/verde) e REFIs emitidos (roxo); (2) seção 'Atividades em Atraso (N)' que lista todas as atividades onde o progresso esperado para hoje > realizado, com barras Deveria (azul) / Hoje (verde/âmbar/vermelho conforme desvio) — mesma lógica do interno (progressoEsperadoHoje linear entre dataInicio e dataFim); (3) Previsão do Tempo entre os blocos; (4) tabela 'Histórico de REFIs' no rodapé com Nº, Semana, Prev.%, Real.%, SPI e Status (cores idênticas ao interno). Os dados vêm dos mesmos campos do backend (kpis, atividadesTodas com percentRealizado, refisLista com cpi/spi) — sem novas queries. Resultado: cliente vê EXATAMENTE os mesmos números, no mesmo layout, que o gestor.",
+    tipo: "feature",
+    modulos: "Portal do Cliente, Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 04:00:00",
+  },
+  {
     version: 1447,
     titulo: "Portal do Cliente — Visão Geral agora exibe Previsão do Tempo + Pontos de Atenção",
     descricao: "Adicionada na aba Visão Geral do Portal do Cliente uma seção de Previsão do Tempo idêntica à da tela interna de Planejamento: card com 5 dias úteis (Seg-Sex) mostrando ícone, condição (Chuva leve/Pancadas/Tempestade etc.), % de probabilidade de chuva, mm previstos e velocidade do vento. Logo abaixo, bloco de Pontos de Atenção lista automaticamente os dias com chuva > 10mm (impacto em armação/atividades externas), tempestades (paralisar içamentos), alta probabilidade de chuva (> 70%) e ventos fortes (> 30 km/h). Coordenadas inferidas a partir da cidade da obra (Rio de Janeiro, São Paulo, Aparecida, etc.); fonte Open-Meteo (gratuita, sem chave). Quando a semana está limpa, exibe mensagem em verde 'condições favoráveis para trabalhos externos'.",
