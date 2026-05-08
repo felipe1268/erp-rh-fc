@@ -16,6 +16,7 @@ import {
   Handshake, Store, Receipt, CreditCard, CheckCircle, Clock, XCircle,
   DollarSign, Users, TrendingUp, Loader2, ArrowLeft, Filter, Wallet,
   Timer, BarChart3, Download, ArrowUp, ArrowDown, Minus, Eye,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -166,31 +167,79 @@ export default function DashParceiros() {
           <PrintActions title={`Dashboard Parceiros — ${ano}`} />
         </div>
 
-        {/* Filtros */}
+        {/* Seletor visual de Ano + Mês (estilo cartão com pílulas) */}
+        <Card className="print:hidden">
+          <CardContent className="p-4 sm:p-5">
+            {/* Linha 1: navegação de ano + legenda */}
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost" size="icon" className="h-8 w-8 rounded-full"
+                  onClick={() => setAno(ano - 1)}
+                  aria-label="Ano anterior"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </Button>
+                <span className="text-xl sm:text-2xl font-bold tabular-nums tracking-tight">
+                  {ano.toLocaleString("pt-BR")}
+                </span>
+                <Button
+                  variant="ghost" size="icon" className="h-8 w-8 rounded-full"
+                  onClick={() => setAno(ano + 1)}
+                  aria-label="Próximo ano"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </Button>
+              </div>
+              <div className="flex items-center gap-4 text-xs sm:text-sm text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-500" /> Com lançamento
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-green-500" /> Consolidado
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-gray-300" /> Sem dados
+                </span>
+              </div>
+            </div>
+
+            {/* Linha 2: pílulas dos 12 meses */}
+            <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5 sm:gap-2 mt-4">
+              {MESES_LBL.map((lbl, i) => {
+                const evRow: any = (data.evolucaoMensal as any[])?.[i] || {};
+                const lanc = Number(evRow.lancamentos || 0);
+                const pend = Number(evRow.pendentes || 0);
+                const rej  = Number(evRow.rejeitados || 0);
+                let dot = "bg-gray-200 text-gray-700";
+                if (lanc > 0 && pend === 0 && rej === 0) dot = "bg-green-100 text-green-800";
+                else if (lanc > 0) dot = "bg-blue-100 text-blue-800";
+                const mNum = String(i + 1);
+                const isSelected = mes === mNum;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setMes(isSelected ? "todos" : mNum)}
+                    className={`h-9 rounded-full text-sm font-medium transition-all ${dot} ${
+                      isSelected ? "ring-2 ring-foreground ring-offset-1 font-bold" : "hover:opacity-80"
+                    }`}
+                    title={lanc === 0 ? "Sem dados" : `${lanc} lançamento(s)${pend || rej ? " — pendências em aberto" : " — consolidado"}`}
+                  >
+                    {lbl}
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Filtros adicionais (Tipo + Parceiro) */}
         <Card className="print:hidden">
           <CardContent className="p-4">
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                 <Filter className="h-4 w-4" /> Filtros:
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Ano</label>
-                <Select value={String(ano)} onValueChange={(v) => setAno(Number(v))}>
-                  <SelectTrigger className="w-28 h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {anoOptions.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Mês</label>
-                <Select value={mes} onValueChange={setMes}>
-                  <SelectTrigger className="w-36 h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos</SelectItem>
-                    {MESES_FULL.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}
-                  </SelectContent>
-                </Select>
               </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Tipo de Convênio</label>
@@ -204,7 +253,7 @@ export default function DashParceiros() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="min-w-[220px]">
+              <div className="min-w-[220px] flex-1">
                 <label className="text-xs text-muted-foreground mb-1 block">Parceiro</label>
                 <Select value={parceiroId} onValueChange={setParceiroId}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
