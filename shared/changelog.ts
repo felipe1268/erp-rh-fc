@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1443,
+    titulo: "Portal do Cliente — Planejamento agora calcula KPIs e Curva S IDÊNTICOS à tela interna",
+    descricao: "Toda a lógica de cálculo do endpoint cliente.planejamentoObra foi reescrita para espelhar EXATAMENTE o getCurvaS do server/routers/planejamento.ts. Mudanças: (1) helpers locais _toMondayStr / _toDateStr / _n idênticos aos internos; (2) regra usarIgual — se menos de 20% das atividades têm pesoFinanceiro definido (ou pesoBruto=0), distribui peso igual entre folhas (antes o portal mostrava 0% nesses casos); (3) parse de datas com T12:00:00Z em vez de T00:00:00 (evita desvio de fuso de 1 dia); (4) % Previsto agora referenciado ao FIM da semana atual (próxima segunda 12:00 UTC), igual ao avancoPrevistoDia interno — antes era referenciado a 'hoje' o que dava sempre um número menor; (5) semana atual agora é segunda→domingo (não mais segunda→sexta), idêntico ao interno; (6) Curva S agora usa buckets semanais alinhados à segunda-feira via toMondayStr, distribui peso/duração entre as semanas (peso/dur/pesoTotal*100), e o realizado é calculado APENAS nas semanas que têm avanços lançados (semanasComAvanco) com snapshot 'latest <= semana' — igual ao curvaRealizada interno. Resultado: o cliente vê os MESMOS números (% Previsto, % Realizado, Desvio, atividades concluídas, curva S) que o gestor interno vê na PlanejamentoDetalhe, garantindo consistência total no fluxo de informação. Visual modernizado da Rev. 1442 mantido.",
+    tipo: "bugfix",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 23:59:45",
+  },
+  {
     version: 1442,
     titulo: "Portal do Cliente — Curva S corrigida (progressão temporal real) + visual modernizado",
     descricao: "BUG CORRIGIDO: o backend cliente.planejamentoObra estava calculando o Realizado da Curva S incorretamente — ele aplicava o valor FINAL atual a TODAS as semanas passadas (linha horizontal), ignorando a progressão semanal real. Agora, para cada semana o servidor calcula um snapshot dos avanços lançados ATÉ aquela semana (último percentualAcumulado por atividade) e pondera pelo peso financeiro, gerando a curva S evolutiva correta. Semanas futuras (após hoje) retornam realizado = null para não exibir progresso fictício. VISUAL MODERNIZADO: header com gradiente azul-índigo no topo + tags 'Planejamento'/'Rev. XX' em pill, título h1 em tracking-tight, badge de status em emerald moderno; card 'Avanço Físico' com ícone gradient, badges em pill com ring, barras de 3px com gradientes lineares (dourado/azul) e shadow-inner; tabs em rounded-2xl com gradient subtle no ativo; KPIs com ícone em quadrado slate, label uppercase tracking-wider, valor em tabular-nums; Curva S agora usa ComposedChart com áreas degradê embaixo das linhas, dot estilizado, tooltip rico com layout flex e divisores, ReferenceLine 'Hoje' mais nítida. Background da página com gradient sutil slate→blue→slate.",

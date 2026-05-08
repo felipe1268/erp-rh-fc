@@ -11,6 +11,22 @@ import { storagePut } from "../storage";
 import { sendEmail } from "../services/smtpService";
 import crypto from "crypto";
 
+// ── Helpers idênticos aos do server/routers/planejamento.ts ─────────────────
+// Mantemos cópias locais para garantir que o Portal do Cliente produza
+// EXATAMENTE os mesmos números da tela interna de Planejamento.
+const _n = (v: any) => parseFloat(v || "0") || 0;
+const _toDateStr = (v: any): string => {
+  if (!v) return "";
+  if (typeof v === "string") return v.slice(0, 10);
+  try { return new Date(v).toISOString().slice(0, 10); } catch { return ""; }
+};
+function _toMondayStr(d: Date): string {
+  const day = d.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const m = new Date(d.getTime() + diff * 86_400_000);
+  return m.toISOString().split("T")[0];
+}
+
 function getPortalBaseUrl(): string {
   return process.env.REPLIT_DEV_DOMAIN
     ? `https://${process.env.REPLIT_DEV_DOMAIN}`
@@ -1083,42 +1099,55 @@ export const portalExternoRouter = router({
         }
       }
 
-      // KPIs: % previsto x realizado (folhas, não-grupo, não-indireta, com datas)
+      // ────────────────────────────────────────────────────────────────────
+      // KPIs e Curva S — IDÊNTICOS à tela interna de Planejamento.
+      // Replicamos exatamente: helpers (toMondayStr, T12:00:00Z), regra
+      // `usarIgual` (fallback de peso quando <20% das atividades têm peso),
+      // buckets semanais alinhados à segunda, snapshot de realizado por
+      // semana com `<=` (igual ao `getCurvaS` interno).
+      // Filtro de folhas: !isGrupo && !isIndireta && datas válidas
+      // (disabled já foi excluído pela query). ────────────────────────────
       const todayStr = new Date().toISOString().slice(0, 10);
       const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
-      let somaPesos = 0, somaPrevisto = 0, somaRealizado = 0;
-      for (const a of folhas) {
-        const peso = a.pesoFinanceiro || 0;
-        somaPesos += peso;
-        // Previsto linear entre dataInicio e dataFim
-        let pctPrev = 0;
-        if (todayStr >= a.dataFim!) pctPrev = 100;
-        else if (todayStr <= a.dataInicio!) pctPrev = 0;
-        else {
-          const ini = new Date(a.dataInicio + "T00:00:00").getTime();
-          const fim = new Date(a.dataFim + "T00:00:00").getTime();
-          const tod = new Date(todayStr + "T00:00:00").getTime();
-          pctPrev = fim > ini ? ((tod - ini) / (fim - ini)) * 100 : 100;
-        }
-        const pctReal = ultimoAvancoPorAtiv[a.id] ?? 0;
-        somaPrevisto += peso * pctPrev / 100;
-        somaRealizado += peso * pctReal / 100;
-      }
-      const pctTotalPrevisto = somaPesos > 0 ? somaPrevisto / somaPesos * 100 : 0;
-      const pctTotalRealizado = somaPesos > 0 ? somaRealizado / somaPesos * 100 : 0;
-      const desvio = pctTotalRealizado - pctTotalPrevisto;
 
-      // Atividades da semana atual (segunda a sexta)
+      // Regra `usarIgual` — quando há poucos pesos cadastrados, distribui igualmente
+      const pesoBruto = folhas.reduce((s: number, a: any) => s + _n(a.pesoFinanceiro), 0);
+      const ativComPeso = folhas.filter((a: any) => _n(a.pesoFinanceiro) > 0).length;
+      const usarIgual = pesoBruto === 0 || ativComPeso < folhas.length * 0.2;
+      const pesoTotal = usarIgual ? (folhas.length || 1) : pesoBruto;
+      const pesoDe = (a: any) => usarIgual ? 1 : _n(a.pesoFinanceiro);
+
+      // Semana atual (segunda → domingo, igual ao interno)
       const today = new Date();
       const dow = today.getDay();
       const diffToMon = dow === 0 ? -6 : 1 - dow;
       const monday = new Date(today); monday.setDate(today.getDate() + diffToMon);
-      const friday = new Date(monday); friday.setDate(monday.getDate() + 4);
+      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
       const monStr = monday.toISOString().slice(0, 10);
-      const friStr = friday.toISOString().slice(0, 10);
+      const sunStr = sunday.toISOString().slice(0, 10);
+      // % Previsto — referenciado ao FIM da semana atual (próxima segunda 12:00),
+      // exatamente como `avancoPrevistoDia` interno (PlanejamentoDetalhe.tsx ~395).
+      const refDate = new Date(monStr + "T12:00:00Z"); refDate.setUTCDate(refDate.getUTCDate() + 7);
+      const refMs = refDate.getTime();
+      let somaPrevisto = 0;
+      let somaRealizado = 0;
+      for (const a of folhas) {
+        const ini = new Date(a.dataInicio + "T12:00:00Z").getTime();
+        const fim = new Date(a.dataFim + "T12:00:00Z").getTime();
+        let exp = 0;
+        if (refMs >= fim) exp = 100;
+        else if (refMs > ini) exp = Math.min(100, ((refMs - ini) / (fim - ini)) * 100);
+        const peso = pesoDe(a);
+        somaPrevisto += (exp * peso) / pesoTotal;
+        somaRealizado += (ultimoAvancoPorAtiv[a.id] ?? 0) * (peso / pesoTotal);
+      }
+      const pctTotalPrevisto = +somaPrevisto.toFixed(2);
+      const pctTotalRealizado = +Math.min(100, somaRealizado).toFixed(2);
+      const desvio = +(pctTotalRealizado - pctTotalPrevisto).toFixed(2);
 
+      // Semana atual: atividades cuja janela toca [seg, dom]
       const semanaAtual = folhas.filter((a: any) =>
-        a.dataFim! >= monStr && a.dataInicio! <= friStr
+        a.dataFim! >= monStr && a.dataInicio! <= sunStr
       ).map((a: any) => ({ ...a, percentRealizado: ultimoAvancoPorAtiv[a.id] ?? 0 }));
 
       // Atrasadas: dataFim < hoje E avanço < 100
@@ -1128,78 +1157,82 @@ export const portalExternoRouter = router({
        .sort((x: any, y: any) => x.dataFim!.localeCompare(y.dataFim!))
        .slice(0, 20);
 
-      // Próximas: dataInicio > sexta da semana atual, ordenadas por dataInicio
-      const proximas = folhas.filter((a: any) => a.dataInicio! > friStr)
+      // Próximas: dataInicio > domingo da semana atual
+      const proximas = folhas.filter((a: any) => a.dataInicio! > sunStr)
         .sort((x: any, y: any) => x.dataInicio!.localeCompare(y.dataInicio!))
         .slice(0, 15);
 
-      // Curva S — buckets semanais com progressão TEMPORAL correta do realizado.
-      // Para cada semana, o realizado é o acumulado ponderado considerando o ÚLTIMO
-      // avanço lançado de cada atividade ATÉ aquela semana (não o valor final atual).
-      const datasComValor: { id: number; dataInicio: string; dataFim: string; peso: number }[] = folhas.map((a: any) => ({
-        id: a.id,
-        dataInicio: a.dataInicio!,
-        dataFim: a.dataFim!,
-        peso: a.pesoFinanceiro || 0,
-      }));
-      // Ordena os avanços por (atividadeId, semana) para snapshot histórico
-      const avancosOrd = avancosRaw
-        .map((av: any) => ({
-          atividadeId: av.atividadeId as number,
-          semana: typeof av.semana === "string" ? av.semana.slice(0, 10) : new Date(av.semana).toISOString().slice(0, 10),
-          pct: Number(av.percentualAcumulado || 0),
-        }))
-        .sort((a, b) => a.semana.localeCompare(b.semana));
-      const minIni = datasComValor.reduce((m, x) => (!m || x.dataInicio < m ? x.dataInicio : m), "" as string);
-      const maxFim = datasComValor.reduce((m, x) => (!m || x.dataFim > m ? x.dataFim : m), "" as string);
-      const curvaS: { semana: string; previsto: number; realizado: number | null }[] = [];
-      if (minIni && maxFim && somaPesos > 0) {
-        const inicio = new Date(minIni + "T00:00:00");
-        const dowI = inicio.getDay();
-        const ajustar = dowI === 0 ? -6 : 1 - dowI;
-        inicio.setDate(inicio.getDate() + ajustar);
-        const fim = new Date(maxFim + "T00:00:00");
-        let cursor = new Date(inicio);
-        let safety = 0;
-        const todayCap = new Date(todayStr + "T00:00:00").getTime();
-        while (cursor <= fim && safety < 520) {
-          const semFim = new Date(cursor); semFim.setDate(cursor.getDate() + 6);
-          const semFimStr = semFim.toISOString().slice(0, 10);
-          // Previsto acumulado linear até o fim da semana
-          let prevSem = 0;
-          for (const a of datasComValor) {
-            const ini = new Date(a.dataInicio + "T00:00:00").getTime();
-            const fimAt = new Date(a.dataFim + "T00:00:00").getTime();
-            if (fimAt <= ini) continue;
-            const ate = Math.min(new Date(semFimStr + "T00:00:00").getTime(), fimAt);
-            const pctNoFim = ate >= fimAt ? 1 : Math.max(0, (ate - ini) / (fimAt - ini));
-            prevSem += a.peso * pctNoFim;
-          }
-          const acumPrev = (prevSem / somaPesos) * 100;
-          // Realizado: somente se a semana já passou (até hoje) — usa snapshot dos avanços até semFim
-          let realizadoOut: number | null = null;
-          if (new Date(semFimStr + "T00:00:00").getTime() <= todayCap) {
-            const snapshot: Record<number, number> = {};
-            for (const av of avancosOrd) {
-              if (av.semana > semFimStr) break;
-              snapshot[av.atividadeId] = av.pct; // último valor até esta semana
-            }
-            let realSem = 0;
-            for (const a of datasComValor) realSem += a.peso * ((snapshot[a.id] ?? 0) / 100);
-            realizadoOut = Math.min(100, (realSem / somaPesos) * 100);
-          }
-          curvaS.push({
-            semana: cursor.toISOString().slice(0, 10),
-            previsto: Math.min(100, acumPrev),
-            realizado: realizadoOut,
-          });
-          cursor = new Date(cursor); cursor.setDate(cursor.getDate() + 7);
-          safety++;
+      // ── Curva S (mesma lógica de planejamento.ts ~1244) ────────────────
+      // Curva planejada: distribui peso/duração pelas semanas (alinhadas à seg)
+      const dates: Map<string, number> = new Map();
+      for (const a of folhas) {
+        const inicioP = new Date(_toDateStr(a.dataInicio) + "T12:00:00Z");
+        const fimP = new Date(_toDateStr(a.dataFim) + "T12:00:00Z");
+        if (isNaN(inicioP.getTime()) || isNaN(fimP.getTime())) continue;
+        const inicioSeg = new Date(_toMondayStr(inicioP) + "T12:00:00Z");
+        const fimSeg = new Date(_toMondayStr(fimP) + "T12:00:00Z");
+        const weeksDiff = (fimSeg.getTime() - inicioSeg.getTime()) / (7 * 86400000);
+        const dur = Math.max(1, weeksDiff + 1);
+        const semPesoVal = (pesoDe(a) / dur / pesoTotal) * 100;
+        let cur = new Date(inicioSeg);
+        for (let i = 0; i < dur; i++) {
+          const key = _toMondayStr(cur);
+          dates.set(key, (dates.get(key) ?? 0) + semPesoVal);
+          cur = new Date(cur.getTime() + 7 * 86400000);
         }
       }
+      const sortedSem = [...dates.entries()].sort((x, y) => x[0].localeCompare(y[0]));
+      const previstoMap: Record<string, number> = {};
+      let acumP = 0;
+      for (const [sem, val] of sortedSem) {
+        acumP = Math.min(100, acumP + val);
+        previstoMap[sem] = +acumP.toFixed(2);
+      }
+      // Avanços normalizados → semana sempre na segunda-feira correspondente
+      const avancos = avancosRaw.map((av: any) => ({
+        atividadeId: av.atividadeId as number,
+        semana: _toMondayStr(new Date(_toDateStr(av.semana) + "T12:00:00Z")),
+        pct: _n(av.percentualAcumulado),
+      }));
+      const semanasComAvanco = [...new Set(avancos.map((a) => a.semana))].sort();
+      const realizadoMap: Record<string, number> = {};
+      for (const sem of semanasComAvanco) {
+        const latest: Record<number, { val: number; sem: string }> = {};
+        for (const av of avancos) {
+          if (av.semana <= sem) {
+            if (!latest[av.atividadeId] || av.semana > latest[av.atividadeId].sem) {
+              latest[av.atividadeId] = { val: av.pct, sem: av.semana };
+            }
+          }
+        }
+        let soma = 0;
+        for (const a of folhas) {
+          soma += (latest[a.id]?.val ?? 0) * (pesoDe(a) / pesoTotal);
+        }
+        realizadoMap[sem] = +Math.min(100, soma).toFixed(2);
+      }
+      // Une as semanas (previsto ∪ realizado), gera curva sequencial
+      const todasSemanas = [...new Set([...Object.keys(previstoMap), ...Object.keys(realizadoMap)])].sort();
+      const todayMon = _toMondayStr(new Date(todayStr + "T12:00:00Z"));
+      let prevAcumLast = 0;
+      let realAcumLast: number | null = null;
+      const curvaS: { semana: string; previsto: number; realizado: number | null }[] = [];
+      // Adiciona semana zero (segunda anterior à primeira)
+      if (todasSemanas.length > 0) {
+        const prim = new Date(todasSemanas[0] + "T12:00:00Z");
+        const semZero = _toMondayStr(new Date(prim.getTime() - 7 * 86400000));
+        curvaS.push({ semana: semZero, previsto: 0, realizado: 0 });
+      }
+      for (const sem of todasSemanas) {
+        if (previstoMap[sem] !== undefined) prevAcumLast = previstoMap[sem];
+        if (realizadoMap[sem] !== undefined) realAcumLast = realizadoMap[sem];
+        // Realizado só aparece em semanas <= hoje (não exibe progresso futuro)
+        const realizadoOut = sem <= todayMon ? (realAcumLast ?? 0) : null;
+        curvaS.push({ semana: sem, previsto: prevAcumLast, realizado: realizadoOut });
+      }
 
-      // Próximas 3 semanas (para "Prog. Semanal")
-      const tresSemanasFim = new Date(friday); tresSemanasFim.setDate(friday.getDate() + 14);
+      // Próximas 3 semanas (para "Prog. Semanal") — janela seg→domingo+14
+      const tresSemanasFim = new Date(sunday); tresSemanasFim.setDate(sunday.getDate() + 14);
       const tresSemFimStr = tresSemanasFim.toISOString().slice(0, 10);
       const progSemanal = folhas.filter((a: any) =>
         a.dataInicio! <= tresSemFimStr && a.dataFim! >= monStr
@@ -1221,7 +1254,7 @@ export const portalExternoRouter = router({
           totalAtividades: folhas.length,
           atividadesConcluidas: folhas.filter((a: any) => (ultimoAvancoPorAtiv[a.id] ?? 0) >= 100).length,
           semanaInicio: monStr,
-          semanaFim: friStr,
+          semanaFim: sunStr,
         },
         semanaAtual,
         atrasadas,
