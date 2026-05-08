@@ -241,6 +241,14 @@ export default function Clientes() {
                 onChange={e => setBusca(e.target.value)}
               />
             </div>
+            <Button
+              variant="outline"
+              onClick={() => { window.location.href = "/clientes/portal"; }}
+              className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+              title="Gerenciar acessos do Portal do Cliente"
+            >
+              <ShieldCheck className="h-4 w-4" /> Portal do Cliente
+            </Button>
             <Button onClick={abrirNovo} className="gap-2 bg-blue-600 hover:bg-blue-700">
               <Plus className="h-4 w-4" /> Novo Cliente
             </Button>
