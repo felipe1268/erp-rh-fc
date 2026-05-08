@@ -10,7 +10,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Receipt, Plus, Search, CheckCircle, XCircle, Clock, Upload, FileText, Eye, Store, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { Receipt, Plus, Search, CheckCircle, XCircle, Clock, Upload, FileText, Eye, Store, ChevronLeft, ChevronRight, Calendar, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+
+const fmtBRL = (v: number | string) => {
+  const n = typeof v === "string" ? parseFloat(v || "0") : Number(v || 0);
+  return (Number.isFinite(n) ? n : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+};
 
 const MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -87,6 +93,9 @@ export default function LancamentosParceiros() {
   const [busca, setBusca] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<any>({});
+  const [arquivoNovo, setArquivoNovo] = useState<File | null>(null);
+  const [editLanc, setEditLanc] = useState<any | null>(null);
+  const [confirmDel, setConfirmDel] = useState<any | null>(null);
 
   const { data: lancamentos = [], refetch } = trpc.parceiros.lancamentos.list.useQuery(
     { companyId: companyId ?? 0, dataInicio, dataFim, parceiroId: filterParceiro !== "all" ? parseInt(filterParceiro) : undefined },
@@ -101,8 +110,15 @@ export default function LancamentosParceiros() {
     { enabled: !!companyId }
   );
   const createMut = trpc.parceiros.lancamentos.create.useMutation({
-    onSuccess: () => { refetch(); setShowForm(false); toast.success("Lançamento registrado!"); },
     onError: (e) => toast.error(`Erro ao registrar: ${e.message}`),
+  });
+  const editMut = trpc.parceiros.lancamentos.editarLancamento.useMutation({
+    onSuccess: () => { refetch(); setEditLanc(null); toast.success("Lançamento atualizado!"); },
+    onError: (e) => toast.error(`Erro ao editar: ${e.message}`),
+  });
+  const delMut = trpc.parceiros.lancamentos.excluirLancamento.useMutation({
+    onSuccess: () => { refetch(); setConfirmDel(null); setEditLanc(null); toast.success("Lançamento excluído!"); },
+    onError: (e) => toast.error(`Erro ao excluir: ${e.message}`),
   });
   const aprovarMut = trpc.parceiros.lancamentos.aprovar.useMutation({
     onSuccess: () => { refetch(); toast.success("Lançamento atualizado!"); },
@@ -138,12 +154,55 @@ export default function LancamentosParceiros() {
 
   const openNew = () => {
     setForm({ companyId: companyId ?? 0, dataCompra: new Date().toISOString().split("T")[0] });
+    setArquivoNovo(null);
     setShowForm(true);
   };
 
-  const handleSave = () => {
-    if (!form.parceiroConveniadoId || !form.employeeId || !form.valor) { toast.error("Parceiro, Colaborador e Valor são obrigatórios"); return; }
-    createMut.mutate(form);
+  const handleSave = async () => {
+    if (!form.parceiroConveniadoId || !form.employeeId || !form.valor) {
+      toast.error("Parceiro, Colaborador e Valor são obrigatórios");
+      return;
+    }
+    if (!arquivoNovo) {
+      toast.error("Comprovante é OBRIGATÓRIO para garantir a veracidade do desconto.");
+      return;
+    }
+    try {
+      const res = await createMut.mutateAsync(form);
+      // Upload do comprovante (obrigatório)
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(",")[1];
+        try {
+          await uploadMut.mutateAsync({
+            lancamentoId: res.id,
+            fileName: arquivoNovo.name,
+            fileBase64: base64,
+            contentType: arquivoNovo.type,
+          });
+          refetch();
+          setShowForm(false);
+          setArquivoNovo(null);
+          toast.success("Lançamento + comprovante registrados!");
+        } catch (e: any) {
+          toast.error(`Lançamento criado, mas falhou o envio do comprovante: ${e?.message || e}`);
+        }
+      };
+      reader.readAsDataURL(arquivoNovo);
+    } catch (e) {
+      // create error já notificado via onError
+    }
+  };
+
+  const handleSaveEdit = () => {
+    if (!editLanc) return;
+    editMut.mutate({
+      id: editLanc.id,
+      employeeId: editLanc.employeeId,
+      dataCompra: editLanc.dataCompra,
+      descricaoItens: editLanc.descricaoItens || "",
+      valor: String(editLanc.valor),
+    });
   };
 
   const handleUpload = (lancamentoId: number) => {
@@ -335,15 +394,15 @@ export default function LancamentosParceiros() {
             <p className="text-xs text-muted-foreground">Total</p>
           </div>
           <div className="bg-amber-50 rounded-lg border border-amber-200 p-3 text-center">
-            <span className="text-lg font-bold text-amber-600">R$ {totalPendente.toFixed(2)}</span>
+            <span className="text-lg font-bold text-amber-600">{fmtBRL(totalPendente)}</span>
             <p className="text-xs text-amber-700">Pendentes</p>
           </div>
           <div className="bg-emerald-50 rounded-lg border border-emerald-200 p-3 text-center">
-            <span className="text-lg font-bold text-emerald-600">R$ {totalAprovado.toFixed(2)}</span>
+            <span className="text-lg font-bold text-emerald-600">{fmtBRL(totalAprovado)}</span>
             <p className="text-xs text-emerald-700">Aprovados</p>
           </div>
           <div className="bg-purple-50 rounded-lg border border-purple-200 p-3 text-center">
-            <span className="text-lg font-bold text-purple-600">R$ {(totalAprovado + totalPendente).toFixed(2)}</span>
+            <span className="text-lg font-bold text-purple-600">{fmtBRL(totalAprovado + totalPendente)}</span>
             <p className="text-xs text-purple-700">Total Geral</p>
           </div>
         </div>
@@ -357,21 +416,31 @@ export default function LancamentosParceiros() {
             </div>
           ) : (
             filtered.map((l: any) => (
-              <div key={l.id} className="bg-card rounded-xl border p-4">
+              <div
+                key={l.id}
+                className="bg-card rounded-xl border p-4 hover:border-purple-300 hover:shadow-sm cursor-pointer transition"
+                onClick={() => setEditLanc({ ...l })}
+                title="Clique para editar / excluir este lançamento"
+              >
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-foreground">{getColaboradorNome(l.employeeId)}</h3>
                       {statusBadge(l.status)}
+                      {!l.comprovanteUrl && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 border border-red-200">
+                          <AlertTriangle className="h-3 w-3" /> Sem comprovante
+                        </span>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-3 mt-1 text-xs text-muted-foreground">
                       <span className="flex items-center gap-0.5"><Store className="h-3 w-3" />{getParceiroNome(l.parceiroConveniadoId)}</span>
                       <span>Data: {l.dataCompra ? new Date(l.dataCompra).toLocaleDateString("pt-BR") : "—"}</span>
-                      <span className="font-semibold text-foreground">R$ {parseFloat(l.valor || "0").toFixed(2)}</span>
+                      <span className="font-semibold text-foreground">{fmtBRL(l.valor)}</span>
                     </div>
                     {l.descricaoItens && <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{l.descricaoItens}</p>}
                   </div>
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
                     {l.comprovanteUrl && (
                       <a href={l.comprovanteUrl} target="_blank" rel="noreferrer">
                         <Button size="sm" variant="outline"><FileText className="h-3.5 w-3.5 mr-1" /> Ver</Button>
@@ -379,6 +448,12 @@ export default function LancamentosParceiros() {
                     )}
                     <Button size="sm" variant="outline" onClick={() => handleUpload(l.id)}>
                       <Upload className="h-3.5 w-3.5 mr-1" /> Comprovante
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditLanc({ ...l })}>
+                      <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => setConfirmDel(l)}>
+                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
                     </Button>
                     {l.status === "pendente" && (
                       <>
@@ -444,19 +519,159 @@ export default function LancamentosParceiros() {
                   );
                 })()}
               </div>
-              <div><Label>Valor (R$) *</Label><Input type="number" step="0.01" value={form.valor || ""} onChange={(e) => setForm({ ...form, valor: e.target.value })} placeholder="0.00" /></div>
+              <div><Label>Valor (R$) *</Label><Input type="number" step="0.01" value={form.valor || ""} onChange={(e) => setForm({ ...form, valor: e.target.value })} placeholder="0,00" /></div>
             </div>
             <div><Label>Descrição dos Itens</Label><Textarea value={form.descricaoItens || ""} onChange={(e) => setForm({ ...form, descricaoItens: e.target.value })} rows={3} placeholder="Descreva os itens comprados..." /></div>
             <div><Label>Observações</Label><Textarea value={form.observacoes || ""} onChange={(e) => setForm({ ...form, observacoes: e.target.value })} rows={2} /></div>
+
+            {/* Comprovante OBRIGATÓRIO */}
+            <div className="border-2 border-dashed border-red-300 bg-red-50/50 rounded-lg p-4 space-y-2">
+              <Label className="flex items-center gap-1 text-red-700">
+                <AlertTriangle className="h-4 w-4" />
+                Comprovante de compra * (OBRIGATÓRIO — garante a veracidade do desconto em folha)
+              </Label>
+              <Input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                onChange={(e) => setArquivoNovo(e.target.files?.[0] || null)}
+              />
+              {arquivoNovo ? (
+                <p className="text-xs text-emerald-700 flex items-center gap-1">
+                  <CheckCircle className="h-3 w-3" /> {arquivoNovo.name} ({(arquivoNovo.size / 1024).toFixed(1)} KB)
+                </p>
+              ) : (
+                <p className="text-xs text-red-600">Selecione um arquivo (PDF, JPG, PNG ou WEBP).</p>
+              )}
+            </div>
+
             <div className="flex justify-end gap-3 pt-4 border-t">
-              <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
-              <Button onClick={handleSave} className="bg-purple-500 hover:bg-purple-600" disabled={createMut.isPending}>
-                {createMut.isPending ? "Salvando..." : "Registrar Lançamento"}
+              <Button variant="outline" onClick={() => { setShowForm(false); setArquivoNovo(null); }}>Cancelar</Button>
+              <Button
+                onClick={handleSave}
+                className="bg-purple-500 hover:bg-purple-600"
+                disabled={createMut.isPending || uploadMut.isPending || !arquivoNovo}
+              >
+                {createMut.isPending || uploadMut.isPending ? "Salvando..." : "Registrar Lançamento"}
               </Button>
             </div>
           </div>
         </FullScreenDialog>
       )}
+
+      {/* ===== Editar Lançamento ===== */}
+      <Dialog open={!!editLanc} onOpenChange={(o) => !o && setEditLanc(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-purple-500" /> Editar Lançamento
+            </DialogTitle>
+            <DialogDescription>
+              {editLanc && `${getColaboradorNome(editLanc.employeeId)} — ${getParceiroNome(editLanc.parceiroConveniadoId)}`}
+            </DialogDescription>
+          </DialogHeader>
+          {editLanc && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Colaborador</Label>
+                  <Select
+                    value={editLanc.employeeId ? String(editLanc.employeeId) : ""}
+                    onValueChange={(v) => setEditLanc({ ...editLanc, employeeId: parseInt(v) })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {colaboradores.map((c: any) => (
+                        <SelectItem key={c.id} value={String(c.id)}>{c.nomeCompleto || c.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Data da Compra</Label>
+                  <Input
+                    type="date"
+                    value={editLanc.dataCompra ? String(editLanc.dataCompra).slice(0, 10) : ""}
+                    onChange={(e) => setEditLanc({ ...editLanc, dataCompra: e.target.value })}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Valor (R$)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={editLanc.valor || ""}
+                    onChange={(e) => setEditLanc({ ...editLanc, valor: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Atual: {fmtBRL(editLanc.valor)}</p>
+                </div>
+              </div>
+              <div>
+                <Label>Descrição dos Itens</Label>
+                <Textarea
+                  rows={3}
+                  value={editLanc.descricaoItens || ""}
+                  onChange={(e) => setEditLanc({ ...editLanc, descricaoItens: e.target.value })}
+                />
+              </div>
+              {editLanc.comprovanteUrl ? (
+                <div className="text-xs">
+                  <a href={editLanc.comprovanteUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1">
+                    <FileText className="h-3.5 w-3.5" /> Ver comprovante atual
+                  </a>
+                  <Button size="sm" variant="outline" className="ml-2" onClick={() => handleUpload(editLanc.id)}>
+                    <Upload className="h-3.5 w-3.5 mr-1" /> Substituir comprovante
+                  </Button>
+                </div>
+              ) : (
+                <div className="bg-red-50 border border-red-200 rounded p-2 text-xs text-red-700 flex items-center justify-between">
+                  <span className="flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> Este lançamento está sem comprovante.</span>
+                  <Button size="sm" variant="outline" onClick={() => handleUpload(editLanc.id)}>
+                    <Upload className="h-3.5 w-3.5 mr-1" /> Anexar agora
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => setConfirmDel(editLanc)}>
+              <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setEditLanc(null)}>Cancelar</Button>
+              <Button onClick={handleSaveEdit} disabled={editMut.isPending} className="bg-purple-500 hover:bg-purple-600">
+                {editMut.isPending ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Confirmar exclusão ===== */}
+      <Dialog open={!!confirmDel} onOpenChange={(o) => !o && setConfirmDel(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700">
+              <AlertTriangle className="h-5 w-5" /> Excluir lançamento?
+            </DialogTitle>
+            <DialogDescription>
+              {confirmDel && (
+                <>Esta ação é irreversível. O lançamento de <strong>{getColaboradorNome(confirmDel.employeeId)}</strong> no valor de <strong>{fmtBRL(confirmDel.valor)}</strong> será removido permanentemente.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirmDel(null)}>Cancelar</Button>
+            <Button
+              className="bg-red-500 hover:bg-red-600 text-white"
+              disabled={delMut.isPending}
+              onClick={() => confirmDel && delMut.mutate({ id: confirmDel.id })}
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              {delMut.isPending ? "Excluindo..." : "Excluir definitivamente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

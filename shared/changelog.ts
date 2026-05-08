@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1419,
+    titulo: "Lançamentos Parceiros: valores em pt-BR, edição/exclusão por clique e comprovante OBRIGATÓRIO",
+    descricao: "MELHORIAS na tela de Lançamentos do módulo Parceiros: (1) todos os valores agora aparecem no padrão pt-BR (R$ 1.268,50 com ponto de milhar e vírgula decimal) — tanto nos KPIs (Pendentes/Aprovados/Total Geral) quanto em cada linha; (2) clicar no card de um lançamento abre o modal de EDIÇÃO (colaborador, data, valor, descrição) com botões 'Editar' e 'Excluir' também disponíveis nos botões de ação; (3) modal de confirmação ao excluir; (4) badge vermelho 'Sem comprovante' nas linhas que não têm anexo; (5) COMPROVANTE OBRIGATÓRIO ao criar um novo lançamento — o formulário não permite salvar sem anexar arquivo (PDF, JPG, PNG ou WEBP), garantindo a veracidade do desconto em folha. O upload acontece automaticamente após criar o lançamento.",
+    tipo: "melhoria",
+    modulos: "Parceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 18:00:00",
+  },
+  {
     version: 1418,
     titulo: "Lançamentos Parceiros: seletor de competência (Ano + 12 meses) acima dos filtros",
     descricao: "MELHORIA: adicionado um seletor visual de COMPETÊNCIA na tela de Lançamentos do módulo Parceiros, no estilo das outras telas (linha com 12 meses + setas para mudar de ano). Ao clicar num mês, o sistema aplica automaticamente o ciclo 16→15 daquela competência (ex: Mai/2026 = 16/04/2026 a 15/05/2026). O mês selecionado fica destacado em roxo, o mês atual fica com borda destacada, e há legenda mostrando exatamente o intervalo de datas da competência selecionada.",
