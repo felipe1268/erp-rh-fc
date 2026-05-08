@@ -247,8 +247,8 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
       {/* Modal registrar integração */}
       {modalForm && (
         <Dialog open={!!modalForm} onOpenChange={open => { if (!open) setModalForm(null); }}>
-          <DialogContent className="max-w-lg" style={{ background: "#fff", color: "#111" }}>
-            <DialogHeader>
+          <DialogContent className="max-w-2xl w-[96vw] max-h-[92vh] p-0 gap-0 flex flex-col" style={{ background: "#fff", color: "#111" }}>
+            <DialogHeader className="px-5 pt-5 pb-3 border-b shrink-0">
               <DialogTitle className="flex items-center gap-2 text-indigo-700">
                 <Users className="h-4 w-4" /> Registrar Integração de Pessoal
               </DialogTitle>
@@ -294,7 +294,7 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
               };
               const isPending = criarMut.isPending || criarLoteMut.isPending;
               return <>
-                <div className="space-y-3 mt-2">
+                <div className="space-y-3 px-5 py-4 overflow-y-auto flex-1 min-h-0">
                   {/* Seleção de colaboradores (multi) */}
                   <div>
                     <div className="flex items-center justify-between">
@@ -442,16 +442,23 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
                     </div>
                   </div>
                 </div>
-                <DialogFooter className="mt-4">
-                  <Button variant="outline" onClick={() => { setModalForm(null); setEmpSearch(""); }}>Cancelar</Button>
-                  <Button
-                    disabled={!selIds.length || !modalForm.dataRealizacao || isPending}
-                    onClick={submit}
-                    className="bg-indigo-600 hover:bg-indigo-700 gap-1"
-                  >
-                    {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                    {selIds.length > 1 ? `Registrar ${selIds.length} integrações` : "Registrar"}
-                  </Button>
+                <DialogFooter className="px-5 py-3 border-t bg-slate-50 shrink-0 sm:justify-between">
+                  <div className="text-[11px] text-slate-500 hidden sm:block">
+                    {selIds.length > 0
+                      ? <>Pronto para registrar <b className="text-indigo-700">{selIds.length}</b> integraç{selIds.length === 1 ? "ão" : "ões"}.</>
+                      : "Selecione ao menos um colaborador para continuar."}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => { setModalForm(null); setEmpSearch(""); }}>Cancelar</Button>
+                    <Button
+                      disabled={!selIds.length || !modalForm.dataRealizacao || isPending}
+                      onClick={submit}
+                      className="bg-indigo-600 hover:bg-indigo-700 gap-1"
+                    >
+                      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                      {selIds.length > 1 ? `Registrar ${selIds.length} integrações` : "Registrar"}
+                    </Button>
+                  </div>
                 </DialogFooter>
               </>;
             })()}

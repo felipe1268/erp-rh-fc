@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1432,
+    titulo: "Modal 'Registrar Integração de Pessoal' — fix de corte vertical (rolagem interna + header/footer fixos)",
+    descricao: "O modal estava cortando o título e os botões em telas com altura limitada (notebooks, navegadores com várias barras): agora o modal usa altura máxima de 92% da tela e o conteúdo do meio rola SOZINHO, mantendo o cabeçalho 'Registrar Integração de Pessoal' e o rodapé com os botões 'Cancelar/Registrar' SEMPRE visíveis. A largura também foi aumentada de max-w-lg (~32rem) para max-w-2xl (~42rem) para acomodar melhor as duas colunas de Data de Realização + Validade. O rodapé ganhou um indicador discreto à esquerda mostrando 'Pronto para registrar N integrações' (ou orientação quando nenhum selecionado). Sem mudanças funcionais — só layout/estrutura de scroll.",
+    tipo: "fix",
+    modulos: "Controle de Integrações,Documentos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 20:30:00",
+  },
+  {
     version: 1431,
     titulo: "Portal do Cliente — tela de login DEDICADA (separada de fornecedor/terceiro/parceiro)",
     descricao: "Criada uma tela de login EXCLUSIVA para clientes em /portal/cliente/login (também acessível por /portal/cliente). Diferente do Portal Externo genérico (que continua existindo em /portal/login para terceiros e parceiros), a tela do cliente tem identidade visual própria: layout em duas colunas no desktop — coluna esquerda com gradiente azul/índigo, mensagem 'Acompanhe sua obra de ponta a ponta' e mini-cards destacando o que ele encontrará lá dentro (Documentos, Medições, RDO, Cronograma); coluna direita com formulário em fundo claro, botão azul 'Entrar como cliente'. Em mobile o layout vira coluna única. Backend: a mutation portalExterno.auth.login agora aceita um parâmetro opcional 'tipoEsperado' que filtra credenciais pelo tipo — quando o cliente entra por /portal/cliente/login, o backend só procura credenciais do tipo 'cliente' e devolve mensagem específica ('CNPJ não encontrado entre os clientes cadastrados') se não achar. Isso impede que um terceirizado entre acidentalmente pela URL do cliente. Há um link discreto no rodapé para terceiros/parceiros usarem o portal genérico.",
