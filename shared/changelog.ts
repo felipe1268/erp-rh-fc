@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1447,
+    titulo: "Portal do Cliente — Visão Geral agora exibe Previsão do Tempo + Pontos de Atenção",
+    descricao: "Adicionada na aba Visão Geral do Portal do Cliente uma seção de Previsão do Tempo idêntica à da tela interna de Planejamento: card com 5 dias úteis (Seg-Sex) mostrando ícone, condição (Chuva leve/Pancadas/Tempestade etc.), % de probabilidade de chuva, mm previstos e velocidade do vento. Logo abaixo, bloco de Pontos de Atenção lista automaticamente os dias com chuva > 10mm (impacto em armação/atividades externas), tempestades (paralisar içamentos), alta probabilidade de chuva (> 70%) e ventos fortes (> 30 km/h). Coordenadas inferidas a partir da cidade da obra (Rio de Janeiro, São Paulo, Aparecida, etc.); fonte Open-Meteo (gratuita, sem chave). Quando a semana está limpa, exibe mensagem em verde 'condições favoráveis para trabalhos externos'.",
+    tipo: "feature",
+    modulos: "Portal do Cliente, Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 03:00:00",
+  },
+  {
     version: 1446,
     titulo: "Portal do Cliente — % Previsto agora bate EXATAMENTE com o valor da tela interna",
     descricao: "BUG CORRIGIDO: o portal do cliente exibia % Previsto com 2 casas decimais (ex: 1,84%) enquanto a tela interna PlanejamentoDetalhe mostrava 1,80% para o mesmo projeto, gerando desconfiança no cliente. CAUSA: o helper `avancoPrevistoDia` interno aplica `+soma.toFixed(1)` (arredonda para 1 casa decimal antes de armazenar), o que transforma 1.84 em 1.8 — e o display formata como '1,80%' (2 casas no display, mas valor base com 1 casa). O portal estava usando `+somaPrevisto.toFixed(2)` (2 casas armazenadas), preservando o 1.84 e mostrando '1,84%'. CORREÇÃO: backend `cliente.planejamentoObra` agora também usa `.toFixed(1)` no Previsto, idêntico ao interno. O Realizado mantém a precisão original (Math.min(100, ponderado)) pois o interno também não arredonda. O Desvio passa a ser calculado a partir do Previsto já arredondado, garantindo que -0,75% no interno = -0,75% no portal (e não mais -0,79%). Resultado: cliente vê EXATAMENTE os mesmos números do gestor.",

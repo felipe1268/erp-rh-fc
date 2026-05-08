@@ -7,7 +7,7 @@ import {
   ArrowLeft, Calendar, MapPin, TrendingUp, AlertTriangle, Clock,
   CheckCircle2, Building2, ListTree, Activity, BarChart3, History,
   CalendarDays, User, CalendarCheck, FileText, GitBranch, HardHat,
-  DollarSign,
+  DollarSign, Cloud, Droplets, Wind, Loader2,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, Line, Area, CartesianGrid, XAxis, YAxis,
@@ -304,7 +304,7 @@ export default function PortalPlanejamentoCliente() {
               </div>
             );
           }
-          if (aba === "visao_geral") return <AbaVisaoGeral kpis={kpis} projeto={projeto} semanaAtual={semanaAtual} atrasadas={atrasadas} proximas={proximas} />;
+          if (aba === "visao_geral") return <AbaVisaoGeral kpis={kpis} projeto={projeto} obra={obra} semanaAtual={semanaAtual} atrasadas={atrasadas} proximas={proximas} />;
           if (aba === "cronograma") return <AbaCronograma atividades={atividadesTodas} />;
           if (aba === "avanco_semanal") return <AbaAvancoSemanal kpis={kpis} semanaAtual={semanaAtual} atrasadas={atrasadas} />;
           if (aba === "prog_semanal") return <AbaProgSemanal kpis={kpis} progSemanal={progSemanal} />;
@@ -332,7 +332,8 @@ function Aviso({ children }: { children: React.ReactNode }) {
   );
 }
 
-function AbaVisaoGeral({ kpis, projeto, semanaAtual, atrasadas, proximas }: any) {
+function AbaVisaoGeral({ kpis, projeto, obra, semanaAtual, atrasadas, proximas }: any) {
+  const localTempo = obra?.cidade || obra?.endereco || null;
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -350,11 +351,160 @@ function AbaVisaoGeral({ kpis, projeto, semanaAtual, atrasadas, proximas }: any)
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 text-xs text-slate-500">
         Revisão {String(projeto?.revisaoNumero ?? 0).padStart(2, "0")} de {fmtBR(projeto?.revisaoData)}
       </div>
+      <WeatherWidget local={localTempo} />
       <SecaoAtividades titulo={`Atividades da semana atual (${fmtBR(kpis.semanaInicio)} – ${fmtBR(kpis.semanaFim)})`} vazio="Nenhuma atividade prevista para esta semana." itens={semanaAtual} cor="border-blue-200" />
       {atrasadas.length > 0 && (
         <SecaoAtividades titulo={`Atividades atrasadas (${atrasadas.length})`} vazio="" itens={atrasadas} cor="border-red-200" />
       )}
       <SecaoAtividades titulo="Próximas atividades" vazio="Nenhuma próxima atividade cadastrada." itens={proximas} cor="border-slate-200" />
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// WEATHER WIDGET — Previsão do Tempo (cópia funcional da tela interna)
+// ═════════════════════════════════════════════════════════════════════════════
+const CIDADES_BR_PORTAL: Record<string, [number, number]> = {
+  "rio de janeiro": [-22.9, -43.17], "sao paulo": [-23.55, -46.63], "são paulo": [-23.55, -46.63],
+  "belo horizonte": [-19.92, -43.94], "brasilia": [-15.78, -47.93], "brasília": [-15.78, -47.93],
+  "salvador": [-12.97, -38.5], "fortaleza": [-3.72, -38.54], "recife": [-8.05, -34.88],
+  "porto alegre": [-30.03, -51.23], "manaus": [-3.12, -60.02], "belem": [-1.46, -48.49],
+  "belém": [-1.46, -48.49], "goiania": [-16.68, -49.25], "goiânia": [-16.68, -49.25],
+  "curitiba": [-25.43, -49.27], "campinas": [-22.9, -47.06], "niteroi": [-22.88, -43.1],
+  "niterói": [-22.88, -43.1], "aparecida": [-22.85, -45.23],
+};
+function getCoordsFromLocalPortal(local: string | null | undefined): [number, number] {
+  if (!local) return [-22.9, -43.17];
+  const lower = local.toLowerCase();
+  for (const [key, coords] of Object.entries(CIDADES_BR_PORTAL)) {
+    if (lower.includes(key)) return coords;
+  }
+  return [-22.9, -43.17];
+}
+const WMO_PORTAL: Record<number, { label: string; icon: string; crit: boolean }> = {
+  0: { label: "Céu limpo", icon: "☀️", crit: false },
+  1: { label: "Predomin. limpo", icon: "🌤️", crit: false },
+  2: { label: "Parcialmente nublado", icon: "⛅", crit: false },
+  3: { label: "Nublado", icon: "☁️", crit: false },
+  45: { label: "Neblina", icon: "🌫️", crit: false },
+  48: { label: "Geada", icon: "🌫️", crit: false },
+  51: { label: "Garoa leve", icon: "🌦️", crit: true },
+  53: { label: "Garoa moderada", icon: "🌦️", crit: true },
+  55: { label: "Garoa intensa", icon: "🌧️", crit: true },
+  61: { label: "Chuva leve", icon: "🌧️", crit: true },
+  63: { label: "Chuva moderada", icon: "🌧️", crit: true },
+  65: { label: "Chuva forte", icon: "🌧️", crit: true },
+  80: { label: "Pancadas leves", icon: "🌦️", crit: true },
+  81: { label: "Pancadas moderadas", icon: "🌧️", crit: true },
+  82: { label: "Pancadas fortes", icon: "⛈️", crit: true },
+  95: { label: "Tempestade", icon: "⛈️", crit: true },
+  96: { label: "Tempestade c/ granizo", icon: "⛈️", crit: true },
+  99: { label: "Tempestade c/ granizo", icon: "⛈️", crit: true },
+};
+const wmoInfoPortal = (code: number) => WMO_PORTAL[code] ?? { label: `Cód ${code}`, icon: "🌡️", crit: false };
+const DIAS_PT_PORTAL = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+function WeatherWidget({ local }: { local: string | null | undefined }) {
+  const [dados, setDados] = useState<any>(null);
+  const [erro, setErro] = useState(false);
+  const [coords, setCoords] = useState<[number, number]>(getCoordsFromLocalPortal(local));
+
+  useEffect(() => { setCoords(getCoordsFromLocalPortal(local)); }, [local]);
+
+  useEffect(() => {
+    const [lat, lon] = coords;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weather_code,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&timezone=America%2FSao_Paulo&forecast_days=7`;
+    fetch(url).then(r => r.json()).then(d => setDados(d)).catch(() => setErro(true));
+  }, [coords]);
+
+  if (erro) return null;
+  if (!dados) return (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex items-center gap-2 text-xs text-slate-400">
+      <Loader2 className="h-4 w-4 animate-spin" /> Carregando previsão do tempo...
+    </div>
+  );
+  const { daily } = dados;
+  if (!daily) return null;
+
+  const diasUteis = daily.time.map((dt: string, i: number) => {
+    const d = new Date(dt + "T12:00:00");
+    const dow = d.getDay();
+    if (dow === 0 || dow === 6) return null;
+    return {
+      dt, dow,
+      code: daily.weather_code[i],
+      chuva: parseFloat(daily.precipitation_sum[i] ?? "0"),
+      probChuva: parseInt(daily.precipitation_probability_max[i] ?? "0"),
+      vento: parseFloat(daily.wind_speed_10m_max[i] ?? "0"),
+    };
+  }).filter(Boolean).slice(0, 5);
+
+  const alertas: string[] = [];
+  diasUteis.forEach((d: any) => {
+    const dayName = DIAS_PT_PORTAL[d.dow];
+    if (d.code >= 95) alertas.push(`⛈️ ${dayName}: Tempestade prevista — recomendável paralisar operações externas e içamentos`);
+    else if (d.chuva > 10) alertas.push(`🌧️ ${dayName}: Chuva > 10mm — atividades externas e armação impactadas`);
+    else if (d.probChuva > 70) alertas.push(`🌦️ ${dayName}: Alta probabilidade de chuva (${d.probChuva}%) — planeje atividades internas como alternativa`);
+    if (d.vento > 50) alertas.push(`💨 ${dayName}: Ventos muito fortes (${d.vento.toFixed(0)} km/h) — paralisar içamentos e andaimes`);
+    else if (d.vento > 30) alertas.push(`💨 ${dayName}: Ventos fortes (${d.vento.toFixed(0)} km/h) — atenção com guindaste e estruturas temporárias`);
+  });
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+          <Cloud className="h-4 w-4 text-blue-500" />
+          Previsão do Tempo — Semana Útil
+        </p>
+        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+          <MapPin className="h-3 w-3" />
+          {local ?? "Rio de Janeiro"}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-5 gap-2">
+        {diasUteis.map((d: any) => {
+          const info = wmoInfoPortal(d.code);
+          const isCrit = info.crit || d.probChuva > 70 || d.vento > 30;
+          return (
+            <div key={d.dt} className={`rounded-lg p-2 text-center border ${isCrit ? "border-amber-200 bg-amber-50" : "border-slate-100 bg-slate-50"}`}>
+              <p className="text-[10px] font-semibold text-slate-500">{DIAS_PT_PORTAL[d.dow]}</p>
+              <p className="text-[10px] text-slate-400">{new Date(d.dt + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</p>
+              <p className="text-2xl my-1">{info.icon}</p>
+              <p className="text-[9px] text-slate-600 leading-tight">{info.label}</p>
+              <div className="mt-1 space-y-0.5">
+                {d.probChuva > 0 && (
+                  <p className="text-[9px] text-blue-600 flex items-center justify-center gap-0.5">
+                    <Droplets className="h-2.5 w-2.5" />{d.probChuva}%
+                  </p>
+                )}
+                {d.chuva > 0 && (
+                  <p className="text-[9px] text-blue-700 font-semibold">{d.chuva.toFixed(1)}mm</p>
+                )}
+                <p className="text-[9px] text-slate-500 flex items-center justify-center gap-0.5">
+                  <Wind className="h-2.5 w-2.5" />{d.vento.toFixed(0)} km/h
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {alertas.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1.5">
+          <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" /> Pontos de Atenção ({alertas.length})
+          </p>
+          {alertas.map((a, i) => (
+            <p key={i} className="text-xs text-amber-700">{a}</p>
+          ))}
+        </div>
+      )}
+      {alertas.length === 0 && (
+        <p className="text-xs text-emerald-600 flex items-center gap-1.5">
+          <CheckCircle2 className="h-3.5 w-3.5" /> Sem alertas meteorológicos para a semana — condições favoráveis para trabalhos externos
+        </p>
+      )}
     </div>
   );
 }
