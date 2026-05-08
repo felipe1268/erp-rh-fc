@@ -343,6 +343,7 @@ const menuSectionsParceiros: MenuSection[] = [
     title: "Parceiros",
     items: [
       { icon: LayoutDashboard, label: "Painel Parceiros", path: "/parceiros/painel" },
+      { icon: BarChart3, label: "Dashboard Parceiros", path: "/dashboards/parceiros" },
       { icon: Store, label: "Parceiros Conveniados", path: "/parceiros/cadastro" },
     ],
   },

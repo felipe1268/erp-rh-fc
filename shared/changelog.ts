@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1410,
+    titulo: "Dashboard Parceiros: item de menu adicionado à barra lateral do módulo Parceiros",
+    descricao: "AJUSTE complementar à Rev. 1409: o link 'Dashboard Parceiros' (ícone BarChart3) foi adicionado à barra lateral do módulo Parceiros (DashboardLayout — menuSectionsParceiros), logo abaixo de 'Painel Parceiros' e antes de 'Parceiros Conveniados', apontando para /dashboards/parceiros. Antes o dashboard só estava acessível pela página /dashboards, agora aparece também no menu lateral quando o usuário navega dentro do módulo Parceiros.",
+    tipo: "melhoria",
+    modulos: "Parceiros,Dashboards",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 11:00:00",
+  },
+  {
     version: 1409,
     titulo: "Novo Dashboard de Parceiros — gestão integrada (Lançamentos, Aprovações, Guia de Descontos, Pagamentos)",
     descricao: "FEATURE: novo dashboard /dashboards/parceiros consolidando todo o módulo Parceiros num único painel analítico, no mesmo padrão dos demais dashboards (Cartão de Ponto, Folha, HE, EPIs etc.). Filtros de Ano, Mês, Tipo de Convênio e Parceiro específico. KPIs principais: Parceiros Ativos, Lançamentos, Valor Total, Pendentes/Aprovados/Rejeitados (clicáveis para drill-down). KPIs secundários: Taxa de Aprovação, SLA Aprovação (dias entre createdAt e aprovadoEm), Total Pago e Total a Pagar. Gráficos: Evolução Mensal de Lançamentos (barras empilhadas por status, clique no mês abre drill-down), Status (doughnut), Valor Aprovado por Mês (linha), Pagamentos Pago vs A Pagar (barras), Top 10 Parceiros por Valor (barra horizontal clicável), Top 10 Colaboradores por Valor. Tabela 'Análise por Tipo de Convênio' com parceiros, lançamentos, valor e ticket médio. Tabela 'Lançamentos Recentes' (top 100 do período filtrado, datas em dd/MM/aaaa). Backend: nova procedure dashboards.parceiros (server/routers/dashboards.ts) que agrega parceiros_conveniados (vivos) + lancamentos_parceiros + pagamentos_parceiros do ano selecionado, respeita tenant isolation (companyWhere) e suporta CONSTRUTORAS via companyIds. Card 'Parceiros' (Handshake roxo) adicionado ao /dashboards e DASH_TO_ROUTE aponta para /parceiros/painel.",
