@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb } from "../db";
-import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos } from "../../drizzle/schema";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1231,6 +1231,83 @@ export const portalExternoRouter = router({
         curvaS.push({ semana: sem, previsto: prevAcumLast, realizado: realizadoOut });
       }
 
+      // ── REFIS lançados (mais recentes primeiro) ─────────────────────────
+      const refisRows = await db.select().from(planejamentoRefis)
+        .where(eq(planejamentoRefis.projetoId, projeto.id))
+        .orderBy(desc(planejamentoRefis.semana));
+      const refisLista = refisRows.map((r: any) => ({
+        id: r.id,
+        numero: r.numero,
+        semana: _toDateStr(r.semana),
+        dataEmissao: _toDateStr(r.dataEmissao),
+        avancoPrevisto: _n(r.avancoPrevisto),
+        avancoRealizado: _n(r.avancoRealizado),
+        avancoSemanalPrevisto: _n(r.avancoSemanalPrevisto),
+        avancoSemanalRealizado: _n(r.avancoSemanalRealizado),
+        spi: _n(r.spi),
+        cpi: _n(r.cpi),
+        observacoes: r.observacoes,
+        status: r.status,
+      }));
+
+      // ── Caminho Crítico — atividades não-concluídas ordenadas por
+      // criticidade (atrasadas primeiro, depois com folga negativa). ─────
+      const caminhoCritico = folhas
+        .map((a: any) => {
+          const real = ultimoAvancoPorAtiv[a.id] ?? 0;
+          const ini = new Date(a.dataInicio + "T12:00:00Z").getTime();
+          const fim = new Date(a.dataFim + "T12:00:00Z").getTime();
+          const tod = new Date(todayStr + "T12:00:00Z").getTime();
+          const duracaoDias = Math.max(1, Math.round((fim - ini) / 86400000));
+          // Previsto linear até hoje
+          let pctPrev = 0;
+          if (tod >= fim) pctPrev = 100;
+          else if (tod > ini) pctPrev = ((tod - ini) / (fim - ini)) * 100;
+          const desvio = real - pctPrev;
+          const isAtrasada = a.dataFim < todayStr && real < 100;
+          const isCritica = isAtrasada || (desvio < -10 && real < 100);
+          // Folga em dias (estimada): quanto tempo a atividade poderia atrasar
+          // antes de comprometer o prazo (aproximação simples: se desvio<0, folga=0)
+          const folgaDias = isAtrasada
+            ? Math.round((tod - fim) / 86400000) * -1
+            : Math.max(0, Math.round((fim - tod) / 86400000));
+          return {
+            ...a,
+            percentRealizado: real,
+            percentPrevisto: +pctPrev.toFixed(2),
+            desvio: +desvio.toFixed(2),
+            duracaoDias,
+            folgaDias,
+            isCritica,
+            isAtrasada,
+          };
+        })
+        .filter((a: any) => a.percentRealizado < 100)
+        .sort((a: any, b: any) => {
+          // Atrasadas primeiro, depois por desvio mais negativo
+          if (a.isAtrasada && !b.isAtrasada) return -1;
+          if (!a.isAtrasada && b.isAtrasada) return 1;
+          return a.desvio - b.desvio;
+        })
+        .slice(0, 50);
+
+      // ── Efetivo (custos de Mão de Obra agrupados por mês/tipo) ─────────
+      const custosMoRaw = await db.select().from(planejamentoCustosMo)
+        .where(eq(planejamentoCustosMo.projetoId, projeto.id));
+      const efetivoPorMes: Record<string, { mesReferencia: string; direto: number; indireto: number; central: number; total: number }> = {};
+      for (const c of custosMoRaw) {
+        const mes = c.mesReferencia;
+        if (!efetivoPorMes[mes]) {
+          efetivoPorMes[mes] = { mesReferencia: mes, direto: 0, indireto: 0, central: 0, total: 0 };
+        }
+        const valor = _n(c.custo);
+        if (c.tipo === "direto") efetivoPorMes[mes].direto += valor;
+        else if (c.tipo?.startsWith("indireta")) efetivoPorMes[mes].indireto += valor;
+        else if (c.tipo?.includes("central")) efetivoPorMes[mes].central += valor;
+        efetivoPorMes[mes].total += valor;
+      }
+      const efetivoMensal = Object.values(efetivoPorMes).sort((a, b) => a.mesReferencia.localeCompare(b.mesReferencia));
+
       // Próximas 3 semanas (para "Prog. Semanal") — janela seg→domingo+14
       const tresSemanasFim = new Date(sunday); tresSemanasFim.setDate(sunday.getDate() + 14);
       const tresSemFimStr = tresSemanasFim.toISOString().slice(0, 10);
@@ -1261,6 +1338,9 @@ export const portalExternoRouter = router({
         proximas,
         progSemanal,
         curvaS,
+        refisLista,
+        caminhoCritico,
+        efetivoMensal,
         atividadesTodas: atividades.map((a: any) => ({ ...a, percentRealizado: ultimoAvancoPorAtiv[a.id] ?? 0 })),
         revisoes: revisoesHist.map((r: any) => ({
           id: r.id, numero: r.numero, dataRevisao: r.dataRevisao,

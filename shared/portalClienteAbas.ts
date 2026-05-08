@@ -33,15 +33,15 @@ export const PORTAL_CLIENTE_ABAS: PortalClienteAbaInfo[] = [
   { key: "prog_semanal", label: "Prog. Semanal", status: "implementado" },
   { key: "curva_s", label: "Curva S", status: "implementado" },
   { key: "revisoes", label: "Revisões", status: "implementado" },
-  { key: "gantt", label: "Gantt", status: "em_breve" },
-  { key: "refis", label: "REFIS", status: "em_breve" },
+  { key: "gantt", label: "Gantt", status: "implementado" },
+  { key: "refis", label: "REFIS", status: "implementado" },
+  { key: "caminho_critico", label: "Caminho Crítico", status: "implementado" },
+  { key: "efetivo", label: "Efetivo", status: "implementado" },
   { key: "crono_financeiro", label: "Crono. Financeiro", status: "em_breve" },
   { key: "prev_medicao", label: "Prev. Medição", status: "em_breve" },
-  { key: "caminho_critico", label: "Caminho Crítico", status: "em_breve" },
   { key: "diagrama_rede", label: "Diagrama de Rede", status: "em_breve" },
   { key: "custo_rh", label: "Custo RH", status: "em_breve" },
   { key: "bim_3d", label: "BIM 3D", status: "em_breve" },
-  { key: "efetivo", label: "Efetivo", status: "em_breve" },
 ];
 
 // Aba sempre liberada (default mínimo). Não é possível desabilitar a Visão Geral —

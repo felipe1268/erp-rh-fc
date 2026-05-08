@@ -6,7 +6,8 @@ import { useLocation, useRoute } from "wouter";
 import {
   ArrowLeft, Calendar, MapPin, TrendingUp, AlertTriangle, Clock,
   CheckCircle2, Building2, ListTree, Activity, BarChart3, History,
-  CalendarDays, User,
+  CalendarDays, User, CalendarCheck, FileText, GitBranch, HardHat,
+  DollarSign,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, Line, Area, CartesianGrid, XAxis, YAxis,
@@ -24,6 +25,15 @@ const ABA_ICONS: Record<string, any> = {
   prog_semanal: CalendarDays,
   curva_s: BarChart3,
   revisoes: History,
+  gantt: CalendarCheck,
+  refis: FileText,
+  caminho_critico: GitBranch,
+  efetivo: HardHat,
+  crono_financeiro: DollarSign,
+  prev_medicao: FileText,
+  diagrama_rede: GitBranch,
+  custo_rh: DollarSign,
+  bim_3d: BarChart3,
 };
 
 function statusBadge(realizado: number, dataFim: string | null) {
@@ -60,6 +70,9 @@ export default function PortalPlanejamentoCliente() {
   const progSemanal = ((data as any)?.progSemanal || []) as any[];
   const curvaS = ((data as any)?.curvaS || []) as { semana: string; previsto: number; realizado: number }[];
   const atividadesTodas = ((data as any)?.atividadesTodas || []) as any[];
+  const refisLista = ((data as any)?.refisLista || []) as any[];
+  const caminhoCritico = ((data as any)?.caminhoCritico || []) as any[];
+  const efetivoMensal = ((data as any)?.efetivoMensal || []) as any[];
   const revisoes = ((data as any)?.revisoes || []) as any[];
   const abasLiberadas = ((data as any)?.abasLiberadas || ["visao_geral"]) as PortalClienteAbaKey[];
 
@@ -296,6 +309,10 @@ export default function PortalPlanejamentoCliente() {
           if (aba === "avanco_semanal") return <AbaAvancoSemanal kpis={kpis} semanaAtual={semanaAtual} atrasadas={atrasadas} />;
           if (aba === "prog_semanal") return <AbaProgSemanal kpis={kpis} progSemanal={progSemanal} />;
           if (aba === "curva_s") return <AbaCurvaS curvaS={curvaS} kpis={kpis} projeto={projeto} />;
+          if (aba === "gantt") return <AbaGantt atividades={atividadesTodas} />;
+          if (aba === "refis") return <AbaRefis refisLista={refisLista} />;
+          if (aba === "caminho_critico") return <AbaCaminhoCritico criticas={caminhoCritico} />;
+          if (aba === "efetivo") return <AbaEfetivo efetivoMensal={efetivoMensal} />;
           if (aba === "revisoes") return <AbaRevisoes revisoes={revisoes} />;
           return null;
         })()}
@@ -594,6 +611,291 @@ function KpiCard({ label, value, icon, sub, accent }: { label: string; value: st
       </div>
       <div className="text-2xl font-bold text-slate-900 tabular-nums">{value}</div>
       {sub && <p className="text-[11px] font-medium text-slate-500 mt-0.5 capitalize">{sub}</p>}
+    </div>
+  );
+}
+
+// ─────────────────────── ABA: GANTT ─────────────────────────────────────
+function AbaGantt({ atividades }: { atividades: any[] }) {
+  const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim), [atividades]);
+  const { minMs, maxMs, meses } = useMemo(() => {
+    if (folhas.length === 0) return { minMs: 0, maxMs: 0, meses: [] as { label: string; pct: number }[] };
+    let mn = Infinity, mx = -Infinity;
+    for (const a of folhas) {
+      const ini = new Date(a.dataInicio + "T12:00:00Z").getTime();
+      const fim = new Date(a.dataFim + "T12:00:00Z").getTime();
+      if (ini < mn) mn = ini;
+      if (fim > mx) mx = fim;
+    }
+    // Headers de mês entre min e max
+    const meses: { label: string; pct: number }[] = [];
+    const d = new Date(mn); d.setUTCDate(1);
+    const total = mx - mn;
+    while (d.getTime() <= mx) {
+      const pct = Math.max(0, ((d.getTime() - mn) / total) * 100);
+      const lbl = d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", "").toUpperCase();
+      meses.push({ label: lbl, pct });
+      d.setUTCMonth(d.getUTCMonth() + 1);
+    }
+    return { minMs: mn, maxMs: mx, meses };
+  }, [folhas]);
+
+  const todayMs = Date.now();
+  const todayPct = maxMs > minMs ? ((todayMs - minMs) / (maxMs - minMs)) * 100 : 0;
+
+  if (folhas.length === 0) {
+    return <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 text-sm">Sem atividades com datas para exibir o Gantt.</div>;
+  }
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white flex items-center gap-2">
+        <CalendarCheck className="h-4 w-4 text-blue-600" />
+        <h3 className="font-semibold text-slate-800">Cronograma Gantt</h3>
+        <span className="text-xs text-slate-500 ml-auto">{folhas.length} atividades</span>
+      </div>
+      <div className="overflow-x-auto">
+        <div className="min-w-[900px]">
+          <div className="grid grid-cols-[280px_1fr] border-b border-slate-200 bg-slate-50/60">
+            <div className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Atividade</div>
+            <div className="relative h-8">
+              {meses.map((m, i) => (
+                <div key={i} className="absolute top-0 h-full border-l border-slate-200 px-1.5 text-[10px] font-medium text-slate-500" style={{ left: `${m.pct}%` }}>
+                  {m.label}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {folhas.slice(0, 80).map((a: any) => {
+              const ini = new Date(a.dataInicio + "T12:00:00Z").getTime();
+              const fim = new Date(a.dataFim + "T12:00:00Z").getTime();
+              const total = maxMs - minMs;
+              const left = total > 0 ? ((ini - minMs) / total) * 100 : 0;
+              const width = total > 0 ? Math.max(0.5, ((fim - ini) / total) * 100) : 0;
+              const real = a.percentRealizado ?? 0;
+              const isAtrasada = a.dataFim < new Date().toISOString().slice(0, 10) && real < 100;
+              const isConcluida = real >= 100;
+              const barColor = isConcluida ? "bg-emerald-500" : isAtrasada ? "bg-red-500" : "bg-blue-500";
+              return (
+                <div key={a.id} className="grid grid-cols-[280px_1fr] hover:bg-slate-50/60 transition-colors">
+                  <div className="px-4 py-2.5 text-xs">
+                    <div className="text-slate-500 text-[10px]">{a.eapCodigo || "—"}</div>
+                    <div className="text-slate-800 truncate" title={a.nome}>{a.nome}</div>
+                  </div>
+                  <div className="relative h-10 px-2">
+                    {meses.map((m, i) => (
+                      <div key={i} className="absolute top-0 bottom-0 border-l border-slate-100" style={{ left: `${m.pct}%` }} />
+                    ))}
+                    <div className="absolute top-1/2 -translate-y-1/2 h-4 rounded-md overflow-hidden bg-slate-200" style={{ left: `${left}%`, width: `${width}%` }}>
+                      <div className={`h-full ${barColor}`} style={{ width: `${Math.min(100, real)}%` }} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {todayPct >= 0 && todayPct <= 100 && (
+            <div className="relative">
+              <div className="absolute -top-[calc(100%+8px)] bottom-0 w-px bg-red-400" style={{ left: `calc(280px + ${todayPct}% * 0.7142)` }} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────── ABA: REFIS ─────────────────────────────────────
+function AbaRefis({ refisLista }: { refisLista: any[] }) {
+  if (refisLista.length === 0) {
+    return <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 text-sm">Nenhum REFIS emitido ainda.</div>;
+  }
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-purple-50/60 to-white flex items-center gap-2">
+        <FileText className="h-4 w-4 text-purple-600" />
+        <h3 className="font-semibold text-slate-800">REFIS — Relatórios de Fiscalização</h3>
+        <span className="text-xs text-slate-500 ml-auto">{refisLista.length} emitidos</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50/80">
+            <tr className="text-slate-500">
+              <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Nº</th>
+              <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Semana</th>
+              <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Emissão</th>
+              <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">% Prev. Acum.</th>
+              <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">% Real. Acum.</th>
+              <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">SPI</th>
+              <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">CPI</th>
+              <th className="text-center px-4 py-2.5 font-semibold uppercase tracking-wider">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {refisLista.map((r: any) => {
+              const desvio = r.avancoRealizado - r.avancoPrevisto;
+              const cls = desvio >= 0 ? "text-emerald-700" : "text-red-700";
+              const stBadge = r.status === "consolidado" ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                : r.status === "emitido" ? "bg-blue-100 text-blue-700 border-blue-200"
+                : "bg-slate-100 text-slate-600 border-slate-200";
+              return (
+                <tr key={r.id} className="hover:bg-slate-50/60">
+                  <td className="px-4 py-2.5 font-semibold text-slate-700">#{r.numero || "—"}</td>
+                  <td className="px-4 py-2.5 text-slate-700">{fmtBR(r.semana)}</td>
+                  <td className="px-4 py-2.5 text-slate-600">{fmtBR(r.dataEmissao)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{fmtPct(r.avancoPrevisto)}</td>
+                  <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${cls}`}>{fmtPct(r.avancoRealizado)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{r.spi.toFixed(2).replace(".", ",")}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{r.cpi.toFixed(2).replace(".", ",")}</td>
+                  <td className="px-4 py-2.5 text-center">
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border capitalize ${stBadge}`}>{r.status || "—"}</span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────── ABA: CAMINHO CRÍTICO ───────────────────────────
+function AbaCaminhoCritico({ criticas }: { criticas: any[] }) {
+  if (criticas.length === 0) {
+    return <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 text-sm">Sem atividades críticas no momento.</div>;
+  }
+  return (
+    <div className="space-y-4">
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+        <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+        <div className="text-xs text-amber-800">
+          <strong className="block mb-1">Caminho Crítico</strong>
+          Atividades com maior impacto no prazo da obra. Atrasadas aparecem primeiro, seguidas pelas que apresentam maior desvio entre Realizado e Previsto.
+        </div>
+      </div>
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-red-50/60 to-white flex items-center gap-2">
+          <GitBranch className="h-4 w-4 text-red-600" />
+          <h3 className="font-semibold text-slate-800">Atividades Críticas</h3>
+          <span className="text-xs text-slate-500 ml-auto">{criticas.length} atividades</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50/80">
+              <tr className="text-slate-500">
+                <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">EAP</th>
+                <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Atividade</th>
+                <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider whitespace-nowrap">Início</th>
+                <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider whitespace-nowrap">Fim</th>
+                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider whitespace-nowrap">Duração</th>
+                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">% Prev.</th>
+                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">% Real.</th>
+                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">Desvio</th>
+                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider whitespace-nowrap">Folga (d)</th>
+                <th className="text-center px-4 py-2.5 font-semibold uppercase tracking-wider">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {criticas.map((a: any) => {
+                const desvCls = a.desvio >= 0 ? "text-emerald-700" : "text-red-700";
+                const folgaCls = a.folgaDias < 0 ? "text-red-700 font-bold" : a.folgaDias < 5 ? "text-amber-700 font-semibold" : "text-slate-600";
+                const st = statusBadge(a.percentRealizado, a.dataFim);
+                return (
+                  <tr key={a.id} className="hover:bg-slate-50/60">
+                    <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{a.eapCodigo || "—"}</td>
+                    <td className="px-4 py-2.5 text-slate-800 max-w-xs truncate" title={a.nome}>{a.nome}</td>
+                    <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{fmtBR(a.dataInicio)}</td>
+                    <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{fmtBR(a.dataFim)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-600">{a.duracaoDias}d</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{fmtPct(a.percentPrevisto)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-slate-800">{fmtPct(a.percentRealizado)}</td>
+                    <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${desvCls}`}>{a.desvio > 0 ? "+" : ""}{fmtPct(a.desvio)}</td>
+                    <td className={`px-4 py-2.5 text-right tabular-nums ${folgaCls}`}>{a.folgaDias}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${st.cls}`}>{st.label}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────── ABA: EFETIVO (Custo MO) ────────────────────────
+function AbaEfetivo({ efetivoMensal }: { efetivoMensal: any[] }) {
+  const fmtMoeda = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const fmtMes = (m: string) => {
+    const [y, mm] = m.split("-");
+    return `${mm}/${y}`;
+  };
+  const totais = useMemo(() => {
+    return efetivoMensal.reduce((acc, m: any) => ({
+      direto: acc.direto + m.direto,
+      indireto: acc.indireto + m.indireto,
+      central: acc.central + m.central,
+      total: acc.total + m.total,
+    }), { direto: 0, indireto: 0, central: 0, total: 0 });
+  }, [efetivoMensal]);
+
+  if (efetivoMensal.length === 0) {
+    return <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 text-sm">Sem dados de efetivo (custos de mão de obra) lançados.</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard label="Total Direto" value={fmtMoeda(totais.direto)} icon={<HardHat className="h-4 w-4 text-blue-600" />} />
+        <KpiCard label="Total Indireto" value={fmtMoeda(totais.indireto)} icon={<HardHat className="h-4 w-4 text-amber-600" />} />
+        <KpiCard label="Total Central" value={fmtMoeda(totais.central)} icon={<Building2 className="h-4 w-4 text-purple-600" />} />
+        <KpiCard label="Total Geral" value={fmtMoeda(totais.total)} icon={<DollarSign className="h-4 w-4 text-emerald-600" />} />
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-orange-50/60 to-white flex items-center gap-2">
+          <HardHat className="h-4 w-4 text-orange-600" />
+          <h3 className="font-semibold text-slate-800">Efetivo / Custos de Mão de Obra (mensal)</h3>
+          <span className="text-xs text-slate-500 ml-auto">{efetivoMensal.length} meses</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50/80">
+              <tr className="text-slate-500">
+                <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Mês</th>
+                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">Direto</th>
+                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">Indireto</th>
+                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">Central</th>
+                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {efetivoMensal.map((m: any) => (
+                <tr key={m.mesReferencia} className="hover:bg-slate-50/60">
+                  <td className="px-4 py-2.5 font-semibold text-slate-700">{fmtMes(m.mesReferencia)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{fmtMoeda(m.direto)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{fmtMoeda(m.indireto)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{fmtMoeda(m.central)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-bold text-slate-900">{fmtMoeda(m.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="bg-slate-50/80 border-t-2 border-slate-200">
+              <tr className="font-bold text-slate-800">
+                <td className="px-4 py-2.5">TOTAL</td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{fmtMoeda(totais.direto)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{fmtMoeda(totais.indireto)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{fmtMoeda(totais.central)}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums">{fmtMoeda(totais.total)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
