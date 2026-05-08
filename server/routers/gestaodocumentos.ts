@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb } from "../db";
+import { getDb, getEffectiveAllowedObraIds, userCanAccessObra } from "../db";
 import { eq, and, desc, isNull, sql, ilike, or, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
 import {
@@ -41,13 +41,65 @@ const DISCIPLINAS_PADRAO = [
 
 const SUBPASTAS_PADRAO_COMPLETAS = ["DWG", "PDF", "IFC", "DOC", "REVIT", "SKP", "XLS", "FOTOS", "BIM", "MEMORIAIS"];
 
+// ----- Helpers de controle de acesso por obra (Rev.1425) -----
+async function assertObraAccess(ctx: any, obraId: number | null | undefined) {
+  if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, obraId))) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta obra" });
+  }
+}
+async function assertDocAccess(ctx: any, db: any, docId: number, companyId: number) {
+  const [doc] = await db.select({ obraId: gdDocumentos.obraId }).from(gdDocumentos)
+    .where(and(eq(gdDocumentos.id, docId), eq(gdDocumentos.companyId, companyId)));
+  if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Documento não encontrado" });
+  await assertObraAccess(ctx, doc.obraId);
+  return doc;
+}
+async function assertDocsAccess(ctx: any, db: any, docIds: number[], companyId: number) {
+  if (docIds.length === 0) return;
+  const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+  if (allowed === null) return;
+  const docs = await db.select({ id: gdDocumentos.id, obraId: gdDocumentos.obraId }).from(gdDocumentos)
+    .where(and(inArray(gdDocumentos.id, docIds), eq(gdDocumentos.companyId, companyId)));
+  if (docs.length !== docIds.length) throw new TRPCError({ code: "NOT_FOUND" });
+  for (const d of docs) {
+    if (d.obraId == null || !allowed.includes(d.obraId)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a uma das obras envolvidas" });
+    }
+  }
+}
+async function assertRevisaoAccess(ctx: any, db: any, revisaoId: number, companyId: number) {
+  const [row] = await db.select({ obraId: gdDocumentos.obraId, documentoId: gdRevisoes.documentoId })
+    .from(gdRevisoes)
+    .innerJoin(gdDocumentos, and(eq(gdDocumentos.id, gdRevisoes.documentoId), eq(gdDocumentos.companyId, companyId)))
+    .where(and(eq(gdRevisoes.id, revisaoId), eq(gdRevisoes.companyId, companyId)));
+  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Revisão não encontrada" });
+  await assertObraAccess(ctx, row.obraId);
+  return row;
+}
+async function assertFicheiroAccess(ctx: any, db: any, ficheiroId: number, companyId: number) {
+  const [f] = await db.select({ obraId: gdFicheirosObra.obraId }).from(gdFicheirosObra)
+    .where(and(eq(gdFicheirosObra.id, ficheiroId), eq(gdFicheirosObra.companyId, companyId)));
+  if (!f) throw new TRPCError({ code: "NOT_FOUND", message: "Ficheiro não encontrado" });
+  await assertObraAccess(ctx, f.obraId);
+  return f;
+}
+async function assertArtAccess(ctx: any, db: any, artId: number, companyId: number) {
+  const [a] = await db.select({ obraId: gdArts.obraId }).from(gdArts)
+    .where(and(eq(gdArts.id, artId), eq(gdArts.companyId, companyId)));
+  if (!a) throw new TRPCError({ code: "NOT_FOUND", message: "ART não encontrada" });
+  await assertObraAccess(ctx, a.obraId);
+  return a;
+}
+
 export const gestaoDocumentosRouter = router({
 
   listObrasDisponiveis: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null && allowed.length === 0) return [];
       const allObras = await db.select({
         id: obras.id,
         nome: obras.nome,
@@ -58,6 +110,7 @@ export const gestaoDocumentosRouter = router({
         .where(and(
           eq(obras.companyId, input.companyId),
           isNull(obras.deletedAt),
+          allowed !== null ? inArray(obras.id, allowed) : sql`TRUE`,
         ));
       return allObras.filter(o => {
         const s = (o.status || "").toLowerCase();
@@ -67,11 +120,16 @@ export const gestaoDocumentosRouter = router({
 
   listFicheiros: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null && allowed.length === 0) return [];
       const ficheiros = await db.select().from(gdFicheirosObra)
-        .where(eq(gdFicheirosObra.companyId, input.companyId))
+        .where(and(
+          eq(gdFicheirosObra.companyId, input.companyId),
+          allowed !== null ? inArray(gdFicheirosObra.obraId, allowed) : sql`TRUE`,
+        ))
         .orderBy(desc(gdFicheirosObra.criadoEm));
       const obraIds = ficheiros.map(f => f.obraId).filter(Boolean);
       let obrasMap: Record<number, any> = {};
@@ -124,6 +182,9 @@ export const gestaoDocumentosRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, input.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta obra" });
+      }
       const [obraCheck] = await db.select({ id: obras.id }).from(obras)
         .where(and(eq(obras.id, input.obraId), eq(obras.companyId, input.companyId)));
       if (!obraCheck) throw new TRPCError({ code: "NOT_FOUND", message: "Obra não encontrada ou não pertence à empresa" });
@@ -145,9 +206,15 @@ export const gestaoDocumentosRouter = router({
 
   deleteFicheiro: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [fich] = await db.select({ obraId: gdFicheirosObra.obraId }).from(gdFicheirosObra)
+        .where(and(eq(gdFicheirosObra.id, input.id), eq(gdFicheirosObra.companyId, input.companyId)));
+      if (!fich) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, fich.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta obra" });
+      }
       await db.delete(gdFicheirosObra)
         .where(and(eq(gdFicheirosObra.id, input.id), eq(gdFicheirosObra.companyId, input.companyId)));
       return { success: true };
@@ -155,12 +222,15 @@ export const gestaoDocumentosRouter = router({
 
   getFicheiroDetail: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [ficheiro] = await db.select().from(gdFicheirosObra)
         .where(and(eq(gdFicheirosObra.id, input.id), eq(gdFicheirosObra.companyId, input.companyId)));
       if (!ficheiro) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, ficheiro.obraId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta obra" });
+      }
       const [obra] = await db.select({
         id: obras.id,
         nome: obras.nome,
@@ -199,12 +269,10 @@ export const gestaoDocumentosRouter = router({
       cor: z.string().optional(),
       subpastas: z.array(z.string()).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [fichCheck] = await db.select({ id: gdFicheirosObra.id }).from(gdFicheirosObra)
-        .where(and(eq(gdFicheirosObra.id, input.ficheiroId), eq(gdFicheirosObra.companyId, input.companyId)));
-      if (!fichCheck) throw new TRPCError({ code: "NOT_FOUND", message: "Ficheiro não encontrado" });
+      await assertFicheiroAccess(ctx, db, input.ficheiroId, input.companyId);
       const [disc] = await db.insert(gdDisciplinas).values({
         companyId: input.companyId,
         ficheiroId: input.ficheiroId,
@@ -234,12 +302,10 @@ export const gestaoDocumentosRouter = router({
         subpastas: z.array(z.string()).min(1),
       })),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [fichCheck] = await db.select({ id: gdFicheirosObra.id }).from(gdFicheirosObra)
-        .where(and(eq(gdFicheirosObra.id, input.ficheiroId), eq(gdFicheirosObra.companyId, input.companyId)));
-      if (!fichCheck) throw new TRPCError({ code: "NOT_FOUND", message: "Ficheiro não encontrado" });
+      await assertFicheiroAccess(ctx, db, input.ficheiroId, input.companyId);
       const results = [];
       for (const d of input.disciplinas) {
         const [disc] = await db.insert(gdDisciplinas).values({
@@ -263,9 +329,13 @@ export const gestaoDocumentosRouter = router({
 
   deleteDisciplinaFicheiro: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [disc] = await db.select({ ficheiroId: gdDisciplinas.ficheiroId }).from(gdDisciplinas)
+        .where(and(eq(gdDisciplinas.id, input.id), eq(gdDisciplinas.companyId, input.companyId)));
+      if (!disc) throw new TRPCError({ code: "NOT_FOUND" });
+      if (disc.ficheiroId) await assertFicheiroAccess(ctx, db, disc.ficheiroId, input.companyId);
       await db.update(gdDisciplinas).set({ ativo: false })
         .where(and(eq(gdDisciplinas.id, input.id), eq(gdDisciplinas.companyId, input.companyId)));
       return { success: true };
@@ -273,9 +343,13 @@ export const gestaoDocumentosRouter = router({
 
   deletePasta: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [p] = await db.select({ ficheiroId: gdPastas.ficheiroId }).from(gdPastas)
+        .where(and(eq(gdPastas.id, input.id), eq(gdPastas.companyId, input.companyId)));
+      if (!p) throw new TRPCError({ code: "NOT_FOUND" });
+      if (p.ficheiroId) await assertFicheiroAccess(ctx, db, p.ficheiroId, input.companyId);
       await db.delete(gdPastas)
         .where(and(eq(gdPastas.id, input.id), eq(gdPastas.companyId, input.companyId)));
       return { success: true };
@@ -283,9 +357,12 @@ export const gestaoDocumentosRouter = router({
 
   listPastas: protectedProcedure
     .input(z.object({ companyId: z.number(), disciplinaId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [disc] = await db.select({ ficheiroId: gdDisciplinas.ficheiroId }).from(gdDisciplinas)
+        .where(and(eq(gdDisciplinas.id, input.disciplinaId), eq(gdDisciplinas.companyId, input.companyId)));
+      if (disc?.ficheiroId) await assertFicheiroAccess(ctx, db, disc.ficheiroId, input.companyId);
       return db.select().from(gdPastas)
         .where(and(
           eq(gdPastas.companyId, input.companyId),
@@ -327,9 +404,13 @@ export const gestaoDocumentosRouter = router({
       cor: z.string().optional(),
       ativo: z.boolean().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [disc] = await db.select({ ficheiroId: gdDisciplinas.ficheiroId }).from(gdDisciplinas)
+        .where(and(eq(gdDisciplinas.id, input.id), eq(gdDisciplinas.companyId, input.companyId)));
+      if (!disc) throw new TRPCError({ code: "NOT_FOUND" });
+      if (disc.ficheiroId) await assertFicheiroAccess(ctx, db, disc.ficheiroId, input.companyId);
       const { id, companyId, ...data } = input;
       await db.update(gdDisciplinas).set(data)
         .where(and(eq(gdDisciplinas.id, id), eq(gdDisciplinas.companyId, companyId)));
@@ -517,15 +598,24 @@ export const gestaoDocumentosRouter = router({
       status: z.string().optional(),
       search: z.string().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (input.obraId && allowed !== null && !allowed.includes(input.obraId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta obra" });
+      }
 
       const conditions: any[] = [
         eq(gdDocumentos.companyId, input.companyId),
         isNull(gdDocumentos.deletedAt),
       ];
       if (input.obraId) conditions.push(eq(gdDocumentos.obraId, input.obraId));
+      else if (allowed !== null) {
+        if (allowed.length === 0) return [];
+        conditions.push(inArray(gdDocumentos.obraId, allowed));
+      }
       if (input.disciplinaId) conditions.push(eq(gdDocumentos.disciplinaId, input.disciplinaId));
       if (input.subpasta) conditions.push(eq(gdDocumentos.subpasta, input.subpasta));
       if (input.tipoDocumentoId) conditions.push(eq(gdDocumentos.tipoDocumentoId, input.tipoDocumentoId));
@@ -544,12 +634,13 @@ export const gestaoDocumentosRouter = router({
 
   getDocumento: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const [doc] = await db.select().from(gdDocumentos)
         .where(and(eq(gdDocumentos.id, input.id), eq(gdDocumentos.companyId, input.companyId)));
       if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Documento não encontrado" });
+      await assertObraAccess(ctx, doc.obraId);
       return doc;
     }),
 
@@ -574,6 +665,7 @@ export const gestaoDocumentosRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertObraAccess(ctx, input.obraId);
       const [row] = await db.insert(gdDocumentos).values({
         ...input,
         criadoPor: ctx.user.id,
@@ -587,9 +679,10 @@ export const gestaoDocumentosRouter = router({
       docIds: z.array(z.number()).min(1),
       status: z.string(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDocsAccess(ctx, db, input.docIds, input.companyId);
       const docs = await db.select().from(gdDocumentos)
         .where(and(
           inArray(gdDocumentos.id, input.docIds),
@@ -643,9 +736,10 @@ export const gestaoDocumentosRouter = router({
       dataValidade: z.string().nullable().optional(),
       tags: z.string().nullable().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDocAccess(ctx, db, input.id, input.companyId);
       const { id, companyId, ...data } = input;
       await db.update(gdDocumentos).set({ ...data, atualizadoEm: new Date() })
         .where(and(eq(gdDocumentos.id, id), eq(gdDocumentos.companyId, companyId)));
@@ -654,9 +748,10 @@ export const gestaoDocumentosRouter = router({
 
   deleteDocumento: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDocAccess(ctx, db, input.id, input.companyId);
       await db.update(gdDocumentos).set({ deletedAt: new Date() })
         .where(and(eq(gdDocumentos.id, input.id), eq(gdDocumentos.companyId, input.companyId)));
       return { success: true };
@@ -664,9 +759,10 @@ export const gestaoDocumentosRouter = router({
 
   deleteDocumentosBatch: protectedProcedure
     .input(z.object({ ids: z.array(z.number()).min(1), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDocsAccess(ctx, db, input.ids, input.companyId);
       await db.update(gdDocumentos).set({ deletedAt: new Date() })
         .where(and(inArray(gdDocumentos.id, input.ids), eq(gdDocumentos.companyId, input.companyId)));
       return { success: true, count: input.ids.length };
@@ -674,9 +770,10 @@ export const gestaoDocumentosRouter = router({
 
   updateStatusBatch: protectedProcedure
     .input(z.object({ ids: z.array(z.number()).min(1), companyId: z.number(), status: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDocsAccess(ctx, db, input.ids, input.companyId);
       await db.update(gdDocumentos).set({ status: input.status, atualizadoEm: new Date() })
         .where(and(inArray(gdDocumentos.id, input.ids), eq(gdDocumentos.companyId, input.companyId)));
       return { success: true, count: input.ids.length };
@@ -691,7 +788,7 @@ export const gestaoDocumentosRouter = router({
       contentType: z.string(),
       fileSize: z.number(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const buf = Buffer.from(input.fileBase64, "base64");
@@ -701,6 +798,7 @@ export const gestaoDocumentosRouter = router({
       const [doc] = await db.select().from(gdDocumentos)
         .where(and(eq(gdDocumentos.id, input.documentoId), eq(gdDocumentos.companyId, input.companyId)));
       if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Documento não encontrado" });
+      await assertObraAccess(ctx, doc.obraId);
       const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/\.{2,}/g, ".");
       const key = `gestao-documentos/${input.companyId}/${doc.obraId}/${Date.now()}-${safeName}`;
       const { url } = await storagePut(key, buf, input.contentType);
@@ -715,9 +813,10 @@ export const gestaoDocumentosRouter = router({
 
   listRevisoes: protectedProcedure
     .input(z.object({ companyId: z.number(), documentoId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDocAccess(ctx, db, input.documentoId, input.companyId);
       return db.select().from(gdRevisoes)
         .where(and(
           eq(gdRevisoes.companyId, input.companyId),
@@ -741,6 +840,7 @@ export const gestaoDocumentosRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDocAccess(ctx, db, input.documentoId, input.companyId);
       const [rev] = await db.insert(gdRevisoes).values({
         ...input,
         criadoPor: ctx.user.id,
@@ -758,6 +858,7 @@ export const gestaoDocumentosRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDocAccess(ctx, db, input.documentoId, input.companyId);
       await db.update(gdRevisoes).set({
         status: "aprovada",
         aprovadoPor: ctx.user.id,
@@ -786,9 +887,10 @@ export const gestaoDocumentosRouter = router({
       documentoId: z.number(),
       motivo: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDocAccess(ctx, db, input.documentoId, input.companyId);
       await db.update(gdRevisoes).set({ status: "rejeitada" })
         .where(and(eq(gdRevisoes.id, input.id), eq(gdRevisoes.companyId, input.companyId)));
 
@@ -807,9 +909,10 @@ export const gestaoDocumentosRouter = router({
       id: z.number(),
       companyId: z.number(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertRevisaoAccess(ctx, db, input.id, input.companyId);
       await db.delete(gdRevisoes).where(and(
         eq(gdRevisoes.id, input.id),
         eq(gdRevisoes.companyId, input.companyId),
@@ -819,9 +922,10 @@ export const gestaoDocumentosRouter = router({
 
   listComentarios: protectedProcedure
     .input(z.object({ companyId: z.number(), revisaoId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertRevisaoAccess(ctx, db, input.revisaoId, input.companyId);
       return db.select().from(gdRevisaoComentarios)
         .where(and(
           eq(gdRevisaoComentarios.companyId, input.companyId),
@@ -843,6 +947,7 @@ export const gestaoDocumentosRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertRevisaoAccess(ctx, db, input.revisaoId, input.companyId);
       const [row] = await db.insert(gdRevisaoComentarios).values({
         ...input,
         usuarioId: ctx.user.id,
@@ -852,9 +957,13 @@ export const gestaoDocumentosRouter = router({
 
   resolverComentario: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [c] = await db.select({ revisaoId: gdRevisaoComentarios.revisaoId }).from(gdRevisaoComentarios)
+        .where(and(eq(gdRevisaoComentarios.id, input.id), eq(gdRevisaoComentarios.companyId, input.companyId)));
+      if (!c) throw new TRPCError({ code: "NOT_FOUND" });
+      await assertRevisaoAccess(ctx, db, c.revisaoId, input.companyId);
       await db.update(gdRevisaoComentarios).set({ resolvido: true })
         .where(and(eq(gdRevisaoComentarios.id, input.id), eq(gdRevisaoComentarios.companyId, input.companyId)));
       return { success: true };
@@ -862,9 +971,10 @@ export const gestaoDocumentosRouter = router({
 
   listDistribuicao: protectedProcedure
     .input(z.object({ companyId: z.number(), documentoId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDocAccess(ctx, db, input.documentoId, input.companyId);
       return db.select().from(gdDistribuicao)
         .where(and(
           eq(gdDistribuicao.companyId, input.companyId),
@@ -880,9 +990,10 @@ export const gestaoDocumentosRouter = router({
       revisaoId: z.number().optional(),
       usuarioIds: z.array(z.number()),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDocAccess(ctx, db, input.documentoId, input.companyId);
       const values = input.usuarioIds.map(uid => ({
         companyId: input.companyId,
         documentoId: input.documentoId,
@@ -897,9 +1008,13 @@ export const gestaoDocumentosRouter = router({
 
   confirmarRecebimento: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [d] = await db.select({ documentoId: gdDistribuicao.documentoId }).from(gdDistribuicao)
+        .where(and(eq(gdDistribuicao.id, input.id), eq(gdDistribuicao.companyId, input.companyId)));
+      if (!d) throw new TRPCError({ code: "NOT_FOUND" });
+      await assertDocAccess(ctx, db, d.documentoId, input.companyId);
       await db.update(gdDistribuicao).set({
         confirmado: true,
         confirmadoEm: new Date(),
@@ -916,6 +1031,7 @@ export const gestaoDocumentosRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertDocAccess(ctx, db, input.documentoId, input.companyId);
       await db.insert(gdDownloadLog).values({
         ...input,
         usuarioId: ctx.user.id,
@@ -925,15 +1041,24 @@ export const gestaoDocumentosRouter = router({
 
   getDashboard: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (input.obraId && allowed !== null && !allowed.includes(input.obraId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta obra" });
+      }
 
       const conditions: any[] = [
         eq(gdDocumentos.companyId, input.companyId),
         isNull(gdDocumentos.deletedAt),
       ];
       if (input.obraId) conditions.push(eq(gdDocumentos.obraId, input.obraId));
+      else if (allowed !== null) {
+        if (allowed.length === 0) conditions.push(sql`FALSE`);
+        else conditions.push(inArray(gdDocumentos.obraId, allowed));
+      }
 
       const docs = await db.select().from(gdDocumentos).where(and(...conditions));
 
@@ -957,6 +1082,10 @@ export const gestaoDocumentosRouter = router({
 
       const artConditions: any[] = [eq(gdArts.companyId, input.companyId)];
       if (input.obraId) artConditions.push(eq(gdArts.obraId, input.obraId));
+      else if (allowed !== null) {
+        if (allowed.length === 0) artConditions.push(sql`FALSE`);
+        else artConditions.push(inArray(gdArts.obraId, allowed));
+      }
       const arts = await db.select().from(gdArts).where(and(...artConditions));
 
       const hoje = new Date();
@@ -1086,11 +1215,19 @@ export const gestaoDocumentosRouter = router({
 
   listArts: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (input.obraId && allowed !== null && !allowed.includes(input.obraId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Você não tem acesso a esta obra" });
+      }
       const conditions: any[] = [eq(gdArts.companyId, input.companyId)];
       if (input.obraId) conditions.push(eq(gdArts.obraId, input.obraId));
+      else if (allowed !== null) {
+        if (allowed.length === 0) return [];
+        conditions.push(inArray(gdArts.obraId, allowed));
+      }
       return db.select().from(gdArts).where(and(...conditions)).orderBy(desc(gdArts.criadoEm));
     }),
 
@@ -1111,6 +1248,7 @@ export const gestaoDocumentosRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertObraAccess(ctx, input.obraId);
       const [row] = await db.insert(gdArts).values({
         ...input,
         criadoPor: ctx.user.id,
@@ -1132,9 +1270,10 @@ export const gestaoDocumentosRouter = router({
       arquivoUrl: z.string().nullable().optional(),
       observacoes: z.string().nullable().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertArtAccess(ctx, db, input.id, input.companyId);
       const { id, companyId, ...data } = input;
       await db.update(gdArts).set({ ...data, atualizadoEm: new Date() })
         .where(and(eq(gdArts.id, id), eq(gdArts.companyId, companyId)));
@@ -1143,9 +1282,10 @@ export const gestaoDocumentosRouter = router({
 
   deleteArt: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await assertArtAccess(ctx, db, input.id, input.companyId);
       await db.delete(gdArts)
         .where(and(eq(gdArts.id, input.id), eq(gdArts.companyId, input.companyId)));
       return { success: true };
@@ -1153,25 +1293,35 @@ export const gestaoDocumentosRouter = router({
 
   getDashboardStats: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      const obraFilterDocs = allowed === null
+        ? sql`TRUE`
+        : (allowed.length === 0 ? sql`FALSE` : inArray(gdDocumentos.obraId, allowed));
+      const obraFilterArts = allowed === null
+        ? sql`TRUE`
+        : (allowed.length === 0 ? sql`FALSE` : inArray(gdArts.obraId, allowed));
+
+      const baseDocs = and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt), obraFilterDocs);
+
       const [totalDocs] = await db.select({ count: sql<number>`count(*)::int` }).from(gdDocumentos)
-        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt)));
+        .where(baseDocs);
 
       const statusCounts = await db.select({
         status: gdDocumentos.status,
         count: sql<number>`count(*)::int`,
       }).from(gdDocumentos)
-        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt)))
+        .where(baseDocs)
         .groupBy(gdDocumentos.status);
 
       const subpastaCounts = await db.select({
         subpasta: gdDocumentos.subpasta,
         count: sql<number>`count(*)::int`,
       }).from(gdDocumentos)
-        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt)))
+        .where(baseDocs)
         .groupBy(gdDocumentos.subpasta);
 
       const obraCounts = await db.select({
@@ -1180,14 +1330,15 @@ export const gestaoDocumentosRouter = router({
         count: sql<number>`count(*)::int`,
       }).from(gdDocumentos)
         .innerJoin(obras, and(eq(obras.id, gdDocumentos.obraId), eq(obras.companyId, input.companyId)))
-        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt)))
+        .where(baseDocs)
         .groupBy(gdDocumentos.obraId, obras.nome);
 
       const [totalRevisoes] = await db.select({ count: sql<number>`count(*)::int` }).from(gdRevisoes)
-        .where(eq(gdRevisoes.companyId, input.companyId));
+        .innerJoin(gdDocumentos, and(eq(gdDocumentos.id, gdRevisoes.documentoId), eq(gdDocumentos.companyId, input.companyId)))
+        .where(and(eq(gdRevisoes.companyId, input.companyId), obraFilterDocs));
 
       const [totalArts] = await db.select({ count: sql<number>`count(*)::int` }).from(gdArts)
-        .where(eq(gdArts.companyId, input.companyId));
+        .where(and(eq(gdArts.companyId, input.companyId), obraFilterArts));
 
       const recentRevisions = await db.select({
         id: gdRevisoes.id,
@@ -1203,7 +1354,7 @@ export const gestaoDocumentosRouter = router({
       }).from(gdRevisoes)
         .innerJoin(gdDocumentos, and(eq(gdDocumentos.id, gdRevisoes.documentoId), eq(gdDocumentos.companyId, input.companyId)))
         .innerJoin(obras, and(eq(obras.id, gdDocumentos.obraId), eq(obras.companyId, input.companyId)))
-        .where(eq(gdRevisoes.companyId, input.companyId))
+        .where(and(eq(gdRevisoes.companyId, input.companyId), obraFilterDocs))
         .orderBy(desc(gdRevisoes.criadoEm))
         .limit(15);
 
@@ -1221,6 +1372,7 @@ export const gestaoDocumentosRouter = router({
         .innerJoin(obras, and(eq(obras.id, gdArts.obraId), eq(obras.companyId, input.companyId)))
         .where(and(
           eq(gdArts.companyId, input.companyId),
+          obraFilterArts,
           sql`${gdArts.dataValidade} IS NOT NULL`,
           sql`${gdArts.dataValidade}::date <= ${in30days.toISOString().split("T")[0]}::date`,
         ))
@@ -1241,6 +1393,7 @@ export const gestaoDocumentosRouter = router({
         .where(and(
           eq(gdDocumentos.companyId, input.companyId),
           isNull(gdDocumentos.deletedAt),
+          obraFilterDocs,
           sql`${gdDocumentos.dataValidade} IS NOT NULL`,
           sql`${gdDocumentos.dataValidade}::date <= ${in30days.toISOString().split("T")[0]}::date`,
         ))
@@ -1258,18 +1411,18 @@ export const gestaoDocumentosRouter = router({
         obraNome: obras.nome,
       }).from(gdDocumentos)
         .innerJoin(obras, and(eq(obras.id, gdDocumentos.obraId), eq(obras.companyId, input.companyId)))
-        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt)))
+        .where(baseDocs)
         .orderBy(desc(gdDocumentos.atualizadoEm))
         .limit(10);
 
       const [docsComValidade] = await db.select({ count: sql<number>`count(*)::int` }).from(gdDocumentos)
-        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt), sql`${gdDocumentos.dataValidade} IS NOT NULL`));
+        .where(and(baseDocs, sql`${gdDocumentos.dataValidade} IS NOT NULL`));
 
       const [docsAprovados] = await db.select({ count: sql<number>`count(*)::int` }).from(gdDocumentos)
-        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt), eq(gdDocumentos.status, "aprovado")));
+        .where(and(baseDocs, eq(gdDocumentos.status, "aprovado")));
 
       const [docsR0] = await db.select({ count: sql<number>`count(*)::int` }).from(gdDocumentos)
-        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt), sql`(${gdDocumentos.revisaoAtual} IS NULL OR ${gdDocumentos.revisaoAtual} = '0')`));
+        .where(and(baseDocs, sql`(${gdDocumentos.revisaoAtual} IS NULL OR ${gdDocumentos.revisaoAtual} = '0')`));
 
       const obraDetails = await db.select({
         obraId: gdDocumentos.obraId,
@@ -1282,7 +1435,7 @@ export const gestaoDocumentosRouter = router({
         pdfs: sql<number>`sum(case when ${gdDocumentos.subpasta} = 'PDF' then 1 else 0 end)::int`,
       }).from(gdDocumentos)
         .innerJoin(obras, and(eq(obras.id, gdDocumentos.obraId), eq(obras.companyId, input.companyId)))
-        .where(and(eq(gdDocumentos.companyId, input.companyId), isNull(gdDocumentos.deletedAt)))
+        .where(baseDocs)
         .groupBy(gdDocumentos.obraId, obras.nome);
 
       return {
