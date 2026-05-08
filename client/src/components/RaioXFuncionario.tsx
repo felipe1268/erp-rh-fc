@@ -2192,17 +2192,24 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       <table className="w-full text-sm">
                         <thead><tr className="border-b bg-muted/30"><th className="p-2 text-left">Per. Aquisitivo</th><th className="p-2 text-left">Início</th><th className="p-2 text-left">Fim</th><th className="p-2 text-center">Dias</th><th className="p-2 text-center">Abono</th><th className="p-2 text-right">Valor Total</th><th className="p-2 text-center">Status</th></tr></thead>
                         <tbody>
-                          {ferias.map((f: any) => (
-                            <tr key={f.id} className="border-b last:border-0">
-                              <td className="p-2 text-xs">{formatDate(f.periodoAquisitivoInicio)} a {formatDate(f.periodoAquisitivoFim)}</td>
-                              <td className="p-2">{formatDate(f.dataInicio)}</td>
-                              <td className="p-2">{formatDate(f.dataFim)}</td>
-                              <td className="p-2 text-center font-bold">{f.diasGozo || 30}</td>
-                              <td className="p-2 text-center">{f.abonoPecuniario ? <Badge>Sim</Badge> : 'Não'}</td>
-                              <td className="p-2 text-right font-bold">{f.valorTotal ? formatMoeda(f.valorTotal) : '-'}</td>
-                              <td className="p-2 text-center"><Badge variant={f.status === 'concluida' ? 'default' : f.status === 'vencida' ? 'destructive' : f.status === 'em_gozo' ? 'default' : 'secondary'}>{f.status}</Badge></td>
-                            </tr>
-                          ))}
+                          {ferias.map((f: any) => {
+                            const hoje = new Date().toISOString().slice(0, 10);
+                            const emCurso = !!f.dataInicio && !!f.dataFim && f.dataInicio <= hoje && f.dataFim >= hoje && f.status !== 'concluida' && f.status !== 'cancelada';
+                            const statusLabel = emCurso ? 'EM FÉRIAS AGORA' : f.status;
+                            const statusVariant: any = emCurso ? 'default' : (f.status === 'concluida' ? 'default' : f.status === 'vencida' ? 'destructive' : f.status === 'em_gozo' ? 'default' : 'secondary');
+                            const statusClass = emCurso ? 'bg-cyan-600 hover:bg-cyan-700 text-white animate-pulse' : '';
+                            return (
+                              <tr key={f.id} className={`border-b last:border-0 ${emCurso ? 'bg-cyan-50/60' : ''}`}>
+                                <td className="p-2 text-xs">{formatDate(f.periodoAquisitivoInicio)} a {formatDate(f.periodoAquisitivoFim)}</td>
+                                <td className="p-2">{formatDate(f.dataInicio)}</td>
+                                <td className="p-2">{formatDate(f.dataFim)}</td>
+                                <td className="p-2 text-center font-bold">{f.diasGozo || 30}</td>
+                                <td className="p-2 text-center">{f.abonoPecuniario ? <Badge>Sim</Badge> : 'Não'}</td>
+                                <td className="p-2 text-right font-bold">{f.valorTotal ? formatMoeda(f.valorTotal) : '-'}</td>
+                                <td className="p-2 text-center"><Badge variant={statusVariant} className={statusClass}>{statusLabel}</Badge></td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

@@ -1760,7 +1760,9 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
     dataFim: vacationPeriods.dataFim,
   }).from(vacationPeriods).where(and(
     inArray(vacationPeriods.companyId, companyIdsArr),
-    eq(vacationPeriods.status, 'em_gozo'),
+    sql`${vacationPeriods.status} IN ('em_gozo','agendada')`,
+    sql`${vacationPeriods.dataInicio} IS NOT NULL`,
+    sql`${vacationPeriods.dataFim} IS NOT NULL`,
     sql`${vacationPeriods.dataInicio} <= ${today}`,
     sql`${vacationPeriods.dataFim} >= ${today}`,
     sql`${vacationPeriods.employeeId} IN (${sql.raw(empIds.join(","))})`
@@ -2735,7 +2737,9 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
     dataInicio: vacationPeriods.dataInicio,
   }).from(vacationPeriods).where(and(
     inArray(vacationPeriods.companyId, idsCompany),
-    eq(vacationPeriods.status, 'em_gozo'),
+    sql`${vacationPeriods.status} IN ('em_gozo','agendada')`,
+    sql`${vacationPeriods.dataInicio} IS NOT NULL`,
+    sql`${vacationPeriods.dataFim} IS NOT NULL`,
     sql`${vacationPeriods.dataInicio} <= ${today}`,
     sql`${vacationPeriods.dataFim} >= ${today}`,
     sql`${vacationPeriods.employeeId} IN (${sql.raw(empIds.join(","))})`
