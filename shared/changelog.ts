@@ -10049,6 +10049,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 02:30:00",
   },
   {
+    version: 1458,
+    titulo: "Apontamentos de Campo — Modal de detalhes agora exibe os horários do ponto",
+    descricao: "No modal 'Detalhes do Apontamento' (módulo Apontamentos de Campo), agora é exibida uma nova linha 'Horário do ponto' com as 4 batidas do dia (Entrada 1, Saída 1, Entrada 2, Saída 2) — informação que já existia no banco (campos entrada1/saida1/entrada2/saida2 e enriquecimento automático a partir de timeRecords) mas não era apresentada ao usuário. Quando não há batidas registradas para a data, é exibido o aviso 'Sem batidas registradas para esta data'.",
+    tipo: "ux",
+    modulos: "Apontamentos de Campo,RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-05-08 21:30:00",
+  },
+  {
     version: 1457,
     titulo: "Controle de Integrações — Edição completa do registro + inclusão de Férias/Afastados",
     descricao: "O modal 'Editar Integração' (Controle de Integrações) agora permite editar TODOS os campos do registro: colaborador, tipo (Externa/Interna), cliente/referência, datas de realização e validade, evidência e observações. Antes, no modo edição, o colaborador, o tipo e o cliente ficavam travados (com a mensagem 'Para trocar o colaborador, exclua e crie uma nova integração'); agora todos esses campos são totalmente editáveis — em edição, a seleção de colaborador é radio (single) e em cadastro segue como checkbox (múltipla). Adicionalmente, a lista de colaboradores selecionáveis (tanto no cadastro quanto na edição) passa a INCLUIR funcionários em 'Férias' e 'Afastado' (exibidos com tags coloridas — âmbar para Férias, laranja para Afastado), excluindo APENAS aqueles com status 'Desligado' ou 'Inativo'. O backend integracoes.atualizar passou a aceitar employeeId, tipo e clienteId no input.",

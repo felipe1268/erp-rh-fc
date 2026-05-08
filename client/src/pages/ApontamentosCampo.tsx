@@ -826,6 +826,15 @@ export default function ApontamentosCampo() {
                   <div><span className="text-muted-foreground">Função:</span><br /><span>{selectedNote.funcaoFunc || "—"}</span></div>
                   <div><span className="text-muted-foreground">Data:</span><br /><span>{selectedNote.data ? new Date(selectedNote.data + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</span></div>
                   <div><span className="text-muted-foreground">Obra:</span><br /><span>{selectedNote.obraNome || "—"}</span></div>
+                  <div className="col-span-2"><span className="text-muted-foreground">Horário do ponto:</span><br />
+                    {(selectedNote.entrada1 || selectedNote.saida1 || selectedNote.entrada2 || selectedNote.saida2) ? (
+                      <span className="font-mono text-xs">
+                        Entrada 1: <b>{selectedNote.entrada1 || "—"}</b> · Saída 1: <b>{selectedNote.saida1 || "—"}</b> · Entrada 2: <b>{selectedNote.entrada2 || "—"}</b> · Saída 2: <b>{selectedNote.saida2 || "—"}</b>
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground italic text-xs">Sem batidas registradas para esta data</span>
+                    )}
+                  </div>
                   <div><span className="text-muted-foreground">Tipo:</span><br /><Badge className={TIPO_LABELS[selectedNote.tipoOcorrencia]?.color}>{TIPO_LABELS[selectedNote.tipoOcorrencia]?.label}</Badge></div>
                   <div><span className="text-muted-foreground">Prioridade:</span><br /><span className={PRIORIDADE_LABELS[selectedNote.prioridade]?.color}>{PRIORIDADE_LABELS[selectedNote.prioridade]?.label}</span></div>
                   <div><span className="text-muted-foreground">Status:</span><br /><Badge variant="outline" className={STATUS_LABELS[selectedNote.status]?.color}>{STATUS_LABELS[selectedNote.status]?.label}</Badge></div>
