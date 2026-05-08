@@ -8,7 +8,7 @@ import {
   CheckCircle2, Building2, ListTree, Activity, BarChart3, History,
   CalendarDays, User, CalendarCheck, FileText, GitBranch, HardHat,
   DollarSign, Cloud, Droplets, Wind, Loader2, ClipboardList, ChevronRight,
-  Search, Menu, X, PanelLeftClose, PanelLeftOpen,
+  ChevronDown, Search, Menu, X, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, LineChart, BarChart, Bar, Cell,
@@ -1308,91 +1308,303 @@ function KpiCard({ label, value, icon, sub, accent }: { label: string; value: st
 }
 
 // ─────────────────────── ABA: GANTT ─────────────────────────────────────
+type ZoomGantt = "semana" | "mes" | "trimestre";
+
 function AbaGantt({ atividades }: { atividades: any[] }) {
-  const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim), [atividades]);
-  const { minMs, maxMs, meses } = useMemo(() => {
-    if (folhas.length === 0) return { minMs: 0, maxMs: 0, meses: [] as { label: string; pct: number }[] };
-    let mn = Infinity, mx = -Infinity;
-    for (const a of folhas) {
-      const ini = new Date(a.dataInicio + "T12:00:00Z").getTime();
-      const fim = new Date(a.dataFim + "T12:00:00Z").getTime();
-      if (ini < mn) mn = ini;
-      if (fim > mx) mx = fim;
-    }
-    // Headers de mês entre min e max
-    const meses: { label: string; pct: number }[] = [];
-    const d = new Date(mn); d.setUTCDate(1);
-    const total = mx - mn;
-    while (d.getTime() <= mx) {
-      const pct = Math.max(0, ((d.getTime() - mn) / total) * 100);
-      const lbl = d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", "").toUpperCase();
-      meses.push({ label: lbl, pct });
-      d.setUTCMonth(d.getUTCMonth() + 1);
-    }
-    return { minMs: mn, maxMs: mx, meses };
-  }, [folhas]);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [nivelAtivo, setNivelAtivo] = useState<number | null>(null);
+  const [zoom, setZoom] = useState<ZoomGantt>("mes");
+  const [hoverId, setHoverId] = useState<number | null>(null);
 
-  const todayMs = Date.now();
-  const todayPct = maxMs > minMs ? ((todayMs - minMs) / (maxMs - minMs)) * 100 : 0;
+  const dayPx = zoom === "semana" ? 28 : zoom === "mes" ? 10 : 3;
+  const ROW_H = 30;
+  const HEADER_H = 46;
+  const LEFT_W = 310;
 
-  if (folhas.length === 0) {
-    return <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 text-sm">Sem atividades com datas para exibir o Gantt.</div>;
+  // Avanço folhas (a partir de percentRealizado)
+  const avMap = useMemo(() => {
+    const m: Record<number, number> = {};
+    atividades.forEach((a: any) => {
+      if (!a.isGrupo) m[a.id] = Number(a.percentRealizado ?? 0);
+    });
+    return m;
+  }, [atividades]);
+
+  // Avanço grupos (média simples das folhas descendentes)
+  const groupAvMap = useMemo(() => {
+    const m: Record<number, number> = {};
+    atividades.filter((a: any) => a.isGrupo && a.eapCodigo).forEach((g: any) => {
+      const leaves = atividades.filter((a: any) =>
+        !a.isGrupo && !a.disabled && a.eapCodigo && a.eapCodigo.startsWith(g.eapCodigo + ".")
+      );
+      if (leaves.length === 0) return;
+      const total = leaves.reduce((s: number, l: any) => s + (avMap[l.id] ?? 0), 0);
+      m[g.id] = total / leaves.length;
+    });
+    return m;
+  }, [atividades, avMap]);
+
+  const { minDate, maxDate } = useMemo(() => {
+    const folhas = atividades.filter((a: any) => a.dataInicio && a.dataFim);
+    if (folhas.length === 0) {
+      const now = new Date();
+      return { minDate: new Date(now.getFullYear(), now.getMonth(), 1), maxDate: new Date(now.getFullYear(), now.getMonth() + 3, 0) };
+    }
+    const times = folhas.flatMap((a: any) => [
+      new Date(a.dataInicio + "T12:00:00").getTime(),
+      new Date(a.dataFim + "T12:00:00").getTime(),
+    ]);
+    const mn = new Date(Math.min(...times));
+    const mx = new Date(Math.max(...times));
+    mn.setDate(1);
+    mx.setMonth(mx.getMonth() + 1, 0);
+    return { minDate: mn, maxDate: mx };
+  }, [atividades]);
+
+  const totalDays = Math.ceil((maxDate.getTime() - minDate.getTime()) / 86400000) + 1;
+  const totalWidth = totalDays * dayPx;
+
+  const dateToX = (dateStr: string) => {
+    const d = new Date(dateStr + "T12:00:00");
+    return Math.round((d.getTime() - minDate.getTime()) / 86400000) * dayPx;
+  };
+
+  const todayX = dateToX(new Date().toISOString().split("T")[0]);
+
+  const monthCells = useMemo(() => {
+    const cells: { label: string; x: number; w: number }[] = [];
+    const cur = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+    while (cur <= maxDate) {
+      const x = Math.max(0, Math.round((cur.getTime() - minDate.getTime()) / 86400000) * dayPx);
+      const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      const endX = Math.round((Math.min(next.getTime() - 86400000, maxDate.getTime()) - minDate.getTime()) / 86400000) * dayPx + dayPx;
+      cells.push({ label: cur.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }), x, w: endX - x });
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    return cells;
+  }, [minDate, maxDate, dayPx]);
+
+  const weekTicks = useMemo(() => {
+    if (zoom === "trimestre") return [];
+    const ticks: { x: number; label: string }[] = [];
+    const cur = new Date(minDate);
+    while (cur.getDay() !== 1) cur.setDate(cur.getDate() + 1);
+    while (cur <= maxDate) {
+      const x = Math.round((cur.getTime() - minDate.getTime()) / 86400000) * dayPx;
+      ticks.push({ x, label: `${cur.getDate()}/${cur.getMonth() + 1}` });
+      cur.setDate(cur.getDate() + 7);
+    }
+    return ticks;
+  }, [minDate, maxDate, dayPx, zoom]);
+
+  const gruposEap = useMemo(() =>
+    atividades.filter((a: any) => a.isGrupo && a.eapCodigo).map((a: any) => a.eapCodigo as string),
+  [atividades]);
+
+  const maxNivel = useMemo(() =>
+    atividades.filter((a: any) => a.isGrupo).reduce((m: number, a: any) => Math.max(m, a.nivel ?? 1), 1),
+  [atividades]);
+
+  function toggleCollapse(eap: string) {
+    setCollapsed(s => { const ns = new Set(s); ns.has(eap) ? ns.delete(eap) : ns.add(eap); return ns; });
+  }
+  function isHidden(eap: string | null) {
+    if (!eap) return false;
+    const parts = eap.split(".");
+    for (let i = 1; i < parts.length; i++) {
+      if (collapsed.has(parts.slice(0, i).join("."))) return true;
+    }
+    return false;
+  }
+  function expandirAteNivel(nivel: number) {
+    setCollapsed(new Set(
+      atividades.filter((a: any) => a.isGrupo && a.eapCodigo && (a.nivel ?? 1) >= nivel).map((a: any) => a.eapCodigo)
+    ));
+  }
+
+  const visibleAtiv = useMemo(() =>
+    atividades.filter((a: any) => !isHidden(a.eapCodigo ?? "")),
+  [atividades, collapsed]);
+
+  if (atividades.length === 0) {
+    return <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 text-sm">Sem atividades para exibir o Gantt.</div>;
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white flex items-center gap-2">
-        <CalendarCheck className="h-4 w-4 text-blue-600" />
-        <h3 className="font-semibold text-slate-800">Cronograma Gantt</h3>
-        <span className="text-xs text-slate-500 ml-auto">{folhas.length} atividades</span>
-      </div>
-      <div className="overflow-x-auto">
-        <div className="min-w-[900px]">
-          <div className="grid grid-cols-[280px_1fr] border-b border-slate-200 bg-slate-50/60">
-            <div className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Atividade</div>
-            <div className="relative h-8">
-              {meses.map((m, i) => (
-                <div key={i} className="absolute top-0 h-full border-l border-slate-200 px-1.5 text-[10px] font-medium text-slate-500" style={{ left: `${m.pct}%` }}>
-                  {m.label}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {folhas.slice(0, 80).map((a: any) => {
-              const ini = new Date(a.dataInicio + "T12:00:00Z").getTime();
-              const fim = new Date(a.dataFim + "T12:00:00Z").getTime();
-              const total = maxMs - minMs;
-              const left = total > 0 ? ((ini - minMs) / total) * 100 : 0;
-              const width = total > 0 ? Math.max(0.5, ((fim - ini) / total) * 100) : 0;
-              const real = a.percentRealizado ?? 0;
-              const isAtrasada = a.dataFim < new Date().toISOString().slice(0, 10) && real < 100;
-              const isConcluida = real >= 100;
-              const barColor = isConcluida ? "bg-emerald-500" : isAtrasada ? "bg-red-500" : "bg-blue-500";
-              return (
-                <div key={a.id} className="grid grid-cols-[280px_1fr] hover:bg-slate-50/60 transition-colors">
-                  <div className="px-4 py-2.5 text-xs">
-                    <div className="text-slate-500 text-[10px]">{a.eapCodigo || "—"}</div>
-                    <div className="text-slate-800 truncate" title={a.nome}>{a.nome}</div>
-                  </div>
-                  <div className="relative h-10 px-2">
-                    {meses.map((m, i) => (
-                      <div key={i} className="absolute top-0 bottom-0 border-l border-slate-100" style={{ left: `${m.pct}%` }} />
-                    ))}
-                    <div className="absolute top-1/2 -translate-y-1/2 h-4 rounded-md overflow-hidden bg-slate-200" style={{ left: `${left}%`, width: `${width}%` }}>
-                      <div className={`h-full ${barColor}`} style={{ width: `${Math.min(100, real)}%` }} />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          {todayPct >= 0 && todayPct <= 100 && (
-            <div className="relative">
-              <div className="absolute -top-[calc(100%+8px)] bottom-0 w-px bg-red-400" style={{ left: `calc(280px + ${todayPct}% * 0.7142)` }} />
-            </div>
-          )}
+    <div className="space-y-3">
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg p-0.5">
+          {(["semana", "mes", "trimestre"] as ZoomGantt[]).map(z => (
+            <button key={z} onClick={() => setZoom(z)}
+              className={`h-6 px-2.5 text-[11px] font-semibold rounded transition-colors ${zoom === z ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+              {z === "semana" ? "Semana" : z === "mes" ? "Mês" : "Trimestre"}
+            </button>
+          ))}
         </div>
+
+        <div className="w-px h-4 bg-slate-200" />
+
+        {gruposEap.length > 0 && <span className="text-[11px] text-slate-500 font-medium">Nível:</span>}
+        {Array.from({ length: maxNivel }, (_, i) => i + 1).map(lvl => (
+          <button key={lvl} onClick={() => { expandirAteNivel(lvl + 1); setNivelAtivo(lvl); }}
+            className={`h-6 min-w-[28px] px-1.5 text-[11px] font-semibold rounded border transition-colors ${nivelAtivo === lvl ? "bg-slate-700 text-white border-slate-700" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
+            N{lvl}
+          </button>
+        ))}
+        <button onClick={() => { setCollapsed(new Set()); setNivelAtivo(null); }}
+          className="h-6 px-2.5 text-[11px] rounded border border-slate-200 bg-white hover:bg-emerald-50 hover:border-emerald-300 text-slate-600 hover:text-emerald-700 flex items-center gap-1 transition-colors">
+          <ChevronDown className="h-3 w-3" /> Tudo
+        </button>
+        <button onClick={() => { setCollapsed(new Set(gruposEap)); setNivelAtivo(0); }}
+          className="h-6 px-2.5 text-[11px] rounded border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 flex items-center gap-1 transition-colors">
+          <ChevronRight className="h-3 w-3" /> Recolher
+        </button>
+
+        <div className="ml-auto flex items-center gap-3 text-[10px] text-slate-500 flex-wrap">
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: "#1e293b" }} /> Grupo</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: "#1A3461" }} /> Atividade</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: "#7c3aed" }} /> ◆ Marco</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm bg-emerald-500" /> Concluída</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2 h-3 rounded-sm bg-red-500" /> Hoje</span>
+        </div>
+      </div>
+
+      {/* Gantt grid */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-auto"
+        style={{ maxHeight: "calc(100vh - 260px)" }}>
+        {/* Sticky header */}
+        <div className="flex sticky top-0 z-20 border-b border-slate-200">
+          <div style={{ width: LEFT_W, minWidth: LEFT_W, height: HEADER_H }}
+            className="bg-slate-700 text-white text-[11px] font-semibold flex items-center px-3 gap-1.5 border-r border-slate-600 shrink-0 sticky left-0 z-30">
+            <CalendarCheck className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+            <span>Atividade / EAP</span>
+          </div>
+          <div style={{ width: totalWidth, minWidth: totalWidth, height: HEADER_H, position: "relative" }}
+            className="bg-slate-700 shrink-0">
+            {monthCells.map((m, i) => (
+              <div key={i} style={{ position: "absolute", left: m.x, top: 0, width: m.w, height: 26 }}
+                className="border-r border-slate-600 flex items-center px-1.5 overflow-hidden">
+                <span className="text-[10px] font-semibold text-slate-200 uppercase tracking-wide whitespace-nowrap">{m.label}</span>
+              </div>
+            ))}
+            {weekTicks.map((w, i) => (
+              <div key={i} style={{ position: "absolute", left: w.x, top: 26, height: 20 }}
+                className="border-r border-slate-600/30 pl-0.5">
+                <span className="text-[8px] text-slate-400 whitespace-nowrap">{w.label}</span>
+              </div>
+            ))}
+            {todayX >= 0 && todayX <= totalWidth && (
+              <div style={{ position: "absolute", left: todayX, top: 0, bottom: 0, width: 2 }}
+                className="bg-red-400/60 pointer-events-none" />
+            )}
+          </div>
+        </div>
+
+        {/* Body */}
+        {visibleAtiv.map((a: any) => {
+          const isGrupo = !!a.isGrupo;
+          const isMarco = !!a.isMarco;
+          const nivel = a.nivel ?? 1;
+          const avanc = isGrupo ? (groupAvMap[a.id] ?? 0) : (avMap[a.id] ?? 0);
+          const isCollapsed = collapsed.has(a.eapCodigo ?? "");
+          const hasChildren = atividades.some((b: any) =>
+            b.eapCodigo && a.eapCodigo &&
+            b.eapCodigo.startsWith(a.eapCodigo + ".") &&
+            b.eapCodigo.split(".").length === a.eapCodigo.split(".").length + 1
+          );
+          const isHovered = hoverId === a.id;
+
+          const hasBar = !!(a.dataInicio && a.dataFim);
+          const barX = hasBar ? Math.max(0, dateToX(a.dataInicio)) : 0;
+          const endX = hasBar ? dateToX(a.dataFim) + dayPx : 0;
+          const barW = hasBar ? Math.max(endX - barX, 4) : 0;
+          const fillW = barW * (avanc / 100);
+
+          const isDone = avanc >= 100;
+          const barColor = isDone ? "#059669" : isGrupo ? "#1e293b" : isMarco ? "#7c3aed" : "#1A3461";
+          const fillColor = isDone ? "#10b981" : isMarco ? "#a855f7" : "#3b82f6";
+          const barH = isGrupo ? 10 : isMarco ? 12 : 14;
+          const barTop = (ROW_H - barH) / 2;
+
+          return (
+            <div key={a.id} className="flex" style={{ height: ROW_H }}
+              onMouseEnter={() => setHoverId(a.id)}
+              onMouseLeave={() => setHoverId(null)}>
+              <div style={{ width: LEFT_W, minWidth: LEFT_W, height: ROW_H }}
+                className={`sticky left-0 z-10 border-b border-r border-slate-100 flex items-center px-2 gap-1 shrink-0 transition-colors
+                  ${isDone ? (isHovered ? "bg-emerald-100" : "bg-emerald-50/70") : isGrupo ? "bg-slate-50" : isMarco ? (isHovered ? "bg-purple-50" : "bg-purple-50/40") : isHovered ? "bg-blue-50/60" : "bg-white"}`}>
+                <div style={{ width: (nivel - 1) * 10 }} className="shrink-0" />
+                {hasChildren ? (
+                  <button onClick={() => toggleCollapse(a.eapCodigo)}
+                    className="h-4 w-4 flex items-center justify-center text-slate-400 hover:text-slate-700 shrink-0">
+                    {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  </button>
+                ) : (
+                  <div className="h-4 w-4 shrink-0" />
+                )}
+                <span className={`text-[8px] font-mono shrink-0 px-1 rounded leading-4 ${isDone ? "bg-emerald-100 text-emerald-700" : isGrupo ? "bg-slate-200 text-slate-600" : isMarco ? "bg-purple-100 text-purple-700" : "bg-blue-50 text-blue-600"}`}>
+                  {a.eapCodigo ?? "—"}
+                </span>
+                <span className={`text-[11px] truncate flex-1 ${isDone ? (isGrupo ? "font-semibold text-emerald-800" : "text-emerald-800 font-medium") : isGrupo ? "font-semibold text-slate-700" : isMarco ? "text-purple-800 font-medium" : "text-slate-600"}`}
+                  title={a.nome}>
+                  {isMarco && <span className="mr-0.5 text-purple-500">◆</span>}{a.nome}
+                </span>
+                {avanc > 0 && (
+                  <span className={`text-[9px] font-bold shrink-0 ${avanc >= 100 ? "text-emerald-600" : isGrupo ? "text-slate-500" : isMarco ? "text-purple-600" : "text-blue-600"}`}>
+                    {avanc.toFixed(0)}%
+                  </span>
+                )}
+              </div>
+
+              <div style={{ width: totalWidth, minWidth: totalWidth, height: ROW_H, position: "relative" }}
+                className={`border-b border-slate-100 shrink-0 ${isDone ? (isHovered ? "bg-emerald-50/40" : "bg-emerald-50/20") : isGrupo ? "bg-slate-50/40" : isHovered ? "bg-blue-50/20" : ""}`}>
+                {monthCells.map((m, i) => (
+                  <div key={i} style={{ position: "absolute", left: m.x, top: 0, bottom: 0, width: 1 }}
+                    className="bg-slate-100 pointer-events-none" />
+                ))}
+                {todayX >= 0 && todayX <= totalWidth && (
+                  <div style={{ position: "absolute", left: todayX, top: 0, bottom: 0, width: 2 }}
+                    className="bg-red-500/50 pointer-events-none" />
+                )}
+                {hasBar && (
+                  <div style={{
+                    position: "absolute", left: barX, top: barTop, width: barW, height: barH,
+                    backgroundColor: barColor, borderRadius: isGrupo ? "2px" : "3px", overflow: "hidden",
+                  }}>
+                    {fillW > 0 && (
+                      <div style={{ position: "absolute", left: 0, top: 0, width: fillW, height: "100%", backgroundColor: fillColor, opacity: 0.9 }} />
+                    )}
+                    {barW > 32 && avanc > 0 && (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", paddingLeft: 3 }}>
+                        <span style={{ fontSize: 8, color: "white", fontWeight: 700 }}>{avanc.toFixed(0)}%</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {hasBar && isHovered && barW > 0 && (
+                  <div style={{
+                    position: "absolute", left: barX + barW + 4, top: "50%", transform: "translateY(-50%)",
+                    fontSize: 9, color: "#64748b", whiteSpace: "nowrap", pointerEvents: "none",
+                    background: "rgba(255,255,255,0.95)", padding: "0 3px", borderRadius: 2,
+                    border: "1px solid #e2e8f0", zIndex: 5,
+                  }}>
+                    {fmtBR(a.dataInicio)} → {fmtBR(a.dataFim)}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center gap-4 text-[10px] text-slate-400 px-1">
+        <span>{visibleAtiv.length} itens visíveis de {atividades.length} total</span>
+        <span>·</span>
+        <span>{fmtBR(minDate.toISOString().split("T")[0])} → {fmtBR(maxDate.toISOString().split("T")[0])}</span>
+        <span>·</span>
+        <span>{totalDays} dias de projeto</span>
       </div>
     </div>
   );

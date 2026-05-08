@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1461,
+    titulo: "Portal do Cliente — Aba Gantt agora idêntica à tela interna de Planejamento",
+    descricao: "A aba Gantt do Portal do Cliente foi totalmente refeita para ser visualmente IDÊNTICA ao Gantt interno (PlanejamentoDetalhe → GanttCronograma): (1) Toolbar com zoom Semana / Mês / Trimestre alterando a densidade de pixels por dia (28 / 10 / 3); (2) seletor de Nível EAP (N1, N2, N3...) + botões 'Tudo' e 'Recolher'; (3) cabeçalho sticky em duas faixas — meses no topo e tickers semanais embaixo (no zoom Semana e Mês); (4) coluna esquerda sticky de 310px com indentação por nível, badge EAP colorido, ícone de marco ◆ e badge de % de avanço; (5) barras com cor por tipo (Grupo cinza-grafite, Atividade azul-marinho, Marco roxo, Concluída verde) e fill interno proporcional ao % realizado; (6) avanço dos grupos calculado como média simples das folhas descendentes; (7) linha vertical vermelha 'Hoje' no cabeçalho e em todas as linhas; (8) hover destaca a linha e mostra o intervalo dd/MM/aaaa → dd/MM/aaaa ao lado da barra; (9) collapse/expand por grupo via clique no chevron; (10) legenda de cores no canto direito; (11) rodapé com totais (itens visíveis, intervalo do projeto, dias totais). Substitui o Gantt anterior do portal que era simplificado e mostrava apenas folhas em barras planas — agora cliente vê EXATAMENTE o mesmo Gantt do gestor.",
+    tipo: "feature",
+    modulos: "Portal do Cliente,Planejamento",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-05-08 19:00:00",
+  },
+  {
     version: 1460,
     titulo: "Portal do Cliente — Curva S Financeira habilitada na aba Curva S",
     descricao: "A aba 'Curva S' do Portal do Cliente agora exibe de fato a Curva S Financeira ao clicar no switcher 'Curva S Financeira' (antes desabilitado). O gráfico converte os percentuais da Curva S (Baseline, Faturamento Previsto, Faturamento Realizado Físico e Tendência) em R$ multiplicando pelo Valor de Contrato do projeto, e plota também a série 'Faturado Real' a partir das medições efetivamente emitidas/aprovadas (curvaMedicoes do backend). Inclui legenda dinâmica com toggles por série, KPIs financeiros (Contrato Total, Faturamento Previsto, Faturamento Realizado Físico, Desvio e Faturado Real quando houver medições), tooltip em BRL e bloco 'Como interpretar'. Quando o projeto não tiver valor de contrato cadastrado ou não houver dados de Curva S, exibe placeholder explicativo.",
