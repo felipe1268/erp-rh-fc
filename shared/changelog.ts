@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1470,
+    titulo: "Planejamento — Bugfix: divergência de 0,04% entre 'Avanço Físico' (topo) e 'Previsto Acumulado' do REFIS",
+    descricao: "O card 'Avanço Físico' no topo da tela de Planejamento mostrava 1,80% enquanto o REFIS abaixo mostrava 1,84% para a mesma obra/semana. Causa: o cálculo do widget de topo (avancoPrevistoDia) arredondava o resultado para 1 casa decimal (toFixed(1)), enquanto o REFIS exibe com 2 casas. Ex: 1,838% → toFixed(1)=1,8 → exibido '1,80%' vs toFixed(2)=1,84 → exibido '1,84%'. Os dois cálculos eram matematicamente IDÊNTICOS (mesma fórmula de proporção linear pelo cronograma, mesma referência de fim de semana, mesma exclusão de indiretas/grupos), apenas o arredondamento divergia. Correção: trocado toFixed(1) por toFixed(2) no avancoPrevistoDia, garantindo que o globo do topo bate exatamente com o REFIS (com 'Só Diretas' ligado).",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 21:00:00",
+  },
+  {
     version: 1469,
     titulo: "Portal do Cliente — Cabeçalho de impressão com logos (Executora FC + Cliente + Gerenciadora) e print mais limpo",
     descricao: "Quando o cliente clica em 'Imprimir' (Ctrl/Cmd+P) qualquer tela do Portal (Planejamento/REFIS/Programação Semanal, RH-Documentos e Proj./Doc. Técnicos), agora aparece um cabeçalho dedicado com 3 logos lado a lado: à esquerda o logo da empresa executora (FC Engenharia ou a operadora cadastrada na empresa), ao centro o logo do CLIENTE, e à direita o logo da GERENCIADORA — ambos vindos do cadastro da Obra (campos cliente_logo_url e gerenciadora_logo_url). Abaixo dos logos, faixa centralizada com o nome da obra, o relatório/aba sendo impresso, cidade/UF e timestamp de emissão. Também foi melhorada a impressão geral do portal: ocultados sidebar (aside) e cabeçalhos sticky, sticky desligado para tudo, gradientes/sombras suprimidos e quebras de página respeitadas. Backend: minhasObras + planejamentoObra agora retornam empresaLogoUrl/empresaNome (companies) + gerenciadoraLogoUrl + cliente.",

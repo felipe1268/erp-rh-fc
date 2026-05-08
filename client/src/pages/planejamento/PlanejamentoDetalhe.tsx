@@ -415,7 +415,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       soma += (exp * peso) / denom;
     });
-    return +soma.toFixed(1);
+    return +soma.toFixed(2);
   }, [atividades, semanaVisualizacao, usarPesoPorDuracao]);
 
   if (loadingProj) return (
