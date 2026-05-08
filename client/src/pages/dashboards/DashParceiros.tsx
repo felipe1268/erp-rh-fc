@@ -21,7 +21,10 @@ import {
 import { Link } from "wouter";
 
 const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const fmtBRLShort = (v: number) => {
+// Versão "short" mantida apenas para eixos de gráfico (onde o espaço é apertado).
+// KPIs, tabelas e drill-downs usam o valor completo em R$ por preferência do usuário.
+const fmtBRLShort = (v: number) => fmtBRL(v);
+const fmtBRLAxis = (v: number) => {
   if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mi`;
   if (v >= 1_000) return `R$ ${(v / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
   return fmtBRL(v);
@@ -344,7 +347,7 @@ export default function DashParceiros() {
               data: data.evolucaoMensal.map((m: any) => m.valorAprovado),
               borderColor: "#8B5CF6", backgroundColor: "rgba(139,92,246,0.15)", fill: true, tension: 0.3,
             }]}
-            valueFormatter={fmtBRLShort}
+            valueFormatter={fmtBRLAxis}
             height={260}
           />
           <DashChart
@@ -355,7 +358,7 @@ export default function DashParceiros() {
               { label: "Pago", data: data.pagamentosPorMes.map((m: any) => m.valorPago), backgroundColor: "#059669" },
               { label: "A Pagar", data: data.pagamentosPorMes.map((m: any) => m.valorAPagar), backgroundColor: "#F97316" },
             ]}
-            valueFormatter={fmtBRLShort}
+            valueFormatter={fmtBRLAxis}
             height={260}
           />
         </div>
@@ -500,7 +503,7 @@ export default function DashParceiros() {
                     data: data.rankingParceiros.map((p: any) => p.valor),
                     backgroundColor: "#8B5CF6",
                   }]}
-                  valueFormatter={fmtBRLShort}
+                  valueFormatter={fmtBRLAxis}
                   height={Math.max(220, data.rankingParceiros.length * 32)}
                   onChartClick={drillByParceiro}
                 />

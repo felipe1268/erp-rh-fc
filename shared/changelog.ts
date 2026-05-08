@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1415,
+    titulo: "Dashboard Parceiros: valores em reais completos (R$ 2.700,00) nos KPIs e tabela comparativa",
+    descricao: "AJUSTE DE FORMATAÇÃO: removida a abreviação 'R$ 2,7 mil / R$ 1,3 mi' nos KPIs e na tabela 'Comparativo Mês a Mês' do Dashboard Parceiros — agora todos os valores aparecem em reais completos (R$ 2.700,00). A abreviação foi mantida APENAS nos eixos dos gráficos (onde o espaço é apertado e a leitura ficaria prejudicada).",
+    tipo: "melhoria",
+    modulos: "Dashboards,Parceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 16:00:00",
+  },
+  {
     version: 1414,
     titulo: "Raio-X do Colaborador: Complemento Salarial (por fora) com valores separados e totais",
     descricao: "MELHORIA NO RAIO-X DO COLABORADOR: agora a ficha exibe o complemento salarial pago 'por fora' da folha CLT quando o funcionário tem essa configuração ativa no cadastro (campos recebeComplemento, valorComplemento, descricaoComplemento). (1) HEADER — adicionados dois itens ao card-resumo: 'Complemento (por fora)' com o valor mensal e 'Salário TOTAL (Base + Complemento)' com a soma. (2) ABA FOLHA — adicionado bloco destacado em laranja/âmbar 'Complemento Salarial (por fora)' com 4 KPIs: Salário Base CLT, Complemento Mensal, Total Mensal (Base + Compl.) e Acumulado do Complemento (×N folhas), incluindo a observação cadastrada. (3) TABELA DE HOLERITES — quando há complemento, ganham duas novas colunas: 'Compl. (fora)' e 'TOTAL Recebido' (líquido CLT + complemento), permitindo visualizar mês a mês o valor real recebido pelo colaborador. Tudo deixa claro que o complemento é pago fora da folha CLT e somado pelo financeiro.",
