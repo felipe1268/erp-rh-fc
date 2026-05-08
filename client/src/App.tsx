@@ -488,6 +488,7 @@ function Router() {
         <Route path="/compras/solicitacoes"      component={() => <RouteGuard component={Solicitacoes} route="/compras/solicitacoes" />} />
         <Route path="/compras/cotacoes"          component={() => <RouteGuard component={Cotacoes} route="/compras/cotacoes" />} />
         <Route path="/compras/ordens"            component={() => <RouteGuard component={Ordens} route="/compras/ordens" />} />
+        <Route path="/compras/ordens-compra"     component={() => <RouteGuard component={Ordens} route="/compras/ordens" />} />
         <Route path="/compras/emergencial"       component={() => <RouteGuard component={ComprasEmergencial} route="/compras/emergencial" />} />
         <Route path="/compras/aprovacoes"        component={() => <RouteGuard component={ComprasAprovacoes} route="/compras/aprovacoes" />} />
         <Route path="/compras/recebimentos"      component={() => <RouteGuard component={ComprasRecebimentos} route="/compras/recebimentos" />} />

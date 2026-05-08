@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1423,
+    titulo: "Compras: rota alias /compras/ordens-compra para evitar 404 em links antigos da OC",
+    descricao: "BUGFIX/COMPATIBILIDADE: o caminho legado /compras/ordens-compra (usado em links antigos para abrir OC, e que estava em uso por algumas telas até a Rev. 1422) agora é uma rota alias que renderiza o mesmo componente da rota oficial /compras/ordens. Resolve o problema de 'a página cai' ao abrir uma OC a partir da Solicitação de Compra em ambientes/abas com a versão antiga em cache, e protege futuros links que ainda apontem para o caminho legado.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 19:05:00",
+  },
+  {
     version: 1422,
     titulo: "Solicitações de Compra: corrigido KPI 'Pendente de Entrega' (SCs 100% entregues estavam contadas como pendentes) e link 404 da OC",
     descricao: "BUGFIX: na tela de Solicitações de Compra, o KPI/filtro 'Pendente de Entrega' contava qualquer SC com OC vinculada cujo status fosse diferente de 'aprovado'. Isso fazia com que SCs cujas Ordens de Compra já tinham sido 100% entregues continuassem aparecendo como pendentes de entrega. CORREÇÃO: agora uma SC é considerada totalmente entregue quando (a) seu status é final (concluida/recebido/aprovado/recusado/cancelado) OU (b) todos os itens têm quantidadeAtendida ≥ quantidade. O KPI 'Concluído' também passa a refletir esse mesmo critério. CORRIGIDO ainda o link 'Abrir OC Completa' no drill-down da SC, que apontava para a rota inexistente /compras/ordens-compra (404) — agora aponta corretamente para /compras/ordens.",
