@@ -1,7 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Maximize2 } from "lucide-react";
+import FullScreenDialog from "@/components/FullScreenDialog";
 
-// Lazy load Chart.js
 let ChartJS: any = null;
 let ChartDataLabels: any = null;
 const loadChartJS = async () => {
@@ -52,7 +54,11 @@ const COLORS = [
   "#A855F7", "#EAB308", "#0EA5E9", "#E11D48", "#059669",
 ];
 
-export default function DashChart({ title, type, labels, datasets, height = 280, className, showPercentage = true, onChartClick, valueFormatter }: DashChartProps) {
+interface ChartCanvasProps extends Omit<DashChartProps, "title" | "className"> {
+  fullscreen?: boolean;
+}
+
+function ChartCanvas({ type, labels, datasets, height = 280, showPercentage = true, onChartClick, valueFormatter, fullscreen = false }: ChartCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
   const onClickRef = useRef(onChartClick);
@@ -75,6 +81,8 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
         borderWidth: ds.borderWidth ?? (isPieOrDoughnut ? 2 : 1),
       }));
 
+      const fontScale = fullscreen ? 1.4 : 1;
+
       const datalabelsConfig = isPieOrDoughnut && showPercentage ? {
         display: function (context: any) {
           const value = context.dataset.data[context.dataIndex];
@@ -92,7 +100,7 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
           return `${pct}%`;
         },
         color: "#fff",
-        font: { size: 11, weight: "bold" as const },
+        font: { size: Math.round(11 * fontScale), weight: "bold" as const },
         anchor: "center" as const,
         align: "center" as const,
         textAlign: "center" as const,
@@ -100,9 +108,9 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
 
       const tooltipConfig = {
         backgroundColor: "rgba(15, 23, 42, 0.92)",
-        titleFont: { size: 12, weight: "bold" as const },
-        bodyFont: { size: 12 },
-        padding: 10,
+        titleFont: { size: Math.round(12 * fontScale), weight: "bold" as const },
+        bodyFont: { size: Math.round(12 * fontScale) },
+        padding: Math.round(10 * fontScale),
         cornerRadius: 8,
         displayColors: true,
         boxPadding: 4,
@@ -131,15 +139,12 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
       const isMobile = window.innerWidth < 768;
       const legendConfig = {
         display: datasets.length > 1 || isPieOrDoughnut,
-        position: isPieOrDoughnut ? (isMobile ? "bottom" as const : "right" as const) : "top" as const,
-        // Clique na legenda → habilita/desabilita a série/fatia.
+        position: isPieOrDoughnut ? (isMobile && !fullscreen ? "bottom" as const : "right" as const) : "top" as const,
         onClick: function (e: any, legendItem: any, legend: any) {
           const ci = legend.chart;
           if (isPieOrDoughnut) {
-            // Pie/Doughnut: toggle do índice da fatia
             ci.toggleDataVisibility(legendItem.index);
           } else {
-            // Linha/Barra: toggle do dataset inteiro
             const idx = legendItem.datasetIndex;
             const meta = ci.getDatasetMeta(idx);
             meta.hidden = meta.hidden === null ? !ci.data.datasets[idx].hidden : null;
@@ -149,9 +154,9 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
         onHover: (e: any) => { if (e?.native?.target) e.native.target.style.cursor = "pointer"; },
         onLeave: (e: any) => { if (e?.native?.target) e.native.target.style.cursor = "default"; },
         labels: {
-          font: { size: isMobile ? 10 : 11 },
-          padding: isMobile ? 6 : 8,
-          boxWidth: isMobile ? 10 : 40,
+          font: { size: Math.round((isMobile && !fullscreen ? 10 : 11) * fontScale) },
+          padding: Math.round((isMobile && !fullscreen ? 6 : 8) * fontScale),
+          boxWidth: isMobile && !fullscreen ? 10 : 40,
           usePointStyle: true,
           pointStyle: "rectRounded" as const,
           ...(isPieOrDoughnut && showPercentage ? {
@@ -185,14 +190,13 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
           responsive: true,
           maintainAspectRatio: false,
           indexAxis: isHorizontalBar ? "y" : "x",
-          ...(onChartClick ? { 
+          ...(onChartClick ? {
             onHover: (event: any, elements: any[]) => {
               const canvas = event.native?.target;
               if (canvas) canvas.style.cursor = elements.length > 0 ? 'pointer' : 'default';
             },
           } : {}),
           onClick: (_event: any, elements: any[], chart: any) => {
-            console.log('[DashChart] onClick fired, elements:', elements.length, 'hasCallback:', !!onClickRef.current);
             if (!onClickRef.current || elements.length === 0) return;
             const el = elements[0];
             const datasetIndex = el.datasetIndex;
@@ -200,13 +204,7 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
             const label = chart.data.labels[dataIndex];
             const datasetLabel = chart.data.datasets[datasetIndex]?.label;
             const value = chart.data.datasets[datasetIndex].data[dataIndex];
-            onClickRef.current({
-              label,
-              datasetLabel,
-              datasetIndex,
-              dataIndex,
-              value,
-            });
+            onClickRef.current({ label, datasetLabel, datasetIndex, dataIndex, value });
           },
           plugins: {
             legend: legendConfig,
@@ -214,39 +212,77 @@ export default function DashChart({ title, type, labels, datasets, height = 280,
             datalabels: datalabelsConfig,
           },
           scales: isPieOrDoughnut ? {} : {
-            y: { beginAtZero: true, ticks: { font: { size: 11 }, ...(valueFormatter && !isHorizontalBar ? { callback: (v: any) => valueFormatter(v) } : {}) } },
-            x: { ticks: { font: { size: 11 }, maxRotation: 45, ...(valueFormatter && isHorizontalBar ? { callback: (v: any) => valueFormatter(v) } : {}) } },
+            y: { beginAtZero: true, ticks: { font: { size: Math.round(11 * fontScale) }, ...(valueFormatter && !isHorizontalBar ? { callback: (v: any) => valueFormatter(v) } : {}) } },
+            x: { ticks: { font: { size: Math.round(11 * fontScale) }, maxRotation: 45, ...(valueFormatter && isHorizontalBar ? { callback: (v: any) => valueFormatter(v) } : {}) } },
           },
         },
       });
     });
 
     return () => { mounted = false; if (chartRef.current) chartRef.current.destroy(); };
-  }, [type, labels, datasets, height, showPercentage, valueFormatter]);
+  }, [type, labels, datasets, height, showPercentage, valueFormatter, fullscreen]);
 
   return (
-    <Card className={`${className || ''} ${onChartClick ? 'ring-1 ring-transparent hover:ring-blue-200 transition-all' : ''}`}>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">{title}</CardTitle>
-          {onChartClick ? (
-            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" /></svg>
-              Clique para detalhes
-            </span>
-          ) : null}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div style={{ height: `${height}px` }}>
-          <canvas ref={canvasRef} />
-        </div>
-      </CardContent>
-    </Card>
+    <div style={{ height: `${height}px`, width: "100%" }}>
+      <canvas ref={canvasRef} />
+    </div>
   );
 }
 
-// KPI Card for dashboards
+export default function DashChart({ title, className, ...rest }: DashChartProps) {
+  const [fullscreen, setFullscreen] = useState(false);
+
+  return (
+    <>
+      <Card className={`${className || ''} ${rest.onChartClick ? 'ring-1 ring-transparent hover:ring-blue-200 transition-all' : ''}`}>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-sm truncate">{title}</CardTitle>
+            <div className="flex items-center gap-2 shrink-0">
+              {rest.onChartClick ? (
+                <span className="hidden sm:flex text-[10px] text-muted-foreground items-center gap-1">
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" /></svg>
+                  Clique para detalhes
+                </span>
+              ) : null}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                title="Tela cheia"
+                onClick={() => setFullscreen(true)}
+              >
+                <Maximize2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ChartCanvas {...rest} />
+        </CardContent>
+      </Card>
+
+      <FullScreenDialog
+        open={fullscreen}
+        onClose={() => setFullscreen(false)}
+        title={title}
+        subtitle={rest.onChartClick ? "Clique nas barras/fatias para ver detalhes" : undefined}
+        zIndex={70}
+      >
+        <Card>
+          <CardContent className="p-3 sm:p-6">
+            <ChartCanvas
+              {...rest}
+              fullscreen
+              height={Math.max(420, (typeof window !== "undefined" ? window.innerHeight : 800) - 220)}
+            />
+          </CardContent>
+        </Card>
+      </FullScreenDialog>
+    </>
+  );
+}
+
 export function DashKpi({ label, value, color = "blue", icon: Icon, sub, active, dimmed, onClick }: {
   label: string;
   value: string | number;
@@ -271,7 +307,6 @@ export function DashKpi({ label, value, color = "blue", icon: Icon, sub, active,
   const c = colorMap[color] || colorMap.blue;
   const [textColor, bgColor, borderColor] = c.split(" ");
   const isMonetary = typeof value === 'string' && value.startsWith('R$');
-  // Format numeric values with Brazilian locale (dot as thousand separator)
   const displayValue = (() => {
     if (typeof value === 'number') return value.toLocaleString('pt-BR');
     if (typeof value === 'string' && !isMonetary && /^\d+$/.test(value.trim())) return Number(value).toLocaleString('pt-BR');

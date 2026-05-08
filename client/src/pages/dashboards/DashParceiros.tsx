@@ -11,11 +11,11 @@ import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import FullScreenDialog from "@/components/FullScreenDialog";
 import {
   Handshake, Store, Receipt, CreditCard, CheckCircle, Clock, XCircle,
   DollarSign, Users, TrendingUp, Loader2, ArrowLeft, Filter, Wallet,
-  Timer, BarChart3,
+  Timer, BarChart3, Download,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -427,45 +427,115 @@ export default function DashParceiros() {
         <PrintFooterLGPD />
       </div>
 
-      {/* Drill-down dialog */}
-      <Dialog open={!!drillDialog} onOpenChange={(o) => !o && setDrillDialog(null)}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{drillDialog?.title}</DialogTitle>
-          </DialogHeader>
-          {drillDialog?.items?.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-6 text-center">Nenhum lançamento.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase text-muted-foreground border-b">
-                <tr>
-                  <th className="text-left py-2 px-2">Data</th>
-                  <th className="text-left py-2 px-2">Parceiro</th>
-                  <th className="text-left py-2 px-2">Colaborador</th>
-                  <th className="text-right py-2 px-2">Valor</th>
-                  <th className="text-center py-2 px-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {drillDialog?.items?.map((d: any) => {
-                  const st = STATUS_LANC[d.status] || { label: d.status, className: "bg-muted" };
-                  return (
-                    <tr key={d.id} className="border-b last:border-0">
-                      <td className="py-1.5 px-2 whitespace-nowrap">{fmtDateBR(d.dataCompra)}</td>
-                      <td className="py-1.5 px-2">{d.parceiroNome}</td>
-                      <td className="py-1.5 px-2">{d.employeeNome}</td>
-                      <td className="text-right py-1.5 px-2 font-medium">{fmtBRL(d.valor)}</td>
-                      <td className="text-center py-1.5 px-2">
-                        <Badge variant="outline" className={`text-[10px] ${st.className}`}>{st.label}</Badge>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Drill-down — tela cheia */}
+      <FullScreenDialog
+        open={!!drillDialog}
+        onClose={() => setDrillDialog(null)}
+        title={drillDialog?.title || "Detalhes"}
+        subtitle={drillDialog ? `${drillDialog.items.length} lançamento(s) — Total ${fmtBRL(drillDialog.items.reduce((a: number, x: any) => a + Number(x.valor || 0), 0))}` : undefined}
+        icon={<Receipt className="h-5 w-5 text-white" />}
+        zIndex={80}
+        headerActions={
+          drillDialog && drillDialog.items.length > 0 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-white hover:bg-white/20 gap-1.5 border border-white/30"
+              onClick={() => exportCsv(drillDialog.title, drillDialog.items)}
+            >
+              <Download className="h-4 w-4" /> CSV
+            </Button>
+          ) : null
+        }
+      >
+        <Card>
+          <CardContent className="p-3 sm:p-6">
+            {!drillDialog || drillDialog.items.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-12 text-center">Nenhum lançamento encontrado.</p>
+            ) : (
+              <>
+                {/* KPIs do drill */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <DashKpi label="Lançamentos" value={drillDialog.items.length} icon={Receipt} color="blue" />
+                  <DashKpi label="Valor Total" value={fmtBRLShort(drillDialog.items.reduce((a: number, x: any) => a + Number(x.valor || 0), 0))} icon={DollarSign} color="purple" />
+                  <DashKpi label="Parceiros" value={new Set(drillDialog.items.map((x: any) => x.parceiroNome)).size} icon={Store} color="indigo" />
+                  <DashKpi label="Colaboradores" value={new Set(drillDialog.items.map((x: any) => x.employeeNome)).size} icon={Users} color="teal" />
+                </div>
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full text-sm">
+                    <thead className="text-xs uppercase text-muted-foreground border-b bg-muted/40 sticky top-0">
+                      <tr>
+                        <th className="text-left py-2 px-3">Data</th>
+                        <th className="text-left py-2 px-3">Parceiro</th>
+                        <th className="text-left py-2 px-3">Tipo</th>
+                        <th className="text-left py-2 px-3">Colaborador</th>
+                        <th className="text-right py-2 px-3">Valor</th>
+                        <th className="text-center py-2 px-3">Status</th>
+                        <th className="text-center py-2 px-3">Competência</th>
+                        <th className="text-left py-2 px-3">Aprovado em</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {drillDialog.items.map((d: any) => {
+                        const st = STATUS_LANC[d.status] || { label: d.status, className: "bg-muted" };
+                        return (
+                          <tr key={d.id} className="border-b last:border-0 hover:bg-muted/30">
+                            <td className="py-1.5 px-3 whitespace-nowrap">{fmtDateBR(d.dataCompra)}</td>
+                            <td className="py-1.5 px-3">{d.parceiroNome}</td>
+                            <td className="py-1.5 px-3 text-xs text-muted-foreground">{TIPO_LBL[d.tipoConvenio] || d.tipoConvenio}</td>
+                            <td className="py-1.5 px-3">{d.employeeNome}</td>
+                            <td className="text-right py-1.5 px-3 font-medium">{fmtBRL(d.valor)}</td>
+                            <td className="text-center py-1.5 px-3">
+                              <Badge variant="outline" className={`text-[10px] ${st.className}`}>{st.label}</Badge>
+                            </td>
+                            <td className="text-center py-1.5 px-3 text-xs text-muted-foreground">
+                              {d.competenciaDesconto ? d.competenciaDesconto.split("-").reverse().join("/") : "—"}
+                            </td>
+                            <td className="py-1.5 px-3 text-xs text-muted-foreground whitespace-nowrap">
+                              {d.aprovadoEm ? fmtDateBR(d.aprovadoEm) : "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 bg-muted/30 font-semibold">
+                        <td colSpan={4} className="py-2 px-3 text-right">TOTAL</td>
+                        <td className="text-right py-2 px-3 text-purple-600">
+                          {fmtBRL(drillDialog.items.reduce((a: number, x: any) => a + Number(x.valor || 0), 0))}
+                        </td>
+                        <td colSpan={3}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </FullScreenDialog>
     </DashboardLayout>
   );
+}
+
+function exportCsv(title: string, items: any[]) {
+  const header = ["Data", "Parceiro", "Tipo", "Colaborador", "Valor", "Status", "Competencia", "AprovadoEm"];
+  const rows = items.map((d: any) => [
+    fmtDateBR(d.dataCompra),
+    d.parceiroNome,
+    TIPO_LBL[d.tipoConvenio] || d.tipoConvenio,
+    d.employeeNome,
+    String(d.valor).replace(".", ","),
+    d.status,
+    d.competenciaDesconto ? d.competenciaDesconto.split("-").reverse().join("/") : "",
+    d.aprovadoEm ? fmtDateBR(d.aprovadoEm) : "",
+  ]);
+  const csv = [header, ...rows].map(r => r.map((c: any) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${title.replace(/[^\w\d]+/g, "_")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }

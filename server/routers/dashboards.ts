@@ -3446,6 +3446,8 @@ async function getDashParceiros(
         status: l.status,
         competenciaDesconto: l.competenciaDesconto,
         descricaoItens: l.descricaoItens,
+        aprovadoEm: l.aprovadoEm ? String(l.aprovadoEm).slice(0, 10) : null,
+        createdAt: l.createdAt ? String(l.createdAt).slice(0, 10) : null,
       };
     });
 

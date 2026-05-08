@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1411,
+    titulo: "Dashboards: gráficos com botão de TELA CHEIA + drill-down em tela cheia (começando por Parceiros)",
+    descricao: "MELHORIA GLOBAL nos dashboards: (1) cada gráfico do componente DashChart agora tem um botão de TELA CHEIA (Maximize2) no cabeçalho — ao clicar, o gráfico abre ocupando toda a viewport com fontes/legendas escaladas (1.4x), tooltips maiores e canvas redimensionado dinamicamente para a altura da janela, mantendo cliques para drill-down funcionando. Os gráficos continuam responsivos (responsive: true, maintainAspectRatio: false). (2) No Dashboard Parceiros, o drill-down (clique em KPI/barra/fatia) deixou de ser um Dialog pequeno e passou a abrir em FullScreenDialog com cabeçalho colorido, KPIs do período (Lançamentos, Valor Total, Parceiros, Colaboradores), tabela completa com colunas Data, Parceiro, Tipo de Convênio, Colaborador, Valor, Status, Competência e Aprovado em (dd/MM/aaaa), linha de TOTAL no rodapé e botão de exportar para CSV (UTF-8 BOM, separador ;). Backend dashboards.parceiros: detalhes agora retornam aprovadoEm e createdAt para popular a coluna 'Aprovado em' do drill.",
+    tipo: "melhoria",
+    modulos: "Dashboards,Parceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 12:00:00",
+  },
+  {
     version: 1410,
     titulo: "Dashboard Parceiros: item de menu adicionado à barra lateral do módulo Parceiros",
     descricao: "AJUSTE complementar à Rev. 1409: o link 'Dashboard Parceiros' (ícone BarChart3) foi adicionado à barra lateral do módulo Parceiros (DashboardLayout — menuSectionsParceiros), logo abaixo de 'Painel Parceiros' e antes de 'Parceiros Conveniados', apontando para /dashboards/parceiros. Antes o dashboard só estava acessível pela página /dashboards, agora aparece também no menu lateral quando o usuário navega dentro do módulo Parceiros.",
