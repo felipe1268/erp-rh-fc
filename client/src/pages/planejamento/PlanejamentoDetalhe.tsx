@@ -7698,7 +7698,7 @@ function CronogramaFinanceiro({ projetoId, proj, atividades, avancos, utils, fmt
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: EFETIVO DA OBRA
 // ═════════════════════════════════════════════════════════════════════════════
-const STATUS_COLORS: Record<string, string> = {
+export const STATUS_COLORS: Record<string, string> = {
   Ativo: "bg-emerald-100 text-emerald-700",
   Aviso: "bg-red-100 text-red-700",
   AvisoDispensado: "bg-red-200 text-red-800",
@@ -7707,7 +7707,7 @@ const STATUS_COLORS: Record<string, string> = {
   Licenca: "bg-purple-100 text-purple-700",
   Recluso: "bg-slate-200 text-slate-700",
 };
-const STATUS_LABELS: Record<string, string> = {
+export const STATUS_LABELS: Record<string, string> = {
   Ativo: "Ativo",
   Aviso: "Aviso Prévio",
   AvisoDispensado: "Dispensado",
@@ -7722,13 +7722,28 @@ function EfetivoObraTab({ proj }: { proj: any }) {
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
   const obraId = proj?.obraId ?? 0;
-  const [busca, setBusca] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState<string>("todos");
 
   const { data: equipeRaw = [], isLoading } = trpc.obras.equipeObra.useQuery(
     { obraId, companyId },
     { enabled: obraId > 0 && companyId > 0 }
   );
+
+  if (!obraId) {
+    return (
+      <div className="text-center py-16 text-slate-400">
+        <HardHat className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+        <p className="text-sm font-medium">Nenhuma obra vinculada a este projeto</p>
+        <p className="text-xs mt-1">Vincule uma obra ao projeto para visualizar o efetivo.</p>
+      </div>
+    );
+  }
+
+  return <EfetivoObraView equipeRaw={equipeRaw as any[]} isLoading={isLoading} />;
+}
+
+export function EfetivoObraView({ equipeRaw, isLoading }: { equipeRaw: any[]; isLoading: boolean }) {
+  const [busca, setBusca] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState<string>("todos");
 
   const equipe = useMemo(() =>
     equipeRaw
@@ -7768,16 +7783,6 @@ function EfetivoObraTab({ proj }: { proj: any }) {
   }, [equipe, filtroStatus, busca]);
 
   const maxBar = funcaoMap.length > 0 ? funcaoMap[0][1] : 1;
-
-  if (!obraId) {
-    return (
-      <div className="text-center py-16 text-slate-400">
-        <HardHat className="h-12 w-12 mx-auto mb-3 text-slate-300" />
-        <p className="text-sm font-medium">Nenhuma obra vinculada a este projeto</p>
-        <p className="text-xs mt-1">Vincule uma obra ao projeto para visualizar o efetivo.</p>
-      </div>
-    );
-  }
 
   if (isLoading) {
     return (

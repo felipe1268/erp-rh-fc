@@ -3,7 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { getDb } from "../db";
+import { getDb, getEquipeObra } from "../db";
 import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -1007,6 +1007,37 @@ export const portalExternoRouter = router({
         recomendaria: input.recomendaria ?? null,
       });
       return { success: true };
+    }),
+
+    efetivoObra: publicProcedure.input(z.object({
+      token: z.string(),
+      obraId: z.number(),
+    })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+
+      // Verifica que a obra pertence ao cliente (mesma regra do planejamentoObra)
+      const [c] = await db.select().from(clientes).where(eq(clientes.id, decoded.clienteId));
+      if (!c) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado" });
+      const nomes = [c.razaoSocial, c.nomeFantasia].filter(Boolean) as string[];
+      if (nomes.length === 0) throw new TRPCError({ code: "FORBIDDEN" });
+      const orConds = nomes.map((n) => ilike(obras.cliente, n));
+      const [obra] = await db.select().from(obras).where(and(
+        eq(obras.id, input.obraId),
+        eq(obras.companyId, decoded.companyId),
+        isNull(obras.deletedAt),
+        or(...orConds)!,
+      ));
+      if (!obra) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não vinculada a este cliente" });
+
+      const equipe = await getEquipeObra(input.obraId, decoded.companyId);
+      // Normaliza para o mesmo shape esperado pelo componente interno EfetivoObraView:
+      // o componente interno usa `effectiveStatus`, mas getEquipeObra retorna `status`
+      // já como o status efetivo (Ativo/Aviso/Ferias/...). Replicamos o campo.
+      return equipe.map((e: any) => ({ ...e, effectiveStatus: e.status }));
     }),
 
     planejamentoObra: publicProcedure.input(z.object({

@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import { PORTAL_CLIENTE_ABAS, type PortalClienteAbaKey } from "@shared/portalClienteAbas";
 import { ProgramacaoSemanal } from "@/pages/planejamento/ProgramacaoSemanal";
+import { EfetivoObraView } from "@/pages/planejamento/PlanejamentoDetalhe";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
 const fmtPct = (n: number) => `${n.toFixed(2).replace(".", ",")}%`;
@@ -320,7 +321,7 @@ export default function PortalPlanejamentoCliente() {
           if (aba === "gantt") return <AbaGantt atividades={atividadesTodas} />;
           if (aba === "refis") return <AbaRefis refisLista={refisLista} />;
           if (aba === "caminho_critico") return <AbaCaminhoCritico criticas={caminhoCritico} />;
-          if (aba === "efetivo") return <AbaEfetivo efetivoMensal={efetivoMensal} />;
+          if (aba === "efetivo") return <AbaEfetivo token={token} obraId={obraId} />;
           if (aba === "crono_financeiro") return <AbaCronoFinanceiro curvaS={curvaS} valorContrato={projeto?.valorContrato || 0} />;
           if (aba === "prev_medicao") return <AbaPrevMedicao curvaS={curvaS} valorContrato={projeto?.valorContrato || 0} />;
           if (aba === "diagrama_rede") return <AbaDiagramaRede atividades={atividadesTodas} />;
@@ -1135,8 +1136,17 @@ function AbaCaminhoCritico({ criticas }: { criticas: any[] }) {
   );
 }
 
-// ─────────────────────── ABA: EFETIVO (Custo MO) ────────────────────────
-function AbaEfetivo({ efetivoMensal }: { efetivoMensal: any[] }) {
+// ─────────────────────── ABA: EFETIVO (Equipe da obra) ──────────────────
+function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
+  const { data: equipeRaw = [], isLoading } = trpc.portalExterno.cliente.efetivoObra.useQuery(
+    { token, obraId },
+    { enabled: !!token && obraId > 0 }
+  );
+  return <EfetivoObraView equipeRaw={equipeRaw as any[]} isLoading={isLoading} />;
+}
+
+// ─────────────────────── ABA: CUSTO MO (mensal) ─────────────────────────
+function AbaEfetivoMensal({ efetivoMensal }: { efetivoMensal: any[] }) {
   const fmtMoeda = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const fmtMes = (m: string) => {
     const [y, mm] = m.split("-");
@@ -1403,7 +1413,7 @@ function AbaCustoRh({ efetivoMensal }: { efetivoMensal: any[] }) {
           </ResponsiveContainer>
         </div>
       </div>
-      <AbaEfetivo efetivoMensal={efetivoMensal} />
+      <AbaEfetivoMensal efetivoMensal={efetivoMensal} />
     </div>
   );
 }

@@ -10049,6 +10049,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 02:30:00",
   },
   {
+    version: 1451,
+    titulo: "Portal do Cliente — aba 'Efetivo' agora é cópia 100% da tela interna (Equipe da Obra)",
+    descricao: "A aba 'Efetivo' do Portal do Cliente passou a reutilizar o mesmo componente visual da tela interna `EfetivoObraTab` (PlanejamentoDetalhe). Foi extraído `EfetivoObraView` (puramente visual) que recebe a equipe já carregada e renderiza: pills de filtro por status (Ativo / Aviso Prévio / Dispensado / Férias / Afastado / Licença / Recluso) com contagens, distribuição por função (gráfico de barras), busca por nome/função/status e tabela com Nome, Função, Status e Tempo de Empresa. Backend: nova rota pública `portalExterno.cliente.efetivoObra({ token, obraId })` que valida o JWT do cliente, confere que a obra pertence ao cliente (mesma regra usada em `planejamentoObra`) e delega para `getEquipeObra(obraId, companyId)` — reaproveitando a lógica de cruzamento com termination_notices (Aviso Prévio / Dispensado) e vacation_periods (Férias em gozo). A antiga aba 'Efetivo' do portal (tabela mensal de custo de mão de obra) virou `AbaEfetivoMensal` e segue acessível dentro de 'Custo MO'.",
+    tipo: "melhoria",
+    modulos: "Portal Cliente,Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 13:00:00",
+  },
+  {
     version: 1450,
     titulo: "Portal do Cliente — aba 'Prog. Semanal' agora é cópia 100% da tela interna",
     descricao: "A aba 'Prog. Semanal' do Portal do Cliente passou a reutilizar diretamente o componente interno `ProgramacaoSemanal` usado em PlanejamentoDetalhe, garantindo paridade visual e funcional total: cabeçalho 'Programação Semanal', navegador de semanas com setas, tape numerado destacando semana atual/REFIS/atrasos, banner 'Peso da Semana' (com indicador de maior peso), e tabela completa de atividades (EAP, Atividade, Início, Fim, Recurso, Peso%, Real%, Status). Adicionada prop `portalMode` ao componente que oculta blocos que dependem de rotas autenticadas (Recursos do Orçamento, JULINHO IA, Modo Relatório), preservando todo o resto. O portal usa `atividadesTodas` já retornado pelo backend e constrói `avancosMap` localmente a partir de `percentRealizado`.",
