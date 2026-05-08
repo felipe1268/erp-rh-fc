@@ -6,6 +6,7 @@ import {
   ArrowLeft, ShieldCheck, Users, FileCheck2, FileX2, FileWarning,
   Stethoscope, GraduationCap, AlertTriangle, ChevronDown, ChevronRight, Search, Home,
 } from "lucide-react";
+import PortalPrintHeader from "@/components/PortalPrintHeader";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
 
@@ -104,6 +105,7 @@ export default function PortalRhDocumentosCliente() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+        <PortalPrintHeader obra={obra} titulo="RH / Controle de Documentos" />
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <Kpi label="Funcionários" value={totais.funcionarios} color="text-blue-700" icon={Users} />

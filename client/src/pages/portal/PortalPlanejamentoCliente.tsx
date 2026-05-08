@@ -17,6 +17,7 @@ import {
 import { PORTAL_CLIENTE_ABAS, type PortalClienteAbaKey } from "@shared/portalClienteAbas";
 import { ProgramacaoSemanal } from "@/pages/planejamento/ProgramacaoSemanal";
 import { EfetivoObraView } from "@/pages/planejamento/PlanejamentoDetalhe";
+import PortalPrintHeader from "@/components/PortalPrintHeader";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
 const fmtPct = (n: number) => `${n.toFixed(2).replace(".", ",")}%`;
@@ -312,6 +313,9 @@ export default function PortalPlanejamentoCliente() {
 
       <div className="flex-1 min-w-0">
         <div className="max-w-7xl mx-auto p-3 sm:p-5">
+        {/* ── Cabeçalho exclusivo de impressão (logos cliente + FC + gerenciadora) ── */}
+        <PortalPrintHeader obra={obra} titulo={`Portal do Cliente — ${PORTAL_CLIENTE_ABAS.find(x=>x.key===aba)?.label || "Planejamento"}`} />
+
         {/* ── Header moderno ──────────────────────────────────────────── */}
         <div className="relative bg-white rounded-2xl border border-slate-200/70 shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)] p-4 sm:p-5 mb-4 overflow-hidden">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600" />

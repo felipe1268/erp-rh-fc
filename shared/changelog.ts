@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1469,
+    titulo: "Portal do Cliente — Cabeçalho de impressão com logos (Executora FC + Cliente + Gerenciadora) e print mais limpo",
+    descricao: "Quando o cliente clica em 'Imprimir' (Ctrl/Cmd+P) qualquer tela do Portal (Planejamento/REFIS/Programação Semanal, RH-Documentos e Proj./Doc. Técnicos), agora aparece um cabeçalho dedicado com 3 logos lado a lado: à esquerda o logo da empresa executora (FC Engenharia ou a operadora cadastrada na empresa), ao centro o logo do CLIENTE, e à direita o logo da GERENCIADORA — ambos vindos do cadastro da Obra (campos cliente_logo_url e gerenciadora_logo_url). Abaixo dos logos, faixa centralizada com o nome da obra, o relatório/aba sendo impresso, cidade/UF e timestamp de emissão. Também foi melhorada a impressão geral do portal: ocultados sidebar (aside) e cabeçalhos sticky, sticky desligado para tudo, gradientes/sombras suprimidos e quebras de página respeitadas. Backend: minhasObras + planejamentoObra agora retornam empresaLogoUrl/empresaNome (companies) + gerenciadoraLogoUrl + cliente.",
+    tipo: "melhoria",
+    modulos: "Portal do Cliente, Planejamento, RH, Proj. Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 20:30:00",
+  },
+  {
     version: 1468,
     titulo: "Portal do Cliente — Bugfix: enviar comentário falhava com 'relation cliente_comentarios does not exist' no Neon",
     descricao: "A aba 'Comentários' do Portal do Cliente acusava 'Failed query: insert into cliente_comentarios ...' ao tentar enviar uma nova mensagem. Causa: as tabelas cliente_comentarios e cliente_avaliacoes nunca foram criadas no Neon porque o ColFix de inicialização é pulado quando a versão do banco já está sincronizada ('[ColFix] Versão ok, pulando migrations.'), e o CREATE TABLE IF NOT EXISTS dessas duas tabelas estava SOMENTE dentro do ColFix. Correção: (1) tabelas criadas manualmente no Neon agora; (2) blocos CREATE TABLE IF NOT EXISTS movidos/adicionados para o SyncSchema+ em server/_core/index.ts, que SEMPRE roda em todo startup, garantindo idempotência permanente. Cobre ambas as tabelas (cliente_comentarios e cliente_avaliacoes) com seus índices.",

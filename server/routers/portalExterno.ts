@@ -907,10 +907,15 @@ export const portalExternoRouter = router({
       if (nomes.length === 0) return [];
       const orConds = nomes.map((n) => ilike(obras.cliente, n));
       const list = await db.select().from(obras).where(and(...conds, or(...orConds)!)).orderBy(desc(obras.createdAt));
+      const [emp] = await db.select().from(companies).where(eq(companies.id, decoded.companyId));
+      const empresaLogoUrl = emp?.logoUrl || null;
+      const empresaNome = emp?.nomeFantasia || emp?.razaoSocial || null;
       return list.map((o: any) => ({
         id: o.id, nome: o.nome, codigo: o.codigo, cidade: o.cidade, estado: o.estado,
         status: o.status, dataInicio: o.dataInicio, dataPrevisaoFim: o.dataPrevisaoFim,
-        clienteLogoUrl: o.clienteLogoUrl, gerenciadoraNome: o.gerenciadoraNome,
+        clienteLogoUrl: o.clienteLogoUrl, gerenciadoraNome: o.gerenciadoraNome, gerenciadoraLogoUrl: o.gerenciadoraLogoUrl,
+        cliente: o.cliente,
+        empresaLogoUrl, empresaNome,
       }));
     }),
 
@@ -1108,6 +1113,11 @@ export const portalExternoRouter = router({
         or(...orConds)!,
       ));
       if (!obra) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não vinculada a este cliente" });
+
+      // Empresa operadora (FC) — para logo no cabeçalho de impressão
+      const [emp] = await db.select().from(companies).where(eq(companies.id, decoded.companyId));
+      (obra as any).empresaLogoUrl = emp?.logoUrl || null;
+      (obra as any).empresaNome = emp?.nomeFantasia || emp?.razaoSocial || null;
 
       // Encontra o projeto de planejamento dessa obra
       const [projeto] = await db.select().from(planejamentoProjetos)

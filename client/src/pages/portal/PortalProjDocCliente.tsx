@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft, FileText, Search, Download, FileCheck2, Clock, Edit3, FileX2, FolderOpen, Home,
 } from "lucide-react";
+import PortalPrintHeader from "@/components/PortalPrintHeader";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
 
@@ -112,6 +113,7 @@ export default function PortalProjDocCliente() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
+        <PortalPrintHeader obra={obra} titulo="Projetos / Documentos Técnicos" />
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <Kpi label="Total Documentos" value={totais.total} color="text-purple-700" icon={FolderOpen} />
           <Kpi label="Aprovados" value={totais.aprovados} color="text-emerald-700" icon={FileCheck2} />

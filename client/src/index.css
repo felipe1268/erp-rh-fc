@@ -277,6 +277,30 @@
   .equipe-print-header {
     display: block !important;
   }
+
+  /* ============================================ */
+  /* Portal do Cliente — impressão limpa          */
+  /* ============================================ */
+  /* Esconde sidebar/aside, sticky headers e botões do portal */
+  aside,
+  header.sticky,
+  .portal-no-print {
+    display: none !important;
+  }
+  /* Tira sticky de headers internos */
+  .sticky { position: static !important; }
+  /* Cabeçalho próprio do portal sempre visível na impressão */
+  .portal-print-header { display: block !important; }
+  .portal-print-header img { display: inline-block !important; }
+  /* Remove gradientes/sombras pesadas em containers do portal */
+  .portal-print-clean,
+  .portal-print-clean * {
+    background: white !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  /* Evita quebra de cards/seções no meio */
+  .print-break-avoid { break-inside: avoid; page-break-inside: avoid; }
   .equipe-print-header img {
     display: inline-block !important;
   }
