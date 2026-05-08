@@ -46,6 +46,7 @@ export default function PortalRhDocumentosCliente() {
   const [busca, setBusca] = useState("");
   const [filtroAso, setFiltroAso] = useState<"todos" | "vigente" | "vencido" | "sem_aso">("todos");
   const [exp, setExp] = useState<Record<number, boolean>>({});
+  const [fotoZoom, setFotoZoom] = useState<{ url: string; nome: string } | null>(null);
 
   const lista = useMemo(() => {
     let l = funcionarios;
@@ -180,11 +181,18 @@ export default function PortalRhDocumentosCliente() {
                         <td className="px-4 py-2 font-medium text-slate-800 text-[13px]">
                           <div className="flex items-center gap-2.5">
                             {f.fotoUrl ? (
-                              <img
-                                src={f.fotoUrl}
-                                alt={f.nome}
-                                className="w-8 h-8 rounded-full object-cover object-top border border-slate-200 shrink-0"
-                              />
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setFotoZoom({ url: f.fotoUrl, nome: f.nome }); }}
+                                className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-400 hover:ring-2 hover:ring-emerald-300 transition"
+                                title="Clique para ampliar"
+                              >
+                                <img
+                                  src={f.fotoUrl}
+                                  alt={f.nome}
+                                  className="w-8 h-8 rounded-full object-cover object-top border border-slate-200 cursor-zoom-in"
+                                />
+                              </button>
                             ) : (
                               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
                                 {(f.nome || "?").split(" ").filter(Boolean).slice(0, 2).map((p: string) => p[0]).join("").toUpperCase()}
@@ -295,6 +303,41 @@ export default function PortalRhDocumentosCliente() {
           )}
         </div>
       </main>
+
+      {/* Lightbox de foto */}
+      {fotoZoom && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setFotoZoom(null)}
+        >
+          <div
+            className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={fotoZoom.url}
+              alt={fotoZoom.nome}
+              className="max-w-[90vw] max-h-[78vh] object-contain rounded-2xl shadow-2xl border-2 border-white/20"
+            />
+            <div className="text-center">
+              <p className="text-white font-semibold text-base">{fotoZoom.nome}</p>
+              <button
+                onClick={() => setFotoZoom(null)}
+                className="mt-2 inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-medium transition"
+              >
+                Fechar
+              </button>
+            </div>
+            <button
+              onClick={() => setFotoZoom(null)}
+              className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-white text-slate-800 hover:bg-slate-100 shadow-lg flex items-center justify-center text-xl font-bold transition"
+              aria-label="Fechar"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

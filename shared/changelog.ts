@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1467,
+    titulo: "Portal do Cliente — Clicar na foto do funcionário abre lightbox em tela cheia",
+    descricao: "Na tabela de funcionários da tela RH/Controle de Documentos do portal do cliente, clicar no avatar circular da foto agora abre um lightbox em tela cheia (overlay escuro com blur) mostrando a foto ampliada (até 90vw × 78vh, mantendo proporção), o nome do funcionário abaixo e botões para fechar (X no canto superior direito, botão Fechar embaixo, ou clicar fora). Funcionários sem foto continuam mostrando o círculo verde com iniciais (sem ação de clique).",
+    tipo: "melhoria",
+    modulos: "Portal do Cliente, RH",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 19:55:00",
+  },
+  {
     version: 1466,
     titulo: "Portal do Cliente — Tela inicial redesenhada no padrão visual do ERP (cards quadrados com ícones grandes)",
     descricao: "A tela inicial do Portal do Cliente (/portal/cliente/hub) foi totalmente refeita seguindo o MESMO padrão visual do hub interno de módulos (Cadastro, RH&DP, Orçamento, etc.): fundo mesh animado, header glassmorphism com badge dourado pulsante, faixa 'PLATAFORMA DO CLIENTE / Portal FC Engenharia' com gradiente azul-marinho→dourado, saudação dinâmica (Bom dia/tarde/noite) com data por extenso e cards quadrados de 115×96px com ícone grande arredondado em gradiente colorido + título e subtítulo abaixo. Os 4 módulos do cliente (Planejamento, RH & Docs, Proj./Doc. e Mensagens) agora aparecem como tiles compactos lado a lado, idênticos aos do ERP interno. Substitui o layout anterior com 4 cards retangulares grandes contendo descrições longas e tags de features. Comportamento dos cliques mantido: navegação direta para a única obra quando há apenas uma vinculada, ou seletor de obras quando há mais. Inclui ainda seção 'Em Desenvolvimento' com 3 placeholders (Galeria de Fotos, Boletins de Medição, Solicitações).",
