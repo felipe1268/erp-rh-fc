@@ -9,7 +9,7 @@ import {
   CalendarDays, User,
 } from "lucide-react";
 import {
-  ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis,
+  ResponsiveContainer, ComposedChart, Line, Area, CartesianGrid, XAxis, YAxis,
   Tooltip, ReferenceLine,
 } from "recharts";
 import { PORTAL_CLIENTE_ABAS, type PortalClienteAbaKey } from "@shared/portalClienteAbas";
@@ -96,10 +96,10 @@ export default function PortalPlanejamentoCliente() {
       <button
         key={a.key}
         onClick={() => setAba(a.key)}
-        className={`group flex items-center justify-center gap-1.5 w-full px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-all duration-150 ${
+        className={`group flex items-center justify-center gap-1.5 w-full px-3 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-all duration-200 ${
           isActive
-            ? "text-blue-700 bg-blue-50 border border-blue-200/80"
-            : "text-slate-500 hover:text-slate-700 hover:bg-slate-50 border border-transparent"
+            ? "text-blue-700 bg-gradient-to-b from-blue-50 to-blue-100/60 ring-1 ring-blue-200 shadow-sm"
+            : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
         }`}
       >
         <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -112,107 +112,128 @@ export default function PortalPlanejamentoCliente() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="max-w-7xl mx-auto p-3 sm:p-4">
-        {/* ── Header (estilo interno) ─────────────────────────────────── */}
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 sm:p-4 mb-3 flex items-start justify-between gap-3 flex-wrap">
-          <div className="flex items-start gap-2 sm:gap-3 min-w-0 flex-1">
-            <Button variant="ghost" size="sm" className="text-muted-foreground -ml-2 mt-0.5 flex-shrink-0"
-              onClick={() => navigate("/portal/cliente/dashboard")}>
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Voltar
-            </Button>
-            <div className="min-w-0">
-              <h1 className="text-base sm:text-lg font-bold text-slate-800 leading-tight break-words">
-                {obra?.nome || "Carregando..."}
-              </h1>
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1 text-xs text-slate-500">
-                {obra?.cliente && (
-                  <span className="flex items-center gap-1">
-                    <Building2 className="h-3 w-3 flex-shrink-0" />
-                    <span className="truncate">{obra.cliente}</span>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50">
+      <div className="max-w-7xl mx-auto p-3 sm:p-5">
+        {/* ── Header moderno ──────────────────────────────────────────── */}
+        <div className="relative bg-white rounded-2xl border border-slate-200/70 shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)] p-4 sm:p-5 mb-4 overflow-hidden">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600" />
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="flex items-start gap-3 min-w-0 flex-1">
+              <Button variant="ghost" size="sm"
+                className="text-slate-500 hover:text-slate-800 hover:bg-slate-100 -ml-2 mt-0.5 flex-shrink-0 rounded-lg"
+                onClick={() => navigate("/portal/cliente/dashboard")}>
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Voltar
+              </Button>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                    Planejamento
                   </span>
-                )}
-                {obra?.responsavel && (
-                  <span className="flex items-center gap-1">
-                    <User className="h-3 w-3 flex-shrink-0" />
-                    <span className="truncate">{obra.responsavel}</span>
-                  </span>
-                )}
-                {(obra?.cidade || obra?.estado) && (
-                  <span className="flex items-center gap-1">
-                    <MapPin className="h-3 w-3 flex-shrink-0" />
-                    <span className="truncate">{[obra.cidade, obra.estado].filter(Boolean).join(" / ")}</span>
-                  </span>
-                )}
-                {diasRestantes !== null && (
-                  <span className={`flex items-center gap-1 font-medium ${diasRestantes < 0 ? "text-red-600" : diasRestantes < 30 ? "text-amber-600" : "text-emerald-600"}`}>
-                    <Clock className="h-3 w-3 flex-shrink-0" />
-                    {diasRestantes < 0 ? `${Math.abs(diasRestantes)}d atrasado` : `${diasRestantes}d restantes`}
-                  </span>
-                )}
+                  {projeto?.revisaoNumero != null && (
+                    <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                      Rev. {String(projeto.revisaoNumero).padStart(2, "0")}
+                    </span>
+                  )}
+                </div>
+                <h1 className="text-lg sm:text-xl font-bold text-slate-900 leading-tight break-words tracking-tight">
+                  {obra?.nome || "Carregando..."}
+                </h1>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-xs text-slate-500">
+                  {obra?.cliente && (
+                    <span className="flex items-center gap-1.5">
+                      <Building2 className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      <span className="truncate">{obra.cliente}</span>
+                    </span>
+                  )}
+                  {obra?.responsavel && (
+                    <span className="flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      <span className="truncate">{obra.responsavel}</span>
+                    </span>
+                  )}
+                  {(obra?.cidade || obra?.estado) && (
+                    <span className="flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                      <span className="truncate">{[obra.cidade, obra.estado].filter(Boolean).join(" / ")}</span>
+                    </span>
+                  )}
+                  {diasRestantes !== null && (
+                    <span className={`flex items-center gap-1.5 font-semibold ${diasRestantes < 0 ? "text-red-600" : diasRestantes < 30 ? "text-amber-600" : "text-emerald-600"}`}>
+                      <Clock className="h-3.5 w-3.5 flex-shrink-0" />
+                      {diasRestantes < 0 ? `${Math.abs(diasRestantes)}d atrasado` : `${diasRestantes}d restantes`}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
+            {obra?.status && (
+              <Badge className="text-[10px] uppercase tracking-wider font-semibold shrink-0 bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+                {obra.status}
+              </Badge>
+            )}
           </div>
-          {obra?.status && (
-            <Badge variant="outline" className="text-xs shrink-0">{obra.status}</Badge>
-          )}
         </div>
 
-        {/* ── Avanço Físico (barras Previsto/Realizado — estilo interno) ── */}
+        {/* ── Avanço Físico (modernizado) ─────────────────────────── */}
         {kpis && (() => {
           const realizado = kpis.realizado as number;
           const previsto = kpis.previsto as number;
           const desvio = realizado - previsto;
           const desvioPositivo = desvio > 0;
-          const desvioNegativo = desvio < 0;
           return (
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 mb-3">
-              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <span className="text-xs font-semibold text-slate-600">Avanço Físico</span>
-                <div className="flex items-center gap-3 flex-wrap">
-                  {projeto?.revisaoNumero != null && (
-                    <span className="text-[10px] text-slate-400">
-                      Rev. {String(projeto.revisaoNumero).padStart(2, "0")}
-                    </span>
-                  )}
+            <div className="bg-white rounded-2xl border border-slate-200/70 shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)] p-5 mb-4">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm">
+                    <TrendingUp className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="text-sm font-bold text-slate-800">Avanço Físico</span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
                   {Math.abs(desvio) >= 0.1 ? (
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${desvioPositivo ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full ${desvioPositivo ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-red-50 text-red-700 ring-1 ring-red-200"}`}>
                       {desvioPositivo ? "+" : ""}{desvio.toFixed(2)}% {desvioPositivo ? "adiantado" : "atrasado"}
                     </span>
                   ) : (
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">No prazo</span>
+                    <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-600 ring-1 ring-slate-200">No prazo</span>
                   )}
                   <span
                     title="Avanço previsto ponderado pelo peso financeiro de cada atividade."
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded border bg-white text-slate-500 border-slate-300"
+                    className="text-[10px] font-semibold px-2 py-1 rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200"
                   >
                     💰 Peso Financeiro
                   </span>
                 </div>
               </div>
-              {/* Previsto — dourado */}
-              <div className="mb-2">
+              {/* Previsto — dourado moderno */}
+              <div className="mb-3">
                 <div className="flex items-center gap-3">
-                  <span className="text-[11px] font-medium w-16 shrink-0" style={{ color: "#9A7408" }}>Previsto</span>
-                  <div className="flex-1 rounded-full h-2.5 overflow-hidden" style={{ background: "#F5E9C0" }}>
-                    <div className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, previsto)}%`, background: "#D4AF37" }} />
+                  <span className="text-xs font-semibold w-20 shrink-0" style={{ color: "#9A7408" }}>Previsto</span>
+                  <div className="flex-1 rounded-full h-3 overflow-hidden shadow-inner" style={{ background: "#FAF1D4" }}>
+                    <div className="h-full rounded-full transition-all duration-700 ease-out shadow-sm"
+                      style={{
+                        width: `${Math.min(100, previsto)}%`,
+                        background: "linear-gradient(90deg, #E5C463 0%, #D4AF37 100%)",
+                      }} />
                   </div>
-                  <span className="text-xs font-bold w-12 text-right shrink-0" style={{ color: "#9A7408" }}>
+                  <span className="text-sm font-bold w-16 text-right shrink-0 tabular-nums" style={{ color: "#9A7408" }}>
                     {fmtPct(previsto)}
                   </span>
                 </div>
               </div>
-              {/* Realizado — azul */}
+              {/* Realizado — azul moderno */}
               <div>
                 <div className="flex items-center gap-3">
-                  <span className="text-[11px] font-medium w-16 shrink-0" style={{ color: "#1B3A8A" }}>Realizado</span>
-                  <div className="flex-1 bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, realizado)}%`, background: "#1B3A8A" }} />
+                  <span className="text-xs font-semibold w-20 shrink-0" style={{ color: "#1B3A8A" }}>Realizado</span>
+                  <div className="flex-1 bg-slate-100 rounded-full h-3 overflow-hidden shadow-inner">
+                    <div className="h-full rounded-full transition-all duration-700 ease-out shadow-sm"
+                      style={{
+                        width: `${Math.min(100, realizado)}%`,
+                        background: "linear-gradient(90deg, #2C58C5 0%, #1B3A8A 100%)",
+                      }} />
                   </div>
-                  <span className="text-xs font-bold w-12 text-right shrink-0" style={{ color: "#1B3A8A" }}>
+                  <span className="text-sm font-bold w-16 text-right shrink-0 tabular-nums" style={{ color: "#1B3A8A" }}>
                     {fmtPct(realizado)}
                   </span>
                 </div>
@@ -221,9 +242,9 @@ export default function PortalPlanejamentoCliente() {
           );
         })()}
 
-        {/* ── Tabs em 2 linhas (estilo interno) ────────────────────── */}
+        {/* ── Tabs modernos (2 linhas no lg+) ──────────────────────── */}
         {abasVisiveis.length > 1 && (
-          <div className="mb-3 rounded-xl border border-slate-200 select-none bg-white p-1 space-y-0.5">
+          <div className="mb-4 rounded-2xl border border-slate-200/70 select-none bg-white shadow-[0_2px_12px_-4px_rgba(15,23,42,0.05)] p-1.5 space-y-1">
             <div className="hidden lg:flex gap-1">
               {abasVisiveis.slice(0, half).map((a) => (
                 <div key={a.key} className="flex-1">{renderTabBtn(a)}</div>
@@ -421,35 +442,56 @@ function AbaCurvaS({ curvaS, kpis, projeto }: any) {
 
   return (
     <div className="space-y-4">
-      {/* Legenda */}
-      <div className="flex flex-wrap gap-4 text-xs bg-white rounded-xl border border-slate-100 shadow-sm p-3">
-        <span className="flex items-center gap-1.5 px-2 py-0.5">
-          <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#D4AF37" strokeWidth={2.5} /></svg>
-          <span className="text-slate-600">Previsto</span>
-        </span>
-        <span className="flex items-center gap-1.5 px-2 py-0.5">
-          <svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#1B3A8A" strokeWidth={3} /></svg>
-          <span className="text-slate-600">Realizado</span>
-        </span>
+      {/* KPIs resumo */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <KpiCard label="Previsto" value={fmtPct(kpis.previsto)} icon={<TrendingUp className="w-5 h-5" style={{ color: "#9A7408" }} />} accent="bg-gradient-to-br from-amber-50/50 to-white" />
+        <KpiCard label="Realizado" value={fmtPct(kpis.realizado)} icon={<CheckCircle2 className="w-5 h-5" style={{ color: "#1B3A8A" }} />} accent="bg-gradient-to-br from-blue-50/50 to-white" />
+        <KpiCard
+          label="Desvio"
+          value={`${kpis.desvio >= 0 ? "+" : ""}${fmtPct(kpis.desvio)}`}
+          icon={<AlertTriangle className={`w-5 h-5 ${kpis.desvio < 0 ? "text-red-600" : "text-emerald-600"}`} />}
+          accent={kpis.desvio < 0 ? "bg-gradient-to-br from-red-50/50 to-white" : "bg-gradient-to-br from-emerald-50/50 to-white"}
+          sub={kpis.desvio < 0 ? "atrasado" : kpis.desvio > 0 ? "adiantado" : "no prazo"}
+        />
       </div>
 
-      {/* Gráfico */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-        <p className="text-sm font-semibold text-slate-700 mb-1">
-          Curva S — Avanço Físico Acumulado (%)
-        </p>
-        <p className="text-xs text-slate-400 mb-3">
-          Realizado atual: <strong style={{ color: "#1B3A8A" }}>{fmtPct(kpis.realizado)}</strong>
-          {projeto?.dataTerminoContratual && ` · Prazo: ${fmtBR(projeto.dataTerminoContratual)}`}
-        </p>
-        <ResponsiveContainer width="100%" height={360}>
-          <LineChart data={data} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-            <XAxis dataKey="semana" tick={{ fontSize: 10 }} angle={-30} textAnchor="end"
-              height={50} interval={"preserveStartEnd"}
+      {/* Gráfico — moderno com áreas degradê */}
+      <div className="bg-white rounded-2xl border border-slate-200/70 shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)] p-5">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 tracking-tight">Curva S</h3>
+            <p className="text-xs text-slate-500 mt-0.5">Avanço Físico Acumulado (%)</p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 ring-1 ring-amber-200">
+              <span className="w-3 h-0.5" style={{ background: "#D4AF37" }} />
+              <span className="font-semibold" style={{ color: "#9A7408" }}>Previsto</span>
+            </span>
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 ring-1 ring-blue-200">
+              <span className="w-3 h-0.5" style={{ background: "#1B3A8A" }} />
+              <span className="font-semibold" style={{ color: "#1B3A8A" }}>Realizado</span>
+            </span>
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={400}>
+          <ComposedChart data={data} margin={{ left: 5, right: 20, top: 10, bottom: 5 }}>
+            <defs>
+              <linearGradient id="prevGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#D4AF37" stopOpacity={0.35} />
+                <stop offset="100%" stopColor="#D4AF37" stopOpacity={0.02} />
+              </linearGradient>
+              <linearGradient id="realGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#1B3A8A" stopOpacity={0.30} />
+                <stop offset="100%" stopColor="#1B3A8A" stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+            <XAxis dataKey="semana" tick={{ fontSize: 10, fill: "#64748b" }} angle={-30} textAnchor="end"
+              height={50} interval={"preserveStartEnd"} stroke="#cbd5e1"
               tickFormatter={(v) => semanaLabel[v] ?? v} />
-            <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
+            <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "#64748b" }} unit="%" stroke="#cbd5e1" />
             <Tooltip
+              cursor={{ stroke: "#cbd5e1", strokeWidth: 1, strokeDasharray: "3 3" }}
               content={({ payload, label }: any) => {
                 if (!payload?.length) return null;
                 const get = (key: string) => payload.find((p: any) => p.dataKey === key)?.value;
@@ -458,15 +500,25 @@ function AbaCurvaS({ curvaS, kpis, projeto }: any) {
                 const desv = prev != null && real != null ? real - prev : null;
                 const [y, m, d] = String(label).split("-");
                 return (
-                  <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs min-w-[200px]">
-                    <p className="font-semibold text-slate-700 mb-2">
-                      {semanaLabel[label] ?? label} ({d}/{m}/{y})
+                  <div className="bg-white border border-slate-200 rounded-xl shadow-xl p-3 text-xs min-w-[220px]">
+                    <p className="font-bold text-slate-900 mb-2 pb-2 border-b border-slate-100">
+                      {semanaLabel[label] ?? label}
+                      <span className="text-slate-400 font-normal ml-2">({d}/{m}/{y})</span>
                     </p>
-                    {prev != null && <p style={{ color: "#9A7408" }}>Previsto: <strong>{Number(prev).toFixed(1)}%</strong></p>}
-                    {real != null && <p style={{ color: "#1B3A8A" }}>Realizado: <strong>{Number(real).toFixed(1)}%</strong></p>}
+                    {prev != null && (
+                      <p className="flex items-center justify-between py-0.5" style={{ color: "#9A7408" }}>
+                        <span>● Previsto</span><strong className="tabular-nums">{Number(prev).toFixed(2)}%</strong>
+                      </p>
+                    )}
+                    {real != null && (
+                      <p className="flex items-center justify-between py-0.5" style={{ color: "#1B3A8A" }}>
+                        <span>● Realizado</span><strong className="tabular-nums">{Number(real).toFixed(2)}%</strong>
+                      </p>
+                    )}
                     {desv != null && (
-                      <p className={`mt-1 font-semibold ${desv >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                        ↔ Desvio: {desv >= 0 ? "+" : ""}{desv.toFixed(1)}%
+                      <p className={`mt-2 pt-2 border-t border-slate-100 flex items-center justify-between font-semibold ${desv >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                        <span>↔ Desvio</span>
+                        <span className="tabular-nums">{desv >= 0 ? "+" : ""}{desv.toFixed(2)}%</span>
                       </p>
                     )}
                   </div>
@@ -474,21 +526,25 @@ function AbaCurvaS({ curvaS, kpis, projeto }: any) {
               }}
             />
             {refHoje && (
-              <ReferenceLine x={refHoje} stroke="#94a3b8" strokeDasharray="2 2"
-                label={{ value: "Hoje", fontSize: 9, fill: "#94a3b8", position: "top" }} />
+              <ReferenceLine x={refHoje} stroke="#64748b" strokeDasharray="3 3" strokeWidth={1.5}
+                label={{ value: "Hoje", fontSize: 10, fill: "#475569", position: "top", offset: 8 }} />
             )}
+            <Area type="monotone" dataKey="previsto" stroke="none" fill="url(#prevGrad)" connectNulls isAnimationActive={false} />
+            <Area type="monotone" dataKey="realizado" stroke="none" fill="url(#realGrad)" connectNulls isAnimationActive={false} />
             <Line type="monotone" dataKey="previsto" name="Previsto" stroke="#D4AF37" strokeWidth={2.5} dot={false} connectNulls />
-            <Line type="monotone" dataKey="realizado" name="Realizado" stroke="#1B3A8A" strokeWidth={3} dot={{ r: 3 }} connectNulls />
-          </LineChart>
+            <Line type="monotone" dataKey="realizado" name="Realizado" stroke="#1B3A8A" strokeWidth={3}
+              dot={{ r: 3, fill: "#1B3A8A", stroke: "#fff", strokeWidth: 1.5 }}
+              activeDot={{ r: 5, fill: "#1B3A8A", stroke: "#fff", strokeWidth: 2 }} connectNulls />
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
 
       {/* Interpretação */}
-      <div className="bg-slate-50 rounded-xl border border-slate-100 p-4 text-xs text-slate-600 space-y-1">
-        <p className="font-semibold text-slate-700 mb-2">Como interpretar</p>
-        <p>🟡 <strong>Previsto</strong>: Curva planejada acumulada (peso financeiro × prazo de cada atividade).</p>
-        <p>🔵 <strong>Realizado</strong>: Avanço físico efetivamente lançado a cada semana. Acima do previsto = adiantado.</p>
-        <p>↔ A linha tracejada cinza marca a semana atual.</p>
+      <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-2xl border border-slate-200/70 p-5 text-xs text-slate-600 space-y-1.5">
+        <p className="font-bold text-slate-800 mb-2">Como interpretar</p>
+        <p><span className="font-bold" style={{ color: "#9A7408" }}>● Previsto</span> — curva planejada acumulada (peso financeiro × prazo de cada atividade).</p>
+        <p><span className="font-bold" style={{ color: "#1B3A8A" }}>● Realizado</span> — avanço físico efetivamente lançado a cada semana. Acima do previsto = adiantado.</p>
+        <p>A linha tracejada cinza marca a <strong>semana atual</strong>. A linha de Realizado para em "hoje" — não exibe progresso futuro.</p>
       </div>
     </div>
   );
@@ -531,13 +587,13 @@ function AbaRevisoes({ revisoes }: { revisoes: any[] }) {
 
 function KpiCard({ label, value, icon, sub, accent }: { label: string; value: string; icon: React.ReactNode; sub?: string; accent?: string }) {
   return (
-    <div className={`border rounded-xl p-4 ${accent || "bg-white"}`}>
+    <div className={`relative border border-slate-200/70 rounded-2xl p-4 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.06)] hover:shadow-[0_4px_20px_-6px_rgba(15,23,42,0.10)] transition-shadow ${accent || "bg-white"} overflow-hidden`}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-slate-500">{label}</span>
-        {icon}
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</span>
+        <div className="w-9 h-9 rounded-lg bg-slate-50 flex items-center justify-center">{icon}</div>
       </div>
-      <div className="text-2xl font-bold text-slate-800">{value}</div>
-      {sub && <p className="text-[11px] text-slate-500 mt-0.5">{sub}</p>}
+      <div className="text-2xl font-bold text-slate-900 tabular-nums">{value}</div>
+      {sub && <p className="text-[11px] font-medium text-slate-500 mt-0.5 capitalize">{sub}</p>}
     </div>
   );
 }

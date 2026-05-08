@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1442,
+    titulo: "Portal do Cliente — Curva S corrigida (progressão temporal real) + visual modernizado",
+    descricao: "BUG CORRIGIDO: o backend cliente.planejamentoObra estava calculando o Realizado da Curva S incorretamente — ele aplicava o valor FINAL atual a TODAS as semanas passadas (linha horizontal), ignorando a progressão semanal real. Agora, para cada semana o servidor calcula um snapshot dos avanços lançados ATÉ aquela semana (último percentualAcumulado por atividade) e pondera pelo peso financeiro, gerando a curva S evolutiva correta. Semanas futuras (após hoje) retornam realizado = null para não exibir progresso fictício. VISUAL MODERNIZADO: header com gradiente azul-índigo no topo + tags 'Planejamento'/'Rev. XX' em pill, título h1 em tracking-tight, badge de status em emerald moderno; card 'Avanço Físico' com ícone gradient, badges em pill com ring, barras de 3px com gradientes lineares (dourado/azul) e shadow-inner; tabs em rounded-2xl com gradient subtle no ativo; KPIs com ícone em quadrado slate, label uppercase tracking-wider, valor em tabular-nums; Curva S agora usa ComposedChart com áreas degradê embaixo das linhas, dot estilizado, tooltip rico com layout flex e divisores, ReferenceLine 'Hoje' mais nítida. Background da página com gradient sutil slate→blue→slate.",
+    tipo: "bugfix",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 23:59:30",
+  },
+  {
     version: 1441,
     titulo: "Portal do Cliente — Planejamento agora replica o layout interno (Curva S idêntica)",
     descricao: "A tela /portal/cliente/obra/:obraId foi totalmente reformatada para espelhar o visual da tela interna de Planejamento (PlanejamentoDetalhe). Header em card branco rounded-xl com botão Voltar à esquerda, nome da obra em destaque, badges de cliente, responsável, cidade/UF e dias restantes (verde >30, âmbar <30, vermelho <0), e Badge de status à direita. Card 'Avanço Físico' com barra Previsto dourada (#D4AF37 sobre #F5E9C0) e barra Realizado azul (#1B3A8A sobre slate-100), badge de desvio (+adiantado/atrasado) e tag '💰 Peso Financeiro'. Tabs em 2 linhas no desktop dentro de container white p-1 rounded-xl border-slate-200, cada botão flex-1 com fundo bg-blue-50 + border quando ativo. Curva S agora usa Recharts (mesma biblioteca do interno) com linhas dourada (Previsto) e azul (Realizado), tooltip rico mostrando desvio, ReferenceLine 'Hoje', legenda no padrão interno e bloco 'Como interpretar'. Realizado é truncado a partir de hoje para não exibir progressão futura. As demais abas (Visão Geral, Cronograma, Avanço Semanal, Prog. Semanal, Revisões) mantiveram a funcionalidade da Rev. 1440 com refinamento visual (rounded-xl, shadow-sm, paddings consistentes).",
