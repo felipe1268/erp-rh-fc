@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
-import { Building2, ArrowLeft, MapPin, ArrowRight, CalendarRange, ShieldCheck, FileText } from "lucide-react";
+import { Building2, ArrowLeft, MapPin, ArrowRight, CalendarRange, ShieldCheck, FileText, Home } from "lucide-react";
 
 const MODULO_INFO: Record<string, { titulo: string; cor: string; corBg: string; icon: any; rotaPorObra: (id: number) => string }> = {
   "planejamento": {
@@ -64,9 +64,9 @@ export default function PortalSelecionarObraCliente() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
           <button
             onClick={() => navigate("/portal/cliente/hub")}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-blue-700"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg shadow-sm"
           >
-            <ArrowLeft className="h-4 w-4" /> Hub
+            <Home className="h-3.5 w-3.5" /> Tela Inicial
           </button>
           <div className="flex items-center gap-2 min-w-0">
             <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${info.cor} flex items-center justify-center shadow-md shrink-0`}>

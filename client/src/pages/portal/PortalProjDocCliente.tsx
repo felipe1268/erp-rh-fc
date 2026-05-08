@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
 import {
-  ArrowLeft, FileText, Search, Download, FileCheck2, Clock, Edit3, FileX2, FolderOpen,
+  ArrowLeft, FileText, Search, Download, FileCheck2, Clock, Edit3, FileX2, FolderOpen, Home,
 } from "lucide-react";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
@@ -84,12 +84,20 @@ export default function PortalProjDocCliente() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
       <header className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
-          <button
-            onClick={() => navigate("/portal/cliente/modulo/proj-doc")}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-purple-700"
-          >
-            <ArrowLeft className="h-4 w-4" /> Obras
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate("/portal/cliente/hub")}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg shadow-sm"
+            >
+              <Home className="h-3.5 w-3.5" /> Hub
+            </button>
+            <button
+              onClick={() => navigate("/portal/cliente/modulo/proj-doc")}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-purple-700"
+            >
+              <ArrowLeft className="h-4 w-4" /> Obras
+            </button>
+          </div>
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-600 to-purple-700 flex items-center justify-center shadow-md shrink-0">
               <FileText className="h-5 w-5 text-white" />

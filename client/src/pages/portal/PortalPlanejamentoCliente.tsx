@@ -8,7 +8,7 @@ import {
   CheckCircle2, Building2, ListTree, Activity, BarChart3, History,
   CalendarDays, User, CalendarCheck, FileText, GitBranch, HardHat,
   DollarSign, Cloud, Droplets, Wind, Loader2, ClipboardList, ChevronRight,
-  ChevronDown, Search, Menu, X, PanelLeftClose, PanelLeftOpen, Users, Handshake,
+  ChevronDown, Search, Menu, X, PanelLeftClose, PanelLeftOpen, Users, Handshake, Home,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, LineChart, BarChart, Bar, Cell,
@@ -253,13 +253,20 @@ export default function PortalPlanejamentoCliente() {
       </div>
 
       {/* Voltar */}
-      <div className="border-t border-slate-700/60 p-3">
+      <div className="border-t border-slate-700/60 p-3 space-y-1.5">
         <button
-          onClick={() => navigate("/portal/cliente/dashboard")}
+          onClick={() => navigate("/portal/cliente/hub")}
+          className="flex items-center gap-2 w-full px-3 py-2 text-[12px] font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-sm"
+        >
+          <Home className="h-3.5 w-3.5" />
+          Tela Inicial do Portal
+        </button>
+        <button
+          onClick={() => navigate("/portal/cliente/modulo/planejamento")}
           className="flex items-center gap-2 w-full px-3 py-2 text-[12px] font-semibold rounded-lg text-slate-300 hover:bg-slate-700/60 hover:text-white transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Voltar para Obras
+          Trocar de Obra
         </button>
       </div>
     </>
