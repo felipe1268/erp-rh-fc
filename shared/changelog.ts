@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1466,
+    titulo: "Portal do Cliente — Tela inicial redesenhada no padrão visual do ERP (cards quadrados com ícones grandes)",
+    descricao: "A tela inicial do Portal do Cliente (/portal/cliente/hub) foi totalmente refeita seguindo o MESMO padrão visual do hub interno de módulos (Cadastro, RH&DP, Orçamento, etc.): fundo mesh animado, header glassmorphism com badge dourado pulsante, faixa 'PLATAFORMA DO CLIENTE / Portal FC Engenharia' com gradiente azul-marinho→dourado, saudação dinâmica (Bom dia/tarde/noite) com data por extenso e cards quadrados de 115×96px com ícone grande arredondado em gradiente colorido + título e subtítulo abaixo. Os 4 módulos do cliente (Planejamento, RH & Docs, Proj./Doc. e Mensagens) agora aparecem como tiles compactos lado a lado, idênticos aos do ERP interno. Substitui o layout anterior com 4 cards retangulares grandes contendo descrições longas e tags de features. Comportamento dos cliques mantido: navegação direta para a única obra quando há apenas uma vinculada, ou seletor de obras quando há mais. Inclui ainda seção 'Em Desenvolvimento' com 3 placeholders (Galeria de Fotos, Boletins de Medição, Solicitações).",
+    tipo: "melhoria",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 19:50:00",
+  },
+  {
     version: 1465,
     titulo: "Portal do Cliente — Foto do funcionário ao lado do nome em RH/Controle de Documentos",
     descricao: "Na tabela de funcionários da tela RH/Controle de Documentos do portal do cliente, agora aparece a foto do colaborador (avatar circular 32px) ao lado do nome. Quando o funcionário não tem foto cadastrada, mostra um círculo verde com as iniciais do nome (até 2 letras). Backend: getEquipeObra (server/db.ts) passa a incluir o campo fotoUrl no SELECT, e a procedure portalExterno.cliente.documentosRhObra repassa fotoUrl no payload de cada funcionário. Frontend: célula 'Funcionário' renderiza foto/iniciais + nome em flex horizontal.",
