@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1449,
+    titulo: "Controle de Integrações — botão Editar em cada linha da tabela",
+    descricao: "Adicionado botão de edição (ícone lápis) ao lado do botão de exclusão em cada linha da tabela de Integrações (módulo Controle de Integrações). Ao clicar, abre o mesmo modal usado para cadastro, agora em modo edição, pré-preenchido com os dados da integração selecionada. No modo edição, o colaborador, o tipo (interna/externa) e o cliente PJ ficam fixos (read-only) — para alterá-los basta excluir e criar uma nova integração; permanecem editáveis a Data de Realização, Validade (período), Data de Vencimento, Evidência/Protocolo, Observações e, no caso de integração interna, a Referência. O título do modal muda para 'Editar Integração' e o botão de ação para 'Salvar alterações'. Backend já possuía a procedure trpc integracoes.atualizar — agora exposta na UI.",
+    tipo: "feature",
+    modulos: "Controle de Integrações",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-05-08 12:00:00",
+  },
+  {
     version: 1448,
     titulo: "Portal do Cliente — Visão Geral agora é cópia idêntica da tela interna de Planejamento",
     descricao: "A aba Visão Geral do Portal do Cliente foi totalmente refeita para ficar visualmente IDÊNTICA à tela interna PlanejamentoDetalhe: (1) 5 KPIs no mesmo layout do interno — Atividades concluídas/total (azul), Avanço Físico % (verde), SPI prazo com cor dinâmica + detalhe 'Realizado ÷ Previsto' (vermelho/verde), CPI custo do último REFIS (vermelho/verde) e REFIs emitidos (roxo); (2) seção 'Atividades em Atraso (N)' que lista todas as atividades onde o progresso esperado para hoje > realizado, com barras Deveria (azul) / Hoje (verde/âmbar/vermelho conforme desvio) — mesma lógica do interno (progressoEsperadoHoje linear entre dataInicio e dataFim); (3) Previsão do Tempo entre os blocos; (4) tabela 'Histórico de REFIs' no rodapé com Nº, Semana, Prev.%, Real.%, SPI e Status (cores idênticas ao interno). Os dados vêm dos mesmos campos do backend (kpis, atividadesTodas com percentRealizado, refisLista com cpi/spi) — sem novas queries. Resultado: cliente vê EXATAMENTE os mesmos números, no mesmo layout, que o gestor.",

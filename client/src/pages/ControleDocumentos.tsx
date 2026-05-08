@@ -101,6 +101,10 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
   const excluirMut = trpc.integracoes.excluir.useMutation({
     onSuccess: () => { utils.integracoes.listar.invalidate(); utils.integracoes.kpis.invalidate(); toast.success("Integração removida."); },
   });
+  const atualizarMut = trpc.integracoes.atualizar.useMutation({
+    onSuccess: () => { utils.integracoes.listar.invalidate(); utils.integracoes.kpis.invalidate(); setModalForm(null); toast.success("Integração atualizada!"); },
+    onError: (e) => toast.error(e.message || "Erro ao atualizar"),
+  });
 
   const filtrados = useMemo(() => {
     let list = integracoes as any[];
@@ -227,12 +231,35 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
                         </td>
                         <td className="p-3 text-xs text-muted-foreground max-w-[140px] truncate">{i.evidencia || "-"}</td>
                         <td className="p-3">
-                          <button
-                            onClick={() => { if (confirm(`Remover integração de "${i.nomeCompleto}"?`)) excluirMut.mutate({ id: i.id, companyId }); }}
-                            className="p-1 rounded hover:bg-red-50 text-red-400 opacity-0 group-hover:opacity-100"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              title="Editar integração"
+                              onClick={() => setModalForm({
+                                id: i.id,
+                                editMode: true,
+                                tipo: i.tipo,
+                                clienteId: i.clienteId ? String(i.clienteId) : "",
+                                clienteNome: i.clienteNome || "",
+                                employeeIds: [i.employeeId],
+                                employeeNomes: { [i.employeeId]: i.nomeCompleto },
+                                validadeMeses: 0,
+                                dataRealizacao: i.dataRealizacao || "",
+                                dataVencimento: i.dataVencimento || "",
+                                evidencia: i.evidencia || "",
+                                observacoes: i.observacoes || "",
+                              })}
+                              className="p-1 rounded hover:bg-indigo-50 text-indigo-500"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              title="Remover integração"
+                              onClick={() => { if (confirm(`Remover integração de "${i.nomeCompleto}"?`)) excluirMut.mutate({ id: i.id, companyId }); }}
+                              className="p-1 rounded hover:bg-red-50 text-red-400"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -250,7 +277,7 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
           <DialogContent className="max-w-2xl w-[96vw] max-h-[92vh] p-0 gap-0 flex flex-col" style={{ background: "#fff", color: "#111" }}>
             <DialogHeader className="px-5 pt-5 pb-3 border-b shrink-0">
               <DialogTitle className="flex items-center gap-2 text-indigo-700">
-                <Users className="h-4 w-4" /> Registrar Integração de Pessoal
+                {modalForm.editMode ? <><Pencil className="h-4 w-4" /> Editar Integração</> : <><Users className="h-4 w-4" /> Registrar Integração de Pessoal</>}
               </DialogTitle>
             </DialogHeader>
             {(() => {
@@ -276,6 +303,18 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
               const submit = () => {
                 if (!selIds.length) { toast.error("Selecione ao menos um colaborador"); return; }
                 if (!modalForm.dataRealizacao) { toast.error("Data de realização obrigatória"); return; }
+                if (modalForm.editMode && modalForm.id) {
+                  atualizarMut.mutate({
+                    id:             modalForm.id,
+                    companyId,
+                    dataRealizacao: modalForm.dataRealizacao,
+                    dataVencimento: modalForm.dataVencimento || "",
+                    evidencia:      modalForm.evidencia ?? "",
+                    observacoes:    modalForm.observacoes ?? "",
+                    ...(modalForm.tipo === "interna" ? { clienteNome: modalForm.clienteNome ?? "" } : {}),
+                  });
+                  return;
+                }
                 const payload = {
                   companyId,
                   tipo:           modalForm.tipo,
@@ -292,10 +331,19 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
                   criarLoteMut.mutate({ ...payload, employeeIds: selIds });
                 }
               };
-              const isPending = criarMut.isPending || criarLoteMut.isPending;
+              const isPending = criarMut.isPending || criarLoteMut.isPending || atualizarMut.isPending;
               return <>
                 <div className="space-y-3 px-5 py-4 overflow-y-auto flex-1 min-h-0">
-                  {/* Seleção de colaboradores (multi) */}
+                  {/* Seleção de colaboradores (multi) — apenas no modo cadastro */}
+                  {modalForm.editMode ? (
+                    <div>
+                      <label className="text-xs font-medium">Colaborador</label>
+                      <div className="mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700">
+                        {modalForm.employeeNomes?.[selIds[0]] || `#${selIds[0]}`}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-1">Para trocar o colaborador, exclua e crie uma nova integração.</p>
+                    </div>
+                  ) : (
                   <div>
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-medium">Colaboradores * <span className="text-muted-foreground">(seleção múltipla)</span></label>
@@ -363,7 +411,9 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
                       </div>
                     )}
                   </div>
+                  )}
 
+                  {!modalForm.editMode && (
                   <div>
                     <label className="text-xs font-medium">Tipo de Integração</label>
                     <div className="flex gap-2 mt-1">
@@ -375,10 +425,15 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
                       ))}
                     </div>
                   </div>
+                  )}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2">
                       <label className="text-xs font-medium">{modalForm.tipo === "externa" ? "Cliente" : "Referência"}</label>
-                      {modalForm.tipo === "externa" ? (
+                      {modalForm.editMode && modalForm.tipo === "externa" ? (
+                        <div className="mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700">
+                          {modalForm.clienteNome || "-"}
+                        </div>
+                      ) : modalForm.tipo === "externa" ? (
                         <Select value={modalForm.clienteId} onValueChange={v => {
                           const c = (allClientes as any[]).find((x: any) => String(x.id) === v);
                           setVal({ clienteId: v, clienteNome: c?.razaoSocial || "" });
@@ -444,9 +499,11 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
                 </div>
                 <DialogFooter className="px-5 py-3 border-t bg-slate-50 shrink-0 sm:justify-between">
                   <div className="text-[11px] text-slate-500 hidden sm:block">
-                    {selIds.length > 0
-                      ? <>Pronto para registrar <b className="text-indigo-700">{selIds.length}</b> integraç{selIds.length === 1 ? "ão" : "ões"}.</>
-                      : "Selecione ao menos um colaborador para continuar."}
+                    {modalForm.editMode
+                      ? <>Editando integração <b className="text-indigo-700">#{modalForm.id}</b>.</>
+                      : selIds.length > 0
+                        ? <>Pronto para registrar <b className="text-indigo-700">{selIds.length}</b> integraç{selIds.length === 1 ? "ão" : "ões"}.</>
+                        : "Selecione ao menos um colaborador para continuar."}
                   </div>
                   <div className="flex gap-2">
                     <Button variant="outline" onClick={() => { setModalForm(null); setEmpSearch(""); }}>Cancelar</Button>
@@ -456,7 +513,7 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
                       className="bg-indigo-600 hover:bg-indigo-700 gap-1"
                     >
                       {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                      {selIds.length > 1 ? `Registrar ${selIds.length} integrações` : "Registrar"}
+                      {modalForm.editMode ? "Salvar alterações" : (selIds.length > 1 ? `Registrar ${selIds.length} integrações` : "Registrar")}
                     </Button>
                   </div>
                 </DialogFooter>
