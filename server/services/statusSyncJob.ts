@@ -17,6 +17,7 @@ import { employees, vacationPeriods, atestados, notificationLogs, notificationRe
 import { eq, and, sql, isNull, inArray } from "drizzle-orm";
 import { logStatusChange } from "../lib/employeeStatusHelper";
 import { sendEmail } from "./smtpService";
+import { getCompanyBranding, renderBrandedEmail } from "./emailNotification";
 
 let statusSyncInterval: NodeJS.Timeout | null = null;
 
@@ -252,8 +253,31 @@ export async function syncEmployeeStatus(): Promise<{
         // Rev. 1352: dispara o e-mail de fato (antes ficava "pendente" eterno).
         // Em caso de erro de SMTP, registra como "erro" para aparecer no contador,
         // mas NUNCA propaga a exceção (o job não pode quebrar por causa de e-mail).
-        const corpoTxt = `O funcionário ${emp.nomeCompleto} tem retorno previsto para ${at.dataRetorno} (${diasRestantes} dia(s)). O sistema mudará o status automaticamente para Ativo na data de retorno.`;
-        const corpoHtml = `<p>${corpoTxt.replace(/\n/g, "<br>")}</p>`;
+        // Rev. 1459: usa template branded (mesmo padrão dos demais e-mails de movimentação)
+        const dataRetornoBR = String(at.dataRetorno || "").split("-").reverse().join("/");
+        const corpoTxt = `Bom dia,
+
+Comunicamos que o colaborador abaixo identificado tem retorno previsto do afastamento.
+
+▸ DADOS DO RETORNO
+┌──────────────────────────────────────────────┐
+│  Colaborador: ${emp.nomeCompleto}
+│  Data prevista de retorno: ${dataRetornoBR}
+│  Dias restantes: ${diasRestantes}
+└──────────────────────────────────────────────┘
+
+O sistema mudará o status automaticamente para "Ativo" na data de retorno.
+
+Providências necessárias:
+  • Agendamento de ASO de retorno (quando aplicável)
+  • Comunicação à seguradora sobre o retorno
+  • Reativação do controle de ponto
+
+Atenciosamente,
+
+Comunicado automático — Sistema de Gestão de Pessoas`;
+        const companyBranding = await getCompanyBranding(at.companyId);
+        const corpoHtml = renderBrandedEmail(titulo, corpoTxt, companyBranding);
         for (const r of recipients) {
           let statusEnvio: "enviado" | "erro" = "erro";
           let erroMsg: string | null = "SMTP não configurado";
@@ -343,7 +367,7 @@ export async function processarNotificacoesPendentes(): Promise<{ tentados: numb
     const db = await getDb();
     if (!db) return result;
     const pendentes = await db.execute(sql`
-      SELECT id, "recipientEmail", titulo, corpo
+      SELECT id, "companyId", "recipientEmail", titulo, corpo
       FROM notification_logs
       WHERE "statusEnvio" = 'pendente'
         AND "enviadoEm" < NOW() - INTERVAL '5 minutes'
@@ -351,9 +375,13 @@ export async function processarNotificacoesPendentes(): Promise<{ tentados: numb
       LIMIT 50
     `);
     const rows: any[] = (pendentes as any).rows || (pendentes as any) || [];
+    const brandingCache = new Map<number, any>();
     for (const row of rows) {
       result.tentados++;
-      const corpoHtml = `<p>${String(row.corpo || "").replace(/\n/g, "<br>")}</p>`;
+      // Rev. 1459: aplica template branded ao reprocessar
+      let branding = brandingCache.get(row.companyId);
+      if (!branding) { branding = await getCompanyBranding(row.companyId); brandingCache.set(row.companyId, branding); }
+      const corpoHtml = renderBrandedEmail(String(row.titulo || ""), String(row.corpo || ""), branding);
       let statusEnvio: "enviado" | "erro" = "erro";
       let erroMsg: string | null = "Falha desconhecida";
       try {

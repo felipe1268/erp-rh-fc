@@ -332,6 +332,12 @@ export function gerarTextoNotificacao(
 // ============================================================
 // GERAR HTML DO E-MAIL
 // ============================================================
+export async function getCompanyBranding(companyId: number) {
+  return getCompanyData(companyId);
+}
+export function renderBrandedEmail(titulo: string, corpoTexto: string, companyData: any): string {
+  return gerarEmailHtml(titulo, corpoTexto, companyData);
+}
 function gerarEmailHtml(titulo: string, corpoTexto: string, companyData: any): string {
   const empresaNome = getCompanyShortName(companyData);
   const logoUrl = companyData?.logoUrl || "";

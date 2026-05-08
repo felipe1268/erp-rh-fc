@@ -10049,6 +10049,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 02:30:00",
   },
   {
+    version: 1459,
+    titulo: "E-mails de retorno de afastamento e reprocessamento agora usam template branded",
+    descricao: "Os e-mails enviados pelo job de sincronização de status (StatusSync) — alertas de 'RETORNO EM N DIA(S)' e o reprocessamento de notificações pendentes — passaram a usar o mesmo template visual com cabeçalho azul, logo da empresa e rodapé padrão já utilizado nos demais comunicados (contratação, demissão, transferência, afastamento). Antes, esses dois fluxos enviavam apenas um <p> de texto puro, gerando uma quebra visual no padrão da caixa de entrada. As funções getCompanyBranding e renderBrandedEmail foram exportadas de emailNotification.ts e reutilizadas em statusSyncJob.ts (com cache por companyId no reprocessamento). O corpo do e-mail de retorno também foi reescrito no padrão dos demais (cabeçalho do colaborador em quadro, providências necessárias, assinatura).",
+    tipo: "ux",
+    modulos: "Notificações,RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-05-08 21:45:00",
+  },
+  {
     version: 1458,
     titulo: "Apontamentos de Campo — Modal de detalhes agora exibe os horários do ponto",
     descricao: "No modal 'Detalhes do Apontamento' (módulo Apontamentos de Campo), agora é exibida uma nova linha 'Horário do ponto' com as 4 batidas do dia (Entrada 1, Saída 1, Entrada 2, Saída 2) — informação que já existia no banco (campos entrada1/saida1/entrada2/saida2 e enriquecimento automático a partir de timeRecords) mas não era apresentada ao usuário. Quando não há batidas registradas para a data, é exibido o aviso 'Sem batidas registradas para esta data'.",
