@@ -4,13 +4,14 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
-  UserCheck, Mail, KeyRound, Send, Search, MessageSquare, Star,
+  Mail, KeyRound, Send, Search, MessageSquare, Star,
   Loader2, ShieldCheck, CheckCircle2, AlertCircle, Copy, Reply,
-  Smile, Meh, Frown, TrendingUp, Users,
+  Smile, Frown, TrendingUp, Users, Plus, Trash2, RefreshCw, UserPlus,
 } from "lucide-react";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
@@ -22,6 +23,8 @@ const fmtCNPJ = (v?: string) => {
   return v;
 };
 
+const LIMITE_SUGERIDO = 4;
+
 export default function ClientesPortalAdmin() {
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId) : 0;
@@ -30,32 +33,53 @@ export default function ClientesPortalAdmin() {
 
   const utils = trpc.useUtils();
   const { data: clientesList = [], isLoading: loadingClientes } = trpc.clientes.list.useQuery({ companyId }, { enabled: !!companyId });
-  const { data: acessos = [], isLoading: loadingAcessos } = trpc.portalExterno.admin.listarAcessosCliente.useQuery({ companyId }, { enabled: !!companyId });
+  const { data: acessos = [] } = trpc.portalExterno.admin.listarAcessosCliente.useQuery({ companyId }, { enabled: !!companyId });
   const { data: comentarios = [], isLoading: loadingCom } = trpc.portalExterno.admin.listarComentariosCliente.useQuery({ companyId }, { enabled: !!companyId && tab === "comentarios" });
   const { data: dashAval, isLoading: loadingAval } = trpc.portalExterno.admin.dashboardAvaliacoesCliente.useQuery({ companyId }, { enabled: !!companyId && tab === "avaliacoes" });
 
-  // Map cliente -> acesso
-  const acessoPorCliente = useMemo(() => {
-    const m = new Map<number, any>();
-    for (const a of acessos as any[]) if (a.clienteId) m.set(a.clienteId, a);
+  // Map cliente -> lista de acessos (múltiplos)
+  const acessosPorCliente = useMemo(() => {
+    const m = new Map<number, any[]>();
+    for (const a of acessos as any[]) {
+      if (!a.clienteId) continue;
+      const arr = m.get(a.clienteId) || [];
+      arr.push(a);
+      m.set(a.clienteId, arr);
+    }
     return m;
   }, [acessos]);
 
-  // ===== Gerar acesso =====
-  const [gerarTarget, setGerarTarget] = useState<any | null>(null);
+  const totalAcessosAtivos = (acessos as any[]).filter((a) => a.ativo === 1).length;
+
+  // ===== Modal Gerenciar acessos =====
+  const [gerenciarTarget, setGerenciarTarget] = useState<any | null>(null);
+  const [novoNome, setNovoNome] = useState("");
+  const [novoEmail, setNovoEmail] = useState("");
+  const [enviarEmail, setEnviarEmail] = useState(true);
   const [resultadoAcesso, setResultadoAcesso] = useState<any | null>(null);
+
   const gerarMut = trpc.portalExterno.admin.gerarAcessoCliente.useMutation({
     onSuccess: (r) => {
       setResultadoAcesso(r);
       utils.portalExterno.admin.listarAcessosCliente.invalidate();
-      if (r.emailEnviado) toast.success(`Acesso gerado e e-mail enviado para ${r.emailDestino}`);
-      else if (r.emailErro) toast.warning(`Acesso gerado, mas falha no e-mail: ${r.emailErro}`);
-      else toast.success("Acesso gerado com sucesso");
+      setNovoNome(""); setNovoEmail("");
+      if (r.acao === "reenviado") {
+        toast.success(r.emailEnviado ? `Acesso atualizado e e-mail reenviado para ${r.emailDestino}` : "Acesso atualizado");
+      } else {
+        toast.success(r.emailEnviado ? `Acesso criado e e-mail enviado para ${r.emailDestino}` : "Acesso criado");
+      }
     },
     onError: (e) => toast.error(e.message),
   });
   const desativarMut = trpc.portalExterno.admin.desativarAcesso.useMutation({
     onSuccess: () => { toast.success("Acesso desativado"); utils.portalExterno.admin.listarAcessosCliente.invalidate(); },
+  });
+  const reativarMut = trpc.portalExterno.admin.reativarAcessoCliente.useMutation({
+    onSuccess: () => { toast.success("Acesso reativado"); utils.portalExterno.admin.listarAcessosCliente.invalidate(); },
+  });
+  const removerMut = trpc.portalExterno.admin.removerAcessoCliente.useMutation({
+    onSuccess: () => { toast.success("Acesso removido"); utils.portalExterno.admin.listarAcessosCliente.invalidate(); },
+    onError: (e) => toast.error(e.message),
   });
 
   // ===== Responder comentário =====
@@ -73,10 +97,30 @@ export default function ClientesPortalAdmin() {
   // ===== Filtragem clientes =====
   const filtrados = useMemo(() => (clientesList as any[]).filter((c) => {
     const t = busca.toLowerCase();
-    return !t || [c.razaoSocial, c.nomeFantasia, c.cnpj, c.cpf, c.contatoEmail, c.email].some((v) => v?.toLowerCase().includes(t));
-  }), [clientesList, busca]);
+    if (!t) return true;
+    const acs = acessosPorCliente.get(c.id) || [];
+    return [
+      c.razaoSocial, c.nomeFantasia, c.cnpj, c.cpf, c.contatoEmail, c.email,
+      ...acs.flatMap((a: any) => [a.nomeResponsavel, a.emailResponsavel]),
+    ].some((v) => v?.toLowerCase().includes(t));
+  }), [clientesList, busca, acessosPorCliente]);
 
   const naoLidos = useMemo(() => (comentarios as any[]).filter((c) => c.autorTipo === "cliente" && !c.lidoEm).length, [comentarios]);
+
+  const acessosDoTarget: any[] = useMemo(() => {
+    if (!gerenciarTarget) return [];
+    return acessosPorCliente.get(gerenciarTarget.id) || [];
+  }, [gerenciarTarget, acessosPorCliente]);
+  const ativosDoTarget = acessosDoTarget.filter((a) => a.ativo === 1).length;
+  const atingiuLimite = ativosDoTarget >= LIMITE_SUGERIDO;
+
+  const abrirGerenciar = (c: any) => {
+    setGerenciarTarget(c);
+    setResultadoAcesso(null);
+    setNovoNome(c.contatoNome || "");
+    setNovoEmail(c.contatoEmail || c.email || "");
+    setEnviarEmail(true);
+  };
 
   return (
     <DashboardLayout>
@@ -87,7 +131,7 @@ export default function ClientesPortalAdmin() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Portal do Cliente — Administração</h1>
-            <p className="text-xs text-slate-500">Gere acessos, responda comentários e acompanhe a satisfação (NPS) dos clientes.</p>
+            <p className="text-xs text-slate-500">Gere acessos (até {LIMITE_SUGERIDO} usuários por cliente), responda comentários e acompanhe a satisfação (NPS) dos clientes.</p>
           </div>
         </div>
 
@@ -119,7 +163,7 @@ export default function ClientesPortalAdmin() {
                 <Input className="pl-9" placeholder="Buscar por nome, CNPJ, e-mail..." value={busca} onChange={(e) => setBusca(e.target.value)} />
               </div>
               <div className="text-xs text-slate-500">
-                {acessos.length} acesso(s) ativo(s) · {clientesList.length} cliente(s) cadastrado(s)
+                {totalAcessosAtivos} acesso(s) ativo(s) · {clientesList.length} cliente(s) cadastrado(s)
               </div>
             </div>
             {loadingClientes ? (
@@ -131,49 +175,52 @@ export default function ClientesPortalAdmin() {
                     <tr>
                       <th className="px-4 py-2.5">Cliente</th>
                       <th className="px-4 py-2.5">CNPJ/CPF</th>
-                      <th className="px-4 py-2.5">E-mail contato</th>
-                      <th className="px-4 py-2.5">Status acesso</th>
+                      <th className="px-4 py-2.5">Usuários do portal</th>
                       <th className="px-4 py-2.5">Último login</th>
                       <th className="px-4 py-2.5 text-right">Ação</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
                     {filtrados.map((c: any) => {
-                      const a = acessoPorCliente.get(c.id);
+                      const acs = acessosPorCliente.get(c.id) || [];
+                      const ativos = acs.filter((a: any) => a.ativo === 1);
+                      const ultimoLogin = acs
+                        .map((a: any) => a.ultimoLogin)
+                        .filter(Boolean)
+                        .sort()
+                        .reverse()[0];
                       return (
                         <tr key={c.id} className="hover:bg-slate-50">
                           <td className="px-4 py-2.5">
                             <div className="font-medium text-slate-800">{c.razaoSocial}</div>
                             {c.nomeFantasia && <div className="text-xs text-slate-500">{c.nomeFantasia}</div>}
                           </td>
-                          <td className="px-4 py-2.5 font-mono text-xs">{fmtCNPJ(c.cnpj || c.cpf)}</td>
-                          <td className="px-4 py-2.5 text-xs">{c.contatoEmail || c.email || <span className="text-slate-400">—</span>}</td>
+                          <td className="px-4 py-2.5 font-mono text-xs">{fmtCNPJ(c.cnpj || c.cpf) || <span className="text-slate-400">—</span>}</td>
                           <td className="px-4 py-2.5">
-                            {!a ? <Badge variant="outline" className="text-slate-500">Sem acesso</Badge>
-                              : a.ativo === 1
-                                ? (a.primeiroAcesso === 1
-                                  ? <Badge className="bg-amber-500">Aguardando 1º acesso</Badge>
-                                  : <Badge className="bg-emerald-500">Ativo</Badge>)
-                                : <Badge variant="outline" className="text-rose-500 border-rose-300">Inativo</Badge>}
+                            {acs.length === 0 ? (
+                              <Badge variant="outline" className="text-slate-500">Sem acesso</Badge>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <Badge className={ativos.length === 0 ? "bg-rose-500" : ativos.length >= LIMITE_SUGERIDO ? "bg-amber-500" : "bg-emerald-600"}>
+                                  {ativos.length}/{LIMITE_SUGERIDO} ativos
+                                </Badge>
+                                {acs.length > ativos.length && (
+                                  <span className="text-xs text-slate-400">({acs.length - ativos.length} inativo{acs.length - ativos.length > 1 ? "s" : ""})</span>
+                                )}
+                              </div>
+                            )}
                           </td>
-                          <td className="px-4 py-2.5 text-xs text-slate-600">{a?.ultimoLogin ? fmtBR(a.ultimoLogin) : "—"}</td>
+                          <td className="px-4 py-2.5 text-xs text-slate-600">{ultimoLogin ? fmtBR(ultimoLogin) : "—"}</td>
                           <td className="px-4 py-2.5 text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button size="sm" variant="outline" onClick={() => { setGerarTarget(c); setResultadoAcesso(null); }} className="gap-1.5">
-                                <Send className="w-3.5 h-3.5" /> {a ? "Reenviar" : "Gerar acesso"}
-                              </Button>
-                              {a && a.ativo === 1 && (
-                                <Button size="sm" variant="outline" onClick={() => { if (confirm("Desativar acesso deste cliente?")) desativarMut.mutate({ id: a.id }); }} className="text-rose-600 border-rose-200 hover:bg-rose-50">
-                                  Desativar
-                                </Button>
-                              )}
-                            </div>
+                            <Button size="sm" variant="outline" onClick={() => abrirGerenciar(c)} className="gap-1.5">
+                              <Users className="w-3.5 h-3.5" /> Gerenciar acessos
+                            </Button>
                           </td>
                         </tr>
                       );
                     })}
                     {filtrados.length === 0 && (
-                      <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Nenhum cliente.</td></tr>
+                      <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">Nenhum cliente.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -325,52 +372,165 @@ export default function ClientesPortalAdmin() {
           </div>
         )}
 
-        {/* Modal: Gerar acesso */}
-        <Dialog open={!!gerarTarget} onOpenChange={(o) => { if (!o) { setGerarTarget(null); setResultadoAcesso(null); } }}>
-          <DialogContent className="max-w-md bg-white">
-            <DialogHeader><DialogTitle>Gerar acesso ao Portal do Cliente</DialogTitle></DialogHeader>
-            {gerarTarget && !resultadoAcesso && (
-              <div className="space-y-3 text-sm">
-                <p>Será gerada uma senha provisória para <b>{gerarTarget.razaoSocial}</b> e enviada por e-mail.</p>
-                <div className="bg-slate-50 rounded-lg p-3 space-y-1 text-xs">
-                  <div><b>Identificador:</b> {fmtCNPJ(gerarTarget.cnpj || gerarTarget.cpf) || <span className="text-rose-600">não cadastrado</span>}</div>
-                  <div><b>E-mail destino:</b> {gerarTarget.contatoEmail || gerarTarget.email || <span className="text-rose-600">não cadastrado</span>}</div>
+        {/* Modal: Gerenciar acessos do cliente */}
+        <Dialog open={!!gerenciarTarget} onOpenChange={(o) => { if (!o) { setGerenciarTarget(null); setResultadoAcesso(null); } }}>
+          <DialogContent className="max-w-2xl bg-white">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-blue-600" />
+                Acessos do Portal — {gerenciarTarget?.razaoSocial}
+              </DialogTitle>
+            </DialogHeader>
+
+            {gerenciarTarget && (
+              <div className="space-y-5">
+                <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-700 flex flex-wrap gap-x-6 gap-y-1">
+                  <div><b>Identificador:</b> <span className="font-mono">{fmtCNPJ(gerenciarTarget.cnpj || gerenciarTarget.cpf) || <span className="text-rose-600">não cadastrado</span>}</span></div>
+                  <div><b>Usuários ativos:</b> {ativosDoTarget}/{LIMITE_SUGERIDO}</div>
                 </div>
-                {(!gerarTarget.contatoEmail && !gerarTarget.email) && (
-                  <div className="bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-800 flex gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /> Cadastre um e-mail no cliente antes de enviar boas-vindas.
-                  </div>
-                )}
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setGerarTarget(null)}>Cancelar</Button>
-                  <Button onClick={() => gerarMut.mutate({ clienteId: gerarTarget.id, companyId, enviarEmail: true })}
-                    disabled={gerarMut.isPending} className="bg-blue-600 hover:bg-blue-700 gap-2">
-                    {gerarMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                    Gerar e enviar e-mail
-                  </Button>
-                </DialogFooter>
-              </div>
-            )}
-            {resultadoAcesso && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="w-5 h-5" /> <b>Acesso gerado com sucesso!</b></div>
-                <div className="bg-slate-50 rounded-lg p-3 text-sm space-y-1.5">
-                  <div><b>Identificador:</b> <span className="font-mono">{resultadoAcesso.identificador}</span></div>
-                  <div className="flex items-center gap-2">
-                    <b>Senha provisória:</b>
-                    <code className="bg-amber-100 px-2 py-0.5 rounded font-mono">{resultadoAcesso.senhaTemporaria}</code>
-                    <button onClick={() => { navigator.clipboard.writeText(resultadoAcesso.senhaTemporaria); toast.success("Copiada!"); }}
-                      className="text-blue-600 hover:text-blue-800"><Copy className="w-4 h-4" /></button>
-                  </div>
-                  <div className="text-xs text-slate-600 pt-1 border-t">
-                    {resultadoAcesso.emailEnviado
-                      ? <span className="text-emerald-700">✓ E-mail de boas-vindas enviado para {resultadoAcesso.emailDestino}</span>
-                      : resultadoAcesso.emailErro
-                        ? <span className="text-rose-700">✗ Falha ao enviar e-mail: {resultadoAcesso.emailErro}</span>
-                        : <span className="text-slate-500">E-mail não enviado.</span>}
-                  </div>
+
+                {/* Lista de acessos existentes */}
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-700 mb-2">Usuários cadastrados</h4>
+                  {acessosDoTarget.length === 0 ? (
+                    <div className="border border-dashed rounded-lg p-6 text-center text-slate-400 text-sm">
+                      Nenhum usuário cadastrado ainda. Use o formulário abaixo para criar o primeiro acesso.
+                    </div>
+                  ) : (
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                          <tr>
+                            <th className="px-3 py-2 text-left">Nome</th>
+                            <th className="px-3 py-2 text-left">E-mail</th>
+                            <th className="px-3 py-2 text-left">Status</th>
+                            <th className="px-3 py-2 text-left">Último login</th>
+                            <th className="px-3 py-2 text-right">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {acessosDoTarget.map((a: any) => (
+                            <tr key={a.id}>
+                              <td className="px-3 py-2 font-medium text-slate-800">{a.nomeResponsavel || <span className="text-slate-400">—</span>}</td>
+                              <td className="px-3 py-2 text-xs">{a.emailResponsavel || <span className="text-slate-400">—</span>}</td>
+                              <td className="px-3 py-2">
+                                {a.ativo === 1
+                                  ? (a.primeiroAcesso === 1
+                                    ? <Badge className="bg-amber-500">Aguardando 1º acesso</Badge>
+                                    : <Badge className="bg-emerald-600">Ativo</Badge>)
+                                  : <Badge variant="outline" className="text-rose-500 border-rose-300">Inativo</Badge>}
+                              </td>
+                              <td className="px-3 py-2 text-xs text-slate-600">{a.ultimoLogin ? fmtBR(a.ultimoLogin) : "—"}</td>
+                              <td className="px-3 py-2 text-right">
+                                <div className="flex justify-end gap-1.5">
+                                  {a.ativo === 1 ? (
+                                    <>
+                                      <Button size="sm" variant="outline" title="Reenviar senha provisória"
+                                        disabled={gerarMut.isPending}
+                                        onClick={() => {
+                                          if (!a.emailResponsavel) { toast.error("Acesso sem e-mail cadastrado."); return; }
+                                          if (!confirm(`Gerar nova senha provisória e reenviar para ${a.emailResponsavel}?`)) return;
+                                          gerarMut.mutate({
+                                            clienteId: gerenciarTarget.id, companyId,
+                                            nome: a.nomeResponsavel || "Usuário",
+                                            email: a.emailResponsavel,
+                                            enviarEmail: true,
+                                          });
+                                        }}>
+                                        <RefreshCw className="w-3.5 h-3.5" />
+                                      </Button>
+                                      <Button size="sm" variant="outline" className="text-rose-600 border-rose-200 hover:bg-rose-50" title="Desativar"
+                                        onClick={() => { if (confirm("Desativar este acesso? O usuário não conseguirá mais entrar.")) desativarMut.mutate({ id: a.id }); }}>
+                                        Desativar
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-200 hover:bg-emerald-50" title="Reativar"
+                                      onClick={() => reativarMut.mutate({ id: a.id, companyId })}>
+                                      Reativar
+                                    </Button>
+                                  )}
+                                  <Button size="sm" variant="outline" className="text-rose-600 border-rose-200 hover:bg-rose-50" title="Remover definitivamente"
+                                    onClick={() => { if (confirm("Remover este acesso DEFINITIVAMENTE? Esta ação não pode ser desfeita.")) removerMut.mutate({ id: a.id, companyId }); }}>
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
-                <DialogFooter><Button onClick={() => { setGerarTarget(null); setResultadoAcesso(null); }} className="bg-blue-600 hover:bg-blue-700">Fechar</Button></DialogFooter>
+
+                {/* Form: adicionar novo */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                    <UserPlus className="w-4 h-4 text-blue-600" /> Adicionar novo acesso
+                  </h4>
+                  {atingiuLimite && (
+                    <div className="bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-800 flex gap-2 mb-3">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      Este cliente já possui {LIMITE_SUGERIDO} acessos ativos (limite recomendado). Você ainda pode adicionar mais — desative algum se preferir.
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Nome do usuário</Label>
+                      <Input className="mt-1 h-9" value={novoNome} onChange={(e) => setNovoNome(e.target.value)} placeholder="Ex.: João da Silva" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">E-mail</Label>
+                      <Input className="mt-1 h-9" type="email" value={novoEmail} onChange={(e) => setNovoEmail(e.target.value)} placeholder="usuario@empresa.com" />
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 mt-3 text-xs text-slate-600 cursor-pointer select-none">
+                    <input type="checkbox" checked={enviarEmail} onChange={(e) => setEnviarEmail(e.target.checked)} className="rounded" />
+                    Enviar e-mail de boas-vindas com a senha provisória
+                  </label>
+
+                  {resultadoAcesso && (
+                    <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm space-y-1.5">
+                      <div className="flex items-center gap-2 text-emerald-700 font-semibold">
+                        <CheckCircle2 className="w-4 h-4" /> Acesso {resultadoAcesso.acao === "reenviado" ? "atualizado" : "criado"} com sucesso!
+                      </div>
+                      <div className="text-xs flex items-center gap-2">
+                        <b>Senha provisória:</b>
+                        <code className="bg-amber-100 px-2 py-0.5 rounded font-mono">{resultadoAcesso.senhaTemporaria}</code>
+                        <button onClick={() => { navigator.clipboard.writeText(resultadoAcesso.senhaTemporaria); toast.success("Copiada!"); }}
+                          className="text-blue-600 hover:text-blue-800"><Copy className="w-3.5 h-3.5" /></button>
+                      </div>
+                      <div className="text-xs text-slate-600">
+                        {resultadoAcesso.emailEnviado
+                          ? <span className="text-emerald-700">✓ E-mail enviado para {resultadoAcesso.emailDestino}</span>
+                          : resultadoAcesso.emailErro
+                            ? <span className="text-rose-700">✗ Falha no e-mail: {resultadoAcesso.emailErro}</span>
+                            : <span className="text-slate-500">E-mail não enviado.</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  <DialogFooter className="mt-4">
+                    <Button variant="outline" onClick={() => { setGerenciarTarget(null); setResultadoAcesso(null); }}>Fechar</Button>
+                    <Button onClick={() => {
+                        if (!novoNome.trim()) { toast.error("Informe o nome do usuário"); return; }
+                        if (!novoEmail.trim() || !/.+@.+\..+/.test(novoEmail)) { toast.error("Informe um e-mail válido"); return; }
+                        gerarMut.mutate({
+                          clienteId: gerenciarTarget.id,
+                          companyId,
+                          nome: novoNome.trim(),
+                          email: novoEmail.trim(),
+                          enviarEmail,
+                        });
+                      }}
+                      disabled={gerarMut.isPending}
+                      className="bg-blue-600 hover:bg-blue-700 gap-2">
+                      {gerarMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                      {enviarEmail ? "Criar acesso e enviar e-mail" : "Criar acesso"}
+                    </Button>
+                  </DialogFooter>
+                </div>
               </div>
             )}
           </DialogContent>

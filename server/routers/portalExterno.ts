@@ -35,12 +35,17 @@ export const portalExternoRouter = router({
     })).mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const cnpjClean = input.cnpj.replace(/\D/g, "");
-      const [cred] = await db.select().from(portalCredentials).where(
+      // Pode haver vários acessos para o mesmo CNPJ (até 4 usuários por cliente).
+      // Tentamos validar a senha contra cada credencial ativa — a senha é o discriminador.
+      const creds = await db.select().from(portalCredentials).where(
         and(eq(portalCredentials.cnpj, cnpjClean), eq(portalCredentials.ativo, 1))
       );
-      if (!cred) throw new TRPCError({ code: "UNAUTHORIZED", message: "CNPJ não encontrado ou acesso inativo" });
-      const valid = await bcrypt.compare(input.senha, cred.senhaHash);
-      if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta" });
+      if (creds.length === 0) throw new TRPCError({ code: "UNAUTHORIZED", message: "CNPJ não encontrado ou acesso inativo" });
+      let cred: typeof creds[number] | undefined;
+      for (const c of creds) {
+        if (await bcrypt.compare(input.senha, c.senhaHash)) { cred = c; break; }
+      }
+      if (!cred) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta" });
       // Update ultimo login
       await db.update(portalCredentials).set({
         ultimoLogin: new Date().toISOString().slice(0, 19).replace("T", " "),
@@ -73,12 +78,15 @@ export const portalExternoRouter = router({
     })).mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const cnpjClean = input.cnpj.replace(/\D/g, "");
-      const [cred] = await db.select().from(portalCredentials).where(
+      const creds = await db.select().from(portalCredentials).where(
         and(eq(portalCredentials.cnpj, cnpjClean), eq(portalCredentials.ativo, 1))
       );
-      if (!cred) throw new TRPCError({ code: "NOT_FOUND", message: "Credencial não encontrada" });
-      const valid = await bcrypt.compare(input.senhaAtual, cred.senhaHash);
-      if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha atual incorreta" });
+      if (creds.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Credencial não encontrada" });
+      let cred: typeof creds[number] | undefined;
+      for (const c of creds) {
+        if (await bcrypt.compare(input.senhaAtual, c.senhaHash)) { cred = c; break; }
+      }
+      if (!cred) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha atual incorreta" });
       const novaSenhaHash = await bcrypt.hash(input.novaSenha, 10);
       await db.update(portalCredentials).set({
         senhaHash: novaSenhaHash,
@@ -103,43 +111,47 @@ export const portalExternoRouter = router({
     })).mutation(async ({ input }) => {
       const db = (await getDb())!;
       const cnpjClean = input.cnpj.replace(/\D/g, "");
-      const [cred] = await db.select().from(portalCredentials).where(
+      // Pode haver múltiplos acessos para o mesmo CNPJ — enviamos um link para CADA e-mail cadastrado.
+      const creds = await db.select().from(portalCredentials).where(
         and(eq(portalCredentials.cnpj, cnpjClean), eq(portalCredentials.ativo, 1))
       );
+      const comEmail = creds.filter((c) => !!c.emailResponsavel);
       // Resposta sempre genérica para não vazar quem está cadastrado
-      if (!cred || !cred.emailResponsavel) {
+      if (comEmail.length === 0) {
         return { success: true, mensagem: "Se houver cadastro, enviaremos um e-mail com instruções." };
       }
-      const token = crypto.randomBytes(32).toString("hex");
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
-      await db.insert(portalPasswordResets).values({
-        credId: cred.id,
-        token,
-        expiresAt: expiresAt.toISOString().slice(0, 19).replace("T", " "),
-      });
-      const link = `${getPortalBaseUrl()}/portal/redefinir-senha/${token}`;
-      try {
-        await sendEmail({
-          to: cred.emailResponsavel,
-          subject: "Redefinição de senha — Portal Externo",
-          html: `
-            <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0f172a">
-              <h2 style="color:#1e3a8a;margin:0 0 12px">Redefinição de senha</h2>
-              <p>Olá${cred.nomeResponsavel ? `, <b>${cred.nomeResponsavel}</b>` : ""},</p>
-              <p>Recebemos uma solicitação para redefinir a senha do acesso vinculado ao identificador <b>${cnpjClean}</b>.</p>
-              <p>Clique no botão abaixo para criar uma nova senha (link válido por 1 hora):</p>
-              <p style="text-align:center;margin:24px 0">
-                <a href="${link}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Redefinir senha</a>
-              </p>
-              <p style="font-size:12px;color:#64748b">Se você não solicitou, ignore este e-mail. Sua senha continua a mesma.</p>
-              <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
-              <p style="font-size:11px;color:#94a3b8">FC Engenharia — Portal Externo. Não responda a este e-mail.</p>
-            </div>
-          `,
-          text: `Acesse: ${link} (válido por 1 hora)`,
+      for (const cred of comEmail) {
+        const token = crypto.randomBytes(32).toString("hex");
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1h
+        await db.insert(portalPasswordResets).values({
+          credId: cred.id,
+          token,
+          expiresAt: expiresAt.toISOString().slice(0, 19).replace("T", " "),
         });
-      } catch (e) {
-        console.error("[solicitarRedefinicao] SMTP falhou:", e);
+        const link = `${getPortalBaseUrl()}/portal/redefinir-senha/${token}`;
+        try {
+          await sendEmail({
+            to: cred.emailResponsavel!,
+            subject: "Redefinição de senha — Portal Externo",
+            html: `
+              <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0f172a">
+                <h2 style="color:#1e3a8a;margin:0 0 12px">Redefinição de senha</h2>
+                <p>Olá${cred.nomeResponsavel ? `, <b>${cred.nomeResponsavel}</b>` : ""},</p>
+                <p>Recebemos uma solicitação para redefinir a senha do acesso vinculado ao identificador <b>${cnpjClean}</b>.</p>
+                <p>Clique no botão abaixo para criar uma nova senha (link válido por 1 hora):</p>
+                <p style="text-align:center;margin:24px 0">
+                  <a href="${link}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Redefinir senha</a>
+                </p>
+                <p style="font-size:12px;color:#64748b">Se você não solicitou, ignore este e-mail. Sua senha continua a mesma.</p>
+                <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+                <p style="font-size:11px;color:#94a3b8">FC Engenharia — Portal Externo. Não responda a este e-mail.</p>
+              </div>
+            `,
+            text: `Acesse: ${link} (válido por 1 hora)`,
+          });
+        } catch (e) {
+          console.error("[solicitarRedefinicao] SMTP falhou:", e);
+        }
       }
       return { success: true, mensagem: "Se houver cadastro, enviaremos um e-mail com instruções." };
     }),
@@ -384,9 +396,13 @@ export const portalExternoRouter = router({
     }),
 
     // ========== PORTAL DO CLIENTE — Admin ==========
+    // Cria (ou atualiza, se já existir um acesso para o mesmo e-mail) uma credencial de acesso
+    // ao Portal do Cliente. Cada cliente pode ter múltiplos usuários — cada um com nome e e-mail próprios.
     gerarAcessoCliente: protectedProcedure.input(z.object({
       clienteId: z.number(),
       companyId: z.number(),
+      nome: z.string().min(1, "Informe o nome do usuário"),
+      email: z.string().email("E-mail inválido"),
       enviarEmail: z.boolean().default(true),
     })).mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
@@ -397,55 +413,62 @@ export const portalExternoRouter = router({
       if (!cli) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente não encontrado" });
       const idDoc = (cli.cnpj || cli.cpf || "").replace(/\D/g, "");
       if (!idDoc) throw new TRPCError({ code: "BAD_REQUEST", message: "Cliente sem CNPJ/CPF cadastrado — preencha antes de gerar acesso." });
-      const emailDestino = cli.contatoEmail || cli.email;
-      if (input.enviarEmail && !emailDestino) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Cliente sem e-mail (contato/principal) — cadastre antes de enviar boas-vindas." });
-      }
+      const emailNorm = input.email.trim().toLowerCase();
       const senhaTemp = generateTempPassword();
       const senhaHash = await bcrypt.hash(senhaTemp, 10);
-      const [existing] = await db.select().from(portalCredentials).where(and(
+
+      // Procura acesso existente por (clienteId, e-mail) para fazer reset/reenvio.
+      const existentes = await db.select().from(portalCredentials).where(and(
         eq(portalCredentials.tipo, "cliente"),
         eq(portalCredentials.clienteId, input.clienteId),
         eq(portalCredentials.companyId, input.companyId),
       ));
+      const existing = existentes.find((c: any) => (c.emailResponsavel || "").trim().toLowerCase() === emailNorm);
+      let credId: number;
+      let acaoLabel: "criado" | "reenviado";
       if (existing) {
         await db.update(portalCredentials).set({
           senhaHash,
           primeiroAcesso: 1,
           ativo: 1,
           cnpj: idDoc,
-          emailResponsavel: emailDestino || existing.emailResponsavel,
-          nomeResponsavel: cli.contatoNome || existing.nomeResponsavel,
+          emailResponsavel: emailNorm,
+          nomeResponsavel: input.nome,
           nomeEmpresa: cli.nomeFantasia || cli.razaoSocial,
           updatedAt: new Date().toISOString(),
         }).where(eq(portalCredentials.id, existing.id));
+        credId = existing.id;
+        acaoLabel = "reenviado";
       } else {
-        await db.insert(portalCredentials).values({
+        const [nova] = await db.insert(portalCredentials).values({
           tipo: "cliente",
           clienteId: input.clienteId,
           companyId: input.companyId,
           cnpj: idDoc,
           senhaHash,
           nomeEmpresa: cli.nomeFantasia || cli.razaoSocial,
-          emailResponsavel: emailDestino || null,
-          nomeResponsavel: cli.contatoNome || null,
+          emailResponsavel: emailNorm,
+          nomeResponsavel: input.nome,
           primeiroAcesso: 1,
           ativo: 1,
-        });
+        }).returning({ id: portalCredentials.id });
+        credId = nova.id;
+        acaoLabel = "criado";
       }
+
       let emailEnviado = false;
       let emailErro: string | undefined;
-      if (input.enviarEmail && emailDestino) {
+      if (input.enviarEmail) {
         const link = `${getPortalBaseUrl()}/portal/login`;
         const r = await sendEmail({
-          to: emailDestino,
+          to: emailNorm,
           subject: "Bem-vindo ao Portal do Cliente — FC Engenharia",
           html: `
             <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#0f172a">
               <h2 style="color:#1e3a8a;margin:0 0 12px">Bem-vindo ao Portal do Cliente</h2>
-              <p>Olá${cli.contatoNome ? `, <b>${cli.contatoNome}</b>` : ""},</p>
-              <p>A <b>FC Engenharia</b> liberou o acesso da empresa <b>${cli.razaoSocial}</b> ao Portal do Cliente.</p>
-              <p>No portal você pode acompanhar suas obras, registrar comentários e enviar uma avaliação anônima da equipe e dos serviços prestados.</p>
+              <p>Olá, <b>${input.nome}</b>,</p>
+              <p>A <b>FC Engenharia</b> liberou seu acesso ao Portal do Cliente, vinculado a <b>${cli.razaoSocial}</b>.</p>
+              <p>No portal você pode acompanhar as obras, registrar comentários e enviar uma avaliação anônima da equipe e dos serviços prestados.</p>
               <div style="background:#f1f5f9;border-radius:10px;padding:16px;margin:20px 0">
                 <p style="margin:4px 0"><b>Identificador (CNPJ/CPF):</b> ${idDoc}</p>
                 <p style="margin:4px 0"><b>Senha provisória:</b> <span style="font-family:Menlo,monospace;background:#fef3c7;padding:4px 8px;border-radius:6px">${senhaTemp}</span></p>
@@ -463,7 +486,34 @@ export const portalExternoRouter = router({
         emailEnviado = r.success;
         emailErro = r.error;
       }
-      return { senhaTemporaria: senhaTemp, identificador: idDoc, emailEnviado, emailErro, emailDestino };
+      return { credId, acao: acaoLabel, senhaTemporaria: senhaTemp, identificador: idDoc, emailEnviado, emailErro, emailDestino: emailNorm };
+    }),
+
+    removerAcessoCliente: protectedProcedure.input(z.object({
+      id: z.number(), companyId: z.number(),
+    })).mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      // Deleta tokens de reset vinculados antes (FK cascade já existe, mas explícito por segurança)
+      await db.delete(portalPasswordResets).where(eq(portalPasswordResets.credId, input.id));
+      await db.delete(portalCredentials).where(and(
+        eq(portalCredentials.id, input.id),
+        eq(portalCredentials.companyId, input.companyId),
+        eq(portalCredentials.tipo, "cliente"),
+      ));
+      return { success: true };
+    }),
+
+    reativarAcessoCliente: protectedProcedure.input(z.object({
+      id: z.number(), companyId: z.number(),
+    })).mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      await db.update(portalCredentials).set({ ativo: 1, updatedAt: new Date().toISOString() })
+        .where(and(
+          eq(portalCredentials.id, input.id),
+          eq(portalCredentials.companyId, input.companyId),
+          eq(portalCredentials.tipo, "cliente"),
+        ));
+      return { success: true };
     }),
 
     listarAcessosCliente: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(async ({ input }) => {

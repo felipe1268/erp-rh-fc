@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1427,
+    titulo: "Portal do Cliente: múltiplos usuários por cliente (até 4 recomendado)",
+    descricao: "Cada cliente agora pode ter VÁRIOS usuários de acesso ao Portal do Cliente, cada um com nome e e-mail próprios — antes era apenas 1. (1) Admin (/clientes/portal): a tabela passa a mostrar 'N/4 ativos' por cliente e o botão 'Gerar acesso' foi substituído por 'Gerenciar acessos', que abre um modal com a LISTA de usuários (nome, e-mail, status, último login) e um formulário para 'Adicionar novo acesso' (nome + e-mail + opção de enviar e-mail de boas-vindas). Cada linha tem ações individuais: Reenviar senha provisória (mesmo e-mail), Desativar/Reativar e Remover definitivamente. Limite de 4 usuários é apenas RECOMENDADO (badge âmbar quando atingido), nunca bloqueia. (2) Backend (portalExterno): gerarAcessoCliente agora exige nome+email; cria nova credencial OU atualiza a existente do mesmo (clienteId, e-mail) — não mais 1 por cliente. Novas procedures removerAcessoCliente e reativarAcessoCliente. listarAcessosCliente já retornava todas as linhas. (3) Login: continua sendo CNPJ + senha (sem campo extra) — o backend agora itera todas as credenciais ativas daquele CNPJ e identifica o usuário pela senha (bcrypt.compare). trocarSenha segue a mesma lógica. (4) Esqueci minha senha: dispara um link de redefinição para CADA e-mail cadastrado no CNPJ informado, cada um válido por 1 hora. Sem mudança de schema (portal_credentials já permitia múltiplas linhas por clienteId).",
+    tipo: "feature",
+    modulos: "Portal do Cliente,Clientes",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 16:00:00",
+  },
+  {
     version: 1426,
     titulo: "Portal do Cliente — registrado como módulo próprio no Hub",
     descricao: "O Portal do Cliente agora aparece como CARD INDEPENDENTE no Hub de Módulos (/modules), separado do módulo Cadastro. (1) ModuleHub: novo card 'Portal do Cliente' (ícone ShieldCheck, indigo) que leva direto para /clientes/portal (administração de credenciais, comentários e NPS). (2) Configurações → Módulos: nova entrada 'Portal do Cliente' com 4 sub-páginas (Acessos, Comentários, Avaliações NPS, Cadastro de Clientes) — visibilidade pode ser ligada/desligada por empresa em Permissões. (3) Backend: 'portal-cliente' incluído em ALL_MODULES (server/routers.ts) — passa a ser respeitado pelo controle de habilitação de módulos por empresa. Sem mudança de schema ou de comportamento das telas existentes.",
