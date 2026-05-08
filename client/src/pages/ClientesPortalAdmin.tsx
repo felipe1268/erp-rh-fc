@@ -687,7 +687,7 @@ export default function ClientesPortalAdmin() {
 
         {/* Modal: Liberar abas do Portal por usuário */}
         <Dialog open={!!abasTarget} onOpenChange={(o) => { if (!o) setAbasTarget(null); }}>
-          <DialogContent className="max-w-2xl bg-white">
+          <DialogContent className="max-w-[95vw] w-[95vw] sm:max-w-5xl bg-white max-h-[92vh] overflow-hidden flex flex-col">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <SlidersHorizontal className="w-5 h-5 text-indigo-600" />
@@ -704,7 +704,7 @@ export default function ClientesPortalAdmin() {
                   Selecione quais abas este usuário verá ao abrir uma obra (<b>/portal/cliente/obra/...</b>).
                   A aba <b>Visão Geral</b> é obrigatória — sem ela o usuário não vê nada da obra clicada.
                 </p>
-                <div className="grid sm:grid-cols-2 gap-2 max-h-[55vh] overflow-y-auto pr-1">
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 flex-1 overflow-y-auto pr-1">
                   {PORTAL_CLIENTE_ABAS.map((aba) => {
                     const checked = abasSel.has(aba.key);
                     const obrig = aba.key === ABA_OBRIGATORIA;
