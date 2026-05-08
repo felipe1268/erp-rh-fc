@@ -8,6 +8,7 @@ import {
   CheckCircle2, Building2, ListTree, Activity, BarChart3, History,
   CalendarDays, User, CalendarCheck, FileText, GitBranch, HardHat,
   DollarSign, Cloud, Droplets, Wind, Loader2, ClipboardList, ChevronRight,
+  Search, Menu, X, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, Line, Area, CartesianGrid, XAxis, YAxis,
@@ -84,12 +85,21 @@ export default function PortalPlanejamentoCliente() {
   }, [abasLiberadas]);
 
   const [aba, setAba] = useState<PortalClienteAbaKey>("visao_geral");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [buscaAba, setBuscaAba] = useState("");
 
   useEffect(() => {
     if (abasVisiveis.length > 0 && !abasVisiveis.find((a) => a.key === aba)) {
       setAba(abasVisiveis[0].key);
     }
   }, [abasVisiveis, aba]);
+
+  const abasFiltradas = useMemo(() => {
+    const q = buscaAba.trim().toLowerCase();
+    if (!q) return abasVisiveis;
+    return abasVisiveis.filter((a) => a.label.toLowerCase().includes(q));
+  }, [abasVisiveis, buscaAba]);
 
   // Dias restantes (estilo interno)
   const diasRestantes = useMemo(() => {
@@ -100,46 +110,143 @@ export default function PortalPlanejamentoCliente() {
     return Math.ceil((fimD.getTime() - hoje.getTime()) / 86400000);
   }, [projeto, obra]);
 
-  // Tabs em 2 linhas (estilo interno)
-  const half = Math.ceil(abasVisiveis.length / 2);
-
-  const renderTabBtn = (a: typeof PORTAL_CLIENTE_ABAS[number]) => {
+  const renderSidebarItem = (a: typeof PORTAL_CLIENTE_ABAS[number]) => {
     const Icon = ABA_ICONS[a.key] || TrendingUp;
     const isActive = aba === a.key;
     const isEmBreve = a.status === "em_breve";
     return (
       <button
         key={a.key}
-        onClick={() => setAba(a.key)}
-        className={`group flex items-center justify-center gap-1.5 w-full px-3 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-all duration-200 ${
+        onClick={() => { setAba(a.key); setMobileSidebarOpen(false); }}
+        className={`group flex items-center gap-2.5 w-full px-3 py-2 text-[13px] font-medium rounded-lg text-left transition-all duration-150 ${
           isActive
-            ? "text-blue-700 bg-gradient-to-b from-blue-50 to-blue-100/60 ring-1 ring-blue-200 shadow-sm"
-            : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+            ? "bg-blue-600 text-white shadow-sm"
+            : "text-slate-200 hover:bg-slate-700/60 hover:text-white"
         }`}
+        title={a.label}
       >
-        <Icon className="h-3.5 w-3.5 shrink-0" />
-        <span>{a.label}</span>
+        <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-white" : "text-slate-400 group-hover:text-white"}`} />
+        <span className="truncate flex-1">{a.label}</span>
         {isEmBreve && (
-          <span className="text-[9px] bg-amber-100 text-amber-700 px-1 rounded">em breve</span>
+          <span className="text-[9px] bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">em breve</span>
         )}
       </button>
     );
   };
 
+  const sidebarContent = (
+    <>
+      {/* Header logo / título */}
+      <div className="px-4 py-4 border-b border-slate-700/60">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow text-slate-900 font-bold text-sm">
+            FC
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Portal do Cliente</p>
+            <p className="text-sm font-bold text-white leading-tight truncate">FC Engenharia</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Pílula da obra */}
+      <div className="px-3 pt-3 pb-2">
+        <div className="bg-slate-700/50 rounded-lg px-3 py-2.5 ring-1 ring-slate-600/50">
+          <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">Obra</p>
+          <p className="text-sm font-bold text-white leading-tight line-clamp-2">{obra?.nome || "—"}</p>
+        </div>
+      </div>
+
+      {/* Busca */}
+      <div className="px-3 pb-2">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <input
+            type="text"
+            value={buscaAba}
+            onChange={(e) => setBuscaAba(e.target.value)}
+            placeholder="Buscar no menu..."
+            className="w-full pl-8 pr-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-[12px] text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40"
+          />
+        </div>
+      </div>
+
+      {/* Grupo: Abas do Projeto */}
+      <div className="px-3 pb-3 flex-1 overflow-y-auto">
+        <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold px-2 py-2">Abas do Projeto</p>
+        <div className="space-y-0.5">
+          {abasFiltradas.map((a) => renderSidebarItem(a))}
+          {abasFiltradas.length === 0 && (
+            <p className="text-[11px] text-slate-500 italic px-2 py-3 text-center">Nenhuma aba encontrada</p>
+          )}
+        </div>
+      </div>
+
+      {/* Voltar */}
+      <div className="border-t border-slate-700/60 p-3">
+        <button
+          onClick={() => navigate("/portal/cliente/dashboard")}
+          className="flex items-center gap-2 w-full px-3 py-2 text-[12px] font-semibold rounded-lg text-slate-300 hover:bg-slate-700/60 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Voltar para Obras
+        </button>
+      </div>
+    </>
+  );
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50">
-      <div className="max-w-7xl mx-auto p-3 sm:p-5">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 flex">
+      {/* ── Sidebar (desktop) ──────────────────────────────────────── */}
+      {sidebarOpen && (
+        <aside className="hidden lg:flex flex-col w-64 bg-slate-800 border-r border-slate-700 sticky top-0 h-screen shrink-0 shadow-xl">
+          {sidebarContent}
+        </aside>
+      )}
+
+      {/* ── Sidebar (mobile overlay) ───────────────────────────────── */}
+      {mobileSidebarOpen && (
+        <>
+          <div
+            className="lg:hidden fixed inset-0 bg-black/40 z-40"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+          <aside className="lg:hidden fixed inset-y-0 left-0 w-72 bg-slate-800 border-r border-slate-700 flex flex-col z-50 shadow-2xl">
+            <div className="flex justify-end px-3 pt-3">
+              <button
+                onClick={() => setMobileSidebarOpen(false)}
+                className="text-slate-300 hover:text-white p-1 rounded-lg hover:bg-slate-700/60"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {sidebarContent}
+          </aside>
+        </>
+      )}
+
+      <div className="flex-1 min-w-0">
+        <div className="max-w-7xl mx-auto p-3 sm:p-5">
         {/* ── Header moderno ──────────────────────────────────────────── */}
         <div className="relative bg-white rounded-2xl border border-slate-200/70 shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)] p-4 sm:p-5 mb-4 overflow-hidden">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600" />
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="flex items-start gap-3 min-w-0 flex-1">
-              <Button variant="ghost" size="sm"
-                className="text-slate-500 hover:text-slate-800 hover:bg-slate-100 -ml-2 mt-0.5 flex-shrink-0 rounded-lg"
-                onClick={() => navigate("/portal/cliente/dashboard")}>
-                <ArrowLeft className="h-4 w-4 mr-1" />
-                Voltar
-              </Button>
+              {/* Toggle sidebar */}
+              <button
+                onClick={() => setSidebarOpen((v) => !v)}
+                className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100 mt-0.5 flex-shrink-0"
+                title={sidebarOpen ? "Recolher menu" : "Expandir menu"}
+              >
+                {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+              </button>
+              <button
+                onClick={() => setMobileSidebarOpen(true)}
+                className="lg:hidden h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100 mt-0.5 flex-shrink-0"
+                title="Abrir menu"
+              >
+                <Menu className="h-4 w-4" />
+              </button>
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
@@ -257,26 +364,21 @@ export default function PortalPlanejamentoCliente() {
           );
         })()}
 
-        {/* ── Tabs modernos (2 linhas no lg+) ──────────────────────── */}
-        {abasVisiveis.length > 1 && (
-          <div className="mb-4 rounded-2xl border border-slate-200/70 select-none bg-white shadow-[0_2px_12px_-4px_rgba(15,23,42,0.05)] p-1.5 space-y-1">
-            <div className="hidden lg:flex gap-1">
-              {abasVisiveis.slice(0, half).map((a) => (
-                <div key={a.key} className="flex-1">{renderTabBtn(a)}</div>
-              ))}
+        {/* ── Indicador da aba atual (mobile/quando sidebar oculta) ── */}
+        {abasVisiveis.length > 1 && (() => {
+          const abaInfo = PORTAL_CLIENTE_ABAS.find((x) => x.key === aba);
+          const Icon = ABA_ICONS[aba] || TrendingUp;
+          if (!abaInfo) return null;
+          return (
+            <div className="mb-4 flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl border border-slate-200/70 shadow-sm">
+              <Icon className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-bold text-slate-800">{abaInfo.label}</span>
+              {abaInfo.status === "em_breve" && (
+                <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold uppercase">em breve</span>
+              )}
             </div>
-            <div className="hidden lg:flex gap-1">
-              {abasVisiveis.slice(half).map((a) => (
-                <div key={a.key} className="flex-1">{renderTabBtn(a)}</div>
-              ))}
-            </div>
-            <div className="flex lg:hidden gap-1.5 overflow-x-auto pb-1">
-              {abasVisiveis.map((a) => (
-                <div key={a.key} className="flex-shrink-0">{renderTabBtn(a)}</div>
-              ))}
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ── Conteúdo ───────────────────────────────────────────── */}
         {isLoading && (
@@ -330,6 +432,7 @@ export default function PortalPlanejamentoCliente() {
           if (aba === "revisoes") return <AbaRevisoes revisoes={revisoes} />;
           return null;
         })()}
+        </div>
       </div>
     </div>
   );
