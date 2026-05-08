@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1412,
+    titulo: "Dashboard Parceiros: layout full-width + Comparativo Mês a Mês (padrão Folha/Cartão de Ponto)",
+    descricao: "MELHORIAS: (1) LAYOUT — removida a restrição max-w-7xl e ajustados os paddings/grids para que TODAS as informações apareçam corretamente em qualquer largura de tela (mobile, tablet, desktop, ultrawide). KPIs principais agora seguem grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 (em vez de pular para 6 colunas só em lg, deixando os cards apertados em tablet). (2) COMPARATIVO MÊS A MÊS — adicionado o mesmo formato de tabela ano-a-ano/mês-a-mês usado nos dashboards de Folha de Pagamento e Cartão de Ponto: tabela com 12 linhas (Jan a Dez do ano filtrado) trazendo Lançamentos, Valor Total, Aprovados, Pendentes (md+), Rejeitados (md+), Pago (lg+) e A Pagar (lg+). Cada métrica mostra a quantidade/valor + a variação percentual (Δ) vs o mês anterior, com setas verdes/vermelhas indicando movimento favorável ou de atenção (semântica respeitando se subir é bom — aprovados/pago — ou ruim — pendentes/rejeitados/a pagar). Linha de TOTAL no rodapé. Linha do mês atual destacada. Clique em qualquer linha abre o drill-down em tela cheia daquele mês.",
+    tipo: "melhoria",
+    modulos: "Dashboards,Parceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 13:00:00",
+  },
+  {
     version: 1411,
     titulo: "Dashboards: gráficos com botão de TELA CHEIA + drill-down em tela cheia (começando por Parceiros)",
     descricao: "MELHORIA GLOBAL nos dashboards: (1) cada gráfico do componente DashChart agora tem um botão de TELA CHEIA (Maximize2) no cabeçalho — ao clicar, o gráfico abre ocupando toda a viewport com fontes/legendas escaladas (1.4x), tooltips maiores e canvas redimensionado dinamicamente para a altura da janela, mantendo cliques para drill-down funcionando. Os gráficos continuam responsivos (responsive: true, maintainAspectRatio: false). (2) No Dashboard Parceiros, o drill-down (clique em KPI/barra/fatia) deixou de ser um Dialog pequeno e passou a abrir em FullScreenDialog com cabeçalho colorido, KPIs do período (Lançamentos, Valor Total, Parceiros, Colaboradores), tabela completa com colunas Data, Parceiro, Tipo de Convênio, Colaborador, Valor, Status, Competência e Aprovado em (dd/MM/aaaa), linha de TOTAL no rodapé e botão de exportar para CSV (UTF-8 BOM, separador ;). Backend dashboards.parceiros: detalhes agora retornam aprovadoEm e createdAt para popular a coluna 'Aprovado em' do drill.",

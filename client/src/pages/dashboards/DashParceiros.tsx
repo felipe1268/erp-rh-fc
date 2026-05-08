@@ -15,7 +15,7 @@ import FullScreenDialog from "@/components/FullScreenDialog";
 import {
   Handshake, Store, Receipt, CreditCard, CheckCircle, Clock, XCircle,
   DollarSign, Users, TrendingUp, Loader2, ArrowLeft, Filter, Wallet,
-  Timer, BarChart3, Download,
+  Timer, BarChart3, Download, ArrowUp, ArrowDown, Minus, Eye,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -94,12 +94,41 @@ export default function DashParceiros() {
     setDrillDialog({ title: `Lançamentos — ${p.nome}`, items });
   };
 
-  const drillByMes = (info: ChartClickInfo) => {
+  const drillByMesIdx = (mIdx: number) => {
     if (!data?.detalhes) return;
-    const mIdx = info.dataIndex;
     const items = data.detalhes.filter((d: any) => Number(String(d.dataCompra).slice(5, 7)) === mIdx + 1);
     setDrillDialog({ title: `Lançamentos — ${MESES_FULL[mIdx]}/${ano}`, items });
   };
+
+  const drillByMes = (info: ChartClickInfo) => drillByMesIdx(info.dataIndex);
+
+  // Comparativo Mês a Mês — padrão Folha de Pagamento (Δ vs mês anterior)
+  const comparativoMensal = useMemo(() => {
+    if (!data?.evolucaoMensal) return [] as any[];
+    const ev = data.evolucaoMensal as any[];
+    const pag = (data.pagamentosPorMes as any[]) || [];
+    const pct = (a: number, b: number) => (b === 0 ? (a > 0 ? 100 : 0) : ((a - b) / Math.abs(b)) * 100);
+    return ev.map((cur, i) => {
+      const prev = i > 0 ? ev[i - 1] : null;
+      const pgCur = pag[i] || { valorPago: 0, valorAPagar: 0 };
+      const pgPrev = i > 0 ? (pag[i - 1] || { valorPago: 0, valorAPagar: 0 }) : null;
+      const fields = ["lancamentos", "valor", "aprovados", "pendentes", "rejeitados", "valorAprovado", "valorPago", "valorAPagar"] as const;
+      const allCur: any = { ...cur, valorPago: pgCur.valorPago, valorAPagar: pgCur.valorAPagar };
+      const allPrev: any = prev ? { ...prev, valorPago: pgPrev?.valorPago ?? 0, valorAPagar: pgPrev?.valorAPagar ?? 0 } : null;
+      const deltas: Record<string, { abs: number; pct: number } | null> = {};
+      for (const f of fields) {
+        if (!allPrev) { deltas[f] = null; continue; }
+        const a = Number(allCur[f] || 0), b = Number(allPrev[f] || 0);
+        deltas[f] = { abs: a - b, pct: pct(a, b) };
+      }
+      return {
+        mIdx: i,
+        label: `${MESES_LBL[i]}/${String(ano).slice(2)}`,
+        ...allCur,
+        deltas,
+      };
+    });
+  }, [data, ano]);
 
   if (isLoading || !data) {
     return (
@@ -115,7 +144,7 @@ export default function DashParceiros() {
 
   return (
     <DashboardLayout>
-      <div className="w-full max-w-7xl mx-auto px-4 py-6 space-y-6 print:py-2">
+      <div className="w-full mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 space-y-5 print:py-2">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 print:hidden">
           <div className="flex items-center gap-3">
@@ -198,7 +227,7 @@ export default function DashParceiros() {
         </Card>
 
         {/* KPIs principais */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <DashKpi label="Parceiros Ativos" value={resumo.parceirosAtivos} sub={`${resumo.parceirosCadastrados} cadastrados`} icon={Store} color="purple" />
           <DashKpi label="Lançamentos" value={resumo.totalLancamentos} sub={`${resumo.colaboradoresUtilizando} colaboradores`} icon={Receipt} color="blue" />
           <DashKpi label="Valor Total" value={fmtBRLShort(resumo.valorTotal)} sub={`${ano}${mes !== "todos" ? "/" + String(mes).padStart(2, "0") : ""}`} icon={DollarSign} color="indigo" />
@@ -273,6 +302,125 @@ export default function DashParceiros() {
             height={260}
           />
         </div>
+
+        {/* Comparativo Mês a Mês — só faz sentido sem filtro de mês (visão 12 meses) */}
+        {mes === "todos" && comparativoMensal.some((r: any) => r.lancamentos > 0) && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-purple-500" />
+                Comparativo Mês a Mês — Lançamentos vs período anterior ({ano})
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Clique em qualquer linha para abrir o <strong>detalhamento completo</strong> daquele mês.
+              </p>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40">
+                  <tr className="text-left">
+                    <th rowSpan={2} className="py-2 px-3 font-medium text-muted-foreground border-b">Mês</th>
+                    <th colSpan={2} className="py-1 px-3 font-medium text-blue-700 border-b text-center">Lançamentos</th>
+                    <th colSpan={2} className="py-1 px-3 font-medium text-purple-700 border-b text-center">Valor Total</th>
+                    <th colSpan={2} className="py-1 px-3 font-medium text-emerald-700 border-b text-center">Aprovados</th>
+                    <th colSpan={2} className="py-1 px-3 font-medium text-amber-700 border-b text-center hidden md:table-cell">Pendentes</th>
+                    <th colSpan={2} className="py-1 px-3 font-medium text-red-700 border-b text-center hidden md:table-cell">Rejeitados</th>
+                    <th colSpan={2} className="py-1 px-3 font-medium text-green-700 border-b text-center hidden lg:table-cell">Pago</th>
+                    <th colSpan={2} className="py-1 px-3 font-medium text-orange-700 border-b text-center hidden lg:table-cell">A Pagar</th>
+                  </tr>
+                  <tr className="text-right text-xs text-muted-foreground">
+                    <th className="py-1 px-3 border-b">Qtd</th>
+                    <th className="py-1 px-3 border-b">Δ</th>
+                    <th className="py-1 px-3 border-b">Valor</th>
+                    <th className="py-1 px-3 border-b">Δ</th>
+                    <th className="py-1 px-3 border-b">Qtd</th>
+                    <th className="py-1 px-3 border-b">Δ</th>
+                    <th className="py-1 px-3 border-b hidden md:table-cell">Qtd</th>
+                    <th className="py-1 px-3 border-b hidden md:table-cell">Δ</th>
+                    <th className="py-1 px-3 border-b hidden md:table-cell">Qtd</th>
+                    <th className="py-1 px-3 border-b hidden md:table-cell">Δ</th>
+                    <th className="py-1 px-3 border-b hidden lg:table-cell">R$</th>
+                    <th className="py-1 px-3 border-b hidden lg:table-cell">Δ</th>
+                    <th className="py-1 px-3 border-b hidden lg:table-cell">R$</th>
+                    <th className="py-1 px-3 border-b hidden lg:table-cell">Δ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparativoMensal.map((r: any) => {
+                    const isMesAtual = r.mIdx + 1 === new Date().getMonth() + 1 && ano === new Date().getFullYear();
+                    const renderDelta = (d: { abs: number; pct: number } | null, invertido = false, isMoney = false) => {
+                      if (!d) return <span className="text-muted-foreground">—</span>;
+                      if (Math.abs(d.abs) < 0.01) return <span className="text-muted-foreground inline-flex items-center gap-0.5"><Minus className="h-3 w-3" />0%</span>;
+                      const subiu = d.abs > 0;
+                      const ruim = invertido ? subiu : !subiu;
+                      const cor = ruim ? "text-red-600" : "text-green-600";
+                      return (
+                        <span className={`inline-flex items-center gap-0.5 font-semibold ${cor} tabular-nums text-xs`}>
+                          {subiu ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                          {d.pct >= 0 ? "+" : ""}{d.pct.toFixed(0)}%
+                          {isMoney && <span className="text-[10px] font-normal text-muted-foreground hidden xl:inline">({subiu ? "+" : "−"}{fmtBRLShort(Math.abs(d.abs))})</span>}
+                        </span>
+                      );
+                    };
+                    const vazio = r.lancamentos === 0;
+                    return (
+                      <tr
+                        key={r.mIdx}
+                        onClick={() => !vazio && drillByMesIdx(r.mIdx)}
+                        className={`border-b transition-colors ${vazio ? "opacity-50" : "cursor-pointer hover:bg-purple-50/40"} ${isMesAtual ? "bg-purple-50/40 font-semibold" : ""}`}
+                        title={vazio ? "Sem lançamentos neste mês" : `Ver lançamentos de ${r.label}`}
+                      >
+                        <td className="py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            {!vazio && <Eye className="h-3.5 w-3.5 text-purple-500 opacity-60" />}
+                            <span>{r.label}</span>
+                            {isMesAtual && <span className="text-[10px] uppercase text-purple-700">atual</span>}
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums">{r.lancamentos}</td>
+                        <td className="py-2 px-3 text-right">{renderDelta(r.deltas.lancamentos, false)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums">{fmtBRLShort(r.valor)}</td>
+                        <td className="py-2 px-3 text-right">{renderDelta(r.deltas.valor, false, true)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums">{r.aprovados}</td>
+                        <td className="py-2 px-3 text-right">{renderDelta(r.deltas.aprovados, false)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums hidden md:table-cell">{r.pendentes}</td>
+                        <td className="py-2 px-3 text-right hidden md:table-cell">{renderDelta(r.deltas.pendentes, true)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums hidden md:table-cell">{r.rejeitados}</td>
+                        <td className="py-2 px-3 text-right hidden md:table-cell">{renderDelta(r.deltas.rejeitados, true)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums hidden lg:table-cell">{fmtBRLShort(r.valorPago)}</td>
+                        <td className="py-2 px-3 text-right hidden lg:table-cell">{renderDelta(r.deltas.valorPago, false, true)}</td>
+                        <td className="py-2 px-3 text-right tabular-nums hidden lg:table-cell">{fmtBRLShort(r.valorAPagar)}</td>
+                        <td className="py-2 px-3 text-right hidden lg:table-cell">{renderDelta(r.deltas.valorAPagar, true, true)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-muted/30 font-semibold border-t-2">
+                    <td className="py-2 px-3">TOTAL {ano}</td>
+                    <td className="py-2 px-3 text-right tabular-nums">{comparativoMensal.reduce((a: number, r: any) => a + r.lancamentos, 0)}</td>
+                    <td></td>
+                    <td className="py-2 px-3 text-right tabular-nums text-purple-700">{fmtBRLShort(comparativoMensal.reduce((a: number, r: any) => a + r.valor, 0))}</td>
+                    <td></td>
+                    <td className="py-2 px-3 text-right tabular-nums text-emerald-700">{comparativoMensal.reduce((a: number, r: any) => a + r.aprovados, 0)}</td>
+                    <td></td>
+                    <td className="py-2 px-3 text-right tabular-nums hidden md:table-cell text-amber-700">{comparativoMensal.reduce((a: number, r: any) => a + r.pendentes, 0)}</td>
+                    <td className="hidden md:table-cell"></td>
+                    <td className="py-2 px-3 text-right tabular-nums hidden md:table-cell text-red-700">{comparativoMensal.reduce((a: number, r: any) => a + r.rejeitados, 0)}</td>
+                    <td className="hidden md:table-cell"></td>
+                    <td className="py-2 px-3 text-right tabular-nums hidden lg:table-cell text-green-700">{fmtBRLShort(comparativoMensal.reduce((a: number, r: any) => a + r.valorPago, 0))}</td>
+                    <td className="hidden lg:table-cell"></td>
+                    <td className="py-2 px-3 text-right tabular-nums hidden lg:table-cell text-orange-700">{fmtBRLShort(comparativoMensal.reduce((a: number, r: any) => a + r.valorAPagar, 0))}</td>
+                    <td className="hidden lg:table-cell"></td>
+                  </tr>
+                </tfoot>
+              </table>
+              <p className="text-[11px] text-muted-foreground mt-2 px-1">
+                <strong>Como ler:</strong> setas <span className="text-green-600 font-semibold">verdes</span> = movimento favorável (lançamentos/valor/aprovados/pago subindo, pendentes/rejeitados/a pagar caindo). Setas <span className="text-red-600 font-semibold">vermelhas</span> = atenção. Δ é o percentual vs o mês anterior.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Rankings + Tipo */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
