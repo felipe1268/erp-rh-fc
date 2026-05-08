@@ -1138,7 +1138,7 @@ export default function DashboardAtestadosAcidentes() {
                         {(d.diasSemAcidente ?? []).map((o: any) => (
                           <tr key={o.obraId} className="hover:bg-gray-50">
                             <td className="px-3 py-2 font-medium">{o.obraNome}</td>
-                            <td className="px-3 py-2 text-gray-600">{o.ultimaData || <span className="text-emerald-600">Nunca</span>}</td>
+                            <td className="px-3 py-2 text-gray-600">{o.ultimaData ? o.ultimaData.split("-").reverse().join("/") : <span className="text-emerald-600">Nunca</span>}</td>
                             <td className="px-3 py-2 text-right">
                               {o.dias === null
                                 ? <span className="font-bold text-emerald-600">— </span>

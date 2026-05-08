@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1404,
+    titulo: "Dashboard Atestados & Acidentes — coluna 'Último Acidente' agora em formato brasileiro (dd/MM/aaaa)",
+    descricao: "AJUSTE em /sst/dashboard-atestados-acidentes > tabela 'Dias sem Acidente — por Obra': a coluna 'Último Acidente' exibia a data crua do banco no formato YYYY-MM-DD (ex.: 2026-05-05). Agora exibe no padrão brasileiro dd/MM/aaaa (ex.: 05/05/2026), seguindo a regra de ouro de datas do sistema.",
+    tipo: "ajuste",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-07 22:35:00",
+  },
+  {
     version: 1403,
     titulo: "Dashboard Atestados & Acidentes — corrigida inconsistência entre 'Dias sem Acidente' e 'Ranking de Obras com Mais Acidentes'",
     descricao: "CORREÇÃO em /sst/dashboard-atestados-acidentes: a tabela 'Dias sem Acidente — por Obra' mostrava 'Nunca' para todas as obras enquanto o gráfico 'Ranking de Obras com Mais Acidentes' logo abaixo apresentava obras com acidentes (ex.: LUCIANA - FINAL BLOCO B, QIU 2 - FASE 4). Causa: a ordenação no backend era por dias decrescente (b.dias ?? 99999) - (a.dias ?? 99999), o que jogava as obras 'Nunca' (null) para o topo, e o slice(0, 15) cortava justamente as obras que tinham acidentes registrados. Fix em server/routers/sstAnalytics.ts: (1) ordenação invertida — obras COM acidente vêm primeiro (acidente mais recente no topo, sort asc por dias), depois as 'Nunca' em ordem alfabética; (2) removido o limite de 15 — agora lista TODAS as obras ativas; (3) defensivamente inclui obras presentes em acRows mesmo se ausentes da lista de obras ativas, garantindo paridade absoluta com o ranking. Resultado: obras com acidentes agora aparecem corretamente no topo da tabela com badges Atenção/Bom/Excelente conforme dias decorridos.",
