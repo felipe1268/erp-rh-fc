@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1422,
+    titulo: "Solicitações de Compra: corrigido KPI 'Pendente de Entrega' (SCs 100% entregues estavam contadas como pendentes) e link 404 da OC",
+    descricao: "BUGFIX: na tela de Solicitações de Compra, o KPI/filtro 'Pendente de Entrega' contava qualquer SC com OC vinculada cujo status fosse diferente de 'aprovado'. Isso fazia com que SCs cujas Ordens de Compra já tinham sido 100% entregues continuassem aparecendo como pendentes de entrega. CORREÇÃO: agora uma SC é considerada totalmente entregue quando (a) seu status é final (concluida/recebido/aprovado/recusado/cancelado) OU (b) todos os itens têm quantidadeAtendida ≥ quantidade. O KPI 'Concluído' também passa a refletir esse mesmo critério. CORRIGIDO ainda o link 'Abrir OC Completa' no drill-down da SC, que apontava para a rota inexistente /compras/ordens-compra (404) — agora aponta corretamente para /compras/ordens.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 18:45:00",
+  },
+  {
     version: 1421,
     titulo: "Aprovações de Parceiros: mesmo seletor visual de competência (Ano + meses coloridos)",
     descricao: "PADRONIZAÇÃO: a tela de Aprovações de Parceiros agora usa o mesmo seletor de competência da tela de Lançamentos: linha com 12 meses + setas para mudar de ano. Cada mês fica colorido conforme o status dos lançamentos daquela competência (verde = todos aprovados, âmbar = tem pendente, vermelho = tem rejeitado, cinza = sem dados), com badge roxo mostrando a quantidade. Tooltip rico com detalhamento por status. Substitui o antigo input <month> por um controle visual muito mais informativo.",

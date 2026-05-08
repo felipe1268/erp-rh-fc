@@ -2117,10 +2117,20 @@ export default function Solicitacoes() {
   }, []);
 
   const listaFiltradaObraBase = filtroObra === "todas" ? lista : lista.filter((r: any) => String(r.obraId) === filtroObra);
+  // Considera SC como "totalmente entregue" quando:
+  //  - já está num status final (concluida/recebido/aprovado/recusado/cancelado), OU
+  //  - todos os itens da SC têm quantidadeAtendida >= quantidade
+  //    (atendidos === total e total > 0)
+  const scEntregueTotal = (r: any) => {
+    const st = String(r.status || "");
+    if (["aprovado", "concluida", "recebido", "recusado", "cancelado"].includes(st)) return true;
+    const it = r._itens || { total: 0, atendidos: 0 };
+    return it.total > 0 && it.atendidos >= it.total;
+  };
   const listaFiltradaObraStatus = filtroStatus === "pendente_oc"
     ? listaFiltradaObraBase.filter((r: any) => !(r._hasOC) && !["aprovado", "recusado", "cancelado"].includes(r.status))
     : filtroStatus === "pendente_entrega"
-    ? listaFiltradaObraBase.filter((r: any) => r._hasOC === true && r.status !== "aprovado")
+    ? listaFiltradaObraBase.filter((r: any) => r._hasOC === true && !scEntregueTotal(r))
     : listaFiltradaObraBase;
   const listaFiltradaObra = filtroClassificacao === "todas"
     ? listaFiltradaObraStatus
@@ -2139,8 +2149,8 @@ export default function Solicitacoes() {
   const listaKpisBase = filtroObra === "todas" ? todasSCs : todasSCs.filter((r: any) => String(r.obraId) === filtroObra);
   const kpis = useMemo(() => ({
     pendenteOC:       listaKpisBase.filter((r: any) => !(r._hasOC) && !["aprovado", "recusado", "cancelado"].includes(r.status)).length,
-    pendenteEntrega:  listaKpisBase.filter((r: any) => r._hasOC === true && r.status !== "aprovado").length,
-    aprovado: listaKpisBase.filter((r: any) => r.status === "aprovado").length,
+    pendenteEntrega:  listaKpisBase.filter((r: any) => r._hasOC === true && !scEntregueTotal(r)).length,
+    aprovado: listaKpisBase.filter((r: any) => r.status === "aprovado" || scEntregueTotal(r)).length,
     recusado: listaKpisBase.filter((r: any) => r.status === "recusado").length,
   }), [listaKpisBase]);
 
@@ -5050,7 +5060,7 @@ export default function Solicitacoes() {
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className={`px-2 py-0.5 text-[10px] font-semibold rounded border ${stCfg.cls}`}>{stCfg.label}</span>
-                                  <Button size="sm" variant="outline" onClick={() => { setShowDetalhe(null); setAbaScDetalhe("detalhes"); navigate(`/compras/ordens-compra?destaque=${oc.id}`); }}
+                                  <Button size="sm" variant="outline" onClick={() => { setShowDetalhe(null); setAbaScDetalhe("detalhes"); navigate(`/compras/ordens?destaque=${oc.id}`); }}
                                     className="text-xs border-blue-200 text-blue-600 hover:bg-blue-50 gap-1">
                                     <ShoppingCart className="h-3 w-3" /> Abrir OC Completa
                                   </Button>
