@@ -8,7 +8,7 @@ import {
   CheckCircle2, Building2, ListTree, Activity, BarChart3, History,
   CalendarDays, User, CalendarCheck, FileText, GitBranch, HardHat,
   DollarSign, Cloud, Droplets, Wind, Loader2, ClipboardList, ChevronRight,
-  ChevronDown, Search, Menu, X, PanelLeftClose, PanelLeftOpen,
+  ChevronDown, Search, Menu, X, PanelLeftClose, PanelLeftOpen, Users, Handshake,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, LineChart, BarChart, Bar, Cell,
@@ -2329,13 +2329,160 @@ function AbaCaminhoCritico({ criticas }: { criticas: any[] }) {
   );
 }
 
-// ─────────────────────── ABA: EFETIVO (Equipe da obra) ──────────────────
+// ─────────────────────── ABA: EFETIVO (CLT + Terceiros) ──────────────────
 function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
   const { data: equipeRaw = [], isLoading } = trpc.portalExterno.cliente.efetivoObra.useQuery(
     { token, obraId },
     { enabled: !!token && obraId > 0 }
   );
-  return <EfetivoObraView equipeRaw={equipeRaw as any[]} isLoading={isLoading} />;
+  const [busca, setBusca] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState<"todos" | "CLT" | "Terceiro">("todos");
+
+  const equipe = useMemo(() => {
+    return (equipeRaw as any[]).filter(
+      (e) => e.effectiveStatus !== "Desligado" && e.effectiveStatus !== "Demitido"
+    );
+  }, [equipeRaw]);
+
+  const totCLT = useMemo(() => equipe.filter((e) => e.tipo !== "Terceiro").length, [equipe]);
+  const totTerc = useMemo(() => equipe.filter((e) => e.tipo === "Terceiro").length, [equipe]);
+  const totGeral = equipe.length;
+
+  const lista = useMemo(() => {
+    let l = equipe;
+    if (filtroTipo !== "todos") l = l.filter((e) => (filtroTipo === "Terceiro" ? e.tipo === "Terceiro" : e.tipo !== "Terceiro"));
+    if (busca) {
+      const q = busca.toLowerCase();
+      l = l.filter((e: any) =>
+        (e.nomeCompleto || "").toLowerCase().includes(q) ||
+        (e.funcao || "").toLowerCase().includes(q) ||
+        (e.empresaTerceira || e.setor || "").toLowerCase().includes(q)
+      );
+    }
+    return [...l].sort((a, b) => (a.nomeCompleto || "").localeCompare(b.nomeCompleto || ""));
+  }, [equipe, filtroTipo, busca]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-3 justify-center py-16 text-slate-500">
+        <Loader2 className="h-5 w-5 animate-spin" /> Carregando efetivo da obra...
+      </div>
+    );
+  }
+
+  const Kpi = ({ label, value, color, icon: Icon }: any) => (
+    <div className={`flex-1 bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3`}>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[11px] uppercase font-semibold text-slate-500 tracking-wide">{label}</p>
+          <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
+        </div>
+        <div className={`p-2 rounded-lg ${color.replace("text-", "bg-").replace("-700", "-100")}`}>
+          <Icon className={`h-5 w-5 ${color}`} />
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-blue-100">
+            <HardHat className="h-5 w-5 text-blue-700" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">Efetivo da Obra</h2>
+            <p className="text-xs text-muted-foreground">{totGeral} pessoa(s) — CLT e Terceiros alocados</p>
+          </div>
+        </div>
+        <input
+          type="text"
+          placeholder="Buscar nome, função ou empresa..."
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm w-full sm:w-72 bg-white shadow-sm"
+        />
+      </div>
+
+      {/* KPIs CLT / Terceiros / Geral */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Kpi label="Total CLT" value={totCLT} color="text-blue-700" icon={Users} />
+        <Kpi label="Total Terceiros" value={totTerc} color="text-amber-700" icon={Handshake} />
+        <Kpi label="Total Geral" value={totGeral} color="text-emerald-700" icon={HardHat} />
+      </div>
+
+      {/* Filtro CLT / Terceiro */}
+      <div className="flex items-center gap-2 flex-wrap bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-2.5">
+        {(["todos", "CLT", "Terceiro"] as const).map((k) => {
+          const active = filtroTipo === k;
+          const count = k === "todos" ? totGeral : k === "CLT" ? totCLT : totTerc;
+          return (
+            <button
+              key={k}
+              onClick={() => setFiltroTipo(k)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all border ${
+                active ? "bg-blue-50 text-blue-700 border-blue-300 shadow-sm" : "text-slate-500 hover:bg-slate-50 border-transparent"
+              }`}
+            >
+              <span className="font-bold">{count}</span>
+              <span>{k === "todos" ? "Todos" : k === "CLT" ? "Apenas CLT" : "Apenas Terceiros"}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {totGeral === 0 ? (
+        <div className="text-center py-12 rounded-xl border border-dashed border-blue-200 bg-blue-50">
+          <HardHat className="h-10 w-10 mx-auto mb-3 text-blue-300" />
+          <p className="text-sm font-medium text-blue-600">Nenhuma pessoa alocada nesta obra</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 480px)", minHeight: 200 }}>
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                <tr>
+                  <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Nome</th>
+                  <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Função</th>
+                  <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Empresa/Setor</th>
+                  <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Tipo</th>
+                  <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {lista.map((e: any, i: number) => {
+                  const isTerc = e.tipo === "Terceiro";
+                  return (
+                    <tr key={String(e.id) + i} className="hover:bg-blue-50/30">
+                      <td className="px-4 py-2 font-medium text-slate-800 text-[13px]">{e.nomeCompleto}</td>
+                      <td className="px-4 py-2 text-slate-600 text-[13px]">{e.funcao || e.cargo || "—"}</td>
+                      <td className="px-4 py-2 text-slate-500 text-[13px]">{isTerc ? (e.empresaTerceira || "—") : (e.setor || "—")}</td>
+                      <td className="px-4 py-2 text-center">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                          isTerc ? "bg-amber-100 text-amber-800 border border-amber-300" : "bg-blue-100 text-blue-800 border border-blue-300"
+                        }`}>
+                          {isTerc ? "Terceiro" : "CLT"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[e.effectiveStatus] || "bg-slate-100 text-slate-600"}`}>
+                          {STATUS_LABELS[e.effectiveStatus] || e.effectiveStatus}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {lista.length === 0 && (
+                  <tr><td colSpan={5} className="text-center py-10 text-slate-400 text-sm">Nenhum resultado</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─────────────────────── ABA: CUSTO MO (mensal) ─────────────────────────

@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb, getEquipeObra } from "../db";
-import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes } from "../../drizzle/schema";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1034,10 +1034,46 @@ export const portalExternoRouter = router({
       if (!obra) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não vinculada a este cliente" });
 
       const equipe = await getEquipeObra(input.obraId, decoded.companyId);
-      // Normaliza para o mesmo shape esperado pelo componente interno EfetivoObraView:
-      // o componente interno usa `effectiveStatus`, mas getEquipeObra retorna `status`
-      // já como o status efetivo (Ativo/Aviso/Ferias/...). Replicamos o campo.
-      return equipe.map((e: any) => ({ ...e, effectiveStatus: e.status }));
+      const cltList = equipe.map((e: any) => ({ ...e, effectiveStatus: e.status, tipo: "CLT" as const }));
+
+      // Adiciona terceiros alocados na obra (mesma company, ativos, não excluídos)
+      const tercRows = await db.select({
+        id: funcionariosTerceiros.id,
+        nomeCompleto: funcionariosTerceiros.nome,
+        funcao: funcionariosTerceiros.funcao,
+        cpf: funcionariosTerceiros.cpf,
+        dataAdmissao: funcionariosTerceiros.dataAdmissao,
+        empresaTerceiraId: funcionariosTerceiros.empresaTerceiraId,
+        status: funcionariosTerceiros.status,
+        statusAptidao: funcionariosTerceiros.statusAptidao,
+      }).from(funcionariosTerceiros).where(and(
+        eq(funcionariosTerceiros.obraId, input.obraId),
+        eq(funcionariosTerceiros.companyId, decoded.companyId),
+        sql`${funcionariosTerceiros.status} <> 'inativo'`,
+        isNull(funcionariosTerceiros.deletedAt),
+      ));
+      const empIds = Array.from(new Set(tercRows.map(t => t.empresaTerceiraId).filter(Boolean) as number[]));
+      let empMap = new Map<number, string>();
+      if (empIds.length > 0) {
+        const emps = await db.select({ id: empresasTerceiras.id, razaoSocial: empresasTerceiras.razaoSocial, nomeFantasia: empresasTerceiras.nomeFantasia })
+          .from(empresasTerceiras).where(inArray(empresasTerceiras.id, empIds));
+        emps.forEach((e: any) => empMap.set(e.id, e.nomeFantasia || e.razaoSocial || ""));
+      }
+      const terceiros = tercRows.map((t: any) => ({
+        id: `T${t.id}`,
+        nomeCompleto: t.nomeCompleto,
+        funcao: t.funcao,
+        cargo: t.funcao,
+        setor: empMap.get(t.empresaTerceiraId) || "Terceiro",
+        status: "Ativo",
+        effectiveStatus: "Ativo",
+        dataAdmissao: t.dataAdmissao,
+        cpf: t.cpf,
+        tipo: "Terceiro" as const,
+        empresaTerceira: empMap.get(t.empresaTerceiraId) || "",
+      }));
+
+      return [...cltList, ...terceiros];
     }),
 
     planejamentoObra: publicProcedure.input(z.object({
@@ -1489,6 +1525,201 @@ export const portalExternoRouter = router({
           motivo: r.motivo, consolidado: r.consolidado, criadoEm: r.criadoEm,
         })),
       };
+    }),
+
+    // ── Documentos RH dos funcionários alocados na obra (ASOs/Atestados/Treinamentos/Advertências) ──
+    documentosRhObra: publicProcedure.input(z.object({
+      token: z.string(),
+      obraId: z.number(),
+    })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+
+      // Valida que a obra pertence ao cliente (mesma regra)
+      const [c] = await db.select().from(clientes).where(eq(clientes.id, decoded.clienteId));
+      if (!c) throw new TRPCError({ code: "NOT_FOUND" });
+      const nomes = [c.razaoSocial, c.nomeFantasia].filter(Boolean) as string[];
+      if (nomes.length === 0) throw new TRPCError({ code: "FORBIDDEN" });
+      const orConds = nomes.map((n) => ilike(obras.cliente, n));
+      const [obra] = await db.select().from(obras).where(and(
+        eq(obras.id, input.obraId),
+        eq(obras.companyId, decoded.companyId),
+        isNull(obras.deletedAt),
+        or(...orConds)!,
+      ));
+      if (!obra) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não vinculada" });
+
+      // Funcionários CLT alocados nesta obra (somente ativos)
+      const equipe = await getEquipeObra(input.obraId, decoded.companyId);
+      const empIds = equipe.map((e: any) => e.id).filter(Boolean);
+      const today = new Date().toISOString().slice(0, 10);
+
+      let asoMap = new Map<number, any>();
+      let atestMap = new Map<number, any[]>();
+      let trainMap = new Map<number, any[]>();
+      let warnMap = new Map<number, any[]>();
+
+      if (empIds.length > 0) {
+        // ASO mais recente (vigente) por funcionário
+        const asoRows = await db.select({
+          employeeId: asos.employeeId, tipo: asos.tipo, dataExame: asos.dataExame,
+          dataValidade: asos.dataValidade, resultado: asos.resultado,
+        }).from(asos).where(and(
+          eq(asos.companyId, decoded.companyId),
+          inArray(asos.employeeId, empIds),
+          isNull(asos.deletedAt),
+        )).orderBy(desc(asos.dataExame));
+        for (const r of asoRows) if (!asoMap.has(r.employeeId)) asoMap.set(r.employeeId, r);
+
+        // Atestados últimos 12 meses
+        const atestRows = await db.select({
+          employeeId: atestados.employeeId, tipo: atestados.tipo,
+          dataEmissao: atestados.dataEmissao, diasAfastamento: atestados.diasAfastamento,
+          cid: atestados.cid,
+        }).from(atestados).where(and(
+          eq(atestados.companyId, decoded.companyId),
+          inArray(atestados.employeeId, empIds),
+          isNull(atestados.deletedAt),
+        )).orderBy(desc(atestados.dataEmissao));
+        for (const r of atestRows) {
+          const arr = atestMap.get(r.employeeId) || [];
+          arr.push(r); atestMap.set(r.employeeId, arr);
+        }
+
+        // Treinamentos vigentes
+        const trainRows = await db.select({
+          employeeId: trainings.employeeId, nome: trainings.nome, norma: trainings.norma,
+          dataRealizacao: trainings.dataRealizacao, dataValidade: trainings.dataValidade,
+          statusTreinamento: trainings.statusTreinamento,
+        }).from(trainings).where(and(
+          eq(trainings.companyId, decoded.companyId),
+          inArray(trainings.employeeId, empIds),
+          isNull(trainings.deletedAt),
+        )).orderBy(desc(trainings.dataRealizacao));
+        for (const r of trainRows) {
+          const arr = trainMap.get(r.employeeId) || [];
+          arr.push(r); trainMap.set(r.employeeId, arr);
+        }
+
+        // Advertências
+        const warnRows = await db.select({
+          employeeId: warnings.employeeId, tipoAdvertencia: warnings.tipoAdvertencia,
+          dataOcorrencia: warnings.dataOcorrencia, motivo: warnings.motivo,
+        }).from(warnings).where(and(
+          eq(warnings.companyId, decoded.companyId),
+          inArray(warnings.employeeId, empIds),
+          isNull(warnings.deletedAt),
+        )).orderBy(desc(warnings.dataOcorrencia));
+        for (const r of warnRows) {
+          const arr = warnMap.get(r.employeeId) || [];
+          arr.push(r); warnMap.set(r.employeeId, arr);
+        }
+      }
+
+      const funcionarios = equipe.map((e: any) => {
+        const aso = asoMap.get(e.id);
+        const atest = atestMap.get(e.id) || [];
+        const trains = trainMap.get(e.id) || [];
+        const warns = warnMap.get(e.id) || [];
+        const asoStatus = aso ? (aso.dataValidade && aso.dataValidade < today ? "vencido" : "vigente") : "sem_aso";
+        const trainsVigentes = trains.filter((t: any) => !t.dataValidade || t.dataValidade >= today);
+        return {
+          id: e.id,
+          nome: e.nomeCompleto,
+          funcao: e.funcao || e.cargo,
+          status: e.status,
+          aso: aso ? { tipo: aso.tipo, dataExame: aso.dataExame, dataValidade: aso.dataValidade, resultado: aso.resultado, status: asoStatus } : null,
+          asoStatus,
+          atestadosUltimos12m: atest.length,
+          atestados: atest.slice(0, 5),
+          treinamentosVigentes: trainsVigentes.length,
+          treinamentos: trains.slice(0, 10),
+          advertencias: warns.length,
+          advertenciasLista: warns.slice(0, 5),
+        };
+      });
+
+      const totais = {
+        funcionarios: funcionarios.length,
+        asoVigente: funcionarios.filter(f => f.asoStatus === "vigente").length,
+        asoVencido: funcionarios.filter(f => f.asoStatus === "vencido").length,
+        semAso: funcionarios.filter(f => f.asoStatus === "sem_aso").length,
+        comAdvertencia: funcionarios.filter(f => f.advertencias > 0).length,
+        comAtestado: funcionarios.filter(f => f.atestadosUltimos12m > 0).length,
+      };
+      return { funcionarios, totais };
+    }),
+
+    // ── Projetos / Documentos Técnicos da obra (gd_documentos) ──
+    projDocObra: publicProcedure.input(z.object({
+      token: z.string(),
+      obraId: z.number(),
+    })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+
+      const [c] = await db.select().from(clientes).where(eq(clientes.id, decoded.clienteId));
+      if (!c) throw new TRPCError({ code: "NOT_FOUND" });
+      const nomes = [c.razaoSocial, c.nomeFantasia].filter(Boolean) as string[];
+      if (nomes.length === 0) throw new TRPCError({ code: "FORBIDDEN" });
+      const orConds = nomes.map((n) => ilike(obras.cliente, n));
+      const [obra] = await db.select().from(obras).where(and(
+        eq(obras.id, input.obraId),
+        eq(obras.companyId, decoded.companyId),
+        isNull(obras.deletedAt),
+        or(...orConds)!,
+      ));
+      if (!obra) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não vinculada" });
+
+      const docs = await db.select({
+        id: gdDocumentos.id,
+        codigo: gdDocumentos.codigo,
+        titulo: gdDocumentos.titulo,
+        descricao: gdDocumentos.descricao,
+        status: gdDocumentos.status,
+        revisaoAtual: gdDocumentos.revisaoAtual,
+        emitente: gdDocumentos.emitente,
+        dataEmissao: gdDocumentos.dataEmissao,
+        dataValidade: gdDocumentos.dataValidade,
+        arquivoUrl: gdDocumentos.arquivoUrl,
+        arquivoNome: gdDocumentos.arquivoNome,
+        tipoDocumentoId: gdDocumentos.tipoDocumentoId,
+        criadoEm: gdDocumentos.criadoEm,
+        atualizadoEm: gdDocumentos.atualizadoEm,
+      }).from(gdDocumentos).where(and(
+        eq(gdDocumentos.companyId, decoded.companyId),
+        eq(gdDocumentos.obraId, input.obraId),
+        isNull(gdDocumentos.deletedAt),
+      )).orderBy(desc(gdDocumentos.atualizadoEm));
+
+      // Tipos para legenda (sigla)
+      const tiposIds = Array.from(new Set(docs.map(d => d.tipoDocumentoId).filter(Boolean) as number[]));
+      let tiposMap = new Map<number, { nome: string; sigla: string }>();
+      if (tiposIds.length > 0) {
+        const tipos = await db.select({ id: gdTiposDocumento.id, nome: gdTiposDocumento.nome, sigla: gdTiposDocumento.sigla })
+          .from(gdTiposDocumento).where(inArray(gdTiposDocumento.id, tiposIds));
+        tipos.forEach(t => tiposMap.set(t.id, { nome: t.nome, sigla: t.sigla }));
+      }
+      const documentos = docs.map(d => ({
+        ...d,
+        tipoNome: d.tipoDocumentoId ? (tiposMap.get(d.tipoDocumentoId)?.nome || "—") : "—",
+        tipoSigla: d.tipoDocumentoId ? (tiposMap.get(d.tipoDocumentoId)?.sigla || "") : "",
+      }));
+
+      const totais = {
+        total: documentos.length,
+        aprovados: documentos.filter(d => d.status === "aprovado").length,
+        emRevisao: documentos.filter(d => d.status === "em_revisao").length,
+        emElaboracao: documentos.filter(d => d.status === "em_elaboracao").length,
+        reprovados: documentos.filter(d => d.status === "reprovado").length,
+      };
+      return { documentos, totais };
     }),
   }),
 

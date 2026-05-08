@@ -22,7 +22,7 @@ export default function PortalLoginCliente() {
       if (data.primeiroAcesso) {
         navigate("/portal/trocar-senha");
       } else {
-        navigate("/portal/cliente/dashboard");
+        navigate("/portal/cliente/hub");
       }
     },
     onError: (e) => toast.error(e.message),

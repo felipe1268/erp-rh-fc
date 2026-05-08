@@ -312,6 +312,10 @@ const PortalLoginCliente = lazy(() => import("./pages/portal/PortalLoginCliente"
 const PortalEsqueciSenha = lazy(() => import("./pages/portal/PortalEsqueciSenha"));
 const PortalRedefinirSenha = lazy(() => import("./pages/portal/PortalRedefinirSenha"));
 const PortalDashboardCliente = lazy(() => import("./pages/portal/PortalDashboardCliente"));
+const PortalHubCliente = lazy(() => import("./pages/portal/PortalHubCliente"));
+const PortalSelecionarObraCliente = lazy(() => import("./pages/portal/PortalSelecionarObraCliente"));
+const PortalRhDocumentosCliente = lazy(() => import("./pages/portal/PortalRhDocumentosCliente"));
+const PortalProjDocCliente = lazy(() => import("./pages/portal/PortalProjDocCliente"));
 const PortalPlanejamentoCliente = lazy(() => import("./pages/portal/PortalPlanejamentoCliente"));
 const ClientesPortalAdmin = lazy(() => import("./pages/ClientesPortalAdmin"));
 const VerificarAptidao = lazy(() => import("./pages/VerificarAptidao"));
@@ -552,7 +556,11 @@ function Router() {
         <Route path="/portal/trocar-senha" component={PortalTrocarSenha} />
         <Route path="/portal/dashboard" component={PortalDashboard} />
         <Route path="/portal/cliente/dashboard" component={PortalDashboardCliente} />
+        <Route path="/portal/cliente/hub" component={PortalHubCliente} />
+        <Route path="/portal/cliente/modulo/:moduloId" component={PortalSelecionarObraCliente} />
         <Route path="/portal/cliente/obra/:obraId" component={PortalPlanejamentoCliente} />
+        <Route path="/portal/cliente/rh/:obraId" component={PortalRhDocumentosCliente} />
+        <Route path="/portal/cliente/projdoc/:obraId" component={PortalProjDocCliente} />
         <Route path="/clientes/portal" component={ClientesPortalAdmin} />
         <Route path="/pesquisa-publica/clima/:token" component={ClimaPublicoPage} />
         {/* Verificação Pública de Aptidão (QR Code) */}
