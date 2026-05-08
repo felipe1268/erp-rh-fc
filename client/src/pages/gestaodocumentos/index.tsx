@@ -2487,56 +2487,152 @@ export default function GestaoDocumentos() {
       </Dialog>
       {/* Modal — Novo Ficheiro (selecionar obra) */}
       <Dialog open={showNewFicheiroModal} onOpenChange={setShowNewFicheiroModal}>
-        <DialogContent className="max-w-lg bg-white border-gray-200 text-gray-900 max-h-[80vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FolderOpen className="w-5 h-5 text-blue-600" />
-              Novo Ficheiro
-            </DialogTitle>
-            <DialogDescription>Selecione uma obra para criar o ficheiro de documentos</DialogDescription>
-          </DialogHeader>
-          <div className="relative mb-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Buscar obra..."
-              value={ficheiroSearchTerm}
-              onChange={(e) => setFicheiroSearchTerm(e.target.value)}
-              className="pl-9 bg-white border-gray-300 text-gray-900"
-            />
+        <DialogContent className="max-w-3xl bg-white border-gray-200 text-gray-900 max-h-[88vh] overflow-hidden flex flex-col p-0">
+          {/* Cabeçalho rico com gradiente */}
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 text-white">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center">
+                  <FolderOpen className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold leading-tight">Criar Novo Ficheiro</h2>
+                  <p className="text-sm text-blue-100 mt-0.5">Selecione a obra que terá seu ficheiro de documentos técnicos</p>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="flex-1 overflow-y-auto space-y-1 pr-1">
-            {(() => {
-              const obrasComFicheiro = new Set((ficheiros.data || []).map((f: any) => f.obraId));
-              const obrasSemFicheiro = (obrasDisponiveis.data || []).filter((o: any) => !obrasComFicheiro.has(o.id));
-              const filtradas = obrasSemFicheiro.filter((o: any) =>
-                !ficheiroSearchTerm || o.nome?.toLowerCase().includes(ficheiroSearchTerm.toLowerCase()) || o.codigo?.toLowerCase().includes(ficheiroSearchTerm.toLowerCase())
-              );
-              if (filtradas.length === 0) {
-                return (
-                  <div className="text-center py-8 text-gray-500 text-sm">
-                    {obrasSemFicheiro.length === 0 ? "Todas as obras já possuem ficheiro." : "Nenhuma obra encontrada."}
+
+          {(() => {
+            const obrasComFicheiro = new Set((ficheiros.data || []).map((f: any) => f.obraId));
+            const todasObras = (obrasDisponiveis.data || []) as any[];
+            const obrasSemFicheiro = todasObras.filter((o: any) => !obrasComFicheiro.has(o.id));
+            const filtradas = obrasSemFicheiro.filter((o: any) => {
+              const t = ficheiroSearchTerm.toLowerCase();
+              return !t || o.nome?.toLowerCase().includes(t) || o.codigo?.toLowerCase().includes(t) || o.cliente?.toLowerCase().includes(t);
+            });
+            const statusCor = (s?: string) => {
+              const v = (s || "").toLowerCase();
+              if (v.includes("andamento") || v.includes("execu")) return "bg-emerald-100 text-emerald-700 border-emerald-200";
+              if (v.includes("planej")) return "bg-amber-100 text-amber-700 border-amber-200";
+              return "bg-slate-100 text-slate-700 border-slate-200";
+            };
+
+            return (
+              <>
+                {/* Stats + busca */}
+                <div className="px-6 pt-4 pb-3 border-b border-gray-100">
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wide text-blue-700 font-semibold">Disponíveis</div>
+                      <div className="text-lg font-bold text-blue-700">{obrasSemFicheiro.length}</div>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wide text-emerald-700 font-semibold">Já com ficheiro</div>
+                      <div className="text-lg font-bold text-emerald-700">{obrasComFicheiro.size}</div>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                      <div className="text-[10px] uppercase tracking-wide text-slate-600 font-semibold">Total ativas</div>
+                      <div className="text-lg font-bold text-slate-700">{todasObras.length}</div>
+                    </div>
                   </div>
-                );
-              }
-              return filtradas.map((obra: any) => (
-                <button
-                  key={obra.id}
-                  onClick={() => {
-                    setShowNewFicheiroModal(false);
-                    handleOpenObra(obra);
-                  }}
-                  className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-blue-400 hover:bg-blue-50/30 transition-all flex items-center gap-3"
-                >
-                  <FolderOpen className="w-6 h-6 text-gray-400 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{obra.nome}</p>
-                    <p className="text-[11px] text-gray-500">{obra.codigo || "—"}</p>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      autoFocus
+                      placeholder="Buscar por nome, código da obra ou cliente..."
+                      value={ficheiroSearchTerm}
+                      onChange={(e) => setFicheiroSearchTerm(e.target.value)}
+                      className="pl-9 pr-9 h-11 bg-white border-gray-300 text-gray-900"
+                    />
+                    {ficheiroSearchTerm && (
+                      <button
+                        type="button"
+                        onClick={() => setFicheiroSearchTerm("")}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-xs"
+                      >
+                        Limpar
+                      </button>
+                    )}
                   </div>
-                  <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
-                </button>
-              ));
-            })()}
-          </div>
+                  {filtradas.length > 0 && ficheiroSearchTerm && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      <span className="font-medium text-gray-700">{filtradas.length}</span> resultado(s) para "<span className="text-blue-600">{ficheiroSearchTerm}</span>"
+                    </p>
+                  )}
+                </div>
+
+                {/* Lista em grid de cards */}
+                <div className="flex-1 overflow-y-auto px-6 py-4 bg-gray-50/50">
+                  {filtradas.length === 0 ? (
+                    <div className="text-center py-16 px-4">
+                      <div className="inline-flex w-16 h-16 rounded-full bg-gray-100 items-center justify-center mb-3">
+                        {obrasSemFicheiro.length === 0 ? <CheckCircle className="w-8 h-8 text-emerald-500" /> : <Search className="w-8 h-8 text-gray-400" />}
+                      </div>
+                      <p className="text-sm font-medium text-gray-700">
+                        {obrasSemFicheiro.length === 0 ? "Tudo certo por aqui!" : "Nenhuma obra encontrada"}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+                        {obrasSemFicheiro.length === 0
+                          ? "Todas as obras ativas já possuem um ficheiro de documentos criado."
+                          : `Nenhuma obra disponível corresponde a "${ficheiroSearchTerm}". Tente outro termo ou verifique se a obra está ativa.`}
+                      </p>
+                      {ficheiroSearchTerm && (
+                        <Button variant="outline" size="sm" className="mt-4" onClick={() => setFicheiroSearchTerm("")}>
+                          Limpar busca
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid sm:grid-cols-2 gap-2.5">
+                      {filtradas.map((obra: any) => (
+                        <button
+                          key={obra.id}
+                          onClick={() => {
+                            setShowNewFicheiroModal(false);
+                            setFicheiroSearchTerm("");
+                            handleOpenObra(obra);
+                          }}
+                          className="group text-left p-3.5 rounded-xl bg-white border border-gray-200 hover:border-blue-500 hover:shadow-md transition-all flex gap-3"
+                        >
+                          <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                            <FolderOpen className="w-5 h-5 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-semibold text-gray-900 leading-tight line-clamp-2 group-hover:text-blue-700">{obra.nome}</p>
+                              <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all shrink-0 mt-0.5" />
+                            </div>
+                            {obra.codigo && (
+                              <p className="text-[10px] font-mono text-gray-500 mt-0.5">{obra.codigo}</p>
+                            )}
+                            {obra.cliente && (
+                              <p className="text-xs text-gray-600 mt-1 truncate">
+                                <span className="text-gray-400">Cliente: </span>{obra.cliente}
+                              </p>
+                            )}
+                            {obra.status && (
+                              <span className={`inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded border mt-1.5 ${statusCor(obra.status)}`}>
+                                {obra.status}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Rodapé */}
+                <div className="px-6 py-3 border-t border-gray-100 bg-white flex items-center justify-between text-xs">
+                  <span className="text-gray-500">Clique em uma obra para criar o ficheiro</span>
+                  <Button variant="outline" size="sm" onClick={() => { setShowNewFicheiroModal(false); setFicheiroSearchTerm(""); }}>
+                    Cancelar
+                  </Button>
+                </div>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
