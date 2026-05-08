@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1408,
+    titulo: "Dashboard Horas Extras: ranking por obra usa a obra vigente no mês da HE (não a obra atual)",
+    descricao: "BUGFIX no Dashboard de Horas Extras (/dashboards → Horas Extras). O ranking 'Custo de Horas Extras por Obra' e a coluna Obra do Detalhamento atribuíam toda a HE histórica à obra ATUAL do funcionário (vínculo isActive=1 em obra_funcionarios), o que distorcia os totais quando alguém mudava de obra. Exemplo real reportado: REVTE-CIVIL aparecia com 32,42h e R$ 569,47 em Mar/2026, mas as 7 pessoas só foram alocadas à REVTE-CIVIL em 06/05/2026 — em Mar/2026 elas estavam em LUCIANA, QIU 2 e HOTEL DO PAPA. Correção: o backend agora carrega TODAS as alocações de obra_funcionarios (ativas e encerradas) e, para cada linha de HE, resolve a obra vigente no mesReferencia da própria HE (alocação cujo intervalo [dataInicio, dataFim] intersecta o mês; em empate, a alocação com dataInicio mais recente / ativa). O filtro por obra do dashboard segue o mesmo critério, mantendo coerência com KPIs, ranking e detalhamento. Ranking por funcionário e por setor não mudam.",
+    tipo: "bugfix",
+    modulos: "Dashboards",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 09:30:00",
+  },
+  {
     version: 1407,
     titulo: "Dashboard Horas Extras: passa a ler do módulo HE da Folha (he_periods/he_period_employees)",
     descricao: "BUGFIX no Dashboard de Horas Extras (/dashboards → Horas Extras): a tela mostrava todos os indicadores zerados mesmo quando a Folha de Pagamento exibia HE calculadas/aprovadas/pagas (ex.: 93 funcionários, R$ 9.802,74 em Mar/2026). Causa raiz: o procedure dashboards.horasExtras lia da tabela legada extra_payments (filtrando tipoExtra='Horas_Extras'), mas o módulo Hora Extra atual da Folha grava em he_periods + he_period_employees e nunca alimenta extra_payments — daí o dashboard sempre voltava zerado. Correção: getDashHorasExtras refatorado para consumir he_periods/he_period_employees. Para cada mesReferencia escolhe UM período (prioridade pago > aprovado > calculado > rascunho, desempate pelo id mais alto), ignorando 'cancelado'. Os KPIs (Total de Horas, Custo Total HE, Pessoas com HE, Média por Pessoa, % HE sobre Folha Bruta), os rankings (Pessoa, Setor, Obra), a evolução mensal, o split de percentual (50%/100%) via heUtilMins/heFimMins e a tabela detalhada agora refletem fielmente o que está na Folha. Compatibilidade: o shape de retorno é idêntico — frontend não precisou mudar.",

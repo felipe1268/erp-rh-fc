@@ -679,12 +679,64 @@ async function getDashHorasExtras(companyId: number, year?: number, filters?: {
       id: employees.id, nomeCompleto: employees.nomeCompleto, cargo: employees.cargo,
       setor: employees.setor, valorHora: employees.valorHora, funcao: employees.funcao, status: employees.status,
     }).from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`)),
-    db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
-      .from(obraFuncionarios).where(and(companyWhere(obraFuncionarios, companyId, companyIds), eq(obraFuncionarios.isActive, 1))),
+    // IMPORTANTE: carregamos TODAS as alocações (ativas e encerradas) para
+    // resolver a obra vigente em cada mesReferencia da HE — usar só
+    // isActive=1 atribui HE histórica à obra ATUAL do funcionário, o que
+    // distorce o ranking por obra (ex.: HE de Mar/2026 indo para uma obra
+    // onde a pessoa só foi alocada em Mai/2026).
+    db.select({
+      employeeId: obraFuncionarios.employeeId,
+      obraId: obraFuncionarios.obraId,
+      dataInicio: obraFuncionarios.dataInicio,
+      dataFim: obraFuncionarios.dataFim,
+      isActive: obraFuncionarios.isActive,
+    }).from(obraFuncionarios).where(companyWhere(obraFuncionarios, companyId, companyIds)),
     db.select({ id: obras.id, nome: obras.nome }).from(obras).where(and(companyWhere(obras, companyId, companyIds), sql`${obras.deletedAt} IS NULL`)),
     db.select().from(payroll).where(and(companyWhere(payroll, companyId, companyIds), gte(payroll.mesReferencia, startDate), lte(payroll.mesReferencia, endDate))),
   ]);
-  const empObraIdMap = new Map(empObraAlocs.map(a => [a.employeeId, a.obraId]));
+
+  // Vínculo "atual" (apenas para filtro de colaboradores na sidebar — não usado
+  // mais para atribuir HE a obra histórica).
+  const empObraIdMap = new Map<number, number>();
+  for (const a of empObraAlocs) {
+    if (a.isActive === 1 && !empObraIdMap.has(a.employeeId)) empObraIdMap.set(a.employeeId, a.obraId);
+  }
+
+  // Index por funcionário para lookup rápido por mês
+  const empAlocsByEmp = new Map<number, typeof empObraAlocs>();
+  for (const a of empObraAlocs) {
+    if (!empAlocsByEmp.has(a.employeeId)) empAlocsByEmp.set(a.employeeId, [] as any);
+    empAlocsByEmp.get(a.employeeId)!.push(a);
+  }
+
+  // Resolve a obra vigente do funcionário durante um mesReferencia ('YYYY-MM').
+  // Critério: alocação cujo intervalo [dataInicio, dataFim] intersecta com
+  // o mês inteiro. Se houver mais de uma, prefere a com dataInicio mais recente
+  // dentro do mês; em empate, a alocação ativa.
+  const resolveObraIdNoMes = (employeeId: number, mesRef: string): number | null => {
+    const list = empAlocsByEmp.get(employeeId);
+    if (!list || !list.length || !mesRef || mesRef.length < 7) return null;
+    const ano = mesRef.slice(0, 4), mes = mesRef.slice(5, 7);
+    const firstDay = `${ano}-${mes}-01`;
+    // último dia do mês
+    const lastDayDate = new Date(Number(ano), Number(mes), 0); // dia 0 do mês seguinte = último do atual
+    const lastDay = `${ano}-${mes}-${String(lastDayDate.getDate()).padStart(2, "0")}`;
+    let best: { obraId: number; dataInicio: string | null; isActive: number } | null = null;
+    for (const a of list) {
+      const ini = a.dataInicio;
+      const fim = a.dataFim;
+      const startsBeforeOrInMonth = !ini || ini <= lastDay;
+      const endsAfterOrInMonth    = !fim || fim >= firstDay;
+      if (!startsBeforeOrInMonth || !endsAfterOrInMonth) continue;
+      if (!best) { best = { obraId: a.obraId, dataInicio: ini, isActive: a.isActive }; continue; }
+      const cmp = (a.dataInicio || "") .localeCompare(best.dataInicio || "");
+      if (cmp > 0 || (cmp === 0 && a.isActive > best.isActive)) {
+        best = { obraId: a.obraId, dataInicio: ini, isActive: a.isActive };
+      }
+    }
+    return best?.obraId ?? null;
+  };
+
   const empMap = new Map(allEmps.map(e => [e.id, { ...e, obraAtualId: empObraIdMap.get(e.id) || null }]));
   const obraMap = new Map(allObras.map(o => [o.id, o.nome]));
 
@@ -709,10 +761,13 @@ async function getDashHorasExtras(companyId: number, year?: number, filters?: {
     allRows = await db.select().from(hePeriodEmployees).where(and(...empConds));
   }
 
-  // Filtro por obra (via vínculo ativo atual em obra_funcionarios)
+  // Filtro por obra: usa a obra vigente no mesReferencia da própria HE,
+  // não o vínculo atual — assim mantém coerência com os rankings/detalhes.
   if (filters?.obraId) {
-    const empIdsNaObra = new Set(allEmps.filter(e => empObraIdMap.get(e.id) === filters.obraId).map(e => e.id));
-    allRows = allRows.filter(r => empIdsNaObra.has(r.employeeId));
+    allRows = allRows.filter(r => {
+      const mesRef = periodIdToMes.get(r.hePeriodId) ?? "";
+      return resolveObraIdNoMes(r.employeeId, mesRef) === filters.obraId;
+    });
   }
 
   // Helpers
@@ -766,11 +821,12 @@ async function getDashHorasExtras(companyId: number, year?: number, filters?: {
     .map(([setor, data]) => ({ setor, horas: Math.round(data.horas * 100) / 100, valor: Math.round(data.valor * 100) / 100, pessoas: data.pessoas.size }))
     .sort((a, b) => b.valor - a.valor);
 
-  // Por obra (via obraAtualId do funcionário)
+  // Por obra: a HE é atribuída à obra vigente no mesReferencia do período,
+  // não à obra atual do funcionário.
   const porObra: Record<string, { horas: number; valor: number; pessoas: Set<number> }> = {};
   for (const r of allRows) {
-    const emp = empMap.get(r.employeeId);
-    const obraId = emp?.obraAtualId;
+    const mesRef = periodIdToMes.get(r.hePeriodId) ?? "";
+    const obraId = resolveObraIdNoMes(r.employeeId, mesRef);
     const obraNome = obraId ? (obraMap.get(obraId) || `Obra #${obraId}`) : "Sem Obra";
     if (!porObra[obraNome]) porObra[obraNome] = { horas: 0, valor: 0, pessoas: new Set() };
     porObra[obraNome].horas += minsToHours(Number(r.heTotalMins || 0));
@@ -829,7 +885,8 @@ async function getDashHorasExtras(companyId: number, year?: number, filters?: {
     .filter(r => Number(r.heTotalMins || 0) > 0 || parseFloat(r.valorHETotal || "0") > 0)
     .map(r => {
       const emp = empMap.get(r.employeeId);
-      const obraId = emp?.obraAtualId;
+      const mesRefRow = periodIdToMes.get(r.hePeriodId) ?? "";
+      const obraId = resolveObraIdNoMes(r.employeeId, mesRefRow);
       const horas50  = minsToHours(Number(r.heUtilMins || 0));
       const horas100 = minsToHours(Number(r.heFimMins  || 0));
       // Frontend já concatena '%' ao renderizar — então mandamos só o número
