@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1417,
+    titulo: "Lançamentos Parceiros: campo de busca por nome (colaborador, parceiro ou item)",
+    descricao: "MELHORIA: na tela de Lançamentos do módulo Parceiros, adicionado campo de BUSCA na barra de filtros. A busca filtra em tempo real pelo nome do colaborador, nome do parceiro/conveniado e descrição dos itens. Tem ícone de lupa, placeholder explicativo e botão ✕ para limpar rapidamente.",
+    tipo: "melhoria",
+    modulos: "Parceiros",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 17:30:00",
+  },
+  {
     version: 1416,
     titulo: "Dashboard Parceiros: clique na linha abre detalhe da compra (itens + comprovante embedded)",
     descricao: "MELHORIA: na tabela de drill-down do Dashboard Parceiros, a coluna 'Itens' agora é clicável (ícone de olho + texto) e abre um modal com o detalhe completo da compra: parceiro, data, colaborador, valor, tipo de convênio, status (com motivo de rejeição quando houver), competência de desconto, descrição completa dos itens (sem truncar) e o COMPROVANTE EMBEDADO no próprio modal — imagem renderizada inline ou PDF em iframe, conforme o tipo do arquivo. Inclui link 'Abrir em nova aba' como fallback. Permite revisar visualmente a compra do colaborador sem precisar abrir uma aba separada.",

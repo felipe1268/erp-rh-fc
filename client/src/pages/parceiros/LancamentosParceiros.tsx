@@ -67,6 +67,7 @@ export default function LancamentosParceiros() {
   const [dataFim, setDataFim] = useState(padrao.fim);
   const [filterParceiro, setFilterParceiro] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [busca, setBusca] = useState<string>("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<any>({});
 
@@ -98,8 +99,17 @@ export default function LancamentosParceiros() {
   const filtered = useMemo(() => {
     let list = lancamentos;
     if (filterStatus !== "all") list = list.filter((l: any) => l.status === filterStatus);
+    const q = busca.trim().toLowerCase();
+    if (q) {
+      list = list.filter((l: any) => {
+        const nomeColab = (getColaboradorNome(l.employeeId) || "").toLowerCase();
+        const nomeParc = (getParceiroNome(l.parceiroConveniadoId) || "").toLowerCase();
+        const desc = (l.descricaoItens || "").toLowerCase();
+        return nomeColab.includes(q) || nomeParc.includes(q) || desc.includes(q);
+      });
+    }
     return list;
-  }, [lancamentos, filterStatus]);
+  }, [lancamentos, filterStatus, busca, colaboradores, parceiros]);
 
   const totalAprovado = useMemo(() => {
     return lancamentos.filter((l: any) => l.status === "aprovado").reduce((acc: number, l: any) => acc + parseFloat(l.valor || "0"), 0);
@@ -213,6 +223,28 @@ export default function LancamentosParceiros() {
               <SelectItem value="rejeitado">Rejeitados</SelectItem>
             </SelectContent>
           </Select>
+          <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
+            <Label className="text-xs">Buscar</Label>
+            <div className="relative">
+              <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <Input
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Nome do colaborador, parceiro ou item..."
+                className="pl-8"
+              />
+              {busca && (
+                <button
+                  type="button"
+                  onClick={() => setBusca("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs"
+                  title="Limpar busca"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Summary */}
