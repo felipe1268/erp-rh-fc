@@ -9,6 +9,7 @@ import {
   monthlyPayrollSummary, obraHorasRateio, obras, folhaLancamentos, folhaItens,
   epiDiscountAlerts, terminationNotices, vacationPeriods, goldenRules,
   asos, trainings, employeeDocuments, obraFuncionarios,
+  hePeriods, hePeriodEmployees,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count, asc, isNull, inArray } from "drizzle-orm";
 import { parseBRL } from "../utils/parseBRL";
@@ -652,20 +653,28 @@ async function getDashHorasExtras(companyId: number, year?: number, filters?: {
     endDate = startDate;
   }
 
-  const conditions = [
-    companyWhere(extraPayments, companyId, companyIds),
-    eq(extraPayments.tipoExtra, "Horas_Extras"),
-    gte(extraPayments.mesReferencia, startDate),
-    lte(extraPayments.mesReferencia, endDate),
+  // ────────────────────────────────────────────────────────────────────────────
+  // Fonte de dados: módulo Horas Extras (he_periods + he_period_employees).
+  // Esses dados são populados pelo cálculo de HE rodado a partir da Folha.
+  // A tabela legada extra_payments NÃO é usada aqui porque o módulo HE atual
+  // não persiste nela — ler de lá deixava o dashboard sempre zerado.
+  // Para cada mesReferencia escolhemos UM período (status priority:
+  // pago > aprovado > calculado > rascunho/outros) ignorando 'cancelado'.
+  // ────────────────────────────────────────────────────────────────────────────
+  const STATUS_PRIORITY: Record<string, number> = {
+    pago: 4, aprovado: 3, calculado: 2, rascunho: 1,
+  };
+  const pickPriority = (s: string | null | undefined) => STATUS_PRIORITY[s ?? ""] ?? 0;
+
+  const periodConditions = [
+    companyWhere(hePeriods, companyId, companyIds),
+    gte(hePeriods.mesReferencia, startDate),
+    lte(hePeriods.mesReferencia, endDate),
+    sql`${hePeriods.status} <> 'cancelado'`,
   ];
 
-  // Filtro por colaborador
-  if (filters?.employeeId) {
-    conditions.push(eq(extraPayments.employeeId, filters.employeeId));
-  }
-
-  const [allHE, allEmps, empObraAlocs, allObras, allPayroll] = await Promise.all([
-    db.select().from(extraPayments).where(and(...conditions)),
+  const [allPeriodsRaw, allEmps, empObraAlocs, allObras, allPayroll] = await Promise.all([
+    db.select().from(hePeriods).where(and(...periodConditions)),
     db.select({
       id: employees.id, nomeCompleto: employees.nomeCompleto, cargo: employees.cargo,
       setor: employees.setor, valorHora: employees.valorHora, funcao: employees.funcao, status: employees.status,
@@ -679,138 +688,178 @@ async function getDashHorasExtras(companyId: number, year?: number, filters?: {
   const empMap = new Map(allEmps.map(e => [e.id, { ...e, obraAtualId: empObraIdMap.get(e.id) || null }]));
   const obraMap = new Map(allObras.map(o => [o.id, o.nome]));
 
+  // Escolhe 1 período por (companyId, mesReferencia) — prioridade de status, desempate pelo id mais alto.
+  const chosenByKey = new Map<string, typeof allPeriodsRaw[number]>();
+  for (const p of allPeriodsRaw) {
+    const key = `${p.companyId}::${p.mesReferencia}`;
+    const cur = chosenByKey.get(key);
+    if (!cur) { chosenByKey.set(key, p); continue; }
+    const a = pickPriority(p.status), b = pickPriority(cur.status);
+    if (a > b || (a === b && p.id > cur.id)) chosenByKey.set(key, p);
+  }
+  const chosenPeriods = Array.from(chosenByKey.values());
+  const periodIdToMes = new Map(chosenPeriods.map(p => [p.id, p.mesReferencia]));
+  const periodIds = chosenPeriods.map(p => p.id);
+
+  // Carrega linhas de funcionário dos períodos escolhidos
+  let allRows: any[] = [];
+  if (periodIds.length > 0) {
+    const empConds: any[] = [inArray(hePeriodEmployees.hePeriodId, periodIds)];
+    if (filters?.employeeId) empConds.push(eq(hePeriodEmployees.employeeId, filters.employeeId));
+    allRows = await db.select().from(hePeriodEmployees).where(and(...empConds));
+  }
+
+  // Filtro por obra (via vínculo ativo atual em obra_funcionarios)
+  if (filters?.obraId) {
+    const empIdsNaObra = new Set(allEmps.filter(e => empObraIdMap.get(e.id) === filters.obraId).map(e => e.id));
+    allRows = allRows.filter(r => empIdsNaObra.has(r.employeeId));
+  }
+
+  // Helpers
+  const minsToHours = (m: number) => m / 60;
+
   let totalHoras = 0, totalValor = 0;
-  for (const he of allHE) {
-    totalHoras += parseFloat(he.quantidadeHoras || "0");
-    totalValor += parseFloat(he.valorTotal || "0");
+  for (const r of allRows) {
+    totalHoras += minsToHours(Number(r.heTotalMins || 0));
+    totalValor += parseFloat(r.valorHETotal || "0");
   }
 
   // Por pessoa
   const porPessoa: Record<number, { horas: number; valor: number; registros: number }> = {};
-  for (const he of allHE) {
-    if (!porPessoa[he.employeeId]) porPessoa[he.employeeId] = { horas: 0, valor: 0, registros: 0 };
-    porPessoa[he.employeeId].horas += parseFloat(he.quantidadeHoras || "0");
-    porPessoa[he.employeeId].valor += parseFloat(he.valorTotal || "0");
-    porPessoa[he.employeeId].registros++;
+  for (const r of allRows) {
+    if (!porPessoa[r.employeeId]) porPessoa[r.employeeId] = { horas: 0, valor: 0, registros: 0 };
+    porPessoa[r.employeeId].horas += minsToHours(Number(r.heTotalMins || 0));
+    porPessoa[r.employeeId].valor += parseFloat(r.valorHETotal || "0");
+    porPessoa[r.employeeId].registros++;
   }
 
   const rankingPessoa = Object.entries(porPessoa)
+    .filter(([, d]) => d.horas > 0 || d.valor > 0)
     .map(([empId, data]) => {
-      const emp = empMap.get(Number(empId));
+      const employeeId = Number(empId);
+      const emp = empMap.get(employeeId);
       return {
+        employeeId,
         nome: emp?.nomeCompleto || `Func. ${empId}`,
         funcao: emp?.funcao || emp?.cargo || "-",
         setor: emp?.setor || "-",
         valorHora: emp?.valorHora || "0",
         isDesligado: isDesligadoStatus(emp?.status),
-        ...data,
+        horas: Math.round(data.horas * 100) / 100,
+        valor: Math.round(data.valor * 100) / 100,
+        registros: data.registros,
       };
     }).sort((a, b) => b.horas - a.horas);
 
   // Por setor
   const porSetor: Record<string, { horas: number; valor: number; pessoas: Set<number> }> = {};
-  for (const he of allHE) {
-    const emp = empMap.get(he.employeeId);
+  for (const r of allRows) {
+    const emp = empMap.get(r.employeeId);
     const setor = emp?.setor || "Sem Setor";
     if (!porSetor[setor]) porSetor[setor] = { horas: 0, valor: 0, pessoas: new Set() };
-    porSetor[setor].horas += parseFloat(he.quantidadeHoras || "0");
-    porSetor[setor].valor += parseFloat(he.valorTotal || "0");
-    porSetor[setor].pessoas.add(he.employeeId);
+    porSetor[setor].horas += minsToHours(Number(r.heTotalMins || 0));
+    porSetor[setor].valor += parseFloat(r.valorHETotal || "0");
+    if (Number(r.heTotalMins || 0) > 0) porSetor[setor].pessoas.add(r.employeeId);
   }
   const rankingSetor = Object.entries(porSetor)
+    .filter(([, d]) => d.horas > 0 || d.valor > 0)
     .map(([setor, data]) => ({ setor, horas: Math.round(data.horas * 100) / 100, valor: Math.round(data.valor * 100) / 100, pessoas: data.pessoas.size }))
     .sort((a, b) => b.valor - a.valor);
 
   // Por obra (via obraAtualId do funcionário)
   const porObra: Record<string, { horas: number; valor: number; pessoas: Set<number> }> = {};
-  for (const he of allHE) {
-    const emp = empMap.get(he.employeeId);
+  for (const r of allRows) {
+    const emp = empMap.get(r.employeeId);
     const obraId = emp?.obraAtualId;
     const obraNome = obraId ? (obraMap.get(obraId) || `Obra #${obraId}`) : "Sem Obra";
     if (!porObra[obraNome]) porObra[obraNome] = { horas: 0, valor: 0, pessoas: new Set() };
-    porObra[obraNome].horas += parseFloat(he.quantidadeHoras || "0");
-    porObra[obraNome].valor += parseFloat(he.valorTotal || "0");
-    porObra[obraNome].pessoas.add(he.employeeId);
+    porObra[obraNome].horas += minsToHours(Number(r.heTotalMins || 0));
+    porObra[obraNome].valor += parseFloat(r.valorHETotal || "0");
+    if (Number(r.heTotalMins || 0) > 0) porObra[obraNome].pessoas.add(r.employeeId);
   }
   const rankingObra = Object.entries(porObra)
+    .filter(([, d]) => d.horas > 0 || d.valor > 0)
     .map(([obra, data]) => ({ obra, horas: Math.round(data.horas * 100) / 100, valor: Math.round(data.valor * 100) / 100, pessoas: data.pessoas.size }))
     .sort((a, b) => b.valor - a.valor);
 
-  // Evolução mensal
+  // Evolução mensal: agrega minutos e valores por mesReferencia dos períodos escolhidos
   const porMes: Record<string, { horas: number; valor: number; registros: number }> = {};
   for (let m = 1; m <= 12; m++) {
     const key = `${targetYear}-${String(m).padStart(2, "0")}`;
     porMes[key] = { horas: 0, valor: 0, registros: 0 };
   }
-  for (const he of allHE) {
-    if (porMes[he.mesReferencia]) {
-      porMes[he.mesReferencia].horas += parseFloat(he.quantidadeHoras || "0");
-      porMes[he.mesReferencia].valor += parseFloat(he.valorTotal || "0");
-      porMes[he.mesReferencia].registros++;
+  for (const r of allRows) {
+    const mesRef = periodIdToMes.get(r.hePeriodId);
+    if (mesRef && porMes[mesRef]) {
+      porMes[mesRef].horas += minsToHours(Number(r.heTotalMins || 0));
+      porMes[mesRef].valor += parseFloat(r.valorHETotal || "0");
+      porMes[mesRef].registros++;
     }
   }
   const evolucaoMensal = Object.entries(porMes).sort(([a], [b]) => a.localeCompare(b))
     .map(([mes, data]) => ({ mes, horas: Math.round(data.horas * 100) / 100, valor: Math.round(data.valor * 100) / 100, registros: data.registros }));
 
-  // Percentuais
-  const percentuais: Record<string, number> = {};
-  for (const he of allHE) {
-    const pct = he.percentualAcrescimo || "50";
-    percentuais[pct + "%"] = (percentuais[pct + "%"] || 0) + 1;
+  // Percentuais: separa minutos 50% (úteis) vs 100% (domingos/feriados)
+  let mins50 = 0, mins100 = 0;
+  for (const r of allRows) {
+    mins50  += Number(r.heUtilMins || 0);
+    mins100 += Number(r.heFimMins  || 0);
   }
+  const percentuais: { percentual: string; count: number }[] = [];
+  if (mins50  > 0) percentuais.push({ percentual: "50%",  count: Math.round(minsToHours(mins50)  * 100) / 100 });
+  if (mins100 > 0) percentuais.push({ percentual: "100%", count: Math.round(minsToHours(mins100) * 100) / 100 });
 
-  // % sobre folha
+  // % sobre folha (mantém fallback a partir da tabela payroll quando houver)
   let totalFolhaBruto = 0;
   for (const p of allPayroll) totalFolhaBruto += parseFloat((p as any).salarioBruto || "0");
   const percentualHEsobreFolha = totalFolhaBruto > 0 ? (totalValor / totalFolhaBruto) * 100 : 0;
 
-  const pessoasComHE = Object.keys(porPessoa).length;
-
-  // Filtro por obra (filtrar allHE se obraId)
-  let filteredHE = allHE;
-  if (filters?.obraId) {
-    const empIdsNaObra = new Set(allEmps.filter(e => empObraIdMap.get(e.id) === filters.obraId).map(e => e.id));
-    filteredHE = allHE.filter(he => empIdsNaObra.has(he.employeeId));
-    // Recalcular totais com filtro
-    totalHoras = 0; totalValor = 0;
-    for (const he of filteredHE) {
-      totalHoras += parseFloat(he.quantidadeHoras || "0");
-      totalValor += parseFloat(he.valorTotal || "0");
-    }
-  }
+  const pessoasComHE = Object.values(porPessoa).filter(d => d.horas > 0).length;
+  const totalRegistros = allRows.filter(r => Number(r.heTotalMins || 0) > 0).length;
 
   // Listas para filtros no frontend
   const obrasDisponiveis = allObras.map(o => ({ id: o.id, nome: o.nome })).sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
   const colaboradoresDisponiveis = allEmps
-    .filter(e => porPessoa[e.id])
+    .filter(e => porPessoa[e.id] && porPessoa[e.id].horas > 0)
     .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao || e.cargo || "-" }))
     .sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
 
-  // Detalhe por registro (para tabela detalhada)
-  const detalhes = filteredHE.map(he => {
-    const emp = empMap.get(he.employeeId);
-    const obraId = emp?.obraAtualId;
-    return {
-      id: he.id,
-      mesReferencia: he.mesReferencia,
-      nome: emp?.nomeCompleto || `Func. ${he.employeeId}`,
-      funcao: emp?.funcao || emp?.cargo || "-",
-      setor: emp?.setor || "-",
-      isDesligado: isDesligadoStatus(emp?.status),
-      obra: obraId ? (obraMap.get(obraId) || `Obra #${obraId}`) : "Sem Obra",
-      horas: parseFloat(he.quantidadeHoras || "0"),
-      percentual: he.percentualAcrescimo || "50",
-      valorHoraBase: parseFloat(he.valorHoraBase || "0"),
-      valorTotal: parseFloat(he.valorTotal || "0"),
-      descricao: he.descricao || "",
-    };
-  }).sort((a, b) => b.mesReferencia.localeCompare(a.mesReferencia));
+  // Detalhe por linha de funcionário (uma linha = um colaborador num período)
+  const detalhes = allRows
+    .filter(r => Number(r.heTotalMins || 0) > 0 || parseFloat(r.valorHETotal || "0") > 0)
+    .map(r => {
+      const emp = empMap.get(r.employeeId);
+      const obraId = emp?.obraAtualId;
+      const horas50  = minsToHours(Number(r.heUtilMins || 0));
+      const horas100 = minsToHours(Number(r.heFimMins  || 0));
+      // Frontend já concatena '%' ao renderizar — então mandamos só o número
+      // ou "50/100" quando há acréscimos mistos no mesmo período.
+      let pctLabel = "50";
+      if (horas50 > 0 && horas100 > 0) pctLabel = "50/100";
+      else if (horas100 > 0)           pctLabel = "100";
+      const mesRef = periodIdToMes.get(r.hePeriodId) ?? "";
+      return {
+        id: r.id,
+        mesReferencia: mesRef,
+        nome: emp?.nomeCompleto || r.nome || `Func. ${r.employeeId}`,
+        employeeId: r.employeeId,
+        funcao: emp?.funcao || emp?.cargo || "-",
+        setor: emp?.setor || "-",
+        isDesligado: isDesligadoStatus(emp?.status),
+        obra: obraId ? (obraMap.get(obraId) || `Obra #${obraId}`) : "Sem Obra",
+        horas: Math.round(minsToHours(Number(r.heTotalMins || 0)) * 100) / 100,
+        percentual: pctLabel,
+        valorHoraBase: parseFloat(r.valorHora || "0"),
+        valorTotal: parseFloat(r.valorHETotal || "0"),
+        descricao: r.destinacao ? `Destinação: ${r.destinacao}` : "",
+      };
+    }).sort((a, b) => b.mesReferencia.localeCompare(a.mesReferencia));
 
   return {
     resumo: {
       totalHoras: Math.round(totalHoras * 100) / 100,
       totalValor: Math.round(totalValor * 100) / 100,
-      totalRegistros: filteredHE.length,
+      totalRegistros,
       pessoasComHE,
       mediaHorasPorPessoa: pessoasComHE > 0 ? Math.round((totalHoras / pessoasComHE) * 100) / 100 : 0,
       mediaValorPorPessoa: pessoasComHE > 0 ? Math.round((totalValor / pessoasComHE) * 100) / 100 : 0,
@@ -821,7 +870,7 @@ async function getDashHorasExtras(companyId: number, year?: number, filters?: {
     rankingSetor,
     rankingObra,
     evolucaoMensal,
-    percentuais: Object.entries(percentuais).map(([pct, count]) => ({ percentual: pct, count })).sort((a, b) => b.count - a.count),
+    percentuais,
     ano: targetYear,
     filtros: {
       obras: obrasDisponiveis,

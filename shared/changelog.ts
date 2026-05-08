@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1407,
+    titulo: "Dashboard Horas Extras: passa a ler do módulo HE da Folha (he_periods/he_period_employees)",
+    descricao: "BUGFIX no Dashboard de Horas Extras (/dashboards → Horas Extras): a tela mostrava todos os indicadores zerados mesmo quando a Folha de Pagamento exibia HE calculadas/aprovadas/pagas (ex.: 93 funcionários, R$ 9.802,74 em Mar/2026). Causa raiz: o procedure dashboards.horasExtras lia da tabela legada extra_payments (filtrando tipoExtra='Horas_Extras'), mas o módulo Hora Extra atual da Folha grava em he_periods + he_period_employees e nunca alimenta extra_payments — daí o dashboard sempre voltava zerado. Correção: getDashHorasExtras refatorado para consumir he_periods/he_period_employees. Para cada mesReferencia escolhe UM período (prioridade pago > aprovado > calculado > rascunho, desempate pelo id mais alto), ignorando 'cancelado'. Os KPIs (Total de Horas, Custo Total HE, Pessoas com HE, Média por Pessoa, % HE sobre Folha Bruta), os rankings (Pessoa, Setor, Obra), a evolução mensal, o split de percentual (50%/100%) via heUtilMins/heFimMins e a tabela detalhada agora refletem fielmente o que está na Folha. Compatibilidade: o shape de retorno é idêntico — frontend não precisou mudar.",
+    tipo: "bugfix",
+    modulos: "Dashboards,Folha de Pagamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 08:30:00",
+  },
+  {
     version: 1406,
     titulo: "Seguro de Vida — controle ano-a-ano e mês-a-mês (snapshot histórico por competência)",
     descricao: "FEATURE em /seguro-vida: novo seletor global de competência (MonthSelector com ChevronLeft/Right e clique-no-mês para voltar ao corrente), seguindo o mesmo padrão de Folha de Pagamento e Cartão de Ponto. Para o mês corrente o comportamento permanece idêntico (dados ao vivo de seguro_vida_coberturas). Para meses passados, a tela exibe o snapshot histórico reconstruído a partir do json_resultado armazenado em seguro_vida_importacoes — cards (Segurados Ativos / Pend. Inclusão / Pend. Cancelamento / Sem Cobertura / Custo Mensal) e tabela de Coberturas Ativas refletem a foto da carteira na competência selecionada, com badge 'Histórico (somente leitura)'. Quando não houver importação para o mês escolhido, mostra aviso orientando importar o relatório daquela competência. Backend: nova procedure seguroVida.snapshotPorCompetencia que agrega importações por (company, competência) e mapeia status do cruzamento (ok/sem_seguro/pagar_indevido/novo) para o formato consumido pela tela.",
