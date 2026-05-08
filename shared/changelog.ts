@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1471,
+    titulo: "Portal do Cliente — Bugfix: Avanço Físico Previsto agora reflete EXATAMENTE o módulo Planejamento (1,84% e não 1,80%)",
+    descricao: "O card 'Avanço Físico' da Visão Geral do Portal do Cliente mostrava 1,80% Previsto enquanto o módulo Planejamento interno (REFIS) mostrava 1,84% para a mesma obra/semana. Causa: o cálculo de pctTotalPrevisto no backend portalExterno.planejamentoObra fazia toFixed(1) (1 casa decimal), arredondando 1,838% para 1,8 (exibido como 1,80%). Já a tela interna passou a usar toFixed(2) na Rev. 1470. Correção: trocado para toFixed(2) também no backend do portal, garantindo que o número exibido ao cliente seja IDÊNTICO ao número exibido internamente. Os cálculos de fórmula sempre foram idênticos (mesmas folhas, mesma referência de fim de semana, mesma exclusão de indiretas/grupos) — só o arredondamento divergia.",
+    tipo: "bugfix",
+    modulos: "Portal do Cliente, Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 21:15:00",
+  },
+  {
     version: 1470,
     titulo: "Planejamento — Bugfix: divergência de 0,04% entre 'Avanço Físico' (topo) e 'Previsto Acumulado' do REFIS",
     descricao: "O card 'Avanço Físico' no topo da tela de Planejamento mostrava 1,80% enquanto o REFIS abaixo mostrava 1,84% para a mesma obra/semana. Causa: o cálculo do widget de topo (avancoPrevistoDia) arredondava o resultado para 1 casa decimal (toFixed(1)), enquanto o REFIS exibe com 2 casas. Ex: 1,838% → toFixed(1)=1,8 → exibido '1,80%' vs toFixed(2)=1,84 → exibido '1,84%'. Os dois cálculos eram matematicamente IDÊNTICOS (mesma fórmula de proporção linear pelo cronograma, mesma referência de fim de semana, mesma exclusão de indiretas/grupos), apenas o arredondamento divergia. Correção: trocado toFixed(1) por toFixed(2) no avancoPrevistoDia, garantindo que o globo do topo bate exatamente com o REFIS (com 'Só Diretas' ligado).",

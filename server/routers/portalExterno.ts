@@ -1218,11 +1218,10 @@ export const portalExternoRouter = router({
         somaPrevisto += (exp * peso) / pesoTotal;
         somaRealizado += (ultimoAvancoPorAtiv[a.id] ?? 0) * (peso / pesoTotal);
       }
-      // ALINHAMENTO COM TELA INTERNA (PlanejamentoDetalhe.tsx):
-      // - avancoPrevistoDia (linha ~418) faz `+soma.toFixed(1)` — 1 casa decimal
-      // - avancoAtual (linha ~392) usa Math.min(100, ponderado) — sem arredondamento
-      // Display interno mostra "1.80%" (formato 2 casas) a partir do valor 1.8.
-      const pctTotalPrevisto = +somaPrevisto.toFixed(1);
+      // ALINHAMENTO COM TELA INTERNA (PlanejamentoDetalhe.tsx Rev. 1470+):
+      // - avancoPrevistoDia agora usa toFixed(2) para bater exatamente com REFIS.
+      // - Portal deve refletir o MESMO número visto no módulo Planejamento interno.
+      const pctTotalPrevisto = +Math.min(100, somaPrevisto).toFixed(2);
       const pctTotalRealizado = +Math.min(100, somaRealizado).toFixed(2);
       const desvio = +(pctTotalRealizado - pctTotalPrevisto).toFixed(2);
 
