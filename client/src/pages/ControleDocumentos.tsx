@@ -73,7 +73,11 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
   const { data: kpis } = trpc.integracoes.kpis.useQuery({ companyId }, { enabled: !!companyId });
   const { data: allClientes = [] } = trpc.clientes.list.useQuery({ companyId }, { enabled: !!companyId });
   const { data: todosEmp = [] } = trpc.employees.list.useQuery({ companyId }, { enabled: !!companyId });
-  const empAtivos = useMemo(() => (todosEmp as any[]).filter((e: any) => e.status === "Ativo"), [todosEmp]);
+  // Inclui Ativo, Férias e Afastado (apenas Desligado/Inativo são excluídos)
+  const empAtivos = useMemo(() => (todosEmp as any[]).filter((e: any) => {
+    const s = String(e.status || "").toLowerCase();
+    return s !== "desligado" && s !== "inativo";
+  }), [todosEmp]);
   const [empSearch, setEmpSearch] = useState("");
 
   const criarMut = trpc.integracoes.criar.useMutation({
@@ -307,11 +311,18 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
                   atualizarMut.mutate({
                     id:             modalForm.id,
                     companyId,
+                    employeeId:     selIds[0],
+                    tipo:           modalForm.tipo,
+                    clienteId:      modalForm.tipo === "externa"
+                                      ? (modalForm.clienteId ? parseInt(modalForm.clienteId) : null)
+                                      : null,
+                    clienteNome:    modalForm.tipo === "externa"
+                                      ? (modalForm.clienteNome ?? "")
+                                      : (modalForm.clienteNome ?? ""),
                     dataRealizacao: modalForm.dataRealizacao,
                     dataVencimento: modalForm.dataVencimento || "",
                     evidencia:      modalForm.evidencia ?? "",
                     observacoes:    modalForm.observacoes ?? "",
-                    ...(modalForm.tipo === "interna" ? { clienteNome: modalForm.clienteNome ?? "" } : {}),
                   });
                   return;
                 }
@@ -334,19 +345,12 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
               const isPending = criarMut.isPending || criarLoteMut.isPending || atualizarMut.isPending;
               return <>
                 <div className="space-y-3 px-5 py-4 overflow-y-auto flex-1 min-h-0">
-                  {/* Seleção de colaboradores (multi) — apenas no modo cadastro */}
-                  {modalForm.editMode ? (
-                    <div>
-                      <label className="text-xs font-medium">Colaborador</label>
-                      <div className="mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700">
-                        {modalForm.employeeNomes?.[selIds[0]] || `#${selIds[0]}`}
-                      </div>
-                      <p className="text-[10px] text-muted-foreground mt-1">Para trocar o colaborador, exclua e crie uma nova integração.</p>
-                    </div>
-                  ) : (
+                  {/* Seleção de colaboradores — em edição é single (substitui), em cadastro é múltipla */}
                   <div>
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-medium">Colaboradores * <span className="text-muted-foreground">(seleção múltipla)</span></label>
+                      <label className="text-xs font-medium">
+                        {modalForm.editMode ? "Colaborador *" : <>Colaboradores * <span className="text-muted-foreground">(seleção múltipla)</span></>}
+                      </label>
                       <span className="text-[11px] text-indigo-700 font-semibold">{selIds.length} selecionado{selIds.length === 1 ? "" : "s"}</span>
                     </div>
                     <div className="relative mt-1">
@@ -395,11 +399,32 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
                         )}
                         {filteredEmps.slice(0, 80).map((e: any) => {
                           const checked = selIds.includes(e.id);
+                          const stTag = String(e.status || "").toLowerCase();
+                          const stColor = stTag === "férias" || stTag === "ferias" ? "bg-amber-100 text-amber-700"
+                            : stTag === "afastado" ? "bg-orange-100 text-orange-700"
+                            : "bg-emerald-100 text-emerald-700";
                           return (
                             <label key={e.id} className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer border-b last:border-b-0 transition-colors ${checked ? "bg-indigo-50/70" : "hover:bg-slate-50"}`}>
-                              <input type="checkbox" checked={checked} onChange={() => onPickEmp(e)} className="rounded text-indigo-600" />
+                              <input
+                                type={modalForm.editMode ? "radio" : "checkbox"}
+                                name={modalForm.editMode ? "edit-emp" : undefined}
+                                checked={checked}
+                                onChange={() => {
+                                  if (modalForm.editMode) {
+                                    setVal({ employeeIds: [e.id], employeeNomes: { [e.id]: e.nomeCompleto } });
+                                  } else {
+                                    onPickEmp(e);
+                                  }
+                                }}
+                                className="rounded text-indigo-600"
+                              />
                               <div className="min-w-0 flex-1">
-                                <div className="font-medium truncate">{e.nomeCompleto}</div>
+                                <div className="font-medium truncate flex items-center gap-1.5">
+                                  {e.nomeCompleto}
+                                  {e.status && e.status !== "Ativo" && (
+                                    <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${stColor}`}>{e.status}</span>
+                                  )}
+                                </div>
                                 <div className="text-[10px] text-muted-foreground">{e.matricula} · {e.funcao}</div>
                               </div>
                             </label>
@@ -411,9 +436,7 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
                       </div>
                     )}
                   </div>
-                  )}
 
-                  {!modalForm.editMode && (
                   <div>
                     <label className="text-xs font-medium">Tipo de Integração</label>
                     <div className="flex gap-2 mt-1">
@@ -425,15 +448,10 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
                       ))}
                     </div>
                   </div>
-                  )}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2">
                       <label className="text-xs font-medium">{modalForm.tipo === "externa" ? "Cliente" : "Referência"}</label>
-                      {modalForm.editMode && modalForm.tipo === "externa" ? (
-                        <div className="mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-sm font-medium text-slate-700">
-                          {modalForm.clienteNome || "-"}
-                        </div>
-                      ) : modalForm.tipo === "externa" ? (
+                      {modalForm.tipo === "externa" ? (
                         <Select value={modalForm.clienteId} onValueChange={v => {
                           const c = (allClientes as any[]).find((x: any) => String(x.id) === v);
                           setVal({ clienteId: v, clienteNome: c?.razaoSocial || "" });

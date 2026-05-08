@@ -10049,6 +10049,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 02:30:00",
   },
   {
+    version: 1457,
+    titulo: "Controle de Integrações — Edição completa do registro + inclusão de Férias/Afastados",
+    descricao: "O modal 'Editar Integração' (Controle de Integrações) agora permite editar TODOS os campos do registro: colaborador, tipo (Externa/Interna), cliente/referência, datas de realização e validade, evidência e observações. Antes, no modo edição, o colaborador, o tipo e o cliente ficavam travados (com a mensagem 'Para trocar o colaborador, exclua e crie uma nova integração'); agora todos esses campos são totalmente editáveis — em edição, a seleção de colaborador é radio (single) e em cadastro segue como checkbox (múltipla). Adicionalmente, a lista de colaboradores selecionáveis (tanto no cadastro quanto na edição) passa a INCLUIR funcionários em 'Férias' e 'Afastado' (exibidos com tags coloridas — âmbar para Férias, laranja para Afastado), excluindo APENAS aqueles com status 'Desligado' ou 'Inativo'. O backend integracoes.atualizar passou a aceitar employeeId, tipo e clienteId no input.",
+    tipo: "ux",
+    modulos: "Controle de Integrações,RH",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-05-08 21:15:00",
+  },
+  {
     version: 1456,
     titulo: "Portal do Cliente — Aba REFIS agora replica a tela interna na íntegra",
     descricao: "A aba 'REFIS' do Portal do Cliente foi totalmente reescrita para reproduzir, em modo somente-leitura, todos os blocos visuais da tela interna de Refis (PlanejamentoDetalhe → função Refis): (1) Cabeçalho do relatório com Nº, Semana, Obra/Cliente, Local, Início/Status em/Término; (2) Evolução Física Global com barras Previsto/Realizado e 4 KPIs (Av. Sem. Previsto, Av. Sem. Realizado, SPI, Desvio Físico); (3A) Curva S Física — Avanço Acumulado (%) com linhas Baseline, Faturamento Previsto, Realizado e Tendência, tooltip detalhado, linha 'Hoje' e ReferenceLines de Prev./Real.; (3B) Curva S Financeira — Faturamento Acumulado (R$) usando o valor de contrato do projeto, série 'Faturado Real' a partir das medições mensais (planejamento_medicoes) e KPIs financeiros; (4) Avanço Físico por Grupo em barras horizontais (#FFB800 Previsto / #1A3461 Realizado); (5) Cards collapsíveis por grupo com sub-etapas em barras coloridas conforme desvio (verde/âmbar/vermelho); (6) Histórico completo dos REFIs emitidos. O backend portalExterno.planejamentoObra passou a devolver curvaMedicoes (faturamento mensal acumulado) para alimentar a série 'Faturado Real'. Toolbar, edição, IA e observações foram removidas — o cliente vê apenas os dados consolidados.",

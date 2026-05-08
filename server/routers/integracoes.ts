@@ -138,6 +138,9 @@ export const integracoesRouter = router({
     .input(z.object({
       id:             z.number(),
       companyId:      z.number(),
+      employeeId:     z.number().optional(),
+      tipo:           z.string().optional(),
+      clienteId:      z.number().nullable().optional(),
       dataRealizacao: z.string().optional(),
       dataVencimento: z.string().optional(),
       evidencia:      z.string().optional(),
