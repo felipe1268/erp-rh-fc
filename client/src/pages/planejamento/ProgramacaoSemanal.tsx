@@ -119,6 +119,8 @@ interface Props {
   atividades:  any[];
   avancosMap:  Record<number, number>;
   refisLista?: any[];
+  /** Portal mode: hides authenticated-only sections (Recursos do orçamento, JULINHO IA, Modo Relatório). */
+  portalMode?: boolean;
 }
 
 // ── Cores de status ───────────────────────────────────────────────────────────
@@ -155,7 +157,7 @@ function tipoIcon(tipo: string) {
 export function ProgramacaoSemanal({
   projetoId, revisaoId, orcamentoId, companyId,
   nomeProjeto, nomeCliente, atividades: atividadesProp, avancosMap,
-  refisLista = [],
+  refisLista = [], portalMode = false,
 }: Props) {
   // Atividades desativadas (a.disabled === true) NÃO devem aparecer em nenhuma
   // parte da Programação Semanal — nem em totais, nem em listagens, nem nos
@@ -263,7 +265,7 @@ export function ProgramacaoSemanal({
 
   const recursosQuery = trpc.planejamento.buscarRecursosSemana.useQuery(
     { companyId, orcamentoId: orcamentoId ?? 0, eapCodigos: todosEaps, atividadeNomes },
-    { enabled: !!orcamentoId && (todosEaps.length > 0 || atividadeNomes.length > 0) }
+    { enabled: !portalMode && !!orcamentoId && (todosEaps.length > 0 || atividadeNomes.length > 0) }
   );
 
   const recursos = recursosQuery.data;
@@ -271,7 +273,7 @@ export function ProgramacaoSemanal({
   // ── Equipamentos do almoxarifado / patrimônio ─────────────────────────────
   const equipQuery = trpc.planejamento.buscarEquipamentosDisponiveis.useQuery(
     { companyId },
-    { enabled: companyId > 0 }
+    { enabled: !portalMode && companyId > 0 }
   );
 
   // ── AI alerts mutation ────────────────────────────────────────────────────
@@ -369,14 +371,16 @@ export function ProgramacaoSemanal({
               ))}
             </div>
           )}
-          <Button
-            variant="outline" size="sm"
-            className="gap-1.5 text-xs"
-            onClick={() => { setModoRelatorio(!modoRelatorio); }}
-          >
-            {modoRelatorio ? <Home className="h-3.5 w-3.5" /> : <CalendarRange className="h-3.5 w-3.5" />}
-            {modoRelatorio ? "Visão Semanal" : `Relatório ${qtdSemanas} Semana${qtdSemanas !== 1 ? "s" : ""}`}
-          </Button>
+          {!portalMode && (
+            <Button
+              variant="outline" size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => { setModoRelatorio(!modoRelatorio); }}
+            >
+              {modoRelatorio ? <Home className="h-3.5 w-3.5" /> : <CalendarRange className="h-3.5 w-3.5" />}
+              {modoRelatorio ? "Visão Semanal" : `Relatório ${qtdSemanas} Semana${qtdSemanas !== 1 ? "s" : ""}`}
+            </Button>
+          )}
           {modoRelatorio && (
             <Button size="sm" className="gap-1.5 text-xs bg-blue-600 hover:bg-blue-700" onClick={imprimir}>
               <Printer className="h-3.5 w-3.5" /> Imprimir / PDF
@@ -593,7 +597,7 @@ export function ProgramacaoSemanal({
           </div>
 
           {/* Recursos do orçamento para a semana */}
-          {orcamentoId && eapsDaSemana.length > 0 && (
+          {!portalMode && orcamentoId && eapsDaSemana.length > 0 && (
             <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
               <div className="px-4 py-2.5 border-b border-slate-50 bg-slate-50/60 flex items-center gap-2">
                 <Package className="h-3.5 w-3.5 text-slate-400" />
@@ -614,6 +618,7 @@ export function ProgramacaoSemanal({
           )}
 
           {/* Bloco JULINHO Alertas */}
+          {!portalMode && (
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="px-4 py-2.5 border-b border-slate-50 bg-gradient-to-r from-blue-50 to-slate-50 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -653,6 +658,7 @@ export function ProgramacaoSemanal({
             )}
             {alertas && <AlertasBlock alertas={alertas} semanas={proximas3.map(p => p.semana)} />}
           </div>
+          )}
         </>
       )}
 

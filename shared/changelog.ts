@@ -10048,4 +10048,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-06 02:30:00",
   },
+  {
+    version: 1450,
+    titulo: "Portal do Cliente — aba 'Prog. Semanal' agora é cópia 100% da tela interna",
+    descricao: "A aba 'Prog. Semanal' do Portal do Cliente passou a reutilizar diretamente o componente interno `ProgramacaoSemanal` usado em PlanejamentoDetalhe, garantindo paridade visual e funcional total: cabeçalho 'Programação Semanal', navegador de semanas com setas, tape numerado destacando semana atual/REFIS/atrasos, banner 'Peso da Semana' (com indicador de maior peso), e tabela completa de atividades (EAP, Atividade, Início, Fim, Recurso, Peso%, Real%, Status). Adicionada prop `portalMode` ao componente que oculta blocos que dependem de rotas autenticadas (Recursos do Orçamento, JULINHO IA, Modo Relatório), preservando todo o resto. O portal usa `atividadesTodas` já retornado pelo backend e constrói `avancosMap` localmente a partir de `percentRealizado`.",
+    tipo: "melhoria",
+    modulos: "Portal Cliente,Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 12:00:00",
+  },
 ];

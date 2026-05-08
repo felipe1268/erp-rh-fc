@@ -14,6 +14,7 @@ import {
   Tooltip, ReferenceLine,
 } from "recharts";
 import { PORTAL_CLIENTE_ABAS, type PortalClienteAbaKey } from "@shared/portalClienteAbas";
+import { ProgramacaoSemanal } from "@/pages/planejamento/ProgramacaoSemanal";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
 const fmtPct = (n: number) => `${n.toFixed(2).replace(".", ",")}%`;
@@ -307,7 +308,14 @@ export default function PortalPlanejamentoCliente() {
           if (aba === "visao_geral") return <AbaVisaoGeral kpis={kpis} projeto={projeto} obra={obra} semanaAtual={semanaAtual} atrasadas={atrasadas} proximas={proximas} atividadesTodas={atividadesTodas} refisLista={refisLista} />;
           if (aba === "cronograma") return <AbaCronograma atividades={atividadesTodas} />;
           if (aba === "avanco_semanal") return <AbaAvancoSemanal kpis={kpis} semanaAtual={semanaAtual} atrasadas={atrasadas} />;
-          if (aba === "prog_semanal") return <AbaProgSemanal kpis={kpis} progSemanal={progSemanal} />;
+          if (aba === "prog_semanal") return (
+            <AbaProgSemanal
+              atividadesTodas={atividadesTodas}
+              refisLista={refisLista}
+              nomeProjeto={obra?.nome ?? ""}
+              nomeCliente={obra?.cliente ?? ""}
+            />
+          );
           if (aba === "curva_s") return <AbaCurvaS curvaS={curvaS} kpis={kpis} projeto={projeto} />;
           if (aba === "gantt") return <AbaGantt atividades={atividadesTodas} />;
           if (aba === "refis") return <AbaRefis refisLista={refisLista} />;
@@ -701,12 +709,35 @@ function AbaAvancoSemanal({ kpis, semanaAtual, atrasadas }: any) {
   );
 }
 
-function AbaProgSemanal({ kpis, progSemanal }: any) {
+function AbaProgSemanal({
+  atividadesTodas, refisLista, nomeProjeto, nomeCliente,
+}: {
+  atividadesTodas: any[];
+  refisLista: any[];
+  nomeProjeto: string;
+  nomeCliente: string;
+}) {
+  const avancosMap = useMemo(() => {
+    const m: Record<number, number> = {};
+    for (const a of atividadesTodas) {
+      m[a.id] = Number(a.percentRealizado ?? 0);
+    }
+    return m;
+  }, [atividadesTodas]);
+
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-slate-500">Programação para as próximas 3 semanas a partir de {fmtBR(kpis.semanaInicio)}.</p>
-      <SecaoAtividades titulo={`${progSemanal.length} atividade${progSemanal.length === 1 ? "" : "s"} programada${progSemanal.length === 1 ? "" : "s"}`} vazio="Nenhuma atividade programada para as próximas 3 semanas." itens={progSemanal} cor="border-indigo-200" />
-    </div>
+    <ProgramacaoSemanal
+      portalMode
+      projetoId={0}
+      revisaoId={0}
+      orcamentoId={null}
+      companyId={0}
+      nomeProjeto={nomeProjeto}
+      nomeCliente={nomeCliente}
+      atividades={atividadesTodas}
+      avancosMap={avancosMap}
+      refisLista={refisLista}
+    />
   );
 }
 
