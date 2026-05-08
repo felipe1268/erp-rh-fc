@@ -12,6 +12,7 @@ import {
   Mail, KeyRound, Send, Search, MessageSquare, Star,
   Loader2, ShieldCheck, CheckCircle2, AlertCircle, Copy, Reply,
   Smile, Frown, TrendingUp, Users, Plus, Trash2, RefreshCw, UserPlus,
+  Lock, UnlockKeyhole,
 } from "lucide-react";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
@@ -374,165 +375,209 @@ export default function ClientesPortalAdmin() {
 
         {/* Modal: Gerenciar acessos do cliente */}
         <Dialog open={!!gerenciarTarget} onOpenChange={(o) => { if (!o) { setGerenciarTarget(null); setResultadoAcesso(null); } }}>
-          <DialogContent className="max-w-2xl bg-white">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-blue-600" />
-                Acessos do Portal — {gerenciarTarget?.razaoSocial}
-              </DialogTitle>
-            </DialogHeader>
-
-            {gerenciarTarget && (
-              <div className="space-y-5">
-                <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-700 flex flex-wrap gap-x-6 gap-y-1">
-                  <div><b>Identificador:</b> <span className="font-mono">{fmtCNPJ(gerenciarTarget.cnpj || gerenciarTarget.cpf) || <span className="text-rose-600">não cadastrado</span>}</span></div>
-                  <div><b>Usuários ativos:</b> {ativosDoTarget}/{LIMITE_SUGERIDO}</div>
-                </div>
-
-                {/* Lista de acessos existentes */}
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-700 mb-2">Usuários cadastrados</h4>
-                  {acessosDoTarget.length === 0 ? (
-                    <div className="border border-dashed rounded-lg p-6 text-center text-slate-400 text-sm">
-                      Nenhum usuário cadastrado ainda. Use o formulário abaixo para criar o primeiro acesso.
-                    </div>
-                  ) : (
-                    <div className="border rounded-lg overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                          <tr>
-                            <th className="px-3 py-2 text-left">Nome</th>
-                            <th className="px-3 py-2 text-left">E-mail</th>
-                            <th className="px-3 py-2 text-left">Status</th>
-                            <th className="px-3 py-2 text-left">Último login</th>
-                            <th className="px-3 py-2 text-right">Ações</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {acessosDoTarget.map((a: any) => (
-                            <tr key={a.id}>
-                              <td className="px-3 py-2 font-medium text-slate-800">{a.nomeResponsavel || <span className="text-slate-400">—</span>}</td>
-                              <td className="px-3 py-2 text-xs">{a.emailResponsavel || <span className="text-slate-400">—</span>}</td>
-                              <td className="px-3 py-2">
-                                {a.ativo === 1
-                                  ? (a.primeiroAcesso === 1
-                                    ? <Badge className="bg-amber-500">Aguardando 1º acesso</Badge>
-                                    : <Badge className="bg-emerald-600">Ativo</Badge>)
-                                  : <Badge variant="outline" className="text-rose-500 border-rose-300">Inativo</Badge>}
-                              </td>
-                              <td className="px-3 py-2 text-xs text-slate-600">{a.ultimoLogin ? fmtBR(a.ultimoLogin) : "—"}</td>
-                              <td className="px-3 py-2 text-right">
-                                <div className="flex justify-end gap-1.5">
-                                  {a.ativo === 1 ? (
-                                    <>
-                                      <Button size="sm" variant="outline" title="Reenviar senha provisória"
-                                        disabled={gerarMut.isPending}
-                                        onClick={() => {
-                                          if (!a.emailResponsavel) { toast.error("Acesso sem e-mail cadastrado."); return; }
-                                          if (!confirm(`Gerar nova senha provisória e reenviar para ${a.emailResponsavel}?`)) return;
-                                          gerarMut.mutate({
-                                            clienteId: gerenciarTarget.id, companyId,
-                                            nome: a.nomeResponsavel || "Usuário",
-                                            email: a.emailResponsavel,
-                                            enviarEmail: true,
-                                          });
-                                        }}>
-                                        <RefreshCw className="w-3.5 h-3.5" />
-                                      </Button>
-                                      <Button size="sm" variant="outline" className="text-rose-600 border-rose-200 hover:bg-rose-50" title="Desativar"
-                                        onClick={() => { if (confirm("Desativar este acesso? O usuário não conseguirá mais entrar.")) desativarMut.mutate({ id: a.id }); }}>
-                                        Desativar
-                                      </Button>
-                                    </>
-                                  ) : (
-                                    <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-200 hover:bg-emerald-50" title="Reativar"
-                                      onClick={() => reativarMut.mutate({ id: a.id, companyId })}>
-                                      Reativar
-                                    </Button>
-                                  )}
-                                  <Button size="sm" variant="outline" className="text-rose-600 border-rose-200 hover:bg-rose-50" title="Remover definitivamente"
-                                    onClick={() => { if (confirm("Remover este acesso DEFINITIVAMENTE? Esta ação não pode ser desfeita.")) removerMut.mutate({ id: a.id, companyId }); }}>
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
-                {/* Form: adicionar novo */}
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                    <UserPlus className="w-4 h-4 text-blue-600" /> Adicionar novo acesso
-                  </h4>
-                  {atingiuLimite && (
-                    <div className="bg-amber-50 border border-amber-200 rounded p-2 text-xs text-amber-800 flex gap-2 mb-3">
-                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                      Este cliente já possui {LIMITE_SUGERIDO} acessos ativos (limite recomendado). Você ainda pode adicionar mais — desative algum se preferir.
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs">Nome do usuário</Label>
-                      <Input className="mt-1 h-9" value={novoNome} onChange={(e) => setNovoNome(e.target.value)} placeholder="Ex.: João da Silva" />
-                    </div>
-                    <div>
-                      <Label className="text-xs">E-mail</Label>
-                      <Input className="mt-1 h-9" type="email" value={novoEmail} onChange={(e) => setNovoEmail(e.target.value)} placeholder="usuario@empresa.com" />
+          <DialogContent className="max-w-3xl bg-white p-0 overflow-hidden gap-0">
+            {gerenciarTarget && (() => {
+              const submitNovo = () => {
+                if (!novoNome.trim()) { toast.error("Informe o nome do usuário"); return; }
+                if (!novoEmail.trim() || !/.+@.+\..+/.test(novoEmail)) { toast.error("Informe um e-mail válido"); return; }
+                gerarMut.mutate({
+                  clienteId: gerenciarTarget.id, companyId,
+                  nome: novoNome.trim(), email: novoEmail.trim(), enviarEmail,
+                });
+              };
+              const onKeyDown = (e: React.KeyboardEvent) => {
+                if (e.key === "Enter" && (e.ctrlKey || e.metaKey || (e.target as HTMLElement).tagName === "INPUT")) {
+                  e.preventDefault(); submitNovo();
+                }
+              };
+              const pct = Math.min(100, (ativosDoTarget / LIMITE_SUGERIDO) * 100);
+              const corBarra = ativosDoTarget === 0 ? "bg-slate-300" : ativosDoTarget >= LIMITE_SUGERIDO ? "bg-amber-500" : "bg-emerald-500";
+              return (
+                <>
+                  {/* Header com gradiente */}
+                  <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white px-6 py-5">
+                    <DialogHeader className="space-y-0">
+                      <div className="flex items-start gap-3">
+                        <div className="w-11 h-11 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0">
+                          <Users className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <DialogTitle className="text-white text-base font-semibold leading-tight truncate pr-8">
+                            {gerenciarTarget.razaoSocial}
+                          </DialogTitle>
+                          <p className="text-xs text-blue-100 mt-0.5 font-mono">
+                            {fmtCNPJ(gerenciarTarget.cnpj || gerenciarTarget.cpf) || <span className="text-rose-200">CNPJ/CPF não cadastrado</span>}
+                          </p>
+                        </div>
+                      </div>
+                    </DialogHeader>
+                    {/* Contador visual */}
+                    <div className="mt-4 flex items-center gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="text-blue-100">Usuários ativos no portal</span>
+                          <span className="font-bold tabular-nums">{ativosDoTarget} de {LIMITE_SUGERIDO} <span className="opacity-70 font-normal">recomendados</span></span>
+                        </div>
+                        <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                          <div className={`h-full ${corBarra} transition-all`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <label className="flex items-center gap-2 mt-3 text-xs text-slate-600 cursor-pointer select-none">
-                    <input type="checkbox" checked={enviarEmail} onChange={(e) => setEnviarEmail(e.target.checked)} className="rounded" />
-                    Enviar e-mail de boas-vindas com a senha provisória
-                  </label>
 
-                  {resultadoAcesso && (
-                    <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm space-y-1.5">
-                      <div className="flex items-center gap-2 text-emerald-700 font-semibold">
-                        <CheckCircle2 className="w-4 h-4" /> Acesso {resultadoAcesso.acao === "reenviado" ? "atualizado" : "criado"} com sucesso!
+                  <div className="px-6 py-5 max-h-[65vh] overflow-y-auto space-y-5">
+                    {/* Form de cadastro rápido — sempre visível no topo */}
+                    <div className="border rounded-xl bg-gradient-to-br from-blue-50/60 to-white p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <UserPlus className="w-4 h-4 text-blue-600" />
+                        <h4 className="text-sm font-semibold text-slate-800">Cadastrar novo usuário</h4>
+                        {atingiuLimite && (
+                          <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 text-[10px] gap-1">
+                            <AlertCircle className="w-3 h-3" /> limite recomendado atingido
+                          </Badge>
+                        )}
                       </div>
-                      <div className="text-xs flex items-center gap-2">
-                        <b>Senha provisória:</b>
-                        <code className="bg-amber-100 px-2 py-0.5 rounded font-mono">{resultadoAcesso.senhaTemporaria}</code>
-                        <button onClick={() => { navigator.clipboard.writeText(resultadoAcesso.senhaTemporaria); toast.success("Copiada!"); }}
-                          className="text-blue-600 hover:text-blue-800"><Copy className="w-3.5 h-3.5" /></button>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs text-slate-600">Nome completo</Label>
+                          <Input className="mt-1 h-10" autoFocus value={novoNome} onChange={(e) => setNovoNome(e.target.value)}
+                            onKeyDown={onKeyDown} placeholder="Ex.: João da Silva" />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-slate-600">E-mail</Label>
+                          <Input className="mt-1 h-10" type="email" value={novoEmail} onChange={(e) => setNovoEmail(e.target.value)}
+                            onKeyDown={onKeyDown} placeholder="usuario@empresa.com" />
+                        </div>
                       </div>
-                      <div className="text-xs text-slate-600">
-                        {resultadoAcesso.emailEnviado
-                          ? <span className="text-emerald-700">✓ E-mail enviado para {resultadoAcesso.emailDestino}</span>
-                          : resultadoAcesso.emailErro
-                            ? <span className="text-rose-700">✗ Falha no e-mail: {resultadoAcesso.emailErro}</span>
-                            : <span className="text-slate-500">E-mail não enviado.</span>}
+                      <div className="flex items-center justify-between gap-3 mt-3 flex-wrap">
+                        <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
+                          <input type="checkbox" checked={enviarEmail} onChange={(e) => setEnviarEmail(e.target.checked)} className="rounded" />
+                          <Mail className="w-3.5 h-3.5 text-slate-400" />
+                          Enviar e-mail de boas-vindas com a senha provisória
+                        </label>
+                        <Button onClick={submitNovo} disabled={gerarMut.isPending} className="bg-blue-600 hover:bg-blue-700 gap-2 h-9">
+                          {gerarMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                          Adicionar acesso
+                        </Button>
                       </div>
+                      <p className="text-[11px] text-slate-400 mt-2">Dica: pressione <kbd className="px-1 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-mono">Enter</kbd> para adicionar rapidamente.</p>
+
+                      {resultadoAcesso && (
+                        <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm space-y-1.5 animate-in fade-in slide-in-from-top-1">
+                          <div className="flex items-center gap-2 text-emerald-700 font-semibold">
+                            <CheckCircle2 className="w-4 h-4" /> Acesso {resultadoAcesso.acao === "reenviado" ? "atualizado" : "criado"} com sucesso!
+                          </div>
+                          <div className="text-xs flex items-center gap-2 flex-wrap">
+                            <b>Senha provisória:</b>
+                            <code className="bg-amber-100 px-2 py-0.5 rounded font-mono select-all">{resultadoAcesso.senhaTemporaria}</code>
+                            <button onClick={() => { navigator.clipboard.writeText(resultadoAcesso.senhaTemporaria); toast.success("Copiada!"); }}
+                              className="text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 text-xs"><Copy className="w-3.5 h-3.5" /> copiar</button>
+                          </div>
+                          <div className="text-xs text-slate-600">
+                            {resultadoAcesso.emailEnviado
+                              ? <span className="text-emerald-700">✓ E-mail enviado para {resultadoAcesso.emailDestino}</span>
+                              : resultadoAcesso.emailErro
+                                ? <span className="text-rose-700">✗ Falha no e-mail: {resultadoAcesso.emailErro}</span>
+                                : <span className="text-slate-500">E-mail não enviado (apenas registrado).</span>}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
 
-                  <DialogFooter className="mt-4">
+                    {/* Lista de usuários — cards */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Usuários cadastrados {acessosDoTarget.length > 0 && <span className="text-slate-400 normal-case font-normal">· {acessosDoTarget.length}</span>}
+                        </h4>
+                      </div>
+                      {acessosDoTarget.length === 0 ? (
+                        <div className="border border-dashed border-slate-200 rounded-xl p-8 text-center bg-slate-50/50">
+                          <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                          <p className="text-sm text-slate-500 font-medium">Nenhum usuário cadastrado ainda</p>
+                          <p className="text-xs text-slate-400 mt-1">Use o formulário acima para criar o primeiro acesso.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {acessosDoTarget
+                            .slice()
+                            .sort((a: any, b: any) => (b.ativo - a.ativo) || (a.id - b.id))
+                            .map((a: any) => {
+                              const ativo = a.ativo === 1;
+                              const aguardando = ativo && a.primeiroAcesso === 1;
+                              const nome = a.nomeResponsavel || a.emailResponsavel || "Usuário";
+                              const iniciais = nome.split(/\s+/).filter(Boolean).slice(0, 2).map((p: string) => p[0]?.toUpperCase()).join("") || "?";
+                              const corAvatar = ativo
+                                ? aguardando ? "bg-amber-500" : "bg-emerald-600"
+                                : "bg-slate-400";
+                              return (
+                                <div key={a.id} className={`border rounded-xl p-3 flex items-center gap-3 transition hover:shadow-sm ${ativo ? "bg-white" : "bg-slate-50/60 opacity-75"}`}>
+                                  <div className={`w-10 h-10 rounded-full ${corAvatar} text-white flex items-center justify-center text-sm font-semibold shrink-0`}>
+                                    {iniciais}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-semibold text-slate-800 truncate">{a.nomeResponsavel || <span className="italic text-slate-400">sem nome</span>}</span>
+                                      {ativo
+                                        ? (aguardando
+                                          ? <Badge className="bg-amber-500 text-[10px]">Aguardando 1º acesso</Badge>
+                                          : <Badge className="bg-emerald-600 text-[10px]">Ativo</Badge>)
+                                        : <Badge variant="outline" className="text-rose-600 border-rose-200 text-[10px]">Inativo</Badge>}
+                                    </div>
+                                    <div className="text-xs text-slate-500 flex items-center gap-3 mt-0.5 flex-wrap">
+                                      <span className="inline-flex items-center gap-1 truncate"><Mail className="w-3 h-3" />{a.emailResponsavel || "—"}</span>
+                                      <span className="inline-flex items-center gap-1 text-slate-400">
+                                        último login: {a.ultimoLogin ? fmtBR(a.ultimoLogin) : "nunca"}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {ativo ? (
+                                      <>
+                                        <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-600 hover:bg-blue-50" title="Reenviar senha provisória"
+                                          disabled={gerarMut.isPending}
+                                          onClick={() => {
+                                            if (!a.emailResponsavel) { toast.error("Acesso sem e-mail cadastrado."); return; }
+                                            if (!confirm(`Gerar nova senha provisória e reenviar para ${a.emailResponsavel}?`)) return;
+                                            gerarMut.mutate({
+                                              clienteId: gerenciarTarget.id, companyId,
+                                              nome: a.nomeResponsavel || "Usuário",
+                                              email: a.emailResponsavel,
+                                              enviarEmail: true,
+                                            });
+                                          }}>
+                                          <RefreshCw className="w-4 h-4" />
+                                        </Button>
+                                        <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:bg-amber-50" title="Desativar"
+                                          onClick={() => { if (confirm("Desativar este acesso? O usuário não conseguirá mais entrar.")) desativarMut.mutate({ id: a.id }); }}>
+                                          <Lock className="w-4 h-4" />
+                                        </Button>
+                                      </>
+                                    ) : (
+                                      <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-700 hover:bg-emerald-50" title="Reativar"
+                                        onClick={() => reativarMut.mutate({ id: a.id, companyId })}>
+                                        <UnlockKeyhole className="w-4 h-4" />
+                                      </Button>
+                                    )}
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-600 hover:bg-rose-50" title="Remover definitivamente"
+                                      onClick={() => { if (confirm("Remover este acesso DEFINITIVAMENTE? Esta ação não pode ser desfeita.")) removerMut.mutate({ id: a.id, companyId }); }}>
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="border-t bg-slate-50 px-6 py-3 flex justify-end">
                     <Button variant="outline" onClick={() => { setGerenciarTarget(null); setResultadoAcesso(null); }}>Fechar</Button>
-                    <Button onClick={() => {
-                        if (!novoNome.trim()) { toast.error("Informe o nome do usuário"); return; }
-                        if (!novoEmail.trim() || !/.+@.+\..+/.test(novoEmail)) { toast.error("Informe um e-mail válido"); return; }
-                        gerarMut.mutate({
-                          clienteId: gerenciarTarget.id,
-                          companyId,
-                          nome: novoNome.trim(),
-                          email: novoEmail.trim(),
-                          enviarEmail,
-                        });
-                      }}
-                      disabled={gerarMut.isPending}
-                      className="bg-blue-600 hover:bg-blue-700 gap-2">
-                      {gerarMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                      {enviarEmail ? "Criar acesso e enviar e-mail" : "Criar acesso"}
-                    </Button>
-                  </DialogFooter>
-                </div>
-              </div>
-            )}
+                  </div>
+                </>
+              );
+            })()}
           </DialogContent>
         </Dialog>
 

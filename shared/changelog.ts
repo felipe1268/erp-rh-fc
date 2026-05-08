@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1428,
+    titulo: "Portal do Cliente — modal 'Gerenciar acessos' redesenhado + fix coluna cliente_id",
+    descricao: "Modal de gestão de acessos (/clientes/portal → Gerenciar acessos) redesenhado para ser mais dinâmico e fácil de cadastrar: (a) header com gradiente azul, ícone, razão social e CNPJ formatado; (b) barra de progresso visual mostrando 'X de 4 recomendados' (verde até o limite, âmbar quando atingido); (c) formulário de cadastro rápido FIXO no topo, com autoFocus no nome e submit por Enter — adicionar usuário em 2 cliques; (d) lista de usuários em CARDS (não mais tabela): avatar circular com iniciais coloridas por status (verde=ativo, âmbar=aguardando 1º acesso, cinza=inativo), nome, e-mail e último login em uma linha limpa; (e) ações como ícones (Reenviar/Desativar/Reativar/Remover) com tooltip, sem ocupar espaço; (f) empty state ilustrado quando ainda não há usuários; (g) usuários inativos ficam levemente esmaecidos e ordenados depois dos ativos. FIX importante: a coluna portal_credentials.cliente_id (introduzida na Rev. 1427) não havia sido aplicada no banco — o ColFix foi pulado pelo guard de versão e o modal carregava com erro 'column \"cliente_id\" does not exist'. Coluna criada manualmente no Neon e índice pc_tipo_cliente também.",
+    tipo: "melhoria",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 18:00:00",
+  },
+  {
     version: 1427,
     titulo: "Portal do Cliente: múltiplos usuários por cliente (até 4 recomendado)",
     descricao: "Cada cliente agora pode ter VÁRIOS usuários de acesso ao Portal do Cliente, cada um com nome e e-mail próprios — antes era apenas 1. (1) Admin (/clientes/portal): a tabela passa a mostrar 'N/4 ativos' por cliente e o botão 'Gerar acesso' foi substituído por 'Gerenciar acessos', que abre um modal com a LISTA de usuários (nome, e-mail, status, último login) e um formulário para 'Adicionar novo acesso' (nome + e-mail + opção de enviar e-mail de boas-vindas). Cada linha tem ações individuais: Reenviar senha provisória (mesmo e-mail), Desativar/Reativar e Remover definitivamente. Limite de 4 usuários é apenas RECOMENDADO (badge âmbar quando atingido), nunca bloqueia. (2) Backend (portalExterno): gerarAcessoCliente agora exige nome+email; cria nova credencial OU atualiza a existente do mesmo (clienteId, e-mail) — não mais 1 por cliente. Novas procedures removerAcessoCliente e reativarAcessoCliente. listarAcessosCliente já retornava todas as linhas. (3) Login: continua sendo CNPJ + senha (sem campo extra) — o backend agora itera todas as credenciais ativas daquele CNPJ e identifica o usuário pela senha (bcrypt.compare). trocarSenha segue a mesma lógica. (4) Esqueci minha senha: dispara um link de redefinição para CADA e-mail cadastrado no CNPJ informado, cada um válido por 1 hora. Sem mudança de schema (portal_credentials já permitia múltiplas linhas por clienteId).",
