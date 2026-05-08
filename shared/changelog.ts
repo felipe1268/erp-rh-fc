@@ -10049,6 +10049,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-06 02:30:00",
   },
   {
+    version: 1456,
+    titulo: "Portal do Cliente — Aba REFIS agora replica a tela interna na íntegra",
+    descricao: "A aba 'REFIS' do Portal do Cliente foi totalmente reescrita para reproduzir, em modo somente-leitura, todos os blocos visuais da tela interna de Refis (PlanejamentoDetalhe → função Refis): (1) Cabeçalho do relatório com Nº, Semana, Obra/Cliente, Local, Início/Status em/Término; (2) Evolução Física Global com barras Previsto/Realizado e 4 KPIs (Av. Sem. Previsto, Av. Sem. Realizado, SPI, Desvio Físico); (3A) Curva S Física — Avanço Acumulado (%) com linhas Baseline, Faturamento Previsto, Realizado e Tendência, tooltip detalhado, linha 'Hoje' e ReferenceLines de Prev./Real.; (3B) Curva S Financeira — Faturamento Acumulado (R$) usando o valor de contrato do projeto, série 'Faturado Real' a partir das medições mensais (planejamento_medicoes) e KPIs financeiros; (4) Avanço Físico por Grupo em barras horizontais (#FFB800 Previsto / #1A3461 Realizado); (5) Cards collapsíveis por grupo com sub-etapas em barras coloridas conforme desvio (verde/âmbar/vermelho); (6) Histórico completo dos REFIs emitidos. O backend portalExterno.planejamentoObra passou a devolver curvaMedicoes (faturamento mensal acumulado) para alimentar a série 'Faturado Real'. Toolbar, edição, IA e observações foram removidas — o cliente vê apenas os dados consolidados.",
+    tipo: "feature",
+    modulos: "Portal Cliente,Planejamento",
+    criadoPor: "Agent",
+    dataPublicacao: "2026-05-08 17:45:00",
+  },
+  {
     version: 1455,
     titulo: "Portal do Cliente — Reordenação das abas por arrastar e soltar",
     descricao: "Na barra lateral da tela /portal/cliente/obra/:obraId, agora é possível clicar no nome da aba, segurar e arrastar para reorganizar a ordem dos itens do menu. A nova ordem é salva no navegador (localStorage por obra), de modo que cada cliente personaliza o seu próprio menu sem afetar os demais. Indicadores visuais: cursor 'grab' ao passar sobre o item, item em arraste fica semi-transparente, uma linha azul indica o ponto de inserção. O drag-and-drop é desativado enquanto a busca 'Buscar no menu...' estiver preenchida (para não confundir com filtragem).",
