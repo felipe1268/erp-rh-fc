@@ -103,6 +103,14 @@ export default function DashParceiros() {
 
   const drillByMes = (info: ChartClickInfo) => drillByMesIdx(info.dataIndex);
 
+  const drillByColaborador = (employeeId: number | null | undefined, nome: string) => {
+    if (!data?.detalhes) return;
+    const items = data.detalhes.filter((d: any) =>
+      employeeId != null ? d.employeeId === employeeId : d.employeeNome === nome
+    );
+    setDrillDialog({ title: `Lançamentos — ${nome}`, items });
+  };
+
   // Comparativo Mês a Mês — padrão Folha de Pagamento (Δ vs mês anterior)
   const comparativoMensal = useMemo(() => {
     if (!data?.evolucaoMensal) return [] as any[];
@@ -512,16 +520,23 @@ export default function DashParceiros() {
               ) : (
                 <div className="space-y-2 max-h-[340px] overflow-y-auto">
                   {data.rankingColaboradores.map((c: any, i: number) => (
-                    <div key={c.employeeId} className="flex items-center justify-between gap-3 p-2 rounded-lg hover:bg-muted/50">
+                    <button
+                      key={c.employeeId}
+                      type="button"
+                      onClick={() => drillByColaborador(c.employeeId, c.nome)}
+                      className="w-full flex items-center justify-between gap-3 p-2 rounded-lg hover:bg-purple-50 cursor-pointer text-left transition-colors group"
+                      title="Clique para ver todos os lançamentos deste colaborador"
+                    >
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs font-bold text-muted-foreground w-5 text-right">{i + 1}</span>
+                        <span className={`text-xs font-bold w-5 text-right ${i < 3 ? "text-purple-600" : "text-muted-foreground"}`}>{i + 1}</span>
+                        <Eye className="h-3.5 w-3.5 text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                         <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{c.nome}</p>
+                          <p className="text-sm font-medium truncate group-hover:text-purple-700">{c.nome}</p>
                           <p className="text-xs text-muted-foreground">{c.lancamentos} lanç.</p>
                         </div>
                       </div>
                       <span className="text-sm font-bold text-purple-600 shrink-0">{fmtBRL(c.valor)}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -666,10 +681,12 @@ export default function DashParceiros() {
                         <th className="text-left py-2 px-3">Parceiro</th>
                         <th className="text-left py-2 px-3">Tipo</th>
                         <th className="text-left py-2 px-3">Colaborador</th>
+                        <th className="text-left py-2 px-3">Itens</th>
                         <th className="text-right py-2 px-3">Valor</th>
                         <th className="text-center py-2 px-3">Status</th>
                         <th className="text-center py-2 px-3">Competência</th>
                         <th className="text-left py-2 px-3">Aprovado em</th>
+                        <th className="text-center py-2 px-3">Comprov.</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -680,7 +697,17 @@ export default function DashParceiros() {
                             <td className="py-1.5 px-3 whitespace-nowrap">{fmtDateBR(d.dataCompra)}</td>
                             <td className="py-1.5 px-3">{d.parceiroNome}</td>
                             <td className="py-1.5 px-3 text-xs text-muted-foreground">{TIPO_LBL[d.tipoConvenio] || d.tipoConvenio}</td>
-                            <td className="py-1.5 px-3">{d.employeeNome}</td>
+                            <td className="py-1.5 px-3">
+                              <button
+                                type="button"
+                                onClick={() => drillByColaborador(d.employeeId, d.employeeNome)}
+                                className="text-left hover:text-purple-700 hover:underline inline-flex items-center gap-1"
+                                title="Ver todos os lançamentos deste colaborador"
+                              >
+                                <Eye className="h-3 w-3 opacity-50" />{d.employeeNome}
+                              </button>
+                            </td>
+                            <td className="py-1.5 px-3 text-xs text-muted-foreground max-w-[260px] truncate" title={d.descricaoItens || ""}>{d.descricaoItens || "—"}</td>
                             <td className="text-right py-1.5 px-3 font-medium">{fmtBRL(d.valor)}</td>
                             <td className="text-center py-1.5 px-3">
                               <Badge variant="outline" className={`text-[10px] ${st.className}`}>{st.label}</Badge>
@@ -691,17 +718,32 @@ export default function DashParceiros() {
                             <td className="py-1.5 px-3 text-xs text-muted-foreground whitespace-nowrap">
                               {d.aprovadoEm ? fmtDateBR(d.aprovadoEm) : "—"}
                             </td>
+                            <td className="text-center py-1.5 px-3">
+                              {d.comprovanteUrl ? (
+                                <a
+                                  href={d.comprovanteUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                                  title="Abrir comprovante em nova aba"
+                                >
+                                  <Eye className="h-3.5 w-3.5" /> Ver
+                                </a>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </td>
                           </tr>
                         );
                       })}
                     </tbody>
                     <tfoot>
                       <tr className="border-t-2 bg-muted/30 font-semibold">
-                        <td colSpan={4} className="py-2 px-3 text-right">TOTAL</td>
+                        <td colSpan={5} className="py-2 px-3 text-right">TOTAL</td>
                         <td className="text-right py-2 px-3 text-purple-600">
                           {fmtBRL(drillDialog.items.reduce((a: number, x: any) => a + Number(x.valor || 0), 0))}
                         </td>
-                        <td colSpan={3}></td>
+                        <td colSpan={4}></td>
                       </tr>
                     </tfoot>
                   </table>

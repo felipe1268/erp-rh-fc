@@ -3439,13 +3439,17 @@ async function getDashParceiros(
       return {
         id: l.id,
         dataCompra: String(l.dataCompra ?? '').slice(0, 10),
+        parceiroId: l.parceiroId,
         parceiroNome: p?.nomeFantasia || p?.razaoSocial || `Parceiro #${l.parceiroId}`,
         tipoConvenio: p?.tipoConvenio || '—',
+        employeeId: l.employeeId,
         employeeNome: l.employeeNome,
         valor: valor(l.valor),
         status: l.status,
         competenciaDesconto: l.competenciaDesconto,
         descricaoItens: l.descricaoItens,
+        comprovanteUrl: l.comprovanteUrl,
+        motivoRejeicao: l.motivoRejeicao,
         aprovadoEm: l.aprovadoEm ? String(l.aprovadoEm).slice(0, 10) : null,
         createdAt: l.createdAt ? String(l.createdAt).slice(0, 10) : null,
       };

@@ -15,7 +15,7 @@ import {
   History, Zap, Scale, Car, TrendingUp, ChevronRight, Activity,
   Palmtree, Shield, FileSignature, Ban, Star, Eye, ScrollText, Wrench,
   Package, PackageX, CheckCircle, XCircle, ShoppingCart,
-  Trash2, Camera, Video, ImageIcon, Upload, ShieldCheck, Plus, Loader2, Pencil, RotateCcw, UserCheck
+  Trash2, Camera, Video, ImageIcon, Upload, ShieldCheck, Plus, Loader2, Pencil, RotateCcw, UserCheck, Handshake, Receipt, ExternalLink
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
@@ -1121,6 +1121,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     color: "teal",
                     tabs: [
                       { value: "seguro_vida", label: "Seguro de Vida", icon: Shield, count: coberturaSeguro ? 1 : 0 },
+                      { value: "parceiros_lanc", label: "Parceiros / Convênios", icon: Handshake, count: ((raioX as any)?.parceirosLancamentos || []).length },
                     ],
                   },
                 ];
@@ -3040,6 +3041,133 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     </div>
                   )}
                 </div>
+              </TabsContent>
+
+              {/* ============ PARCEIROS / CONVÊNIOS — Lançamentos do colaborador ============ */}
+              <TabsContent value="parceiros_lanc" className="mt-4">
+                {(() => {
+                  const lancs = ((raioX as any)?.parceirosLancamentos || []) as any[];
+                  const total = lancs.reduce((a, l) => a + Number(l.valor || 0), 0);
+                  const aprov = lancs.filter(l => l.status === "aprovado");
+                  const pend  = lancs.filter(l => l.status === "pendente");
+                  const rej   = lancs.filter(l => l.status === "rejeitado");
+                  const totAprov = aprov.reduce((a, l) => a + Number(l.valor || 0), 0);
+                  const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                  const tipoLbl: Record<string, string> = {
+                    mercado: "Mercado", farmacia: "Farmácia", restaurante: "Restaurante",
+                    posto: "Posto", oficina: "Oficina", outro: "Convênio",
+                  };
+                  const stCls: Record<string, string> = {
+                    aprovado: "bg-green-100 text-green-800",
+                    pendente: "bg-amber-100 text-amber-800",
+                    rejeitado: "bg-red-100 text-red-800",
+                  };
+                  return (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                          <Handshake className="w-5 h-5 text-purple-600" />
+                          Lançamentos em Parceiros / Convênios
+                        </h3>
+                        <span className="text-xs text-gray-500">{lancs.length} lançamento(s) — Total {fmtBRL(total)}</span>
+                      </div>
+
+                      {/* KPIs */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                          <p className="text-[10px] uppercase font-bold text-blue-700 tracking-wider">Lançamentos</p>
+                          <p className="text-2xl font-bold text-blue-900 mt-1">{lancs.length}</p>
+                        </div>
+                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                          <p className="text-[10px] uppercase font-bold text-purple-700 tracking-wider">Valor Total</p>
+                          <p className="text-2xl font-bold text-purple-900 mt-1">{fmtBRL(total)}</p>
+                        </div>
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                          <p className="text-[10px] uppercase font-bold text-green-700 tracking-wider">Aprovado</p>
+                          <p className="text-2xl font-bold text-green-900 mt-1">{aprov.length}</p>
+                          <p className="text-xs text-green-700">{fmtBRL(totAprov)}</p>
+                        </div>
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                          <p className="text-[10px] uppercase font-bold text-amber-700 tracking-wider">Pend / Rej</p>
+                          <p className="text-2xl font-bold text-amber-900 mt-1">{pend.length} / {rej.length}</p>
+                        </div>
+                      </div>
+
+                      {lancs.length === 0 ? (
+                        <div className="text-center py-10 text-gray-400">
+                          <Handshake className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                          <p className="text-sm font-medium">Nenhum lançamento em parceiros conveniados</p>
+                          <p className="text-xs mt-1">Este colaborador não utilizou nenhum convênio até o momento.</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto rounded-lg border">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-50 text-xs uppercase text-gray-600">
+                              <tr>
+                                <th className="text-left py-2 px-3">Data</th>
+                                <th className="text-left py-2 px-3">Parceiro</th>
+                                <th className="text-left py-2 px-3">Tipo</th>
+                                <th className="text-left py-2 px-3">Itens / Descrição</th>
+                                <th className="text-right py-2 px-3">Valor</th>
+                                <th className="text-center py-2 px-3">Status</th>
+                                <th className="text-center py-2 px-3">Comp. Desconto</th>
+                                <th className="text-left py-2 px-3">Aprovado em</th>
+                                <th className="text-center py-2 px-3">Comprov.</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {lancs.map((l: any) => (
+                                <tr key={l.id} className="border-t hover:bg-gray-50">
+                                  <td className="py-2 px-3 whitespace-nowrap">{String(l.dataCompra ?? "").slice(0,10).split("-").reverse().join("/")}</td>
+                                  <td className="py-2 px-3 font-medium">{l.parceiroNomeExibicao}</td>
+                                  <td className="py-2 px-3 text-xs text-gray-600">{tipoLbl[l.tipoConvenio] || l.tipoConvenio || "—"}</td>
+                                  <td className="py-2 px-3 text-xs text-gray-600 max-w-[280px] truncate" title={l.descricaoItens || ""}>{l.descricaoItens || "—"}</td>
+                                  <td className="py-2 px-3 text-right font-semibold tabular-nums">{fmtBRL(Number(l.valor || 0))}</td>
+                                  <td className="py-2 px-3 text-center">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${stCls[l.status] || "bg-gray-100 text-gray-700"}`}>
+                                      {l.status === "aprovado" ? "Aprovado" : l.status === "rejeitado" ? "Rejeitado" : "Pendente"}
+                                    </span>
+                                    {l.status === "rejeitado" && l.motivoRejeicao && (
+                                      <p className="text-[10px] text-red-600 mt-0.5 max-w-[140px] truncate" title={l.motivoRejeicao}>{l.motivoRejeicao}</p>
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-3 text-center text-xs text-gray-600">
+                                    {l.competenciaDesconto ? l.competenciaDesconto.split("-").reverse().join("/") : "—"}
+                                  </td>
+                                  <td className="py-2 px-3 text-xs text-gray-600 whitespace-nowrap">
+                                    {l.aprovadoEm ? String(l.aprovadoEm).slice(0,10).split("-").reverse().join("/") : "—"}
+                                  </td>
+                                  <td className="py-2 px-3 text-center">
+                                    {l.comprovanteUrl ? (
+                                      <a
+                                        href={l.comprovanteUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                                        title="Abrir comprovante"
+                                      >
+                                        <ExternalLink className="w-3.5 h-3.5" /> Ver
+                                      </a>
+                                    ) : (
+                                      <span className="text-xs text-gray-400">—</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="border-t-2 bg-gray-50 font-semibold">
+                                <td colSpan={4} className="py-2 px-3 text-right">TOTAL</td>
+                                <td className="py-2 px-3 text-right text-purple-700">{fmtBRL(total)}</td>
+                                <td colSpan={4}></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </TabsContent>
 
             </Tabs>

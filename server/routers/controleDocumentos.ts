@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, pontoDescontos, notificationLogs, notificationRecipients } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray, gte, lte } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1736,6 +1736,62 @@ export const controleDocumentosRouter = router({
         }
       });
 
+      // ===== Lançamentos em parceiros conveniados (mercado/farmácia/etc) =====
+      const empParceirosLancRows = await db.select({
+        id: lancamentosParceiros.id,
+        parceiroId: lancamentosParceiros.parceiroId,
+        dataCompra: lancamentosParceiros.dataCompra,
+        descricaoItens: lancamentosParceiros.descricaoItens,
+        valor: lancamentosParceiros.valor,
+        status: lancamentosParceiros.status,
+        motivoRejeicao: lancamentosParceiros.motivoRejeicao,
+        comprovanteUrl: lancamentosParceiros.comprovanteUrl,
+        competenciaDesconto: lancamentosParceiros.competenciaDesconto,
+        aprovadoEm: lancamentosParceiros.aprovadoEm,
+        aprovadoPor: lancamentosParceiros.aprovadoPor,
+        createdAt: lancamentosParceiros.createdAt,
+        parceiroNome: parceirosConveniados.nomeFantasia,
+        parceiroRazao: parceirosConveniados.razaoSocial,
+        tipoConvenio: parceirosConveniados.tipoConvenio,
+      })
+        .from(lancamentosParceiros)
+        .leftJoin(parceirosConveniados, eq(parceirosConveniados.id, lancamentosParceiros.parceiroId))
+        .where(and(
+          eq(lancamentosParceiros.employeeId, input.employeeId),
+          eq(lancamentosParceiros.companyId, emp.companyId),
+        ))
+        .orderBy(desc(lancamentosParceiros.dataCompra));
+
+      const empParceirosLanc = empParceirosLancRows.map(r => ({
+        ...r,
+        parceiroNomeExibicao: r.parceiroNome || r.parceiroRazao || `Parceiro #${r.parceiroId}`,
+      }));
+
+      // Eventos na timeline (compra em parceiro)
+      const tipoLabelConv: Record<string, string> = {
+        mercado: "Mercado", farmacia: "Farmácia", restaurante: "Restaurante",
+        posto: "Posto/Combustível", oficina: "Oficina", outro: "Convênio",
+      };
+      empParceirosLanc.forEach(l => {
+        const dataEvt = String(l.dataCompra ?? '').slice(0, 10);
+        if (!dataEvt) return;
+        const valNum = Number(l.valor || 0);
+        const tipoLbl = tipoLabelConv[l.tipoConvenio || ''] || l.tipoConvenio || 'Convênio';
+        const stLbl = l.status === 'aprovado' ? '✓ Aprovado'
+                    : l.status === 'rejeitado' ? `✗ Rejeitado${l.motivoRejeicao ? ` — ${l.motivoRejeicao}` : ''}`
+                    : 'Pendente aprovação';
+        const compInfo = l.competenciaDesconto ? ` — desconto ${l.competenciaDesconto.split('-').reverse().join('/')}` : '';
+        const itensInfo = l.descricaoItens ? ` — ${l.descricaoItens}` : '';
+        const cor = l.status === 'aprovado' ? 'purple' : l.status === 'rejeitado' ? 'red' : 'amber';
+        timeline.push({
+          data: dataEvt,
+          tipo: `Parceiro ${tipoLbl}`,
+          descricao: `Compra em ${l.parceiroNomeExibicao} — ${valNum.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}${itensInfo} (${stLbl})${compInfo}`,
+          cor,
+          icone: 'handshake',
+        });
+      });
+
       // Re-sort timeline
       timeline.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
 
@@ -1772,6 +1828,7 @@ export const controleDocumentosRouter = router({
         emprestimosAlmox: empEmprestimos,
         descontosAlmox: empDescontosAlmox,
         insumosAlmox: empInsumos,
+        parceirosLancamentos: empParceirosLanc,
       };
     }),
 
