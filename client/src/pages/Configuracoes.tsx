@@ -2279,6 +2279,12 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Abas do Projeto", label: "IA Gestora",            path: "/planejamento?tab=ia-gestora" },
     { section: "Abas do Projeto", label: "BIM 3D",               path: "/planejamento?tab=bim-3d" },
   ],
+  "portal-cliente": [
+    { section: "Administração", label: "Acessos do Portal", path: "/clientes/portal" },
+    { section: "Administração", label: "Comentários", path: "/clientes/portal?tab=comentarios" },
+    { section: "Administração", label: "Avaliações (NPS)", path: "/clientes/portal?tab=avaliacoes" },
+    { section: "Cadastro", label: "Clientes", path: "/clientes" },
+  ],
   cadastro: [
     { section: "Cadastro", label: "Empresas", path: "/empresas" },
     { section: "Cadastro", label: "Colaboradores", path: "/colaboradores" },
@@ -2433,6 +2439,7 @@ function ModulosTab({ companyId, isMaster }: { companyId: number; isMaster: bool
     "comunicados-internos": { label: "Comunicados Internos", subtitle: "Avisos Oficiais da Empresa", icon: Megaphone, color: "text-blue-600", bgColor: "bg-blue-50", borderColor: "border-blue-200", description: "Cadastro e arquivo de comunicados internos com numeração automática anual e anexos." },
     curriculos: { label: "Currículos", subtitle: "Banco de Currículos", icon: Briefcase, color: "text-amber-600", bgColor: "bg-amber-50", borderColor: "border-amber-200", description: "Banco de currículos recebidos organizado por função, com cadastro de novas funções e anexos." },
     oraculo: { label: "Oráculo", subtitle: "Assistente IA do Sistema", icon: Brain, color: "text-violet-600", bgColor: "bg-violet-50", borderColor: "border-violet-200", description: "Assistente inteligente com IA para consultas, análises e orientações sobre dados do sistema." },
+    "portal-cliente": { label: "Portal do Cliente", subtitle: "Acesso Externo dos Clientes", icon: ExternalLink, color: "text-indigo-600", bgColor: "bg-indigo-50", borderColor: "border-indigo-200", description: "Administração das credenciais de acesso dos clientes ao portal externo, comentários e avaliações anônimas (NPS)." },
   };
 
   if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;

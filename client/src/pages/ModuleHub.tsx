@@ -12,7 +12,7 @@ import {
   Handshake, Home, Ruler, BookOpen,
   HardHat, Warehouse, BarChart3, FolderOpen, Hammer, Truck,
   Settings, FileText, Trash2, GitBranch, Receipt, Scale, Sparkles,
-  Megaphone, Briefcase,
+  Megaphone, Briefcase, ShieldCheck,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -198,6 +198,12 @@ const MODULES: Module[] = [
     description: "Veículos, manutenções, combustível, multas, IPVA, licenciamento, seguros com análise IA e rastreamento.",
     icon: Truck, accentFrom: "#0891B2", accentTo: "#0E7490", accentGlow: "rgba(8,145,178,0.35)", iconBg: "rgba(8,145,178,0.12)", path: "/frotas/painel", active: true,
     features: ["Veículos", "Manutenções", "Combustível", "Multas", "IPVA", "Licenciamento", "Seguros IA", "Rastreamento"],
+  },
+  {
+    id: "portal-cliente", title: "Portal do Cliente", subtitle: "Acesso Externo dos Clientes",
+    description: "Administração das credenciais de acesso dos clientes ao portal externo, comentários e avaliações anônimas (NPS).",
+    icon: ShieldCheck, accentFrom: "#6366F1", accentTo: "#4338CA", accentGlow: "rgba(99,102,241,0.35)", iconBg: "rgba(99,102,241,0.12)", path: "/clientes/portal", active: true,
+    features: ["Acessos / Credenciais", "Comentários Cliente↔FC", "Avaliações NPS", "E-mail de Boas-vindas", "Esqueci a Senha"],
   },
   // Comunicados Internos e Currículos foram movidos para dentro do módulo RH & DP
   // (seção "Comunicação e Recrutamento" no menu lateral). Removidos do hub de módulos

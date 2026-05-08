@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1426,
+    titulo: "Portal do Cliente — registrado como módulo próprio no Hub",
+    descricao: "O Portal do Cliente agora aparece como CARD INDEPENDENTE no Hub de Módulos (/modules), separado do módulo Cadastro. (1) ModuleHub: novo card 'Portal do Cliente' (ícone ShieldCheck, indigo) que leva direto para /clientes/portal (administração de credenciais, comentários e NPS). (2) Configurações → Módulos: nova entrada 'Portal do Cliente' com 4 sub-páginas (Acessos, Comentários, Avaliações NPS, Cadastro de Clientes) — visibilidade pode ser ligada/desligada por empresa em Permissões. (3) Backend: 'portal-cliente' incluído em ALL_MODULES (server/routers.ts) — passa a ser respeitado pelo controle de habilitação de módulos por empresa. Sem mudança de schema ou de comportamento das telas existentes.",
+    tipo: "feature",
+    modulos: "Portal do Cliente,Hub,Configurações",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 14:30:00",
+  },
+  {
     version: 1425,
     titulo: "Proj./Doc. Técnicos: controle de acesso por obra (data-row level)",
     descricao: "SEGURANÇA: a página /gestao-documentos agora respeita o vínculo 'OBRAS COM ACESSO' definido em Usuários e Permissões. Antes, qualquer usuário do módulo via TODOS os ficheiros da empresa, mesmo sem permissão à obra. Agora: (1) listFicheiros — filtra os ficheiros pela união entre allowed_obra_ids do usuário + obras das quais ele é responsável (via employees.email); (2) listObrasDisponiveis (modal Novo Ficheiro) — só mostra obras liberadas para o usuário; (3) createFicheiro — bloqueia criação para obra sem acesso (FORBIDDEN); (4) deleteFicheiro — bloqueia exclusão idem; (5) getFicheiroDetail — bloqueia abertura direta por URL/ID; (6) getDashboard — filtra documentos e ARTs pelas obras liberadas e bloqueia acesso direto a obraId não permitida. admin e admin_master continuam vendo tudo (sem restrição). Reaproveita helpers centrais getEffectiveAllowedObraIds/userCanAccessObra (server/db.ts) — mesma lógica já usada em Planejamento e demais módulos sensíveis.",
