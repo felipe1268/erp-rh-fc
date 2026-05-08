@@ -672,6 +672,17 @@ const menuSectionsOraculo: MenuSection[] = [
   },
 ];
 
+// Portal do Cliente — administração
+const menuSectionsPortalCliente: MenuSection[] = [
+  {
+    title: "Administração",
+    items: [
+      { icon: ShieldCheck, label: "Acessos do Portal", path: "/clientes/portal" },
+      { icon: Users, label: "Cadastro de Clientes", path: "/clientes" },
+    ],
+  },
+];
+
 export const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "rh-dp": menuSectionsRHDP,
   "sst": menuSectionsSST,
@@ -695,6 +706,7 @@ export const MODULE_SECTIONS: Record<ModuleId, MenuSection[]> = {
   "comunicados-internos": menuSectionsComunicados,
   "curriculos":           menuSectionsCurriculos,
   "oraculo":              menuSectionsOraculo,
+  "portal-cliente":       menuSectionsPortalCliente,
   "admin": menuSectionsAdmin,
   "all": [...menuSectionsRHDP], // fallback: show RH & DP
 };
@@ -773,6 +785,7 @@ const MODULE_HOME_ROUTES: Record<ModuleId, string> = {
   "comunicados-internos": "/comunicados-internos",
   "curriculos":           "/curriculos",
   "oraculo":              "/oraculo",
+  "portal-cliente":       "/clientes/portal",
   "admin": "/admin/telemetria",
   "all": "/painel",
 };
@@ -801,6 +814,7 @@ const MODULE_THEME: Record<ModuleId, { icon: any; color: string; bg: string }> =
   "comunicados-internos": { icon: Megaphone, color: "text-blue-400",   bg: "bg-blue-500/20"   },
   "curriculos":           { icon: Briefcase, color: "text-amber-400",  bg: "bg-amber-500/20"  },
   "oraculo":              { icon: Sparkles,  color: "text-violet-400", bg: "bg-violet-500/20" },
+  "portal-cliente":       { icon: ShieldCheck, color: "text-indigo-400", bg: "bg-indigo-500/20" },
   "admin": { icon: BarChart3, color: "text-red-400", bg: "bg-red-500/20" },
   "all": { icon: LayoutDashboard, color: "text-[#D4A843]", bg: "bg-[#D4A843]/20" },
 };
@@ -1499,6 +1513,7 @@ function DashboardLayoutContent({
     { id: "comunicados-internos", label: "Comunicados Internos", icon: Megaphone, color: "text-blue-400",   bg: "bg-blue-500/20",   path: "/comunicados-internos", canSee: () => (permIsAdminMaster || canAccessModule("comunicados-internos")) && isModEnabled("comunicados-internos") },
     { id: "curriculos",           label: "Currículos",           icon: Briefcase, color: "text-amber-400",  bg: "bg-amber-500/20",  path: "/curriculos",           canSee: () => (permIsAdminMaster || canAccessModule("curriculos"))           && isModEnabled("curriculos") },
     { id: "oraculo",              label: "Oráculo",              icon: Sparkles,  color: "text-violet-400", bg: "bg-violet-500/20", path: "/oraculo",              canSee: () => permIsAdminMaster },
+    { id: "portal-cliente",       label: "Portal do Cliente",    icon: ShieldCheck, color: "text-indigo-400", bg: "bg-indigo-500/20", path: "/clientes/portal",     canSee: () => (permIsAdminMaster || canAccessModule("portal-cliente")) && isModEnabled("portal-cliente") },
   ];
   const visibleModuleDefs = ALL_MODULE_DEFS.filter(m => m.canSee());
   const sortedModuleDefs = moduleOrder.length === 0 ? visibleModuleDefs :

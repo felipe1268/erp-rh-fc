@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import { useLocation } from "wouter";
 
-export type ModuleId = "rh-dp" | "sst" | "juridico" | "juridico-trabalhista" | "juridico-tributario" | "juridico-civil" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "medicao" | "cadastro" | "compras" | "almoxarifado" | "financeiro" | "gestao-documentos" | "operacional" | "frotas" | "comunicados-internos" | "curriculos" | "oraculo" | "admin" | "all";
+export type ModuleId = "rh-dp" | "sst" | "juridico" | "juridico-trabalhista" | "juridico-tributario" | "juridico-civil" | "avaliacao" | "terceiros" | "parceiros" | "orcamento" | "planejamento" | "medicao" | "cadastro" | "compras" | "almoxarifado" | "financeiro" | "gestao-documentos" | "operacional" | "frotas" | "comunicados-internos" | "curriculos" | "oraculo" | "portal-cliente" | "admin" | "all";
 
 interface ModuleContextType {
   activeModule: ModuleId;
@@ -161,6 +161,7 @@ const ROUTE_MODULE_MAP: Record<string, ModuleId> = {
   "/configuracoes": "cadastro",
   "/lixeira": "cadastro",
   "/revisoes": "cadastro",
+  "/clientes/portal": "portal-cliente",
 };
 
 const MODULE_LABELS: Record<ModuleId, string> = {
@@ -186,6 +187,7 @@ const MODULE_LABELS: Record<ModuleId, string> = {
   "comunicados-internos": "Comunicados Internos",
   "curriculos": "Currículos",
   "oraculo": "Oráculo",
+  "portal-cliente": "Portal do Cliente",
   "admin": "Administração",
   "all": "Todos os Módulos",
 };
@@ -196,7 +198,7 @@ export function ModuleProvider({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [activeModule, setActiveModuleState] = useState<ModuleId>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "juridico-trabalhista" || saved === "juridico-tributario" || saved === "juridico-civil" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "medicao" || saved === "cadastro" || saved === "compras" || saved === "almoxarifado" || saved === "financeiro" || saved === "gestao-documentos" || saved === "operacional" || saved === "frotas" || saved === "comunicados-internos" || saved === "curriculos" || saved === "oraculo" || saved === "all")) {
+    if (saved && (saved === "rh-dp" || saved === "sst" || saved === "juridico" || saved === "juridico-trabalhista" || saved === "juridico-tributario" || saved === "juridico-civil" || saved === "avaliacao" || saved === "terceiros" || saved === "parceiros" || saved === "orcamento" || saved === "planejamento" || saved === "medicao" || saved === "cadastro" || saved === "compras" || saved === "almoxarifado" || saved === "financeiro" || saved === "gestao-documentos" || saved === "operacional" || saved === "frotas" || saved === "comunicados-internos" || saved === "curriculos" || saved === "oraculo" || saved === "portal-cliente" || saved === "all")) {
       return saved as ModuleId;
     }
     return "rh-dp";
