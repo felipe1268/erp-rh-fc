@@ -784,6 +784,7 @@ export default function PortalPlanejamentoCliente() {
               refisLista={refisLista}
               nomeProjeto={obra?.nome ?? ""}
               nomeCliente={obra?.cliente ?? ""}
+              curvaData={curvaData}
             />
           );
           if (aba === "curva_s") return <AbaCurvaS curvaData={curvaData} kpis={kpis} projeto={projeto} curvaMedicoes={curvaMedicoes} />;
@@ -1679,12 +1680,13 @@ function AbaAvancoSemanal({ kpis, semanaAtual, atrasadas, curvaData }: any) {
 }
 
 function AbaProgSemanal({
-  atividadesTodas, refisLista, nomeProjeto, nomeCliente,
+  atividadesTodas, refisLista, nomeProjeto, nomeCliente, curvaData,
 }: {
   atividadesTodas: any[];
   refisLista: any[];
   nomeProjeto: string;
   nomeCliente: string;
+  curvaData?: any;
 }) {
   const avancosMap = useMemo(() => {
     const m: Record<number, number> = {};
@@ -1706,6 +1708,7 @@ function AbaProgSemanal({
       atividades={atividadesTodas}
       avancosMap={avancosMap}
       refisLista={refisLista}
+      curvaData={curvaData}
     />
   );
 }

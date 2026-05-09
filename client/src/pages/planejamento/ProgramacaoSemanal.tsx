@@ -103,9 +103,12 @@ function atividadesDaSemana(atividades: any[], week: Week) {
 }
 
 function currentWeekIdx(weeks: Week[]): number {
+  // Rev. 1532 — Considera Sáb/Dom ainda como "semana corrente" (Mon-Sun lógico),
+  // não cai mais para Semana 1 no fim de semana. Pega a última Week cujo ini <= hoje.
   const today = new Date();
-  const idx = weeks.findIndex(w => w.ini <= today && w.fim >= today);
-  return idx >= 0 ? idx : 0;
+  let lastIdx = -1;
+  weeks.forEach((w, i) => { if (w.ini <= today) lastIdx = i; });
+  return lastIdx >= 0 ? lastIdx : 0;
 }
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
@@ -122,6 +125,12 @@ interface Props {
   refisLista?: any[];
   /** Portal mode: hides authenticated-only sections (Recursos do orçamento, JULINHO IA, Modo Relatório). */
   portalMode?: boolean;
+  /** Rev. 1532 — Curva S (planejada/baseline + realizada) para computar Realizado e Aderência por semana via delta, em paridade com a aba Avanço Semanal. Opcional: quando ausente, banner mostra apenas Previsto. */
+  curvaData?: {
+    curvaPlanejada?: { semana: string; acumulado: number }[];
+    curvaBaseline?: { semana: string; acumulado: number }[];
+    curvaRealizada?: { semana: string; acumulado: number }[];
+  } | null;
 }
 
 // ── Cores de status ───────────────────────────────────────────────────────────
@@ -158,7 +167,7 @@ function tipoIcon(tipo: string) {
 export function ProgramacaoSemanal({
   projetoId, revisaoId, orcamentoId, companyId,
   nomeProjeto, nomeCliente, atividades: atividadesProp, avancosMap,
-  refisLista = [], portalMode = false,
+  refisLista = [], portalMode = false, curvaData = null,
 }: Props) {
   // Atividades desativadas (a.disabled === true) NÃO devem aparecer em nenhuma
   // parte da Programação Semanal — nem em totais, nem em listagens, nem nos
@@ -235,6 +244,33 @@ export function ProgramacaoSemanal({
     });
     return prev;
   }, [folhasTodas, semanaAtual]);
+
+  // Rev. 1532 — Realizado + Aderência da semana via delta da Curva S Realizada,
+  // em paridade com a aba Avanço Semanal (mesmas fórmulas, mesmo número).
+  // Quando curvaData não está disponível, retorna null e o banner esconde estes campos.
+  const evmSemana = useMemo(() => {
+    if (!semanaAtual || !curvaData) return null;
+    const semIniStr = dateStr(semanaAtual.ini);
+    const semAntDate = new Date(semanaAtual.ini.getTime() - 7 * 86400000);
+    const semAntStr = dateStr(semAntDate);
+    const acumAt = (arr: { semana: string; acumulado: number }[] | undefined, semFim: string): number => {
+      if (!arr || !arr.length) return 0;
+      const ord = arr.slice().sort((a, b) => a.semana.localeCompare(b.semana));
+      let last = 0;
+      for (const p of ord) { if (p.semana <= semFim) last = p.acumulado; else break; }
+      return last;
+    };
+    const planejadaArr = (curvaData.curvaPlanejada?.length ? curvaData.curvaPlanejada : curvaData.curvaBaseline) ?? [];
+    const realizadaArr = curvaData.curvaRealizada ?? [];
+    const planAtual = acumAt(planejadaArr, semIniStr);
+    const planAntes = acumAt(planejadaArr, semAntStr);
+    const realAtual = acumAt(realizadaArr, semIniStr);
+    const realAntes = acumAt(realizadaArr, semAntStr);
+    const previstoCurvaS = Math.max(0, planAtual - planAntes);
+    const realizado = Math.max(0, realAtual - realAntes);
+    const aderencia = previstoCurvaS > 0 ? (realizado / previstoCurvaS) * 100 : null;
+    return { previstoCurvaS, realizado, aderencia };
+  }, [semanaAtual, curvaData]);
 
   const pesoSemana = useMemo(() => {
     const indiretas = atividadesSemAtualTodas.filter((a: any) => a.isIndireta);
@@ -485,48 +521,61 @@ export function ProgramacaoSemanal({
             })}
           </div>
 
-          {/* Banner da semana — Previsto via DELTA (overlap) + peso bruto info */}
+          {/* Rev. 1532 — Banner unificado: Previsto + Realizado + Aderência (SPI sem.)
+              em paridade total com a aba Avanço Semanal. Mesmo número, mesmo nome. */}
           {atividadesSemAtual.length > 0 && (
             <div className="rounded-lg border border-blue-200 bg-blue-50/60 px-4 py-2.5 space-y-1.5">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <div className="flex items-center gap-2">
                 <BarChart3 className="h-4 w-4 text-blue-600" />
                 <span className="text-xs font-semibold text-blue-800">
-                  Semana {semanaAtual?.numero} — Previsto:
-                </span>
-                <span className="text-sm font-bold text-orange-600 tabular-nums">
-                  {previstoSemanaDelta.toFixed(2)}%
-                </span>
-                <span className="text-[10px] text-slate-500" title="Delta da Curva S — quanto o projeto deve avançar nesta semana">
-                  (delta da Curva S)
+                  Semana {semanaAtual?.numero}
                 </span>
               </div>
               <span className="text-slate-300">|</span>
-              <div className="text-[11px] text-slate-600">
-                <span className="font-medium">{pesoSemana.diretasCount}</span> atividades diretas
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] text-slate-600 font-medium">Previsto:</span>
+                <span className="text-sm font-bold text-orange-600 tabular-nums">
+                  {(evmSemana?.previstoCurvaS ?? previstoSemanaDelta).toFixed(2)}%
+                </span>
               </div>
-              {pesoSemana.indiretasCount > 0 && (
+              {evmSemana && (
                 <>
                   <span className="text-slate-300">|</span>
-                  <div className="text-[11px] text-gray-500 flex items-center gap-1">
-                    <span className="inline-block w-2 h-2 rounded-full bg-gray-400" />
-                    <span className="font-medium">{pesoSemana.indiretasCount}</span> indiretas
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-slate-600 font-medium">Realizado:</span>
+                    <span className="text-sm font-bold text-emerald-600 tabular-nums">
+                      {evmSemana.realizado.toFixed(2)}%
+                    </span>
+                  </div>
+                  <span className="text-slate-300">|</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-slate-600 font-medium">Aderência (SPI sem.):</span>
+                    <span className={`text-sm font-bold tabular-nums ${evmSemana.aderencia == null ? "text-slate-400" : evmSemana.aderencia >= 95 ? "text-emerald-600" : "text-red-600"}`}>
+                      {evmSemana.aderencia == null ? "—" : `${evmSemana.aderencia.toFixed(0)}%`}
+                    </span>
                   </div>
                 </>
               )}
-              {pesoSemana.maiorPesoIds.size > 0 && (
-                <>
-                  <span className="text-slate-300">|</span>
-                  <div className="text-[11px] text-orange-600 flex items-center gap-1">
-                    <Zap className="h-3 w-3" />
-                    Maior peso: <span className="font-bold">{pesoSemana.maiorPesoVal.toFixed(2)}%</span>
-                    {pesoSemana.maiorPesoIds.size > 1 && <span className="text-[10px] text-orange-500">({pesoSemana.maiorPesoIds.size} atividades)</span>}
-                  </div>
-                </>
+              <span className="text-slate-300">|</span>
+              <div className="text-[11px] text-slate-600">
+                <span className="font-medium">{pesoSemana.diretasCount}</span> atividade{pesoSemana.diretasCount !== 1 ? "s" : ""}
+              </div>
+              {pesoSemana.indiretasCount > 0 && (
+                <div className="text-[11px] text-gray-500 flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-full bg-gray-400" />
+                  <span className="font-medium">{pesoSemana.indiretasCount}</span> indiretas
+                </div>
               )}
             </div>
             <div className="text-[10px] text-slate-400">
-              <strong>Como ler:</strong> &quot;Previsto&quot; é o <strong>delta da Curva S nesta semana</strong> (atividades multi-semana contribuem proporcionalmente). Peso bruto das atividades ativas: <strong className="tabular-nums">{pesoSemana.somaSemana.toFixed(2)}%</strong> ({pesoSemana.pctSemana.toFixed(1)}% do projeto, informativo).
+              <strong>Como ler:</strong>{" "}
+              {evmSemana
+                ? <>&quot;Previsto&quot; e &quot;Realizado&quot; são o <strong>delta da Curva S nesta semana</strong> (o quanto a obra deve / efetivamente avançou de seg a dom). Atividades multi-semana contribuem proporcionalmente.</>
+                : <>&quot;Previsto&quot; é estimado pelo <strong>overlap dias × peso ÷ duração</strong> (atividades multi-semana contribuem proporcionalmente). Realizado e Aderência indisponíveis sem histórico de avanços.</>
+              }
+              {" "}Peso bruto das atividades ativas: <strong className="tabular-nums">{pesoSemana.somaSemana.toFixed(2)}%</strong>
+              {pesoSemana.maiorPesoVal > 0 && <> · maior peso individual: <strong>{pesoSemana.maiorPesoVal.toFixed(2)}%</strong></>} (informativo).
             </div>
             </div>
           )}

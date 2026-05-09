@@ -792,6 +792,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             atividades={atividades}
             avancosMap={avancosMap}
             refisLista={refisLista}
+            curvaData={curvaData}
           />
         )}
 

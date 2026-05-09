@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1532,
+    titulo: "Programação Semanal × Avanço Semanal — paridade total (Previsto + Realizado + Aderência via delta)",
+    descricao: "AJUSTE pedido pelo usuário (IMG_0217 vs IMG_0218): as duas telas exibiam números aparentemente divergentes para 'a semana' (Programação Semanal: 'Peso da Semana 1: 11,47%' vs Avanço Semanal: 'Previsto na semana: 1,98%'). Causa: peso bruto somava atividades multi-semana integralmente em CADA semana (double-counting clássico, anti-padrão segundo PMBOK/EVM). SOLUÇÃO baseada em PMBOK 7ª ed./AACE 80R-13: 'Single Source of Truth' — Programação Semanal agora exibe os MESMOS 3 indicadores da aba Avanço Semanal, com o MESMO nome e a MESMA fórmula: (a) Previsto = delta da Curva S Planejada na semana; (b) Realizado = delta da Curva S Realizada (Δ% acumulado × peso); (c) Aderência (SPI sem.) = Realizado÷Previsto×100, verde≥95% / vermelho<95%. Peso bruto demovido para a nota 'Como ler' (informativo, sem competir visualmente). Implementação: ProgramacaoSemanal.tsx ganhou prop opcional curvaData; PlanejamentoDetalhe.tsx (interno) e PortalPlanejamentoCliente.tsx > AbaProgSemanal (externo) passam curvaData já existente. Quando curvaData ausente (fallback), banner mostra apenas Previsto via overlap (Rev. 1531).",
+    tipo: 'fix',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 05:00:00',
+  },
+  {
     version: 1531,
     titulo: "Planejamento interno — Replica melhorias do Portal (KPIs por semana + Pred./Suc. clicáveis)",
     descricao: "REPLICAÇÃO pedida pelo usuário: aplicadas no módulo INTERNO de Planejamento as 3 melhorias feitas no Portal do Cliente (Rev. 1528, 1529, 1530). (1) Cronograma — colunas Pred./Suc. continuam como chip compacto MAS agora são CLICÁVEIS abrindo Popover com a lista completa das EAPs em chips coloridos (funciona em mouse e touch — antes só hover). (2) Avanço Semanal — banner 'Peso da Semana' agora mostra também 'Previsto', 'Realizado' e 'Aderência' computados via DELTA DA CURVA S (overlap dias × peso ÷ duração para Previsto; Δ% acumulado × peso para Realizado). Atividades multi-semana contribuem proporcionalmente em vez de pelo peso integral. Peso bruto mantido como info auxiliar com nota 'Como ler'. (3) Programação Semanal — banner 'Peso da Semana' substituído por 'Previsto na semana' (delta via overlap), peso bruto vira info auxiliar. Mesmo layout/conceito do Portal para manter consistência. Arquivos: PlanejamentoDetalhe.tsx (Cronograma + AvancoSemanal), ProgramacaoSemanal.tsx.",
