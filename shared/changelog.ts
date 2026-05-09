@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1518,
+    titulo: "Portal do Cliente — Aba Caminho Crítico ganha legendas didáticas em linguagem de engenharia",
+    descricao: "DIDÁTICA pedida pelo usuário (screenshot IMG_0195): a aba Caminho Crítico mostrava os números mas não explicava como TRATAR cada grupo de atividades de risco. Adicionados (sempre visíveis, sem sobrescrever os números existentes): (1) Cabeçalho técnico no topo explicando o método CPM e o conceito de float total. (2) Logo abaixo dos 3 cards de KPI, três cartões coloridos com a 'orientação de tratamento' por categoria — Crítico = tratamento operacional/diário (monitoramento em campo, RDO, escalonamento no mesmo dia); Quase Crítico = tratamento tático/semanal (antecipar mobilização, revisar predecessoras, float<7d vira crítico); Com Folga = tratamento gerencial/quinzenal (reserva de capacidade da rede). (3) Subtítulo curto sob o título de cada lista de atividades, reforçando o significado prático do grupo. Linguagem técnica de engenharia, sem cobrir as informações já existentes.",
+    tipo: 'melhoria',
+    modulos: 'Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 20:30:00',
+  },
+  {
     version: 1517,
     titulo: "Portal do Cliente — Recolher barra lateral vira modo 'rail' (só ícones), igual ao ERP",
     descricao: "AJUSTE pedido pelo usuário: ao recolher a barra lateral do Portal do Cliente, ela sumia totalmente da tela. O usuário pediu para manter a mesma lógica usada no resto do ERP, em que a barra apenas DIMINUI de largura e fica no formato 'rail' mostrando apenas os ícones. Implementado: a barra alterna suavemente entre w-64 (expandida) e w-16 (rail), com transição. No modo rail aparecem: logo FC, botão de expandir (PanelLeftOpen), botão Home (Tela Inicial), ícone de prédio (clique abre/expande para trocar de obra), todos os ícones das abas do projeto (com tooltip do nome e ponto âmbar para 'em breve') e botão Trocar de Obra. Removido o botão flutuante de expandir que ficava no header branco — não é mais necessário pois o rail tem o seu próprio.",

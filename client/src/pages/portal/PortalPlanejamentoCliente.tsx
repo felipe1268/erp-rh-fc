@@ -3216,11 +3216,12 @@ function AbaCaminhoCritico({ atividades, projeto }: { atividades: any[]; projeto
 
   return (
     <div className="space-y-5">
+      {/* Rev. 1518: bloco didático no topo, em linguagem técnica de engenharia. */}
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
         <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-        <div className="text-xs text-amber-800">
-          <strong className="block mb-1">Caminho Crítico</strong>
-          Cada atividade é classificada pelo seu <strong>float</strong> (folga em dias até o fim da obra). <strong>Float = 0</strong> são as atividades que se atrasarem empurram o término da obra inteira; <strong>Float ≤ 14d</strong> são quase críticas; o restante tem folga confortável. Cada lista mostra mini-Gantt visual e barra de avanço.
+        <div className="text-xs text-amber-800 leading-relaxed">
+          <strong className="block mb-1 text-sm">Caminho Crítico — método CPM</strong>
+          O Caminho Crítico é calculado pelo <strong>CPM (Critical Path Method)</strong> considerando o <strong>float total</strong> de cada atividade — folga, em dias, entre o término planejado da atividade e o término planejado do projeto. As atividades com float zerado definem o <strong>prazo contratual da obra</strong>: qualquer desvio negativo nessas atividades produz atraso direto na entrega final, sem absorção pela rede de precedências.
         </div>
       </div>
 
@@ -3243,6 +3244,35 @@ function AbaCaminhoCritico({ atividades, projeto }: { atividades: any[]; projeto
         </div>
       </div>
 
+      {/* Rev. 1518: legendas explicativas por categoria — sempre visíveis,
+          em linguagem de engenharia, indicando como TRATAR cada grupo de risco. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="bg-white border border-red-200 rounded-xl p-3.5 text-[11.5px] leading-relaxed">
+          <p className="font-semibold text-red-700 mb-1.5 flex items-center gap-1.5">
+            <AlertOctagon className="h-3.5 w-3.5" /> Tratamento operacional · diário
+          </p>
+          <p className="text-slate-600">
+            Atividades <strong>sem folga total</strong> na rede. Exigem <strong>monitoramento diário em campo</strong>, liberação prévia de frente de serviço, cobertura integral de insumos no canteiro e equipe dedicada. Desvios devem ser registrados no RDO e escalados ao gestor da obra <strong>no mesmo dia</strong>.
+          </p>
+        </div>
+        <div className="bg-white border border-amber-200 rounded-xl p-3.5 text-[11.5px] leading-relaxed">
+          <p className="font-semibold text-amber-700 mb-1.5 flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" /> Tratamento tático · semanal
+          </p>
+          <p className="text-slate-600">
+            Atividades em <strong>risco iminente de migração para o caminho crítico</strong> (float total ≤ 14 dias). Acompanhamento na reunião semanal de obra, antecipação de mobilização (mão de obra, equipamento e materiais) e revisão das predecessoras. <strong>Float &lt; 7 dias</strong> deve ser conduzido como crítico.
+          </p>
+        </div>
+        <div className="bg-white border border-blue-200 rounded-xl p-3.5 text-[11.5px] leading-relaxed">
+          <p className="font-semibold text-blue-700 mb-1.5 flex items-center gap-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5" /> Tratamento gerencial · quinzenal
+          </p>
+          <p className="text-slate-600">
+            Atividades com <strong>folga total &gt; 14 dias</strong>. Funcionam como <strong>reserva de capacidade</strong> da rede — equipe e equipamento podem ser temporariamente realocados em apoio às atividades críticas sem comprometer o prazo contratual da obra.
+          </p>
+        </div>
+      </div>
+
       {/* Legenda Gantt */}
       <div className="flex items-center gap-1 text-[10px] text-slate-400 bg-white border border-slate-100 rounded-lg p-2 shadow-sm flex-wrap">
         <span className="font-medium text-slate-500 mr-2">Gantt:</span>
@@ -3255,9 +3285,12 @@ function AbaCaminhoCritico({ atividades, projeto }: { atividades: any[]; projeto
 
       {criticas.length > 0 && (
         <div className="bg-white rounded-xl border border-red-200 shadow-sm p-4">
-          <p className="text-sm font-semibold text-red-700 mb-3 flex items-center gap-2">
+          <p className="text-sm font-semibold text-red-700 mb-1 flex items-center gap-2">
             <AlertOctagon className="h-4 w-4" />
             Caminho Crítico — {criticas.length} atividades (Float = 0)
+          </p>
+          <p className="text-[11px] text-slate-500 mb-3">
+            Definem o prazo final da obra. Atraso aqui = atraso na entrega contratual.
           </p>
           <AtivList list={criticas} badgeClass="text-red-600" />
         </div>
@@ -3265,9 +3298,12 @@ function AbaCaminhoCritico({ atividades, projeto }: { atividades: any[]; projeto
 
       {quaseCrit.length > 0 && (
         <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-4">
-          <p className="text-sm font-semibold text-amber-700 mb-3 flex items-center gap-2">
+          <p className="text-sm font-semibold text-amber-700 mb-1 flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" />
             Quase Crítico — {quaseCrit.length} atividades (Float ≤ 14 dias)
+          </p>
+          <p className="text-[11px] text-slate-500 mb-3">
+            Próximas a virar caminho crítico. Antecipar mobilização e suprimentos para preservar a folga.
           </p>
           <AtivList list={quaseCrit} badgeClass="text-amber-600" />
         </div>
@@ -3275,9 +3311,12 @@ function AbaCaminhoCritico({ atividades, projeto }: { atividades: any[]; projeto
 
       {comFolga.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-          <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+          <p className="text-sm font-semibold text-slate-700 mb-1 flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-blue-500" />
             Com Folga — {comFolga.length} atividades (Float &gt; 14 dias)
+          </p>
+          <p className="text-[11px] text-slate-500 mb-3">
+            Folga confortável na rede. Servem como reserva de capacidade para apoio às atividades críticas.
           </p>
           <AtivList list={comFolga} badgeClass="text-blue-600" />
         </div>
