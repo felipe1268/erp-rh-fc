@@ -3738,6 +3738,72 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
 // Paleta de cores para revisões anteriores (distintas, mas secundárias)
 const REV_COLORS = ["#7c3aed","#0891b2","#d97706","#be185d","#0d9488","#ea580c","#9333ea","#0284c7"];
 
+// ── Rev. 1525 — Banner de Tendência × Prazo Contratual (interno) ──────
+// Mesmo componente do Portal do Cliente (Rev. 1523). Usa SPI atual para
+// projetar a data estimada de conclusão e comparar com o prazo contratual.
+function AlertaTendenciaBanner({ alerta }: { alerta: any }) {
+  if (!alerta) return null;
+  if (alerta.nivel === "sem_dados") {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-center gap-3 text-xs text-slate-500">
+        <Activity className="h-4 w-4 shrink-0" />
+        <span>Tendência indisponível — aguardando primeiros lançamentos de avanço para projetar conclusão.</span>
+      </div>
+    );
+  }
+  const cfg: Record<string, { bg: string; bd: string; tx: string; ic: any; titulo: string; sub: string }> = {
+    ok:      { bg: "bg-emerald-50",  bd: "border-emerald-200",  tx: "text-emerald-800", ic: <CheckCircle2 className="h-5 w-5 text-emerald-600" />,
+               titulo: `No prazo · SPI ${alerta.spi.toFixed(2)}`,
+               sub: `Conclusão estimada: ${alerta.etaStr} (prazo contratual: ${alerta.fimStr}). Mantendo o ritmo atual a obra entrega ${Math.abs(alerta.diffDias)} dia(s) ${alerta.diffDias < 0 ? "antes" : "no"} do prazo.` },
+    atencao: { bg: "bg-amber-50",    bd: "border-amber-200",    tx: "text-amber-800",   ic: <AlertTriangle className="h-5 w-5 text-amber-600" />,
+               titulo: `Atenção · SPI ${alerta.spi.toFixed(2)} · ${alerta.diffDias} dia(s) de atraso projetado`,
+               sub: `Conclusão estimada: ${alerta.etaStr} (prazo contratual: ${alerta.fimStr}). Pequeno desvio recuperável; intensificar frente crítica recomenda-se.` },
+    alerta:  { bg: "bg-orange-50",   bd: "border-orange-200",   tx: "text-orange-800",  ic: <AlertTriangle className="h-5 w-5 text-orange-600" />,
+               titulo: `Alerta · SPI ${alerta.spi.toFixed(2)} · ${alerta.diffDias} dia(s) de atraso projetado`,
+               sub: `Conclusão estimada: ${alerta.etaStr} (prazo contratual: ${alerta.fimStr}). Risco de estouro do prazo contratual — replanejamento sugerido.` },
+    critico: { bg: "bg-red-50",      bd: "border-red-300",      tx: "text-red-800",     ic: <AlertTriangle className="h-5 w-5 text-red-600" />,
+               titulo: `Crítico · SPI ${alerta.spi.toFixed(2)} · ${alerta.diffDias} dia(s) de atraso projetado`,
+               sub: `Conclusão estimada: ${alerta.etaStr} (prazo contratual: ${alerta.fimStr}). Tendência de estouro severo — ação corretiva imediata.` },
+  };
+  const c = cfg[alerta.nivel];
+  return (
+    <div className={`rounded-xl border ${c.bd} ${c.bg} px-4 py-3 flex items-start gap-3`}>
+      <div className="mt-0.5">{c.ic}</div>
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-bold ${c.tx}`}>{c.titulo}</p>
+        <p className={`text-xs ${c.tx} opacity-80 mt-0.5`}>{c.sub}</p>
+      </div>
+    </div>
+  );
+}
+
+// Calcula nível de alerta tendência × prazo contratual (EVM padrão).
+function calcAlertaTendencia(dataInicio: string | null | undefined, dataTerminoContratual: string | null | undefined, previstoPct: number, realizadoPct: number): any {
+  if (!dataInicio || !dataTerminoContratual) return null;
+  if (previstoPct <= 0) return { nivel: "sem_dados" as const };
+  const spi = realizadoPct / previstoPct;
+  const ini = new Date(dataInicio + "T12:00:00").getTime();
+  const fim = new Date(dataTerminoContratual + "T12:00:00").getTime();
+  if (!Number.isFinite(ini) || !Number.isFinite(fim)) return null;
+  if (fim <= ini) return null;
+  const duracaoMs = fim - ini;
+  const etaMs = ini + duracaoMs / Math.max(spi, 0.0001);
+  const etaDate = new Date(etaMs);
+  const diffDias = Math.round((etaMs - fim) / 86400000);
+  let nivel: "ok" | "atencao" | "alerta" | "critico";
+  if (diffDias <= 0)       nivel = "ok";
+  else if (diffDias <= 30) nivel = "atencao";
+  else if (diffDias <= 90) nivel = "alerta";
+  else                     nivel = "critico";
+  return {
+    nivel,
+    spi: +spi.toFixed(2),
+    diffDias,
+    etaStr: etaDate.toLocaleDateString("pt-BR"),
+    fimStr: new Date(fim).toLocaleDateString("pt-BR"),
+  };
+}
+
 function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPct, projetoId, revisaoAtiva, curvaMedicoes = [], onEditarProjeto, hideFinancial }: any) {
   const [curvaTipo, setCurvaTipo] = useState<"trabalho" | "financeira">("trabalho");
 
@@ -3847,6 +3913,17 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
           </p>
         </div>
       ) : <>
+      {/* Rev. 1525 — Banner de tendência × prazo contratual */}
+      {(() => {
+        const hojeT = new Date().toISOString().split("T")[0];
+        const lastPlan = [...merged].reverse().find((p: any) => p.semana <= hojeT && p.planejada != null);
+        const lastReal = [...merged].reverse().find((p: any) => p.realizada != null);
+        const prevPct = Number(lastPlan?.planejada ?? 0);
+        const realPct = Number(lastReal?.realizada ?? avancoAtual ?? 0);
+        const alerta = calcAlertaTendencia(proj?.dataInicio, proj?.dataTerminoContratual, prevPct, realPct);
+        return <AlertaTendenciaBanner alerta={alerta} />;
+      })()}
+
       {/* Legenda dinâmica */}
       <div className="flex flex-wrap gap-4 text-xs bg-white rounded-xl border border-slate-100 shadow-sm p-3">
         {[
@@ -4086,6 +4163,16 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
 
         return (
           <>
+          {/* Rev. 1525 — Banner de tendência × prazo contratual (financeira usa mesmos %) */}
+          {(() => {
+            const hojeT = new Date().toISOString().split("T")[0];
+            const lastPlan = [...merged].reverse().find((p: any) => p.semana <= hojeT && p.planejada != null);
+            const lastReal = [...merged].reverse().find((p: any) => p.realizada != null);
+            const prevPct = Number(lastPlan?.planejada ?? 0);
+            const realPct = Number(lastReal?.realizada ?? avancoAtual ?? 0);
+            const alerta = calcAlertaTendencia(proj?.dataInicio, proj?.dataTerminoContratual, prevPct, realPct);
+            return <AlertaTendenciaBanner alerta={alerta} />;
+          })()}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
             <div className={`grid divide-x divide-slate-100 border-b border-slate-100 mb-4 ${finHasReceita ? "grid-cols-5" : "grid-cols-4"}`}>
               <div className="px-4 py-3 text-center">
@@ -9333,6 +9420,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const [colBloco4, setColBloco4] = useState(false);
   const [colBloco6, setColBloco6] = useState(false);
   const [colBloco7, setColBloco7] = useState(false);
+  // Rev. 1525 — toggles individuais por série nas Curvas S do REFIS (Física + Financeira)
+  const [serRefis, setSerRefis] = useState<Record<string, boolean>>({
+    baseline: true, planejada: true, realizada: true, tendencia: true, faturado: true,
+  });
+  const tglRefis = (k: string) => setSerRefis(p => ({ ...p, [k]: !p[k] }));
   const [refisComIndiretas, setRefisComIndiretas] = useState(false);
 
   // ── Cruzamento orçamento × cronograma (para calcular venda prevista/realizada mensal) ──
@@ -10730,15 +10822,36 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             <p className="text-xs font-bold uppercase tracking-wider text-white">
               Curva S Física — Avanço Acumulado (%)
             </p>
-            <div className="flex gap-4 text-[11px] text-slate-300 flex-wrap items-center">
-              {cfHasBaseline  && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#1e40af" }} /> Baseline</span>}
-              {cfHasPlanejada && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#ef4444" }} /> Faturamento Previsto</span>}
-              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#22c55e" }} /> Faturamento Realizado (Físico)</span>
-              <span className="flex items-center gap-1.5">
+            <div className="flex gap-3 text-[11px] text-slate-300 flex-wrap items-center" onClick={(e) => e.stopPropagation()}>
+              {cfHasBaseline && (
+                <button type="button" onClick={() => tglRefis("baseline")}
+                  className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-opacity ${serRefis.baseline ? "" : "opacity-40"}`}
+                  title={serRefis.baseline ? "Ocultar Baseline" : "Mostrar Baseline"}>
+                  <span className="inline-block w-7 h-0.5 rounded" style={{ background: "#1e40af" }} />
+                  <span className={serRefis.baseline ? "" : "line-through"}>Baseline</span>
+                </button>
+              )}
+              {cfHasPlanejada && (
+                <button type="button" onClick={() => tglRefis("planejada")}
+                  className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-opacity ${serRefis.planejada ? "" : "opacity-40"}`}
+                  title={serRefis.planejada ? "Ocultar Revisão Atual" : "Mostrar Revisão Atual"}>
+                  <span className="inline-block w-7 h-0.5 rounded" style={{ background: "#ef4444" }} />
+                  <span className={serRefis.planejada ? "" : "line-through"}>Revisão Atual</span>
+                </button>
+              )}
+              <button type="button" onClick={() => tglRefis("realizada")}
+                className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-opacity ${serRefis.realizada ? "" : "opacity-40"}`}
+                title={serRefis.realizada ? "Ocultar Realizado" : "Mostrar Realizado"}>
+                <span className="inline-block w-7 h-0.5 rounded" style={{ background: "#22c55e" }} />
+                <span className={serRefis.realizada ? "" : "line-through"}>Realizado</span>
+              </button>
+              <button type="button" onClick={() => tglRefis("tendencia")}
+                className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-opacity ${serRefis.tendencia ? "" : "opacity-40"}`}
+                title={serRefis.tendencia ? "Ocultar Tendência" : "Mostrar Tendência"}>
                 <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#16a34a" strokeWidth="2" strokeDasharray="4 2" /></svg>
-                Tendência
-              </span>
-              <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${colBloco3A ? "rotate-180" : ""}`} />
+                <span className={serRefis.tendencia ? "" : "line-through"}>Tendência</span>
+              </button>
+              <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform cursor-pointer ${colBloco3A ? "rotate-180" : ""}`} onClick={() => setColBloco3A(v => !v)} />
             </div>
           </div>
           {!colBloco3A && (
@@ -10763,15 +10876,15 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               {/* Chart */}
               <div className="px-5 py-4" style={{ height: 360 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={curvaFiltrada} margin={{ top: 5, right: 60, bottom: curvaFiltrada.length > 10 ? 50 : 20, left: 10 }}>
+                  <LineChart data={curvaFiltrada} margin={{ top: 5, right: 60, bottom: curvaFiltrada.length > 10 ? 70 : 20, left: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 10 }}
-                      angle={-30}
+                      tick={{ fontSize: 8 }}
+                      angle={-60}
                       textAnchor="end"
-                      height={50}
-                      interval={Math.max(0, Math.floor(curvaFiltrada.length / 10) - 1)}
+                      height={70}
+                      interval={0}
                     />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
                     <Tooltip
@@ -10816,10 +10929,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                       label={{ value: `${rPrev.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#dc2626", fontWeight: 700 }} />
                     <ReferenceLine y={rReal} stroke="#22c55e" strokeDasharray="5 4" strokeWidth={1}
                       label={{ value: `${rReal.toFixed(1)}%`, position: "right", fontSize: 9, fill: "#16a34a", fontWeight: 700 }} />
-                    {cfHasBaseline  && <Line type="monotone" dataKey="baseline"  stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls name="baseline" />}
-                    {cfHasPlanejada && <Line type="monotone" dataKey="planejada" stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls name="planejada" />}
-                    <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls name="realizada" />
-                    <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
+                    {cfHasBaseline  && serRefis.baseline  && <Line type="monotone" dataKey="baseline"  stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls name="baseline" />}
+                    {cfHasPlanejada && serRefis.planejada && <Line type="monotone" dataKey="planejada" stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls name="planejada" />}
+                    {serRefis.realizada && <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls name="realizada" />}
+                    {serRefis.tendencia && <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -10842,16 +10955,44 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             <p className="text-xs font-bold uppercase tracking-wider text-white">
               Curva S Financeira — Faturamento Acumulado (R$)
             </p>
-            <div className="flex gap-4 text-[11px] text-slate-300 flex-wrap items-center">
-              {cfFinHasBaseline  && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#1e40af" }} /> Baseline</span>}
-              {cfFinHasPlanejada && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#ef4444" }} /> Faturamento Previsto</span>}
-              <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#22c55e" }} /> Faturamento Realizado (Físico)</span>
-              {cfHasFaturado && <span className="flex items-center gap-1.5"><span className="inline-block w-7 h-0.5 rounded" style={{ background: "#7c3aed" }} /> Faturado Real</span>}
-              <span className="flex items-center gap-1.5">
+            <div className="flex gap-3 text-[11px] text-slate-300 flex-wrap items-center" onClick={(e) => e.stopPropagation()}>
+              {cfFinHasBaseline && (
+                <button type="button" onClick={() => tglRefis("baseline")}
+                  className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-opacity ${serRefis.baseline ? "" : "opacity-40"}`}
+                  title={serRefis.baseline ? "Ocultar Baseline" : "Mostrar Baseline"}>
+                  <span className="inline-block w-7 h-0.5 rounded" style={{ background: "#1e40af" }} />
+                  <span className={serRefis.baseline ? "" : "line-through"}>Baseline</span>
+                </button>
+              )}
+              {cfFinHasPlanejada && (
+                <button type="button" onClick={() => tglRefis("planejada")}
+                  className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-opacity ${serRefis.planejada ? "" : "opacity-40"}`}
+                  title={serRefis.planejada ? "Ocultar Faturamento Previsto" : "Mostrar Faturamento Previsto"}>
+                  <span className="inline-block w-7 h-0.5 rounded" style={{ background: "#ef4444" }} />
+                  <span className={serRefis.planejada ? "" : "line-through"}>Faturamento Previsto</span>
+                </button>
+              )}
+              <button type="button" onClick={() => tglRefis("realizada")}
+                className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-opacity ${serRefis.realizada ? "" : "opacity-40"}`}
+                title={serRefis.realizada ? "Ocultar Faturamento Realizado" : "Mostrar Faturamento Realizado"}>
+                <span className="inline-block w-7 h-0.5 rounded" style={{ background: "#22c55e" }} />
+                <span className={serRefis.realizada ? "" : "line-through"}>Faturamento Realizado (Físico)</span>
+              </button>
+              {cfHasFaturado && (
+                <button type="button" onClick={() => tglRefis("faturado")}
+                  className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-opacity ${serRefis.faturado ? "" : "opacity-40"}`}
+                  title={serRefis.faturado ? "Ocultar Faturado Real" : "Mostrar Faturado Real"}>
+                  <span className="inline-block w-7 h-0.5 rounded" style={{ background: "#7c3aed" }} />
+                  <span className={serRefis.faturado ? "" : "line-through"}>Faturado Real</span>
+                </button>
+              )}
+              <button type="button" onClick={() => tglRefis("tendencia")}
+                className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded transition-opacity ${serRefis.tendencia ? "" : "opacity-40"}`}
+                title={serRefis.tendencia ? "Ocultar Tendência" : "Mostrar Tendência"}>
                 <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#16a34a" strokeWidth="2" strokeDasharray="4 2" /></svg>
-                Tendência
-              </span>
-              <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${colBloco3B ? "rotate-180" : ""}`} />
+                <span className={serRefis.tendencia ? "" : "line-through"}>Tendência</span>
+              </button>
+              <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform cursor-pointer ${colBloco3B ? "rotate-180" : ""}`} onClick={() => setColBloco3B(v => !v)} />
             </div>
           </div>
           {!colBloco3B && (
@@ -10894,15 +11035,15 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
               {/* Chart */}
               <div className="px-5 py-4" style={{ height: 360 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={curvaFinanceiraFull as any[]} margin={{ top: 5, right: 90, bottom: (curvaFinanceiraFull as any[]).length > 10 ? 50 : 20, left: 10 }}>
+                  <LineChart data={curvaFinanceiraFull as any[]} margin={{ top: 5, right: 90, bottom: (curvaFinanceiraFull as any[]).length > 10 ? 70 : 20, left: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis
                       dataKey="label"
-                      tick={{ fontSize: 10 }}
-                      angle={-30}
+                      tick={{ fontSize: 8 }}
+                      angle={-60}
                       textAnchor="end"
-                      height={50}
-                      interval={Math.max(0, Math.floor((curvaFinanceiraFull as any[]).length / 10) - 1)}
+                      height={70}
+                      interval={0}
                     />
                     <YAxis
                       tickFormatter={finTickFmt}
@@ -10952,11 +11093,11 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                       label={{ value: finTickFmt(prevAcumFin),  position: "right", fontSize: 9, fill: "#dc2626", fontWeight: 700 }} />
                     <ReferenceLine y={realAcumFin}  stroke="#22c55e" strokeDasharray="5 4" strokeWidth={1}
                       label={{ value: finTickFmt(realAcumFin), position: "right", fontSize: 9, fill: "#16a34a", fontWeight: 700 }} />
-                    {cfFinHasBaseline  && <Line type="monotone" dataKey="baseline"  stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls name="baseline" />}
-                    {cfFinHasPlanejada && <Line type="monotone" dataKey="planejada" stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls name="planejada" />}
-                    <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls name="realizada" />
-                    <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />
-                    {cfHasFaturado && (
+                    {cfFinHasBaseline  && serRefis.baseline  && <Line type="monotone" dataKey="baseline"  stroke="#1e40af" strokeWidth={2}   dot={false} connectNulls name="baseline" />}
+                    {cfFinHasPlanejada && serRefis.planejada && <Line type="monotone" dataKey="planejada" stroke="#ef4444" strokeWidth={3.5} dot={false} connectNulls name="planejada" />}
+                    {serRefis.realizada && <Line type="monotone" dataKey="realizada" stroke="#22c55e" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls name="realizada" />}
+                    {serRefis.tendencia && <Line type="monotone" dataKey="tendencia" stroke="#16a34a" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls name="tendencia" />}
+                    {cfHasFaturado && serRefis.faturado && (
                       <Line type="stepAfter" dataKey="faturado" stroke="#7c3aed" strokeWidth={2.5}
                         dot={{ r: 5, fill: "#7c3aed", strokeWidth: 0 }} activeDot={{ r: 7 }}
                         connectNulls name="faturado" />

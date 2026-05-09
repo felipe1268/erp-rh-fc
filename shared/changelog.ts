@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1525,
+    titulo: "Planejamento interno — paridade com Portal: alerta de tendência + eixo X completo + legendas clicáveis nas Curvas S do REFIS",
+    descricao: "PARIDADE com Rev. 1523/1524 pedida pelo usuário: as melhorias aplicadas no Portal do Cliente foram replicadas no módulo Planejamento interno (PlanejamentoDetalhe.tsx). (1) Componente AlertaTendenciaBanner + função calcAlertaTendencia (cálculo EVM SPI = realizado/previsto, ETA = dataInicio + duração/SPI) replicado e renderizado acima das duas Curvas S da aba Curva S (Trabalho e Financeira). 4 níveis: 🟢 ok / 🟡 atencao / 🟠 alerta / 🔴 critico + 'sem_dados'. (2) Curva S Física e Curva S Financeira do REFIS interno: legendas no header viraram botões clicáveis (toggle por série, line-through + opacity-40 quando desativado, stopPropagation para não colapsar bloco). Estado serRefis compartilhado entre os 2 blocos. (3) Eixo X dos 2 blocos do REFIS interno: trocado interval calculado para `interval={0}` (mostra todas semanas) com fontSize 8 + angle -60° + height 70px. As duas Curvas S da AbaCurvaS interna já tinham interval={0} desde antes — mantido.",
+    tipo: 'feature',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 23:50:00',
+  },
+  {
     version: 1524,
     titulo: "Portal do Cliente — REFIS: legendas das Curvas S clicáveis (toggle ativar/desativar) + eixo X completo na Financeira",
     descricao: "MELHORIA pedida pelo usuário (IMG_0205/IMG_0206): nas Curvas S do REFIS (Física e Financeira), as legendas no header (Baseline, Faturamento Previsto, Faturamento Realizado, Tendência, Faturado Real) eram apenas decorativas. Agora cada item é um botão clicável que liga/desliga a respectiva linha no gráfico (com line-through visual + opacity-40 quando desativado). Estado compartilhado `serRefis` entre os 2 blocos (3A Física + 3B Financeira). Click nas legendas é isolado com stopPropagation para não colapsar o bloco. Aproveitado para corrigir o eixo X do BLOCO 3B (Financeira) que ainda usava `interval={Math.max(0, Math.floor(len/10)-1)}` e pulava semanas — agora `interval={0}` com fontSize 8 + angle -60° + height 70px (mesmo padrão da Rev. 1523).",
