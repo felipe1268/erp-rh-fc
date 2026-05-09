@@ -335,12 +335,32 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
     (orcItens as any[]).reduce((s: number, it: any) => s + n(it.vendaTotal), 0),
   [orcItens]);
 
+  const [modoImport, setModoImport] = useState<"substituir" | "apenas_predecessora" | "mesclar">("mesclar");
+  const [resultadoImport, setResultadoImport] = useState<{ atualizados: number; inseridos: number; naoEncontrados: number } | null>(null);
+
   const salvarMutation = trpc.planejamento.salvarAtividades.useMutation({
     onSuccess: () => {
       utils.planejamento.listarAtividades.invalidate();
       setOpen(false);
       resetState();
       onImportado?.();
+    },
+  });
+
+  const importarComModoMutation = trpc.planejamento.importarComModo.useMutation({
+    onSuccess: (res: any) => {
+      utils.planejamento.listarAtividades.invalidate();
+      setResultadoImport({
+        atualizados:    res?.atualizados ?? 0,
+        inseridos:      res?.inseridos ?? 0,
+        naoEncontrados: res?.naoEncontrados ?? 0,
+      });
+      // Mantém o modal aberto por 2.5s para mostrar o resumo, depois fecha
+      setTimeout(() => {
+        setOpen(false);
+        resetState();
+        onImportado?.();
+      }, 2500);
     },
   });
 
@@ -352,6 +372,8 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
     setArquivo("");
     setNivelMax(5);
     setPagina(1);
+    setModoImport("mesclar");
+    setResultadoImport(null);
   }
 
   // ── Vinculação automática com EAP do orçamento ────────────────────────────
@@ -442,7 +464,32 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
       ordem:               i,
       percentConcluido:    t.percentConcluido ?? 0,
     }));
-    salvarMutation.mutate({ revisaoId: revisaoAtiva.id, projetoId, atividades });
+
+    if (modoImport === "substituir") {
+      // Comportamento original: apaga revisão e recria
+      salvarMutation.mutate({ revisaoId: revisaoAtiva.id, projetoId, atividades });
+    } else {
+      // Modos "mesclar" ou "apenas_predecessora": preserva ajustes locais
+      importarComModoMutation.mutate({
+        revisaoId: revisaoAtiva.id,
+        projetoId,
+        modo: modoImport,
+        atividades: atividades.map(a => ({
+          eapCodigo:        a.eapCodigo,
+          nome:             a.nome,
+          nivel:            a.nivel,
+          dataInicio:       a.dataInicio,
+          dataFim:          a.dataFim,
+          duracaoDias:      a.duracaoDias,
+          predecessora:     a.predecessora,
+          pesoFinanceiro:   a.pesoFinanceiro,
+          recursoPrincipal: a.recursoPrincipal,
+          ordem:            a.ordem,
+          isGrupo:          a.isGrupo,
+          isMarco:          a.isMarco,
+        })),
+      });
+    }
   }
 
   const totalPeso = tarefas.reduce((s, t) => s + (t.isGrupo ? 0 : t.pesoFin), 0);
@@ -744,18 +791,84 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                 </span>
               </div>
 
+              {/* Seletor de modo de importação */}
+              <div className="border border-slate-200 rounded-lg p-3 bg-slate-50 space-y-2">
+                <div className="text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
+                  Modo de importação
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <label className={`flex items-start gap-2 p-2 rounded border cursor-pointer transition ${modoImport === "mesclar" ? "border-emerald-500 bg-emerald-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                    <input
+                      type="radio"
+                      name="modoImport"
+                      value="mesclar"
+                      checked={modoImport === "mesclar"}
+                      onChange={() => setModoImport("mesclar")}
+                      className="mt-0.5"
+                    />
+                    <div className="text-[11px] leading-tight">
+                      <div className="font-semibold text-slate-800">Mesclar (recomendado)</div>
+                      <div className="text-slate-500">Atualiza datas, duração, peso e predecessora. <b>Preserva</b> marcos, indiretas, desativadas e ajustes manuais. Adiciona atividades novas.</div>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-start gap-2 p-2 rounded border cursor-pointer transition ${modoImport === "apenas_predecessora" ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                    <input
+                      type="radio"
+                      name="modoImport"
+                      value="apenas_predecessora"
+                      checked={modoImport === "apenas_predecessora"}
+                      onChange={() => setModoImport("apenas_predecessora")}
+                      className="mt-0.5"
+                    />
+                    <div className="text-[11px] leading-tight">
+                      <div className="font-semibold text-slate-800">Apenas Predecessora</div>
+                      <div className="text-slate-500">Não mexe em nada além do campo predecessora. Ideal para destravar a Rede de Precedências sem alterar o resto.</div>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-start gap-2 p-2 rounded border cursor-pointer transition ${modoImport === "substituir" ? "border-orange-500 bg-orange-50" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                    <input
+                      type="radio"
+                      name="modoImport"
+                      value="substituir"
+                      checked={modoImport === "substituir"}
+                      onChange={() => setModoImport("substituir")}
+                      className="mt-0.5"
+                    />
+                    <div className="text-[11px] leading-tight">
+                      <div className="font-semibold text-slate-800">Substituir tudo</div>
+                      <div className="text-slate-500 text-orange-700">Apaga as atividades atuais da revisão e recria. Perde marcos, indiretas e ajustes manuais. Use só em revisões novas.</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Resumo pós-import */}
+              {resultadoImport && (
+                <div className="border border-emerald-200 bg-emerald-50 rounded p-2 text-[11px] text-emerald-800 flex items-center gap-2">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Importação concluída: <b>{resultadoImport.atualizados}</b> atualizadas, <b>{resultadoImport.inseridos}</b> novas
+                  {resultadoImport.naoEncontrados > 0 && <> · <span className="text-amber-700"><b>{resultadoImport.naoEncontrados}</b> sem correspondência (ignoradas)</span></>}
+                </div>
+              )}
+
               <div className="flex gap-2 justify-end pt-1 border-t border-slate-100">
                 <Button variant="outline" size="sm" onClick={() => { setOpen(false); resetState(); }}>Cancelar</Button>
                 <Button
                   size="sm"
                   className="bg-emerald-600 hover:bg-emerald-700 gap-1.5"
-                  disabled={salvarMutation.isPending}
+                  disabled={salvarMutation.isPending || importarComModoMutation.isPending}
                   onClick={confirmarImportacao}
                 >
-                  {salvarMutation.isPending
+                  {(salvarMutation.isPending || importarComModoMutation.isPending)
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     : <CheckCircle2 className="h-3.5 w-3.5" />}
-                  Importar {tarefas.length} atividades
+                  {modoImport === "substituir"
+                    ? `Substituir por ${tarefas.length} atividades`
+                    : modoImport === "apenas_predecessora"
+                    ? `Atualizar predecessoras (${tarefas.length})`
+                    : `Mesclar ${tarefas.length} atividades`}
                 </Button>
               </div>
             </div>

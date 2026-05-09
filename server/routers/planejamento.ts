@@ -936,6 +936,124 @@ export const planejamentoRouter = router({
       return { success: true };
     }),
 
+  // ── Importação MS Project com 3 modos (preservando ajustes locais) ────────
+  // modo = "substituir"        → comportamento padrão (apaga revisão, recria)
+  // modo = "apenas_predecessora" → casa por eapCodigo, atualiza SOMENTE predecessora
+  // modo = "mesclar"            → casa por eapCodigo: atualiza datas/duração/peso/predecessora
+  //                               PRESERVANDO isMarco, isIndireta, disabled, recursoPrincipal
+  //                               e quantidadePlanejada das atividades existentes.
+  //                               Atividades novas (não existentes no ERP) são INSERIDAS.
+  //                               Atividades que existem no ERP mas NÃO vieram no XML são MANTIDAS.
+  importarComModo: protectedProcedure
+    .input(z.object({
+      revisaoId: z.number(),
+      projetoId: z.number(),
+      modo: z.enum(["substituir", "apenas_predecessora", "mesclar"]),
+      atividades: z.array(z.object({
+        eapCodigo:        z.string().nullish(),
+        nome:             z.string(),
+        nivel:            z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
+        dataInicio:       z.string().nullish(),
+        dataFim:          z.string().nullish(),
+        duracaoDias:      z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
+        predecessora:     z.string().nullish(),
+        pesoFinanceiro:   z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
+        recursoPrincipal: z.string().nullish(),
+        ordem:            z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
+        isGrupo:          z.boolean().optional(),
+        isMarco:          z.boolean().optional(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+
+      // Carrega atividades existentes da revisão
+      const existentes = await db.select({
+        id: planejamentoAtividades.id,
+        eapCodigo: planejamentoAtividades.eapCodigo,
+      }).from(planejamentoAtividades)
+        .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
+
+      const eapToId = new Map<string, number>();
+      for (const e of existentes) {
+        if (e.eapCodigo) eapToId.set(e.eapCodigo.trim(), e.id);
+      }
+
+      let atualizados = 0;
+      let inseridos   = 0;
+      let naoEncontrados = 0;
+
+      // ── Modo 1: APENAS PREDECESSORA ────────────────────────────────────────
+      if (input.modo === "apenas_predecessora") {
+        for (const a of input.atividades) {
+          const eap = (a.eapCodigo ?? "").trim();
+          if (!eap) continue;
+          const id = eapToId.get(eap);
+          if (!id) { naoEncontrados++; continue; }
+          await db.update(planejamentoAtividades)
+            .set({ predecessora: a.predecessora ?? null })
+            .where(eq(planejamentoAtividades.id, id));
+          atualizados++;
+        }
+        return { success: true, modo: input.modo, atualizados, inseridos, naoEncontrados, total: input.atividades.length };
+      }
+
+      // ── Modo 2: MESCLAR (preserva ajustes locais) ──────────────────────────
+      if (input.modo === "mesclar") {
+        await db.transaction(async (tx) => {
+          for (const [i, a] of input.atividades.entries()) {
+            const eap = (a.eapCodigo ?? "").trim();
+            const id  = eap ? eapToId.get(eap) : undefined;
+
+            if (id) {
+              // Atualiza SOMENTE campos do XML; preserva isMarco, isIndireta, disabled,
+              // recursoPrincipal, quantidadePlanejada (campos tipicamente ajustados pelo usuário)
+              await tx.update(planejamentoAtividades).set({
+                nome:           a.nome ?? "",
+                nivel:          a.nivel ?? 1,
+                dataInicio:     a.dataInicio ?? null,
+                dataFim:        a.dataFim ?? null,
+                duracaoDias:    a.duracaoDias ?? 0,
+                predecessora:   a.predecessora ?? null,
+                pesoFinanceiro: String(a.pesoFinanceiro ?? 0),
+                ordem:          a.ordem ?? i,
+                isGrupo:        a.isGrupo ?? false,
+              }).where(eq(planejamentoAtividades.id, id));
+              atualizados++;
+            } else {
+              // Insere nova
+              await tx.insert(planejamentoAtividades).values({
+                revisaoId:      input.revisaoId,
+                projetoId:      input.projetoId,
+                eapCodigo:      a.eapCodigo ?? null,
+                nome:           a.nome ?? "",
+                nivel:          a.nivel ?? 1,
+                dataInicio:     a.dataInicio ?? null,
+                dataFim:        a.dataFim ?? null,
+                duracaoDias:    a.duracaoDias ?? 0,
+                predecessora:   a.predecessora ?? null,
+                pesoFinanceiro: String(a.pesoFinanceiro ?? 0),
+                recursoPrincipal: a.recursoPrincipal ?? null,
+                quantidadePlanejada: "0",
+                unidade:        null,
+                ordem:          a.ordem ?? i,
+                isGrupo:        a.isGrupo ?? false,
+                isMarco:        a.isMarco ?? false,
+                isIndireta:     false,
+                disabled:       false,
+              });
+              inseridos++;
+            }
+          }
+        });
+        return { success: true, modo: input.modo, atualizados, inseridos, naoEncontrados, total: input.atividades.length };
+      }
+
+      // ── Modo 3: SUBSTITUIR (não cai aqui — frontend chama salvarAtividades) ─
+      // Por segurança, retorna erro orientando o caller correto.
+      throw new Error("Para modo 'substituir', use a procedure salvarAtividades.");
+    }),
+
   // ── Avanços físicos semanais ──────────────────────────────────────────────
   listarAvancos: protectedProcedure
     .input(z.object({ projetoId: z.number(), revisaoId: z.number() }))
