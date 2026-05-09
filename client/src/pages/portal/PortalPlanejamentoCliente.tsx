@@ -3272,9 +3272,7 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
                   <th className="text-left px-3 py-2 text-[11px] font-semibold text-slate-500 uppercase w-12">Foto</th>
                   <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Nome</th>
                   <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Função</th>
-                  <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Empresa/Setor</th>
                   <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Categoria</th>
-                  <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Tipo</th>
                   <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Status</th>
                 </tr>
               </thead>
@@ -3312,15 +3310,9 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
                       </td>
                       <td className="px-4 py-2 font-medium text-slate-800 text-[13px]">{e.nomeCompleto}</td>
                       <td className="px-4 py-2 text-slate-600 text-[13px]">{e.funcao || e.cargo || "—"}</td>
-                      <td className="px-4 py-2 text-slate-500 text-[13px]">{isTerc ? (e.empresaTerceira || "—") : (e.setor || "—")}</td>
                       <td className="px-4 py-2 text-center">
                         <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${catBadge}`}>
                           {cat}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${tipoBadge}`}>
-                          {tipoLabel}
                         </span>
                       </td>
                       <td className="px-4 py-2 text-center">
@@ -3332,7 +3324,7 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
                   );
                 })}
                 {lista.length === 0 && (
-                  <tr><td colSpan={7} className="text-center py-10 text-slate-400 text-sm">Nenhum resultado</td></tr>
+                  <tr><td colSpan={5} className="text-center py-10 text-slate-400 text-sm">Nenhum resultado</td></tr>
                 )}
               </tbody>
             </table>

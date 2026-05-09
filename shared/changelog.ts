@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1514,
+    titulo: "Portal do Cliente — Aba Efetivo: ocultar 'Empresa/Setor' e 'Tipo (CLT/PJ)'",
+    descricao: "AJUSTE de privacidade pedido pelo usuário: na tabela de funcionários da aba Efetivo do Portal do Cliente, foram removidas as colunas 'EMPRESA/SETOR' (que mostrava sempre 'OBRA' ou nome do setor interno) e 'TIPO' (que mostrava CLT/PJ/Terceiro como badge). O cliente externo não precisa visualizar a estrutura interna de setores nem o regime de contratação dos profissionais alocados — informações administrativas/sensíveis. A tabela agora exibe apenas: Foto, Nome, Função, Categoria (Direto/Indireto) e Status. KPIs e filtros internos foram preservados (CLT/PJ/Terceiros continuam disponíveis nas estatísticas, mas não expostos linha-a-linha).",
+    tipo: 'melhoria',
+    modulos: 'Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 19:30:00',
+  },
+  {
     version: 1513,
     titulo: "Portal do Cliente — REFIS: toggle Diretas/Indiretas, retrato/paisagem e layout de impressão",
     descricao: "MELHORIA pedida pelo usuário na aba REFIS do Portal do Cliente: (1) Novo toggle 'Só Diretas' / 'Global (c/ Indiretas)' permitindo ao gerenciador analisar o impacto das atividades indiretas sobre o avanço da obra. Quando ativado, todas as métricas globais (Previsto Acumulado, Realizado Acumulado, Desvio, SPI) e os blocos de Avanço por Grupo/Etapa são RECALCULADOS incluindo as indiretas (média ponderada pelos pesos). Quando desativado, mantém os valores OFICIAIS salvos no REFIS para garantir paridade com o documento emitido. O toggle só aparece se houver indiretas no projeto e mostra contador (ex.: '3 ind.'). (2) Novo seletor de orientação de impressão Retrato / Paisagem (vetor SVG ilustrativo em cada botão), gravando dinamicamente em @page size. (3) Botão 'Imprimir / PDF' dedicado dentro da aba. (4) Folha de estilos @media print otimizada: oculta toolbar e elementos com classe 'refis-no-print', remove sombras, bordas mais leves, padding compacto, page-break-inside: avoid em cada bloco para evitar quebras no meio de gráficos/tabelas, fontes ajustadas para 8pt (tabelas 7.5pt) garantindo legibilidade em A4. Cores e gráficos preservados via -webkit-print-color-adjust: exact.",
