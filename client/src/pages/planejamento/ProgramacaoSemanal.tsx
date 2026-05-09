@@ -780,8 +780,7 @@ export function ProgramacaoSemanal({
                           os recursos previstos do orçamento já aparecem em
                           bloco próprio abaixo. No módulo interno mantemos. */}
                       {!portalMode && <th className="py-2 px-3 w-28">Recurso</th>}
-                      <th className="py-2 px-3 w-20 text-right" title="Peso financeiro da atividade no PROJETO INTEIRO (estático, vem do cronograma). É o BAC% da atividade no EVM.">Peso%</th>
-                      <th className="py-2 px-3 w-24 text-right" title="Contribuição em pp ao Previsto DESTA semana = Peso% × ΔPrevisto da semana / 100. Mostra quanto cada atividade efetivamente 'move o ponteiro' no acumulado da semana. Ranking deste valor define o TOP 3 (Last Planner System).">Peso Sem%</th>
+                      <th className="py-2 px-3 w-24 text-right" title="Peso da atividade NESTA semana, em pp = peso financeiro da atividade × fração do trabalho previsto para esta semana. Mostra quanto cada atividade efetivamente 'move o ponteiro' do avanço semanal. Ranking deste valor define o TOP 3 (Last Planner System).">Peso Sem%</th>
                       <th className="py-2 px-3 w-20 text-right" title="% que esta atividade DEVERIA estar concluída até o fim desta semana, calculado linearmente entre data de início e fim">Previsto%</th>
                       <th className="py-2 px-3 w-20 text-right">Real%</th>
                       <th className="py-2 px-3 w-20 text-right" title="Desvio = Real% − Previsto%. Positivo = atividade adiantada (verde). Negativo = atrasada (vermelho). Em semanas futuras o desvio fica em cinza neutro — a atividade ainda nem teve a chance de ser executada.">Desvio</th>
@@ -907,14 +906,14 @@ export function ProgramacaoSemanal({
                           {!portalMode && (
                             <td className="py-2 px-3 text-slate-500 max-w-[120px] truncate">{a.recursoPrincipal || "—"}</td>
                           )}
-                          <td className={`py-2 px-3 text-right font-medium ${isMaiorPeso ? "text-orange-700 font-bold" : "text-slate-600"}`}>{parseFloat(a.pesoFinanceiro ?? "0").toFixed(2)}%</td>
                           <td
                             className={`py-2 px-3 text-right tabular-nums ${
+                              isMaiorPeso       ? "font-bold text-orange-700" :
                               contribPp >= 0.10 ? "font-bold text-orange-700" :
                               contribPp >= 0.01 ? "font-semibold text-slate-700" :
                                                   "text-slate-400"
                             }`}
-                            title={`Contribuição em pp ao Previsto da semana = ${parseFloat(a.pesoFinanceiro ?? "0").toFixed(2)}% × ΔPrev_semana / 100`}
+                            title={`Peso da atividade nesta semana = peso projeto ${parseFloat(a.pesoFinanceiro ?? "0").toFixed(2)}% × fração do trabalho previsto na semana.`}
                           >
                             {contribPp < 0.005 ? "—" : `${contribPp.toFixed(2)}pp`}
                           </td>

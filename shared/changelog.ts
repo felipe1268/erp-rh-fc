@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1546,
+    titulo: "Programação Semanal — coluna 'Peso%' (projeto) removida; mantém só 'Peso Sem%' (mais limpo)",
+    descricao: "Pedido do usuário (após validar Rev. 1545): manter apenas a coluna 'Peso Sem%' deixa a tabela mais limpa para quem está olhando a semana — quem quiser saber o peso projeto consulta o cronograma. Removida a coluna duplicada que mostrava 8,83% / 0,45% etc., mantendo só a contribuição em pp ao avanço da semana. Cores e tooltip preservados.",
+    tipo: 'melhoria',
+    modulos: 'Planejamento, Programação Semanal, Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 19:00:00',
+  },
+  {
     version: 1545,
     titulo: "Programação Semanal — nova coluna 'Peso Sem%' (contribuição em pp na semana)",
     descricao: "Nova coluna ao lado de Peso% para tornar visualmente óbvia a diferença entre os dois conceitos: Peso% = peso da atividade no PROJETO INTEIRO (BAC%, estático, vem do cronograma) vs Peso Sem% = contribuição em pp ao Previsto DESTA semana (Peso% × ΔPrevisto_semana / 100). Exemplo do problema que essa coluna esclarece: 'Locação de gradil' tem Peso% = 8,83% (vale 8,83% do projeto inteiro, dura 13 meses) MAS Peso Sem% = 0,05pp na semana 1 — quase nada do ponteiro semanal. Já 'Tapume autoportante' tem Peso% = 0,45% (irrelevante no projeto) MAS Peso Sem% = 0,16pp (3× mais relevante para a semana). Cores: ≥0,10pp em laranja-bold (move o ponteiro), 0,01-0,10pp em cinza-bold (contribui), <0,01pp mostrado como '—' em cinza claro (irrelevante na semana). Tooltip explica a fórmula.",
