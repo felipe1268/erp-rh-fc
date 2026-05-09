@@ -1055,15 +1055,24 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
 
               {/* Cor por nível WBS — só faz sentido quando "Todos os pacotes" */}
               {filtroPacoteEap === "todos" && (
-                <div className="relative" title="Cor automática por nível da WBS — facilita identificar a qual pacote cada atividade pertence">
+                <div
+                  className="relative group"
+                  title={
+                    "Pinta cada atividade com uma cor de acordo com o pacote da EAP a que ela pertence — assim você bate o olho na rede e sabe a qual frente da obra cada caixa pertence.\n\n" +
+                    "• N1 = pacote macro (ex.: '2 — SERVIÇOS PRELIMINARES'). Toda atividade com EAP que começa com '2' fica da MESMA cor.\n" +
+                    "• N2 = subpacote (ex.: '2.1', '2.2'). Atividades de '2.1' ficam de uma cor; de '2.2' de outra.\n" +
+                    "• N3 = nível ainda mais detalhado (ex.: '2.1.3'). Útil em obras com EAP profunda.\n\n" +
+                    "A cor aparece como uma faixa fina no topo de cada caixa. A faixa do lado esquerdo continua sendo o status (verde/azul/vermelho/amarelo/cinza)."
+                  }
+                >
                   <select
                     value={corPorNivel}
                     onChange={e => setCorPorNivel(Number(e.target.value) as 1 | 2 | 3)}
-                    className="text-[11px] border border-slate-200 rounded-lg pl-7 pr-6 py-1.5 text-slate-600 bg-white appearance-none"
+                    className="text-[11px] border border-slate-200 rounded-lg pl-7 pr-6 py-1.5 text-slate-600 bg-white appearance-none cursor-help"
                   >
-                    <option value={1}>Cor por N1</option>
-                    <option value={2}>Cor por N2</option>
-                    <option value={3}>Cor por N3</option>
+                    <option value={1}>Cor por N1 — pacote macro</option>
+                    <option value={2}>Cor por N2 — subpacote</option>
+                    <option value={3}>Cor por N3 — detalhe</option>
                   </select>
                   <span className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 rounded-sm bg-gradient-to-r from-blue-400 via-emerald-400 to-amber-400 pointer-events-none" />
                   <ChevronDown className="h-3 w-3 text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />

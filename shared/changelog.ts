@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1505,
+    titulo: "Diagrama de Rede — Legenda 'Cor por N1/N2/N3' explicada",
+    descricao: "AJUSTE DE UX pedido pelo usuário: o seletor 'Cor por N1/N2/N3' do Diagrama de Rede tinha rótulos cifrados que não diziam para que serviam. Agora os rótulos do dropdown são autoexplicativos — 'Cor por N1 — pacote macro', 'Cor por N2 — subpacote', 'Cor por N3 — detalhe' — e o tooltip (passar o mouse) traz a explicação completa: 'pinta cada atividade com uma cor de acordo com o pacote da EAP a que ela pertence — assim você bate o olho na rede e sabe a qual frente da obra cada caixa pertence', com exemplos práticos por nível e a observação de que a faixa do topo é o pacote WBS enquanto a faixa lateral esquerda continua sendo o status. Cursor 'help' no seletor reforça que tem informação ao passar o mouse.",
+    tipo: 'melhoria',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 13:30:00',
+  },
+  {
     version: 1504,
     titulo: "Efetivo da Obra — Terceiros agora aparecem junto com CLT/PJ",
     descricao: "PEDIDO DO USUÁRIO: a aba 'Efetivo' do Planejamento (Lista de Funcionários) só mostrava colaboradores CLT/PJ vinculados via obra_funcionarios — terceiros (cadastrados em funcionarios_terceiros) ficavam invisíveis, mesmo tendo obraId preenchido. Agora a lista é UNIFICADA: além do trpc.obras.equipeObra (CLT/PJ), a aba também consulta trpc.terceiros.funcionarios.list filtrando por obraId, normaliza o shape (nomeCompleto, funcao, fotoUrl, dataAdmissao, status) e mescla na mesma tabela. Distribuição por Função, contagens, busca, ordenação e filtros de status passam a contemplar os 3 vínculos. Badge nova 'TERCEIRO' em laranja na coluna Vínculo (CLT azul, PJ roxo, TERCEIRO laranja). Backend: terceiros.funcionarios.list ganhou parâmetro opcional obraId. Tenant isolation preservada (companyFilter + deletedAt IS NULL).",
