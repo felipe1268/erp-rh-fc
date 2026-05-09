@@ -534,7 +534,7 @@ export function ProgramacaoSemanal({
                       <th className="py-2 px-3 w-20 text-right">Peso%</th>
                       <th className="py-2 px-3 w-20 text-right" title="% que esta atividade DEVERIA estar concluída até o fim desta semana, calculado linearmente entre data de início e fim">Previsto%</th>
                       <th className="py-2 px-3 w-20 text-right">Real%</th>
-                      <th className="py-2 px-3 w-20 text-right" title="Desvio = Real% − Previsto%. Positivo = atividade adiantada (verde). Negativo = atrasada (vermelho).">Desvio</th>
+                      <th className="py-2 px-3 w-20 text-right" title="Desvio = Real% − Previsto%. Positivo = atividade adiantada (verde). Negativo = atrasada (vermelho). Em semanas futuras o desvio fica em cinza neutro — a atividade ainda nem teve a chance de ser executada.">Desvio</th>
                       <th className="py-2 px-3 w-24 text-center">Status</th>
                     </tr>
                   </thead>
@@ -555,12 +555,17 @@ export function ProgramacaoSemanal({
                         else if (ref > ini)   prevInd = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
                       }
                       // Rev. 1511: Desvio = Real − Previsto. Positivo = adiantada (verde).
-                      // Negativo = atrasada (vermelho). Ajuste pedido pelo usuário.
+                      // Negativo = atrasada (vermelho).
+                      // Rev. 1512: Para SEMANAS FUTURAS (que ainda não começaram),
+                      // exibir o desvio em CINZA neutro — atividade ainda nem teve a
+                      // chance de ser executada, seria injusto pintar de vermelho.
                       const desvio = av - prevInd;
-                      const desvioCor =
-                        desvio >= -2  ? "text-emerald-600" :  // dentro da tolerância ou adiantada
-                        desvio >= -10 ? "text-amber-600"   :  // pequeno atraso
-                                        "text-red-600";       // atraso significativo
+                      const semanaFutura = !!semanaAtual && dateStr(semanaAtual.ini) > today;
+                      const desvioCor = semanaFutura
+                        ? "text-slate-400"
+                        : desvio >= -2  ? "text-emerald-600" :  // dentro da tolerância ou adiantada
+                          desvio >= -10 ? "text-amber-600"   :  // pequeno atraso
+                                          "text-red-600";       // atraso significativo
                       return (
                         <tr key={a.id ?? i}
                           className={`border-b border-slate-50 ${

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1512,
+    titulo: "Programação Semanal — Desvio neutralizado em semanas futuras (sem falso vermelho)",
+    descricao: "AJUSTE de justiça pedido pelo usuário: ao navegar para uma SEMANA FUTURA na Programação Semanal, todas as atividades apareciam com desvio negativo em vermelho/amarelo, porque o Previsto% (calculado linearmente até o fim daquela semana futura) era > 0% mas o Real% naturalmente ainda era 0% — ninguém pode executar uma atividade antes da semana acontecer. Marcar como 'atrasada' nesse caso era injusto. Agora: para semanas cujo INÍCIO é posterior à data de hoje (semana ainda não começou), o desvio é exibido em CINZA NEUTRO (slate-400), mantendo o valor visível para o usuário antecipar o gap mas sem dar falsa sensação de problema. Para semanas PASSADAS e a SEMANA ATUAL o comportamento da Rev. 1511 é mantido (verde adiantada / amarelo pequeno atraso / vermelho atraso relevante). Tooltip do cabeçalho atualizado.",
+    tipo: 'bugfix',
+    modulos: 'Planejamento, Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 18:30:00',
+  },
+  {
     version: 1511,
     titulo: "Programação Semanal — Desvio invertido (Real − Previsto): adiantada = +verde, atrasada = −vermelho",
     descricao: "CORREÇÃO conceitual pedida pelo usuário: a coluna 'Desvio' da tabela 'Atividades da Semana' (em Programação Semanal e Portal do Cliente) estava calculando como Previsto − Real (positivo = atrasada). Estava antiintuitivo: uma atividade que executou 100% quando o previsto era 0% aparecia como −100pp em vermelho, dando a falsa sensação de problema. Agora segue a leitura natural do executivo: Desvio = Real − Previsto. Quando a equipe adianta a obra (Real > Previsto) o desvio aparece com sinal POSITIVO e cor VERDE (executou mais do que tinha sido planejado para a semana). Quando a equipe atrasa (Real < Previsto) o desvio aparece com sinal NEGATIVO e cor VERMELHA. Cores: verde quando desvio ≥ −2pp (dentro da tolerância ou adiantada), amarelo entre −2pp e −10pp (pequeno atraso), vermelho < −10pp (atraso relevante). Tooltip do cabeçalho atualizado.",
