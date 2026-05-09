@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1547,
+    titulo: "Programação Semanal — coluna 'Recurso' removida no módulo interno também",
+    descricao: "Pedido do usuário: a coluna Recurso é texto livre que quase sempre vem vazio ('—') e polui visualmente a tabela. Já estava removida do Portal do Cliente desde a Rev. 1536; agora removida também no módulo interno. Os recursos previstos do orçamento continuam aparecendo no bloco 'Recursos previstos no orçamento' logo abaixo da tabela.",
+    tipo: 'melhoria',
+    modulos: 'Planejamento, Programação Semanal',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 19:30:00',
+  },
+  {
     version: 1546,
     titulo: "Programação Semanal — coluna 'Peso%' (projeto) removida; mantém só 'Peso Sem%' (mais limpo)",
     descricao: "Pedido do usuário (após validar Rev. 1545): manter apenas a coluna 'Peso Sem%' deixa a tabela mais limpa para quem está olhando a semana — quem quiser saber o peso projeto consulta o cronograma. Removida a coluna duplicada que mostrava 8,83% / 0,45% etc., mantendo só a contribuição em pp ao avanço da semana. Cores e tooltip preservados.",
