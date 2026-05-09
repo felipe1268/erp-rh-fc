@@ -5163,6 +5163,11 @@ export const planejamentoRevisoes = pgTable("planejamento_revisoes", {
   isBaseline:   boolean("is_baseline").default(false),
   consolidado:  boolean("consolidado").default(false),
   diferencas:   text("diferencas"),
+  /** Rev. 1534 — Janela de Recovery Schedule (AACE 23R-02). Quantas semanas o
+   * engenheiro escolheu pra diluir o débito acumulado em metas semanais
+   * factíveis. Default 4. PV (baseline) permanece imutável; isto é apenas
+   * a janela de cobrança gerencial. Visível também no Portal do Cliente. */
+  recoveryWindowSemanas: integer("recovery_window_semanas").default(4),
   criadoEm:     timestamp("criado_em").defaultNow(),
 });
 

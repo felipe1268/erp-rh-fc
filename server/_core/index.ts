@@ -909,6 +909,9 @@ Regras:
 
             ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS diferencas TEXT;
             ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS consolidado BOOLEAN DEFAULT FALSE;
+            -- Rev. 1534 — Janela de Recovery Schedule (AACE 23R-02). Quantas
+            -- semanas o engenheiro escolheu pra diluir o débito acumulado.
+            ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS recovery_window_semanas INTEGER DEFAULT 4;
             ALTER TABLE user_groups ADD COLUMN IF NOT EXISTS module_access TEXT;
             -- Rev. 1510 — Escritório Central: acesso automático a todas as obras em andamento
             ALTER TABLE user_groups ADD COLUMN IF NOT EXISTS acesso_todas_obras SMALLINT NOT NULL DEFAULT 0;

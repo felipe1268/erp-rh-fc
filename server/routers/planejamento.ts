@@ -292,7 +292,7 @@ export const planejamentoRouter = router({
           .where(eq(planejamentoRevisoes.projetoId, input.id))
           .orderBy(asc(planejamentoRevisoes.numero))
           .catch(() => db.execute(
-            sql`SELECT id, projeto_id, numero, descricao, data_revisao, motivo, responsavel, aprovado_por, status, observacao, is_baseline, false as consolidado, diferencas, criado_em FROM planejamento_revisoes WHERE projeto_id = ${input.id} ORDER BY numero ASC`
+            sql`SELECT id, projeto_id, numero, descricao, data_revisao, motivo, responsavel, aprovado_por, status, observacao, is_baseline, false as consolidado, diferencas, recovery_window_semanas, criado_em FROM planejamento_revisoes WHERE projeto_id = ${input.id} ORDER BY numero ASC`
           ).then((r: any) => Array.isArray(r) ? r : (r?.rows ?? []))),
         projeto.orcamentoId
           ? db.select().from(orcamentos).where(eq(orcamentos.id, projeto.orcamentoId)).then(r => r[0])
@@ -1140,6 +1140,19 @@ export const planejamentoRouter = router({
         }
       }
       return { atualizados, inseridos, naoEncontrados };
+    }),
+
+  // ── Rev. 1534 — Recovery Schedule (AACE 23R-02) ──────────────────────────
+  // Salva a janela em semanas que o engenheiro escolheu pra diluir o débito
+  // acumulado em metas semanais factíveis. PV (baseline) permanece imutável.
+  setRecoveryWindow: protectedProcedure
+    .input(z.object({ revisaoId: z.number(), semanas: z.number().int().min(1).max(52) }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.update(planejamentoRevisoes)
+        .set({ recoveryWindowSemanas: input.semanas } as any)
+        .where(eq(planejamentoRevisoes.id, input.revisaoId));
+      return { ok: true, semanas: input.semanas };
     }),
 
   // ── Avanços físicos semanais ──────────────────────────────────────────────

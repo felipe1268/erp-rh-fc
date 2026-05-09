@@ -778,7 +778,7 @@ export default function PortalPlanejamentoCliente() {
           }
           if (aba === "visao_geral") return <AbaVisaoGeral kpis={kpis} projeto={projeto} obra={obra} semanaAtual={semanaAtual} atrasadas={atrasadas} proximas={proximas} atividadesTodas={atividadesTodas} refisLista={refisLista} />;
           if (aba === "cronograma") return <AbaCronograma atividades={atividadesTodas} />;
-          if (aba === "avanco_semanal") return <AbaAvancoSemanal kpis={kpis} semanaAtual={semanaAtual} atrasadas={atrasadas} curvaData={curvaData} />;
+          if (aba === "avanco_semanal") return <AbaAvancoSemanal kpis={kpis} semanaAtual={semanaAtual} atrasadas={atrasadas} curvaData={curvaData} recoveryWindow={projeto?.recoveryWindowSemanas ?? 4} />;
           if (aba === "prog_semanal") return (
             <AbaProgSemanal
               atividadesTodas={atividadesTodas}
@@ -786,6 +786,7 @@ export default function PortalPlanejamentoCliente() {
               nomeProjeto={obra?.nome ?? ""}
               nomeCliente={obra?.cliente ?? ""}
               curvaData={curvaData}
+              recoveryWindow={projeto?.recoveryWindowSemanas ?? 4}
             />
           );
           if (aba === "curva_s") return <AbaCurvaS curvaData={curvaData} kpis={kpis} projeto={projeto} curvaMedicoes={curvaMedicoes} />;
@@ -1632,7 +1633,10 @@ function AbaCronograma({ atividades }: { atividades: any[] }) {
   );
 }
 
-function AbaAvancoSemanal({ kpis, semanaAtual, atrasadas, curvaData }: any) {
+function AbaAvancoSemanal({ kpis, semanaAtual, atrasadas, curvaData, recoveryWindow }: any) {
+  // Rev. 1534 — Janela de Recovery Schedule (AACE 23R-02). CONGELADA pro cliente:
+  // exibe só a meta diluída + data de convergência que o engenheiro definiu.
+  const janelaRecuperacao = Math.max(1, recoveryWindow ?? 4);
   // Rev. 1528 — KPIs corretos por SEMANA (delta da Curva S), não por atividade ativa.
   // O "Previsto na semana" é o quanto o projeto DEVE avançar nesta semana (delta da
   // curva planejada). O "Realizado na semana" é o quanto efetivamente avançou.
@@ -1675,29 +1679,40 @@ function AbaAvancoSemanal({ kpis, semanaAtual, atrasadas, curvaData }: any) {
           icon={<Activity className={`w-5 h-5 ${adOk ? "text-emerald-600" : "text-red-600"}`} />}
         />
       </div>
-      {/* Rev. 1533 — Débito acumulado + Meta de recuperação (Recovery Schedule, AACE 23R-02) */}
-      {debitoAcumulado > 0.01 && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50/60 px-4 py-2.5">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-            <div className="flex items-center gap-1.5" title="Quanto a obra ficou devendo das semanas anteriores (PV acumulado − EV acumulado até a semana passada). Não é descontado do baseline; é meta gerencial.">
-              <TrendingDown className="h-4 w-4 text-red-600" />
-              <span className="text-[11px] text-slate-700 font-medium">Atraso a recuperar:</span>
-              <span className="text-sm font-bold text-red-600 tabular-nums">{fmtPct(debitoAcumulado)}</span>
-            </div>
-            <span className="text-slate-300">|</span>
-            <div className="flex items-center gap-1.5" title="Quanto entregar nesta semana para ZERAR o atraso = Previsto baseline + Débito acumulado. PV original permanece imutável.">
-              <Zap className="h-4 w-4 text-blue-700" />
-              <span className="text-[11px] text-slate-700 font-medium">Meta para recuperar:</span>
-              <span className="text-sm font-bold text-blue-700 tabular-nums">{fmtPct(metaRecuperacao)}</span>
-              <span className="text-[10px] text-slate-500">({fmtPct(previstoSemana)} baseline + {fmtPct(debitoAcumulado)} débito)</span>
+      {/* Rev. 1534 — Recovery Schedule CONGELADO pro cliente (AACE 23R-02):
+          meta DILUÍDA + data de convergência. Sem seletor, sem meta agressiva. */}
+      {debitoAcumulado > 0.01 && (() => {
+        const metaDiluida = previstoSemana + (debitoAcumulado / janelaRecuperacao);
+        const semIniDate = semIni ? new Date(semIni + "T12:00:00") : new Date();
+        const semFim = new Date(semIniDate.getTime() + 6 * 86400000);
+        const dataConv = new Date(semFim.getTime() + janelaRecuperacao * 7 * 86400000).toLocaleDateString("pt-BR");
+        return (
+          <div className="rounded-lg border border-blue-200 bg-blue-50/60 px-4 py-2.5">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+              <div className="flex items-center gap-1.5" title="Quanto a obra ficou devendo das semanas anteriores. Métrica gerencial; o baseline (PV) permanece imutável.">
+                <TrendingDown className="h-4 w-4 text-red-600" />
+                <span className="text-[11px] text-slate-700 font-medium">Atraso a recuperar:</span>
+                <span className="text-sm font-bold text-red-600 tabular-nums">{fmtPct(debitoAcumulado)}</span>
+              </div>
+              <span className="text-slate-300">|</span>
+              <div className="flex items-center gap-1.5" title={`Compromisso semanal diluído em ${janelaRecuperacao} semanas = Previsto baseline + (Débito ÷ ${janelaRecuperacao}). Plano de recuperação factível.`}>
+                <Zap className="h-4 w-4 text-blue-700" />
+                <span className="text-[11px] text-slate-700 font-medium">Compromisso ({janelaRecuperacao} sem):</span>
+                <span className="text-sm font-bold text-blue-700 tabular-nums">{fmtPct(metaDiluida)}</span>
+                <span className="text-[10px] text-slate-500">por semana</span>
+              </div>
+              <span className="text-slate-300">|</span>
+              <span className="text-[11px] text-slate-600" title={`Mantendo o compromisso semanal, o atraso acumulado zera nesta data.`}>
+                📅 Atraso zerado em <strong className="text-slate-800">{dataConv}</strong>
+              </span>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       <p className="text-[11px] text-slate-400 px-1">
         <strong>Como ler:</strong> &quot;Previsto&quot; e &quot;Realizado&quot; são o <strong>delta da Curva S nesta semana</strong> (o quanto a obra deve / efetivamente avançou de seg a dom).
         Atividades multi-semana contribuem proporcionalmente.
-        {debitoAcumulado > 0.01 && <> O <strong>baseline (PV) é imutável</strong>; o débito é métrica gerencial — não substitui o cronograma original.</>}
+        {debitoAcumulado > 0.01 && <> O <strong>baseline (PV) é imutável</strong>; o compromisso semanal acima é o <strong>plano de recuperação</strong> diluído em {janelaRecuperacao} semanas.</>}
         {" "}Peso bruto das atividades ativas: <strong>{pesoAtivas.toFixed(2).replace(".", ",")}%</strong> (informativo).
       </p>
       <SecaoAtividades titulo={`Semana ${fmtBR(kpis.semanaInicio)} a ${fmtBR(kpis.semanaFim)}`} vazio="Nenhuma atividade nesta semana." itens={semanaAtual} cor="border-blue-200" />
@@ -1707,13 +1722,14 @@ function AbaAvancoSemanal({ kpis, semanaAtual, atrasadas, curvaData }: any) {
 }
 
 function AbaProgSemanal({
-  atividadesTodas, refisLista, nomeProjeto, nomeCliente, curvaData,
+  atividadesTodas, refisLista, nomeProjeto, nomeCliente, curvaData, recoveryWindow,
 }: {
   atividadesTodas: any[];
   refisLista: any[];
   nomeProjeto: string;
   nomeCliente: string;
   curvaData?: any;
+  recoveryWindow?: number;
 }) {
   const avancosMap = useMemo(() => {
     const m: Record<number, number> = {};
@@ -1736,6 +1752,7 @@ function AbaProgSemanal({
       avancosMap={avancosMap}
       refisLista={refisLista}
       curvaData={curvaData}
+      recoveryWindow={recoveryWindow ?? 4}
     />
   );
 }

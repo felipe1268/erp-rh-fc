@@ -258,6 +258,11 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     onError: (e) => toast.error(e.message),
   });
 
+  // Rev. 1534 — Recovery Schedule (AACE 23R-02): janela em semanas pra diluir débito.
+  const setRecoveryWindowMut = trpc.planejamento.setRecoveryWindow.useMutation({
+    onSuccess: () => { utils.planejamento.getProjetoById.invalidate({ id: projetoId }); },
+  });
+
   const atualizarProjetoMut = trpc.planejamento.atualizarProjeto.useMutation({
     onSuccess: () => {
       utils.planejamento.getProjetoById.invalidate({ id: projetoId });
@@ -793,6 +798,10 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             avancosMap={avancosMap}
             refisLista={refisLista}
             curvaData={curvaData}
+            recoveryWindow={(revisaoAtiva as any)?.recoveryWindowSemanas ?? 4}
+            onChangeRecoveryWindow={(semanas) => {
+              if (revisaoAtiva?.id) setRecoveryWindowMut.mutate({ revisaoId: revisaoAtiva.id, semanas });
+            }}
           />
         )}
 
@@ -4576,8 +4585,16 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     });
     const debitoAcumulado = Math.max(0, pvAcum - evAcum);
     const metaRecuperacao = prev + debitoAcumulado;
-    return { previsto: prev, realizado: real, aderencia, debitoAcumulado, metaRecuperacao };
+    return { previsto: prev, realizado: real, aderencia, debitoAcumulado, metaRecuperacao, semIniDate, semFimDate };
   }, [folhas, avancos, semanaAtual, semanaFim]);
+
+  // Rev. 1534 — Janela de Recovery Schedule (AACE 23R-02). Lê do mesmo
+  // revisaoAtiva.recoveryWindowSemanas que ProgramacaoSemanal usa, para que
+  // engenheiro veja a MESMA meta diluída nas duas telas (single source of truth).
+  const janelaRecuperacao = Math.max(1, (revisaoAtiva as any)?.recoveryWindowSemanas ?? 4);
+  const metaDiluida = previstoRealizadoSemana.previsto + (previstoRealizadoSemana.debitoAcumulado / janelaRecuperacao);
+  const dataConvergencia = new Date(previstoRealizadoSemana.semFimDate + (janelaRecuperacao - 1) * 7 * 86400000)
+    .toLocaleDateString("pt-BR");
 
   // Avanço anterior por atividade
   const avancoAnterior = useMemo(() => {
@@ -5258,9 +5275,11 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
               </>
             )}
           </div>
-          {/* Rev. 1533 — Linha 2: Débito acumulado + Meta de recuperação (Recovery Schedule, AACE 23R-02) */}
+          {/* Rev. 1534 — Linha 2: Débito + Meta DILUÍDA + Data convergência
+              (Recovery Schedule, AACE 23R-02). PV permanece imutável.
+              Janela é definida em Programação Semanal e replicada aqui (single source). */}
           {previstoRealizadoSemana.debitoAcumulado > 0.01 && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1.5 mt-1 border-t border-blue-200/70">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1.5 mt-1 border-t border-blue-200/70">
               <div className="flex items-center gap-1.5" title="Quanto a obra ficou devendo das semanas anteriores (PV acumulado − EV acumulado até a semana passada). Não é descontado do baseline; é meta gerencial.">
                 <TrendingDown className="h-4 w-4 text-red-600" />
                 <span className="text-[11px] text-slate-700 font-medium">Atraso a recuperar:</span>
@@ -5269,21 +5288,31 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
                 </span>
               </div>
               <span className="text-slate-300">|</span>
-              <div className="flex items-center gap-1.5" title="Quanto entregar nesta semana para ZERAR o atraso = Previsto baseline + Débito acumulado. PV original permanece imutável.">
+              <div className="flex items-center gap-1.5" title={`Meta semanal DILUÍDA em ${janelaRecuperacao} semanas = Previsto baseline + (Débito ÷ ${janelaRecuperacao}). Cobrança factível, baseline imutável.`}>
                 <Zap className="h-4 w-4 text-blue-700" />
-                <span className="text-[11px] text-slate-700 font-medium">Meta para recuperar:</span>
+                <span className="text-[11px] text-slate-700 font-medium">Meta diluída ({janelaRecuperacao} sem):</span>
                 <span className="text-sm font-bold text-blue-700 tabular-nums">
-                  {previstoRealizadoSemana.metaRecuperacao.toFixed(2)}%
+                  {metaDiluida.toFixed(2)}%
                 </span>
                 <span className="text-[10px] text-slate-500">
-                  ({previstoRealizadoSemana.previsto.toFixed(2)}% baseline + {previstoRealizadoSemana.debitoAcumulado.toFixed(2)}% débito)
+                  ({previstoRealizadoSemana.previsto.toFixed(2)}% baseline + {(previstoRealizadoSemana.debitoAcumulado / janelaRecuperacao).toFixed(2)}%/sem)
                 </span>
               </div>
+              <span className="text-slate-300">|</span>
+              <span className="text-[11px] text-slate-600" title={`Mantendo a meta diluída de ${metaDiluida.toFixed(2)}%/sem, o débito acumulado zera nesta data.`}>
+                📅 Atraso zerado em <strong className="text-slate-800">{dataConvergencia}</strong>
+              </span>
+              {janelaRecuperacao > 1 && (
+                <span className="text-[10px] text-slate-400" title="Meta agressiva: cobrar TODO o débito numa única semana. Quase sempre irrealista.">
+                  (agressiva 1 sem: {previstoRealizadoSemana.metaRecuperacao.toFixed(2)}%)
+                </span>
+              )}
+              <span className="text-[10px] text-slate-400 ml-auto">Janela definida em &quot;Programação Semanal&quot;.</span>
             </div>
           )}
           <div className="text-[10px] text-slate-400">
             <strong>Como ler:</strong> &quot;Previsto&quot; e &quot;Realizado&quot; são o <strong>delta da Curva S nesta semana</strong> (atividades multi-semana contribuem proporcionalmente).
-            {previstoRealizadoSemana.debitoAcumulado > 0.01 && <> O <strong>baseline (PV) é imutável</strong>; o débito é métrica gerencial — não substitui o cronograma original.</>}
+            {previstoRealizadoSemana.debitoAcumulado > 0.01 && <> O <strong>baseline (PV) é imutável</strong>; o débito é métrica gerencial diluída em {janelaRecuperacao} semanas — não substitui o cronograma original.</>}
             {" "}Peso bruto das atividades ativas: <strong className="tabular-nums">{pesoSemana.somaSemana.toFixed(2)}%</strong> ({pesoSemana.pctSemana.toFixed(1)}% do projeto, informativo).
           </div>
         </div>

@@ -131,6 +131,12 @@ interface Props {
     curvaBaseline?: { semana: string; acumulado: number }[];
     curvaRealizada?: { semana: string; acumulado: number }[];
   } | null;
+  /** Rev. 1534 — Janela de Recovery Schedule (AACE 23R-02): em quantas semanas
+   * diluir o débito acumulado. Quando undefined, usa default 4. */
+  recoveryWindow?: number | null;
+  /** Quando definido (modo interno), exibe seletor que persiste no banco via
+   * tRPC. Quando undefined (Portal do Cliente), só lê o valor congelado. */
+  onChangeRecoveryWindow?: (semanas: number) => void;
 }
 
 // ── Cores de status ───────────────────────────────────────────────────────────
@@ -168,7 +174,10 @@ export function ProgramacaoSemanal({
   projetoId, revisaoId, orcamentoId, companyId,
   nomeProjeto, nomeCliente, atividades: atividadesProp, avancosMap,
   refisLista = [], portalMode = false, curvaData = null,
+  recoveryWindow = null, onChangeRecoveryWindow,
 }: Props) {
+  // Rev. 1534 — Janela atual de Recovery Schedule (default 4 semanas).
+  const janelaRecuperacao = Math.max(1, recoveryWindow ?? 4);
   // Atividades desativadas (a.disabled === true) NÃO devem aparecer em nenhuma
   // parte da Programação Semanal — nem em totais, nem em listagens, nem nos
   // alertas de IA. Filtramos uma única vez aqui para garantir consistência.
@@ -275,9 +284,44 @@ export function ProgramacaoSemanal({
     // Meta de Recuperação = Previsto da semana + Débito acumulado anterior →
     // o quanto entregar HOJE para zerar atraso. Se 0 = obra em dia.
     const debitoAcumulado = Math.max(0, planAntes - realAntes);
-    const metaRecuperacao = previstoCurvaS + debitoAcumulado;
-    return { previstoCurvaS, realizado, aderencia, debitoAcumulado, metaRecuperacao };
-  }, [semanaAtual, curvaData]);
+    const metaRecuperacao = previstoCurvaS + debitoAcumulado; // meta agressiva (1 sem)
+    // Rev. 1534 — Meta DILUÍDA em N semanas (Recovery Schedule, AACE 23R-02):
+    // o engenheiro escolhe a janela; a cobrança vira factível em vez de cair
+    // tudo numa única semana.
+    const metaDiluida = previstoCurvaS + (debitoAcumulado / janelaRecuperacao);
+    // Data prevista de convergência: fim da semana atual + N semanas.
+    const semanaFimDate = new Date(semanaAtual.fim.getTime() + janelaRecuperacao * 7 * 86400000);
+    const dataConvergencia = semanaFimDate.toLocaleDateString("pt-BR");
+    // Janela mínima viável (camada 2): com base no MAIOR delta semanal já
+    // realizado vs MÉDIA dos baselines semanais (últimos 6 períodos). Se a
+    // capacidade comprovada não supera o baseline (folga≤0), retorna null.
+    let janelaMinima: number | null = null;
+    if (debitoAcumulado > 0.01 && realizadaArr.length >= 2 && planejadaArr.length >= 2) {
+      const deltasReal: number[] = [];
+      const ordReal = realizadaArr.slice().sort((a, b) => a.semana.localeCompare(b.semana));
+      for (let i = 1; i < ordReal.length; i++) {
+        deltasReal.push(Math.max(0, ordReal[i].acumulado - ordReal[i - 1].acumulado));
+      }
+      const deltasPrev: number[] = [];
+      const ordPrev = planejadaArr.slice().sort((a, b) => a.semana.localeCompare(b.semana));
+      for (let i = 1; i < ordPrev.length; i++) {
+        deltasPrev.push(Math.max(0, ordPrev[i].acumulado - ordPrev[i - 1].acumulado));
+      }
+      const ult6Real = deltasReal.slice(-6);
+      const ult6Prev = deltasPrev.slice(-6);
+      const ritmoMaxReal = ult6Real.length ? Math.max(...ult6Real) : 0;
+      const baselineMedio = ult6Prev.length ? ult6Prev.reduce((s, x) => s + x, 0) / ult6Prev.length : 0;
+      const folga = ritmoMaxReal - baselineMedio;
+      if (folga > 0.05) {
+        janelaMinima = Math.max(1, Math.ceil(debitoAcumulado / folga));
+      }
+    }
+    return {
+      previstoCurvaS, realizado, aderencia,
+      debitoAcumulado, metaRecuperacao, metaDiluida,
+      dataConvergencia, janelaMinima,
+    };
+  }, [semanaAtual, curvaData, janelaRecuperacao]);
 
   const pesoSemana = useMemo(() => {
     const indiretas = atividadesSemAtualTodas.filter((a: any) => a.isIndireta);
@@ -575,9 +619,10 @@ export function ProgramacaoSemanal({
                 </div>
               )}
             </div>
-            {/* Rev. 1533 — Linha 2: Débito acumulado + Meta de recuperação (Recovery Schedule, AACE 23R-02) */}
+            {/* Rev. 1534 — Linha 2: Débito + Meta DILUÍDA + Seletor de janela
+                (Recovery Schedule, AACE 23R-02). PV permanece imutável. */}
             {evmSemana && evmSemana.debitoAcumulado > 0.01 && (
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1.5 mt-1 border-t border-blue-200/70">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-1.5 mt-1 border-t border-blue-200/70">
                 <div className="flex items-center gap-1.5" title="Quanto a obra ficou devendo das semanas anteriores (PV acumulado − EV acumulado até a semana passada). Não é descontado do baseline; é meta gerencial.">
                   <TrendingDown className="h-3.5 w-3.5 text-red-600" />
                   <span className="text-[11px] text-slate-700 font-medium">Atraso a recuperar:</span>
@@ -586,16 +631,50 @@ export function ProgramacaoSemanal({
                   </span>
                 </div>
                 <span className="text-slate-300">|</span>
-                <div className="flex items-center gap-1.5" title="Quanto entregar nesta semana para ZERAR o atraso = Previsto baseline + Débito acumulado. PV original permanece imutável.">
+                <div className="flex items-center gap-1.5" title={`Meta semanal DILUÍDA em ${janelaRecuperacao} semanas = Previsto baseline + (Débito ÷ ${janelaRecuperacao}). Cobrança factível, baseline imutável.`}>
                   <Zap className="h-3.5 w-3.5 text-blue-700" />
-                  <span className="text-[11px] text-slate-700 font-medium">Meta para recuperar:</span>
+                  <span className="text-[11px] text-slate-700 font-medium">Meta diluída ({janelaRecuperacao}{janelaRecuperacao === 1 ? " sem" : " sem"}):</span>
                   <span className="text-sm font-bold text-blue-700 tabular-nums">
-                    {evmSemana.metaRecuperacao.toFixed(2)}%
+                    {evmSemana.metaDiluida.toFixed(2)}%
                   </span>
                   <span className="text-[10px] text-slate-500">
-                    ({evmSemana.previstoCurvaS.toFixed(2)}% baseline + {evmSemana.debitoAcumulado.toFixed(2)}% débito)
+                    ({evmSemana.previstoCurvaS.toFixed(2)}% baseline + {(evmSemana.debitoAcumulado / janelaRecuperacao).toFixed(2)}%/sem)
                   </span>
                 </div>
+                {/* Seletor: só engenheiro mexe; cliente vê congelado */}
+                {!portalMode && onChangeRecoveryWindow && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-slate-600">Recuperar em</span>
+                    <select
+                      value={janelaRecuperacao}
+                      onChange={(e) => onChangeRecoveryWindow(parseInt(e.target.value))}
+                      className="text-[11px] font-semibold border border-blue-300 bg-white rounded px-1.5 py-0.5 text-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      title="Janela de Recovery Schedule. Quanto MAIOR a janela, mais factível a meta semanal. PV (baseline) permanece intacto."
+                    >
+                      {[1, 2, 4, 6, 8, 12].map(n => (
+                        <option key={n} value={n}>{n} sem</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {!portalMode && evmSemana.janelaMinima != null && (
+                  <span
+                    className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 cursor-help"
+                    title={`Com base no MAIOR avanço semanal já realizado (capacidade comprovada) vs MÉDIA do baseline das últimas 6 semanas. Janela menor que esta provavelmente não é factível.`}
+                  >
+                    💡 Sugerido: {evmSemana.janelaMinima} sem
+                  </span>
+                )}
+                <span className="text-slate-300">|</span>
+                <span className="text-[11px] text-slate-600" title={`Mantendo a meta diluída de ${evmSemana.metaDiluida.toFixed(2)}%/sem, o débito acumulado zera nesta data.`}>
+                  📅 Atraso zerado em <strong className="text-slate-800">{evmSemana.dataConvergencia}</strong>
+                </span>
+                {/* Meta agressiva (1 sem) só pra engenheiro como referência de teto */}
+                {!portalMode && janelaRecuperacao > 1 && (
+                  <span className="text-[10px] text-slate-400" title="Meta agressiva: cobrar TODO o débito numa única semana. Quase sempre irrealista — exibido só como teto de referência.">
+                    (agressiva 1 sem: {evmSemana.metaRecuperacao.toFixed(2)}%)
+                  </span>
+                )}
               </div>
             )}
             <div className="text-[10px] text-slate-400">
@@ -604,7 +683,7 @@ export function ProgramacaoSemanal({
                 ? <>&quot;Previsto&quot; e &quot;Realizado&quot; são o <strong>delta da Curva S nesta semana</strong> (o quanto a obra deve / efetivamente avançou de seg a dom). Atividades multi-semana contribuem proporcionalmente.</>
                 : <>&quot;Previsto&quot; é estimado pelo <strong>overlap dias × peso ÷ duração</strong> (atividades multi-semana contribuem proporcionalmente). Realizado e Aderência indisponíveis sem histórico de avanços.</>
               }
-              {evmSemana && evmSemana.debitoAcumulado > 0.01 && <> O <strong>baseline (PV) é imutável</strong>; o débito é métrica gerencial — não substitui o cronograma original.</>}
+              {evmSemana && evmSemana.debitoAcumulado > 0.01 && <> O <strong>baseline (PV) é imutável</strong>; o débito é métrica gerencial diluída em {janelaRecuperacao} semanas — não substitui o cronograma original.</>}
               {" "}Peso bruto das atividades ativas: <strong className="tabular-nums">{pesoSemana.somaSemana.toFixed(2)}%</strong>
               {pesoSemana.maiorPesoVal > 0 && <> · maior peso individual: <strong>{pesoSemana.maiorPesoVal.toFixed(2)}%</strong></>} (informativo).
             </div>
@@ -641,7 +720,7 @@ export function ProgramacaoSemanal({
                       <th className="py-2 px-3 w-20 text-right" title="% que esta atividade DEVERIA estar concluída até o fim desta semana, calculado linearmente entre data de início e fim">Previsto%</th>
                       <th className="py-2 px-3 w-20 text-right">Real%</th>
                       <th className="py-2 px-3 w-20 text-right" title="Desvio = Real% − Previsto%. Positivo = atividade adiantada (verde). Negativo = atrasada (vermelho). Em semanas futuras o desvio fica em cinza neutro — a atividade ainda nem teve a chance de ser executada.">Desvio</th>
-                      <th className="py-2 px-3 w-24 text-right" title="Quanto esta atividade precisa avançar nesta semana para zerar o atraso individual = max(0, Previsto% − Real%). Em semanas futuras é zero (atividade ainda não devia ter avançado).">Recuperação</th>
+                      <th className="py-2 px-3 w-28 text-right" title={`Quanto esta atividade precisa avançar POR SEMANA para zerar o atraso individual, diluído na janela de Recovery Schedule (${janelaRecuperacao} semanas). Em semanas futuras é zero (atividade ainda não devia ter avançado).`}>Recuperação</th>
                       <th className="py-2 px-3 w-24 text-center">Status</th>
                     </tr>
                   </thead>
@@ -716,13 +795,15 @@ export function ProgramacaoSemanal({
                           <td className={`py-2 px-3 text-right font-bold tabular-nums ${desvioCor}`}>
                             {desvio > 0 ? "+" : ""}{desvio.toFixed(1)}pp
                           </td>
-                          {/* Rev. 1533 — Recuperação por atividade = max(0, Previsto% − Real%).
+                          {/* Rev. 1534 — Recuperação por atividade DILUÍDA em N semanas:
+                              gap = max(0, Previsto% − Real%); pp/sem = gap ÷ N.
                               Em semanas futuras a atividade nem devia ter avançado, então 0. */}
-                          <td className="py-2 px-3 text-right font-semibold tabular-nums">
+                          <td className="py-2 px-3 text-right font-semibold tabular-nums" title={`Diluído em ${janelaRecuperacao} semana(s). Gap total: ${semanaFutura ? "0" : Math.max(0, prevInd - av).toFixed(1)}pp.`}>
                             {(() => {
-                              const recup = semanaFutura ? 0 : Math.max(0, prevInd - av);
-                              if (recup < 0.05) return <span className="text-emerald-600">— em dia</span>;
-                              return <span className="text-blue-700">+{recup.toFixed(1)}pp</span>;
+                              const gap = semanaFutura ? 0 : Math.max(0, prevInd - av);
+                              if (gap < 0.05) return <span className="text-emerald-600">— em dia</span>;
+                              const pps = gap / janelaRecuperacao;
+                              return <span className="text-blue-700">+{pps.toFixed(1)}pp/sem</span>;
                             })()}
                           </td>
                           <td className="py-2 px-3 text-center">

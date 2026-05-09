@@ -1559,6 +1559,9 @@ export const portalExternoRouter = router({
           dataTerminoContratual: projeto.dataTerminoContratual, status: projeto.status,
           valorContrato: _n((projeto as any).valorContrato),
           revisaoNumero: revisao.numero, revisaoData: revisao.dataRevisao,
+          // Rev. 1534 — Janela de Recovery Schedule (AACE 23R-02). Cliente vê o
+          // compromisso que o engenheiro definiu pra diluir o atraso.
+          recoveryWindowSemanas: (revisao as any).recoveryWindowSemanas ?? 4,
         },
         kpis: (() => {
           // ALINHAMENTO COM O REFIS OFICIAL:
