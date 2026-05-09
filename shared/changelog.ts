@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1490,
+    titulo: "Planejamento → aba Efetivo: foto do funcionário e vínculo (PJ/CLT) na lista da obra",
+    descricao: "A lista de funcionários alocados na obra (aba Efetivo dentro do Planejamento) agora mostra: (1) Foto do funcionário no formato avatar circular (44px) — quando não há foto cadastrada, exibe um avatar com as 2 iniciais do nome em gradiente azul. (2) Coluna 'Vínculo' com badge colorido indicando o tipo de contrato: PJ (roxo) ou CLT (azul). Os dados (fotoUrl e tipoContrato) já vinham do backend (getEquipeObra) — só faltava renderizar. Ajustado também o colspan da linha 'Nenhum funcionário encontrado' (4 → 6 colunas).",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 08:30:00",
+  },
+  {
     version: 1489,
     titulo: "Planejamento (interno) — Impressão profissional em TODAS as abas, igual ao Portal do Cliente (cabeçalho + botões Imprimir/PDF)",
     descricao: "O módulo INTERNO de Planejamento agora suporta impressão e geração de PDF em qualquer aba (Visão Geral, Cronograma, Gantt, Crono. Financeiro, Curva S, Avanço Semanal, Caminho Crítico, Prev. Medição, Prog. Semanal, Diagrama de Rede, Custo RH, Efetivo, Revisões, REFIS, BIM 3D), com o mesmo padrão visual do Portal do Cliente. (1) Botões 'Imprimir' e 'PDF' adicionados ao cabeçalho do projeto, ao lado do badge de status — disponíveis em qualquer aba. (2) Cabeçalho exclusivo de impressão (PlanejamentoPrintHeader) que aparece SÓ no PDF: linha 1 com os 3 logos lado a lado (Executora à esquerda, Cliente no centro, Gerenciadora à direita); linha 2 com a barra com nome da obra, número da revisão, cidade/estado, título da aba sendo impressa e timestamp de geração. (3) Os logos do Cliente e da Gerenciadora vêm do cadastro da Obra; o logo da Executora vem da empresa atualmente selecionada (selectedCompany). (4) O cabeçalho de tela continua intacto e não aparece no PDF (print:hidden). (5) Componente novo `PlanejamentoPrintHeader` espelha o `PortalPrintHeader` para garantir consistência visual entre o que o cliente vê no portal e o que a equipe interna imprime.",

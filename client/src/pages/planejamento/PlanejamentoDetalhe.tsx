@@ -7917,17 +7917,44 @@ export function EfetivoObraView({ equipeRaw, isLoading }: { equipeRaw: any[]; is
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                   <tr>
+                    <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Foto</th>
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Nome</th>
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Função / Cargo</th>
+                    <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Vínculo</th>
                     <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Status</th>
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Tempo de Empresa</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {listaFiltrada.map((e: any, i: number) => (
+                  {listaFiltrada.map((e: any, i: number) => {
+                    const iniciais = (e.nomeCompleto || "?").split(" ").filter(Boolean).slice(0, 2).map((p: string) => p[0]?.toUpperCase()).join("") || "?";
+                    const tipoRaw = String(e.tipoContrato || "").toUpperCase();
+                    const isPJ = tipoRaw === "PJ";
+                    const isCLT = tipoRaw === "CLT";
+                    const vincLabel = isPJ ? "PJ" : isCLT ? "CLT" : (e.tipoContrato || "—");
+                    const vincCls = isPJ
+                      ? "bg-purple-100 text-purple-700 border-purple-200"
+                      : isCLT
+                        ? "bg-blue-100 text-blue-700 border-blue-200"
+                        : "bg-slate-100 text-slate-500 border-slate-200";
+                    return (
                     <tr key={e.id || i} className="hover:bg-blue-50/30 transition-colors">
+                      <td className="px-4 py-2">
+                        {e.fotoUrl ? (
+                          <img src={e.fotoUrl} alt={e.nomeCompleto} className="h-9 w-9 rounded-full object-cover border border-slate-200 shadow-sm" />
+                        ) : (
+                          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 text-white text-[11px] font-bold flex items-center justify-center shadow-sm">
+                            {iniciais}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-2 font-medium text-slate-800 text-[13px]">{e.nomeCompleto}</td>
                       <td className="px-4 py-2 text-slate-600 text-[13px]">{e.funcao || e.cargo || "—"}</td>
+                      <td className="px-4 py-2 text-center">
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold border ${vincCls}`}>
+                          {vincLabel}
+                        </span>
+                      </td>
                       <td className="px-4 py-2 text-center">
                         <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[e.effectiveStatus] || "bg-slate-100 text-slate-600"}`}>
                           {STATUS_LABELS[e.effectiveStatus] || e.effectiveStatus}
@@ -7949,9 +7976,10 @@ export function EfetivoObraView({ equipeRaw, isLoading }: { equipeRaw: any[]; is
                         return parts.join(" ");
                       })()}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   {listaFiltrada.length === 0 && (
-                    <tr><td colSpan={4} className="text-center py-10 text-slate-400 text-sm">Nenhum funcionário encontrado</td></tr>
+                    <tr><td colSpan={6} className="text-center py-10 text-slate-400 text-sm">Nenhum funcionário encontrado</td></tr>
                   )}
                 </tbody>
               </table>
