@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1530,
+    titulo: "Portal Cronograma — Pred./Suc. clicáveis com popover (lista completa)",
+    descricao: "AJUSTE pedido pelo usuário (IMG_0215): na Rev. 1529 transformamos as colunas Pred./Suc. em chip compacto (← N / N →) com a lista completa apenas no tooltip (atributo title). Em iPad/celular o tooltip não funciona — só hover de mouse — então o usuário não conseguia ver QUAIS eram os 17 sucessores. SOLUÇÃO: chips agora são botões clicáveis que abrem um Popover (já existente no shadcn) mostrando a lista completa das EAPs em chips coloridos e organizados em wrap. Funciona em mouse E touch. Aplicado em PortalPlanejamentoCliente.tsx > AbaCronograma (Pred. azul, Suc. violeta).",
+    tipo: 'fix',
+    modulos: 'Portal do Cliente, Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 03:30:00',
+  },
+  {
     version: 1529,
     titulo: "Portal Cronograma — Pred./Suc. como chip compacto (corrige altura desproporcional)",
     descricao: "AJUSTE pedido pelo usuário (IMG_0213): a coluna 'Suc.' do Cronograma do Portal listava TODAS as EAPs sucessoras separadas por ';' empilhadas verticalmente. Em atividades-marco com 15+ sucessoras (ex.: linha 'Início' com 2.1; 2.1.3; 2.1.4; 2.2; ...) a célula crescia muito e a linha inteira ficava desproporcional. SOLUÇÃO: substituídas as células Pred./Suc. por CHIP COMPACTO com contagem (ex.: '← 3' em azul para predecessoras, '15 →' em violeta para sucessoras), idêntico ao módulo interno de Planejamento (Rev. anterior). A lista completa fica no tooltip (atributo title). Larguras das colunas fixadas em w-16 para garantir consistência. Aplicado em PortalPlanejamentoCliente.tsx > AbaCronograma.",

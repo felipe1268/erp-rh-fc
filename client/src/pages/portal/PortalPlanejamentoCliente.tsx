@@ -1547,12 +1547,29 @@ function AbaCronograma({ atividades }: { atividades: any[] }) {
                       const arr = raw ? raw.split(/[,;]/).map((s: string) => s.trim()).filter(Boolean) : [];
                       if (arr.length === 0) return <span className="text-slate-300 text-[11px]">—</span>;
                       return (
-                        <span
-                          title={`Predecessoras (${arr.length}): ${arr.join("; ")}`}
-                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-semibold border border-blue-200 cursor-help"
-                        >
-                          ← {arr.length}
-                        </span>
+                        <UiPopover>
+                          <UiPopoverTrigger asChild>
+                            <button
+                              type="button"
+                              title={`Clique para ver as ${arr.length} predecessoras`}
+                              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-semibold border border-blue-200 hover:bg-blue-100 active:bg-blue-200 transition cursor-pointer"
+                            >
+                              ← {arr.length}
+                            </button>
+                          </UiPopoverTrigger>
+                          <UiPopoverContent side="bottom" align="center" className="w-auto max-w-[260px] p-3">
+                            <div className="text-[11px] font-semibold text-slate-700 mb-2">
+                              Predecessoras ({arr.length})
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {arr.map((p: string, i: number) => (
+                                <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-mono border border-blue-200">
+                                  {p}
+                                </span>
+                              ))}
+                            </div>
+                          </UiPopoverContent>
+                        </UiPopover>
                       );
                     })()}
                   </td>
@@ -1561,12 +1578,29 @@ function AbaCronograma({ atividades }: { atividades: any[] }) {
                       const sucs = a.eapCodigo ? (sucessorasMap[a.eapCodigo] ?? []) : [];
                       if (sucs.length === 0) return <span className="text-slate-300 text-[11px]">—</span>;
                       return (
-                        <span
-                          title={`Sucessoras (${sucs.length}): ${sucs.join("; ")}`}
-                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 text-[10px] font-semibold border border-violet-200 cursor-help"
-                        >
-                          {sucs.length} →
-                        </span>
+                        <UiPopover>
+                          <UiPopoverTrigger asChild>
+                            <button
+                              type="button"
+                              title={`Clique para ver as ${sucs.length} sucessoras`}
+                              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 text-[10px] font-semibold border border-violet-200 hover:bg-violet-100 active:bg-violet-200 transition cursor-pointer"
+                            >
+                              {sucs.length} →
+                            </button>
+                          </UiPopoverTrigger>
+                          <UiPopoverContent side="bottom" align="center" className="w-auto max-w-[260px] p-3">
+                            <div className="text-[11px] font-semibold text-slate-700 mb-2">
+                              Sucessoras ({sucs.length})
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {sucs.map((s: string, i: number) => (
+                                <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 text-[10px] font-mono border border-violet-200">
+                                  {s}
+                                </span>
+                              ))}
+                            </div>
+                          </UiPopoverContent>
+                        </UiPopover>
                       );
                     })()}
                   </td>
