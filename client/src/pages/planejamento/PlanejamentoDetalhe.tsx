@@ -194,6 +194,11 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   const { selectedCompany, companyId } = useCompany();
   const [refisInitSemana, setRefisInitSemana] = useState<string | null>(null);
   const [semanaVisualizacao, setSemanaVisualizacao] = useState<string | null>(null);
+  // Rev. 1537 — Espelha em tempo real os avanços DIGITADOS (ainda não salvos)
+  // na aba "Avanço Semanal" para que a barra superior "Avanço Físico" e o
+  // card "VISÃO GERAL" reflitam imediatamente o que o usuário está digitando,
+  // em vez de só atualizar depois do "Salvar Avanços". Limpado ao salvar.
+  const [avancoLocalLive, setAvancoLocalLive] = useState<Record<number, number>>({});
   // Rev. 1343: ponderação fixada em Peso Financeiro (padrão da construção civil).
   // O alternador "Duração (Project)" foi removido a pedido — toda a obra mede por valor.
   const usarPesoPorDuracao = false;
@@ -377,16 +382,23 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   }, [avancos]);
 
   const avancosMapSemana = useMemo(() => {
-    if (!semanaVisualizacao) return avancosMap;
-    const m: Record<number, number> = {};
-    const semMap: Record<number, string> = {};
-    avancos.forEach((av: any) => {
-      if (av.semana > semanaVisualizacao) return;
-      const id = av.atividadeId;
-      if (!semMap[id] || av.semana > semMap[id]) { semMap[id] = av.semana; m[id] = n(av.percentualAcumulado); }
-    });
-    return m;
-  }, [avancos, semanaVisualizacao, avancosMap]);
+    const base: Record<number, number> = {};
+    if (!semanaVisualizacao) {
+      Object.assign(base, avancosMap);
+    } else {
+      const semMap: Record<number, string> = {};
+      avancos.forEach((av: any) => {
+        if (av.semana > semanaVisualizacao) return;
+        const id = av.atividadeId;
+        if (!semMap[id] || av.semana > semMap[id]) { semMap[id] = av.semana; base[id] = n(av.percentualAcumulado); }
+      });
+    }
+    // Rev. 1537 — Sobrepõe avanços digitados ainda não salvos vindos da aba Avanço Semanal
+    for (const [idStr, val] of Object.entries(avancoLocalLive)) {
+      base[parseInt(idStr)] = val as number;
+    }
+    return base;
+  }, [avancos, semanaVisualizacao, avancosMap, avancoLocalLive]);
 
   const avancoAtual = useMemo(() => {
     if (!atividades.length) return 0;
@@ -712,6 +724,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             avancos={avancos}
             utils={utils}
             onSemanaChange={setSemanaVisualizacao}
+            onLocalAvancoChange={setAvancoLocalLive}
             usarPesoPorDuracao={usarPesoPorDuracao}
           />
         )}
@@ -4345,10 +4358,12 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: AVANÇO SEMANAL
 // ═════════════════════════════════════════════════════════════════════════════
-function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, onSemanaChange, usarPesoPorDuracao }: any) {
+function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, onSemanaChange, onLocalAvancoChange, usarPesoPorDuracao }: any) {
   const [semanaAtual, setSemanaAtualRaw] = useState(() => toMonday(new Date()));
   const setSemanaAtual = (s: string) => { setSemanaAtualRaw(s); onSemanaChange?.(s); };
   const [avancoLocal, setAvancoLocal] = useState<Record<number, number>>({});
+  // Rev. 1537 — Espelha avanços digitados pra cima (barra superior + Visão Geral)
+  useEffect(() => { onLocalAvancoChange?.(avancoLocal); }, [avancoLocal, onLocalAvancoChange]);
   const [importStatus, setImportStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [importando, setImportando] = useState(false);
   const [importProgress, setImportProgress] = useState(0);

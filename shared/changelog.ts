@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1537,
+    titulo: "Planejamento — barra 'Avanço Físico' e 'Visão Geral' agora atualizam em tempo real ao digitar avanços",
+    descricao: "AJUSTE de UX reportado pelo usuário: ao digitar % de avanço na aba 'Avanço Semanal', os cards da seção (PREVISTO/REALIZADO ACUM./VARIAÇÃO) atualizavam imediatamente, mas a barra superior 'Avanço Físico' (Previsto/Realizado) e o card 'Avanço Físico' da Visão Geral só refletiam após clicar em 'Salvar Avanços'. Causa: a seção semanal lê do estado local 'avancoLocal' (digitado, não salvo); a barra superior e a Visão Geral leem da query 'listarAvancos' (só se atualiza após save + refetch). Correção: subi o estado 'avancoLocal' (via callback onLocalAvancoChange) até PlanejamentoDetalhe e fiz 'avancosMapSemana' sobrepor as edições não-salvas em cima dos avanços persistidos. Resultado: digitou 1.40% na atividade → barra superior já mostra 1.40% antes mesmo de salvar. Ao salvar, o estado local é limpo e os dados persistidos assumem (sem flicker, mesmo valor).",
+    tipo: 'melhoria',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 15:10:00',
+  },
+  {
     version: 1536,
     titulo: "Portal — Programação Semanal: coluna 'Recurso' removida (era sempre vazia)",
     descricao: "AJUSTE de UX no Portal do Cliente: a coluna 'Recurso' da tabela de Programação Semanal vinha quase sempre vazia (apenas '—'), pois o campo recursoPrincipal de planejamento_atividades é texto livre raramente preenchido pelo engenheiro — que costuma usar o orçamento vinculado para detalhar mão-de-obra e materiais. A coluna ocupava espaço útil sem agregar valor para o cliente. Aplicado em ProgramacaoSemanal.tsx (componente compartilhado): o cabeçalho e a célula da coluna agora só renderizam quando portalMode=false, ou seja, somem do portal mas continuam disponíveis no módulo interno de Planejamento (engenheiro pode continuar consultando). Os recursos previstos no orçamento permanecem visíveis em bloco próprio abaixo da tabela quando há orcamentoId vinculado (esse bloco já era escondido em portalMode).",
