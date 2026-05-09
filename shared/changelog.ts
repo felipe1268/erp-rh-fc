@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1545,
+    titulo: "Programação Semanal — nova coluna 'Peso Sem%' (contribuição em pp na semana)",
+    descricao: "Nova coluna ao lado de Peso% para tornar visualmente óbvia a diferença entre os dois conceitos: Peso% = peso da atividade no PROJETO INTEIRO (BAC%, estático, vem do cronograma) vs Peso Sem% = contribuição em pp ao Previsto DESTA semana (Peso% × ΔPrevisto_semana / 100). Exemplo do problema que essa coluna esclarece: 'Locação de gradil' tem Peso% = 8,83% (vale 8,83% do projeto inteiro, dura 13 meses) MAS Peso Sem% = 0,05pp na semana 1 — quase nada do ponteiro semanal. Já 'Tapume autoportante' tem Peso% = 0,45% (irrelevante no projeto) MAS Peso Sem% = 0,16pp (3× mais relevante para a semana). Cores: ≥0,10pp em laranja-bold (move o ponteiro), 0,01-0,10pp em cinza-bold (contribui), <0,01pp mostrado como '—' em cinza claro (irrelevante na semana). Tooltip explica a fórmula.",
+    tipo: 'melhoria',
+    modulos: 'Planejamento, Programação Semanal, Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 18:30:00',
+  },
+  {
     version: 1544,
     titulo: "Programação Semanal — 'MAIOR PESO' agora é Top 3 por contribuição na semana + badges CRÍTICA / QUASE CRÍTICA",
     descricao: "Pedido do usuário (validado por literatura): a marcação 'MAIOR PESO' usava o peso TOTAL da atividade no projeto, o que destacava atividades multi-semana com peso projeto alto mesmo quando elas mal contribuíam para o avanço da semana. Exemplo: 'Locação de gradil' (peso projeto 8,83%, durando 13 meses) era destacada com Previsto de apenas 0,6% na semana — contribuição real ~0,053pp. Já 'Tapume autoportante' (peso projeto 0,45%, mas Previsto 36% na semana = 0,16pp, 3× mais relevante) ficava sem destaque. CORRIGIDO: ranqueamento agora é por CONTRIBUIÇÃO em pp na semana = peso% × ΔPrev_semana / 100, e mostra o TOP 3 (Last Planner System recomenda 3-5 'constraints' por semana — sweet spot gerencial). Cada badge mostra a posição (TOP 1/2/3) e o valor em pp. ADICIONADO: badge CRÍTICA (vermelho, ícone alerta) para atividades de caminho crítico (float = 0, mesma lógica da aba Caminho Crítico = projectEnd − dataFim) e badge QUASE CRÍTICA (âmbar) para folga ≤ 14 dias (Goldratt/CCPM). Realce de linha hierarquizado: CRÍTICA (vermelho) > MAIOR PESO (laranja) > QUASE CRÍTICA (âmbar) > atrasada > zebra. Linha do cabeçalho agora informa quantas críticas/quase críticas existem na semana. Tooltips explicam cada badge.",
