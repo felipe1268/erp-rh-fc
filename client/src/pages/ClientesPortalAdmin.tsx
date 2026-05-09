@@ -693,8 +693,8 @@ export default function ClientesPortalAdmin() {
 
         {/* Modal: Liberar abas do Portal por usuário */}
         <Dialog open={!!abasTarget} onOpenChange={(o) => { if (!o) setAbasTarget(null); }}>
-          <DialogContent className="bg-white p-0 gap-0 flex flex-col !max-w-none w-screen h-screen !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 sm:!max-w-none"
-            style={{ width: "100vw", height: "100vh", maxWidth: "100vw", maxHeight: "100vh", top: 0, left: 0, transform: "none", borderRadius: 0 }}>
+          <DialogContent className="bg-white p-0 gap-0 flex flex-col !max-w-none w-screen !rounded-none !translate-x-0 !translate-y-0 !top-0 !left-0 sm:!max-w-none"
+            style={{ width: "100vw", height: "100dvh", maxWidth: "100vw", maxHeight: "100dvh", top: 0, left: 0, transform: "none", borderRadius: 0 }}>
             <DialogHeader className="px-6 py-4 border-b shrink-0">
               <DialogTitle className="flex items-center gap-2 text-lg">
                 <SlidersHorizontal className="w-5 h-5 text-indigo-600" />
@@ -738,7 +738,9 @@ export default function ClientesPortalAdmin() {
                 </div>
               </div>
             )}
-            <DialogFooter className="gap-2 px-6 py-4 border-t bg-slate-50 shrink-0 flex-row flex-wrap">
+            <DialogFooter
+              className="gap-2 px-6 py-4 border-t bg-slate-50 shrink-0 flex-row flex-wrap"
+              style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
               <Button variant="outline" size="sm" onClick={() => setAbasSel(new Set(PORTAL_CLIENTE_ABAS.map((a) => a.key)))}>Selecionar todas</Button>
               <Button variant="outline" size="sm" onClick={() => setAbasSel(new Set([ABA_OBRIGATORIA]))}>Apenas a obrigatória</Button>
               <div className="flex-1" />

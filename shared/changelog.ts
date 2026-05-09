@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1477,
+    titulo: "Admin do Portal — Bugfix iPad: botão Salvar do modal 'Abas liberadas' agora aparece corretamente",
+    descricao: "No iPad/Safari iOS, o modal 'Abas liberadas no Portal do Cliente' (acessado em Configurações → Clientes do Portal → ícone de abas) abria em tela cheia mas o rodapé com os botões 'Cancelar' e 'Salvar' ficava fora da viewport, escondido atrás da barra de URL e da home indicator do iPad. Causa: o modal usava height: 100vh, que no iOS não desconta a barra de URL dinâmica do Safari, fazendo o footer ser empurrado para baixo da tela visível. Correção: trocado 100vh por 100dvh (dynamic viewport height — recalcula automaticamente quando a barra de URL aparece/desaparece) e adicionado padding-bottom com env(safe-area-inset-bottom) para respeitar a área segura do iPad/iPhone. Agora os botões 'Selecionar todas', 'Apenas a obrigatória', 'Cancelar' e 'Salvar' ficam sempre visíveis no rodapé do modal, em qualquer dispositivo.",
+    tipo: "bugfix",
+    modulos: "Admin do Portal",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 23:25:00",
+  },
+  {
     version: 1476,
     titulo: "Portal do Cliente — Bugfix CRÍTICO: Avanço Físico Previsto agora usa a MESMA revisão do módulo Planejamento (última APROVADA)",
     descricao: "Causa REAL da divergência teimosa 'portal 2,19% vs Planejamento interno 1,84%' identificada e corrigida: o portal e o módulo interno estavam lendo REVISÕES DIFERENTES do mesmo projeto. (1) Módulo interno (PlanejamentoDetalhe.tsx ~309): pega a última revisão com status='aprovada'; só cai na revisão mais nova (qualquer status) quando NENHUMA aprovada existe — exatamente como o cliente vê o REFIS oficial. (2) Portal externo (portalExterno.ts ~1167): pegava SEMPRE revisoesHist[0] (a mais nova por número, sem filtrar status). Quando havia uma revisão em rascunho/em_revisao mais nova com pesos financeiros ou datas diferentes da revisão aprovada, o portal calculava em cima dela e produzia outro número (2,19%) enquanto o módulo interno mantinha o número da revisão aprovada (1,84%). Correção: o portal agora replica EXATAMENTE a regra de revisaoAtiva do módulo interno — última aprovada → fallback à mais nova. Junto com as correções anteriores (Rev. 1470/1471 toFixed e Rev. 1473 alinhamento usarIgual), os números de Avanço Físico Previsto, Curva S e KPIs do portal passam a refletir SEMPRE a revisão oficial aprovada que o cliente vê no REFIS interno.",
