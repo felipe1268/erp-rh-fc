@@ -1452,8 +1452,8 @@ function AbaCronograma({ atividades }: { atividades: any[] }) {
               <th className="py-2 px-2 text-left text-[11px] whitespace-nowrap">Início</th>
               <th className="py-2 px-2 text-left text-[11px] whitespace-nowrap">Fim</th>
               <th className="py-2 px-2 text-right text-[11px]">Dur.</th>
-              <th className="py-2 px-2 text-center text-[11px]">Pred.</th>
-              <th className="py-2 px-2 text-center w-20 text-[11px]">Suc.</th>
+              <th className="py-2 px-2 text-center w-16 text-[11px]">Pred.</th>
+              <th className="py-2 px-2 text-center w-16 text-[11px]">Suc.</th>
               <th className="py-2 px-2 text-right text-[11px] whitespace-nowrap min-w-[64px]">Peso%</th>
               <th className="py-2 px-2 text-left text-[11px]">Recurso</th>
               <th className="py-2 px-3 text-right w-20 text-[11px]">Avanço</th>
@@ -1541,13 +1541,33 @@ function AbaCronograma({ atividades }: { atividades: any[] }) {
                   <td className="py-1.5 px-2 text-right text-slate-500 text-[11px] tabular-nums">
                     {a.duracaoDias ? `${a.duracaoDias}d` : <span className="text-slate-300">—</span>}
                   </td>
-                  <td className="py-1.5 px-2 text-center text-[11px] font-mono text-blue-600">
-                    {a.predecessora || <span className="text-slate-300">—</span>}
+                  <td className="py-1.5 px-2 text-center align-middle">
+                    {(() => {
+                      const raw = (a.predecessora ?? "").toString();
+                      const arr = raw ? raw.split(/[,;]/).map((s: string) => s.trim()).filter(Boolean) : [];
+                      if (arr.length === 0) return <span className="text-slate-300 text-[11px]">—</span>;
+                      return (
+                        <span
+                          title={`Predecessoras (${arr.length}): ${arr.join("; ")}`}
+                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-semibold border border-blue-200 cursor-help"
+                        >
+                          ← {arr.length}
+                        </span>
+                      );
+                    })()}
                   </td>
-                  <td className="py-1.5 px-2 text-center text-[11px] font-mono text-violet-600">
+                  <td className="py-1.5 px-2 text-center align-middle">
                     {(() => {
                       const sucs = a.eapCodigo ? (sucessorasMap[a.eapCodigo] ?? []) : [];
-                      return sucs.length > 0 ? sucs.join("; ") : <span className="text-slate-300">—</span>;
+                      if (sucs.length === 0) return <span className="text-slate-300 text-[11px]">—</span>;
+                      return (
+                        <span
+                          title={`Sucessoras (${sucs.length}): ${sucs.join("; ")}`}
+                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 text-[10px] font-semibold border border-violet-200 cursor-help"
+                        >
+                          {sucs.length} →
+                        </span>
+                      );
                     })()}
                   </td>
                   <td className="py-1.5 px-2 text-right text-slate-600 text-[11px] tabular-nums whitespace-nowrap">{Number(a.pesoFinanceiro || 0).toFixed(2)}%</td>

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1529,
+    titulo: "Portal Cronograma — Pred./Suc. como chip compacto (corrige altura desproporcional)",
+    descricao: "AJUSTE pedido pelo usuário (IMG_0213): a coluna 'Suc.' do Cronograma do Portal listava TODAS as EAPs sucessoras separadas por ';' empilhadas verticalmente. Em atividades-marco com 15+ sucessoras (ex.: linha 'Início' com 2.1; 2.1.3; 2.1.4; 2.2; ...) a célula crescia muito e a linha inteira ficava desproporcional. SOLUÇÃO: substituídas as células Pred./Suc. por CHIP COMPACTO com contagem (ex.: '← 3' em azul para predecessoras, '15 →' em violeta para sucessoras), idêntico ao módulo interno de Planejamento (Rev. anterior). A lista completa fica no tooltip (atributo title). Larguras das colunas fixadas em w-16 para garantir consistência. Aplicado em PortalPlanejamentoCliente.tsx > AbaCronograma.",
+    tipo: 'fix',
+    modulos: 'Portal do Cliente, Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 03:00:00',
+  },
+  {
     version: 1528,
     titulo: "Portal — Avanço Semanal: KPIs corretos por semana (delta da Curva S)",
     descricao: "BUGFIX pedido pelo usuário (IMG_0211/0212): os 3 KPIs do topo da aba 'Avanço Semanal' do Portal do Cliente estavam errados conceitualmente. 'PESO DA SEMANA: 11,47%' era a soma dos pesos financeiros de TODAS as atividades ativas na semana — incluindo atividades de várias semanas pelo seu peso INTEGRAL, gerando duplo-conta (uma atividade de 8 semanas com peso 8,83% aparecia inteira em todas as 8 semanas). 'REALIZADO NA SEMANA' tinha o mesmo problema. SOLUÇÃO: substituídos por DELTA DA CURVA S — 'Previsto na semana' = curvaPlanejada[fim sem N] − curvaPlanejada[fim sem N−1] (representa quanto o projeto DEVE avançar nesta semana, atividades multi-semana contribuem proporcionalmente); 'Realizado na semana' = mesmo cálculo com curvaRealizada. Adicionado 4º KPI 'Aderência (SPI sem.)' = Realizado/Previsto × 100. Layout: grid de 3 → 4 cards (sm:grid-cols-2 lg:grid-cols-4). Adicionada nota explicativa abaixo dos cards mostrando o peso bruto das atividades ativas como informação auxiliar. Aplicado em PortalPlanejamentoCliente.tsx > AbaAvancoSemanal (passa curvaData via prop).",
