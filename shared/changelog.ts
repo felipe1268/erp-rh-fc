@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1491,
+    titulo: "Diagrama de Rede / Hierarquia EAP — filtros de status agora filtram de verdade (mostram só as atividades pertinentes + cadeia de ancestrais)",
+    descricao: "Antes: ao clicar em 'Em andamento' (ou Concluída, Atrasada, Em risco, Não iniciada) na barra de pílulas, o diagrama mantinha TODOS os grupos visíveis e só destacava as folhas — visualmente parecia que nada havia sido filtrado. Agora: o clique no filtro restringe o diagrama para mostrar APENAS as atividades que casam com o status selecionado, mais a cadeia de ancestrais EAP (ex.: 4.5.1.2 → 4.5.1 → 4.5 → 4) para preservar o contexto hierárquico. Mesma regra aplicada à busca por texto. Funciona em ambos os modos: 'Hierarquia EAP' e 'Rede de Precedências'. As arestas (ligações) acompanham automaticamente porque já filtram pelo conjunto de nós visíveis.",
+    tipo: "fix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 09:00:00",
+  },
+  {
     version: 1490,
     titulo: "Planejamento → aba Efetivo: foto do funcionário e vínculo (PJ/CLT) na lista da obra",
     descricao: "A lista de funcionários alocados na obra (aba Efetivo dentro do Planejamento) agora mostra: (1) Foto do funcionário no formato avatar circular (44px) — quando não há foto cadastrada, exibe um avatar com as 2 iniciais do nome em gradiente azul. (2) Coluna 'Vínculo' com badge colorido indicando o tipo de contrato: PJ (roxo) ou CLT (azul). Os dados (fotoUrl e tipoContrato) já vinham do backend (getEquipeObra) — só faltava renderizar. Ajustado também o colspan da linha 'Nenhum funcionário encontrado' (4 → 6 colunas).",

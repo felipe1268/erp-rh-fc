@@ -631,17 +631,39 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
   }, [rawNodes]);
 
   // Apply status + busca filters
-  // In hierarchy mode: groups are always shown (they are parents, not filterable by status)
+  // Quando há filtro ativo (status ou busca), mostramos APENAS as atividades
+  // que casam + a cadeia de ancestrais (na hierarquia EAP) para preservar
+  // o contexto. Se não houver filtro, mostra tudo.
   const visibleNodes = useMemo(() => {
-    let ns = rawNodes;
-    if (filtroStatus !== "todos") {
-      ns = ns.filter(n => n.isGrupo || n.status === filtroStatus);
-    }
-    if (busca.trim()) {
-      const q = busca.trim().toLowerCase();
-      ns = ns.filter(n => n.nome.toLowerCase().includes(q) || n.eap.toLowerCase().includes(q));
-    }
-    return ns;
+    const hasStatus = filtroStatus !== "todos";
+    const q = busca.trim().toLowerCase();
+    const hasBusca = q.length > 0;
+    if (!hasStatus && !hasBusca) return rawNodes;
+
+    // 1) Folhas (e/ou nodos) que casam com o filtro
+    const matched = rawNodes.filter(n => {
+      const okStatus = !hasStatus || (!n.isGrupo && n.status === filtroStatus);
+      const okBusca  = !hasBusca  || n.nome.toLowerCase().includes(q) || n.eap.toLowerCase().includes(q);
+      return okStatus && okBusca;
+    });
+
+    // 2) Conjunto base = ids dos casados
+    const keep = new Set<number>(matched.map(n => n.id));
+
+    // 3) Adiciona cadeia de ancestrais via EAP (1.2.3 → 1.2 → 1)
+    const byEap = new Map<string, Node>();
+    rawNodes.forEach(n => byEap.set(n.eap, n));
+    matched.forEach(n => {
+      let parentEap = eapParent(n.eap);
+      while (parentEap) {
+        const parent = byEap.get(parentEap);
+        if (!parent) break;
+        keep.add(parent.id);
+        parentEap = eapParent(parentEap);
+      }
+    });
+
+    return rawNodes.filter(n => keep.has(n.id));
   }, [rawNodes, filtroStatus, busca]);
 
   const visibleSet = useMemo(() => new Set(visibleNodes.map(n => n.id)), [visibleNodes]);
