@@ -700,6 +700,11 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
   const [dragging, setDragging] = useState(false);
   const dragStart               = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   const containerRef            = useRef<HTMLDivElement>(null);
+  // Rev. 1554 — gestos de toque (iPad/celular): 1 dedo arrasta, 2 dedos
+  // dão pinça (zoom). Mantemos o estado dos toques ativos num ref para
+  // poder distinguir pan single-touch de pinch multi-touch.
+  const activeTouches = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchStart    = useRef<{ dist: number; zoom: number; cx: number; cy: number; panX: number; panY: number } | null>(null);
 
   // All atividades with EAP code (for hierarchy — includes groups)
   const todos = useMemo(() =>
@@ -956,29 +961,105 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
 
   useEffect(() => { fitToView(); }, [fitToView]);
 
-  // Wheel zoom
-  const onWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.88 : 1.12;
-    setZoom(z => Math.min(Math.max(z * delta, 0.1), 4));
+  // Wheel zoom — registrado como listener NÃO-passivo (React onWheel é
+  // passivo por padrão e o preventDefault não funciona, deixando a página
+  // rolar enquanto o usuário tenta dar zoom).
+  useEffect(() => {
+    const cont = containerRef.current;
+    if (!cont) return;
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.88 : 1.12;
+      setZoom(z => Math.min(Math.max(z * delta, 0.1), 4));
+    };
+    cont.addEventListener("wheel", handler, { passive: false });
+    return () => cont.removeEventListener("wheel", handler);
   }, []);
 
-  // Drag pan
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    const tag = (e.target as SVGElement).tagName;
-    if (tag === "svg" || tag === "rect" && !(e.target as SVGElement).closest("g[data-node]")) {
-      setDragging(true);
-      dragStart.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y };
+  // ── Pointer / Touch — funciona em desktop (mouse), iPad e celular ──
+  // Helpers
+  const isBackgroundTarget = (target: EventTarget | null): boolean => {
+    const el = target as Element | null;
+    if (!el) return false;
+    const tag = el.tagName?.toLowerCase();
+    // Permite arrastar começando no container, no <svg>, no <rect data-bg=1>
+    // e em qualquer área que NÃO esteja dentro de um nó (g[data-node]).
+    if (el === containerRef.current) return true;
+    if (tag === "svg") return true;
+    if (el.getAttribute && el.getAttribute("data-bg") === "1") return true;
+    return !(el as any).closest?.("g[data-node]");
+  };
+
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    // Toque com 2+ dedos é tratado pelos handlers de touch abaixo (pinça).
+    if (e.pointerType === "touch") {
+      activeTouches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activeTouches.current.size >= 2) {
+        // Inicializa pinch — captura distância inicial e centro entre dedos
+        const [t1, t2] = Array.from(activeTouches.current.values());
+        const dx = t2.x - t1.x, dy = t2.y - t1.y;
+        pinchStart.current = {
+          dist: Math.hypot(dx, dy) || 1,
+          zoom,
+          cx: (t1.x + t2.x) / 2,
+          cy: (t1.y + t2.y) / 2,
+          panX: pan.x,
+          panY: pan.y,
+        };
+        setDragging(false);
+        dragStart.current = null;
+        return;
+      }
     }
-  }, [pan]);
-  const onMouseMove = useCallback((e: React.MouseEvent) => {
+    // Pan single-pointer (mouse, caneta, ou 1 dedo)
+    if (!isBackgroundTarget(e.target)) return;
+    setDragging(true);
+    dragStart.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y };
+    try { (e.currentTarget as Element).setPointerCapture(e.pointerId); } catch {}
+  }, [pan, zoom]);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (e.pointerType === "touch") {
+      activeTouches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      // Pinça: 2 dedos → zoom em torno do centro entre os dedos
+      if (activeTouches.current.size >= 2 && pinchStart.current) {
+        const [t1, t2] = Array.from(activeTouches.current.values());
+        const dx = t2.x - t1.x, dy = t2.y - t1.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const ratio = dist / pinchStart.current.dist;
+        const newZoom = Math.min(Math.max(pinchStart.current.zoom * ratio, 0.1), 4);
+        // Mantém o centro da pinça fixo na tela
+        const cont = containerRef.current;
+        if (cont) {
+          const rect = cont.getBoundingClientRect();
+          const cx = pinchStart.current.cx - rect.left;
+          const cy = pinchStart.current.cy - rect.top;
+          const k = newZoom / pinchStart.current.zoom;
+          setPan({
+            x: cx - (cx - pinchStart.current.panX) * k,
+            y: cy - (cy - pinchStart.current.panY) * k,
+          });
+        }
+        setZoom(newZoom);
+        return;
+      }
+    }
+    // Pan
     if (!dragging || !dragStart.current) return;
     setPan({
       x: dragStart.current.px + e.clientX - dragStart.current.x,
       y: dragStart.current.py + e.clientY - dragStart.current.y,
     });
   }, [dragging]);
-  const onMouseUp = useCallback(() => { setDragging(false); dragStart.current = null; }, []);
+
+  const onPointerUp = useCallback((e: React.PointerEvent) => {
+    if (e.pointerType === "touch") {
+      activeTouches.current.delete(e.pointerId);
+      if (activeTouches.current.size < 2) pinchStart.current = null;
+    }
+    setDragging(false);
+    dragStart.current = null;
+  }, []);
 
   const selectedNode = selectedId !== null ? nodeMap.get(selectedId) ?? null : null;
   const predecessoras = useMemo(() => rawEdges.filter(e => e.toId === selectedId).map(e => nodeMap.get(e.fromId)).filter(Boolean) as Node[], [rawEdges, selectedId, nodeMap]);
@@ -1370,12 +1451,12 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
         <div
           ref={containerRef}
           className="flex-1 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden relative"
-          style={{ cursor: dragging ? "grabbing" : "grab" }}
-          onWheel={onWheel}
-          onMouseDown={onMouseDown}
-          onMouseMove={onMouseMove}
-          onMouseUp={onMouseUp}
-          onMouseLeave={onMouseUp}
+          style={{ cursor: dragging ? "grabbing" : "grab", touchAction: "none" }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onPointerLeave={onPointerUp}
         >
           {/* Dot grid */}
           <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)", backgroundSize: "28px 28px", opacity: 0.5 }} />

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1554,
+    titulo: "Planejamento — Diagrama de Rede: navegação por toque (1 dedo arrasta, 2 dedos dão zoom)",
+    descricao: "O Diagrama de Rede (Hierarquia EAP / Rede de Precedências) só respondia a mouse e roda — no iPad e no celular não dava pra arrastar o gráfico nem dar pinça pra zoom (a página rolava em vez de zoom). Reescrito o controle de navegação usando Pointer Events (funciona em desktop, caneta e toque) + handlers específicos de pinça multi-touch: 1 dedo = arrastar (pan); 2 dedos = pinça com zoom mantendo o centro entre os dedos fixo na tela; touch-action: none aplicado ao canvas pra evitar que o navegador roube o gesto. Listener de roda virou não-passivo pra garantir que o zoom no desktop não role a página por trás. Aplica-se também ao Portal do Cliente (mesmo componente).",
+    tipo: 'melhoria',
+    modulos: 'Planejamento, Portal do Cliente, Mobile',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 23:00:00',
+  },
+  {
     version: 1553,
     titulo: "Portal do Cliente — RH/Docs: removida exposição de atestados e advertências dos funcionários",
     descricao: "Informações internas e sensíveis (atestados médicos e advertências disciplinares de funcionários CLT) foram removidas do Portal do Cliente. Não fazem sentido para o cliente — são questões trabalhistas/de saúde da relação FC × funcionário. O painel agora mostra apenas o que interessa ao cliente provar contratualmente: ASO (segurança ocupacional) e treinamentos NR (qualificação). Mudanças: KPIs 'Com Atestado' e 'Com Advertência' removidos; colunas 'Atestados' e 'Advertências' da tabela removidas; bloco 'Atestados / Advertências' do detalhe expandido removido. Backend: query documentosRhObra deixou de buscar e retornar esses dados (proteção em duas camadas).",
