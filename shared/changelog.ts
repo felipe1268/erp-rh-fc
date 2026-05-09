@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1543,
+    titulo: "Planejamento — botão 'Salvar Avanços' agora dá feedback (toast) em sucesso E erro",
+    descricao: "Usuário reportou: 'não estou conseguindo salvar o avanço, clico e nada acontece'. Causa: as mutations salvarAvanco/salvarAvancoLote/limparAvancos/limparAvancosSemana NÃO tinham handler onError nem nenhum toast — se o servidor devolvesse erro de validação, timeout de rede, revisão inativa, ou qualquer outra coisa, a UI ficava completamente muda. O usuário clicava no botão e parecia 'não fazer nada'. Correções: (1) onError em todas as 4 mutations, mostrando toast vermelho com a mensagem real do servidor; (2) onSuccess agora também mostra toast verde de confirmação ('N avanço(s) salvo(s) com sucesso'); (3) salvarTudo() embrulhado em try/catch — se der erro, avancoLocal NÃO é limpo, então o usuário não perde o trabalho; (4) se o usuário clica sem ter alterado nada, mostra toast.info pedindo pra mexer no slider; (5) se não há revisão ativa, mostra toast.error claro em vez de tentar salvar com revisaoId=0 (que silenciosamente falhava no servidor).",
+    tipo: 'bugfix',
+    modulos: 'Planejamento, Avanço Físico Semanal',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 17:30:00',
+  },
+  {
     version: 1542,
     titulo: "Programação Semanal — pill visual de aderência ao lado do Desvio (Atrasada / No prazo / Adiantada)",
     descricao: "Pedido do usuário: 'quando o desvio for menor [que zero] quero que apareça que a atividade está atrasada em vermelho, e quando for maior que zero adiantada, e o que estiver no prazo indica disso — quero algo visual de fácil acesso'. Agora a coluna Desvio mostra, ao lado do valor numérico em pp, um pill colorido com ícone: ▼ Atrasada (vermelho) quando desvio < −2pp, ● No prazo (verde) na faixa neutra ±2pp, ▲ Adiantada (azul) quando desvio > +2pp. Semana futura segue cinza neutro com '—'. Faixa de ±2pp evita marcar 'atraso' por ruído de arredondamento de cronograma. Tooltip mostra Real% vs Previsto%. Aplica-se igualmente ao módulo interno e ao Portal do Cliente (mesmo componente ProgramacaoSemanal).",

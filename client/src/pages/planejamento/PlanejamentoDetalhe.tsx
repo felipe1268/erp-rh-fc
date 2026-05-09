@@ -4820,12 +4820,23 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     }
   }
 
+  // Rev. 1543 — Adicionado feedback visual (toast) em TODAS as mutations de
+  // salvar/limpar avanços. Antes, se o servidor retornasse erro (validação,
+  // timeout, revisão inativa, etc.), a UI ficava muda — usuário clicava em
+  // "Salvar Avanços" e nada acontecia visivelmente. Agora qualquer erro vira
+  // toast vermelho com a mensagem real, e sucessos viram toast verde.
   const salvarMutation = trpc.planejamento.salvarAvanco.useMutation({
     onSuccess: () => utils.planejamento.listarAvancos.invalidate(),
+    onError:   (e) => toast.error(`Erro ao salvar avanço: ${e.message}`),
   });
 
   const salvarLoteMutation = trpc.planejamento.salvarAvancoLote.useMutation({
-    onSuccess: () => utils.planejamento.listarAvancos.invalidate(),
+    onSuccess: (data) => {
+      utils.planejamento.listarAvancos.invalidate();
+      utils.planejamento.listarSemanasComAvanco.invalidate();
+      toast.success(`${data?.total ?? 0} avanço(s) salvo(s) com sucesso.`);
+    },
+    onError: (e) => toast.error(`Erro ao salvar avanços: ${e.message}`),
   });
 
   const limparMutation = trpc.planejamento.limparAvancos.useMutation({
@@ -4834,7 +4845,9 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
       utils.planejamento.listarSemanasComAvanco.invalidate();
       setAvancoLocal({});
       setConfirmLimpar(false);
+      toast.success("Avanços limpos.");
     },
+    onError: (e) => toast.error(`Erro ao limpar avanços: ${e.message}`),
   });
 
   const limparSemanaMutation = trpc.planejamento.limparAvancosSemana.useMutation({
@@ -4843,7 +4856,9 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
       utils.planejamento.listarSemanasComAvanco.invalidate();
       setAvancoLocal({});
       setConfirmLimpar(false);
+      toast.success("Avanços da semana limpos.");
     },
+    onError: (e) => toast.error(`Erro ao limpar avanços da semana: ${e.message}`),
   });
 
   async function salvarTudo() {
@@ -4856,15 +4871,28 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
         percentualSemanal:   Math.max(0, pct - anterior),
       };
     });
-    if (itens.length === 0) return;
-    // Usa batch save para qualquer quantidade (muito mais rápido que 1 request por atividade)
-    await salvarLoteMutation.mutateAsync({
-      projetoId,
-      revisaoId: revisaoAtiva?.id ?? 0,
-      semana:    semanaAtual,
-      itens,
-    });
-    setAvancoLocal({});
+    if (itens.length === 0) {
+      toast.info("Nenhuma alteração para salvar. Mexa em algum slider primeiro.");
+      return;
+    }
+    if (!revisaoAtiva?.id) {
+      toast.error("Nenhuma revisão ativa. Crie uma na aba Revisões antes de salvar.");
+      return;
+    }
+    try {
+      // Usa batch save para qualquer quantidade (muito mais rápido que 1 request por atividade)
+      await salvarLoteMutation.mutateAsync({
+        projetoId,
+        revisaoId: revisaoAtiva.id,
+        semana:    semanaAtual,
+        itens,
+      });
+      setAvancoLocal({});
+    } catch (err: any) {
+      // onError já mostrou o toast; aqui só garantimos que avancoLocal NÃO é
+      // limpo — o usuário não perde o trabalho dele se o save falhar.
+      console.error("[salvarTudo] erro:", err);
+    }
   }
 
   if (!revisaoAtiva) return (
