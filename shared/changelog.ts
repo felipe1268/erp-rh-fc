@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1552,
+    titulo: "Portal do Cliente — Switcher de obra e módulo com o mesmo desenho do ModuleHub do ERP",
+    descricao: "Antes o painel 'Outras obras' e 'Outros módulos' eram listas simples (linha de texto + ícone pequeno cinza), iguais entre si. Agora cada item virou um card colorido idêntico ao tile do ModuleHub interno do ERP: ícone branco em quadrado com gradiente accent, borda da cor do módulo, glow no hover e selo de check no item atual. Diferenciação visual: obras usam gradiente âmbar→laranja (combina com a logo FC); módulos usam suas cores próprias (Planejamento verde, RH & Docs esmeralda, Proj./Doc. índigo, Mensagens âmbar). Layout em grade 2-colunas, com hover scale + glow igual ao ERP. Mantidos: comportamento de troca, marcação do item ativo, fechamento do painel ao escolher.",
+    tipo: 'melhoria',
+    modulos: 'Portal do Cliente, Navegação, UI',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 22:00:00',
+  },
+  {
     version: 1551,
     titulo: "Portal do Cliente — Avaliação mensal anônima (LGPD) com lembrete e limite 1×/mês",
     descricao: "Três entregas: (1) Bug fix do envio: a tabela cliente_avaliacoes no banco estava com schema legado (comentario_negativo + sem recomendaria), causando 'Failed query' no insert. Schema sincronizado: comentario_melhoria TEXT + recomendaria SMALLINT, com migração automática que copia comentario_negativo → comentario_melhoria e remove a coluna antiga. (2) Limite anônimo de 1 avaliação por mês por usuário do portal: nova tabela cliente_avaliacao_marcacoes guarda APENAS (cred_id, ano_mes) — sem qualquer referência ao registro da avaliação, preservando 100% o anonimato do conteúdo (atende LGPD: não dá pra ligar uma resposta a uma pessoa nem por query bruta). Backend rejeita o segundo envio do mesmo mês com mensagem clara. (3) Modal de lembrete: ao acessar o portal, se ainda não avaliou no mês corrente, abre automaticamente um modal 'Avaliação mensal pendente' com selo verde de garantia LGPD e botões 'Mais tarde' / 'Avaliar agora' (que joga direto na aba). Quem já avaliou vê tela de confirmação ao abrir a aba.",
