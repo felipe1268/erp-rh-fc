@@ -338,6 +338,120 @@ function buildNetworkLayout(
   return { nodes: Array.from(nodeMap.values()), edges, hasDeps };
 }
 
+// ── Layout Por Semana (folhas agrupadas em colunas semanais) ────────────────
+// Cada coluna = 1 semana (com base em dataInicio). Mantém setas de precedência.
+interface SemanaInfo { num: number; label: string; inicio: string; fim: string; }
+interface WeeklyLayoutResult {
+  nodes: Node[];
+  edges: Edge[];
+  hasDeps: boolean;
+  weekColumns: { x: number; width: number; label: string; num: number }[];
+}
+function buildWeeklyNetworkLayout(
+  folhas: Atividade[],
+  avancosMap: Record<number, number>,
+  hoje: string,
+  semanas: SemanaInfo[],
+): WeeklyLayoutResult {
+  if (folhas.length === 0 || semanas.length === 0) {
+    return { nodes: [], edges: [], hasDeps: false, weekColumns: [] };
+  }
+
+  const byEap = new Map<string, Atividade>();
+  folhas.forEach(a => { if (a.eapCodigo) byEap.set(a.eapCodigo, a); });
+
+  // Decide a semana de cada folha: aquela cujo intervalo contém dataInicio.
+  // Se a atividade não tem dataInicio, vai pra última coluna ("sem prazo").
+  const weekOfFolha = new Map<number, number>();   // id → weekIndex (0-based) ou -1 (sem prazo)
+  folhas.forEach(a => {
+    const ini = a.dataInicio;
+    if (!ini) { weekOfFolha.set(a.id, -1); return; }
+    let idx = -1;
+    for (let i = 0; i < semanas.length; i++) {
+      if (ini >= semanas[i].inicio && ini <= semanas[i].fim) { idx = i; break; }
+    }
+    // Se a data não cai em nenhuma semana mapeada (raro, fora do range), usa a mais próxima
+    if (idx === -1) {
+      if (ini < semanas[0].inicio) idx = 0;
+      else idx = semanas.length - 1;
+    }
+    weekOfFolha.set(a.id, idx);
+  });
+
+  const hasSemPrazo = Array.from(weekOfFolha.values()).some(v => v === -1);
+
+  // Agrupa folhas por semana
+  const byWeek = new Map<number, Atividade[]>();
+  folhas.forEach(a => {
+    const w = weekOfFolha.get(a.id) ?? -1;
+    if (!byWeek.has(w)) byWeek.set(w, []);
+    byWeek.get(w)!.push(a);
+  });
+  byWeek.forEach(arr => arr.sort((a, b) => {
+    const oa = a.ordem ?? 0, ob = b.ordem ?? 0;
+    if (oa !== ob) return oa - ob;
+    return (a.eapCodigo ?? "").localeCompare(b.eapCodigo ?? "", undefined, { numeric: true });
+  }));
+
+  // Posiciona nodes
+  const HEADER_H = 36;       // altura reservada para o cabeçalho da coluna
+  const COL_W = NW + COL_GAP;
+  const nodeMap = new Map<number, Node>();
+
+  // Lista ordenada de chaves de coluna (semanas usadas + sem prazo no fim)
+  const usedWeeks = Array.from(byWeek.keys())
+    .filter(w => w !== -1)
+    .sort((a, b) => a - b);
+  const colOrder: number[] = [...usedWeeks];
+  if (hasSemPrazo) colOrder.push(-1);
+
+  const weekColumns: WeeklyLayoutResult["weekColumns"] = [];
+  colOrder.forEach((wIdx, colIdx) => {
+    const x = colIdx * COL_W;
+    const sem = wIdx >= 0 ? semanas[wIdx] : null;
+    const label = sem ? sem.label : "Sem prazo";
+    const num = sem ? sem.num : 0;
+    weekColumns.push({ x, width: NW, label, num });
+
+    const arr = byWeek.get(wIdx) ?? [];
+    arr.forEach((a, i) => {
+      const avanco = avancosMap[a.id] ?? 0;
+      nodeMap.set(a.id, {
+        id: a.id,
+        eap: a.eapCodigo ?? String(a.id),
+        nome: a.nome,
+        grupo: a.grupo ?? null,
+        dataInicio: a.dataInicio ?? null,
+        dataFim: a.dataFim ?? null,
+        status: calcStatus(a, avanco, hoje),
+        avanco,
+        esperado: calcEsperado(a, hoje),
+        x,
+        y: HEADER_H + i * (NH + ROW_GAP),
+        width: NW,
+        height: NH,
+        depth: colIdx,
+        isGrupo: false,
+      });
+    });
+  });
+
+  // Edges
+  let totalDeps = 0;
+  const edges: Edge[] = [];
+  folhas.forEach(a => {
+    parsePreds(a.predecessora).forEach(pEap => {
+      const pAt = byEap.get(pEap);
+      if (pAt && nodeMap.has(pAt.id) && nodeMap.has(a.id)) {
+        edges.push({ fromId: pAt.id, toId: a.id });
+        totalDeps++;
+      }
+    });
+  });
+
+  return { nodes: Array.from(nodeMap.values()), edges, hasDeps: totalDeps > 0, weekColumns };
+}
+
 // ── SVG Arrow ─────────────────────────────────────────────────────────────────
 
 function Arrow({
@@ -570,6 +684,8 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
   // ── NOVO: filtro por pacote EAP + cor por WBS (só aplicado no modo Rede) ─
   const [filtroPacoteEap, setFiltroPacoteEap] = useState<string>("todos");
   const [corPorNivel, setCorPorNivel] = useState<1 | 2 | 3>(1);
+  // Layout da Rede: "cpm" = topológico clássico (default) ou "semana" = colunas semanais
+  const [layoutRede, setLayoutRede] = useState<"cpm" | "semana">("cpm");
 
   // Escape key exits fullscreen
   useEffect(() => {
@@ -693,10 +809,16 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
     [todosFiltrados, avancosMap, hoje]
   );
 
-  const rede = useMemo(
+  const redeCpm = useMemo(
     () => buildNetworkLayout(folhasFiltradas, avancosMap, hoje),
     [folhasFiltradas, avancosMap, hoje]
   );
+  const redeSemana = useMemo(
+    () => buildWeeklyNetworkLayout(folhasFiltradas, avancosMap, hoje, semanas),
+    [folhasFiltradas, avancosMap, hoje, semanas]
+  );
+  const rede = layoutRede === "semana" ? redeSemana : redeCpm;
+  const weekColumns = layoutRede === "semana" ? redeSemana.weekColumns : [];
 
   const hasDeps = rede.hasDeps;
   const rawNodes = viewMode === "rede" ? rede.nodes : hierarquia.nodes;
@@ -710,40 +832,53 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
   }, [rawNodes]);
 
   // Apply status + busca filters
-  // Quando há filtro ativo (status ou busca), mostramos APENAS as atividades
-  // que casam + a cadeia de ancestrais (na hierarquia EAP) para preservar
-  // o contexto. Se não houver filtro, mostra tudo.
-  const visibleNodes = useMemo(() => {
+  // - Hierarquia: matched + ancestrais EAP (preserva contexto da árvore)
+  // - Rede: matched + vizinhos diretos (1 hop) — preserva o fluxo de execução,
+  //   evitando que a filtragem por status quebre toda a cadeia visualmente
+  const matchedSet = useMemo(() => {
     const hasStatus = filtroStatus !== "todos";
     const q = busca.trim().toLowerCase();
     const hasBusca = q.length > 0;
-    if (!hasStatus && !hasBusca) return rawNodes;
-
-    // 1) Folhas (e/ou nodos) que casam com o filtro
-    const matched = rawNodes.filter(n => {
+    if (!hasStatus && !hasBusca) return null;
+    const set = new Set<number>();
+    rawNodes.forEach(n => {
       const okStatus = !hasStatus || (!n.isGrupo && n.status === filtroStatus);
       const okBusca  = !hasBusca  || n.nome.toLowerCase().includes(q) || n.eap.toLowerCase().includes(q);
-      return okStatus && okBusca;
+      if (okStatus && okBusca) set.add(n.id);
     });
+    return set;
+  }, [rawNodes, filtroStatus, busca]);
 
-    // 2) Conjunto base = ids dos casados
-    const keep = new Set<number>(matched.map(n => n.id));
+  const visibleNodes = useMemo(() => {
+    if (!matchedSet) return rawNodes;
 
-    // 3) Adiciona cadeia de ancestrais via EAP (1.2.3 → 1.2 → 1)
-    const byEap = new Map<string, Node>();
-    rawNodes.forEach(n => byEap.set(n.eap, n));
-    matched.forEach(n => {
-      let parentEap = eapParent(n.eap);
-      while (parentEap) {
-        const parent = byEap.get(parentEap);
-        if (!parent) break;
-        keep.add(parent.id);
-        parentEap = eapParent(parentEap);
-      }
-    });
+    const keep = new Set<number>(matchedSet);
+
+    if (viewMode === "hierarquia") {
+      // Adiciona cadeia de ancestrais via EAP
+      const byEap = new Map<string, Node>();
+      rawNodes.forEach(n => byEap.set(n.eap, n));
+      matchedSet.forEach(id => {
+        const n = rawNodes.find(rn => rn.id === id);
+        if (!n) return;
+        let parentEap = eapParent(n.eap);
+        while (parentEap) {
+          const parent = byEap.get(parentEap);
+          if (!parent) break;
+          keep.add(parent.id);
+          parentEap = eapParent(parentEap);
+        }
+      });
+    } else {
+      // Rede: adiciona vizinhos diretos (predecessores e sucessores)
+      rawEdges.forEach(e => {
+        if (matchedSet.has(e.fromId)) keep.add(e.toId);
+        if (matchedSet.has(e.toId))   keep.add(e.fromId);
+      });
+    }
 
     return rawNodes.filter(n => keep.has(n.id));
-  }, [rawNodes, filtroStatus, busca]);
+  }, [rawNodes, rawEdges, matchedSet, viewMode]);
 
   const visibleSet = useMemo(() => new Set(visibleNodes.map(n => n.id)), [visibleNodes]);
 
@@ -932,6 +1067,25 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
                   </select>
                   <span className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 rounded-sm bg-gradient-to-r from-blue-400 via-emerald-400 to-amber-400 pointer-events-none" />
                   <ChevronDown className="h-3 w-3 text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              )}
+
+              {/* Layout: CPM (default) vs Por Semana — só na rede e se houver semanas */}
+              {semanas.length > 0 && (
+                <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200" title="Organizar a rede em colunas semanais com base na data de início">
+                  <button
+                    onClick={() => setLayoutRede("cpm")}
+                    className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-colors ${layoutRede === "cpm" ? "bg-white text-slate-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                  >
+                    CPM
+                  </button>
+                  <button
+                    onClick={() => setLayoutRede("semana")}
+                    className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-colors flex items-center gap-1 ${layoutRede === "semana" ? "bg-white text-blue-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                  >
+                    <Calendar className="h-3 w-3" />
+                    Por semana
+                  </button>
                 </div>
               )}
             </>
@@ -1173,6 +1327,58 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
             </defs>
 
             <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
+              {/* Week column headers (Layout: Por Semana) */}
+              {viewMode === "rede" && layoutRede === "semana" && weekColumns.length > 0 && (() => {
+                const totalH = canvasH;
+                return (
+                  <g>
+                    {weekColumns.map((col, i) => (
+                      <g key={i}>
+                        {/* Faixa vertical sutil delimitando a coluna */}
+                        <rect
+                          x={col.x - COL_GAP / 2}
+                          y={0}
+                          width={col.width + COL_GAP}
+                          height={totalH}
+                          fill={i % 2 === 0 ? "#f8fafc" : "#ffffff"}
+                          opacity={0.7}
+                        />
+                        {/* Cabeçalho da semana */}
+                        <rect
+                          x={col.x}
+                          y={0}
+                          width={col.width}
+                          height={28}
+                          rx={6}
+                          fill="#eff6ff"
+                          stroke="#bfdbfe"
+                          strokeWidth={1}
+                        />
+                        <text
+                          x={col.x + col.width / 2}
+                          y={12}
+                          textAnchor="middle"
+                          fontSize={10}
+                          fontWeight={700}
+                          fill="#1d4ed8"
+                        >
+                          {col.num > 0 ? `Semana ${String(col.num).padStart(2, "0")}` : "Sem prazo"}
+                        </text>
+                        <text
+                          x={col.x + col.width / 2}
+                          y={23}
+                          textAnchor="middle"
+                          fontSize={8}
+                          fill="#64748b"
+                        >
+                          {col.label.length > 28 ? col.label.slice(0, 26) + "…" : col.label}
+                        </text>
+                      </g>
+                    ))}
+                  </g>
+                );
+              })()}
+
               {/* Edges */}
               {visibleEdges.map((e, i) => {
                 const from = nodeMap.get(e.fromId);
