@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1544,
+    titulo: "Programação Semanal — 'MAIOR PESO' agora é Top 3 por contribuição na semana + badges CRÍTICA / QUASE CRÍTICA",
+    descricao: "Pedido do usuário (validado por literatura): a marcação 'MAIOR PESO' usava o peso TOTAL da atividade no projeto, o que destacava atividades multi-semana com peso projeto alto mesmo quando elas mal contribuíam para o avanço da semana. Exemplo: 'Locação de gradil' (peso projeto 8,83%, durando 13 meses) era destacada com Previsto de apenas 0,6% na semana — contribuição real ~0,053pp. Já 'Tapume autoportante' (peso projeto 0,45%, mas Previsto 36% na semana = 0,16pp, 3× mais relevante) ficava sem destaque. CORRIGIDO: ranqueamento agora é por CONTRIBUIÇÃO em pp na semana = peso% × ΔPrev_semana / 100, e mostra o TOP 3 (Last Planner System recomenda 3-5 'constraints' por semana — sweet spot gerencial). Cada badge mostra a posição (TOP 1/2/3) e o valor em pp. ADICIONADO: badge CRÍTICA (vermelho, ícone alerta) para atividades de caminho crítico (float = 0, mesma lógica da aba Caminho Crítico = projectEnd − dataFim) e badge QUASE CRÍTICA (âmbar) para folga ≤ 14 dias (Goldratt/CCPM). Realce de linha hierarquizado: CRÍTICA (vermelho) > MAIOR PESO (laranja) > QUASE CRÍTICA (âmbar) > atrasada > zebra. Linha do cabeçalho agora informa quantas críticas/quase críticas existem na semana. Tooltips explicam cada badge.",
+    tipo: 'melhoria',
+    modulos: 'Planejamento, Programação Semanal, Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 18:00:00',
+  },
+  {
     version: 1543,
     titulo: "Planejamento — botão 'Salvar Avanços' agora dá feedback (toast) em sucesso E erro",
     descricao: "Usuário reportou: 'não estou conseguindo salvar o avanço, clico e nada acontece'. Causa: as mutations salvarAvanco/salvarAvancoLote/limparAvancos/limparAvancosSemana NÃO tinham handler onError nem nenhum toast — se o servidor devolvesse erro de validação, timeout de rede, revisão inativa, ou qualquer outra coisa, a UI ficava completamente muda. O usuário clicava no botão e parecia 'não fazer nada'. Correções: (1) onError em todas as 4 mutations, mostrando toast vermelho com a mensagem real do servidor; (2) onSuccess agora também mostra toast verde de confirmação ('N avanço(s) salvo(s) com sucesso'); (3) salvarTudo() embrulhado em try/catch — se der erro, avancoLocal NÃO é limpo, então o usuário não perde o trabalho; (4) se o usuário clica sem ter alterado nada, mostra toast.info pedindo pra mexer no slider; (5) se não há revisão ativa, mostra toast.error claro em vez de tentar salvar com revisaoId=0 (que silenciosamente falhava no servidor).",

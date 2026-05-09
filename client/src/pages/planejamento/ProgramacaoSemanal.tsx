@@ -323,24 +323,81 @@ export function ProgramacaoSemanal({
     };
   }, [semanaAtual, curvaData, janelaRecuperacao]);
 
+  // Rev. 1544 — "MAIOR PESO da semana" agora usa CONTRIBUIÇÃO em pp na semana
+  // (peso% × ΔPrev_semana / 100), não peso TOTAL no projeto. Antes, atividades
+  // multi-semana com peso projeto alto (ex. "Locação de gradil" 8,83% durando
+  // 13 meses) eram destacadas mesmo contribuindo com apenas ~0,05pp na semana,
+  // enquanto "Tapume autoportante" (peso projeto 0,45% × Prev 36% = 0,16pp,
+  // 3× mais relevante) ficava sem destaque. Ranqueamos por contribuição real.
+  //
+  // Last Planner System (Lean Construction): Top 3 a 5 'constraints' por
+  // semana é o sweet spot gerencial. Adotamos Top 3.
+  //
+  // CPM/Goldratt: atividades com float ≤ 0 (sem folga até o fim do projeto)
+  // recebem badge CRÍTICA separado. Float ≤ 14 dias = QUASE CRÍTICA.
+  // Float é calculado igual à aba 'Caminho Crítico' (projectEnd − dataFim).
   const pesoSemana = useMemo(() => {
     const indiretas = atividadesSemAtualTodas.filter((a: any) => a.isIndireta);
     const pesoTotal = folhasTodas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || 1;
     const somaSemana = atividadesSemAtual.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
     const pctSemana = (somaSemana / pesoTotal) * 100;
-    let maiorPesoVal = 0;
-    atividadesSemAtual.forEach((a: any) => {
-      const p = n(a.pesoFinanceiro);
-      if (p > maiorPesoVal) { maiorPesoVal = p; }
+
+    // projectEnd para cálculo de float (mesma lógica da aba Caminho Crítico)
+    const projectEndStr = folhasTodas
+      .map((a: any) => a.dataFim)
+      .filter(Boolean)
+      .sort()
+      .pop();
+    const projectEndMs = projectEndStr ? new Date(projectEndStr + "T12:00:00").getTime() : 0;
+
+    // Janela calendário Mon-Dom (mesma do per-row e do cabeçalho)
+    const semIniMs = semanaAtual ? semanaAtual.ini.getTime() : 0;
+    const domingo = semanaAtual ? new Date(semanaAtual.fim) : null;
+    if (domingo) { domingo.setDate(domingo.getDate() + 2); domingo.setHours(23, 59, 59, 999); }
+    const semFimMs = domingo ? domingo.getTime() : 0;
+
+    // Calcula contribuição em pp e float por atividade
+    const enriched = atividadesSemAtual.map((a: any) => {
+      let contribSemana = 0;
+      if (a.dataInicio && a.dataFim && semIniMs && semFimMs) {
+        const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+        const fim = new Date(a.dataFim    + "T12:00:00").getTime();
+        const interp = (ref: number) => {
+          if (ref >= fim) return 100;
+          if (ref <= ini) return 0;
+          return ((ref - ini) / (fim - ini)) * 100;
+        };
+        const dPrev = interp(semFimMs) - interp(semIniMs);
+        contribSemana = n(a.pesoFinanceiro) * dPrev / 100; // em pp
+      }
+      const fimMs = a.dataFim ? new Date(a.dataFim + "T12:00:00").getTime() : 0;
+      const float = (projectEndMs && fimMs)
+        ? Math.round((projectEndMs - fimMs) / 86400000)
+        : 999;
+      return { id: a.id, contribSemana, float };
     });
-    const maiorPesoIds = new Set<number>();
-    if (maiorPesoVal > 0) {
-      atividadesSemAtual.forEach((a: any) => {
-        if (Math.abs(n(a.pesoFinanceiro) - maiorPesoVal) < 0.0001) maiorPesoIds.add(a.id);
-      });
-    }
-    return { somaSemana, pctSemana, maiorPesoIds, maiorPesoVal, diretasCount: atividadesSemAtual.length, indiretasCount: indiretas.length };
-  }, [atividadesSemAtual, atividadesSemAtualTodas, folhasTodas]);
+
+    // Top 3 por contribuição (filtra contribuições > 0 — sem destaque pra zero)
+    const top3 = [...enriched]
+      .filter(x => x.contribSemana > 0.001)
+      .sort((a, b) => b.contribSemana - a.contribSemana)
+      .slice(0, 3);
+    const maiorPesoIds = new Set<number>(top3.map(x => x.id));
+    const contribById  = new Map<number, number>(enriched.map(x => [x.id, x.contribSemana]));
+    const maiorContribVal = top3[0]?.contribSemana ?? 0;
+
+    // Críticas / quase críticas (zero ou pouca folga até o fim do projeto)
+    const criticasIds      = new Set<number>(enriched.filter(x => x.float <= 0).map(x => x.id));
+    const quaseCriticasIds = new Set<number>(enriched.filter(x => x.float > 0 && x.float <= 14).map(x => x.id));
+
+    return {
+      somaSemana, pctSemana,
+      maiorPesoIds, maiorContribVal, contribById,
+      criticasIds, quaseCriticasIds,
+      diretasCount: atividadesSemAtual.length,
+      indiretasCount: indiretas.length,
+    };
+  }, [atividadesSemAtual, atividadesSemAtualTodas, folhasTodas, semanaAtual]);
 
   // EAP codes for the current week (for resource lookup)
   const eapsDaSemana = useMemo(
@@ -685,7 +742,10 @@ export function ProgramacaoSemanal({
               }
               {evmSemana && evmSemana.debitoAcumulado > 0.01 && <> O <strong>baseline (PV) é imutável</strong>; o débito é métrica gerencial diluída em {janelaRecuperacao} semanas — não substitui o cronograma original.</>}
               {" "}Peso bruto das atividades ativas: <strong className="tabular-nums">{pesoSemana.somaSemana.toFixed(2)}%</strong>
-              {pesoSemana.maiorPesoVal > 0 && <> · maior peso individual: <strong>{pesoSemana.maiorPesoVal.toFixed(2)}%</strong></>} (informativo).
+              {pesoSemana.maiorContribVal > 0 && <> · maior contribuição na semana: <strong>{pesoSemana.maiorContribVal.toFixed(2)}pp</strong></>}
+              {pesoSemana.criticasIds.size > 0 && <> · <strong className="text-red-600">{pesoSemana.criticasIds.size} crítica{pesoSemana.criticasIds.size !== 1 ? "s" : ""}</strong> (caminho crítico)</>}
+              {pesoSemana.quaseCriticasIds.size > 0 && <> · <strong className="text-amber-600">{pesoSemana.quaseCriticasIds.size} quase crítica{pesoSemana.quaseCriticasIds.size !== 1 ? "s" : ""}</strong> (folga ≤ 14 d)</>}
+              {" "}(informativo).
             </div>
             </div>
           )}
@@ -732,7 +792,10 @@ export function ProgramacaoSemanal({
                     {atividadesSemAtual.map((a: any, i: number) => {
                       const av       = avancosMap[a.id] ?? 0;
                       const atrasada = !!a.dataFim && a.dataFim < today && av < 100;
-                      const isMaiorPeso = pesoSemana.maiorPesoIds.has(a.id);
+                      const isMaiorPeso  = pesoSemana.maiorPesoIds.has(a.id);
+                      const isCritica    = pesoSemana.criticasIds.has(a.id);
+                      const isQuaseCrit  = pesoSemana.quaseCriticasIds.has(a.id);
+                      const contribPp    = pesoSemana.contribById.get(a.id) ?? 0;
 
                       // Previsto% individual — % que a atividade DEVERIA estar
                       // concluída no fim desta semana (interpolação linear pela data).
@@ -779,23 +842,48 @@ export function ProgramacaoSemanal({
                           desvio >= -2 ? "text-emerald-600" :
                           desvio >= -10 ? "text-amber-600"  :
                                           "text-red-600";
+                      // Rev. 1544 — Realce de linha: CRÍTICA tem prioridade visual
+                      // (vermelho) sobre MAIOR PESO (laranja); ambas podem aparecer
+                      // simultaneamente nos badges do nome.
+                      const rowBg = isCritica
+                        ? "bg-red-50/70 border-l-4 border-l-red-500"
+                        : isMaiorPeso
+                          ? "bg-orange-50/60 border-l-4 border-l-orange-400"
+                          : isQuaseCrit
+                            ? "bg-amber-50/40 border-l-4 border-l-amber-300"
+                            : atrasada
+                              ? "bg-red-50/40"
+                              : i % 2 === 0 ? "bg-white" : "bg-slate-50/30";
                       return (
-                        <tr key={a.id ?? i}
-                          className={`border-b border-slate-50 ${
-                            isMaiorPeso
-                              ? "bg-orange-50/60 border-l-4 border-l-orange-400"
-                              : atrasada
-                                ? "bg-red-50/40"
-                                : i % 2 === 0 ? "bg-white" : "bg-slate-50/30"
-                          }`}>
+                        <tr key={a.id ?? i} className={`border-b border-slate-50 ${rowBg}`}>
                           <td className="py-2 px-3 font-mono text-slate-500">{a.eapCodigo ?? "—"}</td>
                           <td className="py-2 px-3 text-slate-800 font-medium max-w-[300px]">
-                            <div className="flex items-center gap-1.5">
-                              {isMaiorPeso && <Zap className="h-3 w-3 shrink-0 text-orange-500" />}
-                              <span className={`truncate ${isMaiorPeso ? "font-semibold text-orange-900" : ""}`}>{a.nome}</span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {isCritica && <AlertTriangle className="h-3 w-3 shrink-0 text-red-600" />}
+                              {!isCritica && isMaiorPeso && <Zap className="h-3 w-3 shrink-0 text-orange-500" />}
+                              <span className={`truncate ${isCritica ? "font-semibold text-red-900" : isMaiorPeso ? "font-semibold text-orange-900" : ""}`}>{a.nome}</span>
+                              {isCritica && (
+                                <span
+                                  title="Caminho crítico: zero folga até o fim do projeto. Qualquer atraso aqui empurra a entrega."
+                                  className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[9px] font-bold shrink-0 ring-1 ring-red-200"
+                                >
+                                  CRÍTICA
+                                </span>
+                              )}
+                              {!isCritica && isQuaseCrit && (
+                                <span
+                                  title="Quase crítica: folga ≤ 14 dias até o fim do projeto. Pouca margem para atraso."
+                                  className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[9px] font-bold shrink-0 ring-1 ring-amber-200"
+                                >
+                                  QUASE CRÍTICA
+                                </span>
+                              )}
                               {isMaiorPeso && (
-                                <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[9px] font-bold shrink-0">
-                                  MAIOR PESO
+                                <span
+                                  title={`Top 3 da semana por contribuição ao Previsto: ${contribPp.toFixed(2)}pp (peso% × fração da atividade nesta semana).`}
+                                  className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[9px] font-bold shrink-0"
+                                >
+                                  TOP {Array.from(pesoSemana.maiorPesoIds).indexOf(a.id) + 1} · {contribPp.toFixed(2)}pp
                                 </span>
                               )}
                             </div>
