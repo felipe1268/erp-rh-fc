@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1533,
+    titulo: "Programação Semanal × Avanço Semanal — Débito acumulado + Meta de recuperação (Recovery Schedule)",
+    descricao: "FEATURE pedida pelo usuário: ao planejar a semana atual o gestor precisa enxergar TAMBÉM o que ficou pendente das semanas anteriores e qual a meta para zerar o atraso, sem mexer no cronograma baseline. Implementação alinhada à boa prática de Recovery Schedule (PMBOK 7ª ed. e AACE Recommended Practice 23R-02): (a) Banner ganha LINHA 2 com 'Atraso a recuperar' (vermelho, em pp) = max(0, PV_acum − EV_acum) até o fim da semana ANTERIOR — Schedule Variance negativo; (b) 'Meta para recuperar' (azul, em pp) = Previsto baseline da semana + Débito acumulado, com decomposição visível ('X% baseline + Y% débito'); (c) PV (baseline) permanece IMUTÁVEL — o débito é métrica gerencial paralela, NÃO altera a Curva S Planejada nem a aderência baseline; (d) Linha 2 só aparece quando há débito > 0,01 (obra em dia segue limpa); (e) Nova coluna 'Recuperação' na tabela de Programação Semanal por atividade = max(0, Previsto% − Real%), em pp azuis, ou '— em dia' verde quando atividade está no ritmo. Aplicado nos 3 lugares: (1) ProgramacaoSemanal.tsx (módulo interno + reaproveitado pelo Portal); (2) AvancoSemanal de PlanejamentoDetalhe.tsx (calcula via folhas+avancos pois não tem curvaData); (3) AbaAvancoSemanal de PortalPlanejamentoCliente.tsx (cliente final vê o débito e a meta com a mesma transparência do gestor). Tooltips explicam que PV é imutável e que se trata de métrica gerencial.",
+    tipo: 'feature',
+    modulos: 'Planejamento, Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 06:00:00',
+  },
+  {
     version: 1532,
     titulo: "Programação Semanal × Avanço Semanal — paridade total (Previsto + Realizado + Aderência via delta)",
     descricao: "AJUSTE pedido pelo usuário (IMG_0217 vs IMG_0218): as duas telas exibiam números aparentemente divergentes para 'a semana' (Programação Semanal: 'Peso da Semana 1: 11,47%' vs Avanço Semanal: 'Previsto na semana: 1,98%'). Causa: peso bruto somava atividades multi-semana integralmente em CADA semana (double-counting clássico, anti-padrão segundo PMBOK/EVM). SOLUÇÃO baseada em PMBOK 7ª ed./AACE 80R-13: 'Single Source of Truth' — Programação Semanal agora exibe os MESMOS 3 indicadores da aba Avanço Semanal, com o MESMO nome e a MESMA fórmula: (a) Previsto = delta da Curva S Planejada na semana; (b) Realizado = delta da Curva S Realizada (Δ% acumulado × peso); (c) Aderência (SPI sem.) = Realizado÷Previsto×100, verde≥95% / vermelho<95%. Peso bruto demovido para a nota 'Como ler' (informativo, sem competir visualmente). Implementação: ProgramacaoSemanal.tsx ganhou prop opcional curvaData; PlanejamentoDetalhe.tsx (interno) e PortalPlanejamentoCliente.tsx > AbaProgSemanal (externo) passam curvaData já existente. Quando curvaData ausente (fallback), banner mostra apenas Previsto via overlap (Rev. 1531).",

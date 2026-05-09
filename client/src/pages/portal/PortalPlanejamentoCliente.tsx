@@ -10,6 +10,7 @@ import {
   DollarSign, Cloud, Droplets, Wind, Loader2, ClipboardList, ChevronRight,
   ChevronDown, Search, Menu, X, PanelLeftClose, PanelLeftOpen, Users, Handshake, Home,
   AlertOctagon, Printer, CalendarRange, ShieldCheck, MessageSquare, Layers, Check,
+  TrendingDown, Zap,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, LineChart, BarChart, Bar, Cell,
@@ -1657,6 +1658,11 @@ function AbaAvancoSemanal({ kpis, semanaAtual, atrasadas, curvaData }: any) {
   const aderencia = previstoSemana > 0 ? (realizadoSemana / previstoSemana) * 100 : null;
   const adOk = aderencia == null ? null : aderencia >= 95;
   const pesoAtivas = semanaAtual.reduce((s: number, a: any) => s + (a.pesoFinanceiro || 0), 0);
+  // Rev. 1533 — Débito acumulado + Meta de recuperação (PMBOK 7ª/AACE 23R-02).
+  // PV é IMUTÁVEL (baseline). Débito = Schedule Variance negativo até o fim da semana anterior.
+  // Meta = Previsto baseline + Débito → o quanto entregar HOJE para zerar atraso.
+  const debitoAcumulado = Math.max(0, planAntes - realAntes);
+  const metaRecuperacao = previstoSemana + debitoAcumulado;
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -1669,9 +1675,30 @@ function AbaAvancoSemanal({ kpis, semanaAtual, atrasadas, curvaData }: any) {
           icon={<Activity className={`w-5 h-5 ${adOk ? "text-emerald-600" : "text-red-600"}`} />}
         />
       </div>
+      {/* Rev. 1533 — Débito acumulado + Meta de recuperação (Recovery Schedule, AACE 23R-02) */}
+      {debitoAcumulado > 0.01 && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50/60 px-4 py-2.5">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+            <div className="flex items-center gap-1.5" title="Quanto a obra ficou devendo das semanas anteriores (PV acumulado − EV acumulado até a semana passada). Não é descontado do baseline; é meta gerencial.">
+              <TrendingDown className="h-4 w-4 text-red-600" />
+              <span className="text-[11px] text-slate-700 font-medium">Atraso a recuperar:</span>
+              <span className="text-sm font-bold text-red-600 tabular-nums">{fmtPct(debitoAcumulado)}</span>
+            </div>
+            <span className="text-slate-300">|</span>
+            <div className="flex items-center gap-1.5" title="Quanto entregar nesta semana para ZERAR o atraso = Previsto baseline + Débito acumulado. PV original permanece imutável.">
+              <Zap className="h-4 w-4 text-blue-700" />
+              <span className="text-[11px] text-slate-700 font-medium">Meta para recuperar:</span>
+              <span className="text-sm font-bold text-blue-700 tabular-nums">{fmtPct(metaRecuperacao)}</span>
+              <span className="text-[10px] text-slate-500">({fmtPct(previstoSemana)} baseline + {fmtPct(debitoAcumulado)} débito)</span>
+            </div>
+          </div>
+        </div>
+      )}
       <p className="text-[11px] text-slate-400 px-1">
         <strong>Como ler:</strong> &quot;Previsto&quot; e &quot;Realizado&quot; são o <strong>delta da Curva S nesta semana</strong> (o quanto a obra deve / efetivamente avançou de seg a dom).
-        Atividades multi-semana contribuem proporcionalmente. Peso bruto das atividades ativas: <strong>{pesoAtivas.toFixed(2).replace(".", ",")}%</strong> (informativo).
+        Atividades multi-semana contribuem proporcionalmente.
+        {debitoAcumulado > 0.01 && <> O <strong>baseline (PV) é imutável</strong>; o débito é métrica gerencial — não substitui o cronograma original.</>}
+        {" "}Peso bruto das atividades ativas: <strong>{pesoAtivas.toFixed(2).replace(".", ",")}%</strong> (informativo).
       </p>
       <SecaoAtividades titulo={`Semana ${fmtBR(kpis.semanaInicio)} a ${fmtBR(kpis.semanaFim)}`} vazio="Nenhuma atividade nesta semana." itens={semanaAtual} cor="border-blue-200" />
       {atrasadas.length > 0 && <SecaoAtividades titulo={`Atrasadas (${atrasadas.length})`} vazio="" itens={atrasadas} cor="border-red-200" />}

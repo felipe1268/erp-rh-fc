@@ -269,7 +269,14 @@ export function ProgramacaoSemanal({
     const previstoCurvaS = Math.max(0, planAtual - planAntes);
     const realizado = Math.max(0, realAtual - realAntes);
     const aderencia = previstoCurvaS > 0 ? (realizado / previstoCurvaS) * 100 : null;
-    return { previstoCurvaS, realizado, aderencia };
+    // Rev. 1533 — Débito acumulado (Schedule Variance negativo) até o fim da
+    // SEMANA ANTERIOR, baseado em PMBOK 7ª/AACE 23R-02 (Recovery Schedule).
+    // PV é IMUTÁVEL (baseline). Débito é métrica gerencial, não substitui PV.
+    // Meta de Recuperação = Previsto da semana + Débito acumulado anterior →
+    // o quanto entregar HOJE para zerar atraso. Se 0 = obra em dia.
+    const debitoAcumulado = Math.max(0, planAntes - realAntes);
+    const metaRecuperacao = previstoCurvaS + debitoAcumulado;
+    return { previstoCurvaS, realizado, aderencia, debitoAcumulado, metaRecuperacao };
   }, [semanaAtual, curvaData]);
 
   const pesoSemana = useMemo(() => {
@@ -568,12 +575,36 @@ export function ProgramacaoSemanal({
                 </div>
               )}
             </div>
+            {/* Rev. 1533 — Linha 2: Débito acumulado + Meta de recuperação (Recovery Schedule, AACE 23R-02) */}
+            {evmSemana && evmSemana.debitoAcumulado > 0.01 && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1.5 mt-1 border-t border-blue-200/70">
+                <div className="flex items-center gap-1.5" title="Quanto a obra ficou devendo das semanas anteriores (PV acumulado − EV acumulado até a semana passada). Não é descontado do baseline; é meta gerencial.">
+                  <TrendingDown className="h-3.5 w-3.5 text-red-600" />
+                  <span className="text-[11px] text-slate-700 font-medium">Atraso a recuperar:</span>
+                  <span className="text-sm font-bold text-red-600 tabular-nums">
+                    {evmSemana.debitoAcumulado.toFixed(2)}%
+                  </span>
+                </div>
+                <span className="text-slate-300">|</span>
+                <div className="flex items-center gap-1.5" title="Quanto entregar nesta semana para ZERAR o atraso = Previsto baseline + Débito acumulado. PV original permanece imutável.">
+                  <Zap className="h-3.5 w-3.5 text-blue-700" />
+                  <span className="text-[11px] text-slate-700 font-medium">Meta para recuperar:</span>
+                  <span className="text-sm font-bold text-blue-700 tabular-nums">
+                    {evmSemana.metaRecuperacao.toFixed(2)}%
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    ({evmSemana.previstoCurvaS.toFixed(2)}% baseline + {evmSemana.debitoAcumulado.toFixed(2)}% débito)
+                  </span>
+                </div>
+              </div>
+            )}
             <div className="text-[10px] text-slate-400">
               <strong>Como ler:</strong>{" "}
               {evmSemana
                 ? <>&quot;Previsto&quot; e &quot;Realizado&quot; são o <strong>delta da Curva S nesta semana</strong> (o quanto a obra deve / efetivamente avançou de seg a dom). Atividades multi-semana contribuem proporcionalmente.</>
                 : <>&quot;Previsto&quot; é estimado pelo <strong>overlap dias × peso ÷ duração</strong> (atividades multi-semana contribuem proporcionalmente). Realizado e Aderência indisponíveis sem histórico de avanços.</>
               }
+              {evmSemana && evmSemana.debitoAcumulado > 0.01 && <> O <strong>baseline (PV) é imutável</strong>; o débito é métrica gerencial — não substitui o cronograma original.</>}
               {" "}Peso bruto das atividades ativas: <strong className="tabular-nums">{pesoSemana.somaSemana.toFixed(2)}%</strong>
               {pesoSemana.maiorPesoVal > 0 && <> · maior peso individual: <strong>{pesoSemana.maiorPesoVal.toFixed(2)}%</strong></>} (informativo).
             </div>
@@ -610,6 +641,7 @@ export function ProgramacaoSemanal({
                       <th className="py-2 px-3 w-20 text-right" title="% que esta atividade DEVERIA estar concluída até o fim desta semana, calculado linearmente entre data de início e fim">Previsto%</th>
                       <th className="py-2 px-3 w-20 text-right">Real%</th>
                       <th className="py-2 px-3 w-20 text-right" title="Desvio = Real% − Previsto%. Positivo = atividade adiantada (verde). Negativo = atrasada (vermelho). Em semanas futuras o desvio fica em cinza neutro — a atividade ainda nem teve a chance de ser executada.">Desvio</th>
+                      <th className="py-2 px-3 w-24 text-right" title="Quanto esta atividade precisa avançar nesta semana para zerar o atraso individual = max(0, Previsto% − Real%). Em semanas futuras é zero (atividade ainda não devia ter avançado).">Recuperação</th>
                       <th className="py-2 px-3 w-24 text-center">Status</th>
                     </tr>
                   </thead>
@@ -683,6 +715,15 @@ export function ProgramacaoSemanal({
                           <td className="py-2 px-3 text-right font-semibold text-slate-800 tabular-nums">{av.toFixed(1)}%</td>
                           <td className={`py-2 px-3 text-right font-bold tabular-nums ${desvioCor}`}>
                             {desvio > 0 ? "+" : ""}{desvio.toFixed(1)}pp
+                          </td>
+                          {/* Rev. 1533 — Recuperação por atividade = max(0, Previsto% − Real%).
+                              Em semanas futuras a atividade nem devia ter avançado, então 0. */}
+                          <td className="py-2 px-3 text-right font-semibold tabular-nums">
+                            {(() => {
+                              const recup = semanaFutura ? 0 : Math.max(0, prevInd - av);
+                              if (recup < 0.05) return <span className="text-emerald-600">— em dia</span>;
+                              return <span className="text-blue-700">+{recup.toFixed(1)}pp</span>;
+                            })()}
                           </td>
                           <td className="py-2 px-3 text-center">
                             <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusColor(atrasada, av)}`}>

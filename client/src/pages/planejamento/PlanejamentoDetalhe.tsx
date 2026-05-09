@@ -4552,7 +4552,31 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
       real += peso * Math.max(0, acumAtual - acumAntes) / 100;
     });
     const aderencia = prev > 0 ? (real / prev) * 100 : null;
-    return { previsto: prev, realizado: real, aderencia };
+    // Rev. 1533 — Débito acumulado (Schedule Variance negativo) ATÉ O FIM DA SEMANA ANTERIOR.
+    // PMBOK 7ª/AACE 23R-02: PV é imutável (baseline); débito é métrica gerencial paralela.
+    // Meta de Recuperação = Previsto da semana atual + Débito acumulado das semanas passadas.
+    const semAntFimMs = semIniDate; // start da semana atual = end exclusive da anterior
+    let pvAcum = 0;
+    let evAcum = 0;
+    folhas.forEach((a: any) => {
+      const peso = n(a.pesoFinanceiro);
+      if (a.dataInicio && a.dataFim) {
+        const aIni = new Date(a.dataInicio + "T12:00:00").getTime();
+        const aFim = new Date(a.dataFim + "T12:00:00").getTime();
+        let exp = 0;
+        if (semAntFimMs >= aFim)      exp = 100;
+        else if (semAntFimMs > aIni)  exp = Math.min(100, ((semAntFimMs - aIni) / (aFim - aIni)) * 100);
+        pvAcum += peso * exp / 100;
+      }
+      const avs = (avancos as any[])
+        .filter((av: any) => av.atividadeId === a.id && av.semana < semanaAtual)
+        .sort((x: any, y: any) => y.semana.localeCompare(x.semana));
+      const acum = avs.length ? n(avs[0].percentualAcumulado) : 0;
+      evAcum += peso * acum / 100;
+    });
+    const debitoAcumulado = Math.max(0, pvAcum - evAcum);
+    const metaRecuperacao = prev + debitoAcumulado;
+    return { previsto: prev, realizado: real, aderencia, debitoAcumulado, metaRecuperacao };
   }, [folhas, avancos, semanaAtual, semanaFim]);
 
   // Avanço anterior por atividade
@@ -5234,8 +5258,33 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
               </>
             )}
           </div>
+          {/* Rev. 1533 — Linha 2: Débito acumulado + Meta de recuperação (Recovery Schedule, AACE 23R-02) */}
+          {previstoRealizadoSemana.debitoAcumulado > 0.01 && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1.5 mt-1 border-t border-blue-200/70">
+              <div className="flex items-center gap-1.5" title="Quanto a obra ficou devendo das semanas anteriores (PV acumulado − EV acumulado até a semana passada). Não é descontado do baseline; é meta gerencial.">
+                <TrendingDown className="h-4 w-4 text-red-600" />
+                <span className="text-[11px] text-slate-700 font-medium">Atraso a recuperar:</span>
+                <span className="text-sm font-bold text-red-600 tabular-nums">
+                  {previstoRealizadoSemana.debitoAcumulado.toFixed(2)}%
+                </span>
+              </div>
+              <span className="text-slate-300">|</span>
+              <div className="flex items-center gap-1.5" title="Quanto entregar nesta semana para ZERAR o atraso = Previsto baseline + Débito acumulado. PV original permanece imutável.">
+                <Zap className="h-4 w-4 text-blue-700" />
+                <span className="text-[11px] text-slate-700 font-medium">Meta para recuperar:</span>
+                <span className="text-sm font-bold text-blue-700 tabular-nums">
+                  {previstoRealizadoSemana.metaRecuperacao.toFixed(2)}%
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  ({previstoRealizadoSemana.previsto.toFixed(2)}% baseline + {previstoRealizadoSemana.debitoAcumulado.toFixed(2)}% débito)
+                </span>
+              </div>
+            </div>
+          )}
           <div className="text-[10px] text-slate-400">
-            <strong>Como ler:</strong> &quot;Previsto&quot; e &quot;Realizado&quot; são o <strong>delta da Curva S nesta semana</strong> (atividades multi-semana contribuem proporcionalmente). Peso bruto das atividades ativas: <strong className="tabular-nums">{pesoSemana.somaSemana.toFixed(2)}%</strong> ({pesoSemana.pctSemana.toFixed(1)}% do projeto, informativo).
+            <strong>Como ler:</strong> &quot;Previsto&quot; e &quot;Realizado&quot; são o <strong>delta da Curva S nesta semana</strong> (atividades multi-semana contribuem proporcionalmente).
+            {previstoRealizadoSemana.debitoAcumulado > 0.01 && <> O <strong>baseline (PV) é imutável</strong>; o débito é métrica gerencial — não substitui o cronograma original.</>}
+            {" "}Peso bruto das atividades ativas: <strong className="tabular-nums">{pesoSemana.somaSemana.toFixed(2)}%</strong> ({pesoSemana.pctSemana.toFixed(1)}% do projeto, informativo).
           </div>
         </div>
       )}
