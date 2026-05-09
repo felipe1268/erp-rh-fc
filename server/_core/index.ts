@@ -11,6 +11,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerDownloadSSTRoute } from "../routers/downloadSST";
 import { registerDownloadOCRoute } from "../routers/downloadOC";
+import { registerPortalDocumentosRoute } from "../routers/portalDocumentos";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -275,6 +276,7 @@ async function startServer() {
   // Download de arquivos SST em ZIP
   registerDownloadSSTRoute(app);
   registerDownloadOCRoute(app);
+  registerPortalDocumentosRoute(app);
 
   // Upload multipart para documentos SST grandes (PGR/PCMSO/LTCAT — até 150MB)
   const multer = (await import("multer")).default;

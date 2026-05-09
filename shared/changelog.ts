@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1555,
+    titulo: "Portal do Cliente — RH/Docs: visualização inline de PDFs de ASO e Treinamentos (sem download)",
+    descricao: "Atendendo pedido do cliente que precisa comprovar contratualmente os documentos da equipe sem ter cópia local: agora cada ASO e cada Certificado de Treinamento que tem PDF anexado mostra um botão 'Ver PDF' / 'Ver' no detalhe expandido do funcionário. O documento abre em modal embutido (iframe), com a barra do visualizador escondida (toolbar=0), botão direito bloqueado, marca d'água diagonal com nome do cliente e a tarja 'Visualização — Download desabilitado'. Backend: novo endpoint /api/portal/cliente/documento/:tipo/:id valida o token JWT do portal, confere que o funcionário do registro está alocado em alguma obra do cliente e faz proxy autenticado do arquivo do storage com Content-Disposition: inline + no-cache + nosniff. A URL real do storage NUNCA é exposta ao cliente. Importante: nenhum PDF servido pelo navegador é 100% à prova de captura (print/screenshot sempre funciona) — o objetivo é dificultar download casual, não impedir captura.",
+    tipo: 'novo',
+    modulos: 'Portal do Cliente, RH, Documentos',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 23:30:00',
+  },
+  {
     version: 1554,
     titulo: "Planejamento — Diagrama de Rede: navegação por toque (1 dedo arrasta, 2 dedos dão zoom)",
     descricao: "O Diagrama de Rede (Hierarquia EAP / Rede de Precedências) só respondia a mouse e roda — no iPad e no celular não dava pra arrastar o gráfico nem dar pinça pra zoom (a página rolava em vez de zoom). Reescrito o controle de navegação usando Pointer Events (funciona em desktop, caneta e toque) + handlers específicos de pinça multi-touch: 1 dedo = arrastar (pan); 2 dedos = pinça com zoom mantendo o centro entre os dedos fixo na tela; touch-action: none aplicado ao canvas pra evitar que o navegador roube o gesto. Listener de roda virou não-passivo pra garantir que o zoom no desktop não role a página por trás. Aplica-se também ao Portal do Cliente (mesmo componente).",

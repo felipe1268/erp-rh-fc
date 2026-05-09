@@ -4,7 +4,7 @@ import { useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
 import {
   ArrowLeft, ShieldCheck, Users, FileCheck2, FileX2, FileWarning,
-  GraduationCap, ChevronDown, ChevronRight, Search, Home,
+  GraduationCap, ChevronDown, ChevronRight, Search, Home, Eye, X,
 } from "lucide-react";
 import PortalPrintHeader from "@/components/PortalPrintHeader";
 import PrintActions from "@/components/PrintActions";
@@ -49,6 +49,16 @@ export default function PortalRhDocumentosCliente() {
   const [filtroAso, setFiltroAso] = useState<"todos" | "vigente" | "vencido" | "sem_aso">("todos");
   const [exp, setExp] = useState<Record<number, boolean>>({});
   const [fotoZoom, setFotoZoom] = useState<{ url: string; nome: string } | null>(null);
+  // Rev. 1555 — visualizador de PDF inline (sem download).
+  // O backend faz proxy autenticado em /api/portal/cliente/documento/:tipo/:id
+  // e devolve com Content-Disposition: inline. O front embute em iframe com
+  // sandbox + #toolbar=0 pra esconder a barra do visualizador (que tem
+  // botão de download). Não é à prova de print/screenshot.
+  const [pdfViewer, setPdfViewer] = useState<{ url: string; titulo: string; subtitulo: string } | null>(null);
+  const abrirPdf = (tipo: "aso" | "treinamento", id: number, titulo: string, subtitulo: string) => {
+    const url = `/api/portal/cliente/documento/${tipo}/${id}?token=${encodeURIComponent(token)}#toolbar=0&navpanes=0&scrollbar=1`;
+    setPdfViewer({ url, titulo, subtitulo });
+  };
 
   const lista = useMemo(() => {
     let l = funcionarios;
@@ -226,12 +236,22 @@ export default function PortalRhDocumentosCliente() {
                                   <FileCheck2 className="h-3.5 w-3.5 text-emerald-600" /> ASO
                                 </p>
                                 {f.aso ? (
-                                  <ul className="space-y-1 text-slate-600">
-                                    <li><b>Tipo:</b> {f.aso.tipo}</li>
-                                    <li><b>Resultado:</b> {f.aso.resultado}</li>
-                                    <li><b>Exame:</b> {fmtBR(f.aso.dataExame)}</li>
-                                    <li><b>Validade:</b> {fmtBR(f.aso.dataValidade)}</li>
-                                  </ul>
+                                  <>
+                                    <ul className="space-y-1 text-slate-600">
+                                      <li><b>Tipo:</b> {f.aso.tipo}</li>
+                                      <li><b>Resultado:</b> {f.aso.resultado}</li>
+                                      <li><b>Exame:</b> {fmtBR(f.aso.dataExame)}</li>
+                                      <li><b>Validade:</b> {fmtBR(f.aso.dataValidade)}</li>
+                                    </ul>
+                                    {f.aso.temPdf && (
+                                      <button
+                                        onClick={() => abrirPdf("aso", f.aso.id, `ASO — ${f.nome}`, `${f.aso.tipo || "Periódico"} • Validade ${fmtBR(f.aso.dataValidade)}`)}
+                                        className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[11px] font-semibold border border-emerald-200 transition"
+                                      >
+                                        <Eye className="h-3 w-3" /> Ver PDF
+                                      </button>
+                                    )}
+                                  </>
                                 ) : <p className="text-slate-400">Sem ASO registrado.</p>}
                               </div>
                               <div>
@@ -241,10 +261,20 @@ export default function PortalRhDocumentosCliente() {
                                 {f.treinamentos.length === 0 ? (
                                   <p className="text-slate-400">Sem treinamentos.</p>
                                 ) : (
-                                  <ul className="space-y-1 text-slate-600 max-h-40 overflow-y-auto">
+                                  <ul className="space-y-1.5 text-slate-600 max-h-44 overflow-y-auto">
                                     {f.treinamentos.map((t: any, i: number) => (
-                                      <li key={i}>
-                                        <b>{t.norma || t.nome}</b> — val. {fmtBR(t.dataValidade)}
+                                      <li key={i} className="flex items-center justify-between gap-2">
+                                        <span className="truncate">
+                                          <b>{t.norma || t.nome}</b> — val. {fmtBR(t.dataValidade)}
+                                        </span>
+                                        {t.temPdf && (
+                                          <button
+                                            onClick={() => abrirPdf("treinamento", t.id, `Certificado — ${t.norma || t.nome}`, `${f.nome} • Validade ${fmtBR(t.dataValidade)}`)}
+                                            className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[10px] font-semibold border border-emerald-200 transition"
+                                          >
+                                            <Eye className="h-3 w-3" /> Ver
+                                          </button>
+                                        )}
                                       </li>
                                     ))}
                                   </ul>
@@ -262,6 +292,61 @@ export default function PortalRhDocumentosCliente() {
           )}
         </div>
       </main>
+
+      {/* Visualizador de PDF (inline, sem download) — Rev. 1555.
+          O iframe usa sandbox sem 'allow-downloads', e o hash #toolbar=0
+          esconde a barra do PDF.js (que tem botão de baixar). Botão direito
+          é bloqueado via onContextMenu. NÃO é à prova de print/screenshot. */}
+      {pdfViewer && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm flex flex-col animate-in fade-in duration-150"
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-slate-900/90 text-white border-b border-slate-700">
+            <div className="min-w-0">
+              <p className="font-semibold text-sm truncate">{pdfViewer.titulo}</p>
+              <p className="text-[11px] text-slate-300 truncate">{pdfViewer.subtitulo}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-amber-200 bg-amber-900/40 px-2 py-1 rounded-md border border-amber-700/40" title="Documento de uso restrito">
+                Visualização — Download desabilitado
+              </span>
+              <button
+                onClick={() => setPdfViewer(null)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition"
+                aria-label="Fechar"
+              >
+                <X className="h-4 w-4" /> Fechar
+              </button>
+            </div>
+          </div>
+          {/* Body — iframe ocupando o resto, com marca d'água sutil cobrindo */}
+          <div className="relative flex-1 min-h-0 bg-slate-800">
+            <iframe
+              src={pdfViewer.url}
+              title={pdfViewer.titulo}
+              className="absolute inset-0 w-full h-full bg-white"
+              sandbox="allow-same-origin allow-scripts"
+            />
+            {/* Marca d'água diagonal repetida — identifica o cliente acessando.
+                pointer-events:none pra não atrapalhar a navegação no PDF. */}
+            <div
+              className="absolute inset-0 pointer-events-none select-none mix-blend-multiply opacity-[0.07]"
+              style={{
+                backgroundImage: `repeating-linear-gradient(-30deg, transparent 0 60px, rgba(0,0,0,0.0) 60px 240px)`,
+              }}
+            >
+              <div
+                className="absolute inset-0 flex items-center justify-center text-slate-900 font-black text-2xl tracking-widest uppercase"
+                style={{ transform: "rotate(-30deg)" }}
+              >
+                {nomeEmpresa} • Visualização
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Lightbox de foto */}
       {fotoZoom && (

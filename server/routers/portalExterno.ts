@@ -1741,9 +1741,14 @@ export const portalExternoRouter = router({
 
       if (empIds.length > 0) {
         // ASO mais recente (vigente) por funcionário
+        // Rev. 1555: incluímos id e flag "temPdf" (boolean) — NÃO expomos a
+        // URL real do storage. Para visualizar, o front chama o endpoint
+        // /api/portal/cliente/documento/aso/:id que faz proxy autenticado.
         const asoRows = await db.select({
+          id: asos.id,
           employeeId: asos.employeeId, tipo: asos.tipo, dataExame: asos.dataExame,
           dataValidade: asos.dataValidade, resultado: asos.resultado,
+          documentoUrl: asos.documentoUrl,
         }).from(asos).where(and(
           eq(asos.companyId, decoded.companyId),
           inArray(asos.employeeId, empIds),
@@ -1753,9 +1758,11 @@ export const portalExternoRouter = router({
 
         // Treinamentos vigentes
         const trainRows = await db.select({
+          id: trainings.id,
           employeeId: trainings.employeeId, nome: trainings.nome, norma: trainings.norma,
           dataRealizacao: trainings.dataRealizacao, dataValidade: trainings.dataValidade,
           statusTreinamento: trainings.statusTreinamento,
+          certificadoUrl: trainings.certificadoUrl,
         }).from(trainings).where(and(
           eq(trainings.companyId, decoded.companyId),
           inArray(trainings.employeeId, empIds),
@@ -1778,10 +1785,21 @@ export const portalExternoRouter = router({
           funcao: e.funcao || e.cargo,
           status: e.status,
           fotoUrl: e.fotoUrl || null,
-          aso: aso ? { tipo: aso.tipo, dataExame: aso.dataExame, dataValidade: aso.dataValidade, resultado: aso.resultado, status: asoStatus } : null,
+          aso: aso ? {
+            id: aso.id,
+            tipo: aso.tipo, dataExame: aso.dataExame, dataValidade: aso.dataValidade,
+            resultado: aso.resultado, status: asoStatus,
+            temPdf: !!aso.documentoUrl,
+          } : null,
           asoStatus,
           treinamentosVigentes: trainsVigentes.length,
-          treinamentos: trains.slice(0, 10),
+          treinamentos: trains.slice(0, 10).map((t: any) => ({
+            id: t.id,
+            nome: t.nome, norma: t.norma,
+            dataRealizacao: t.dataRealizacao, dataValidade: t.dataValidade,
+            statusTreinamento: t.statusTreinamento,
+            temPdf: !!t.certificadoUrl,
+          })),
         };
       });
 
