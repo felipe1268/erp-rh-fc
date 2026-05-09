@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1519,
+    titulo: "Portal do Cliente — Aba Efetivo: removida distinção CLT/PJ (cliente não precisa ver regime)",
+    descricao: "AJUSTE pedido pelo usuário (screenshots IMG_0196/IMG_0197): a Rev. 1514 já havia removido as colunas EMPRESA/SETOR e TIPO da TABELA, mas os KPIs do topo (TOTAL CLT, TOTAL PJ) e os filtros (Apenas CLT, Apenas PJ) ainda expunham o regime de contratação para o cliente. Consolidado em uma única linha 'Próprios FC' (soma CLT + PJ). Mudanças: (1) KPIs do topo passaram de 4 para 3 — Próprios FC, Total Terceiros, Total Geral. (2) Chips de filtro: 'Apenas CLT' e 'Apenas PJ' viraram 'Apenas Próprios FC'. (3) Subtítulo 'CLT, PJ e Terceiros alocados' → 'Próprios FC e terceiros alocados'. Lógica do filtro adaptada: ao escolher 'Próprios FC' o sistema filtra todos com tipo ≠ Terceiro.",
+    tipo: 'melhoria',
+    modulos: 'Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 20:45:00',
+  },
+  {
     version: 1518,
     titulo: "Portal do Cliente — Aba Caminho Crítico ganha legendas didáticas em linguagem de engenharia",
     descricao: "DIDÁTICA pedida pelo usuário (screenshot IMG_0195): a aba Caminho Crítico mostrava os números mas não explicava como TRATAR cada grupo de atividades de risco. Adicionados (sempre visíveis, sem sobrescrever os números existentes): (1) Cabeçalho técnico no topo explicando o método CPM e o conceito de float total. (2) Logo abaixo dos 3 cards de KPI, três cartões coloridos com a 'orientação de tratamento' por categoria — Crítico = tratamento operacional/diário (monitoramento em campo, RDO, escalonamento no mesmo dia); Quase Crítico = tratamento tático/semanal (antecipar mobilização, revisar predecessoras, float<7d vira crítico); Com Folga = tratamento gerencial/quinzenal (reserva de capacidade da rede). (3) Subtítulo curto sob o título de cada lista de atividades, reforçando o significado prático do grupo. Linguagem técnica de engenharia, sem cobrir as informações já existentes.",

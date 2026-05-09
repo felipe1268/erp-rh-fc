@@ -3357,7 +3357,9 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
     { enabled: !!token && obraId > 0 }
   );
   const [busca, setBusca] = useState("");
-  const [filtroTipo, setFiltroTipo] = useState<"todos" | "CLT" | "PJ" | "Terceiro">("todos");
+  // Rev. 1519: cliente não precisa ver regime de contratação (CLT vs PJ).
+  // Consolidamos CLT+PJ em "Próprios FC" e mantemos Terceiros separado.
+  const [filtroTipo, setFiltroTipo] = useState<"todos" | "Proprio" | "Terceiro">("todos");
   const [filtroCat, setFiltroCat] = useState<"todos" | "Direto" | "Indireto">("todos");
 
   const equipe = useMemo(() => {
@@ -3375,7 +3377,8 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
 
   const lista = useMemo(() => {
     let l = equipe;
-    if (filtroTipo !== "todos") l = l.filter((e) => e.tipo === filtroTipo);
+    if (filtroTipo === "Terceiro") l = l.filter((e) => e.tipo === "Terceiro");
+    else if (filtroTipo === "Proprio") l = l.filter((e) => e.tipo !== "Terceiro");
     if (filtroCat !== "todos") l = l.filter((e) => (e.categoria || "Direto") === filtroCat);
     if (busca) {
       const q = busca.toLowerCase();
@@ -3422,7 +3425,7 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
           </div>
           <div>
             <h2 className="text-lg font-bold text-slate-800">Efetivo da Obra</h2>
-            <p className="text-xs text-muted-foreground">{totGeral} pessoa(s) — CLT, PJ e Terceiros alocados</p>
+            <p className="text-xs text-muted-foreground">{totGeral} pessoa(s) — próprios FC e terceiros alocados</p>
           </div>
         </div>
         <input
@@ -3434,10 +3437,10 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
         />
       </div>
 
-      {/* KPIs por tipo de contrato */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Kpi label="Total CLT" value={totCLT} color="text-blue-700" icon={Users} />
-        <Kpi label="Total PJ" value={totPJ} color="text-violet-700" icon={Users} />
+      {/* Rev. 1519: KPIs sem distinção de regime CLT/PJ — cliente vê
+          apenas Próprios FC vs Terceiros + Total Geral. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Kpi label="Próprios FC" value={totCLT + totPJ} color="text-blue-700" icon={Users} />
         <Kpi label="Total Terceiros" value={totTerc} color="text-amber-700" icon={Handshake} />
         <Kpi label="Total Geral" value={totGeral} color="text-emerald-700" icon={HardHat} />
       </div>
@@ -3450,9 +3453,9 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
 
       {/* Filtros: tipo de contrato + categoria */}
       <div className="flex items-center gap-2 flex-wrap bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-2.5">
-        {(["todos", "CLT", "PJ", "Terceiro"] as const).map((k) => {
+        {(["todos", "Proprio", "Terceiro"] as const).map((k) => {
           const active = filtroTipo === k;
-          const count = k === "todos" ? totGeral : k === "CLT" ? totCLT : k === "PJ" ? totPJ : totTerc;
+          const count = k === "todos" ? totGeral : k === "Proprio" ? (totCLT + totPJ) : totTerc;
           return (
             <button
               key={k}
@@ -3462,7 +3465,7 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
               }`}
             >
               <span className="font-bold">{count}</span>
-              <span>{k === "todos" ? "Todos" : k === "CLT" ? "Apenas CLT" : k === "PJ" ? "Apenas PJ" : "Apenas Terceiros"}</span>
+              <span>{k === "todos" ? "Todos" : k === "Proprio" ? "Apenas Próprios FC" : "Apenas Terceiros"}</span>
             </button>
           );
         })}
