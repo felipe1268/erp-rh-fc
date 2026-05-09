@@ -22,6 +22,8 @@ import { DiagramaRede as DiagramaRedeInterno } from "@/pages/planejamento/Diagra
 import PortalPrintHeader from "@/components/PortalPrintHeader";
 import PrintActions from "@/components/PrintActions";
 import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider as UiTooltipProvider, TooltipTrigger as UiTooltipTrigger } from "@/components/ui/tooltip";
+import { Popover as UiPopover, PopoverContent as UiPopoverContent, PopoverTrigger as UiPopoverTrigger } from "@/components/ui/popover";
+import { Info as InfoIcon } from "lucide-react";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
 const fmtPct = (n: number) => `${n.toFixed(2).replace(".", ",")}%`;
@@ -641,26 +643,34 @@ function AbaVisaoGeral({ kpis, projeto: _projeto, obra, semanaAtual: _sa, atrasa
 
   return (
     <div className="space-y-5">
-      {/* KPIs (idênticos ao interno) */}
+      {/* KPIs (idênticos ao interno) — clicáveis: abrem popover com explicação
+          (funciona em desktop por hover/clique e em iPad/celular por toque). */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <UiTooltipProvider delayDuration={150}>
-          {kpiCards.map((k, i) => (
-            <UiTooltip key={i}>
-              <UiTooltipTrigger asChild>
-                <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 flex flex-col gap-2 cursor-help transition-shadow hover:shadow-md hover:border-slate-200">
-                  <div className={`w-8 h-8 rounded-lg ${k.bg} ${k.color} flex items-center justify-center`}>{k.icon}</div>
-                  <p className="text-[10px] text-slate-500 leading-tight">{k.label}</p>
-                  <p className={`text-base font-bold ${k.color} leading-tight`}>{k.value}</p>
-                  {(k as any).detail && <p className="text-[9px] text-slate-400 leading-tight -mt-1">{(k as any).detail}</p>}
-                </div>
-              </UiTooltipTrigger>
-              <UiTooltipContent side="bottom" className="max-w-[280px] p-3 bg-slate-900 text-white border-slate-700">
-                <p className="font-semibold text-[12px] mb-1 leading-tight">{(k as any).titulo}</p>
-                <p className="text-[11px] leading-snug text-slate-200">{(k as any).explicacao}</p>
-              </UiTooltipContent>
-            </UiTooltip>
-          ))}
-        </UiTooltipProvider>
+        {kpiCards.map((k, i) => (
+          <UiPopover key={i}>
+            <UiPopoverTrigger asChild>
+              <button
+                type="button"
+                className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 flex flex-col gap-2 cursor-pointer transition-shadow hover:shadow-md hover:border-slate-200 active:scale-[0.98] text-left relative w-full"
+                aria-label={`${k.label}: tocar para ver explicação`}
+              >
+                {/* Ícone "ℹ" no canto superior direito — deixa claro que é tocável */}
+                <span className="absolute top-2 right-2 text-slate-300">
+                  <InfoIcon className="h-3.5 w-3.5" />
+                </span>
+                <div className={`w-8 h-8 rounded-lg ${k.bg} ${k.color} flex items-center justify-center`}>{k.icon}</div>
+                <p className="text-[10px] text-slate-500 leading-tight">{k.label}</p>
+                <p className={`text-base font-bold ${k.color} leading-tight`}>{k.value}</p>
+                {(k as any).detail && <p className="text-[9px] text-slate-400 leading-tight -mt-1">{(k as any).detail}</p>}
+              </button>
+            </UiPopoverTrigger>
+            <UiPopoverContent side="bottom" align="start" className="max-w-[300px] p-4 bg-slate-900 text-white border-slate-700 shadow-xl">
+              <p className="font-semibold text-[13px] mb-2 leading-tight text-white">{(k as any).titulo}</p>
+              <p className="text-[12px] leading-snug text-slate-200">{(k as any).explicacao}</p>
+              <p className="text-[10px] text-slate-400 mt-2 pt-2 border-t border-slate-700">Toque fora para fechar</p>
+            </UiPopoverContent>
+          </UiPopover>
+        ))}
       </div>
 
       {/* Atividades em Atraso (com barras Deveria/Hoje) */}

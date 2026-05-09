@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1486,
+    titulo: "Portal do Cliente — KPIs da Visão Geral agora abrem no toque (iPad/celular) com ícone 'ℹ' visível",
+    descricao: "Substituído o tooltip por hover (que NÃO funciona em iPad/celular porque toque não dispara hover) por um popover que abre no clique/toque. Agora cada um dos 5 cards de KPI (Atividades, Avanço Físico, SPI, CPI, REFIs) tem: (1) um ícone 'ℹ' permanente no canto superior direito, deixando claro que o card é interativo; (2) ao tocar/clicar, abre um painel preto com título em destaque e a explicação completa do indicador; (3) animação sutil de 'press' (active:scale-[0.98]) para feedback tátil; (4) instrução 'Toque fora para fechar' no rodapé do painel; (5) acessibilidade — botão semântico com aria-label. Funciona idêntico em desktop (clique), iPad e celular (toque).",
+    tipo: "fix",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 06:00:00",
+  },
+  {
     version: 1485,
     titulo: "Portal do Cliente — Aba 'Caminho Crítico' agora espelha a UX do módulo interno (3 categorias + mini-Gantt + expandir/recolher)",
     descricao: "A aba 'Caminho Crítico' do Portal do Cliente foi totalmente reescrita para espelhar exatamente a função interna `CaminhoCritico` do módulo de Planejamento, em modo somente leitura. Antes era apenas uma tabela plana; agora apresenta: (1) 3 cards de KPI no topo separando atividades por categoria — Caminho Crítico (Float = 0), Quase Crítico (Float ≤ 14 dias) e Com Folga (Float > 14 dias); (2) Legenda visual do mini-Gantt com cores e marcador 'Hoje', mostrando o período total da obra; (3) Para cada categoria, uma seção dedicada com cor própria (vermelho, âmbar, azul) listando as atividades com mini-Gantt visual ao lado — mostra a posição da atividade no tempo total da obra, a barra de avanço sobreposta e a linha vertical 'Hoje' quando aplicável; (4) Botão 'Ver mais N atividades / Ver menos' em cada lista (mostra 15 por padrão, expande para todas); (5) Coluna de avanço com mini-barra de progresso (verde se 100%, vermelho se crítica, azul caso contrário) + percentual; (6) Banner explicativo de como o float é calculado e por que algumas atividades são críticas. Cliente NÃO pode editar — toda a tela é puramente de visualização.",
