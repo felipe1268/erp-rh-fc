@@ -1692,7 +1692,7 @@ function AbaCurvaS({ curvaData, kpis, projeto, curvaMedicoes = [] }: any) {
 
   const semanaLabel = useMemo(() => {
     const m: Record<string, string> = {};
-    merged.forEach((p: any, i: number) => { m[p.semana] = `Sem ${String(i + 1).padStart(2, "0")}`; });
+    merged.forEach((p: any, i: number) => { m[p.semana] = `S${i + 1}`; });
     return m;
   }, [merged]);
 
@@ -1830,8 +1830,8 @@ function AbaCurvaS({ curvaData, kpis, projeto, curvaMedicoes = [] }: any) {
             <ResponsiveContainer width="100%" height={420}>
               <ComposedChart data={merged} margin={{ left: 5, right: 20, top: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="semana" tick={{ fontSize: 8, fill: "#64748b" }} angle={-60} textAnchor="end"
-                  height={70} interval={0} stroke="#cbd5e1"
+                <XAxis dataKey="semana" tick={{ fontSize: 10, fill: "#64748b" }} angle={-45} textAnchor="end"
+                  height={55} interval={Math.max(0, Math.ceil(merged.length / 25) - 1)} stroke="#cbd5e1"
                   tickFormatter={(v) => semanaLabel[v] ?? v} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "#64748b" }} unit="%" stroke="#cbd5e1" />
                 <Tooltip
@@ -1991,8 +1991,8 @@ function AbaCurvaS({ curvaData, kpis, projeto, curvaMedicoes = [] }: any) {
               <ResponsiveContainer width="100%" height={420}>
                 <ComposedChart data={dataFin} margin={{ left: 5, right: 20, top: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="semana" tick={{ fontSize: 8, fill: "#64748b" }} angle={-60} textAnchor="end"
-                    height={70} interval={0} stroke="#cbd5e1"
+                  <XAxis dataKey="semana" tick={{ fontSize: 10, fill: "#64748b" }} angle={-45} textAnchor="end"
+                    height={55} interval={Math.max(0, Math.ceil(dataFin.length / 25) - 1)} stroke="#cbd5e1"
                     tickFormatter={(v) => semanaLabel[v] ?? v} />
                   <YAxis tickFormatter={finTickFmt} tick={{ fontSize: 10, fill: "#64748b" }} width={90} stroke="#cbd5e1" />
                   <Tooltip
@@ -2606,17 +2606,14 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
     const planMap = new Map(curvaData.curvaPlanejada.map(p => [p.semana, p.acumulado]));
     const realMap = new Map(curvaData.curvaRealizada.map(p => [p.semana, p.acumulado]));
     const tendMap = new Map(curvaData.curvaTendencia.map(p => [p.semana, p.acumulado]));
-    return semanas.map(s => {
-      const [y, m, d] = s.split("-");
-      return {
-        semana: s,
-        label: `${d}/${m}/${y.slice(2)}`,
-        baseline: baseMap.get(s) ?? null,
-        planejada: planMap.get(s) ?? null,
-        realizada: realMap.get(s) ?? null,
-        tendencia: tendMap.get(s) ?? null,
-      };
-    });
+    return semanas.map((s, i) => ({
+      semana: s,
+      label: `S${i + 1}`,
+      baseline: baseMap.get(s) ?? null,
+      planejada: planMap.get(s) ?? null,
+      realizada: realMap.get(s) ?? null,
+      tendencia: tendMap.get(s) ?? null,
+    }));
   })();
   const cfHasBaseline  = curvaFiltrada.some((r: any) => r.baseline != null);
   const cfHasPlanejada = curvaFiltrada.some((r: any) => r.planejada != null);
@@ -2932,10 +2929,10 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
               </div>
               <div className="px-5 py-4" style={{ height: 360 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={curvaFiltrada} margin={{ top: 5, right: 60, bottom: curvaFiltrada.length > 10 ? 70 : 20, left: 10 }}>
+                  <LineChart data={curvaFiltrada} margin={{ top: 5, right: 60, bottom: curvaFiltrada.length > 10 ? 55 : 20, left: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="label" tick={{ fontSize: 8 }} angle={-60} textAnchor="end" height={70}
-                      interval={0} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={55}
+                      interval={Math.max(0, Math.ceil(curvaFiltrada.length / 25) - 1)} />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
                     <Tooltip
                       content={({ payload, label }: any) => {
@@ -3064,10 +3061,10 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
                 </div>
                 <div className="px-5 py-4" style={{ height: 360 }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={curvaFinanceiraFull as any[]} margin={{ top: 5, right: 90, bottom: (curvaFinanceiraFull as any[]).length > 10 ? 70 : 20, left: 10 }}>
+                    <LineChart data={curvaFinanceiraFull as any[]} margin={{ top: 5, right: 90, bottom: (curvaFinanceiraFull as any[]).length > 10 ? 55 : 20, left: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis dataKey="label" tick={{ fontSize: 8 }} angle={-60} textAnchor="end" height={70}
-                        interval={0} />
+                      <XAxis dataKey="label" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={55}
+                        interval={Math.max(0, Math.ceil((curvaFinanceiraFull as any[]).length / 25) - 1)} />
                       <YAxis tickFormatter={finTickFmt} tick={{ fontSize: 10 }} width={90} />
                       <Tooltip
                         content={({ payload, label }: any) => {

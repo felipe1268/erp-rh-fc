@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1526,
+    titulo: "Curvas S — labels limpos (S1, S2...) + intervalo inteligente do eixo X",
+    descricao: "AJUSTE pedido pelo usuário (IMG_0207/IMG_0208): a Rev. 1523/1525 deixou as Curvas S com `interval={0}` mostrando TODAS as semanas no eixo X. Em obras longas (60+ semanas) ficava ilegível, com datas dd/MM/aa empilhadas. Solução: (1) Labels reformatados de `Sem 01` (Planejamento interno) e `dd/MM/aa` (Portal) para `S1, S2, S3...` — formato curto e claro. Aplicado em `semanaLabel` (interno + portal) e nos `label` de `curvaFiltrada`/`curvaFinanceira` (interno + portal). (2) Eixo X agora usa `interval={Math.max(0, Math.ceil(len/25) - 1)}` que mostra ~20-25 labels distribuídos uniformemente, mantendo TODOS os pontos do gráfico (linhas continuam suaves). (3) fontSize 10 + ângulo -45° + height 55px (antes 8/-60°/70px) deixa labels mais legíveis. Aplicado nos 4 gráficos do Planejamento interno (AbaCurvaS Trabalho/Financeira + REFIS 3A/3B) e nos 4 equivalentes do Portal do Cliente.",
+    tipo: 'fix',
+    modulos: 'Planejamento, Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 00:30:00',
+  },
+  {
     version: 1525,
     titulo: "Planejamento interno — paridade com Portal: alerta de tendência + eixo X completo + legendas clicáveis nas Curvas S do REFIS",
     descricao: "PARIDADE com Rev. 1523/1524 pedida pelo usuário: as melhorias aplicadas no Portal do Cliente foram replicadas no módulo Planejamento interno (PlanejamentoDetalhe.tsx). (1) Componente AlertaTendenciaBanner + função calcAlertaTendencia (cálculo EVM SPI = realizado/previsto, ETA = dataInicio + duração/SPI) replicado e renderizado acima das duas Curvas S da aba Curva S (Trabalho e Financeira). 4 níveis: 🟢 ok / 🟡 atencao / 🟠 alerta / 🔴 critico + 'sem_dados'. (2) Curva S Física e Curva S Financeira do REFIS interno: legendas no header viraram botões clicáveis (toggle por série, line-through + opacity-40 quando desativado, stopPropagation para não colapsar bloco). Estado serRefis compartilhado entre os 2 blocos. (3) Eixo X dos 2 blocos do REFIS interno: trocado interval calculado para `interval={0}` (mostra todas semanas) com fontSize 8 + angle -60° + height 70px. As duas Curvas S da AbaCurvaS interna já tinham interval={0} desde antes — mantido.",
