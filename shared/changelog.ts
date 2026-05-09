@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1482,
+    titulo: "Portal do Cliente — Aba 'Cronograma' agora espelha a UX do módulo Planejamento (somente leitura)",
+    descricao: "Reescrita da aba 'Cronograma' do Portal do Cliente para replicar visual e navegação idênticas ao módulo interno Planejamento, mas em modo somente leitura (cliente não pode alterar nada). Recursos adicionados: (1) Filtros de período — Tudo / Hoje / Semana / Mês / Ano / Intervalo personalizado com datas; (2) Filtros de nível EAP — N1, N2, N3... com botões Tudo (expandir tudo) e Recolher (fechar tudo); (3) Hierarquia colapsável — clique no ▶/▼ ao lado do grupo para expandir/recolher filhos, com indentação proporcional ao nível; (4) Busca por EAP ou nome — campo dedicado com botão limpar (X) e contador de resultados; (5) Indicador de Soma Peso% — pílula colorida (verde se 100%, amarelo se faltam, vermelho se passou); (6) Atividades CONCLUÍDAS aparecem com fundo verde + ícone ✓ e nome em verde; (7) Atividades ATRASADAS aparecem com fundo vermelho + ícone ⚠ + nome em vermelho (com tooltip mostrando data fim e % atual); (8) Marcos aparecem com badge roxo ◆ Marco e fundo roxo claro; (9) Atividades indiretas com tag cinza 'Indireta'; (10) Colunas completas: EAP, Atividade, Início, Fim, Duração, Predecessoras (azul), Sucessoras (violeta — calculadas), Peso%, Recurso, Avanço (com mini barra de progresso). Removidos do portal (visualização-apenas): editar/importar/excluir cronograma, consolidar, seleção em bloco para desativar atividades.",
+    tipo: "feature",
+    modulos: "Portal do Cliente, Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 01:30:00",
+  },
+  {
     version: 1481,
     titulo: "Portal do Cliente — Card 'Avanço Físico' mostra agora a etiqueta da fonte (REFIS Nº ...)",
     descricao: "Complementa a Rev. 1480 adicionando uma etiqueta visível abaixo do card 'Avanço Físico' indicando de onde os números vieram. Quando os valores foram lidos do último REFIS oficial emitido, aparece em texto pequeno e cinza: 'Fonte oficial: REFIS Nº 001 · semana 04/05/2026' (com bolinha verde). Isso (1) deixa claro para o cliente que os números acima são exatamente os do relatório oficial assinado, eliminando a confusão sobre porque Visão Geral e REFIS mostravam números diferentes; (2) serve como indicador visual rápido pra confirmar que a build nova carregou no dispositivo (se a etiqueta NÃO aparece, é cache do iPad/navegador).",

@@ -855,53 +855,405 @@ function WeatherWidget({ local }: { local: string | null | undefined }) {
   );
 }
 
+// ── Helpers de período (espelhados do módulo interno) ──────────────────────
+type PeriodoFiltroPortal = "tudo" | "dia" | "semana" | "mes" | "ano" | "intervalo";
+
+function getPeriodoRangePortal(p: PeriodoFiltroPortal, customIni?: string, customFim?: string): [string, string] | null {
+  if (p === "tudo") return null;
+  if (p === "intervalo") {
+    if (customIni && customFim && customIni <= customFim) return [customIni, customFim];
+    if (customIni && !customFim) return [customIni, customIni];
+    return null;
+  }
+  const hoje = new Date();
+  const fmt = (d: Date) => d.toISOString().split("T")[0];
+  if (p === "dia") return [fmt(hoje), fmt(hoje)];
+  if (p === "semana") {
+    const ini = new Date(hoje); ini.setDate(hoje.getDate() - hoje.getDay() + 1);
+    const fim = new Date(ini); fim.setDate(ini.getDate() + 6);
+    return [fmt(ini), fmt(fim)];
+  }
+  if (p === "mes") {
+    const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+    return [fmt(ini), fmt(fim)];
+  }
+  if (p === "ano") {
+    return [`${hoje.getFullYear()}-01-01`, `${hoje.getFullYear()}-12-31`];
+  }
+  return null;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// AbaCronograma — Espelho somente-leitura da Cronograma do módulo interno
+// (PlanejamentoDetalhe.tsx ~2429). Preserva: filtro de período, níveis N1..Nx,
+// Tudo/Recolher, busca EAP/nome, soma do peso%, hierarquia colapsável, marcos,
+// tag Indireta, destaque de atrasadas (linha vermelha + alerta) e concluídas
+// (verde). NÃO inclui edição, importação, exclusão, consolidação ou seleção
+// em bloco — cliente é apenas visualizador.
+// ──────────────────────────────────────────────────────────────────────────────
 function AbaCronograma({ atividades }: { atividades: any[] }) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [nivelAtivo, setNivelAtivo] = useState<number | null>(null);
+  const [periodoFiltro, setPeriodoFiltro] = useState<PeriodoFiltroPortal>("tudo");
+  const [intervaloIni, setIntervaloIni] = useState("");
+  const [intervaloFim, setIntervaloFim] = useState("");
   const [busca, setBusca] = useState("");
-  const filtradas = useMemo(() => {
-    const t = busca.toLowerCase();
-    const arr = atividades.slice().sort((a, b) => (a.eapCodigo || "").localeCompare(b.eapCodigo || "", "pt-BR", { numeric: true }));
-    if (!t) return arr;
-    return arr.filter((a) => (a.nome || "").toLowerCase().includes(t) || (a.eapCodigo || "").toLowerCase().includes(t));
-  }, [atividades, busca]);
+
+  // Atividades ordenadas por EAP (numeric collation)
+  const ativOrdenadas = useMemo(() =>
+    atividades.slice().sort((a, b) =>
+      (a.eapCodigo || "").localeCompare(b.eapCodigo || "", "pt-BR", { numeric: true })
+    ),
+    [atividades]
+  );
+
+  // Mapa de sucessoras (EAP → EAPs que a têm como predecessora)
+  const sucessorasMap = useMemo(() => {
+    const m: Record<string, string[]> = {};
+    ativOrdenadas.forEach((a: any) => {
+      if (!a.predecessora) return;
+      a.predecessora.split(/[,;]/).map((s: string) => s.trim()).filter(Boolean).forEach((p: string) => {
+        if (!m[p]) m[p] = [];
+        if (a.eapCodigo && !m[p].includes(a.eapCodigo)) m[p].push(a.eapCodigo);
+      });
+    });
+    return m;
+  }, [ativOrdenadas]);
+
+  // Nível máximo de grupos + lista de EAPs de grupos
+  const maxNivel = useMemo(() =>
+    ativOrdenadas.filter((a: any) => a.isGrupo).reduce((m: number, a: any) => Math.max(m, a.nivel ?? 1), 1),
+    [ativOrdenadas]
+  );
+  const gruposEap = useMemo(() =>
+    ativOrdenadas.filter((a: any) => a.isGrupo && a.eapCodigo).map((a: any) => a.eapCodigo as string),
+    [ativOrdenadas]
+  );
+
+  function toggleCollapse(eap: string) {
+    setCollapsed(s => {
+      const ns = new Set(s);
+      ns.has(eap) ? ns.delete(eap) : ns.add(eap);
+      return ns;
+    });
+  }
+
+  function isHidden(eap: string) {
+    if (!eap) return false;
+    if (busca.trim()) return false;
+    const parts = eap.split(".");
+    for (let i = 1; i < parts.length; i++) {
+      const parent = parts.slice(0, i).join(".");
+      if (collapsed.has(parent)) return true;
+    }
+    return false;
+  }
+
+  function expandirAteNivel(nivel: number) {
+    setCollapsed(new Set(
+      ativOrdenadas
+        .filter((a: any) => a.isGrupo && a.eapCodigo && (a.nivel ?? 1) >= nivel)
+        .map((a: any) => a.eapCodigo as string)
+    ));
+  }
+
+  const periodoRange = useMemo(
+    () => getPeriodoRangePortal(periodoFiltro, intervaloIni, intervaloFim),
+    [periodoFiltro, intervaloIni, intervaloFim]
+  );
+
+  // Aplicar filtros de período + busca, mantendo grupos pais visíveis
+  const displayAtiv = useMemo(() => {
+    let base = ativOrdenadas;
+    if (periodoRange) {
+      const [ini, fim] = periodoRange;
+      const matchIds = new Set(
+        base.filter((a: any) => {
+          if (!a.dataInicio) return false;
+          const inicioNoPeriodo = a.dataInicio >= ini && a.dataInicio <= fim;
+          const fimNoPeriodo = a.dataFim && a.dataFim >= ini && a.dataFim <= fim;
+          return inicioNoPeriodo || fimNoPeriodo;
+        }).map((a: any) => a.id)
+      );
+      if (matchIds.size === 0) return [];
+      const parentEaps = new Set<string>();
+      base.filter((a: any) => matchIds.has(a.id) && a.eapCodigo).forEach((a: any) => {
+        const parts = String(a.eapCodigo).split(".");
+        for (let i = 1; i < parts.length; i++) parentEaps.add(parts.slice(0, i).join("."));
+      });
+      base = base.filter((a: any) => matchIds.has(a.id) || (a.isGrupo && a.eapCodigo && parentEaps.has(a.eapCodigo)));
+    }
+    if (busca.trim()) {
+      const q = busca.trim().toLowerCase();
+      const matchIds = new Set(
+        base.filter((a: any) => {
+          const nome = (a.nome || "").toLowerCase();
+          const eap = (a.eapCodigo || "").toLowerCase();
+          return nome.includes(q) || eap.includes(q);
+        }).map((a: any) => a.id)
+      );
+      if (matchIds.size === 0) return [];
+      const parentEaps = new Set<string>();
+      base.filter((a: any) => matchIds.has(a.id) && a.eapCodigo).forEach((a: any) => {
+        const parts = String(a.eapCodigo).split(".");
+        for (let i = 1; i < parts.length; i++) parentEaps.add(parts.slice(0, i).join("."));
+      });
+      base = base.filter((a: any) => matchIds.has(a.id) || (a.isGrupo && a.eapCodigo && parentEaps.has(a.eapCodigo)));
+    }
+    return base;
+  }, [ativOrdenadas, periodoRange, busca]);
+
+  const folhasTotal = ativOrdenadas.filter((a: any) => !a.isGrupo).length;
+  const folhasFiltradas = displayAtiv.filter((a: any) => !a.isGrupo).length;
+  const hoje = new Date().toISOString().split("T")[0];
+
   return (
-    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-        <h3 className="text-sm font-semibold text-slate-800">Cronograma completo ({atividades.length} itens)</h3>
-        <input type="text" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar EAP ou nome..." className="border rounded px-2.5 py-1.5 text-xs w-60" />
+    <div className="space-y-3">
+      {/* Linha 1 — título + contador */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-slate-700">Cronograma completo</p>
+          <span className="text-xs text-slate-400">
+            {(periodoRange || busca.trim())
+              ? <>{folhasFiltradas} <span className="text-blue-500">de {folhasTotal}</span> atividades</>
+              : <>{ativOrdenadas.length} itens</>}
+          </span>
+        </div>
       </div>
-      <div className="overflow-x-auto -mx-4 sm:mx-0 max-h-[70vh] overflow-y-auto">
-        <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-slate-50">
-            <tr className="text-slate-500 border-b">
-              <th className="text-left px-3 py-2 font-medium">EAP</th>
-              <th className="text-left px-3 py-2 font-medium">Atividade</th>
-              <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Início</th>
-              <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Fim</th>
-              <th className="text-right px-3 py-2 font-medium whitespace-nowrap">Realizado</th>
+
+      {/* Linha 2 — período + níveis + Tudo/Recolher + busca */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Período */}
+        <div className="flex items-center gap-1 flex-wrap">
+          <CalendarDays className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+          {(["tudo", "dia", "semana", "mes", "ano", "intervalo"] as PeriodoFiltroPortal[]).map(p => (
+            <button key={p} onClick={() => setPeriodoFiltro(p)}
+              className={`h-6 px-2 text-[11px] font-semibold rounded border transition-colors ${periodoFiltro === p ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>
+              {p === "tudo" ? "Tudo" : p === "dia" ? "Hoje" : p === "semana" ? "Semana" : p === "mes" ? "Mês" : p === "ano" ? "Ano" : "Intervalo"}
+            </button>
+          ))}
+          {periodoFiltro === "intervalo" && (
+            <div className="flex items-center gap-1 ml-1">
+              <input type="date" value={intervaloIni} onChange={e => setIntervaloIni(e.target.value)}
+                className="h-6 border border-slate-200 rounded px-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-slate-700" />
+              <span className="text-[10px] text-slate-400">até</span>
+              <input type="date" value={intervaloFim} onChange={e => setIntervaloFim(e.target.value)}
+                className="h-6 border border-slate-200 rounded px-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white text-slate-700" />
+              {(intervaloIni || intervaloFim) && (
+                <button onClick={() => { setIntervaloIni(""); setIntervaloFim(""); }}
+                  className="h-6 w-6 flex items-center justify-center rounded border border-slate-200 bg-white hover:bg-red-50 hover:border-red-300 text-slate-400 hover:text-red-500 transition-colors"
+                  title="Limpar intervalo">
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          )}
+          {periodoFiltro !== "tudo" && !(periodoFiltro === "intervalo" && !periodoRange) && (
+            <span className="text-[10px] text-blue-600 font-medium ml-1">{folhasFiltradas} atividades</span>
+          )}
+        </div>
+
+        {/* Níveis */}
+        {gruposEap.length > 0 && <div className="w-px h-4 bg-slate-200" />}
+        {gruposEap.length > 0 && <span className="text-[11px] text-slate-500 font-medium">Nível:</span>}
+        {Array.from({ length: maxNivel }, (_, i) => i + 1).map(lvl => {
+          const isAtivo = nivelAtivo === lvl;
+          return (
+            <button key={lvl} title={`Expandir até nível ${lvl}`}
+              onClick={() => { expandirAteNivel(lvl + 1); setNivelAtivo(lvl); }}
+              className={`h-6 min-w-[28px] px-1.5 text-[11px] font-semibold rounded border transition-colors
+                ${isAtivo ? "bg-slate-700 text-white border-slate-700 shadow-sm" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-400"}`}>
+              N{lvl}
+            </button>
+          );
+        })}
+
+        {/* Tudo / Recolher */}
+        {gruposEap.length > 0 && (
+          <>
+            <div className="w-px h-4 bg-slate-200 mx-0.5" />
+            <button onClick={() => { setCollapsed(new Set()); setNivelAtivo(null); }}
+              className="h-6 px-2.5 text-[11px] rounded border border-slate-200 bg-white hover:bg-emerald-50 hover:border-emerald-300 text-slate-600 hover:text-emerald-700 flex items-center gap-1 transition-colors">
+              <ChevronDown className="h-3 w-3" /> Tudo
+            </button>
+            <button onClick={() => { setCollapsed(new Set(gruposEap)); setNivelAtivo(0); }}
+              className="h-6 px-2.5 text-[11px] rounded border border-slate-200 bg-white hover:bg-slate-100 hover:border-slate-400 text-slate-600 flex items-center gap-1 transition-colors">
+              <ChevronRight className="h-3 w-3" /> Recolher
+            </button>
+            {nivelAtivo !== null && (
+              <span className="text-[10px] text-slate-400 ml-1">
+                {nivelAtivo === 0 ? "Tudo recolhido" : `Mostrando até N${nivelAtivo}`}
+              </span>
+            )}
+          </>
+        )}
+
+        {/* Busca */}
+        <div className="w-px h-4 bg-slate-200 mx-0.5" />
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+          <input type="text" placeholder="Buscar EAP ou atividade..." value={busca} onChange={e => setBusca(e.target.value)}
+            className="h-7 w-56 pl-7 pr-7 text-[11px] border border-slate-200 rounded-md bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors" />
+          {busca && (
+            <button onClick={() => setBusca("")}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 h-4 w-4 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+              title="Limpar busca">
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+        {busca.trim() && (
+          <span className="text-[10px] text-blue-600 font-medium">
+            {folhasFiltradas} resultado{folhasFiltradas !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+
+      {/* Indicador de soma de Peso% */}
+      {ativOrdenadas.length > 0 && (() => {
+        const folhas = ativOrdenadas.filter((a: any) => !a.isGrupo && !a.disabled);
+        const soma = folhas.reduce((s: number, a: any) => s + Number(a.pesoFinanceiro || 0), 0);
+        const ok = Math.abs(soma - 100) < 0.1;
+        const overshot = soma > 100.05;
+        return (
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-semibold w-fit
+            ${ok ? "bg-emerald-50 border-emerald-200 text-emerald-700" : overshot ? "bg-red-50 border-red-200 text-red-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+            <span className="text-[11px] font-normal text-inherit opacity-70">Soma Peso%:</span>
+            <span className="tabular-nums text-sm">{ok ? "100,00" : soma.toFixed(2).replace(".", ",")}%</span>
+            {ok
+              ? <span className="text-[10px] font-bold tracking-wide">✓ 100%</span>
+              : <span className="text-[10px]">{overshot ? "▲ acima de 100%" : `▼ faltam ${(100 - soma).toFixed(2).replace(".", ",")}%`}</span>}
+          </div>
+        );
+      })()}
+
+      {/* Tabela */}
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-x-auto">
+        <table className="text-xs w-full">
+          <thead>
+            <tr className="bg-slate-700 text-white">
+              <th className="py-2 px-2 text-left text-[11px]">EAP</th>
+              <th className="py-2 px-2 text-left text-[11px]">Atividade</th>
+              <th className="py-2 px-2 text-left text-[11px] whitespace-nowrap">Início</th>
+              <th className="py-2 px-2 text-left text-[11px] whitespace-nowrap">Fim</th>
+              <th className="py-2 px-2 text-right text-[11px]">Dur.</th>
+              <th className="py-2 px-2 text-center text-[11px]">Pred.</th>
+              <th className="py-2 px-2 text-center w-20 text-[11px]">Suc.</th>
+              <th className="py-2 px-2 text-right text-[11px] whitespace-nowrap min-w-[64px]">Peso%</th>
+              <th className="py-2 px-2 text-left text-[11px]">Recurso</th>
+              <th className="py-2 px-3 text-right w-20 text-[11px]">Avanço</th>
             </tr>
           </thead>
           <tbody>
-            {filtradas.map((a) => {
-              const real = a.percentRealizado ?? 0;
-              const idente = (a.nivel || 0) * 12;
+            {displayAtiv.length === 0 && (
+              <tr>
+                <td colSpan={10} className="py-8 text-center text-slate-400">
+                  {(busca.trim() || periodoRange)
+                    ? <>Nenhuma atividade encontrada para os filtros aplicados.</>
+                    : <>Nenhuma atividade cadastrada.</>}
+                </td>
+              </tr>
+            )}
+            {displayAtiv.map((a: any, idx: number) => {
+              if (isHidden(a.eapCodigo)) return null;
+              const hasChildren = displayAtiv.some((b: any) =>
+                b.eapCodigo && a.eapCodigo && b.eapCodigo.startsWith(a.eapCodigo + "."));
+              const isCollapsed = collapsed.has(a.eapCodigo);
+              const indent = a.nivel ? (a.nivel - 1) * 16 : 0;
+              const avanco = Number(a.percentRealizado ?? 0);
+              const atrasada = !hasChildren && a.dataFim && a.dataFim < hoje && avanco < 100;
+              const concluida = !hasChildren && avanco >= 100;
+              const nivel = a.nivel ?? 1;
+
+              const rowBg = a.disabled
+                ? "bg-slate-100 opacity-60 border-l-4 border-l-slate-400"
+                : concluida
+                  ? "bg-emerald-50 border-l-4 border-l-emerald-400"
+                  : atrasada
+                    ? "bg-red-50 border-l-4 border-l-red-400"
+                    : a.isMarco
+                      ? "bg-purple-50/40 border-l-4 border-l-purple-400"
+                      : a.isIndireta
+                        ? "bg-gray-100 border-l-4 border-l-gray-400"
+                        : a.isGrupo && nivel === 1
+                          ? "bg-yellow-50 border-l-4 border-l-yellow-400"
+                          : a.isGrupo && nivel === 2
+                            ? "bg-amber-50/60 border-l-4 border-l-amber-300"
+                            : a.isGrupo
+                              ? "bg-slate-50 border-l-4 border-l-slate-300"
+                              : idx % 2 === 0 ? "bg-white" : "bg-slate-50/30";
+
               return (
-                <tr key={a.id} className={`border-b border-slate-50 hover:bg-slate-50 ${a.isGrupo ? "bg-slate-50/60 font-semibold" : ""}`}>
-                  <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{a.eapCodigo || "—"}</td>
-                  <td className="px-3 py-1.5 text-slate-800" style={{ paddingLeft: idente + 12 }}>
-                    {a.isMarco && <span className="text-purple-600 mr-1">◆</span>}
-                    {a.nome}
+                <tr key={a.id ?? idx}
+                  className={`group border-b border-slate-100 ${rowBg} ${a.isGrupo ? "font-semibold" : ""} ${a.disabled ? "line-through text-slate-400" : ""}`}>
+                  <td className="py-1.5 px-2 font-mono text-slate-500 text-[11px]">{a.eapCodigo ?? ""}</td>
+                  <td className="py-1.5 px-2">
+                    <div className="flex items-center gap-1" style={{ paddingLeft: indent }}>
+                      {hasChildren && (
+                        <button onClick={() => toggleCollapse(a.eapCodigo)}
+                          className="p-0.5 rounded hover:bg-slate-100 shrink-0">
+                          {isCollapsed
+                            ? <ChevronRight className="h-3 w-3 text-slate-400" />
+                            : <ChevronDown className="h-3 w-3 text-slate-400" />}
+                        </button>
+                      )}
+                      <span className={`text-[12px] leading-tight ${a.isGrupo ? "text-slate-900 font-bold uppercase tracking-wide" : "text-slate-700"} ${atrasada ? "text-red-700" : ""} ${concluida ? "text-emerald-800" : ""}`}>
+                        {a.nome}
+                      </span>
+                      {a.isMarco && (
+                        <span className="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 text-[9px] font-semibold shrink-0">
+                          ◆ Marco
+                        </span>
+                      )}
+                      {a.isIndireta && (
+                        <span className="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px] font-semibold shrink-0">
+                          Indireta
+                        </span>
+                      )}
+                      {concluida && (
+                        <CheckCircle2 className="h-3 w-3 text-emerald-600 ml-1 shrink-0" />
+                      )}
+                      {atrasada && (
+                        <span title={`Atividade atrasada — fim: ${fmtBR(a.dataFim)} · avanço: ${avanco.toFixed(1)}%`}>
+                          <AlertTriangle className="h-3 w-3 text-red-500 ml-1 shrink-0" />
+                        </span>
+                      )}
+                    </div>
                   </td>
-                  <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{fmtBR(a.dataInicio)}</td>
-                  <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{fmtBR(a.dataFim)}</td>
-                  <td className="px-3 py-1.5 text-right font-semibold text-slate-700 whitespace-nowrap">
-                    {a.isGrupo ? "—" : fmtPct(real)}
+                  <td className="py-1.5 px-2 text-slate-600 text-[11px] tabular-nums whitespace-nowrap">{fmtBR(a.dataInicio)}</td>
+                  <td className="py-1.5 px-2 text-slate-600 text-[11px] tabular-nums whitespace-nowrap">{fmtBR(a.dataFim)}</td>
+                  <td className="py-1.5 px-2 text-right text-slate-500 text-[11px] tabular-nums">
+                    {a.duracaoDias ? `${a.duracaoDias}d` : <span className="text-slate-300">—</span>}
+                  </td>
+                  <td className="py-1.5 px-2 text-center text-[11px] font-mono text-blue-600">
+                    {a.predecessora || <span className="text-slate-300">—</span>}
+                  </td>
+                  <td className="py-1.5 px-2 text-center text-[11px] font-mono text-violet-600">
+                    {(() => {
+                      const sucs = a.eapCodigo ? (sucessorasMap[a.eapCodigo] ?? []) : [];
+                      return sucs.length > 0 ? sucs.join("; ") : <span className="text-slate-300">—</span>;
+                    })()}
+                  </td>
+                  <td className="py-1.5 px-2 text-right text-slate-600 text-[11px] tabular-nums whitespace-nowrap">{Number(a.pesoFinanceiro || 0).toFixed(2)}%</td>
+                  <td className="py-1.5 px-2 text-slate-500 text-[11px] truncate max-w-[120px]">{a.recursoPrincipal || <span className="text-slate-300">—</span>}</td>
+                  <td className="py-1.5 px-3 text-right">
+                    {!a.isGrupo && (
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className={`text-[11px] font-bold tabular-nums ${avanco >= 100 ? "text-emerald-700" : avanco > 0 ? "text-blue-700" : "text-slate-400"}`}>
+                          {fmtPct(avanco)}
+                        </span>
+                        {avanco > 0 && avanco < 100 && (
+                          <div className="w-12 h-1 bg-slate-200 rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${avanco}%` }} />
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </td>
                 </tr>
               );
             })}
-            {filtradas.length === 0 && (
-              <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">Nenhuma atividade encontrada.</td></tr>
-            )}
           </tbody>
         </table>
       </div>
