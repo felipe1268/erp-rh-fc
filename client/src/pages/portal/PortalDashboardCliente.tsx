@@ -11,7 +11,24 @@ import {
   CheckCircle2, ShieldCheck, Smile, Meh, Frown, Sparkles,
 } from "lucide-react";
 
-const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
+// Rev. 1550 — fmtBR robusto: aceita "YYYY-MM-DD", "YYYY-MM-DDTHH:mm:ss"
+// e "YYYY-MM-DD HH:mm:ss[.ffffff]" (formato cru do Postgres). Antes
+// só dividia em "T", então timestamps separados por espaço viravam
+// "09 20:53:35.290665/05/2026".
+const fmtBR = (s?: string | null): string => {
+  if (!s) return "—";
+  const datePart = s.split(/[T ]/)[0];
+  const parts = datePart.split("-");
+  if (parts.length !== 3) return s;
+  return parts.reverse().join("/");
+};
+const fmtBRDateTime = (s?: string | null): string => {
+  if (!s) return "—";
+  const [datePart, timePartRaw] = s.split(/[T ]/);
+  const dateBR = (datePart?.split("-").length === 3) ? datePart.split("-").reverse().join("/") : (datePart ?? "");
+  const timeBR = timePartRaw ? timePartRaw.split(".")[0].slice(0, 5) : "";
+  return timeBR ? `${dateBR} ${timeBR}` : dateBR;
+};
 
 function NotaSelector({ value, onChange, label }: { value: number | null; onChange: (n: number | null) => void; label: string }) {
   return (
@@ -255,7 +272,7 @@ export default function PortalDashboardCliente() {
                               {m.autorNome || (isCli ? "Você" : "FC Engenharia")}
                             </span>
                             <span className={`text-[10px] ${isCli ? "text-blue-200" : "text-slate-400"}`}>
-                              {fmtBR(m.criadoEm)}
+                              {fmtBRDateTime(m.criadoEm)}
                             </span>
                           </div>
                           <p className={`text-sm whitespace-pre-wrap ${isCli ? "text-white" : "text-slate-700"}`}>{m.mensagem}</p>

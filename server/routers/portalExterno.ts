@@ -92,6 +92,12 @@ export const portalExternoRouter = router({
         parceiroId: cred.parceiroId,
         clienteId: (cred as any).clienteId,
         nomeEmpresa: cred.nomeEmpresa,
+        // Rev. 1550 — incluído nomeResponsavel/email para identificar
+        // o usuário humano que enviou a mensagem (antes só tinha o
+        // nome da empresa, gerando "Conversa" assinada com o nome
+        // do cliente, não da pessoa).
+        nomeResponsavel: (cred as any).nomeResponsavel ?? null,
+        emailResponsavel: (cred as any).emailResponsavel ?? null,
       }, secret, { expiresIn: "24h" });
       return {
         token,
@@ -962,12 +968,28 @@ export const portalExternoRouter = router({
       try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
       if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
       const [c] = await db.select().from(clientes).where(eq(clientes.id, decoded.clienteId));
+      // Rev. 1550 — usar nome da PESSOA (responsavel do acesso) e não
+      // mais o nome da empresa cliente. Se por algum motivo o token
+      // antigo não trouxer (ainda válido), tenta buscar no
+      // portalCredentials e cai para empresa só em último caso.
+      let nomeAutor: string =
+        decoded.nomeResponsavel ||
+        (c?.contatoNome ?? "") ||
+        c?.nomeFantasia ||
+        c?.razaoSocial ||
+        "Cliente";
+      if (!decoded.nomeResponsavel && decoded.portalId) {
+        try {
+          const [cred] = await db.select().from(portalCredentials).where(eq(portalCredentials.id, decoded.portalId));
+          if ((cred as any)?.nomeResponsavel) nomeAutor = (cred as any).nomeResponsavel;
+        } catch {}
+      }
       await db.insert(clienteComentarios).values({
         companyId: decoded.companyId,
         clienteId: decoded.clienteId,
         obraId: input.obraId ?? null,
         autorTipo: "cliente",
-        autorNome: c?.nomeFantasia || c?.razaoSocial || c?.contatoNome || "Cliente",
+        autorNome: nomeAutor,
         mensagem: input.mensagem,
       });
       return { success: true };
