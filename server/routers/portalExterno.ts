@@ -1555,15 +1555,35 @@ export const portalExternoRouter = router({
           valorContrato: _n((projeto as any).valorContrato),
           revisaoNumero: revisao.numero, revisaoData: revisao.dataRevisao,
         },
-        kpis: {
-          previsto: pctTotalPrevisto,
-          realizado: pctTotalRealizado,
-          desvio,
-          totalAtividades: folhas.length,
-          atividadesConcluidas: folhas.filter((a: any) => (ultimoAvancoPorAtiv[a.id] ?? 0) >= 100).length,
-          semanaInicio: monStr,
-          semanaFim: sunStr,
-        },
+        kpis: (() => {
+          // ALINHAMENTO COM O REFIS OFICIAL:
+          // O cliente vê na aba REFIS o relatório oficial emitido/consolidado
+          // (ex.: 1,84% previsto). O card "Avanço Físico" no topo do portal
+          // estava recalculando ao vivo (ref = próxima segunda + 7), gerando
+          // valores diferentes (ex.: 2,19%) conforme novas atividades entravam
+          // na janela. Solução: se existe um REFIS NÃO-rascunho mais recente,
+          // usar SEUS valores como fonte de verdade — assim o card do topo bate
+          // exatamente com o último REFIS exibido logo abaixo. Caso não haja
+          // REFIS emitido, mantém o cálculo ao vivo como fallback.
+          const refisOficial = refisRows.find((r: any) => r.status && r.status !== "rascunho")
+            ?? refisRows[0];
+          const previstoFinal = refisOficial ? _n(refisOficial.avancoPrevisto) : pctTotalPrevisto;
+          const realizadoFinal = refisOficial ? _n(refisOficial.avancoRealizado) : pctTotalRealizado;
+          const desvioFinal = +(realizadoFinal - previstoFinal).toFixed(2);
+          return {
+            previsto: previstoFinal,
+            realizado: realizadoFinal,
+            desvio: desvioFinal,
+            totalAtividades: folhas.length,
+            atividadesConcluidas: folhas.filter((a: any) => (ultimoAvancoPorAtiv[a.id] ?? 0) >= 100).length,
+            semanaInicio: monStr,
+            semanaFim: sunStr,
+            // Indica de onde veio o número, útil para debug e legenda futura.
+            fonte: refisOficial ? "refis_oficial" : "calculo_ao_vivo",
+            refisSemana: refisOficial ? _toDateStr(refisOficial.semana) : null,
+            refisNumero: refisOficial ? refisOficial.numero ?? null : null,
+          };
+        })(),
         semanaAtual,
         atrasadas,
         proximas,

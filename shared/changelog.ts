@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1480,
+    titulo: "Portal do Cliente — Card 'Avanço Físico' agora reflete o ÚLTIMO REFIS oficial emitido (mesma fonte de verdade)",
+    descricao: "RESOLUÇÃO DEFINITIVA da divergência teimosa entre o card 'Avanço Físico Previsto' (topo do portal) e a aba REFIS logo abaixo. Antes: o card recalculava ao vivo o previsto referenciando a próxima segunda+7 (ex.: 2,19%) enquanto o REFIS oficial mostrava o valor consolidado da semana reportada (ex.: 1,84%). Como toda semana entram novas atividades na janela, o número ao vivo ficava sempre 'à frente' do REFIS, gerando confusão para o cliente. Decisão: o REFIS é o documento oficial assinado pelo cliente, então o card no topo do portal passa a ler diretamente do último REFIS emitido/consolidado (status != 'rascunho') — fallback ao cálculo ao vivo só se a obra ainda não tiver nenhum REFIS emitido. Resultado: o card 'Previsto', 'Realizado' e 'Desvio' no topo da Visão Geral do portal SEMPRE batem com o último REFIS exibido logo abaixo. O backend também passa a expor 'kpis.fonte' = 'refis_oficial' | 'calculo_ao_vivo' e 'kpis.refisSemana/refisNumero' para diagnóstico e futura legenda no frontend.",
+    tipo: "bugfix",
+    modulos: "Portal do Cliente, Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 00:10:00",
+  },
+  {
     version: 1479,
     titulo: "Portal do Cliente — Bugfix: aba 'Diagrama de Rede' agora mostra as dependências entre atividades",
     descricao: "A aba 'Diagrama de Rede' do Portal do Cliente exibia sempre 'Nenhuma atividade com predecessora cadastrada' (0 de N) mesmo em obras com dependências cadastradas no módulo interno de Planejamento. Causa: o backend do portal (portalExterno.ts ~1191) montava o objeto de atividade enviado ao frontend SEM incluir o campo 'predecessora'. O componente AbaDiagramaRede filtra exatamente por esse campo, então sem ele todas as atividades caíam no estado vazio. Correção: o portal agora expõe o campo predecessora junto com os demais campos da atividade. Ao recarregar o portal, a aba Diagrama de Rede passa a listar todas as atividades-folha que têm predecessora apontando para 'XX [Nome da predecessora]', exatamente como aparece no Planejamento interno.",
