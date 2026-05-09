@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1479,
+    titulo: "Portal do Cliente — Bugfix: aba 'Diagrama de Rede' agora mostra as dependências entre atividades",
+    descricao: "A aba 'Diagrama de Rede' do Portal do Cliente exibia sempre 'Nenhuma atividade com predecessora cadastrada' (0 de N) mesmo em obras com dependências cadastradas no módulo interno de Planejamento. Causa: o backend do portal (portalExterno.ts ~1191) montava o objeto de atividade enviado ao frontend SEM incluir o campo 'predecessora'. O componente AbaDiagramaRede filtra exatamente por esse campo, então sem ele todas as atividades caíam no estado vazio. Correção: o portal agora expõe o campo predecessora junto com os demais campos da atividade. Ao recarregar o portal, a aba Diagrama de Rede passa a listar todas as atividades-folha que têm predecessora apontando para 'XX [Nome da predecessora]', exatamente como aparece no Planejamento interno.",
+    tipo: "bugfix",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 23:55:00",
+  },
+  {
     version: 1478,
     titulo: "Editar Função (RH) — Bugfix iPad: botão Salvar agora fica fixo no rodapé e sempre visível",
     descricao: "Na tela 'Editar Função' (Configurações → RH → Funções → editar) os botões Cancelar e 'Salvar Função' estavam DENTRO do conteúdo scrollável, no fim do formulário, depois das caixas de Descrição, Ordem de Serviço e do bloco 'Como funciona a IA'. No iPad isso forçava o usuário a rolar muito para baixo e, mesmo rolando, o rodapé caía atrás da barra de URL do Safari (mesma classe de bug do modal de Abas Liberadas). Correção em duas frentes: (1) Os botões Cancelar/Salvar foram movidos para o slot 'footer' do componente FullScreenDialog — agora ficam fixos no rodapé branco da tela, independentemente da rolagem do formulário. (2) O componente FullScreenDialog passou a usar 100dvh (dynamic viewport height) em vez de 100vh, e o rodapé respeita a area segura do iOS (env(safe-area-inset-bottom)). Resultado: em qualquer dispositivo (iPad, iPhone, desktop) o botão 'Salvar Função' fica sempre visível no canto inferior direito ao editar/criar uma função. Como o FullScreenDialog é compartilhado, todos os outros modais full-screen do sistema (DrillDownModal, BeneficiosAlimentacaoTab, etc.) também ganham automaticamente o ajuste de viewport para iPad.",

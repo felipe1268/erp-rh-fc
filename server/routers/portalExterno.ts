@@ -1200,6 +1200,12 @@ export const portalExternoRouter = router({
         isGrupo: a.isGrupo,
         isMarco: a.isMarco,
         isIndireta: a.isIndireta,
+        // Campo necessário para a aba "Diagrama de Rede" do portal
+        // (AbaDiagramaRede em PortalPlanejamentoCliente filtra por a.predecessora).
+        // Sem isso, todas as atividades caem no else "Nenhuma atividade com
+        // predecessora cadastrada" mesmo com dependências cadastradas no
+        // módulo interno de Planejamento.
+        predecessora: a.predecessora ?? null,
       }));
 
       // Avanços (último percentual acumulado por atividade)
