@@ -3304,14 +3304,32 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                         {a.duracaoDias ? `${a.duracaoDias}d` : <span className="text-slate-300">—</span>}
                       </td>
                       {/* Predecessoras */}
-                      <td className="py-1.5 px-2 text-center text-[11px] font-mono text-blue-600">
-                        {a.predecessora || <span className="text-slate-300">—</span>}
+                      <td className="py-1.5 px-2 text-center text-[11px] font-mono text-blue-600 max-w-[120px]">
+                        {(() => {
+                          const raw = (a.predecessora ?? "").toString();
+                          if (!raw) return <span className="text-slate-300">—</span>;
+                          const arr = raw.split(/[,;]/).map((s: string) => s.trim()).filter(Boolean);
+                          if (arr.length <= 3) return <span title={arr.join("; ")}>{arr.join("; ")}</span>;
+                          return (
+                            <span title={arr.join("; ")} className="cursor-help">
+                              {arr.slice(0, 3).join("; ")}
+                              <span className="ml-1 px-1 rounded bg-blue-100 text-blue-700 text-[10px] font-semibold">+{arr.length - 3}</span>
+                            </span>
+                          );
+                        })()}
                       </td>
                       {/* Sucessoras (computada) */}
-                      <td className="py-1.5 px-2 text-center text-[11px] font-mono text-violet-600">
+                      <td className="py-1.5 px-2 text-center text-[11px] font-mono text-violet-600 max-w-[120px]">
                         {(() => {
                           const sucs = a.eapCodigo ? (sucessorasMap[a.eapCodigo] ?? []) : [];
-                          return sucs.length > 0 ? sucs.join("; ") : <span className="text-slate-300">—</span>;
+                          if (sucs.length === 0) return <span className="text-slate-300">—</span>;
+                          if (sucs.length <= 3) return <span title={sucs.join("; ")}>{sucs.join("; ")}</span>;
+                          return (
+                            <span title={sucs.join("; ")} className="cursor-help">
+                              {sucs.slice(0, 3).join("; ")}
+                              <span className="ml-1 px-1 rounded bg-violet-100 text-violet-700 text-[10px] font-semibold">+{sucs.length - 3}</span>
+                            </span>
+                          );
                         })()}
                       </td>
                       {/* Peso% */}

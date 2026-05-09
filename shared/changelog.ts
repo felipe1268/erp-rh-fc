@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1498,
+    titulo: "Planejamento — Cronograma: colunas Pred./Suc. com truncamento (cap 3 + badge '+N') para evitar quebra de layout",
+    descricao: "BUGFIX visual reportado pelo usuário após importação MS Project: quando o XML do MS Project linka todas as atividades ao mesmo marco (ex.: 'Início' como predecessora de tudo), a linha do marco passava a exibir centenas de códigos WBS na coluna Sucessoras, esticando a linha verticalmente em várias telas e quebrando o layout do cronograma. Agora as colunas Predecessoras e Sucessoras na aba Cronograma mostram no máximo os 3 primeiros códigos seguidos de um badge clicável '+N' (azul para Pred., violeta para Suc.) com tooltip exibindo a lista completa ao passar o mouse. Largura máxima das células fixada em 120px. Corrige a percepção de 'importação quebrada' sem alterar nenhum dado importado — a correção é apenas de renderização.",
+    tipo: 'bugfix',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 09:35:00',
+  },
+  {
     version: 1497,
     titulo: "Planejamento — Coluna % Concluído editável (0-100%) no preview do importador MS Project",
     descricao: "ATENDENDO PEDIDO DO USUÁRIO: a coluna '% Conc.' no preview do importador de cronograma agora é SEMPRE exibida (antes só aparecia se alguma atividade já viesse com avanço > 0) e VIROU UM CAMPO EDITÁVEL aceitando valores de 0 a 100. Cada atividade não-grupo tem agora um input numérico onde o usuário pode digitar o percentual concluído antes de confirmar a importação. O sistema clampa automaticamente entre 0 e 100. Ao confirmar a importação em qualquer modo (Substituir / Mesclar / Apenas Predecessora), os percentuais editados são gravados como avanço físico da semana atual (segunda-feira ISO) na tabela planejamento_avancos: cria registro novo com percentualSemanal calculado a partir do último avanço anterior, ou atualiza o registro existente da semana corrente. Backend: nova procedure planejamento.importarAvancosDoArquivo que reaproveita a mesma lógica de matching por eapCodigo (e fallback por nome) já usada em salvarAtividades. O modo 'substituir' já gravava avanços via salvarAtividades; agora os modos 'mesclar' e 'apenas_predecessora' também gravam, garantindo paridade entre os 3 fluxos.",
