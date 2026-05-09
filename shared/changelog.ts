@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1487,
+    titulo: "Portal do Cliente — Nova barra horizontal de navegação por pílulas (2ª opção de menu, ao lado da sidebar)",
+    descricao: "Adicionada uma barra horizontal de navegação no topo da área de conteúdo do Portal do Cliente, com todas as abas liberadas em formato de pílulas (estilo do mockup enviado pelo usuário). Cada pílula mostra ícone + label, com a aba atual destacada em azul claro com anel azul. A barra fica logo acima do conteúdo da aba e SE SOMA à navegação lateral existente (sidebar) — agora o cliente pode navegar de duas formas: (1) pela sidebar à esquerda (com busca, drag-to-reorder e modo recolhido); (2) pela barra horizontal de pílulas no topo, ideal para iPad/celular onde o toque é mais natural que arrastar. A barra usa flex-wrap para se adaptar a qualquer largura — em telas grandes mostra todas as pílulas em uma ou duas linhas, em telas pequenas elas quebram automaticamente. Removido o indicador antigo de 'aba atual' (já é redundante com a barra). Oculta na impressão.",
+    tipo: "feature",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 06:30:00",
+  },
+  {
     version: 1486,
     titulo: "Portal do Cliente — KPIs da Visão Geral agora abrem no toque (iPad/celular) com ícone 'ℹ' visível",
     descricao: "Substituído o tooltip por hover (que NÃO funciona em iPad/celular porque toque não dispara hover) por um popover que abre no clique/toque. Agora cada um dos 5 cards de KPI (Atividades, Avanço Físico, SPI, CPI, REFIs) tem: (1) um ícone 'ℹ' permanente no canto superior direito, deixando claro que o card é interativo; (2) ao tocar/clicar, abre um painel preto com título em destaque e a explicação completa do indicador; (3) animação sutil de 'press' (active:scale-[0.98]) para feedback tátil; (4) instrução 'Toque fora para fechar' no rodapé do painel; (5) acessibilidade — botão semântico com aria-label. Funciona idêntico em desktop (clique), iPad e celular (toque).",

@@ -481,21 +481,39 @@ export default function PortalPlanejamentoCliente() {
           );
         })()}
 
-        {/* ── Indicador da aba atual (mobile/quando sidebar oculta) ── */}
-        {abasVisiveis.length > 1 && (() => {
-          const abaInfo = PORTAL_CLIENTE_ABAS.find((x) => x.key === aba);
-          const Icon = ABA_ICONS[aba] || TrendingUp;
-          if (!abaInfo) return null;
-          return (
-            <div className="mb-4 flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl border border-slate-200/70 shadow-sm">
-              <Icon className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-bold text-slate-800">{abaInfo.label}</span>
-              {abaInfo.status === "em_breve" && (
-                <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold uppercase">em breve</span>
-              )}
+        {/* ── Barra horizontal de navegação por pílulas (2ª opção de navegação,
+              em adição à sidebar lateral). Funciona bem em desktop, tablet e
+              celular — em telas estreitas vira scroll horizontal. ─────── */}
+        {abasVisiveis.length > 1 && (
+          <div className="mb-4 bg-white rounded-2xl border border-slate-200/70 shadow-sm p-2 print:hidden">
+            <div className="flex flex-wrap gap-1.5">
+              {abasVisiveis.map((a) => {
+                const Icon = ABA_ICONS[a.key] || TrendingUp;
+                const isActive = aba === a.key;
+                const isEmBreve = a.status === "em_breve";
+                return (
+                  <button
+                    key={a.key}
+                    type="button"
+                    onClick={() => setAba(a.key)}
+                    className={`group inline-flex items-center gap-2 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all whitespace-nowrap ${
+                      isActive
+                        ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200 shadow-sm"
+                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                    title={a.label}
+                  >
+                    <Icon className={`h-4 w-4 ${isActive ? "text-blue-600" : "text-slate-400 group-hover:text-slate-600"}`} />
+                    <span>{a.label}</span>
+                    {isEmBreve && (
+                      <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">em breve</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
-          );
-        })()}
+          </div>
+        )}
 
         {/* ── Conteúdo ───────────────────────────────────────────── */}
         {isLoading && (
