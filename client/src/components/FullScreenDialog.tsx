@@ -84,7 +84,7 @@ export default function FullScreenDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-background flex flex-col" style={{ width: "100vw", height: "100vh", zIndex: zIndex ?? 50 }}>
+    <div className="fixed inset-0 bg-background flex flex-col" style={{ width: "100vw", height: "100dvh", zIndex: zIndex ?? 50 }}>
       {/* HEADER */}
       <div className={`shrink-0 ${headerStyle ? '' : headerColor} text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-lg`} style={headerStyle}>
         <div className="flex items-center gap-3">
@@ -114,7 +114,10 @@ export default function FullScreenDialog({
 
       {/* FOOTER (optional) */}
       {footer && (
-        <div className="shrink-0 border-t bg-white px-4 sm:px-6 py-3 flex items-center justify-end gap-3">
+        <div
+          className="shrink-0 border-t bg-white px-4 sm:px-6 py-3 flex items-center justify-end gap-3 flex-wrap"
+          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+        >
           {footer}
         </div>
       )}

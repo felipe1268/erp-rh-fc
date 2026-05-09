@@ -537,7 +537,21 @@ export default function Funcoes() {
       </div>
 
       {/* Dialog: Criar/Editar Função - FULL SCREEN */}
-      <FullScreenDialog open={dialogOpen} onClose={() => setDialogOpen(false)} title={editingId ? "Editar Função" : "Nova Função"} subtitle="Preencha os dados da função. A descrição e a Ordem de Serviço podem ser geradas pela IA." icon={<Briefcase className="h-5 w-5 text-white" />}>
+      <FullScreenDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        title={editingId ? "Editar Função" : "Nova Função"}
+        subtitle="Preencha os dados da função. A descrição e a Ordem de Serviço podem ser geradas pela IA."
+        icon={<Briefcase className="h-5 w-5 text-white" />}
+        footer={(
+          <>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={createMut.isPending || updateMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
+              {createMut.isPending || updateMut.isPending ? "Salvando..." : "Salvar Função"}
+            </Button>
+          </>
+        )}
+      >
         <div className="w-full">
           <div className="space-y-5">
             {/* Nome e CBO */}
@@ -703,12 +717,6 @@ export default function Funcoes() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={createMut.isPending || updateMut.isPending} className="bg-[#1B2A4A] hover:bg-[#243660]">
-              {createMut.isPending || updateMut.isPending ? "Salvando..." : "Salvar Função"}
-            </Button>
-          </div>
         </div>
       </FullScreenDialog>
 

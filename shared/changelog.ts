@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1478,
+    titulo: "Editar Função (RH) — Bugfix iPad: botão Salvar agora fica fixo no rodapé e sempre visível",
+    descricao: "Na tela 'Editar Função' (Configurações → RH → Funções → editar) os botões Cancelar e 'Salvar Função' estavam DENTRO do conteúdo scrollável, no fim do formulário, depois das caixas de Descrição, Ordem de Serviço e do bloco 'Como funciona a IA'. No iPad isso forçava o usuário a rolar muito para baixo e, mesmo rolando, o rodapé caía atrás da barra de URL do Safari (mesma classe de bug do modal de Abas Liberadas). Correção em duas frentes: (1) Os botões Cancelar/Salvar foram movidos para o slot 'footer' do componente FullScreenDialog — agora ficam fixos no rodapé branco da tela, independentemente da rolagem do formulário. (2) O componente FullScreenDialog passou a usar 100dvh (dynamic viewport height) em vez de 100vh, e o rodapé respeita a area segura do iOS (env(safe-area-inset-bottom)). Resultado: em qualquer dispositivo (iPad, iPhone, desktop) o botão 'Salvar Função' fica sempre visível no canto inferior direito ao editar/criar uma função. Como o FullScreenDialog é compartilhado, todos os outros modais full-screen do sistema (DrillDownModal, BeneficiosAlimentacaoTab, etc.) também ganham automaticamente o ajuste de viewport para iPad.",
+    tipo: "bugfix",
+    modulos: "RH & DP, UI Components",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 23:40:00",
+  },
+  {
     version: 1477,
     titulo: "Admin do Portal — Bugfix iPad: botão Salvar do modal 'Abas liberadas' agora aparece corretamente",
     descricao: "No iPad/Safari iOS, o modal 'Abas liberadas no Portal do Cliente' (acessado em Configurações → Clientes do Portal → ícone de abas) abria em tela cheia mas o rodapé com os botões 'Cancelar' e 'Salvar' ficava fora da viewport, escondido atrás da barra de URL e da home indicator do iPad. Causa: o modal usava height: 100vh, que no iOS não desconta a barra de URL dinâmica do Safari, fazendo o footer ser empurrado para baixo da tela visível. Correção: trocado 100vh por 100dvh (dynamic viewport height — recalcula automaticamente quando a barra de URL aparece/desaparece) e adicionado padding-bottom com env(safe-area-inset-bottom) para respeitar a área segura do iPad/iPhone. Agora os botões 'Selecionar todas', 'Apenas a obrigatória', 'Cancelar' e 'Salvar' ficam sempre visíveis no rodapé do modal, em qualquer dispositivo.",
