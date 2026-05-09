@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1538,
+    titulo: "Planejamento — divergência de 0,02pp entre 'Avanço Físico' (topo) e 'REALIZADO (ACUM.)' (semanal) corrigida",
+    descricao: "BUGFIX reportado pelo usuário: a barra superior 'Avanço Físico' mostrava Realizado 1.38% enquanto o card 'REALIZADO (ACUM.)' da seção semanal logo abaixo mostrava 1.40% — divergência de 0,02pp para o MESMO conjunto de atividades, pesos e avanços. Causa: as memos previsto/realizadoAcum/previstoComInd/realizadoComInd da seção semanal arredondavam o valor INTERMEDIÁRIO da soma ponderada para 1 casa decimal (`+soma.toFixed(1)`) ANTES de exibir, então um valor real de 1.385 virava 1.4 e era mostrado como '1.40'. A barra superior usa precisão cheia (`Math.min(100, ponderado)` sem toFixed), então mostra '1.38' real. Correção: removido o arredondamento intermediário das 4 memos da seção semanal — agora todas retornam o valor com precisão cheia e o arredondamento acontece só no display (`.toFixed(2)`). Os dois cards agora batem exatamente.",
+    tipo: 'bugfix',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 15:25:00',
+  },
+  {
     version: 1537,
     titulo: "Planejamento — barra 'Avanço Físico' e 'Visão Geral' agora atualizam em tempo real ao digitar avanços",
     descricao: "AJUSTE de UX reportado pelo usuário: ao digitar % de avanço na aba 'Avanço Semanal', os cards da seção (PREVISTO/REALIZADO ACUM./VARIAÇÃO) atualizavam imediatamente, mas a barra superior 'Avanço Físico' (Previsto/Realizado) e o card 'Avanço Físico' da Visão Geral só refletiam após clicar em 'Salvar Avanços'. Causa: a seção semanal lê do estado local 'avancoLocal' (digitado, não salvo); a barra superior e a Visão Geral leem da query 'listarAvancos' (só se atualiza após save + refetch). Correção: subi o estado 'avancoLocal' (via callback onLocalAvancoChange) até PlanejamentoDetalhe e fiz 'avancosMapSemana' sobrepor as edições não-salvas em cima dos avanços persistidos. Resultado: digitou 1.40% na atividade → barra superior já mostra 1.40% antes mesmo de salvar. Ao salvar, o estado local é limpo e os dados persistidos assumem (sem flicker, mesmo valor).",

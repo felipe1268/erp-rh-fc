@@ -4650,7 +4650,9 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
       const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       soma += (exp * peso) / denom;
     });
-    return +soma.toFixed(1);
+    // Rev. 1538 — NÃO arredonda intermediário (causa divergência com a barra
+    // superior). O display final cuida do toFixed(2).
+    return soma;
   }, [folhas, semanaFim, usarPesoPorDuracao]);
 
   // ── Realizado acumulado ponderado (semana atual) ───────────────────────────
@@ -4670,7 +4672,10 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
       const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       soma += (val * peso) / denom;
     });
-    return +soma.toFixed(1);
+    // Rev. 1538 — NÃO arredonda intermediário (estava arredondando para 1
+    // casa, ex.: 1.385 → 1.4 → display "1.40"). Causa divergência com a
+    // barra superior "Avanço Físico" que usa precisão cheia (1.38).
+    return soma;
   }, [folhas, avancoExistente, avancoMaisRecente, avancoLocal, usarPesoPorDuracao]);
 
   const delta = +(realizadoAcum - previsto).toFixed(2);
@@ -4693,7 +4698,8 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
       const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       soma += (exp * peso) / denom;
     });
-    return +soma.toFixed(1);
+    // Rev. 1538 — sem arredondamento intermediário (consistência com a barra superior).
+    return soma;
   }, [folhasComInd, semanaFim, usarPesoPorDuracao]);
 
   const realizadoComInd = useMemo(() => {
@@ -4721,7 +4727,8 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
       const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       soma += (val * peso) / denom;
     });
-    return +soma.toFixed(1);
+    // Rev. 1538 — sem arredondamento intermediário (consistência com a barra superior).
+    return soma;
   }, [folhasComInd, avancoExistente, avancoMaisRecente, avancoLocal, semanaFim, usarPesoPorDuracao]);
 
   const distorcaoPrev = +(previstoComInd - previsto).toFixed(2);
