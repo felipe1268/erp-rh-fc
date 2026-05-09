@@ -1187,10 +1187,12 @@ export const portalExternoRouter = router({
       const todayStr = new Date().toISOString().slice(0, 10);
       const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
 
-      // Regra `usarIgual` — quando há poucos pesos cadastrados, distribui igualmente
+      // ALINHAMENTO COM TELA INTERNA (PlanejamentoDetalhe.tsx calcPesoTotal):
+      // semPeso só quando pesoBruto === 0 (TODAS sem peso). Removido o limiar
+      // de <20% que existia antes e causava divergência (2,19% portal vs
+      // 1,84% interno) quando a obra tinha algumas atividades sem peso.
       const pesoBruto = folhas.reduce((s: number, a: any) => s + _n(a.pesoFinanceiro), 0);
-      const ativComPeso = folhas.filter((a: any) => _n(a.pesoFinanceiro) > 0).length;
-      const usarIgual = pesoBruto === 0 || ativComPeso < folhas.length * 0.2;
+      const usarIgual = pesoBruto === 0;
       const pesoTotal = usarIgual ? (folhas.length || 1) : pesoBruto;
       const pesoDe = (a: any) => usarIgual ? 1 : _n(a.pesoFinanceiro);
 
@@ -1320,8 +1322,7 @@ export const portalExternoRouter = router({
         const folhasL = ativs.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
         if (!folhasL.length) return [];
         const pesoBrutoL = folhasL.reduce((s: number, a: any) => s + _n(a.pesoFinanceiro), 0);
-        const ativComPesoL = folhasL.filter((a: any) => _n(a.pesoFinanceiro) > 0).length;
-        const usarIgualL = pesoBrutoL === 0 || ativComPesoL < folhasL.length * 0.2;
+        const usarIgualL = pesoBrutoL === 0;
         const pesoTotalL = usarIgualL ? folhasL.length : pesoBrutoL;
         const datesL: Map<string, number> = new Map();
         for (const a of folhasL as any[]) {
