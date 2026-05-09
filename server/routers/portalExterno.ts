@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb, getEquipeObra } from "../db";
-import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento } from "../../drizzle/schema";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, jobFunctions } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1039,7 +1039,33 @@ export const portalExternoRouter = router({
       if (!obra) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não vinculada a este cliente" });
 
       const equipe = await getEquipeObra(input.obraId, decoded.companyId);
-      const cltList = equipe.map((e: any) => ({ ...e, effectiveStatus: e.status, tipo: "CLT" as const }));
+
+      // ── Mapa categoria (Direto/Indireto) por nome de função ──────────
+      // employees.funcao é texto livre; jobFunctions.nome guarda categoriaMO.
+      const jobFns = await db.select({
+        nome: jobFunctions.nome,
+        categoriaMO: jobFunctions.categoriaMO,
+      }).from(jobFunctions).where(eq(jobFunctions.companyId, decoded.companyId));
+      const catByFn = new Map<string, string>();
+      for (const j of jobFns) {
+        if (j.nome) catByFn.set(j.nome.trim().toUpperCase(), (j.categoriaMO || "").toLowerCase());
+      }
+      const categoriaDe = (funcao: string | null | undefined): "Direto" | "Indireto" => {
+        const cat = catByFn.get((funcao || "").trim().toUpperCase()) || "";
+        if (cat === "direto") return "Direto";
+        if (cat === "indireta_obra" || cat === "escritorio_central") return "Indireto";
+        return "Direto";
+      };
+
+      const cltList = equipe.map((e: any) => {
+        const isPJ = (e.tipoContrato || "").toUpperCase() === "PJ";
+        return {
+          ...e,
+          effectiveStatus: e.status,
+          tipo: isPJ ? ("PJ" as const) : ("CLT" as const),
+          categoria: categoriaDe(e.funcao || e.cargo),
+        };
+      });
 
       // Adiciona terceiros alocados na obra (mesma company, ativos, não excluídos)
       const tercRows = await db.select({
@@ -1051,6 +1077,7 @@ export const portalExternoRouter = router({
         empresaTerceiraId: funcionariosTerceiros.empresaTerceiraId,
         status: funcionariosTerceiros.status,
         statusAptidao: funcionariosTerceiros.statusAptidao,
+        fotoUrl: funcionariosTerceiros.fotoUrl,
       }).from(funcionariosTerceiros).where(and(
         eq(funcionariosTerceiros.obraId, input.obraId),
         eq(funcionariosTerceiros.companyId, decoded.companyId),
@@ -1076,6 +1103,8 @@ export const portalExternoRouter = router({
         cpf: t.cpf,
         tipo: "Terceiro" as const,
         empresaTerceira: empMap.get(t.empresaTerceiraId) || "",
+        fotoUrl: t.fotoUrl || null,
+        categoria: categoriaDe(t.funcao),
       }));
 
       return [...cltList, ...terceiros];

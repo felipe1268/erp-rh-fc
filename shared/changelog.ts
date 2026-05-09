@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1475,
+    titulo: "Portal do Cliente — Aba Efetivo: foto do funcionário, PJ incluídos, classificação Direto/Indireto",
+    descricao: "A aba Efetivo do Portal do Cliente foi enriquecida para refletir TODO o efetivo da obra com a mesma riqueza visual do módulo interno: (1) Coluna 'Foto' adicionada na tabela — exibe a foto cadastrada de cada pessoa (employees.fotoUrl para CLT/PJ e funcionarios_terceiros.foto_url para terceiros). Quando não há foto cadastrada, mostra um avatar com as iniciais do nome, colorido conforme o tipo (azul=CLT, violeta=PJ, âmbar=Terceiro). (2) Funcionários PJ agora aparecem na lista — antes eram contados como CLT genérico; agora o backend identifica employees.tipoContrato='PJ' e expõe um badge violeta 'PJ' próprio, com KPI 'Total PJ' separado. (3) Nova coluna 'Categoria' classifica cada pessoa como 'Direto' ou 'Indireto' com base no campo categoriaMO da função (job_functions.categoria_mo): 'direto' → Direto (verde); 'indireta_obra' ou 'escritorio_central' → Indireto (cinza). (4) Adicionados KPIs 'Mão de Obra Direta' e 'Mão de Obra Indireta' e um filtro extra 'Direto / Indireto' lado a lado com o filtro de tipo de contrato. Cliente passa a ver de forma transparente a composição completa do efetivo: quem é CLT, quem é PJ, quem é terceirizado, e quanto disso é mão de obra direta (produtiva) vs indireta (apoio).",
+    tipo: "feature",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 22:30:00",
+  },
+  {
     version: 1474,
     titulo: "Portal do Cliente — Bugfix: 'Ocorreu um erro inesperado' ao abrir a aba Efetivo (STATUS_COLORS/STATUS_LABELS undefined)",
     descricao: "A aba 'Efetivo' do Portal do Cliente quebrava com tela 'Ocorreu um erro inesperado' assim que carregava. Causa: o componente AbaEfetivo referenciava as constantes STATUS_COLORS e STATUS_LABELS para colorir o badge de status (Ativo, Aviso, Férias, Afastado, etc.) mas essas constantes nunca foram definidas no arquivo, gerando TypeError ao tentar fazer STATUS_COLORS[e.effectiveStatus] no render. Correção: definidas as duas constantes no escopo do arquivo, com mapeamento de cores e rótulos para todos os status conhecidos (Ativo verde, Aviso âmbar, Férias azul, Afastado roxo, Atestado rosa, Desligado/Demitido cinza). Aba volta a funcionar normalmente.",

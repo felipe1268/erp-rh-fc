@@ -2389,7 +2389,8 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
     { enabled: !!token && obraId > 0 }
   );
   const [busca, setBusca] = useState("");
-  const [filtroTipo, setFiltroTipo] = useState<"todos" | "CLT" | "Terceiro">("todos");
+  const [filtroTipo, setFiltroTipo] = useState<"todos" | "CLT" | "PJ" | "Terceiro">("todos");
+  const [filtroCat, setFiltroCat] = useState<"todos" | "Direto" | "Indireto">("todos");
 
   const equipe = useMemo(() => {
     return (equipeRaw as any[]).filter(
@@ -2397,13 +2398,17 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
     );
   }, [equipeRaw]);
 
-  const totCLT = useMemo(() => equipe.filter((e) => e.tipo !== "Terceiro").length, [equipe]);
+  const totCLT = useMemo(() => equipe.filter((e) => e.tipo === "CLT").length, [equipe]);
+  const totPJ = useMemo(() => equipe.filter((e) => e.tipo === "PJ").length, [equipe]);
   const totTerc = useMemo(() => equipe.filter((e) => e.tipo === "Terceiro").length, [equipe]);
+  const totDireto = useMemo(() => equipe.filter((e) => e.categoria === "Direto").length, [equipe]);
+  const totIndireto = useMemo(() => equipe.filter((e) => e.categoria === "Indireto").length, [equipe]);
   const totGeral = equipe.length;
 
   const lista = useMemo(() => {
     let l = equipe;
-    if (filtroTipo !== "todos") l = l.filter((e) => (filtroTipo === "Terceiro" ? e.tipo === "Terceiro" : e.tipo !== "Terceiro"));
+    if (filtroTipo !== "todos") l = l.filter((e) => e.tipo === filtroTipo);
+    if (filtroCat !== "todos") l = l.filter((e) => (e.categoria || "Direto") === filtroCat);
     if (busca) {
       const q = busca.toLowerCase();
       l = l.filter((e: any) =>
@@ -2413,7 +2418,10 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
       );
     }
     return [...l].sort((a, b) => (a.nomeCompleto || "").localeCompare(b.nomeCompleto || ""));
-  }, [equipe, filtroTipo, busca]);
+  }, [equipe, filtroTipo, filtroCat, busca]);
+
+  const iniciais = (nome: string) =>
+    (nome || "?").split(" ").filter(Boolean).slice(0, 2).map((s) => s[0]).join("").toUpperCase();
 
   if (isLoading) {
     return (
@@ -2446,7 +2454,7 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
           </div>
           <div>
             <h2 className="text-lg font-bold text-slate-800">Efetivo da Obra</h2>
-            <p className="text-xs text-muted-foreground">{totGeral} pessoa(s) — CLT e Terceiros alocados</p>
+            <p className="text-xs text-muted-foreground">{totGeral} pessoa(s) — CLT, PJ e Terceiros alocados</p>
           </div>
         </div>
         <input
@@ -2458,18 +2466,25 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
         />
       </div>
 
-      {/* KPIs CLT / Terceiros / Geral */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {/* KPIs por tipo de contrato */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Kpi label="Total CLT" value={totCLT} color="text-blue-700" icon={Users} />
+        <Kpi label="Total PJ" value={totPJ} color="text-violet-700" icon={Users} />
         <Kpi label="Total Terceiros" value={totTerc} color="text-amber-700" icon={Handshake} />
         <Kpi label="Total Geral" value={totGeral} color="text-emerald-700" icon={HardHat} />
       </div>
 
-      {/* Filtro CLT / Terceiro */}
+      {/* KPIs Direto / Indireto */}
+      <div className="grid grid-cols-2 gap-3">
+        <Kpi label="Mão de Obra Direta" value={totDireto} color="text-emerald-700" icon={HardHat} />
+        <Kpi label="Mão de Obra Indireta" value={totIndireto} color="text-slate-700" icon={Users} />
+      </div>
+
+      {/* Filtros: tipo de contrato + categoria */}
       <div className="flex items-center gap-2 flex-wrap bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-2.5">
-        {(["todos", "CLT", "Terceiro"] as const).map((k) => {
+        {(["todos", "CLT", "PJ", "Terceiro"] as const).map((k) => {
           const active = filtroTipo === k;
-          const count = k === "todos" ? totGeral : k === "CLT" ? totCLT : totTerc;
+          const count = k === "todos" ? totGeral : k === "CLT" ? totCLT : k === "PJ" ? totPJ : totTerc;
           return (
             <button
               key={k}
@@ -2479,7 +2494,24 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
               }`}
             >
               <span className="font-bold">{count}</span>
-              <span>{k === "todos" ? "Todos" : k === "CLT" ? "Apenas CLT" : "Apenas Terceiros"}</span>
+              <span>{k === "todos" ? "Todos" : k === "CLT" ? "Apenas CLT" : k === "PJ" ? "Apenas PJ" : "Apenas Terceiros"}</span>
+            </button>
+          );
+        })}
+        <span className="mx-2 h-5 w-px bg-slate-200" />
+        {(["todos", "Direto", "Indireto"] as const).map((k) => {
+          const active = filtroCat === k;
+          const count = k === "todos" ? totGeral : k === "Direto" ? totDireto : totIndireto;
+          return (
+            <button
+              key={k}
+              onClick={() => setFiltroCat(k)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all border ${
+                active ? "bg-emerald-50 text-emerald-700 border-emerald-300 shadow-sm" : "text-slate-500 hover:bg-slate-50 border-transparent"
+              }`}
+            >
+              <span className="font-bold">{count}</span>
+              <span>{k === "todos" ? "Direto + Indireto" : k === "Direto" ? "Apenas Diretos" : "Apenas Indiretos"}</span>
             </button>
           );
         })}
@@ -2496,9 +2528,11 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                 <tr>
+                  <th className="text-left px-3 py-2 text-[11px] font-semibold text-slate-500 uppercase w-12">Foto</th>
                   <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Nome</th>
                   <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Função</th>
                   <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Empresa/Setor</th>
+                  <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Categoria</th>
                   <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Tipo</th>
                   <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Status</th>
                 </tr>
@@ -2506,16 +2540,46 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
               <tbody className="divide-y divide-slate-100">
                 {lista.map((e: any, i: number) => {
                   const isTerc = e.tipo === "Terceiro";
+                  const isPJ = e.tipo === "PJ";
+                  const tipoBadge = isTerc
+                    ? "bg-amber-100 text-amber-800 border border-amber-300"
+                    : isPJ
+                      ? "bg-violet-100 text-violet-800 border border-violet-300"
+                      : "bg-blue-100 text-blue-800 border border-blue-300";
+                  const tipoLabel = isTerc ? "Terceiro" : isPJ ? "PJ" : "CLT";
+                  const cat = (e.categoria || "Direto") as "Direto" | "Indireto";
+                  const catBadge = cat === "Direto"
+                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                    : "bg-slate-200 text-slate-700 border border-slate-300";
                   return (
                     <tr key={String(e.id) + i} className="hover:bg-blue-50/30">
+                      <td className="px-3 py-2">
+                        {e.fotoUrl ? (
+                          <img
+                            src={e.fotoUrl}
+                            alt={e.nomeCompleto}
+                            className="h-9 w-9 rounded-full object-cover border border-slate-200 bg-slate-100"
+                            onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }}
+                          />
+                        ) : (
+                          <div className={`h-9 w-9 rounded-full border flex items-center justify-center text-[11px] font-bold ${
+                            isTerc ? "bg-amber-50 text-amber-700 border-amber-200" : isPJ ? "bg-violet-50 text-violet-700 border-violet-200" : "bg-blue-50 text-blue-700 border-blue-200"
+                          }`}>
+                            {iniciais(e.nomeCompleto)}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-2 font-medium text-slate-800 text-[13px]">{e.nomeCompleto}</td>
                       <td className="px-4 py-2 text-slate-600 text-[13px]">{e.funcao || e.cargo || "—"}</td>
                       <td className="px-4 py-2 text-slate-500 text-[13px]">{isTerc ? (e.empresaTerceira || "—") : (e.setor || "—")}</td>
                       <td className="px-4 py-2 text-center">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                          isTerc ? "bg-amber-100 text-amber-800 border border-amber-300" : "bg-blue-100 text-blue-800 border border-blue-300"
-                        }`}>
-                          {isTerc ? "Terceiro" : "CLT"}
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${catBadge}`}>
+                          {cat}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${tipoBadge}`}>
+                          {tipoLabel}
                         </span>
                       </td>
                       <td className="px-4 py-2 text-center">
@@ -2527,7 +2591,7 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
                   );
                 })}
                 {lista.length === 0 && (
-                  <tr><td colSpan={5} className="text-center py-10 text-slate-400 text-sm">Nenhum resultado</td></tr>
+                  <tr><td colSpan={7} className="text-center py-10 text-slate-400 text-sm">Nenhum resultado</td></tr>
                 )}
               </tbody>
             </table>
