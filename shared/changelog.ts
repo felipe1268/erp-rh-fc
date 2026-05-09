@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1474,
+    titulo: "Portal do Cliente — Bugfix: 'Ocorreu um erro inesperado' ao abrir a aba Efetivo (STATUS_COLORS/STATUS_LABELS undefined)",
+    descricao: "A aba 'Efetivo' do Portal do Cliente quebrava com tela 'Ocorreu um erro inesperado' assim que carregava. Causa: o componente AbaEfetivo referenciava as constantes STATUS_COLORS e STATUS_LABELS para colorir o badge de status (Ativo, Aviso, Férias, Afastado, etc.) mas essas constantes nunca foram definidas no arquivo, gerando TypeError ao tentar fazer STATUS_COLORS[e.effectiveStatus] no render. Correção: definidas as duas constantes no escopo do arquivo, com mapeamento de cores e rótulos para todos os status conhecidos (Ativo verde, Aviso âmbar, Férias azul, Afastado roxo, Atestado rosa, Desligado/Demitido cinza). Aba volta a funcionar normalmente.",
+    tipo: "bugfix",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 22:00:00",
+  },
+  {
     version: 1473,
     titulo: "Portal do Cliente — Bugfix CRÍTICO: Avanço Físico Previsto agora bate EXATAMENTE com o módulo Planejamento (1,84% e não 2,19%)",
     descricao: "O Portal do Cliente mostrava 2,19% de Previsto enquanto o módulo Planejamento interno (REFIS) mostrava 1,84% para a mesma obra/semana. Causa REAL: o backend do portal usava uma regra a mais que o módulo interno — aplicava 'pesos iguais' quando MENOS DE 20% das atividades tinham peso financeiro cadastrado, enquanto o módulo interno (calcPesoTotal em PlanejamentoDetalhe.tsx) só usa 'pesos iguais' quando NENHUMA atividade tem peso (pesoBruto === 0). Como a obra REVTE-CIVIL tem várias atividades sem peso (mas algumas têm), o portal caía no modo 'pesos iguais' e calculava 2,19%, enquanto o interno respeitava o peso financeiro real e calculava 1,84%. Correção: removido o limiar de <20% tanto no cálculo do KPI principal (linha ~1197) quanto no cálculo da Curva S Planejada (linha ~1326). Agora portal e interno usam EXATAMENTE a mesma fórmula. Junto com as correções das Rev. 1470/1471 (arredondamento toFixed), os números do portal agora batem 100% com a tela de Planejamento.",

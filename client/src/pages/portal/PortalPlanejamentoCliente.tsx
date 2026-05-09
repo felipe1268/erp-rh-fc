@@ -2362,6 +2362,27 @@ function AbaCaminhoCritico({ criticas }: { criticas: any[] }) {
 }
 
 // ─────────────────────── ABA: EFETIVO (CLT + Terceiros) ──────────────────
+const STATUS_COLORS: Record<string, string> = {
+  Ativo: "bg-emerald-100 text-emerald-700 border border-emerald-300",
+  Aviso: "bg-amber-100 text-amber-800 border border-amber-300",
+  Ferias: "bg-blue-100 text-blue-700 border border-blue-300",
+  Férias: "bg-blue-100 text-blue-700 border border-blue-300",
+  Afastado: "bg-purple-100 text-purple-700 border border-purple-300",
+  Atestado: "bg-rose-100 text-rose-700 border border-rose-300",
+  Desligado: "bg-slate-200 text-slate-600 border border-slate-300",
+  Demitido: "bg-slate-200 text-slate-600 border border-slate-300",
+};
+const STATUS_LABELS: Record<string, string> = {
+  Ativo: "Ativo",
+  Aviso: "Aviso Prévio",
+  Ferias: "Férias",
+  Férias: "Férias",
+  Afastado: "Afastado",
+  Atestado: "Atestado",
+  Desligado: "Desligado",
+  Demitido: "Demitido",
+};
+
 function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
   const { data: equipeRaw = [], isLoading } = trpc.portalExterno.cliente.efetivoObra.useQuery(
     { token, obraId },
