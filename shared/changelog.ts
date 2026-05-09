@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1560,
+    titulo: "Portal do Cliente — RH/Docs: KPIs de Treinamentos com controle de validade",
+    descricao: "O Portal RH/Controle de Documentos agora tem uma segunda fileira de KPIs específica para Treinamentos: 'Trein. Vigente' (todos os treinamentos do funcionário estão dentro da validade), 'Trein. Vencido' (tem ao menos 1 treinamento vencido) e 'Sem Treinamento'. Os 3 cards são clicáveis e filtram a lista de forma independente do filtro de ASO. Na coluna Treinamentos da tabela, além da contagem de vigentes (verde), agora aparece um selo vermelho com a quantidade de treinamentos vencidos quando houver, e a etiqueta 'sem treinamento' quando o funcionário não tiver nenhum cadastrado. Backend retorna treinVigente/treinVencido/semTreinamento e trainStatus por funcionário.",
+    tipo: 'novo',
+    modulos: 'Portal do Cliente, RH, SST',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 01:30:00',
+  },
+  {
     version: 1559,
     titulo: "Portal do Cliente — RH/Docs: treinamentos vencidos em vermelho",
     descricao: "Alinhamento com a aba Efetivo do Planejamento. No Portal do Cliente → RH/Controle de Documentos, treinamentos com a data de validade já passada agora aparecem em vermelho com a palavra 'venceu' (antes mostrava só 'val. dd/MM/aaaa' em cinza, sem deixar claro que estava vencido).",

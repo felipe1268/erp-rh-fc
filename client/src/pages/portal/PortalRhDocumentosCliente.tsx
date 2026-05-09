@@ -44,10 +44,12 @@ export default function PortalRhDocumentosCliente() {
   );
 
   const funcionarios = (data?.funcionarios || []) as any[];
-  const totais = data?.totais || { funcionarios: 0, asoVigente: 0, asoVencido: 0, semAso: 0 };
+  const totais = data?.totais || { funcionarios: 0, asoVigente: 0, asoVencido: 0, semAso: 0, treinVigente: 0, treinVencido: 0, semTreinamento: 0 };
 
   const [busca, setBusca] = useState("");
   const [filtroAso, setFiltroAso] = useState<"todos" | "vigente" | "vencido" | "sem_aso">("todos");
+  // Rev. 1560 — filtro independente por situação de treinamento.
+  const [filtroTrein, setFiltroTrein] = useState<"todos" | "treinamento_vigente" | "treinamento_vencido" | "sem_treinamento">("todos");
   const [exp, setExp] = useState<Record<number, boolean>>({});
   const [fotoZoom, setFotoZoom] = useState<{ url: string; nome: string } | null>(null);
   // Rev. 1555 — visualizador de PDF inline (sem download).
@@ -64,25 +66,33 @@ export default function PortalRhDocumentosCliente() {
   const lista = useMemo(() => {
     let l = funcionarios;
     if (filtroAso !== "todos") l = l.filter((f) => f.asoStatus === filtroAso);
+    if (filtroTrein !== "todos") l = l.filter((f) => f.trainStatus === filtroTrein);
     if (busca) {
       const q = busca.toLowerCase();
       l = l.filter((f) => (f.nome || "").toLowerCase().includes(q) || (f.funcao || "").toLowerCase().includes(q));
     }
     return [...l].sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
-  }, [funcionarios, filtroAso, busca]);
+  }, [funcionarios, filtroAso, filtroTrein, busca]);
 
   // Rev. 1557 — KPIs viraram botões de filtro. Clicar alterna o filtro
   // (clicou de novo no ativo → volta pra "todos"). Visual: ring + leve
   // bg colorido quando ativo; hover sutil quando inativo.
-  const Kpi = ({ label, value, color, icon: Icon, filterKey }: any) => {
-    const ativo = filtroAso === filterKey;
+  // Rev. 1560 — Kpi genérico: cada card pode operar em 2 grupos de filtro
+  // independentes ("aso" ou "trein"). Funcionários é o card "todos" do
+  // grupo ASO (limpa só o filtro de ASO).
+  const Kpi = ({ label, value, color, icon: Icon, filterKey, group = "aso" }: any) => {
+    const ativo = group === "aso" ? filtroAso === filterKey : filtroTrein === filterKey;
     const ringClr = color.replace("text-", "ring-").replace("-700", "-400").replace("-600", "-400");
     const bgSoft = color.replace("text-", "bg-").replace("-700", "-50").replace("-600", "-50");
     const iconBg = color.replace("text-", "bg-").replace("-700", "-100").replace("-600", "-100");
+    const onClick = () => {
+      if (group === "aso") setFiltroAso((cur) => (cur === filterKey ? "todos" : filterKey));
+      else setFiltroTrein((cur) => (cur === filterKey ? "todos" : filterKey));
+    };
     return (
       <button
         type="button"
-        onClick={() => setFiltroAso((cur) => (cur === filterKey ? "todos" : filterKey))}
+        onClick={onClick}
         className={`text-left bg-white rounded-xl border shadow-sm px-4 py-3 transition cursor-pointer w-full
           ${ativo ? `${bgSoft} border-transparent ring-2 ${ringClr}` : "border-slate-200 hover:border-slate-300 hover:shadow-md"}`}
         aria-pressed={ativo}
@@ -139,12 +149,29 @@ export default function PortalRhDocumentosCliente() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
         <PortalPrintHeader obra={obra} titulo="RH / Controle de Documentos" />
-        {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Kpi label="Funcionários" value={totais.funcionarios} color="text-blue-700" icon={Users} filterKey="todos" />
-          <Kpi label="ASO Vigente" value={totais.asoVigente} color="text-emerald-700" icon={FileCheck2} filterKey="vigente" />
-          <Kpi label="ASO Vencido" value={totais.asoVencido} color="text-rose-700" icon={FileX2} filterKey="vencido" />
-          <Kpi label="Sem ASO" value={totais.semAso} color="text-slate-700" icon={FileWarning} filterKey="sem_aso" />
+        {/* KPIs — ASO */}
+        <div>
+          <p className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1.5 flex items-center gap-1.5">
+            <FileCheck2 className="h-3 w-3" /> ASO
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Kpi label="Funcionários" value={totais.funcionarios} color="text-blue-700" icon={Users} filterKey="todos" group="aso" />
+            <Kpi label="ASO Vigente" value={totais.asoVigente} color="text-emerald-700" icon={FileCheck2} filterKey="vigente" group="aso" />
+            <Kpi label="ASO Vencido" value={totais.asoVencido} color="text-rose-700" icon={FileX2} filterKey="vencido" group="aso" />
+            <Kpi label="Sem ASO" value={totais.semAso} color="text-slate-700" icon={FileWarning} filterKey="sem_aso" group="aso" />
+          </div>
+        </div>
+
+        {/* KPIs — Treinamentos (Rev. 1560) */}
+        <div>
+          <p className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider mb-1.5 flex items-center gap-1.5">
+            <GraduationCap className="h-3 w-3" /> Treinamentos
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            <Kpi label="Trein. Vigente" value={totais.treinVigente} color="text-emerald-700" icon={GraduationCap} filterKey="treinamento_vigente" group="trein" />
+            <Kpi label="Trein. Vencido" value={totais.treinVencido} color="text-rose-700" icon={FileX2} filterKey="treinamento_vencido" group="trein" />
+            <Kpi label="Sem Treinamento" value={totais.semTreinamento} color="text-slate-700" icon={FileWarning} filterKey="sem_treinamento" group="trein" />
+          </div>
         </div>
 
         {/* Filtros */}
@@ -242,9 +269,19 @@ export default function PortalRhDocumentosCliente() {
                           )}
                         </td>
                         <td className="px-4 py-2 text-center">
-                          <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-slate-700">
-                            <GraduationCap className="h-3.5 w-3.5 text-emerald-600" /> {f.treinamentosVigentes}
-                          </span>
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-slate-700" title="Treinamentos vigentes">
+                              <GraduationCap className="h-3.5 w-3.5 text-emerald-600" /> {f.treinamentosVigentes}
+                            </span>
+                            {f.treinamentosVencidos > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded-full" title="Treinamentos vencidos">
+                                <FileX2 className="h-3 w-3" /> {f.treinamentosVencidos}
+                              </span>
+                            )}
+                          </div>
+                          {f.trainStatus === "sem_treinamento" && (
+                            <p className="text-[9.5px] text-slate-400 mt-0.5">sem treinamento</p>
+                          )}
                         </td>
                       </tr>
                       {expanded && (

@@ -1779,6 +1779,17 @@ export const portalExternoRouter = router({
         const trains = trainMap.get(e.id) || [];
         const asoStatus = aso ? (aso.dataValidade && aso.dataValidade < today ? "vencido" : "vigente") : "sem_aso";
         const trainsVigentes = trains.filter((t: any) => !t.dataValidade || t.dataValidade >= today);
+        const trainsVencidos = trains.filter((t: any) => t.dataValidade && t.dataValidade < today);
+        // Rev. 1560 — status agregado de treinamento por funcionário,
+        // mesmo padrão do asoStatus, pra alimentar os novos KPIs/filtros:
+        // - sem_treinamento: não tem nenhum treinamento cadastrado
+        // - treinamento_vencido: tem 1+ treinamento vencido (mesmo que tenha
+        //   outros vigentes — a obra precisa renovar)
+        // - treinamento_vigente: tem treinamentos e nenhum vencido
+        const trainStatus: "sem_treinamento" | "treinamento_vencido" | "treinamento_vigente" =
+          trains.length === 0 ? "sem_treinamento"
+          : trainsVencidos.length > 0 ? "treinamento_vencido"
+          : "treinamento_vigente";
         return {
           id: e.id,
           nome: e.nomeCompleto,
@@ -1793,11 +1804,16 @@ export const portalExternoRouter = router({
           } : null,
           asoStatus,
           treinamentosVigentes: trainsVigentes.length,
-          treinamentos: trains.slice(0, 10).map((t: any) => ({
+          treinamentosVencidos: trainsVencidos.length,
+          trainStatus,
+          treinamentos: trains.slice(0, 20).map((t: any) => ({
             id: t.id,
             nome: t.nome, norma: t.norma,
             dataRealizacao: t.dataRealizacao, dataValidade: t.dataValidade,
             statusTreinamento: t.statusTreinamento,
+            // Rev. 1560 — status efetivo (vencido/vigente) calculado no
+            // servidor pra garantir consistência com os KPIs.
+            status: (t.dataValidade && t.dataValidade < today) ? "vencido" : "vigente",
             temPdf: !!t.certificadoUrl,
           })),
         };
@@ -1808,6 +1824,10 @@ export const portalExternoRouter = router({
         asoVigente: funcionarios.filter(f => f.asoStatus === "vigente").length,
         asoVencido: funcionarios.filter(f => f.asoStatus === "vencido").length,
         semAso: funcionarios.filter(f => f.asoStatus === "sem_aso").length,
+        // Rev. 1560 — totais de treinamento (alinhado com aba SST do Planejamento).
+        treinVigente: funcionarios.filter(f => f.trainStatus === "treinamento_vigente").length,
+        treinVencido: funcionarios.filter(f => f.trainStatus === "treinamento_vencido").length,
+        semTreinamento: funcionarios.filter(f => f.trainStatus === "sem_treinamento").length,
       };
       return { funcionarios, totais };
     }),
