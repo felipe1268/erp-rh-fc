@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1569,
+    titulo: "Portal do Cliente — Avaliação NPS configurável (mês/ano), cancelar pelo Master e perguntas de Equipe, Empresa e Gestor",
+    descricao: "Pacote de melhorias na pesquisa de satisfação anônima do Portal do Cliente: (1) Admin Master pode cancelar uma avaliação registrada — o cancelamento preserva o registro no banco para auditoria (carimbado com nome do Master e motivo), exclui a avaliação dos cálculos de NPS/médias e libera o usuário-cliente a enviar uma nova avaliação no mesmo período. (2) Periodicidade da avaliação agora é configurável por empresa: mês a mês (padrão) ou ano a ano — afeta o limite anônimo, as mensagens do portal do cliente e o agrupamento. (3) Visão por período no painel admin: cards e tabela mostram NPS/respostas/média por mês ou por ano (toggle). (4) Novas perguntas no formulário do cliente — bloco Equipe FC (nota + texto livre), bloco Gestor responsável (nota + nome opcional + texto livre), bloco Empresa FC (nota + texto livre) e bloco Obra (andamento, prazo, qualidade); a pergunta Recomendaria a FC já existia e agora aparece num card próprio do painel admin (Sim · Talvez · Não). (5) Cards de avaliação no painel admin mostram badges com todas as notas detalhadas e os comentários por bloco, com botão de cancelar visível apenas para Admin Master.",
+    tipo: 'feature',
+    modulos: 'Portal do Cliente, Administração',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 06:30:00',
+  },
+  {
     version: 1568,
     titulo: "Curva S — Tendência: trava de fase inicial (PMBOK / Earned Schedule)",
     descricao: "O banner de Tendência × Prazo Contratual estava emitindo alertas alarmistas (ex.: 'Crítico · 138 dias de atraso projetado · ação corretiva imediata') em obras recém-iniciadas — caso típico de 1,38% realizado vs 1,84% previsto, em que o SPI puro extrapola conclusões absurdas. Pela literatura clássica de planejamento (PMBOK e Earned Schedule de Walt Lipke, 2003), o SPI é estatisticamente instável quando o avanço previsto está abaixo de ~20% (e se distorce para 1,0 acima de ~80%). Agora, enquanto o avanço previsto até hoje for < 20%, mostramos um banner azul informativo 'Fase inicial · SPI X.XX (referência)' com previsto/realizado, SEM extrapolar ETA nem classificar como crítico. Acima de 20% a projeção clássica continua valendo. Aplicado tanto na tela interna do Planejamento quanto no Portal do Cliente.",

@@ -612,7 +612,23 @@ Regras:
           )`);
           await db.execute(sql`ALTER TABLE cliente_avaliacao_marcacoes DROP COLUMN IF EXISTS marcado_em`).catch(() => {});
           await db.execute(sql`CREATE INDEX IF NOT EXISTS cam_anomes ON cliente_avaliacao_marcacoes (ano_mes)`);
-          console.log(`[SyncSchema+] Tabelas Portal Cliente (comentarios + avaliacoes) garantidas.`);
+          // Rev. 1569 — novas perguntas (Empresa / Gestor), comentários por bloco,
+          // período da avaliação (YYYY-MM ou YYYY) e cancelamento pelo Admin Master.
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_empresa INTEGER`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_gestor INTEGER`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS comentario_equipe TEXT`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS comentario_empresa TEXT`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS comentario_gestor TEXT`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS gestor_nome VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS ano_periodo VARCHAR(7)`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS cancelada_em TIMESTAMP WITHOUT TIME ZONE`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS cancelada_por VARCHAR(255)`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS portal_cliente_config (
+            company_id INTEGER PRIMARY KEY,
+            periodicidade VARCHAR(8) NOT NULL DEFAULT 'mensal',
+            updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+          )`);
+          console.log(`[SyncSchema+] Tabelas Portal Cliente (comentarios + avaliacoes + config) garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA cliente_comentarios/avaliacoes:`, e?.message || e); }
 
         try {

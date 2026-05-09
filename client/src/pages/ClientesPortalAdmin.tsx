@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,15 +12,16 @@ import { toast } from "sonner";
 import {
   Mail, KeyRound, Send, Search, MessageSquare, Star,
   Loader2, ShieldCheck, CheckCircle2, AlertCircle, Copy, Reply,
-  Smile, Frown, TrendingUp, Users, Plus, Trash2, RefreshCw, UserPlus,
+  Smile, Frown, Meh, TrendingUp, Users, Plus, Trash2, RefreshCw, UserPlus,
   Lock, UnlockKeyhole, SlidersHorizontal, ExternalLink, Layers,
+  Building2, ThumbsUp, X, CalendarDays,
 } from "lucide-react";
 import {
   PORTAL_CLIENTE_ABAS, parseAbasLiberadas, ABA_OBRIGATORIA, type PortalClienteAbaKey,
   PORTAL_CLIENTE_MODULOS, parseModulosLiberados, MODULO_OBRIGATORIO, type PortalClienteModuloKey,
 } from "@shared/portalClienteAbas";
 
-const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
+const fmtBR = (s?: string | null) => (s ? s.split(/[T ]/)[0].split("-").reverse().join("/") : "—");
 const fmtCNPJ = (v?: string) => {
   if (!v) return "";
   const d = v.replace(/\D/g, "");
@@ -37,10 +39,45 @@ export default function ClientesPortalAdmin() {
   const [busca, setBusca] = useState("");
 
   const utils = trpc.useUtils();
+  const { user } = useAuth();
+  const isMaster = user?.role === "admin_master";
   const { data: clientesList = [], isLoading: loadingClientes } = trpc.clientes.list.useQuery({ companyId }, { enabled: !!companyId });
   const { data: acessos = [] } = trpc.portalExterno.admin.listarAcessosCliente.useQuery({ companyId }, { enabled: !!companyId });
   const { data: comentarios = [], isLoading: loadingCom } = trpc.portalExterno.admin.listarComentariosCliente.useQuery({ companyId }, { enabled: !!companyId && tab === "comentarios" });
-  const { data: dashAval, isLoading: loadingAval } = trpc.portalExterno.admin.dashboardAvaliacoesCliente.useQuery({ companyId }, { enabled: !!companyId && tab === "avaliacoes" });
+  // Rev. 1569 — agrupamento por período (mês/ano) controlado pela UI
+  const [agruparPor, setAgruparPor] = useState<"mes" | "ano">("mes");
+  const { data: dashAval, isLoading: loadingAval } = trpc.portalExterno.admin.dashboardAvaliacoesCliente.useQuery(
+    { companyId, agruparPor },
+    { enabled: !!companyId && tab === "avaliacoes" },
+  );
+  const { data: portalCfg } = trpc.portalExterno.admin.getPortalClienteConfig.useQuery(
+    { companyId }, { enabled: !!companyId && tab === "avaliacoes" },
+  );
+  const periodicidadeAtual = portalCfg?.periodicidade ?? "mensal";
+  const setPeriodicidadeMut = trpc.portalExterno.admin.setPortalClienteConfig.useMutation({
+    onSuccess: () => {
+      toast.success("Periodicidade atualizada");
+      utils.portalExterno.admin.getPortalClienteConfig.invalidate();
+      utils.portalExterno.admin.dashboardAvaliacoesCliente.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  // Rev. 1569 — cancelar avaliação (Admin Master)
+  const cancelarAvalMut = trpc.portalExterno.admin.cancelarAvaliacaoCliente.useMutation({
+    onSuccess: () => {
+      toast.success("Avaliação cancelada. O cliente já pode registrar uma nova.");
+      utils.portalExterno.admin.dashboardAvaliacoesCliente.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const cancelarAvaliacao = (a: any) => {
+    const motivo = window.prompt(
+      "Cancelar esta avaliação?\n\nIsso libera o cliente para enviar uma nova avaliação no mesmo período.\n\nMotivo (opcional):",
+      "",
+    );
+    if (motivo === null) return;
+    cancelarAvalMut.mutate({ id: a.id, companyId, motivo: motivo || undefined });
+  };
 
   // Map cliente -> lista de acessos (múltiplos)
   const acessosPorCliente = useMemo(() => {
@@ -330,7 +367,55 @@ export default function ClientesPortalAdmin() {
 
         {/* TAB AVALIAÇÕES */}
         {tab === "avaliacoes" && (
-          <div>
+          <div className="space-y-4">
+            {/* Rev. 1569 — Configuração de periodicidade + agrupador de período */}
+            <div className="bg-white border rounded-xl p-4 flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-slate-500" />
+                <span className="text-sm font-medium text-slate-700">Periodicidade da avaliação:</span>
+                <div className="inline-flex border rounded-lg overflow-hidden">
+                  {[
+                    { v: "mensal", label: "Mês a mês" },
+                    { v: "anual", label: "Ano a ano" },
+                  ].map((o) => {
+                    const sel = periodicidadeAtual === o.v;
+                    return (
+                      <button key={o.v}
+                        onClick={() => setPeriodicidadeMut.mutate({ companyId, periodicidade: o.v as "mensal" | "anual" })}
+                        disabled={setPeriodicidadeMut.isPending || !isMaster}
+                        title={isMaster ? "" : "Apenas Admin Master pode alterar a periodicidade"}
+                        className={`px-3 py-1.5 text-xs font-semibold transition ${sel ? "bg-blue-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"} ${!isMaster ? "opacity-60 cursor-not-allowed" : ""}`}
+                      >
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="text-xs text-slate-400">
+                  Limite anônimo de 1 envio por {periodicidadeAtual === "anual" ? "ano" : "mês"} por usuário.
+                  {!isMaster && " (alteração restrita ao Admin Master)"}
+                </span>
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-sm text-slate-700">Visualizar por:</span>
+                <div className="inline-flex border rounded-lg overflow-hidden">
+                  {[
+                    { v: "mes", label: "Mês" },
+                    { v: "ano", label: "Ano" },
+                  ].map((o) => {
+                    const sel = agruparPor === o.v;
+                    return (
+                      <button key={o.v} onClick={() => setAgruparPor(o.v as "mes" | "ano")}
+                        className={`px-3 py-1.5 text-xs font-semibold transition ${sel ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                      >
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
             {loadingAval ? <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div> : !dashAval || dashAval.total === 0 ? (
               <div className="bg-white border rounded-xl p-12 text-center text-slate-400">
                 <Star className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -364,12 +449,40 @@ export default function ClientesPortalAdmin() {
                   </div>
                 </div>
 
+                {/* Recomendação (clássica NPS: Sim · Talvez · Não) */}
+                {dashAval.recomendacao && dashAval.recomendacao.total > 0 && (
+                  <div className="bg-white border rounded-xl p-4">
+                    <h3 className="font-semibold text-slate-800 mb-3">Recomendaria a FC para outras empresas?</h3>
+                    <div className="grid grid-cols-3 gap-3 text-sm">
+                      <div className="rounded-lg border-2 border-emerald-200 bg-emerald-50 p-3 text-center">
+                        <Smile className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
+                        <div className="text-2xl font-bold text-emerald-700">{dashAval.recomendacao.sim}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-emerald-700">Sim</div>
+                      </div>
+                      <div className="rounded-lg border-2 border-amber-200 bg-amber-50 p-3 text-center">
+                        <Meh className="w-5 h-5 text-amber-600 mx-auto mb-1" />
+                        <div className="text-2xl font-bold text-amber-700">{dashAval.recomendacao.talvez}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-amber-700">Talvez</div>
+                      </div>
+                      <div className="rounded-lg border-2 border-rose-200 bg-rose-50 p-3 text-center">
+                        <Frown className="w-5 h-5 text-rose-600 mx-auto mb-1" />
+                        <div className="text-2xl font-bold text-rose-700">{dashAval.recomendacao.nao}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-rose-700">Não</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="bg-white border rounded-xl p-4">
                   <h3 className="font-semibold text-slate-800 mb-3">Médias por critério (0–10)</h3>
-                  <div className="grid md:grid-cols-5 gap-3 text-sm">
+                  <div className="grid md:grid-cols-4 gap-3 text-sm">
                     {[
-                      { k: "equipe", label: "Equipe FC" }, { k: "obra", label: "Obra" },
-                      { k: "atendimento", label: "Atendimento" }, { k: "prazo", label: "Prazos" },
+                      { k: "equipe", label: "Equipe FC" },
+                      { k: "gestor", label: "Gestor responsável" },
+                      { k: "empresa", label: "Empresa FC" },
+                      { k: "obra", label: "Andamento da obra" },
+                      { k: "atendimento", label: "Atendimento" },
+                      { k: "prazo", label: "Prazos" },
                       { k: "qualidade", label: "Qualidade" },
                     ].map((c) => {
                       const v = (dashAval.medias as any)[c.k];
@@ -405,22 +518,85 @@ export default function ClientesPortalAdmin() {
                   </table>
                 </div>
 
+                {/* Rev. 1569 — Visão por período (mês/ano) */}
+                {dashAval.porPeriodo && dashAval.porPeriodo.length > 0 && (
+                  <div className="bg-white border rounded-xl p-4">
+                    <h3 className="font-semibold text-slate-800 mb-3">Por {agruparPor === "ano" ? "ano" : "mês"}</h3>
+                    <table className="w-full text-sm">
+                      <thead className="text-left text-xs uppercase text-slate-500">
+                        <tr><th className="py-2">{agruparPor === "ano" ? "Ano" : "Mês"}</th><th>Respostas</th><th>Média geral</th><th>NPS</th></tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {dashAval.porPeriodo.map((p: any, i: number) => {
+                          const label = agruparPor === "ano"
+                            ? p.periodo
+                            : (p.periodo && p.periodo.length === 7 ? p.periodo.split("-").reverse().join("/") : p.periodo);
+                          return (
+                            <tr key={i}>
+                              <td className="py-2 font-medium">{label}</td>
+                              <td>{p.respostas}</td>
+                              <td>{p.mediaGeral ?? "—"}</td>
+                              <td><Badge className={p.nps == null ? "bg-slate-400" : p.nps >= 50 ? "bg-emerald-500" : p.nps >= 0 ? "bg-amber-500" : "bg-rose-500"}>{p.nps ?? "—"}</Badge></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
                 <div className="bg-white border rounded-xl p-4">
-                  <h3 className="font-semibold text-slate-800 mb-3">Comentários anônimos recentes</h3>
+                  <h3 className="font-semibold text-slate-800 mb-3">Avaliações recebidas (mais recentes)</h3>
+                  <p className="text-xs text-slate-500 mb-3">
+                    Apenas o <b>Admin Master</b> pode cancelar uma avaliação. Cancelar libera o usuário-cliente para enviar uma nova avaliação no mesmo período.
+                    {!isMaster && " Você não tem este perfil — o botão de cancelar está oculto."}
+                  </p>
                   <div className="space-y-2">
-                    {dashAval.avaliacoes.filter((a: any) => a.comentarioPositivo || a.comentarioMelhoria).slice(0, 30).map((a: any) => (
+                    {(dashAval.avaliacoes as any[]).slice(0, 50).map((a: any) => (
                       <div key={a.id} className="border rounded-lg p-3">
-                        <div className="text-xs text-slate-500 mb-1 flex items-center gap-2">
-                          {a.obraNome && <span className="font-medium text-slate-700">{a.obraNome}</span>}
-                          <span>· {fmtBR(a.criadoEm)}</span>
-                          <span>· Nota geral: <b className={a.notaGeral >= 9 ? "text-emerald-600" : a.notaGeral <= 6 ? "text-rose-600" : "text-amber-600"}>{a.notaGeral}</b></span>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="text-xs text-slate-500 mb-1 flex items-center gap-2 flex-wrap">
+                            {a.obraNome && <span className="font-medium text-slate-700">{a.obraNome}</span>}
+                            <span>· {fmtBR(a.criadoEm)}</span>
+                            <span>· Nota geral: <b className={a.notaGeral >= 9 ? "text-emerald-600" : a.notaGeral <= 6 ? "text-rose-600" : "text-amber-600"}>{a.notaGeral ?? "—"}</b></span>
+                            {a.recomendaria != null && (
+                              <Badge className={a.recomendaria === 2 ? "bg-emerald-500" : a.recomendaria === 1 ? "bg-amber-500" : "bg-rose-500"}>
+                                {a.recomendaria === 2 ? "Recomenda" : a.recomendaria === 1 ? "Talvez recomenda" : "Não recomenda"}
+                              </Badge>
+                            )}
+                            {a.gestorNome && <span className="text-slate-600">· Gestor: <b>{a.gestorNome}</b></span>}
+                          </div>
+                          {isMaster && (
+                            <button
+                              onClick={() => cancelarAvaliacao(a)}
+                              disabled={cancelarAvalMut.isPending}
+                              title="Cancelar avaliação (Admin Master) — libera nova avaliação no mesmo período"
+                              className="shrink-0 inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-rose-200 text-rose-600 hover:bg-rose-50"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Cancelar
+                            </button>
+                          )}
                         </div>
-                        {a.comentarioPositivo && <p className="text-sm text-emerald-700"><Smile className="inline w-4 h-4 mr-1" />{a.comentarioPositivo}</p>}
+                        {/* Notas detalhadas em badges compactos */}
+                        <div className="flex flex-wrap gap-1 mt-1 text-[11px] text-slate-600">
+                          {[
+                            { k: "notaEquipe", l: "Equipe" }, { k: "notaGestor", l: "Gestor" },
+                            { k: "notaEmpresa", l: "Empresa" }, { k: "notaObra", l: "Obra" },
+                            { k: "notaAtendimento", l: "Atend." }, { k: "notaPrazo", l: "Prazo" },
+                            { k: "notaQualidade", l: "Qualidade" },
+                          ].filter((c) => a[c.k] != null).map((c) => (
+                            <span key={c.k} className="px-1.5 py-0.5 rounded bg-slate-100 border">{c.l}: <b>{a[c.k]}</b></span>
+                          ))}
+                        </div>
+                        {a.comentarioPositivo && <p className="text-sm text-emerald-700 mt-1"><Smile className="inline w-4 h-4 mr-1" />{a.comentarioPositivo}</p>}
                         {a.comentarioMelhoria && <p className="text-sm text-rose-700 mt-1"><Frown className="inline w-4 h-4 mr-1" />{a.comentarioMelhoria}</p>}
+                        {a.comentarioEquipe && <p className="text-sm text-blue-700 mt-1"><Users className="inline w-4 h-4 mr-1" /><b>Equipe:</b> {a.comentarioEquipe}</p>}
+                        {a.comentarioGestor && <p className="text-sm text-amber-700 mt-1"><Star className="inline w-4 h-4 mr-1" /><b>Gestor:</b> {a.comentarioGestor}</p>}
+                        {a.comentarioEmpresa && <p className="text-sm text-emerald-700 mt-1"><Building2 className="inline w-4 h-4 mr-1" /><b>Empresa:</b> {a.comentarioEmpresa}</p>}
                       </div>
                     ))}
-                    {dashAval.avaliacoes.filter((a: any) => a.comentarioPositivo || a.comentarioMelhoria).length === 0 && (
-                      <p className="text-sm text-slate-400 text-center py-4">Nenhum comentário escrito ainda.</p>
+                    {(dashAval.avaliacoes as any[]).length === 0 && (
+                      <p className="text-sm text-slate-400 text-center py-4">Nenhuma avaliação registrada ainda.</p>
                     )}
                   </div>
                 </div>

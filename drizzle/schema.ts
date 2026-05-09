@@ -3999,15 +3999,35 @@ export const clienteAvaliacoes = pgTable("cliente_avaliacoes", {
   notaPrazo: integer("nota_prazo"),
   notaQualidade: integer("nota_qualidade"),
   notaGeral: integer("nota_geral"), // 0-10 — pergunta NPS
+  // Rev. 1569 — perguntas adicionais (Empresa / Gestor)
+  notaEmpresa: integer("nota_empresa"),
+  notaGestor: integer("nota_gestor"),
   comentarioPositivo: text("comentario_positivo"),
   comentarioMelhoria: text("comentario_melhoria"),
+  // Rev. 1569 — comentários por bloco
+  comentarioEquipe: text("comentario_equipe"),
+  comentarioEmpresa: text("comentario_empresa"),
+  comentarioGestor: text("comentario_gestor"),
+  gestorNome: varchar("gestor_nome", { length: 255 }),
   recomendaria: smallint(), // 0=não, 1=talvez, 2=sim
+  // Rev. 1569 — período da avaliação (YYYY-MM ou YYYY) e cancelamento pelo Master
+  anoPeriodo: varchar("ano_periodo", { length: 7 }),
+  canceladaEm: timestamp("cancelada_em", { mode: "string" }),
+  canceladaPor: varchar("cancelada_por", { length: 255 }),
   criadoEm: timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [
   index("ca_company").on(t.companyId),
   index("ca_obra").on(t.obraId),
   index("ca_data").on(t.criadoEm),
 ]);
+
+// Rev. 1569 — Configuração do Portal do Cliente por empresa
+// (periodicidade da avaliação anônima: mensal | anual)
+export const portalClienteConfig = pgTable("portal_cliente_config", {
+  companyId: integer("company_id").primaryKey().references(() => companies.id, { onDelete: "cascade" }),
+  periodicidade: varchar("periodicidade", { length: 8 }).notNull().default("mensal"), // 'mensal' | 'anual'
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+});
 
 
 // ============================================================

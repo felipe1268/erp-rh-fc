@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 import {
   Building2, LogOut, MessageSquare, Star, Send, MapPin,
-  CheckCircle2, ShieldCheck, Smile, Meh, Frown, Sparkles,
+  CheckCircle2, ShieldCheck, Smile, Meh, Frown, Sparkles, Users,
 } from "lucide-react";
 
 // Rev. 1550 — fmtBR robusto: aceita "YYYY-MM-DD", "YYYY-MM-DDTHH:mm:ss"
@@ -112,12 +112,22 @@ export default function PortalDashboardCliente() {
   const [aval, setAval] = useState<{
     obraId: number | null;
     notaEquipe: number | null; notaObra: number | null; notaAtendimento: number | null;
-    notaPrazo: number | null; notaQualidade: number | null; notaGeral: number | null;
-    comentarioPositivo: string; comentarioMelhoria: string; recomendaria: number | null;
+    notaPrazo: number | null; notaQualidade: number | null;
+    notaEmpresa: number | null; notaGestor: number | null;
+    notaGeral: number | null;
+    comentarioPositivo: string; comentarioMelhoria: string;
+    comentarioEquipe: string; comentarioEmpresa: string; comentarioGestor: string;
+    gestorNome: string;
+    recomendaria: number | null;
   }>({
     obraId: null, notaEquipe: null, notaObra: null, notaAtendimento: null,
-    notaPrazo: null, notaQualidade: null, notaGeral: null,
-    comentarioPositivo: "", comentarioMelhoria: "", recomendaria: null,
+    notaPrazo: null, notaQualidade: null,
+    notaEmpresa: null, notaGestor: null,
+    notaGeral: null,
+    comentarioPositivo: "", comentarioMelhoria: "",
+    comentarioEquipe: "", comentarioEmpresa: "", comentarioGestor: "",
+    gestorNome: "",
+    recomendaria: null,
   });
   const [avaliado, setAvaliado] = useState(false);
   // Rev. 1551 — Lembrete mensal anônimo: o backend devolve apenas se a
@@ -165,12 +175,23 @@ export default function PortalDashboardCliente() {
       notaAtendimento: aval.notaAtendimento ?? undefined,
       notaPrazo: aval.notaPrazo ?? undefined,
       notaQualidade: aval.notaQualidade ?? undefined,
+      notaEmpresa: aval.notaEmpresa ?? undefined,
+      notaGestor: aval.notaGestor ?? undefined,
       notaGeral: aval.notaGeral,
       comentarioPositivo: aval.comentarioPositivo || undefined,
       comentarioMelhoria: aval.comentarioMelhoria || undefined,
+      comentarioEquipe: aval.comentarioEquipe || undefined,
+      comentarioEmpresa: aval.comentarioEmpresa || undefined,
+      comentarioGestor: aval.comentarioGestor || undefined,
+      gestorNome: aval.gestorNome || undefined,
       recomendaria: aval.recomendaria ?? undefined,
     });
   };
+  // Rev. 1569 — periodicidade configurável (mensal/anual)
+  const periodicidade = (podeAvaliarQ.data?.periodicidade as "mensal" | "anual" | undefined) ?? "mensal";
+  const labelPer = periodicidade === "anual" ? "ano" : "mês";
+  const labelPerCap = periodicidade === "anual" ? "Ano" : "Mês";
+  const labelUmaPor = periodicidade === "anual" ? "uma avaliação por ano" : "uma avaliação por mês";
 
   const logout = () => { localStorage.clear(); navigate("/portal/login"); };
 
@@ -229,17 +250,17 @@ export default function PortalDashboardCliente() {
                 <Star className="w-6 h-6 text-amber-600" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-800">Avaliação mensal pendente</h3>
+                <h3 className="text-lg font-bold text-slate-800">Avaliação {periodicidade === "anual" ? "anual" : "mensal"} pendente</h3>
                 <p className="text-sm text-slate-500 mt-0.5">Sua opinião é essencial para a evolução da FC Engenharia.</p>
               </div>
             </div>
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-4 flex items-start gap-2">
               <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
               <p className="text-xs text-emerald-900">
-                <b>100% anônima.</b> Não armazenamos sua identidade, CNPJ ou IP. Apenas registramos que você já enviou a avaliação deste mês — sem ligar isso ao conteúdo das respostas (LGPD).
+                <b>100% anônima.</b> Não armazenamos sua identidade, CNPJ ou IP. Apenas registramos que você já enviou a avaliação deste {labelPer} — sem ligar isso ao conteúdo das respostas (LGPD).
               </p>
             </div>
-            <p className="text-sm text-slate-700 mb-5">Leva menos de 1 minuto. Você pode preencher agora ou depois — só lembre-se: <b>uma avaliação por mês</b>.</p>
+            <p className="text-sm text-slate-700 mb-5">Leva menos de 1 minuto. Você pode preencher agora ou depois — só lembre-se: <b>{labelUmaPor}</b>.</p>
             <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
               <Button variant="outline" onClick={() => { setLembreteAberto(false); setLembreteDispensado(true); }}>
                 Mais tarde
@@ -371,16 +392,17 @@ export default function PortalDashboardCliente() {
             {jaAvaliouEsteMes && !avaliado ? (
               <div className="bg-white border rounded-2xl p-12 text-center">
                 <ShieldCheck className="w-20 h-20 text-emerald-500 mx-auto mb-4" />
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">Avaliação deste mês já registrada</h2>
-                <p className="text-slate-600 mb-2">Para preservar o anonimato (LGPD), cada usuário envia apenas <b>uma avaliação por mês</b>.</p>
-                <p className="text-slate-500 text-sm">Volte no próximo mês para registrar uma nova avaliação. Obrigado!</p>
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">Avaliação deste {labelPer} já registrada</h2>
+                <p className="text-slate-600 mb-2">Para preservar o anonimato (LGPD), cada usuário envia apenas <b>{labelUmaPor}</b>.</p>
+                <p className="text-slate-500 text-sm">Volte no próximo {labelPer} para registrar uma nova avaliação. Obrigado!</p>
+                <p className="text-slate-400 text-xs mt-3">Precisa registrar uma nova agora? Solicite ao Admin Master da FC para cancelar a avaliação deste {labelPer}.</p>
               </div>
             ) : avaliado ? (
               <div className="bg-white border rounded-2xl p-12 text-center">
                 <CheckCircle2 className="w-20 h-20 text-emerald-500 mx-auto mb-4" />
                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Obrigado pela avaliação!</h2>
                 <p className="text-slate-600 mb-6">Suas respostas foram registradas <b>de forma totalmente anônima</b> e ajudarão a FC Engenharia a melhorar continuamente.</p>
-                <Button onClick={() => { setAvaliado(false); setAval({ ...aval, notaGeral: null, notaEquipe: null, notaObra: null, notaAtendimento: null, notaPrazo: null, notaQualidade: null, comentarioPositivo: "", comentarioMelhoria: "", recomendaria: null, obraId: null }); }} variant="outline">
+                <Button onClick={() => { setAvaliado(false); setAval({ ...aval, notaGeral: null, notaEquipe: null, notaObra: null, notaAtendimento: null, notaPrazo: null, notaQualidade: null, notaEmpresa: null, notaGestor: null, comentarioPositivo: "", comentarioMelhoria: "", comentarioEquipe: "", comentarioEmpresa: "", comentarioGestor: "", gestorNome: "", recomendaria: null, obraId: null }); }} variant="outline">
                   Enviar nova avaliação
                 </Button>
               </div>
@@ -412,12 +434,74 @@ export default function PortalDashboardCliente() {
                   <NotaSelector label="Nota geral (0 = péssimo · 10 = excelente) ★" value={aval.notaGeral} onChange={(n) => setAval({ ...aval, notaGeral: n })} />
                 </div>
 
-                <div className="grid md:grid-cols-2 gap-4">
-                  <NotaSelector label="Equipe FC (técnica e relacionamento)" value={aval.notaEquipe} onChange={(n) => setAval({ ...aval, notaEquipe: n })} />
-                  <NotaSelector label="Andamento da obra" value={aval.notaObra} onChange={(n) => setAval({ ...aval, notaObra: n })} />
-                  <NotaSelector label="Atendimento e comunicação" value={aval.notaAtendimento} onChange={(n) => setAval({ ...aval, notaAtendimento: n })} />
-                  <NotaSelector label="Cumprimento de prazos" value={aval.notaPrazo} onChange={(n) => setAval({ ...aval, notaPrazo: n })} />
-                  <NotaSelector label="Qualidade do serviço entregue" value={aval.notaQualidade} onChange={(n) => setAval({ ...aval, notaQualidade: n })} />
+                {/* Bloco EQUIPE FC */}
+                <div className="border rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-blue-600" />
+                    <h3 className="font-semibold text-slate-800 text-sm">Equipe FC na obra</h3>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <NotaSelector label="Equipe FC (técnica e relacionamento)" value={aval.notaEquipe} onChange={(n) => setAval({ ...aval, notaEquipe: n })} />
+                    <NotaSelector label="Atendimento e comunicação" value={aval.notaAtendimento} onChange={(n) => setAval({ ...aval, notaAtendimento: n })} />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Comentário sobre a equipe <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                    <textarea value={aval.comentarioEquipe} onChange={(e) => setAval({ ...aval, comentarioEquipe: e.target.value })}
+                      rows={2} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
+                      placeholder="Postura, técnica, segurança, organização, pontualidade..." />
+                  </div>
+                </div>
+
+                {/* Bloco GESTOR / RESPONSÁVEL */}
+                <div className="border rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Star className="w-4 h-4 text-amber-600" />
+                    <h3 className="font-semibold text-slate-800 text-sm">Gestor / Responsável FC pela obra</h3>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <NotaSelector label="Gestor responsável (liderança, decisões, proatividade)" value={aval.notaGestor} onChange={(n) => setAval({ ...aval, notaGestor: n })} />
+                    <div>
+                      <Label className="text-sm font-medium">Nome do gestor <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                      <Input value={aval.gestorNome} onChange={(e) => setAval({ ...aval, gestorNome: e.target.value })}
+                        placeholder="Ex.: Eng. João da Silva" className="mt-1" />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Como o gestor pode evoluir? <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                    <textarea value={aval.comentarioGestor} onChange={(e) => setAval({ ...aval, comentarioGestor: e.target.value })}
+                      rows={2} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
+                      placeholder="Clareza, proatividade, presença em obra, decisões técnicas..." />
+                  </div>
+                </div>
+
+                {/* Bloco EMPRESA */}
+                <div className="border rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <h3 className="font-semibold text-slate-800 text-sm">FC Engenharia (Empresa)</h3>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <NotaSelector label="Empresa FC (reputação, transparência, comunicação institucional)" value={aval.notaEmpresa} onChange={(n) => setAval({ ...aval, notaEmpresa: n })} />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Comentário sobre a Empresa <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                    <textarea value={aval.comentarioEmpresa} onChange={(e) => setAval({ ...aval, comentarioEmpresa: e.target.value })}
+                      rows={2} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
+                      placeholder="Imagem da empresa, postura institucional, processos administrativos..." />
+                  </div>
+                </div>
+
+                {/* Bloco OBRA */}
+                <div className="border rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-indigo-600" />
+                    <h3 className="font-semibold text-slate-800 text-sm">Obra / Execução</h3>
+                  </div>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <NotaSelector label="Andamento da obra" value={aval.notaObra} onChange={(n) => setAval({ ...aval, notaObra: n })} />
+                    <NotaSelector label="Cumprimento de prazos" value={aval.notaPrazo} onChange={(n) => setAval({ ...aval, notaPrazo: n })} />
+                    <NotaSelector label="Qualidade do serviço entregue" value={aval.notaQualidade} onChange={(n) => setAval({ ...aval, notaQualidade: n })} />
+                  </div>
                 </div>
 
                 <div>

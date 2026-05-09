@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb, getEquipeObra } from "../db";
-import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos } from "../../drizzle/schema";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalClienteConfig, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -620,9 +620,16 @@ export const portalExternoRouter = router({
     dashboardAvaliacoesCliente: protectedProcedure.input(z.object({
       companyId: z.number(), companyIds: z.array(z.number()).optional(),
       dataInicio: z.string().optional(), dataFim: z.string().optional(),
+      // Rev. 1569 — agrupamento opcional (mes | ano) p/ visão por período
+      agruparPor: z.enum(["mes", "ano"]).optional(),
     })).query(async ({ input }) => {
       const db = (await getDb())!;
-      const conds: any[] = [companyFilter(clienteAvaliacoes.companyId, input)];
+      // Rev. 1569 — Avaliações canceladas pelo Master ficam fora dos cálculos
+      // (mas continuam no banco para auditoria).
+      const conds: any[] = [
+        companyFilter(clienteAvaliacoes.companyId, input),
+        isNull(clienteAvaliacoes.canceladaEm),
+      ];
       if (input.dataInicio) conds.push(sql`${clienteAvaliacoes.criadoEm} >= ${input.dataInicio}`);
       if (input.dataFim)    conds.push(sql`${clienteAvaliacoes.criadoEm} <= ${input.dataFim + " 23:59:59"}`);
       const rows = await db.select().from(clienteAvaliacoes).where(and(...conds)).orderBy(desc(clienteAvaliacoes.criadoEm));
@@ -632,16 +639,29 @@ export const portalExternoRouter = router({
         if (!vals.length) return null;
         return Math.round((vals.reduce((s: number, x: number) => s + x, 0) / vals.length) * 10) / 10;
       };
+      const npsOf = (ns: number[]) => {
+        const p = ns.filter(n => n >= 9).length;
+        const d = ns.filter(n => n <= 6).length;
+        return ns.length ? Math.round(((p - d) / ns.length) * 100) : null;
+      };
+      // Recomendaria: 0=não, 1=talvez, 2=sim
+      const recVals = (rows as any[]).map(r => r.recomendaria).filter((v: any) => v !== null && v !== undefined) as number[];
+      const recomendacao = {
+        sim: recVals.filter(v => v === 2).length,
+        talvez: recVals.filter(v => v === 1).length,
+        nao: recVals.filter(v => v === 0).length,
+        total: recVals.length,
+      };
       const notas = rows.map((r: any) => r.notaGeral).filter((v: any) => v !== null && v !== undefined) as number[];
       const promotores = notas.filter(n => n >= 9).length;
       const detratores = notas.filter(n => n <= 6).length;
       const neutros = notas.filter(n => n === 7 || n === 8).length;
-      const nps = notas.length ? Math.round(((promotores - detratores) / notas.length) * 100) : null;
+      const nps = npsOf(notas);
       // Por obra
-      const porObra = new Map<string, { obraNome: string; obraId: number | null; respostas: number; mediaGeral: number; nps: number }>();
+      const porObra = new Map<string, { obraNome: string; obraId: number | null; respostas: number; mediaGeral: number; nps: number | null }>();
       for (const r of rows as any[]) {
         const key = r.obraId ? `o${r.obraId}` : `n_${r.obraNome ?? "Sem obra"}`;
-        const cur = porObra.get(key) || { obraNome: r.obraNome ?? "Sem obra", obraId: r.obraId, respostas: 0, mediaGeral: 0, nps: 0 };
+        const cur = porObra.get(key) || { obraNome: r.obraNome ?? "Sem obra", obraId: r.obraId, respostas: 0, mediaGeral: 0, nps: null };
         cur.respostas += 1;
         cur.mediaGeral += r.notaGeral ?? 0;
         porObra.set(key, cur);
@@ -649,18 +669,39 @@ export const portalExternoRouter = router({
       const obrasList = Array.from(porObra.values()).map((o) => {
         const subset = (rows as any[]).filter(r => (o.obraId ? r.obraId === o.obraId : r.obraNome === o.obraNome));
         const ns = subset.map(r => r.notaGeral).filter((v: any) => v !== null) as number[];
-        const p = ns.filter(n => n >= 9).length;
-        const d = ns.filter(n => n <= 6).length;
         return {
           obraId: o.obraId, obraNome: o.obraNome, respostas: o.respostas,
           mediaGeral: Math.round((o.mediaGeral / o.respostas) * 10) / 10,
-          nps: ns.length ? Math.round(((p - d) / ns.length) * 100) : null,
+          nps: npsOf(ns),
         };
       }).sort((a, b) => b.respostas - a.respostas);
+      // Rev. 1569 — Por período (mês ou ano). Usamos anoPeriodo (fonte de verdade do
+      // limite anônimo) e fazemos fallback para criadoEm em fuso Brasília quando o
+      // anoPeriodo não estiver preenchido (avaliações antigas).
+      const slice = input.agruparPor === "ano" ? 4 : 7;
+      const porPeriodo = new Map<string, { periodo: string; respostas: number; somaGeral: number; notas: number[] }>();
+      for (const r of rows as any[]) {
+        const ap = (r.anoPeriodo || "").trim();
+        const fallback = r.criadoEm ? String(r.criadoEm).slice(0, 10) : "";
+        const baseRaw = ap || fallback;
+        const periodo = (baseRaw || "—").slice(0, slice);
+        const cur = porPeriodo.get(periodo) || { periodo, respostas: 0, somaGeral: 0, notas: [] };
+        cur.respostas += 1;
+        cur.somaGeral += r.notaGeral ?? 0;
+        if (r.notaGeral !== null && r.notaGeral !== undefined) cur.notas.push(r.notaGeral);
+        porPeriodo.set(periodo, cur);
+      }
+      const periodos = Array.from(porPeriodo.values()).map(p => ({
+        periodo: p.periodo,
+        respostas: p.respostas,
+        mediaGeral: p.respostas ? Math.round((p.somaGeral / p.respostas) * 10) / 10 : null,
+        nps: npsOf(p.notas),
+      })).sort((a, b) => b.periodo.localeCompare(a.periodo));
       return {
         total,
         nps,
         promotores, neutros, detratores,
+        recomendacao,
         medias: {
           geral:        med("notaGeral"),
           equipe:       med("notaEquipe"),
@@ -668,10 +709,85 @@ export const portalExternoRouter = router({
           atendimento:  med("notaAtendimento"),
           prazo:        med("notaPrazo"),
           qualidade:    med("notaQualidade"),
+          empresa:      med("notaEmpresa"),
+          gestor:       med("notaGestor"),
         },
         porObra: obrasList,
+        porPeriodo: periodos,
         avaliacoes: rows.slice(0, 100),
       };
+    }),
+
+    // Rev. 1569 — Master pode CANCELAR uma avaliação registrada.
+    // Marca cancelada_em (soft-delete preservando auditoria) e remove
+    // marcações de credencial daquele período da empresa, liberando
+    // o cliente para registrar nova avaliação no mesmo período.
+    cancelarAvaliacaoCliente: protectedProcedure.input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      motivo: z.string().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode cancelar avaliações." });
+      }
+      const db = (await getDb())!;
+      const [aval] = await db.select().from(clienteAvaliacoes).where(eq(clienteAvaliacoes.id, input.id));
+      if (!aval) throw new TRPCError({ code: "NOT_FOUND", message: "Avaliação não encontrada." });
+      if (aval.companyId !== input.companyId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Avaliação não pertence à empresa selecionada." });
+      }
+      const motivo = (input.motivo || "").trim();
+      const carimbo = ctx.user.name ? `${ctx.user.name}${motivo ? " — " + motivo : ""}` : (motivo || "Admin Master");
+      await db.update(clienteAvaliacoes).set({
+        canceladaEm: new Date().toISOString().slice(0, 19).replace("T", " "),
+        canceladaPor: carimbo.slice(0, 255),
+      }).where(eq(clienteAvaliacoes.id, input.id));
+      // Libera as credenciais de cliente desta empresa para o mesmo período,
+      // permitindo nova avaliação. Como a tabela é anônima, removemos as
+      // marcações de cred_id pertencentes à empresa para o ano_periodo da
+      // avaliação cancelada (texto YYYY-MM ou YYYY).
+      const periodoLimpo = (aval.anoPeriodo || "").trim();
+      if (periodoLimpo) {
+        await db.execute(sql`
+          DELETE FROM cliente_avaliacao_marcacoes
+          WHERE ano_mes = ${periodoLimpo}
+            AND cred_id IN (
+              SELECT id FROM portal_credentials
+              WHERE company_id = ${aval.companyId} AND tipo = 'cliente'
+            )
+        `);
+      }
+      return { success: true };
+    }),
+
+    // Rev. 1569 — Configuração do Portal do Cliente (periodicidade NPS).
+    getPortalClienteConfig: protectedProcedure.input(z.object({
+      companyId: z.number(),
+    })).query(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
+      }
+      const db = (await getDb())!;
+      const [cfg] = await db.select().from(portalClienteConfig).where(eq(portalClienteConfig.companyId, input.companyId));
+      return { periodicidade: (cfg?.periodicidade === "anual" ? "anual" : "mensal") as "mensal" | "anual" };
+    }),
+
+    setPortalClienteConfig: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      periodicidade: z.enum(["mensal", "anual"]),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode alterar a periodicidade do NPS." });
+      }
+      const db = (await getDb())!;
+      await db.execute(sql`
+        INSERT INTO portal_cliente_config (company_id, periodicidade, updated_at)
+        VALUES (${input.companyId}, ${input.periodicidade}, NOW())
+        ON CONFLICT (company_id) DO UPDATE
+          SET periodicidade = EXCLUDED.periodicidade,
+              updated_at = NOW()
+      `);
+      return { success: true };
     }),
 
     // Approve/reject funcionario from portal
@@ -1029,9 +1145,15 @@ export const portalExternoRouter = router({
       notaAtendimento: z.number().int().min(0).max(10).nullable().optional(),
       notaPrazo: z.number().int().min(0).max(10).nullable().optional(),
       notaQualidade: z.number().int().min(0).max(10).nullable().optional(),
+      notaEmpresa: z.number().int().min(0).max(10).nullable().optional(),
+      notaGestor: z.number().int().min(0).max(10).nullable().optional(),
       notaGeral: z.number().int().min(0).max(10),
       comentarioPositivo: z.string().optional(),
       comentarioMelhoria: z.string().optional(),
+      comentarioEquipe: z.string().optional(),
+      comentarioEmpresa: z.string().optional(),
+      comentarioGestor: z.string().optional(),
+      gestorNome: z.string().optional(),
       recomendaria: z.number().int().min(0).max(2).nullable().optional(),
     })).mutation(async ({ input }) => {
       const db = (await getDb())!;
@@ -1045,25 +1167,27 @@ export const portalExternoRouter = router({
         const [o] = await db.select().from(obras).where(eq(obras.id, input.obraId));
         obraNome = o?.nome ?? null;
       }
-      // Rev. 1551 — Limite mensal anônimo por credencial.
-      // ATÔMICO: insere a marcação PRIMEIRO via ON CONFLICT DO NOTHING
-      // RETURNING. Se nada voltou, alguém já registrou neste mês
-      // (concorrência ou repetição), então rejeitamos antes de
-      // gravar a avaliação. Só insere a resposta se conseguimos
-      // a marcação. Isso elimina race conditions e duplicidade.
-      // ano_mes calculado no banco com fuso America/Sao_Paulo
-      // pra não errar a virada do mês na janela UTC-3.
+      // Rev. 1569 — periodicidade configurável (mensal | anual) por empresa.
+      // ano_periodo: 'YYYY-MM' (mensal) ou 'YYYY' (anual). Calculado no
+      // banco com fuso America/Sao_Paulo pra não errar a virada na janela UTC-3.
+      const [cfg] = await db.select().from(portalClienteConfig).where(eq(portalClienteConfig.companyId, decoded.companyId));
+      const periodicidade = (cfg?.periodicidade === "anual") ? "anual" : "mensal";
+      const fmt = periodicidade === "anual" ? "YYYY" : "YYYY-MM";
+      const labelPer = periodicidade === "anual" ? "ano" : "mês";
+      const periodoRow = await db.execute(sql`SELECT to_char(now() AT TIME ZONE 'America/Sao_Paulo', ${fmt}) AS periodo`);
+      const anoPeriodo = (((periodoRow as any).rows ?? periodoRow ?? [])[0] as any)?.periodo ?? "";
+      // Rev. 1551 — Limite anônimo por credencial. ATÔMICO via ON CONFLICT.
       const credId = decoded.portalId as number | undefined;
       if (credId) {
         const claim = await db.execute(sql`
           INSERT INTO cliente_avaliacao_marcacoes (cred_id, ano_mes)
-          VALUES (${credId}, to_char(now() AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM'))
+          VALUES (${credId}, ${anoPeriodo})
           ON CONFLICT (cred_id, ano_mes) DO NOTHING
           RETURNING cred_id
         `);
         const claimRows = ((claim as any).rows ?? claim ?? []) as any[];
         if (claimRows.length === 0) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Você já enviou a avaliação deste mês. Volte no próximo mês." });
+          throw new TRPCError({ code: "FORBIDDEN", message: `Você já enviou a avaliação deste ${labelPer}. Volte no próximo ${labelPer}.` });
         }
       }
       await db.insert(clienteAvaliacoes).values({
@@ -1075,16 +1199,23 @@ export const portalExternoRouter = router({
         notaAtendimento: input.notaAtendimento ?? null,
         notaPrazo: input.notaPrazo ?? null,
         notaQualidade: input.notaQualidade ?? null,
+        notaEmpresa: input.notaEmpresa ?? null,
+        notaGestor: input.notaGestor ?? null,
         notaGeral: input.notaGeral,
         comentarioPositivo: input.comentarioPositivo || null,
         comentarioMelhoria: input.comentarioMelhoria || null,
+        comentarioEquipe: input.comentarioEquipe || null,
+        comentarioEmpresa: input.comentarioEmpresa || null,
+        comentarioGestor: input.comentarioGestor || null,
+        gestorNome: input.gestorNome || null,
         recomendaria: input.recomendaria ?? null,
+        anoPeriodo,
       });
       return { success: true };
     }),
 
-    // Rev. 1551 — verifica de forma anônima se o usuário do portal
-    // já enviou avaliação no mês corrente (fuso Brasília).
+    // Rev. 1551/1569 — verifica de forma anônima se o usuário do portal
+    // já enviou avaliação no período corrente (mês ou ano, fuso Brasília).
     podeAvaliarEsteMes: publicProcedure.input(z.object({
       token: z.string(),
     })).query(async ({ input }) => {
@@ -1092,14 +1223,17 @@ export const portalExternoRouter = router({
       const secret = process.env.JWT_SECRET || "portal-secret";
       let decoded: any;
       try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
-      if (decoded.tipo !== "cliente") return { podeAvaliar: false, jaAvaliou: false, anoMes: "" };
+      if (decoded.tipo !== "cliente") return { podeAvaliar: false, jaAvaliou: false, anoMes: "", periodicidade: "mensal" as const };
+      const [cfg] = await db.select().from(portalClienteConfig).where(eq(portalClienteConfig.companyId, decoded.companyId));
+      const periodicidade = (cfg?.periodicidade === "anual") ? "anual" as const : "mensal" as const;
+      const fmt = periodicidade === "anual" ? "YYYY" : "YYYY-MM";
       const credId = decoded.portalId as number | undefined;
-      const anoMesRow = await db.execute(sql`SELECT to_char(now() AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') AS ano_mes`);
-      const anoMes = (((anoMesRow as any).rows ?? anoMesRow ?? [])[0] as any)?.ano_mes ?? "";
-      if (!credId) return { podeAvaliar: true, jaAvaliou: false, anoMes };
+      const periodoRow = await db.execute(sql`SELECT to_char(now() AT TIME ZONE 'America/Sao_Paulo', ${fmt}) AS periodo`);
+      const anoMes = (((periodoRow as any).rows ?? periodoRow ?? [])[0] as any)?.periodo ?? "";
+      if (!credId) return { podeAvaliar: true, jaAvaliou: false, anoMes, periodicidade };
       const ja = await db.execute(sql`SELECT 1 FROM cliente_avaliacao_marcacoes WHERE cred_id = ${credId} AND ano_mes = ${anoMes} LIMIT 1`);
       const rows = ((ja as any).rows ?? ja ?? []) as any[];
-      return { podeAvaliar: rows.length === 0, jaAvaliou: rows.length > 0, anoMes };
+      return { podeAvaliar: rows.length === 0, jaAvaliou: rows.length > 0, anoMes, periodicidade };
     }),
 
     efetivoObra: publicProcedure.input(z.object({
