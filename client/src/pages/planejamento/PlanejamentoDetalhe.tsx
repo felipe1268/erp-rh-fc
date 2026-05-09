@@ -35,7 +35,9 @@ import {
   ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye, EyeOff, Printer, CheckSquare,
   TrendingDown, ArrowUpRight, ArrowDownRight, CalendarClock, Network,
   Users, HardHat, CheckCircle, Calculator, Info, Box,
+  FileCheck2, FileX2, FileWarning, GraduationCap,
 } from "lucide-react";
+import { getNrDescricao } from "@shared/trainingRules";
 import {
   LineChart, Line, BarChart, Bar, Cell, ComposedChart,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -8126,12 +8128,29 @@ function EfetivoObraTab({ proj }: { proj: any }) {
     );
   }
 
-  return <EfetivoObraView equipeRaw={equipeMerged as any[]} isLoading={isLoading || isLoadingTerc} />;
+  // Rev. 1558 — busca os documentos SST (ASO + Treinamentos) do efetivo
+  // para mostrar inline na aba (mesma UX do Portal do Cliente). Pulamos
+  // os terceiros (id "terc-..." vira NaN) — esses não têm ASO/treinamento
+  // na base interna de funcionários.
+  const empIds = useMemo(
+    () => (equipeRaw as any[]).map((e: any) => Number(e.id)).filter((v) => Number.isFinite(v) && v > 0),
+    [equipeRaw]
+  );
+  const { data: docsMap = {} } = trpc.obras.docsSstFuncionarios.useQuery(
+    { companyId, employeeIds: empIds },
+    { enabled: companyId > 0 && empIds.length > 0 }
+  );
+
+  return <EfetivoObraView equipeRaw={equipeMerged as any[]} isLoading={isLoading || isLoadingTerc} docsMap={docsMap as any} />;
 }
 
-export function EfetivoObraView({ equipeRaw, isLoading }: { equipeRaw: any[]; isLoading: boolean }) {
+export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipeRaw: any[]; isLoading: boolean; docsMap?: Record<number, { aso: any | null; treinamentos: any[] }> }) {
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
+  // Rev. 1558 — linhas expandidas para mostrar ASO + Treinamentos (mesma UI
+  // do Portal do Cliente). Estado por employeeId.
+  const [expandidos, setExpandidos] = useState<Record<string | number, boolean>>({});
+  const fmtBR = (s?: string | null) => (s ? String(s).split("T")[0].split("-").reverse().join("/") : "—");
 
   const equipe = useMemo(() =>
     equipeRaw
@@ -8281,16 +8300,30 @@ export function EfetivoObraView({ equipeRaw, isLoading }: { equipeRaw: any[]; is
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                   <tr>
+                    <th className="w-8" />
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Foto</th>
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Nome</th>
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Função / Cargo</th>
                     <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Vínculo</th>
                     <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Status</th>
+                    <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">ASO</th>
+                    <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Trein.</th>
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Tempo de Empresa</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {listaFiltrada.map((e: any, i: number) => {
+                    const empId = Number(e.id);
+                    const docs = Number.isFinite(empId) ? (docsMap[empId] || { aso: null, treinamentos: [] }) : { aso: null as any, treinamentos: [] as any[] };
+                    const aso = docs.aso;
+                    const today = new Date().toISOString().slice(0, 10);
+                    const trVigentes = (docs.treinamentos || []).filter((t: any) => !t.dataValidade || t.dataValidade >= today);
+                    const isTerceiro = String(e.tipoContrato || "").toUpperCase().startsWith("TERC");
+                    const expanded = !!expandidos[e.id];
+                    const asoStatus = aso ? aso.status : "sem_aso";
+                    const asoColor = asoStatus === "vigente" ? "bg-emerald-100 text-emerald-800" :
+                                     asoStatus === "vencido" ? "bg-rose-100 text-rose-800" :
+                                     "bg-slate-100 text-slate-500";
                     const iniciais = (e.nomeCompleto || "?").split(" ").filter(Boolean).slice(0, 2).map((p: string) => p[0]?.toUpperCase()).join("") || "?";
                     const tipoRaw = String(e.tipoContrato || "").toUpperCase();
                     const isPJ = tipoRaw === "PJ";
@@ -8304,8 +8337,21 @@ export function EfetivoObraView({ equipeRaw, isLoading }: { equipeRaw: any[]; is
                         : isTerc
                           ? "bg-orange-100 text-orange-700 border-orange-200"
                           : "bg-slate-100 text-slate-500 border-slate-200";
+                    const podeExpandir = !isTerceiro && (aso || (docs.treinamentos && docs.treinamentos.length > 0));
                     return (
-                    <tr key={e.id || i} className="hover:bg-blue-50/30 transition-colors">
+                    <React.Fragment key={e.id || i}>
+                    <tr className="hover:bg-blue-50/30 transition-colors">
+                      <td className="px-2 py-2 text-center align-top pt-3">
+                        {podeExpandir ? (
+                          <button
+                            onClick={() => setExpandidos((x) => ({ ...x, [e.id]: !x[e.id] }))}
+                            className="text-slate-400 hover:text-slate-600"
+                            title={expanded ? "Recolher" : "Ver ASO e Treinamentos"}
+                          >
+                            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </button>
+                        ) : null}
+                      </td>
                       <td className="px-4 py-2">
                         {e.fotoUrl ? (
                           <img src={e.fotoUrl} alt={e.nomeCompleto} className="h-9 w-9 rounded-full object-cover border border-slate-200 shadow-sm" />
@@ -8327,6 +8373,29 @@ export function EfetivoObraView({ equipeRaw, isLoading }: { equipeRaw: any[]; is
                           {STATUS_LABELS[e.effectiveStatus] || e.effectiveStatus}
                         </span>
                       </td>
+                      <td className="px-4 py-2 text-center">
+                        {isTerceiro ? (
+                          <span className="text-[10px] text-slate-300">—</span>
+                        ) : (
+                          <>
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${asoColor}`}>
+                              {asoStatus === "vigente" ? "Vigente" : asoStatus === "vencido" ? "Vencido" : "Sem ASO"}
+                            </span>
+                            {aso?.dataValidade && (
+                              <p className="text-[9.5px] text-slate-400 mt-0.5">até {fmtBR(aso.dataValidade)}</p>
+                            )}
+                          </>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        {isTerceiro ? (
+                          <span className="text-[10px] text-slate-300">—</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-slate-700">
+                            <GraduationCap className="h-3.5 w-3.5 text-emerald-600" /> {trVigentes.length}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-2 text-slate-500 text-[13px]">{(() => {
                         if (!e.dataAdmissao) return "—";
                         const adm = new Date(e.dataAdmissao);
@@ -8343,10 +8412,62 @@ export function EfetivoObraView({ equipeRaw, isLoading }: { equipeRaw: any[]; is
                         return parts.join(" ");
                       })()}</td>
                     </tr>
+                    {expanded && podeExpandir && (
+                      <tr className="bg-slate-50/60">
+                        <td colSpan={9} className="px-6 py-4">
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 text-xs">
+                            <div>
+                              <p className="font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                                <FileCheck2 className="h-3.5 w-3.5 text-emerald-600" /> ASO
+                              </p>
+                              {aso ? (
+                                <ul className="space-y-1 text-slate-600">
+                                  <li><b>Tipo:</b> {aso.tipo || "—"}</li>
+                                  <li><b>Resultado:</b> {aso.resultado || "—"}</li>
+                                  <li><b>Exame:</b> {fmtBR(aso.dataExame)}</li>
+                                  <li><b>Validade:</b> {fmtBR(aso.dataValidade)}</li>
+                                </ul>
+                              ) : <p className="text-slate-400">Sem ASO registrado.</p>}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                                <GraduationCap className="h-3.5 w-3.5 text-emerald-600" /> Treinamentos ({(docs.treinamentos || []).length})
+                              </p>
+                              {(docs.treinamentos || []).length === 0 ? (
+                                <p className="text-slate-400">Sem treinamentos.</p>
+                              ) : (
+                                <ul className="space-y-1.5 text-slate-600 max-h-56 overflow-y-auto pr-1">
+                                  {docs.treinamentos.map((t: any, idx: number) => {
+                                    const desc = (t.nome && t.nome.toUpperCase() !== String(t.norma || "").toUpperCase())
+                                      ? t.nome
+                                      : getNrDescricao(t.norma);
+                                    const venceu = t.dataValidade && t.dataValidade < today;
+                                    return (
+                                      <li key={idx} className="flex items-start justify-between gap-2 py-0.5">
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex items-baseline gap-1.5 flex-wrap">
+                                            <b className="text-slate-800">{t.norma || t.nome || "—"}</b>
+                                            {desc && <span className="text-slate-500 text-[11px]">{desc}</span>}
+                                          </div>
+                                          <div className={`text-[10.5px] ${venceu ? "text-rose-600 font-semibold" : "text-slate-400"}`}>
+                                            {venceu ? "venceu" : "val."} {fmtBR(t.dataValidade)}
+                                          </div>
+                                        </div>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                     );
                   })}
                   {listaFiltrada.length === 0 && (
-                    <tr><td colSpan={6} className="text-center py-10 text-slate-400 text-sm">Nenhum funcionário encontrado</td></tr>
+                    <tr><td colSpan={9} className="text-center py-10 text-slate-400 text-sm">Nenhum funcionário encontrado</td></tr>
                   )}
                 </tbody>
               </table>

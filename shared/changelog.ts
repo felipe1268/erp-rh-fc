@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1558,
+    titulo: "Planejamento — Aba Efetivo: ASO e Treinamentos NR direto na lista do efetivo",
+    descricao: "A aba Efetivo do Planejamento agora traz, ao lado de cada funcionário, o status do ASO (Vigente / Vencido / Sem ASO com a data de validade) e a quantidade de treinamentos vigentes. Clicando na seta da linha, expande mostrando o ASO completo (tipo, resultado, exame, validade) e a lista de treinamentos com o código da NR, descrição da norma (NR-12 Máquinas e Equipamentos, etc.) e a validade — treinamentos vencidos aparecem em vermelho. Mesma UX do Portal do Cliente, mas trazida pra dentro do planejamento pra acelerar a análise diária da obra. Backend: novo endpoint obras.docsSstFuncionarios faz fetch em lote por employeeIds. Terceiros não exibem coluna SST (ainda não suportado).",
+    tipo: 'novo',
+    modulos: 'Planejamento, SST, Efetivo',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 00:25:00',
+  },
+  {
     version: 1557,
     titulo: "Portal do Cliente — RH/Docs: KPIs do topo viraram filtros clicáveis",
     descricao: "No Portal do Cliente → RH/Controle de Documentos, os 4 cards do topo (Funcionários, ASO Vigente, ASO Vencido, Sem ASO) agora são clicáveis e filtram a lista de funcionários. Clicar no card ativo remove o filtro. Visual: card ativo ganha contorno colorido + leve background tonal e mostra '• filtrando' na legenda. Sincroniza com a barra de filtros pílula que já existia abaixo.",

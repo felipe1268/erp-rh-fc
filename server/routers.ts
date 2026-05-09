@@ -44,7 +44,7 @@ import {
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb, encerrarContratosPjDoFuncionario } from "./db";
 import { normalizeCidadeInput } from "../shared/normalizeCidade";
-import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist } from "../drizzle/schema";
+import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings } from "../drizzle/schema";
 import { eq, and, sql, or, ilike, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
@@ -1517,6 +1517,61 @@ export const appRouter = router({
     // Funcionários sem obra
     semObra: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getFuncionariosSemObra(input.companyId, input.companyIds)),
     equipeObra: protectedProcedure.input(z.object({ obraId: z.number(), companyId: z.number(), obraIds: z.array(z.number()).optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getEquipeObra(input.obraId, input.companyId, input.obraIds, input.companyIds)),
+    // Rev. 1558 — Documentos SST (ASO + Treinamentos) por lote de funcionários,
+    // usado na aba Efetivo do Planejamento. Devolve, por employeeId:
+    // { aso: { id, tipo, dataExame, dataValidade, resultado, status, temPdf },
+    //   treinamentos: [{ id, nome, norma, dataValidade, statusTreinamento, temPdf }] }
+    docsSstFuncionarios: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      employeeIds: z.array(z.number()),
+    })).query(async ({ input }) => {
+      const result: Record<number, { aso: any | null; treinamentos: any[] }> = {};
+      if (input.employeeIds.length === 0) return result;
+      const db = (await getDb())!;
+      const today = new Date().toISOString().slice(0, 10);
+
+      const asoRows = await db.select({
+        id: asos.id, employeeId: asos.employeeId, tipo: asos.tipo,
+        dataExame: asos.dataExame, dataValidade: asos.dataValidade,
+        resultado: asos.resultado, documentoUrl: asos.documentoUrl,
+      }).from(asos).where(and(
+        eq(asos.companyId, input.companyId),
+        inArray(asos.employeeId, input.employeeIds),
+        isNull(asos.deletedAt),
+      )).orderBy(sql`${asos.dataExame} DESC`);
+
+      const trainRows = await db.select({
+        id: trainings.id, employeeId: trainings.employeeId,
+        nome: trainings.nome, norma: trainings.norma,
+        dataRealizacao: trainings.dataRealizacao,
+        dataValidade: trainings.dataValidade,
+        statusTreinamento: trainings.statusTreinamento,
+        certificadoUrl: trainings.certificadoUrl,
+      }).from(trainings).where(and(
+        eq(trainings.companyId, input.companyId),
+        inArray(trainings.employeeId, input.employeeIds),
+        isNull(trainings.deletedAt),
+      )).orderBy(sql`${trainings.dataRealizacao} DESC`);
+
+      for (const eid of input.employeeIds) result[eid] = { aso: null, treinamentos: [] };
+      for (const a of asoRows) {
+        const slot = result[a.employeeId]; if (!slot || slot.aso) continue;
+        slot.aso = {
+          id: a.id, tipo: a.tipo, dataExame: a.dataExame, dataValidade: a.dataValidade,
+          resultado: a.resultado, temPdf: !!a.documentoUrl,
+          status: (a.dataValidade && a.dataValidade < today) ? "vencido" : "vigente",
+        };
+      }
+      for (const t of trainRows) {
+        const slot = result[t.employeeId]; if (!slot) continue;
+        slot.treinamentos.push({
+          id: t.id, nome: t.nome, norma: t.norma,
+          dataRealizacao: t.dataRealizacao, dataValidade: t.dataValidade,
+          statusTreinamento: t.statusTreinamento, temPdf: !!t.certificadoUrl,
+        });
+      }
+      return result;
+    }),
     efetivoDashMensal: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), mesRef: z.string() })).query(({ input }) => getEfetivoDashboardMensal(input.companyId, input.mesRef, input.companyIds)),
     // Transferência em lote
     transferirEmLote: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraDestinoId: z.number(),
