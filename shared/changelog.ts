@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1563,
+    titulo: "Portal do Cliente — módulo 'Mensagens' renomeado para 'Avaliação' (foco exclusivo)",
+    descricao: "O card laranja do Hub do Cliente que se chamava 'Mensagens — Avaliação & Canal Direto' agora se chama 'Avaliação — Avaliação anônima mensal' (ícone de estrela). Ao clicar, o cliente vai direto para a tela de Avaliação Anônima Mensal, sem as abas de Obras e Comentários — foco exclusivo no envio da avaliação. Mesma renomeação aplicada na barra lateral do Planejamento.",
+    tipo: 'melhoria',
+    modulos: 'Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 02:55:00',
+  },
+  {
     version: 1562,
     titulo: "Portal do Cliente — Projetos/Documentos: organização em pastas por Disciplina e Formato (PDF/DWG/...)",
     descricao: "A tela de Projetos / Documentos Técnicos do Portal do Cliente agora organiza os arquivos em pastas hierárquicas: nível 1 = Disciplina (Arquitetura, Estrutural, Elétrica, etc., com a cor cadastrada no módulo Documentos), nível 2 = Formato (PDF, DWG, DXF, JPG, etc.). Cada pasta mostra a contagem de arquivos por formato. Botão de alternância entre 'Pastas' (padrão) e 'Lista' plana — na lista plana foram adicionadas as colunas Disciplina (com bolinha colorida + sigla) e Formato (badge colorido). Quando o cliente faz busca ou filtra por status, todas as pastas se expandem automaticamente. Histórico de revisões e endpoint /api/portal/cliente/projdoc/:id continuam autenticados pelo token JWT.",

@@ -9,7 +9,7 @@ import {
   CalendarDays, User, CalendarCheck, FileText, GitBranch, HardHat,
   DollarSign, Cloud, Droplets, Wind, Loader2, ClipboardList, ChevronRight,
   ChevronDown, Search, Menu, X, PanelLeftClose, PanelLeftOpen, Users, Handshake, Home,
-  AlertOctagon, Printer, CalendarRange, ShieldCheck, MessageSquare, Layers, Check,
+  AlertOctagon, Printer, CalendarRange, ShieldCheck, MessageSquare, Star, Layers, Check,
   TrendingDown, Zap,
 } from "lucide-react";
 import {
@@ -125,7 +125,7 @@ export default function PortalPlanejamentoCliente() {
     { id: "planejamento",   title: "Planejamento",  subtitle: "Cronograma e Avanço",        icon: CalendarRange,  accentFrom: "#22C55E", accentTo: "#16A34A", route: (oid: number) => `/portal/cliente/obra/${oid}` },
     { id: "rh-documentos",  title: "RH & Docs",     subtitle: "Controle de Documentos",     icon: ShieldCheck,    accentFrom: "#10B981", accentTo: "#059669", route: (oid: number) => `/portal/cliente/rh/${oid}` },
     { id: "proj-doc",       title: "Proj./Doc.",    subtitle: "Documentos Técnicos",        icon: FileText,       accentFrom: "#6366F1", accentTo: "#4338CA", route: (oid: number) => `/portal/cliente/projdoc/${oid}` },
-    { id: "mensagens",      title: "Mensagens",     subtitle: "Avaliação & Canal",          icon: MessageSquare,  accentFrom: "#F59E0B", accentTo: "#D97706", route: (_oid: number) => `/portal/cliente/dashboard` },
+    { id: "avaliacao",      title: "Avaliação",     subtitle: "Avaliação anônima mensal",   icon: Star,           accentFrom: "#F59E0B", accentTo: "#D97706", route: (_oid: number) => `/portal/cliente/dashboard?tab=avaliacao` },
   ];
   const moduloAtualId = "planejamento";
   // Cores fixas para obras (diferenciam visualmente do bloco de módulos):

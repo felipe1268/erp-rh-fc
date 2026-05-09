@@ -58,7 +58,17 @@ export default function PortalDashboardCliente() {
   const [, navigate] = useLocation();
   const token = localStorage.getItem("portal_token") || "";
   const tipo = localStorage.getItem("portal_tipo") || "";
-  const [tab, setTab] = useState<"obras" | "comentarios" | "avaliacao">("obras");
+  // Rev. 1563 — quando o cliente entra pelo card "Avaliação" do Hub
+  // (?tab=avaliacao), o dashboard foca exclusivamente na avaliação:
+  // tab inicial já em "avaliacao" e as outras abas (Obras / Comentários)
+  // ficam ocultas. Sem o parâmetro o comportamento clássico é mantido.
+  const initialTab = (() => {
+    if (typeof window === "undefined") return "obras" as const;
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t === "avaliacao" || t === "comentarios" || t === "obras" ? (t as "obras" | "comentarios" | "avaliacao") : "obras";
+  })();
+  const focoAvaliacao = initialTab === "avaliacao";
+  const [tab, setTab] = useState<"obras" | "comentarios" | "avaliacao">(initialTab);
 
   // Guard
   useEffect(() => {
@@ -186,11 +196,14 @@ export default function PortalDashboardCliente() {
         </div>
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex gap-1 -mb-px">
-            {[
-              { k: "obras", label: "Minhas Obras", icon: Building2 },
-              { k: "comentarios", label: "Comentários", icon: MessageSquare },
-              { k: "avaliacao", label: "Avaliação Anônima", icon: Star },
-            ].map((t) => {
+            {(focoAvaliacao
+              ? [{ k: "avaliacao", label: "Avaliação Anônima", icon: Star }]
+              : [
+                  { k: "obras", label: "Minhas Obras", icon: Building2 },
+                  { k: "comentarios", label: "Comentários", icon: MessageSquare },
+                  { k: "avaliacao", label: "Avaliação Anônima", icon: Star },
+                ]
+            ).map((t) => {
               const Icon = t.icon as any;
               const active = tab === t.k;
               return (

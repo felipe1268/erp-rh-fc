@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
-  Building2, LogOut, CalendarRange, FileText, MessageSquare, ShieldCheck,
+  Building2, LogOut, CalendarRange, FileText, Star, ShieldCheck,
   Layers, Clock, Zap,
 } from "lucide-react";
 import { APP_VERSION } from "../../../../shared/version";
@@ -47,10 +47,10 @@ const MODULOS: Modulo[] = [
     accentGlow: "rgba(168,85,247,0.35)",
   },
   {
-    id: "mensagens",
-    title: "Mensagens",
-    subtitle: "Avaliação & Canal Direto",
-    icon: MessageSquare,
+    id: "avaliacao",
+    title: "Avaliação",
+    subtitle: "Avaliação anônima mensal",
+    icon: Star,
     accentFrom: "#F59E0B",
     accentTo: "#D97706",
     accentGlow: "rgba(245,158,11,0.35)",
@@ -140,7 +140,7 @@ export default function PortalHubCliente() {
   const firstName = (nomeEmpresa || "Cliente").split(" ").slice(0, 2).join(" ");
 
   const handleClick = (modulo: Modulo) => {
-    if (modulo.id === "mensagens") { navigate("/portal/cliente/dashboard"); return; }
+    if (modulo.id === "avaliacao") { navigate("/portal/cliente/dashboard?tab=avaliacao"); return; }
     if (minhasObras.length === 1) {
       const obraId = (minhasObras[0] as any).id;
       if (modulo.id === "planejamento") navigate(`/portal/cliente/obra/${obraId}`);
