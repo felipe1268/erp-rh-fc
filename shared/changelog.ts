@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1540,
+    titulo: "Planejamento — 'Previsto/Realizado da semana' agora bate com a tabela linha-a-linha",
+    descricao: "BUGFIX reportado pelo usuário: na semana 1 da REVTE-CIVIL o cabeçalho mostrava Previsto 1,98% / Realizado 1,38% (Aderência 70%) enquanto TODAS as 13 atividades da tabela 'Atividades da Semana' estavam marcadas como 'em dia' — contradição evidente. Causa: o cálculo do Previsto agregado usava `peso × diasOverlap_calendário ÷ duracaoDias`. Quando duracaoDias vinha em dias ÚTEIS (cronograma com calendário de obra ou import MS Project) e o overlap era em dias CORRIDOS, a divisão ficava inflada e o cabeçalho cobrava mais do que deveria — diferente da tabela linha-a-linha que usa interpolação linear pura por datas (((ref − ini)/(fim − ini)) × 100). Correção: o agregado agora usa a MESMA interpolação linear por datas, calculando o Previsto da semana como Σ peso × (prev_fimSemana − prev_inicioSemana) ÷ 100. Resultado: se cada atividade individual está em dia, o cabeçalho também mostra em dia.",
+    tipo: 'bugfix',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 16:10:00',
+  },
+  {
     version: 1539,
     titulo: "Portal do Cliente — 'Avanço Físico' do topo agora é cálculo ao vivo (alinhado ao módulo interno)",
     descricao: "BUGFIX reportado pelo cliente: na obra REVTE-CIVIL o card 'Avanço Físico' do topo do portal mostrava Realizado 1,05% / Previsto 1,84% (com badge 'Fonte oficial: REFIS Nº 001 - semana 04/05/2026'), enquanto logo abaixo o card 'REALIZADO NA SEMANA' já mostrava 1,38% (estado atual). A divergência confundia: o cliente atualiza avanços, vê o número de baixo mudar mas o de cima ficar travado no último REFIS. Causa: a query planejamentoObra do portal congelava previsto/realizado do último REFIS NÃO-rascunho como fonte de verdade do top bar. Funcionava enquanto ninguém mexia em nada após o REFIS, mas qualquer atualização de avanço gerava a divergência. Correção: server/routers/portalExterno.ts agora SEMPRE retorna kpis.previsto/realizado calculados ao vivo (pctTotalPrevisto/pctTotalRealizado), igual ao módulo interno 'Avanço Físico'. O REFIS continua sendo a referência histórica oficial na aba REFIS — o top bar só ganha um rótulo discreto 'Cálculo ao vivo · último REFIS oficial Nº 001' embaixo. Topo e base do portal agora batem sempre, e batem também com o módulo interno.",

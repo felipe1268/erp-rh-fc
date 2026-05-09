@@ -4562,14 +4562,29 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     let real = 0;
     folhas.forEach((a: any) => {
       const peso = n(a.pesoFinanceiro);
-      // Previsto via overlap
+      // Rev. 1540 — Previsto da semana via Δ de interpolação linear por DATAS
+      // (mesma fórmula que a tabela "Atividades da Semana" usa por linha:
+      // prevInd = ((ref − ini) / (fim − ini)) × 100). Antes usávamos
+      // `peso × overlapDias_calendário / duracaoDias`, mas quando
+      // `duracaoDias` vinha em dias ÚTEIS (cronograma com calendário de obra
+      // ou importação MS Project) e o overlap em dias CORRIDOS, a divisão
+      // ficava inflada e o cabeçalho mostrava 1,98% Previsto enquanto a
+      // tabela linha-a-linha — toda em dia — só somava 1,38%. Agora as duas
+      // visões usam a MESMA interpolação por datas e batem entre si.
       if (a.dataInicio && a.dataFim) {
-        const aIni = new Date(a.dataInicio + "T00:00:00").getTime();
-        const aFim = new Date(a.dataFim + "T00:00:00").getTime() + 86400000;
-        const overlapMs = Math.max(0, Math.min(aFim, semFimDate) - Math.max(aIni, semIniDate));
-        const overlapDays = overlapMs / 86400000;
-        const dur = (a.duracaoDias && a.duracaoDias > 0) ? a.duracaoDias : Math.max(1, (aFim - aIni) / 86400000);
-        prev += peso * (overlapDays / dur);
+        const aIni = new Date(a.dataInicio + "T12:00:00").getTime();
+        const aFim = new Date(a.dataFim    + "T12:00:00").getTime();
+        const refIni = semIniDate;          // fim da semana anterior = início desta
+        const refFim = semFimDate;          // fim desta semana
+        const interp = (t: number) => {
+          if (aFim <= aIni) return t >= aFim ? 100 : 0;
+          if (t >= aFim) return 100;
+          if (t <= aIni) return 0;
+          return Math.min(100, ((t - aIni) / (aFim - aIni)) * 100);
+        };
+        const expFim = interp(refFim);
+        const expIni = interp(refIni);
+        prev += peso * Math.max(0, expFim - expIni) / 100;
       }
       // Realizado via Δ acumulado
       const avs = (avancos as any[]).filter((av: any) => av.atividadeId === a.id);
