@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1556,
+    titulo: "Portal do Cliente — Treinamentos: descrição da NR ao lado do código",
+    descricao: "Na lista de treinamentos do funcionário (Portal do Cliente → RH/Docs → expandir funcionário), agora ao lado do código aparece a descrição curta da norma (ex: 'NR-12 Segurança em Máquinas e Equipamentos', 'NR-35 Trabalho em Altura'). A validade fica em uma linha secundária mais discreta. Se o treinamento tiver um nome específico gravado (ex: 'Operador de Empilhadeira'), esse nome é usado no lugar da descrição genérica. Tabela de descrições centralizada em shared/trainingRules.ts (NR_DESCRICAO_CURTA + helper getNrDescricao) — reutilizável em outras telas.",
+    tipo: 'melhoria',
+    modulos: 'Portal do Cliente, SST',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 23:50:00',
+  },
+  {
     version: 1555,
     titulo: "Portal do Cliente — RH/Docs: visualização inline de PDFs de ASO e Treinamentos (sem download)",
     descricao: "Atendendo pedido do cliente que precisa comprovar contratualmente os documentos da equipe sem ter cópia local: agora cada ASO e cada Certificado de Treinamento que tem PDF anexado mostra um botão 'Ver PDF' / 'Ver' no detalhe expandido do funcionário. O documento abre em modal embutido (iframe), com a barra do visualizador escondida (toolbar=0), botão direito bloqueado, marca d'água diagonal com nome do cliente e a tarja 'Visualização — Download desabilitado'. Backend: novo endpoint /api/portal/cliente/documento/:tipo/:id valida o token JWT do portal, confere que o funcionário do registro está alocado em alguma obra do cliente e faz proxy autenticado do arquivo do storage com Content-Disposition: inline + no-cache + nosniff. A URL real do storage NUNCA é exposta ao cliente. Importante: nenhum PDF servido pelo navegador é 100% à prova de captura (print/screenshot sempre funciona) — o objetivo é dificultar download casual, não impedir captura.",

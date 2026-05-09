@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import PortalPrintHeader from "@/components/PortalPrintHeader";
 import PrintActions from "@/components/PrintActions";
+import { getNrDescricao } from "@shared/trainingRules";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
 
@@ -262,21 +263,39 @@ export default function PortalRhDocumentosCliente() {
                                   <p className="text-slate-400">Sem treinamentos.</p>
                                 ) : (
                                   <ul className="space-y-1.5 text-slate-600 max-h-44 overflow-y-auto">
-                                    {f.treinamentos.map((t: any, i: number) => (
-                                      <li key={i} className="flex items-center justify-between gap-2">
-                                        <span className="truncate">
-                                          <b>{t.norma || t.nome}</b> — val. {fmtBR(t.dataValidade)}
-                                        </span>
-                                        {t.temPdf && (
-                                          <button
-                                            onClick={() => abrirPdf("treinamento", t.id, `Certificado — ${t.norma || t.nome}`, `${f.nome} • Validade ${fmtBR(t.dataValidade)}`)}
-                                            className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[10px] font-semibold border border-emerald-200 transition"
-                                          >
-                                            <Eye className="h-3 w-3" /> Ver
-                                          </button>
-                                        )}
-                                      </li>
-                                    ))}
+                                    {f.treinamentos.map((t: any, i: number) => {
+                                      // Rev. 1556 — descrição curta da NR ao lado do código.
+                                      // Prioridade: nome do treinamento gravado → descrição
+                                      // padrão da NR. Não duplica se o nome já for o código.
+                                      const desc = (t.nome && t.nome.toUpperCase() !== String(t.norma || "").toUpperCase())
+                                        ? t.nome
+                                        : getNrDescricao(t.norma);
+                                      return (
+                                        <li key={i} className="flex items-start justify-between gap-2 py-0.5">
+                                          <div className="min-w-0 flex-1">
+                                            <div className="flex items-baseline gap-1.5 flex-wrap">
+                                              <b className="text-slate-800">{t.norma || t.nome || "—"}</b>
+                                              {desc && (
+                                                <span className="text-slate-500 text-[11px] truncate" title={desc}>
+                                                  {desc}
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="text-[10.5px] text-slate-400">
+                                              val. {fmtBR(t.dataValidade)}
+                                            </div>
+                                          </div>
+                                          {t.temPdf && (
+                                            <button
+                                              onClick={() => abrirPdf("treinamento", t.id, `Certificado — ${t.norma || t.nome}${desc ? " · " + desc : ""}`, `${f.nome} • Validade ${fmtBR(t.dataValidade)}`)}
+                                              className="shrink-0 mt-0.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[10px] font-semibold border border-emerald-200 transition"
+                                            >
+                                              <Eye className="h-3 w-3" /> Ver
+                                            </button>
+                                          )}
+                                        </li>
+                                      );
+                                    })}
                                   </ul>
                                 )}
                               </div>

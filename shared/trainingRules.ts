@@ -575,6 +575,64 @@ export function calcularDataValidade(dataRealizacao: string, validadeMeses: numb
 }
 
 /**
+ * Descrição curta de cada NR — usada para listas/labels onde o usuário
+ * só vê o código (ex: "NR-12") e quer entender do que se trata.
+ * Fonte: NRs do MTE (gov.br/trabalho-e-emprego).
+ */
+export const NR_DESCRICAO_CURTA: Record<string, string> = {
+  "NR-01": "Disposições Gerais e Gerenciamento de Riscos",
+  "NR-02": "Inspeção Prévia",
+  "NR-03": "Embargo e Interdição",
+  "NR-04": "SESMT",
+  "NR-05": "CIPA",
+  "NR-06": "Equipamento de Proteção Individual (EPI)",
+  "NR-07": "PCMSO — Saúde Ocupacional",
+  "NR-08": "Edificações",
+  "NR-09": "PGR — Avaliação de Riscos Ocupacionais",
+  "NR-10": "Segurança em Instalações Elétricas",
+  "NR-11": "Transporte, Movimentação e Armazenagem",
+  "NR-12": "Segurança em Máquinas e Equipamentos",
+  "NR-13": "Caldeiras, Vasos de Pressão e Tubulações",
+  "NR-14": "Fornos",
+  "NR-15": "Atividades e Operações Insalubres",
+  "NR-16": "Atividades e Operações Perigosas",
+  "NR-17": "Ergonomia",
+  "NR-18": "Segurança na Construção Civil",
+  "NR-19": "Explosivos",
+  "NR-20": "Inflamáveis e Combustíveis",
+  "NR-21": "Trabalho a Céu Aberto",
+  "NR-22": "Segurança na Mineração",
+  "NR-23": "Proteção Contra Incêndios",
+  "NR-24": "Condições Sanitárias e de Conforto",
+  "NR-25": "Resíduos Industriais",
+  "NR-26": "Sinalização de Segurança",
+  "NR-27": "Registro Profissional do TST",
+  "NR-28": "Fiscalização e Penalidades",
+  "NR-29": "Trabalho Portuário",
+  "NR-30": "Trabalho Aquaviário",
+  "NR-31": "Segurança no Trabalho Rural",
+  "NR-32": "Segurança em Serviços de Saúde",
+  "NR-33": "Espaços Confinados",
+  "NR-34": "Indústria Naval",
+  "NR-35": "Trabalho em Altura",
+  "NR-36": "Frigoríficos / Abate",
+  "NR-37": "Plataformas de Petróleo",
+  "NR-38": "Limpeza Urbana",
+};
+
+/**
+ * Normaliza variações ("NR12", "nr-12", "NR 12") para o formato "NR-12"
+ * e devolve a descrição curta. Retorna string vazia se não encontrar.
+ */
+export function getNrDescricao(norma?: string | null): string {
+  if (!norma) return "";
+  const m = String(norma).toUpperCase().match(/NR\s*-?\s*0?(\d{1,2})/);
+  if (!m) return "";
+  const codigo = `NR-${m[1].padStart(2, "0")}`;
+  return NR_DESCRICAO_CURTA[codigo] || "";
+}
+
+/**
  * Categorias para agrupamento no select
  */
 export const TRAINING_CATEGORIES: Record<string, string> = {
