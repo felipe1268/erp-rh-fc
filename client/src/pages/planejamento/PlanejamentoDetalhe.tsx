@@ -259,8 +259,11 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   });
 
   // Rev. 1534 — Recovery Schedule (AACE 23R-02): janela em semanas pra diluir débito.
+  // Override local pra resposta INSTANTÂNEA (não esperar refetch do servidor).
+  const [recoveryOverride, setRecoveryOverride] = useState<number | null>(null);
   const setRecoveryWindowMut = trpc.planejamento.setRecoveryWindow.useMutation({
     onSuccess: () => { utils.planejamento.getProjetoById.invalidate({ id: projetoId }); },
+    onError: () => { setRecoveryOverride(null); }, // reverte se falhar
   });
 
   const atualizarProjetoMut = trpc.planejamento.atualizarProjeto.useMutation({
@@ -798,8 +801,9 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             avancosMap={avancosMap}
             refisLista={refisLista}
             curvaData={curvaData}
-            recoveryWindow={(revisaoAtiva as any)?.recoveryWindowSemanas ?? 4}
+            recoveryWindow={recoveryOverride ?? (revisaoAtiva as any)?.recoveryWindowSemanas ?? 4}
             onChangeRecoveryWindow={(semanas) => {
+              setRecoveryOverride(semanas); // UI instantânea
               if (revisaoAtiva?.id) setRecoveryWindowMut.mutate({ revisaoId: revisaoAtiva.id, semanas });
             }}
           />
