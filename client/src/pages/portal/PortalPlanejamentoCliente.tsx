@@ -1624,6 +1624,46 @@ function AbaProgSemanal({
   );
 }
 
+// ── Rev. 1523 — Banner de Tendência × Prazo Contratual ────────────────
+// Mostra ao cliente, em destaque, se o ritmo atual da obra projeta
+// conclusão dentro ou fora do prazo contratual. 4 níveis (verde/amarelo/
+// laranja/vermelho) + caso "sem dados" (cinza) quando ainda não há previsto.
+function AlertaTendenciaBanner({ alerta }: { alerta: any }) {
+  if (!alerta) return null;
+  if (alerta.nivel === "sem_dados") {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-center gap-3 text-xs text-slate-500">
+        <Activity className="h-4 w-4 shrink-0" />
+        <span>Tendência indisponível — aguardando primeiros lançamentos de avanço para projetar conclusão.</span>
+      </div>
+    );
+  }
+  const cfg: Record<string, { bg: string; bd: string; tx: string; ic: any; titulo: string; sub: string }> = {
+    ok:      { bg: "bg-emerald-50",  bd: "border-emerald-200",  tx: "text-emerald-800", ic: <CheckCircle2 className="h-5 w-5 text-emerald-600" />,
+               titulo: `No prazo · SPI ${alerta.spi.toFixed(2)}`,
+               sub: `Conclusão estimada: ${alerta.etaStr} (prazo contratual: ${alerta.fimStr}). Mantendo o ritmo atual a obra entrega ${Math.abs(alerta.diffDias)} dia(s) ${alerta.diffDias < 0 ? "antes" : "no"} do prazo.` },
+    atencao: { bg: "bg-amber-50",    bd: "border-amber-200",    tx: "text-amber-800",   ic: <AlertTriangle className="h-5 w-5 text-amber-600" />,
+               titulo: `Atenção · SPI ${alerta.spi.toFixed(2)} · ${alerta.diffDias} dia(s) de atraso projetado`,
+               sub: `Conclusão estimada: ${alerta.etaStr} (prazo contratual: ${alerta.fimStr}). Pequeno desvio recuperável; intensificar frente crítica recomenda-se.` },
+    alerta:  { bg: "bg-orange-50",   bd: "border-orange-200",   tx: "text-orange-800",  ic: <AlertTriangle className="h-5 w-5 text-orange-600" />,
+               titulo: `Alerta · SPI ${alerta.spi.toFixed(2)} · ${alerta.diffDias} dia(s) de atraso projetado`,
+               sub: `Conclusão estimada: ${alerta.etaStr} (prazo contratual: ${alerta.fimStr}). Risco de estouro do prazo contratual — replanejamento sugerido.` },
+    critico: { bg: "bg-red-50",      bd: "border-red-300",      tx: "text-red-800",     ic: <AlertTriangle className="h-5 w-5 text-red-600" />,
+               titulo: `Crítico · SPI ${alerta.spi.toFixed(2)} · ${alerta.diffDias} dia(s) de atraso projetado`,
+               sub: `Conclusão estimada: ${alerta.etaStr} (prazo contratual: ${alerta.fimStr}). Tendência de estouro severo — ação corretiva imediata.` },
+  };
+  const c = cfg[alerta.nivel];
+  return (
+    <div className={`rounded-xl border ${c.bd} ${c.bg} px-4 py-3 flex items-start gap-3`}>
+      <div className="mt-0.5">{c.ic}</div>
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-bold ${c.tx}`}>{c.titulo}</p>
+        <p className={`text-xs ${c.tx} opacity-80 mt-0.5`}>{c.sub}</p>
+      </div>
+    </div>
+  );
+}
+
 function AbaCurvaS({ curvaData, kpis, projeto, curvaMedicoes = [] }: any) {
   // Réplica visual da Curva S de Trabalho interna (PlanejamentoDetalhe.tsx ~3697).
   // Mantém: switcher Trabalho/Financeira (Financeira desabilitada no portal),
@@ -1663,6 +1703,46 @@ function AbaCurvaS({ curvaData, kpis, projeto, curvaMedicoes = [] }: any) {
   const hasPlanejada  = merged.some((p: any) => p.planejada  != null);
   const hasRealizada  = merged.some((p: any) => p.realizada  != null);
   const hasTendencia  = merged.some((p: any) => p.tendencia  != null);
+
+  // ── Rev. 1523 — Alerta de Tendência × Prazo Contratual ────────────────
+  // Calcula a data estimada de conclusão (ETA) com base no SPI atual:
+  //   SPI = realizado / previsto. Se SPI < 1 a obra tende a estourar prazo.
+  //   ETA = dataInicio + (duração contratual / SPI). Comparado a
+  //   dataTerminoContratual gera 4 níveis de alerta:
+  //   - "ok" verde:    no prazo ou antecipado
+  //   - "atencao" amarelo: até 30 dias de atraso projetado
+  //   - "alerta" laranja:  31 a 90 dias de atraso projetado
+  //   - "critico" vermelho: > 90 dias de atraso projetado
+  //   - "sem_dados": prev/real ainda não disponíveis
+  const alertaTendencia = useMemo(() => {
+    const dIni = projeto?.dataInicio;
+    const dFim = projeto?.dataTerminoContratual;
+    if (!dIni || !dFim) return null;
+    const prev = Number(kpis?.previsto || 0);
+    const real = Number(kpis?.realizado || 0);
+    if (prev <= 0) return { nivel: "sem_dados" as const };
+    const spi = real / prev;
+    const ini = new Date(dIni + "T12:00:00").getTime();
+    const fim = new Date(dFim + "T12:00:00").getTime();
+    if (!Number.isFinite(ini) || !Number.isFinite(fim)) return null;
+    if (fim <= ini) return null;
+    const duracaoMs = fim - ini;
+    const etaMs = ini + duracaoMs / Math.max(spi, 0.0001);
+    const etaDate = new Date(etaMs);
+    const diffDias = Math.round((etaMs - fim) / 86400000);
+    let nivel: "ok" | "atencao" | "alerta" | "critico";
+    if (diffDias <= 0)       nivel = "ok";
+    else if (diffDias <= 30) nivel = "atencao";
+    else if (diffDias <= 90) nivel = "alerta";
+    else                     nivel = "critico";
+    return {
+      nivel,
+      spi: +spi.toFixed(2),
+      diffDias,
+      etaStr: etaDate.toLocaleDateString("pt-BR"),
+      fimStr: new Date(fim).toLocaleDateString("pt-BR"),
+    };
+  }, [projeto?.dataInicio, projeto?.dataTerminoContratual, kpis?.previsto, kpis?.realizado]);
 
   return (
     <div className="space-y-4">
@@ -1711,6 +1791,9 @@ function AbaCurvaS({ curvaData, kpis, projeto, curvaMedicoes = [] }: any) {
         </div>
       ) : (
         <>
+          {/* Banner de alerta de tendência × prazo contratual */}
+          <AlertaTendenciaBanner alerta={alertaTendencia} />
+
           {/* Legenda dinâmica com toggles */}
           <div className="flex flex-wrap gap-4 text-xs bg-white rounded-xl border border-slate-100 shadow-sm p-3">
             {[
@@ -1747,8 +1830,8 @@ function AbaCurvaS({ curvaData, kpis, projeto, curvaMedicoes = [] }: any) {
             <ResponsiveContainer width="100%" height={420}>
               <ComposedChart data={merged} margin={{ left: 5, right: 20, top: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="semana" tick={{ fontSize: 10, fill: "#64748b" }} angle={-30} textAnchor="end"
-                  height={50} interval={"preserveStartEnd"} stroke="#cbd5e1"
+                <XAxis dataKey="semana" tick={{ fontSize: 8, fill: "#64748b" }} angle={-60} textAnchor="end"
+                  height={70} interval={0} stroke="#cbd5e1"
                   tickFormatter={(v) => semanaLabel[v] ?? v} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "#64748b" }} unit="%" stroke="#cbd5e1" />
                 <Tooltip
@@ -1844,6 +1927,9 @@ function AbaCurvaS({ curvaData, kpis, projeto, curvaMedicoes = [] }: any) {
         const finTickFmt = (v: number) => v === 0 ? "0" : v.toLocaleString("pt-BR");
         return (
           <>
+            {/* Banner de alerta de tendência × prazo contratual */}
+            <AlertaTendenciaBanner alerta={alertaTendencia} />
+
             {/* Legenda dinâmica financeira */}
             <div className="flex flex-wrap gap-4 text-xs bg-white rounded-xl border border-slate-100 shadow-sm p-3">
               {[
@@ -1905,8 +1991,8 @@ function AbaCurvaS({ curvaData, kpis, projeto, curvaMedicoes = [] }: any) {
               <ResponsiveContainer width="100%" height={420}>
                 <ComposedChart data={dataFin} margin={{ left: 5, right: 20, top: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis dataKey="semana" tick={{ fontSize: 10, fill: "#64748b" }} angle={-30} textAnchor="end"
-                    height={50} interval={"preserveStartEnd"} stroke="#cbd5e1"
+                  <XAxis dataKey="semana" tick={{ fontSize: 8, fill: "#64748b" }} angle={-60} textAnchor="end"
+                    height={70} interval={0} stroke="#cbd5e1"
                     tickFormatter={(v) => semanaLabel[v] ?? v} />
                   <YAxis tickFormatter={finTickFmt} tick={{ fontSize: 10, fill: "#64748b" }} width={90} stroke="#cbd5e1" />
                   <Tooltip
@@ -2820,10 +2906,10 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
               </div>
               <div className="px-5 py-4" style={{ height: 360 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={curvaFiltrada} margin={{ top: 5, right: 60, bottom: curvaFiltrada.length > 10 ? 50 : 20, left: 10 }}>
+                  <LineChart data={curvaFiltrada} margin={{ top: 5, right: 60, bottom: curvaFiltrada.length > 10 ? 70 : 20, left: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" height={50}
-                      interval={Math.max(0, Math.floor(curvaFiltrada.length / 10) - 1)} />
+                    <XAxis dataKey="label" tick={{ fontSize: 8 }} angle={-60} textAnchor="end" height={70}
+                      interval={0} />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
                     <Tooltip
                       content={({ payload, label }: any) => {

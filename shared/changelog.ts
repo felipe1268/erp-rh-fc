@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1523,
+    titulo: "Portal do Cliente — Curva S: todas as semanas no eixo X + alerta de tendência × prazo contratual",
+    descricao: "MELHORIA pedida pelo usuário (IMG_0203/IMG_0204): (1) os 3 gráficos de Curva S do Portal (Curva S de Trabalho, Curva S Financeira da aba Curva S e Curva S Física da aba REFIS) estavam com `interval={\"preserveStartEnd\"}` e ticks aleatórios que pulavam semanas. Trocado para `interval={0}` com fonte 8px e angle -60° + height 70px → mostra TODAS as semanas sem pular nenhuma. (2) Adicionado novo componente AlertaTendenciaBanner acima dos 2 gráficos da aba Curva S calculando a data estimada de conclusão (ETA) com base no SPI atual (= realizado/previsto) e comparando com dataTerminoContratual. 4 níveis de alerta visual: 🟢 'No prazo' (SPI ≥ 1 ou diferença ≤ 0 dias), 🟡 'Atenção' (1-30 dias atraso projetado), 🟠 'Alerta' (31-90 dias), 🔴 'Crítico' (>90 dias) + 'Sem dados' cinza enquanto não há previsto. Cada nível mostra SPI exato, dias de atraso/antecipação projetados, conclusão estimada (dd/MM/aaaa), prazo contratual (dd/MM/aaaa) e recomendação de ação. Cálculo: ETA = dataInicio + (duração contratual / SPI).",
+    tipo: 'feature',
+    modulos: 'Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 23:15:00',
+  },
+  {
     version: 1522,
     titulo: "Portal do Cliente — REFIS: usa FIM da semana como referência (fix definitivo do 0,00%)",
     descricao: "BUGFIX complementar à Rev. 1521 reportado pelo usuário (IMG_0202): após a Rev. 1521 corrigir o fallback de pesos, o Portal AINDA mostrava 0,00% Previsto Acumulado quando o toggle 'Global (c/ Indiretas)' era ativado. Causa: a função AbaRefis usava `semanaRef` (segunda-feira de início = 04/05/2026) como data de corte do cálculo previsto, mas o módulo Planejamento (PlanejamentoDetalhe.tsx 4266-4272 e 9442-9448) usa `semanaFim = semanas[idx+1]` (próxima segunda = 11/05/2026) ou `semana + 7` quando não há próxima. Como o REFIS Nº 001 é o PRIMEIRO da obra e a maioria das atividades começa exatamente em 04/05/2026, no início da semana o progresso linear de cada atividade é 0% — daí o Portal somar zero. Usando o FIM da semana (11/05/2026), as atividades já têm uma semana de progresso linear → bate com os 2,28% do interno. Solução: criada constante `semanaFimRef = semanaRef + 7 dias` no Portal e usada em `progPrevistoNa(a, semanaFimRef)`. Comentário explícito apontando os arquivos/linhas do interno como fonte de verdade.",
