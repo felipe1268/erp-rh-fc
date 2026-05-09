@@ -405,6 +405,9 @@ export default function PortalPlanejamentoCliente() {
           const previsto = kpis.previsto as number;
           const desvio = realizado - previsto;
           const desvioPositivo = desvio > 0;
+          const fonte = kpis.fonte as string | undefined;
+          const refisNumero = kpis.refisNumero as number | null | undefined;
+          const refisSemana = kpis.refisSemana as string | undefined;
           return (
             <div className="bg-white rounded-2xl border border-slate-200/70 shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)] p-5 mb-4">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -462,6 +465,13 @@ export default function PortalPlanejamentoCliente() {
                   </span>
                 </div>
               </div>
+              {fonte === "refis_oficial" && refisNumero != null && (
+                <div className="mt-3 text-[10px] text-slate-500 flex items-center gap-1.5">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  Fonte oficial: REFIS Nº {String(refisNumero).padStart(3, "0")}
+                  {refisSemana ? ` · semana ${refisSemana.split("-").reverse().join("/")}` : ""}
+                </div>
+              )}
             </div>
           );
         })()}

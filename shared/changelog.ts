@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1481,
+    titulo: "Portal do Cliente — Card 'Avanço Físico' mostra agora a etiqueta da fonte (REFIS Nº ...)",
+    descricao: "Complementa a Rev. 1480 adicionando uma etiqueta visível abaixo do card 'Avanço Físico' indicando de onde os números vieram. Quando os valores foram lidos do último REFIS oficial emitido, aparece em texto pequeno e cinza: 'Fonte oficial: REFIS Nº 001 · semana 04/05/2026' (com bolinha verde). Isso (1) deixa claro para o cliente que os números acima são exatamente os do relatório oficial assinado, eliminando a confusão sobre porque Visão Geral e REFIS mostravam números diferentes; (2) serve como indicador visual rápido pra confirmar que a build nova carregou no dispositivo (se a etiqueta NÃO aparece, é cache do iPad/navegador).",
+    tipo: "feature",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 00:35:00",
+  },
+  {
     version: 1480,
     titulo: "Portal do Cliente — Card 'Avanço Físico' agora reflete o ÚLTIMO REFIS oficial emitido (mesma fonte de verdade)",
     descricao: "RESOLUÇÃO DEFINITIVA da divergência teimosa entre o card 'Avanço Físico Previsto' (topo do portal) e a aba REFIS logo abaixo. Antes: o card recalculava ao vivo o previsto referenciando a próxima segunda+7 (ex.: 2,19%) enquanto o REFIS oficial mostrava o valor consolidado da semana reportada (ex.: 1,84%). Como toda semana entram novas atividades na janela, o número ao vivo ficava sempre 'à frente' do REFIS, gerando confusão para o cliente. Decisão: o REFIS é o documento oficial assinado pelo cliente, então o card no topo do portal passa a ler diretamente do último REFIS emitido/consolidado (status != 'rascunho') — fallback ao cálculo ao vivo só se a obra ainda não tiver nenhum REFIS emitido. Resultado: o card 'Previsto', 'Realizado' e 'Desvio' no topo da Visão Geral do portal SEMPRE batem com o último REFIS exibido logo abaixo. O backend também passa a expor 'kpis.fonte' = 'refis_oficial' | 'calculo_ao_vivo' e 'kpis.refisSemana/refisNumero' para diagnóstico e futura legenda no frontend.",
