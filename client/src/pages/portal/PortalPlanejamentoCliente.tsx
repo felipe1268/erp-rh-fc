@@ -2467,13 +2467,29 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
   // Quando "Só Diretas" → usa os valores oficiais salvos no REFIS (paridade com o emitido).
   // Quando "Global (c/ Indiretas)" → recalcula a partir das folhas (média ponderada por peso),
   // refletindo o impacto das indiretas no avanço da obra.
-  const totalPesosFolhas = folhas.reduce((s: number, a: any) => s + (Number(a.pesoFinanceiro) || 0), 0);
-  const previstoRecalc = totalPesosFolhas > 0
-    ? folhas.reduce((s: number, a: any) => s + (Number(a.pesoFinanceiro) || 0) * progPrevistoNa(a, semanaRef), 0) / totalPesosFolhas
-    : 0;
-  const realizadoRecalc = totalPesosFolhas > 0
-    ? folhas.reduce((s: number, a: any) => s + (Number(a.pesoFinanceiro) || 0) * (Number(a.percentRealizado) || 0), 0) / totalPesosFolhas
-    : 0;
+  //
+  // Rev. 1521 — Fonte de verdade = módulo Planejamento.
+  // Replica EXATAMENTE a lógica de `previsto`/`realizadoAcum` em
+  // client/src/pages/planejamento/PlanejamentoDetalhe.tsx (linhas 4427-4466):
+  // se a soma de pesoFinanceiro for 0, cai em fallback `semPeso=true`
+  // → cada atividade vira peso 1 e denom = nº de folhas (média simples).
+  // Sem este fallback o Portal mostrava 0,00% / 0,91% enquanto o REFIS
+  // interno mostrava 2,28% / 1,60% para a mesma semana (REFIS Nº 001).
+  const folhasComDatas = folhas.filter((a: any) => a.dataInicio && a.dataFim);
+  const pesoBrutoFolhas = folhas.reduce((s: number, a: any) => s + (Number(a.pesoFinanceiro) || 0), 0);
+  const semPesoFolhas   = pesoBrutoFolhas === 0;
+  const denomPrev = semPesoFolhas ? (folhasComDatas.length || 1) : pesoBrutoFolhas;
+  const denomReal = semPesoFolhas ? (folhas.length        || 1) : pesoBrutoFolhas;
+  const previstoRecalc = folhasComDatas.reduce(
+    (s: number, a: any) => {
+      const peso = semPesoFolhas ? 1 : (Number(a.pesoFinanceiro) || 0);
+      return s + (progPrevistoNa(a, semanaRef) * peso) / denomPrev;
+    }, 0);
+  const realizadoRecalc = folhas.reduce(
+    (s: number, a: any) => {
+      const peso = semPesoFolhas ? 1 : (Number(a.pesoFinanceiro) || 0);
+      return s + ((Number(a.percentRealizado) || 0) * peso) / denomReal;
+    }, 0);
   const avancoPrevisto  = incluirIndiretas ? previstoRecalc  : Number(refisAtual.avancoPrevisto ?? 0);
   const avancoRealAtual = incluirIndiretas ? realizadoRecalc : Number(refisAtual.avancoRealizado ?? 0);
   const avancoSemPrev   = Number(refisAtual.avancoSemanalPrevisto ?? (refisAnterior ? avancoPrevisto - Number(refisAnterior.avancoPrevisto) : 0));

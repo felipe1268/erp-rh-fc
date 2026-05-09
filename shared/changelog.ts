@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1521,
+    titulo: "Portal do Cliente — REFIS: divergência corrigida (fonte de verdade = módulo Planejamento)",
+    descricao: "BUGFIX crítico apontado pelo usuário (screenshots IMG_0200/IMG_0201): a aba REFIS do Portal do Cliente exibia 0,00% Previsto Acumulado / 0,91% Realizado Acumulado / SPI 0,00 enquanto o REFIS Nº 001 (semana 04/05/2026) no módulo interno de Planejamento mostrava 2,28% / 1,60% / SPI 0,70 para a MESMA obra/semana com o mesmo toggle 'Global (c/ Indiretas)' ativo. Causa raiz: a função AbaRefis do Portal calculava `previstoRecalc`/`realizadoRecalc` SEM o fallback de média simples — quando a soma de pesoFinanceiro das atividades folha era zero, a divisão retornava 0. Já o módulo Planejamento (PlanejamentoDetalhe.tsx linhas 4427-4466) tem o fallback `semPeso → peso=1, denom=count` (média simples). Solução: replicada EXATAMENTE a mesma lógica do módulo Planejamento dentro de AbaRefis do Portal, garantindo que o Portal sempre assuma a verdade do Planejamento. Comentário explícito adicionado no código apontando o arquivo/linhas de origem para futuras manutenções.",
+    tipo: 'bugfix',
+    modulos: 'Portal do Cliente, Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 22:30:00',
+  },
+  {
     version: 1520,
     titulo: "Portal do Cliente — Cards do Caminho Crítico viram filtros clicáveis",
     descricao: "MELHORIA pedida pelo usuário (screenshots IMG_0198/IMG_0199): os 3 cards de KPI do topo da aba Caminho Crítico (Caminho Crítico / Quase Crítico / Com Folga) eram apenas decorativos. Agora cada card é um BOTÃO clicável que filtra as listas abaixo para mostrar apenas a categoria escolhida. Clicar de novo no mesmo card desativa o filtro e volta a mostrar as 3 listas. Quando há filtro ativo, aparece um banner cinza acima das listas indicando a categoria filtrada e um botão 'Limpar filtro · ver todas'. O card ativo recebe destaque visual (fundo mais saturado, borda 2px colorida, ring sutil e marcador '✓ filtrando').",
