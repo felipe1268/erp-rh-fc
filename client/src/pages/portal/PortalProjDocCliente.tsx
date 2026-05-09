@@ -359,29 +359,12 @@ export default function PortalProjDocCliente() {
                                           <td className="px-4 py-2 text-center text-[12px] text-slate-600">{fmtBR(d.dataEmissao)}</td>
                                           <td className="px-4 py-2 text-center">
                                             {d.temArquivo ? (
-                                              <div className="flex items-center justify-center gap-2 flex-wrap">
-                                                {d.podeVisualizarInline && (
-                                                  <button
-                                                    onClick={() => abrirInline(d.id, `${d.codigo} — ${d.titulo}`, `Rev. ${d.revisaoAtual || "0"} • ${st.label}`)}
-                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 hover:bg-purple-100 text-[11px] font-semibold border border-purple-200 transition"
-                                                    title="Visualizar no navegador"
-                                                  >
-                                                    <Eye className="h-3 w-3" /> Abrir
-                                                  </button>
-                                                )}
-                                                <button
-                                                  onClick={() => baixar(d.id)}
-                                                  className="inline-flex items-center gap-1 text-[12px] font-semibold text-purple-700 hover:text-purple-900"
-                                                  title={d.extensao ? `Baixar .${d.extensao.toUpperCase()}` : "Baixar"}
-                                                >
-                                                  <Download className="h-3.5 w-3.5" /> Baixar
-                                                  {d.extensao && (
-                                                    <span className="ml-1 px-1 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-500 uppercase tracking-wider">
-                                                      {d.extensao}
-                                                    </span>
-                                                  )}
-                                                </button>
-                                              </div>
+                                              <AcoesArquivo
+                                                extensao={d.extensao}
+                                                podeVisualizarInline={d.podeVisualizarInline}
+                                                onAbrir={() => abrirInline(d.id, `${d.codigo} — ${d.titulo}`, `Rev. ${d.revisaoAtual || "0"} • ${st.label}`)}
+                                                onBaixar={() => baixar(d.id)}
+                                              />
                                             ) : (
                                               <span className="text-[11px] text-slate-400">—</span>
                                             )}
@@ -456,29 +439,12 @@ export default function PortalProjDocCliente() {
                       <td className="px-4 py-2 text-center text-[12px] text-slate-600">{fmtBR(d.dataEmissao)}</td>
                       <td className="px-4 py-2 text-center">
                         {d.temArquivo ? (
-                          <div className="flex items-center justify-center gap-2 flex-wrap">
-                            {d.podeVisualizarInline && (
-                              <button
-                                onClick={() => abrirInline(d.id, `${d.codigo} — ${d.titulo}`, `Rev. ${d.revisaoAtual || "0"} • ${st.label}`)}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 hover:bg-purple-100 text-[11px] font-semibold border border-purple-200 transition"
-                                title="Visualizar no navegador"
-                              >
-                                <Eye className="h-3 w-3" /> Abrir
-                              </button>
-                            )}
-                            <button
-                              onClick={() => baixar(d.id)}
-                              className="inline-flex items-center gap-1 text-[12px] font-semibold text-purple-700 hover:text-purple-900"
-                              title={d.extensao ? `Baixar .${d.extensao.toUpperCase()}` : "Baixar"}
-                            >
-                              <Download className="h-3.5 w-3.5" /> Baixar
-                              {d.extensao && (
-                                <span className="ml-1 px-1 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-500 uppercase tracking-wider">
-                                  {d.extensao}
-                                </span>
-                              )}
-                            </button>
-                          </div>
+                          <AcoesArquivo
+                            extensao={d.extensao}
+                            podeVisualizarInline={d.podeVisualizarInline}
+                            onAbrir={() => abrirInline(d.id, `${d.codigo} — ${d.titulo}`, `Rev. ${d.revisaoAtual || "0"} • ${st.label}`)}
+                            onBaixar={() => baixar(d.id)}
+                          />
                         ) : (
                           <span className="text-[11px] text-slate-400">—</span>
                         )}
@@ -536,6 +502,53 @@ export default function PortalProjDocCliente() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Rev. 1566 — Botões de ação compactos: "pílula" única dividida em
+// dois ícones (olho = abrir / seta = baixar) com a extensão do arquivo
+// como um chip à esquerda. Evita sobreposição em telas estreitas e
+// economiza espaço da coluna Ações sem perder clareza.
+function AcoesArquivo({
+  extensao,
+  podeVisualizarInline,
+  onAbrir,
+  onBaixar,
+}: {
+  extensao?: string | null;
+  podeVisualizarInline?: boolean;
+  onAbrir: () => void;
+  onBaixar: () => void;
+}) {
+  const ext = (extensao || "").toString().toUpperCase();
+  return (
+    <div className="inline-flex items-stretch h-7 rounded-md border border-purple-200 bg-white shadow-sm overflow-hidden">
+      {ext && (
+        <span className="flex items-center px-1.5 text-[9px] font-bold tracking-wider text-slate-500 bg-slate-50 border-r border-purple-200">
+          {ext}
+        </span>
+      )}
+      {podeVisualizarInline && (
+        <button
+          type="button"
+          onClick={onAbrir}
+          className="flex items-center justify-center w-7 text-purple-700 hover:bg-purple-50 transition border-r border-purple-200"
+          title="Visualizar no navegador"
+          aria-label="Visualizar"
+        >
+          <Eye className="h-3.5 w-3.5" />
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onBaixar}
+        className="flex items-center justify-center w-7 text-purple-700 hover:bg-purple-50 transition"
+        title={ext ? `Baixar .${ext}` : "Baixar"}
+        aria-label="Baixar"
+      >
+        <Download className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }

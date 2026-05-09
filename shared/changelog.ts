@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1566,
+    titulo: "Portal do Cliente — Projetos/Documentos: ações compactas (olho + seta)",
+    descricao: "Na tela de Projetos/Documentos Técnicos do Portal do Cliente os botões 'Abrir' e 'Baixar EXT' estavam se sobrepondo em algumas linhas (especialmente no iPad e em larguras menores). Agora a coluna 'Ações' usa uma pílula única e elegante com: chip da extensão do arquivo (PDF/DWG/...) + ícone de olho (visualizar) + ícone de seta (baixar), separados por divisórias finas. Vale tanto na visão por Pastas quanto na visão Lista. Tooltip em cada ícone mantém clareza para o usuário.",
+    tipo: 'melhoria',
+    modulos: 'Portal do Cliente, Projetos Técnicos',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 04:30:00',
+  },
+  {
     version: 1565,
     titulo: "Portal do Cliente — Visualizador de Projetos/Documentos: corrige 'Erro interno'",
     descricao: "A tela de visualização de Projetos/Documentos Técnicos do Portal do Cliente estava mostrando 'Erro interno' ao abrir certos arquivos (PDF, JPG, PNG). Causa: o backend tentava baixar o próprio arquivo via HTTP no domínio público (loop pelo proxy do Replit), o que falhava silenciosamente. Agora, quando o arquivo está em /uploads/* o backend lê diretamente do disco e, se não encontrar, do banco de dados (tabela uploaded_files) — sem HTTP roundtrip. URLs externas (storage Manus etc.) continuam sendo baixadas normalmente. Mesma correção aplicada ao endpoint de documentos SST (ASO/Treinamento).",
