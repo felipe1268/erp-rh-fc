@@ -1822,6 +1822,26 @@ function AlertaTendenciaBanner({ alerta }: { alerta: any }) {
       </div>
     );
   }
+  // Rev. 1568 — vide PlanejamentoDetalhe.tsx: SPI não é confiável p/
+  // projetar conclusão em fase inicial (< 20% previsto). Mostramos
+  // referência sem alarmar o cliente.
+  if (alerta.nivel === "fase_inicial") {
+    return (
+      <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 flex items-start gap-3">
+        <Activity className="h-5 w-5 text-sky-600 mt-0.5 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-sky-800">
+            Fase inicial · SPI {alerta.spi.toFixed(2)} (referência)
+          </p>
+          <p className="text-xs text-sky-800/80 mt-0.5">
+            Avanço previsto até hoje: {alerta.previstoPct.toFixed(2)}% · Realizado: {alerta.realizadoPct.toFixed(2)}%.
+            Com menos de 20% executado, projeções de prazo a partir do SPI não são estatisticamente confiáveis (referência: PMBOK / Earned Schedule).
+            A tendência de conclusão ganha precisão à medida que a obra avança.
+          </p>
+        </div>
+      </div>
+    );
+  }
   const cfg: Record<string, { bg: string; bd: string; tx: string; ic: any; titulo: string; sub: string }> = {
     ok:      { bg: "bg-emerald-50",  bd: "border-emerald-200",  tx: "text-emerald-800", ic: <CheckCircle2 className="h-5 w-5 text-emerald-600" />,
                titulo: `No prazo · SPI ${alerta.spi.toFixed(2)}`,
@@ -1910,6 +1930,16 @@ function AbaCurvaS({ curvaData, kpis, projeto, curvaMedicoes = [] }: any) {
     const fim = new Date(dFim + "T12:00:00").getTime();
     if (!Number.isFinite(ini) || !Number.isFinite(fim)) return null;
     if (fim <= ini) return null;
+    // Rev. 1568 — Guarda de FASE INICIAL (PMBOK / Lipke 2003).
+    // Vide comentário em PlanejamentoDetalhe.tsx.
+    if (prev < 20) {
+      return {
+        nivel: "fase_inicial" as const,
+        spi: +spi.toFixed(2),
+        previstoPct: prev,
+        realizadoPct: real,
+      };
+    }
     const duracaoMs = fim - ini;
     const etaMs = ini + duracaoMs / Math.max(spi, 0.0001);
     const etaDate = new Date(etaMs);

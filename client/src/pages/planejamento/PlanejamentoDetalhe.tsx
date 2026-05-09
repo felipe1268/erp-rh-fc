@@ -3818,6 +3818,28 @@ function AlertaTendenciaBanner({ alerta }: { alerta: any }) {
       </div>
     );
   }
+  // Rev. 1568 — Fase inicial (< 20% de avanço previsto): conforme a
+  // literatura (Lipke 2003, Earned Schedule; PMBOK), o SPI clássico é
+  // estatisticamente instável no início (e converge para 1 no fim).
+  // Mostramos o SPI atual como referência informativa, mas NÃO
+  // extrapolamos ETA nem disparamos alertas de "estouro de prazo".
+  if (alerta.nivel === "fase_inicial") {
+    return (
+      <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 flex items-start gap-3">
+        <Activity className="h-5 w-5 text-sky-600 mt-0.5 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-sky-800">
+            Fase inicial · SPI {alerta.spi.toFixed(2)} (referência)
+          </p>
+          <p className="text-xs text-sky-800/80 mt-0.5">
+            Avanço previsto até hoje: {alerta.previstoPct.toFixed(2)}% · Realizado: {alerta.realizadoPct.toFixed(2)}%.
+            Com menos de 20% executado, projeções de prazo a partir do SPI não são confiáveis (PMBOK / Earned Schedule).
+            Acompanhe o ritmo semanal; a tendência ganha precisão ao longo da execução.
+          </p>
+        </div>
+      </div>
+    );
+  }
   const cfg: Record<string, { bg: string; bd: string; tx: string; ic: any; titulo: string; sub: string }> = {
     ok:      { bg: "bg-emerald-50",  bd: "border-emerald-200",  tx: "text-emerald-800", ic: <CheckCircle2 className="h-5 w-5 text-emerald-600" />,
                titulo: `No prazo · SPI ${alerta.spi.toFixed(2)}`,
@@ -3853,6 +3875,21 @@ function calcAlertaTendencia(dataInicio: string | null | undefined, dataTerminoC
   const fim = new Date(dataTerminoContratual + "T12:00:00").getTime();
   if (!Number.isFinite(ini) || !Number.isFinite(fim)) return null;
   if (fim <= ini) return null;
+  // Rev. 1568 — Guarda de FASE INICIAL (literatura PMBOK / Lipke,
+  // Earned Schedule, 2003): com < 20% de avanço previsto até hoje, o
+  // SPI clássico tem alta variância e gera projeções de ETA absurdas
+  // (ex.: 1,38% real × 1,84% prev → SPI 0,75 → "138 dias de atraso"
+  // numa obra que mal começou). Nesse regime devolvemos o SPI apenas
+  // como referência, sem extrapolar conclusão nem classificar como
+  // "Crítico". Acima de 20% retomamos a projeção EVM padrão.
+  if (previstoPct < 20) {
+    return {
+      nivel: "fase_inicial" as const,
+      spi: +spi.toFixed(2),
+      previstoPct,
+      realizadoPct,
+    };
+  }
   const duracaoMs = fim - ini;
   const etaMs = ini + duracaoMs / Math.max(spi, 0.0001);
   const etaDate = new Date(etaMs);

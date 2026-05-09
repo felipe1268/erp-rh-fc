@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1568,
+    titulo: "Curva S — Tendência: trava de fase inicial (PMBOK / Earned Schedule)",
+    descricao: "O banner de Tendência × Prazo Contratual estava emitindo alertas alarmistas (ex.: 'Crítico · 138 dias de atraso projetado · ação corretiva imediata') em obras recém-iniciadas — caso típico de 1,38% realizado vs 1,84% previsto, em que o SPI puro extrapola conclusões absurdas. Pela literatura clássica de planejamento (PMBOK e Earned Schedule de Walt Lipke, 2003), o SPI é estatisticamente instável quando o avanço previsto está abaixo de ~20% (e se distorce para 1,0 acima de ~80%). Agora, enquanto o avanço previsto até hoje for < 20%, mostramos um banner azul informativo 'Fase inicial · SPI X.XX (referência)' com previsto/realizado, SEM extrapolar ETA nem classificar como crítico. Acima de 20% a projeção clássica continua valendo. Aplicado tanto na tela interna do Planejamento quanto no Portal do Cliente.",
+    tipo: 'correcao',
+    modulos: 'Planejamento, Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 05:10:00',
+  },
+  {
     version: 1567,
     titulo: "Portal Externo / Cliente — Olho da senha funciona no iPad/iOS",
     descricao: "O ícone de olho ao lado do campo de Senha não revelava a senha quando clicado pelo iPad/iPhone (Safari). Agora o botão tem área de toque maior, ficou em uma camada acima do input e responde no toque (onPointerDown), evitando que o gesto fosse 'engolido' pelo campo de senha ou pelo AutoFill do iOS. Vale para os logins do Portal Externo (terceiros/parceiros) e do Portal do Cliente.",
