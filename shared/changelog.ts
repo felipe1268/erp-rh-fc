@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1559,
+    titulo: "Portal do Cliente — RH/Docs: treinamentos vencidos em vermelho",
+    descricao: "Alinhamento com a aba Efetivo do Planejamento. No Portal do Cliente → RH/Controle de Documentos, treinamentos com a data de validade já passada agora aparecem em vermelho com a palavra 'venceu' (antes mostrava só 'val. dd/MM/aaaa' em cinza, sem deixar claro que estava vencido).",
+    tipo: 'correcao',
+    modulos: 'Portal do Cliente, RH',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 00:55:00',
+  },
+  {
     version: 1558,
     titulo: "Planejamento — Aba Efetivo: ASO e Treinamentos NR direto na lista do efetivo",
     descricao: "A aba Efetivo do Planejamento agora traz, ao lado de cada funcionário, o status do ASO (Vigente / Vencido / Sem ASO com a data de validade) e a quantidade de treinamentos vigentes. Clicando na seta da linha, expande mostrando o ASO completo (tipo, resultado, exame, validade) e a lista de treinamentos com o código da NR, descrição da norma (NR-12 Máquinas e Equipamentos, etc.) e a validade — treinamentos vencidos aparecem em vermelho. Mesma UX do Portal do Cliente, mas trazida pra dentro do planejamento pra acelerar a análise diária da obra. Backend: novo endpoint obras.docsSstFuncionarios faz fetch em lote por employeeIds. Terceiros não exibem coluna SST (ainda não suportado).",

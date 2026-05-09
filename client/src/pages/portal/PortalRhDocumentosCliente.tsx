@@ -289,6 +289,10 @@ export default function PortalRhDocumentosCliente() {
                                       const desc = (t.nome && t.nome.toUpperCase() !== String(t.norma || "").toUpperCase())
                                         ? t.nome
                                         : getNrDescricao(t.norma);
+                                      // Rev. 1559 — destaca treinamentos vencidos
+                                      // (mesma regra do Planejamento/Efetivo).
+                                      const hoje = new Date().toISOString().slice(0, 10);
+                                      const venceu = t.dataValidade && t.dataValidade < hoje;
                                       return (
                                         <li key={i} className="flex items-start justify-between gap-2 py-0.5">
                                           <div className="min-w-0 flex-1">
@@ -300,8 +304,8 @@ export default function PortalRhDocumentosCliente() {
                                                 </span>
                                               )}
                                             </div>
-                                            <div className="text-[10.5px] text-slate-400">
-                                              val. {fmtBR(t.dataValidade)}
+                                            <div className={`text-[10.5px] ${venceu ? "text-rose-600 font-semibold" : "text-slate-400"}`}>
+                                              {venceu ? "venceu" : "val."} {fmtBR(t.dataValidade)}
                                             </div>
                                           </div>
                                           {t.temPdf && (
