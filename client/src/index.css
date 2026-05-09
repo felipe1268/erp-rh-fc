@@ -134,61 +134,94 @@
 
 
 /* ============================================================ */
-/* RESPONSIVIDADE MOBILE                                        */
+/* RESPONSIVIDADE GLOBAL                                        */
 /* ============================================================ */
 
-/* Garantir que o layout se adapte ao virar o celular */
+/* Touch scroll suave em containers roláveis (sem overscroll-contain global
+   para não quebrar pull-to-refresh nem rolagem encadeada) */
+.overflow-x-auto,
+.overflow-auto,
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Overscroll-contain APENAS em modais/sheets para evitar arrastar o body
+   por baixo quando o usuário rola dentro do diálogo */
+[data-slot="dialog-content"],
+[data-slot="sheet-content"] {
+  overscroll-behavior: contain;
+}
+
+/* Imagens e vídeos nunca estouram a largura. SVGs FICAM DE FORA porque
+   ícones inline (lucide, gráficos) usam width/height fixos. */
+img, video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Quebra-linha defensiva em palavras longas (URLs, IDs) */
+.break-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* ===== Mobile: até 767px ===== */
 @media screen and (max-width: 767px) {
-  html, body {
-    overflow-x: hidden;
-    width: 100%;
-    min-height: 100dvh;
+  html, body { min-height: 100dvh; }
+
+  /* Prevenir scroll horizontal acidental APENAS no body (não em html,
+     para não quebrar position:sticky em cabeçalhos de tabela) */
+  body { overflow-x: hidden; max-width: 100vw; }
+
+  /* Targets de toque mínimos (Apple/Material guideline = 44px) */
+  button:not(.size-sm):not([data-size="sm"]):not([data-size="icon"]),
+  [role="button"]:not(.size-sm),
+  a[role="menuitem"] {
+    min-height: 40px;
   }
 
-  /* Tabelas responsivas - scroll horizontal */
-  .overflow-x-auto {
+  /* Cards e formulários: gap menor para caber */
+  .grid { gap: 0.75rem; }
+
+  /* Headings encolhem proporcionalmente */
+  h1 { font-size: 1.25rem !important; line-height: 1.3 !important; }
+  h2 { font-size: 1.1rem !important;  line-height: 1.3 !important; }
+
+  /* Diálogos do shadcn: padding menor já vem do componente, garantir scroll interno */
+  [data-slot="dialog-content"] {
+    border-radius: 0.75rem;
+  }
+
+  /* Tabs com muitos itens: scroll horizontal sem quebrar */
+  [role="tablist"] {
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Todas as tabelas dentro de cards devem ter scroll horizontal */
-  table {
-    min-width: 600px;
-  }
-
-  /* Cards e formulários */
-  .grid {
-    gap: 0.75rem;
-  }
-
-  /* Textos menores em mobile */
-  h1 { font-size: 1.25rem !important; }
-  h2 { font-size: 1.1rem !important; }
-
-  /* Botões menores em mobile */
-  .gap-2 > button, .gap-3 > button {
-    font-size: 0.75rem;
-    padding: 0.375rem 0.625rem;
+  /* Toolbars com muitos botões: virar scroll horizontal */
+  .toolbar-scroll {
+    overflow-x: auto;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
-/* Landscape mobile - aproveitar melhor o espaço horizontal */
+/* ===== Landscape phone: aproveitar espaço horizontal ===== */
 @media screen and (max-width: 900px) and (orientation: landscape) {
-  html, body {
-    overflow-x: hidden;
-    width: 100%;
-  }
-
-  /* Sidebar fica oculta em landscape mobile para dar mais espaço */
-  [data-sidebar] {
-    --sidebar-width: 0px !important;
-  }
+  /* Sidebar mobile já é Sheet — sem ajuste extra necessário */
 }
 
-/* Tablets e landscape phones */
+/* ===== Tablet portrait: 768px–1023px ===== */
 @media screen and (min-width: 768px) and (max-width: 1023px) {
   .container {
     padding-left: 1rem;
     padding-right: 1rem;
+  }
+
+  /* Diálogos resizáveis usam mais largura útil em tablet */
+  [data-slot="dialog-content"] {
+    max-width: calc(100vw - 2rem) !important;
   }
 }
 

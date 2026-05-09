@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1501,
+    titulo: "Responsividade global — modais, tabelas, tabs e toolbars no celular/tablet",
+    descricao: "MELHORIA TRANSVERSAL pedida pelo usuário: o ERP estava 'bagunçado' em celular e tablet. Foram aplicadas mudanças GLOBAIS de baixo risco (sem reescrever páginas) que cascateiam para todos os módulos: (1) DialogContent (modal global do shadcn) agora tem max-h-[92dvh] + overflow-y-auto, padding p-4 no mobile / p-6 desktop e largura útil de 100vw - 1rem, evitando que modais grandes (Folha, Compras, Planejamento) estourem a tela; (2) html/body recebem overflow-x:hidden + max-width:100vw para impedir scroll horizontal acidental causado por componentes mal dimensionados; (3) todos os containers .overflow-x-auto / .overflow-auto / .overflow-y-auto ganham -webkit-overflow-scrolling:touch + overscroll-behavior:contain para inércia natural no iOS; (4) imagens, vídeos e SVGs limitados a max-width:100% para nunca estourar; (5) no breakpoint mobile (<768px) botões têm min-height:40px (target de toque), tablists e toolbars com classe .toolbar-scroll viram scroll horizontal ao invés de quebrar linha, headings encolhem; (6) no breakpoint tablet (768-1023px) modais usam max-width:calc(100vw - 2rem). Nada foi removido ou reescrito — apenas defaults globais melhores. Layout desktop permanece idêntico.",
+    tipo: 'melhoria',
+    modulos: 'Geral',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 10:30:00',
+  },
+  {
     version: 1500,
     titulo: "Planejamento — Cronograma: colunas Pred./Suc. agora exibem chip compacto com contagem (← N / N →)",
     descricao: "MELHORIA VISUAL pedida pelo usuário: as colunas Predecessoras e Sucessoras na aba Cronograma estavam visualmente pesadas, mostrando até 3 códigos WBS por linha + badge '+N'. Ficou amontoado, especialmente em atividades com muitas relações. Agora cada célula exibe um chip único, pequeno e colorido apenas com a CONTAGEM e uma seta direcional: '← N' (azul) para predecessoras e 'N →' (violeta) para sucessoras. A lista completa dos códigos WBS aparece em tooltip ao passar o mouse sobre o chip ('Predecessoras (N): 2.1.1; 2.1.2; ...'). Resultado: linhas finas, layout limpo, informação preserva 100% via tooltip. Atividades sem relação continuam mostrando '—' cinza.",
