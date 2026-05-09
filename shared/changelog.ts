@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1489,
+    titulo: "Planejamento (interno) — Impressão profissional em TODAS as abas, igual ao Portal do Cliente (cabeçalho + botões Imprimir/PDF)",
+    descricao: "O módulo INTERNO de Planejamento agora suporta impressão e geração de PDF em qualquer aba (Visão Geral, Cronograma, Gantt, Crono. Financeiro, Curva S, Avanço Semanal, Caminho Crítico, Prev. Medição, Prog. Semanal, Diagrama de Rede, Custo RH, Efetivo, Revisões, REFIS, BIM 3D), com o mesmo padrão visual do Portal do Cliente. (1) Botões 'Imprimir' e 'PDF' adicionados ao cabeçalho do projeto, ao lado do badge de status — disponíveis em qualquer aba. (2) Cabeçalho exclusivo de impressão (PlanejamentoPrintHeader) que aparece SÓ no PDF: linha 1 com os 3 logos lado a lado (Executora à esquerda, Cliente no centro, Gerenciadora à direita); linha 2 com a barra com nome da obra, número da revisão, cidade/estado, título da aba sendo impressa e timestamp de geração. (3) Os logos do Cliente e da Gerenciadora vêm do cadastro da Obra; o logo da Executora vem da empresa atualmente selecionada (selectedCompany). (4) O cabeçalho de tela continua intacto e não aparece no PDF (print:hidden). (5) Componente novo `PlanejamentoPrintHeader` espelha o `PortalPrintHeader` para garantir consistência visual entre o que o cliente vê no portal e o que a equipe interna imprime.",
+    tipo: "feature",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 07:30:00",
+  },
+  {
     version: 1488,
     titulo: "Portal do Cliente — Faixa de logos no topo da tela (Executora · Cliente · Gerenciadora), igual ao cabeçalho de impressão",
     descricao: "Adicionada faixa branca arredondada no topo da área de conteúdo do Portal do Cliente exibindo os 3 atores envolvidos no projeto: Construtora Executora (à esquerda), Cliente (centro) e Gerenciadora (direita). Cada bloco mostra o logo (quando cadastrado) ou o nome em texto. A faixa só aparece se ao menos um dos 3 tiver logo cadastrado, evitando faixa vazia. Reaproveita os mesmos dados já enviados pelo backend para o cabeçalho de impressão (empresaLogoUrl, clienteLogoUrl, gerenciadoraLogoUrl). Oculta na impressão (print:hidden) porque o PortalPrintHeader já cumpre esse papel no PDF — evita duplicidade.",

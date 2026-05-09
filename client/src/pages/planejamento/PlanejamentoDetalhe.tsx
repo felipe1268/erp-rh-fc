@@ -7,6 +7,8 @@ import { usePermissions } from "@/contexts/PermissionsContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCompany } from "@/hooks/useCompany";
 import PrintHeader from "@/components/PrintHeader";
+import PlanejamentoPrintHeader from "@/components/PlanejamentoPrintHeader";
+import PrintActions from "@/components/PrintActions";
 import ImportarCronograma, { parseMSProjectXML, parseMSProjectXLSX, TarefaImportada } from "./ImportarCronograma";
 import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
 import { DiagramaRede } from "./DiagramaRede";
@@ -441,12 +443,32 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
 
   const diasRestantes = calcDesvio(proj.dataTerminoContratual);
 
+  // ── Cabeçalho de impressão (idêntico ao Portal do Cliente) ──────────
+  // Resolve a obra associada ao projeto a partir da lista já carregada
+  // (obrasLista) e a empresa atualmente selecionada para extrair os 3 logos:
+  // Executora · Cliente · Gerenciadora.
+  const obraDoProjeto = useMemo(() => {
+    if (!proj?.obraId) return null;
+    return (obrasLista as any[]).find((o: any) => o.id === proj.obraId) || null;
+  }, [obrasLista, proj?.obraId]);
+  const tituloAbaAtual = TAB_DEFS.find(t => t.id === aba)?.label || "Planejamento";
+
   return (
     <DashboardLayout>
       <div className="p-4 pb-10">
 
+        {/* ── Cabeçalho EXCLUSIVO de impressão (logos 3 atores + obra + aba) ─
+              Não aparece em tela; só é renderizado no PDF/print. Cobre TODAS
+              as abas porque o componente fica fora do switch de abas. ───── */}
+        <PlanejamentoPrintHeader
+          proj={proj as any}
+          obra={obraDoProjeto as any}
+          empresa={selectedCompany as any}
+          titulo={`Planejamento — ${tituloAbaAtual}`}
+        />
+
         {/* ── Cabeçalho ───────────────────────────────────────────────── */}
-        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-3 mb-4">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-3 mb-4 print:hidden">
           <div className="flex items-start gap-2 sm:gap-3 min-w-0">
             <Button variant="ghost" size="sm" className="text-muted-foreground -ml-2 mt-0.5 flex-shrink-0"
               onClick={() => setLoc("/planejamento")}>
@@ -474,6 +496,8 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                 {fmt(n(proj.valorContrato))}
               </span>
             )}
+            {/* Ações de impressão / PDF (qualquer aba do módulo) */}
+            <PrintActions title={`Planejamento — ${tituloAbaAtual} — ${proj.nome}`} />
             <Button size="sm" variant="outline" className="gap-1.5 border-blue-200 text-blue-700 hover:bg-blue-50"
               onClick={() => setShowImportarMoModal(true)}>
               <Users className="h-3.5 w-3.5" /> Importar Custos MO
