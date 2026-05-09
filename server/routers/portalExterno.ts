@@ -899,6 +899,32 @@ export const portalExternoRouter = router({
       return c || null;
     }),
 
+    // Rev. 1564 — Liberações (módulos do Hub e abas do Planejamento)
+    // configuradas pelo admin para esta credencial. Usado pelo Hub e
+    // pela barra lateral do Planejamento para esconder o que o cliente
+    // não pode ver. Backward compatible: se a coluna estiver NULL ou
+    // sem chaves de módulo, devolve todos os módulos liberados.
+    liberacoes: publicProcedure.input(z.object({ token: z.string() })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+      const { parseAbasLiberadas, parseModulosLiberados } = await import("../../shared/portalClienteAbas");
+      // O JWT do auth.login usa `portalId`. Outros endpoints (planejamentoObra)
+      // já fazem `portalId ?? credId` — mesma normalização aqui.
+      const credId = decoded.portalId ?? decoded.credId;
+      const [cred] = await db.select().from(portalCredentials).where(and(
+        eq(portalCredentials.id, credId),
+        eq(portalCredentials.companyId, decoded.companyId),
+      ));
+      const raw = (cred as any)?.abasLiberadas as string | null;
+      return {
+        modulos: parseModulosLiberados(raw),
+        abas: parseAbasLiberadas(raw),
+      };
+    }),
+
     minhasObras: publicProcedure.input(z.object({ token: z.string() })).query(async ({ input }) => {
       const db = (await getDb())!;
       const secret = process.env.JWT_SECRET || "portal-secret";

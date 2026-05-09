@@ -98,6 +98,23 @@ export default function PortalPlanejamentoCliente() {
   const revisoes = ((data as any)?.revisoes || []) as any[];
   const abasLiberadas = ((data as any)?.abasLiberadas || ["visao_geral"]) as PortalClienteAbaKey[];
 
+  // Rev. 1564 — módulos liberados pelo admin (filtra a lista lateral "Outros módulos").
+  const { data: liberacoes } = trpc.portalExterno.cliente.liberacoes.useQuery(
+    { token }, { enabled: !!token, staleTime: 60_000 }
+  );
+  const idsModulosLiberados = useMemo(() => {
+    const set = new Set<string>();
+    const map: Record<string, string> = {
+      mod_planejamento: "planejamento",
+      mod_rh_documentos: "rh-documentos",
+      mod_proj_doc: "proj-doc",
+      mod_avaliacao: "avaliacao",
+    };
+    const keys = liberacoes?.modulos || (["mod_planejamento","mod_rh_documentos","mod_proj_doc","mod_avaliacao"] as string[]);
+    for (const k of keys) { const id = map[k]; if (id) set.add(id); }
+    return set;
+  }, [liberacoes]);
+
   const abasVisiveisBase = useMemo(() => {
     const liber = new Set(abasLiberadas);
     return PORTAL_CLIENTE_ABAS.filter((a) => liber.has(a.key));
@@ -356,7 +373,7 @@ export default function PortalPlanejamentoCliente() {
               </p>
             </div>
             <div className="px-2 pb-2 space-y-1">
-              {MODULOS_CLIENTE_NAV.map((m) => {
+              {MODULOS_CLIENTE_NAV.filter((m) => idsModulosLiberados.has(m.id)).map((m) => {
                 const isAtual = m.id === moduloAtualId;
                 const Icon = m.icon;
                 return (

@@ -12,9 +12,12 @@ import {
   Mail, KeyRound, Send, Search, MessageSquare, Star,
   Loader2, ShieldCheck, CheckCircle2, AlertCircle, Copy, Reply,
   Smile, Frown, TrendingUp, Users, Plus, Trash2, RefreshCw, UserPlus,
-  Lock, UnlockKeyhole, SlidersHorizontal, ExternalLink,
+  Lock, UnlockKeyhole, SlidersHorizontal, ExternalLink, Layers,
 } from "lucide-react";
-import { PORTAL_CLIENTE_ABAS, parseAbasLiberadas, ABA_OBRIGATORIA, type PortalClienteAbaKey } from "@shared/portalClienteAbas";
+import {
+  PORTAL_CLIENTE_ABAS, parseAbasLiberadas, ABA_OBRIGATORIA, type PortalClienteAbaKey,
+  PORTAL_CLIENTE_MODULOS, parseModulosLiberados, MODULO_OBRIGATORIO, type PortalClienteModuloKey,
+} from "@shared/portalClienteAbas";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
 const fmtCNPJ = (v?: string) => {
@@ -88,13 +91,15 @@ export default function ClientesPortalAdmin() {
     onError: (e) => toast.error(e.message),
   });
 
-  // ===== Modal: liberar abas do Portal por usuário =====
+  // ===== Modal: liberar módulos + abas do Portal por usuário =====
   const [abasTarget, setAbasTarget] = useState<any | null>(null);
   const [abasSel, setAbasSel] = useState<Set<PortalClienteAbaKey>>(new Set());
+  const [modSel, setModSel] = useState<Set<PortalClienteModuloKey>>(new Set());
   const [abasPicker, setAbasPicker] = useState<{ cliente: any; usuarios: any[] } | null>(null);
   const abrirAbas = (a: any) => {
     setAbasTarget(a);
     setAbasSel(new Set(parseAbasLiberadas(a.abasLiberadas)));
+    setModSel(new Set(parseModulosLiberados(a.abasLiberadas)));
   };
   const toggleAba = (k: PortalClienteAbaKey) => {
     if (k === ABA_OBRIGATORIA) return;
@@ -104,6 +109,15 @@ export default function ClientesPortalAdmin() {
       return next;
     });
   };
+  const toggleModulo = (k: PortalClienteModuloKey) => {
+    if (k === MODULO_OBRIGATORIO) return;
+    setModSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  };
+  const planejamentoLiberado = modSel.has("mod_planejamento");
 
   // ===== Responder comentário =====
   const [respondendo, setRespondendo] = useState<any | null>(null);
@@ -249,9 +263,9 @@ export default function ClientesPortalAdmin() {
                                     else setAbasPicker({ cliente: c, usuarios: ativos });
                                   }}
                                   className="gap-1.5 text-indigo-700 border-indigo-200 hover:bg-indigo-50"
-                                  title="Liberar abas do Portal por usuário"
+                                  title="Liberar módulos e abas do Portal por usuário"
                                 >
-                                  <SlidersHorizontal className="w-3.5 h-3.5" /> Abas
+                                  <SlidersHorizontal className="w-3.5 h-3.5" /> Módulos & Abas
                                 </Button>
                               )}
                               <Button size="sm" variant="outline" onClick={() => abrirGerenciar(c)} className="gap-1.5">
@@ -656,7 +670,7 @@ export default function ClientesPortalAdmin() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <SlidersHorizontal className="w-5 h-5 text-indigo-600" />
-                Liberar abas — escolha o usuário
+                Liberar módulos & abas — escolha o usuário
               </DialogTitle>
             </DialogHeader>
             {abasPicker && (
@@ -698,57 +712,120 @@ export default function ClientesPortalAdmin() {
             <DialogHeader className="px-6 py-4 border-b shrink-0">
               <DialogTitle className="flex items-center gap-2 text-lg">
                 <SlidersHorizontal className="w-5 h-5 text-indigo-600" />
-                Abas liberadas no Portal do Cliente
+                Liberações do Portal — Módulos e Abas
               </DialogTitle>
             </DialogHeader>
             {abasTarget && (
-              <div className="flex flex-col flex-1 min-h-0 px-6 py-4 gap-3">
+              <div className="flex flex-col flex-1 min-h-0 px-6 py-4 gap-4">
                 <div className="bg-slate-50 rounded-lg p-3 text-sm flex flex-wrap items-center justify-between gap-2 shrink-0">
                   <div>
                     <div className="font-semibold text-slate-800">{abasTarget.nomeResponsavel || abasTarget.emailResponsavel}</div>
                     <div className="text-xs text-slate-500">{abasTarget.emailResponsavel}</div>
                   </div>
-                  <Badge variant="outline" className="text-xs">{abasSel.size} de {PORTAL_CLIENTE_ABAS.length} abas selecionadas</Badge>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="outline" className="text-xs">{modSel.size} de {PORTAL_CLIENTE_MODULOS.length} módulos</Badge>
+                    <Badge variant="outline" className="text-xs">{abasSel.size} de {PORTAL_CLIENTE_ABAS.length} abas</Badge>
+                  </div>
                 </div>
-                <p className="text-xs text-slate-500 shrink-0">
-                  Selecione quais abas este usuário verá ao abrir uma obra (<b>/portal/cliente/obra/...</b>).
-                  A aba <b>Visão Geral</b> é obrigatória — sem ela o usuário não vê nada da obra clicada.
-                </p>
-                <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 flex-1 overflow-y-auto pr-1 content-start">
-                  {PORTAL_CLIENTE_ABAS.map((aba) => {
-                    const checked = abasSel.has(aba.key);
-                    const obrig = aba.key === ABA_OBRIGATORIA;
-                    return (
-                      <label key={aba.key}
-                        className={`flex items-start gap-2 border rounded-lg p-2.5 cursor-pointer text-sm transition ${checked ? "bg-indigo-50 border-indigo-200" : "bg-white hover:bg-slate-50"} ${obrig ? "opacity-90" : ""}`}>
-                        <input type="checkbox" className="mt-0.5" checked={checked} disabled={obrig} onChange={() => toggleAba(aba.key)} />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-slate-800 flex items-center gap-1.5 flex-wrap">
-                            {aba.label}
-                            {obrig && <Badge variant="outline" className="text-[9px]">obrigatória</Badge>}
-                            {aba.status === "em_breve" && <Badge className="bg-amber-500 text-[9px]">em breve</Badge>}
-                          </div>
-                          {aba.status === "em_breve" && (
-                            <div className="text-[10px] text-slate-500 mt-0.5">Aba liberável; conteúdo será disponibilizado em revisões futuras.</div>
-                          )}
-                        </div>
-                      </label>
-                    );
-                  })}
+
+                <div className="flex-1 overflow-y-auto pr-1 space-y-5 min-h-0">
+                  {/* ───── 1) MÓDULOS DO HUB ───── */}
+                  <section>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                          <Layers className="w-4 h-4 text-indigo-600" /> 1. Módulos do Portal
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Cards visíveis no Hub (<b>/portal/cliente/hub</b>). Desligue para esconder o card por completo. O módulo <b>Avaliação</b> é obrigatório para que o cliente sempre possa enviar feedback.
+                        </p>
+                      </div>
+                      <div className="flex gap-1.5 shrink-0">
+                        <Button variant="outline" size="sm" onClick={() => setModSel(new Set(PORTAL_CLIENTE_MODULOS.map((m) => m.key)))}>Todos</Button>
+                        <Button variant="outline" size="sm" onClick={() => setModSel(new Set([MODULO_OBRIGATORIO]))}>Só obrigatório</Button>
+                      </div>
+                    </div>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                      {PORTAL_CLIENTE_MODULOS.map((mod) => {
+                        const checked = modSel.has(mod.key);
+                        const obrig = mod.key === MODULO_OBRIGATORIO;
+                        return (
+                          <label key={mod.key}
+                            className={`flex items-start gap-2 border-2 rounded-lg p-3 cursor-pointer text-sm transition ${checked ? "bg-indigo-50 border-indigo-300" : "bg-white border-slate-200 hover:bg-slate-50"} ${obrig ? "opacity-90" : ""}`}>
+                            <input type="checkbox" className="mt-0.5" checked={checked} disabled={obrig} onChange={() => toggleModulo(mod.key)} />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                                {mod.label}
+                                {obrig && <Badge variant="outline" className="text-[9px]">obrigatório</Badge>}
+                              </div>
+                              <div className="text-[11px] text-slate-500 mt-0.5">{mod.descricao}</div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  {/* ───── 2) ABAS DO MÓDULO PLANEJAMENTO ───── */}
+                  <section className={planejamentoLiberado ? "" : "opacity-50 pointer-events-none"}>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                          <SlidersHorizontal className="w-4 h-4 text-indigo-600" /> 2. Abas do módulo Planejamento
+                          {!planejamentoLiberado && <Badge variant="outline" className="text-[10px]">módulo desligado</Badge>}
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Abas internas mostradas ao abrir uma obra (<b>/portal/cliente/obra/...</b>). A aba <b>Visão Geral</b> é obrigatória.
+                          {!planejamentoLiberado && <> Ative o módulo <b>Planejamento</b> acima para configurar as abas.</>}
+                        </p>
+                      </div>
+                      <div className="flex gap-1.5 shrink-0">
+                        <Button variant="outline" size="sm" onClick={() => setAbasSel(new Set(PORTAL_CLIENTE_ABAS.map((a) => a.key)))}>Todas</Button>
+                        <Button variant="outline" size="sm" onClick={() => setAbasSel(new Set([ABA_OBRIGATORIA]))}>Só obrigatória</Button>
+                      </div>
+                    </div>
+                    <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                      {PORTAL_CLIENTE_ABAS.map((aba) => {
+                        const checked = abasSel.has(aba.key);
+                        const obrig = aba.key === ABA_OBRIGATORIA;
+                        return (
+                          <label key={aba.key}
+                            className={`flex items-start gap-2 border rounded-lg p-2.5 cursor-pointer text-sm transition ${checked ? "bg-indigo-50 border-indigo-200" : "bg-white hover:bg-slate-50"} ${obrig ? "opacity-90" : ""}`}>
+                            <input type="checkbox" className="mt-0.5" checked={checked} disabled={obrig} onChange={() => toggleAba(aba.key)} />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-slate-800 flex items-center gap-1.5 flex-wrap">
+                                {aba.label}
+                                {obrig && <Badge variant="outline" className="text-[9px]">obrigatória</Badge>}
+                                {aba.status === "em_breve" && <Badge className="bg-amber-500 text-[9px]">em breve</Badge>}
+                              </div>
+                              {aba.status === "em_breve" && (
+                                <div className="text-[10px] text-slate-500 mt-0.5">Aba liberável; conteúdo será disponibilizado em revisões futuras.</div>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  {/* RH&Docs / Proj./Doc. / Avaliação não têm abas internas configuráveis hoje. */}
+                  <section className="border border-dashed border-slate-200 rounded-lg p-3 bg-slate-50/50">
+                    <p className="text-[11px] text-slate-500">
+                      Os módulos <b>RH&Docs</b>, <b>Proj./Doc. Técnicos</b> e <b>Avaliação</b> ainda não possuem sub-abas configuráveis — são liberados/bloqueados apenas no nível do módulo (acima).
+                      Quando novas abas internas forem adicionadas a esses módulos, elas aparecerão aqui automaticamente.
+                    </p>
+                  </section>
                 </div>
               </div>
             )}
             <DialogFooter
               className="gap-2 px-6 py-4 border-t bg-slate-50 shrink-0 flex-row flex-wrap"
               style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}>
-              <Button variant="outline" size="sm" onClick={() => setAbasSel(new Set(PORTAL_CLIENTE_ABAS.map((a) => a.key)))}>Selecionar todas</Button>
-              <Button variant="outline" size="sm" onClick={() => setAbasSel(new Set([ABA_OBRIGATORIA]))}>Apenas a obrigatória</Button>
-              <div className="flex-1" />
               <Button variant="outline" onClick={() => setAbasTarget(null)}>Cancelar</Button>
-              <Button onClick={() => abasTarget && setAbasMut.mutate({ id: abasTarget.id, companyId, abas: Array.from(abasSel) })}
+              <Button onClick={() => abasTarget && setAbasMut.mutate({ id: abasTarget.id, companyId, abas: [...Array.from(modSel), ...Array.from(abasSel)] })}
                 disabled={setAbasMut.isPending || !abasTarget} className="bg-indigo-600 hover:bg-indigo-700 gap-2">
                 {setAbasMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                Salvar
+                Salvar liberações
               </Button>
             </DialogFooter>
           </DialogContent>

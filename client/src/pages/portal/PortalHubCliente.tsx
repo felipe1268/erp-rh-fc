@@ -7,6 +7,7 @@ import {
   Layers, Clock, Zap,
 } from "lucide-react";
 import { APP_VERSION } from "../../../../shared/version";
+import { PORTAL_CLIENTE_MODULOS, type PortalClienteModuloKey } from "@shared/portalClienteAbas";
 
 type Modulo = {
   id: string;
@@ -134,6 +135,24 @@ export default function PortalHubCliente() {
   const { data: minhasObras = [] } = trpc.portalExterno.cliente.minhasObras.useQuery(
     { token }, { enabled: !!token && tipo === "cliente" }
   );
+
+  // Rev. 1564 — quais módulos o admin liberou para este usuário.
+  const { data: liberacoes } = trpc.portalExterno.cliente.liberacoes.useQuery(
+    { token }, { enabled: !!token && tipo === "cliente" }
+  );
+  const modulosLiberados = useMemo(() => {
+    const keys = new Set<string>(liberacoes?.modulos || PORTAL_CLIENTE_MODULOS.map((m) => m.key));
+    const idByKey: Record<PortalClienteModuloKey, string> = {
+      mod_planejamento: "planejamento",
+      mod_rh_documentos: "rh-documentos",
+      mod_proj_doc: "proj-doc",
+      mod_avaliacao: "avaliacao",
+    };
+    const idsLiberados = new Set<string>(
+      Array.from(keys).map((k) => idByKey[k as PortalClienteModuloKey]).filter(Boolean)
+    );
+    return MODULOS.filter((m) => idsLiberados.has(m.id));
+  }, [liberacoes]);
 
   const greeting = useMemo(() => getGreeting(), []);
   const formattedDate = useMemo(() => getFormattedDate(), []);
@@ -267,7 +286,7 @@ export default function PortalHubCliente() {
 
               {/* Tiles */}
               <div className="flex flex-wrap gap-3 mt-3 relative z-10">
-                {MODULOS.map((mod, idx) => {
+                {modulosLiberados.map((mod, idx) => {
                   const Icon = mod.icon;
                   return (
                     <div
