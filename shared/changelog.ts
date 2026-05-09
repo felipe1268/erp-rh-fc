@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1476,
+    titulo: "Portal do Cliente — Bugfix CRÍTICO: Avanço Físico Previsto agora usa a MESMA revisão do módulo Planejamento (última APROVADA)",
+    descricao: "Causa REAL da divergência teimosa 'portal 2,19% vs Planejamento interno 1,84%' identificada e corrigida: o portal e o módulo interno estavam lendo REVISÕES DIFERENTES do mesmo projeto. (1) Módulo interno (PlanejamentoDetalhe.tsx ~309): pega a última revisão com status='aprovada'; só cai na revisão mais nova (qualquer status) quando NENHUMA aprovada existe — exatamente como o cliente vê o REFIS oficial. (2) Portal externo (portalExterno.ts ~1167): pegava SEMPRE revisoesHist[0] (a mais nova por número, sem filtrar status). Quando havia uma revisão em rascunho/em_revisao mais nova com pesos financeiros ou datas diferentes da revisão aprovada, o portal calculava em cima dela e produzia outro número (2,19%) enquanto o módulo interno mantinha o número da revisão aprovada (1,84%). Correção: o portal agora replica EXATAMENTE a regra de revisaoAtiva do módulo interno — última aprovada → fallback à mais nova. Junto com as correções anteriores (Rev. 1470/1471 toFixed e Rev. 1473 alinhamento usarIgual), os números de Avanço Físico Previsto, Curva S e KPIs do portal passam a refletir SEMPRE a revisão oficial aprovada que o cliente vê no REFIS interno.",
+    tipo: "bugfix",
+    modulos: "Portal do Cliente, Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 22:50:00",
+  },
+  {
     version: 1475,
     titulo: "Portal do Cliente — Aba Efetivo: foto do funcionário, PJ incluídos, classificação Direto/Indireto",
     descricao: "A aba Efetivo do Portal do Cliente foi enriquecida para refletir TODO o efetivo da obra com a mesma riqueza visual do módulo interno: (1) Coluna 'Foto' adicionada na tabela — exibe a foto cadastrada de cada pessoa (employees.fotoUrl para CLT/PJ e funcionarios_terceiros.foto_url para terceiros). Quando não há foto cadastrada, mostra um avatar com as iniciais do nome, colorido conforme o tipo (azul=CLT, violeta=PJ, âmbar=Terceiro). (2) Funcionários PJ agora aparecem na lista — antes eram contados como CLT genérico; agora o backend identifica employees.tipoContrato='PJ' e expõe um badge violeta 'PJ' próprio, com KPI 'Total PJ' separado. (3) Nova coluna 'Categoria' classifica cada pessoa como 'Direto' ou 'Indireto' com base no campo categoriaMO da função (job_functions.categoria_mo): 'direto' → Direto (verde); 'indireta_obra' ou 'escritorio_central' → Indireto (cinza). (4) Adicionados KPIs 'Mão de Obra Direta' e 'Mão de Obra Indireta' e um filtro extra 'Direto / Indireto' lado a lado com o filtro de tipo de contrato. Cliente passa a ver de forma transparente a composição completa do efetivo: quem é CLT, quem é PJ, quem é terceirizado, e quanto disso é mão de obra direta (produtiva) vs indireta (apoio).",

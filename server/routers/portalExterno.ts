@@ -1165,7 +1165,17 @@ export const portalExternoRouter = router({
       const revisoesHist = await db.select().from(planejamentoRevisoes)
         .where(eq(planejamentoRevisoes.projetoId, projeto.id))
         .orderBy(desc(planejamentoRevisoes.numero));
-      const revisao = revisoesHist[0];
+      // ALINHAMENTO COM O MÓDULO INTERNO (PlanejamentoDetalhe.tsx ~309):
+      // revisaoAtiva = última revisão APROVADA; só cai na revisão mais nova
+      // (qualquer status) quando NENHUMA aprovada existe. Antes o portal pegava
+      // sempre revisoesHist[0] (a mais nova por número), o que fazia o portal
+      // calcular em cima de revisões em rascunho/em_revisao com pesos diferentes
+      // dos da revisão aprovada que o cliente vê no módulo interno → divergência
+      // típica do tipo "portal 2,19% vs Planejamento interno 1,84%".
+      const aprovadasOrdAsc = revisoesHist
+        .filter((r: any) => r.status === "aprovada")
+        .sort((a: any, b: any) => a.numero - b.numero);
+      const revisao = aprovadasOrdAsc[aprovadasOrdAsc.length - 1] ?? revisoesHist[0];
 
       if (!revisao) {
         return { obra, abasLiberadas, projeto, atividades: [], avancos: [], kpis: null, revisoes: [] };
