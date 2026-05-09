@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1539,
+    titulo: "Portal do Cliente — 'Avanço Físico' do topo agora é cálculo ao vivo (alinhado ao módulo interno)",
+    descricao: "BUGFIX reportado pelo cliente: na obra REVTE-CIVIL o card 'Avanço Físico' do topo do portal mostrava Realizado 1,05% / Previsto 1,84% (com badge 'Fonte oficial: REFIS Nº 001 - semana 04/05/2026'), enquanto logo abaixo o card 'REALIZADO NA SEMANA' já mostrava 1,38% (estado atual). A divergência confundia: o cliente atualiza avanços, vê o número de baixo mudar mas o de cima ficar travado no último REFIS. Causa: a query planejamentoObra do portal congelava previsto/realizado do último REFIS NÃO-rascunho como fonte de verdade do top bar. Funcionava enquanto ninguém mexia em nada após o REFIS, mas qualquer atualização de avanço gerava a divergência. Correção: server/routers/portalExterno.ts agora SEMPRE retorna kpis.previsto/realizado calculados ao vivo (pctTotalPrevisto/pctTotalRealizado), igual ao módulo interno 'Avanço Físico'. O REFIS continua sendo a referência histórica oficial na aba REFIS — o top bar só ganha um rótulo discreto 'Cálculo ao vivo · último REFIS oficial Nº 001' embaixo. Topo e base do portal agora batem sempre, e batem também com o módulo interno.",
+    tipo: 'bugfix',
+    modulos: 'Portal do Cliente, Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 15:40:00',
+  },
+  {
     version: 1538,
     titulo: "Planejamento — divergência de 0,02pp entre 'Avanço Físico' (topo) e 'REALIZADO (ACUM.)' (semanal) corrigida",
     descricao: "BUGFIX reportado pelo usuário: a barra superior 'Avanço Físico' mostrava Realizado 1.38% enquanto o card 'REALIZADO (ACUM.)' da seção semanal logo abaixo mostrava 1.40% — divergência de 0,02pp para o MESMO conjunto de atividades, pesos e avanços. Causa: as memos previsto/realizadoAcum/previstoComInd/realizadoComInd da seção semanal arredondavam o valor INTERMEDIÁRIO da soma ponderada para 1 casa decimal (`+soma.toFixed(1)`) ANTES de exibir, então um valor real de 1.385 virava 1.4 e era mostrado como '1.40'. A barra superior usa precisão cheia (`Math.min(100, ponderado)` sem toFixed), então mostra '1.38' real. Correção: removido o arredondamento intermediário das 4 memos da seção semanal — agora todas retornam o valor com precisão cheia e o arredondamento acontece só no display (`.toFixed(2)`). Os dois cards agora batem exatamente.",

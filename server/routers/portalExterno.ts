@@ -1583,30 +1583,28 @@ export const portalExternoRouter = router({
           recoveryWindowSemanas: (revisao as any).recoveryWindowSemanas ?? 4,
         },
         kpis: (() => {
-          // ALINHAMENTO COM O REFIS OFICIAL:
-          // O cliente vê na aba REFIS o relatório oficial emitido/consolidado
-          // (ex.: 1,84% previsto). O card "Avanço Físico" no topo do portal
-          // estava recalculando ao vivo (ref = próxima segunda + 7), gerando
-          // valores diferentes (ex.: 2,19%) conforme novas atividades entravam
-          // na janela. Solução: se existe um REFIS NÃO-rascunho mais recente,
-          // usar SEUS valores como fonte de verdade — assim o card do topo bate
-          // exatamente com o último REFIS exibido logo abaixo. Caso não haja
-          // REFIS emitido, mantém o cálculo ao vivo como fallback.
+          // Rev. 1539 — Top bar SEMPRE usa cálculo ao vivo (alinhado com o
+          // módulo interno "Avanço Físico" e com o card "REALIZADO (ACUM.)"
+          // logo abaixo na própria tela). Antes, quando havia um REFIS
+          // emitido, o portal congelava o número do último REFIS — o que
+          // gerava divergência confusa pro cliente: topo mostrava 1,05%
+          // (REFIS antigo) e logo abaixo "REALIZADO NA SEMANA" mostrava
+          // 1,38% (atual). O REFIS continua sendo a referência histórica
+          // oficial, exibido na aba REFIS, mas o "Avanço Físico" do topo
+          // reflete o estado ATUAL da obra, igual no módulo interno.
           const refisOficial = refisRows.find((r: any) => r.status && r.status !== "rascunho")
             ?? refisRows[0];
-          const previstoFinal = refisOficial ? _n(refisOficial.avancoPrevisto) : pctTotalPrevisto;
-          const realizadoFinal = refisOficial ? _n(refisOficial.avancoRealizado) : pctTotalRealizado;
-          const desvioFinal = +(realizadoFinal - previstoFinal).toFixed(2);
           return {
-            previsto: previstoFinal,
-            realizado: realizadoFinal,
-            desvio: desvioFinal,
+            previsto: pctTotalPrevisto,
+            realizado: pctTotalRealizado,
+            desvio: +(pctTotalRealizado - pctTotalPrevisto).toFixed(2),
             totalAtividades: folhas.length,
             atividadesConcluidas: folhas.filter((a: any) => (ultimoAvancoPorAtiv[a.id] ?? 0) >= 100).length,
             semanaInicio: monStr,
             semanaFim: sunStr,
-            // Indica de onde veio o número, útil para debug e legenda futura.
-            fonte: refisOficial ? "refis_oficial" : "calculo_ao_vivo",
+            // Sempre cálculo ao vivo agora; metadados do último REFIS ainda
+            // expostos para a legenda histórica.
+            fonte: "calculo_ao_vivo",
             refisSemana: refisOficial ? _toDateStr(refisOficial.semana) : null,
             refisNumero: refisOficial ? refisOficial.numero ?? null : null,
           };

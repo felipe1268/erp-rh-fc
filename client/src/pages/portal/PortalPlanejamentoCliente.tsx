@@ -703,10 +703,13 @@ export default function PortalPlanejamentoCliente() {
                   </span>
                 </div>
               </div>
-              {fonte === "refis_oficial" && refisNumero != null && (
+              {/* Rev. 1539 — Avanço Físico do topo agora é SEMPRE ao vivo
+                  (igual ao módulo interno e ao card REALIZADO ACUM. abaixo).
+                  Mostramos só uma referência ao último REFIS emitido. */}
+              {refisNumero != null && (
                 <div className="mt-3 text-[10px] text-slate-500 flex items-center gap-1.5">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  Fonte oficial: REFIS Nº {String(refisNumero).padStart(3, "0")}
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" />
+                  Cálculo ao vivo · último REFIS oficial: Nº {String(refisNumero).padStart(3, "0")}
                   {refisSemana ? ` · semana ${refisSemana.split("-").reverse().join("/")}` : ""}
                 </div>
               )}
