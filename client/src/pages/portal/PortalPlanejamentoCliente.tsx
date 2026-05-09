@@ -777,7 +777,7 @@ export default function PortalPlanejamentoCliente() {
           }
           if (aba === "visao_geral") return <AbaVisaoGeral kpis={kpis} projeto={projeto} obra={obra} semanaAtual={semanaAtual} atrasadas={atrasadas} proximas={proximas} atividadesTodas={atividadesTodas} refisLista={refisLista} />;
           if (aba === "cronograma") return <AbaCronograma atividades={atividadesTodas} />;
-          if (aba === "avanco_semanal") return <AbaAvancoSemanal kpis={kpis} semanaAtual={semanaAtual} atrasadas={atrasadas} />;
+          if (aba === "avanco_semanal") return <AbaAvancoSemanal kpis={kpis} semanaAtual={semanaAtual} atrasadas={atrasadas} curvaData={curvaData} />;
           if (aba === "prog_semanal") return (
             <AbaProgSemanal
               atividadesTodas={atividadesTodas}
@@ -1576,16 +1576,48 @@ function AbaCronograma({ atividades }: { atividades: any[] }) {
   );
 }
 
-function AbaAvancoSemanal({ kpis, semanaAtual, atrasadas }: any) {
-  const totalSemana = semanaAtual.reduce((s: number, a: any) => s + (a.pesoFinanceiro || 0), 0);
-  const realSemana = semanaAtual.reduce((s: number, a: any) => s + (a.pesoFinanceiro || 0) * (a.percentRealizado / 100), 0);
+function AbaAvancoSemanal({ kpis, semanaAtual, atrasadas, curvaData }: any) {
+  // Rev. 1528 — KPIs corretos por SEMANA (delta da Curva S), não por atividade ativa.
+  // O "Previsto na semana" é o quanto o projeto DEVE avançar nesta semana (delta da
+  // curva planejada). O "Realizado na semana" é o quanto efetivamente avançou.
+  // O peso bruto das atividades ativas é informativo e foi mantido como nota auxiliar.
+  const semIni: string | undefined = kpis?.semanaInicio;
+  const acumAt = (arr: { semana: string; acumulado: number }[] | undefined, semFim: string | undefined): number => {
+    if (!arr || !arr.length || !semFim) return 0;
+    const ord = arr.slice().sort((a, b) => a.semana.localeCompare(b.semana));
+    let last = 0;
+    for (const p of ord) { if (p.semana <= semFim) last = p.acumulado; else break; }
+    return last;
+  };
+  const semIniDate = semIni ? new Date(semIni + "T12:00:00") : null;
+  const semAntStr = semIniDate ? new Date(semIniDate.getTime() - 7 * 86400000).toISOString().slice(0, 10) : undefined;
+  const planejadaArr = (curvaData?.curvaPlanejada?.length ? curvaData.curvaPlanejada : curvaData?.curvaBaseline) as { semana: string; acumulado: number }[] | undefined;
+  const realizadaArr = curvaData?.curvaRealizada as { semana: string; acumulado: number }[] | undefined;
+  const planAtual = acumAt(planejadaArr, semIni);
+  const planAntes = acumAt(planejadaArr, semAntStr);
+  const realAtual = acumAt(realizadaArr, semIni);
+  const realAntes = acumAt(realizadaArr, semAntStr);
+  const previstoSemana = Math.max(0, planAtual - planAntes);
+  const realizadoSemana = Math.max(0, realAtual - realAntes);
+  const aderencia = previstoSemana > 0 ? (realizadoSemana / previstoSemana) * 100 : null;
+  const adOk = aderencia == null ? null : aderencia >= 95;
+  const pesoAtivas = semanaAtual.reduce((s: number, a: any) => s + (a.pesoFinanceiro || 0), 0);
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Atividades na semana" value={String(semanaAtual.length)} icon={<Activity className="w-5 h-5 text-blue-600" />} />
-        <KpiCard label="Peso da semana" value={`${totalSemana.toFixed(2).replace(".", ",")}%`} icon={<TrendingUp className="w-5 h-5 text-emerald-600" />} />
-        <KpiCard label="Realizado na semana" value={totalSemana > 0 ? fmtPct((realSemana / totalSemana) * 100) : "0,00%"} icon={<CheckCircle2 className="w-5 h-5 text-blue-600" />} />
+        <KpiCard label="Previsto na semana" value={fmtPct(previstoSemana)} icon={<TrendingUp className="w-5 h-5 text-orange-600" />} />
+        <KpiCard label="Realizado na semana" value={fmtPct(realizadoSemana)} icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />} />
+        <KpiCard
+          label="Aderência (SPI sem.)"
+          value={aderencia == null ? "—" : `${aderencia.toFixed(0)}%`}
+          icon={<Activity className={`w-5 h-5 ${adOk ? "text-emerald-600" : "text-red-600"}`} />}
+        />
       </div>
+      <p className="text-[11px] text-slate-400 px-1">
+        <strong>Como ler:</strong> &quot;Previsto&quot; e &quot;Realizado&quot; são o <strong>delta da Curva S nesta semana</strong> (o quanto a obra deve / efetivamente avançou de seg a dom).
+        Atividades multi-semana contribuem proporcionalmente. Peso bruto das atividades ativas: <strong>{pesoAtivas.toFixed(2).replace(".", ",")}%</strong> (informativo).
+      </p>
       <SecaoAtividades titulo={`Semana ${fmtBR(kpis.semanaInicio)} a ${fmtBR(kpis.semanaFim)}`} vazio="Nenhuma atividade nesta semana." itens={semanaAtual} cor="border-blue-200" />
       {atrasadas.length > 0 && <SecaoAtividades titulo={`Atrasadas (${atrasadas.length})`} vazio="" itens={atrasadas} cor="border-red-200" />}
     </div>

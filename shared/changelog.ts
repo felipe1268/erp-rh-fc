@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1528,
+    titulo: "Portal — Avanço Semanal: KPIs corretos por semana (delta da Curva S)",
+    descricao: "BUGFIX pedido pelo usuário (IMG_0211/0212): os 3 KPIs do topo da aba 'Avanço Semanal' do Portal do Cliente estavam errados conceitualmente. 'PESO DA SEMANA: 11,47%' era a soma dos pesos financeiros de TODAS as atividades ativas na semana — incluindo atividades de várias semanas pelo seu peso INTEGRAL, gerando duplo-conta (uma atividade de 8 semanas com peso 8,83% aparecia inteira em todas as 8 semanas). 'REALIZADO NA SEMANA' tinha o mesmo problema. SOLUÇÃO: substituídos por DELTA DA CURVA S — 'Previsto na semana' = curvaPlanejada[fim sem N] − curvaPlanejada[fim sem N−1] (representa quanto o projeto DEVE avançar nesta semana, atividades multi-semana contribuem proporcionalmente); 'Realizado na semana' = mesmo cálculo com curvaRealizada. Adicionado 4º KPI 'Aderência (SPI sem.)' = Realizado/Previsto × 100. Layout: grid de 3 → 4 cards (sm:grid-cols-2 lg:grid-cols-4). Adicionada nota explicativa abaixo dos cards mostrando o peso bruto das atividades ativas como informação auxiliar. Aplicado em PortalPlanejamentoCliente.tsx > AbaAvancoSemanal (passa curvaData via prop).",
+    tipo: 'fix',
+    modulos: 'Portal do Cliente, Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 02:30:00',
+  },
+  {
     version: 1527,
     titulo: "Curvas S — exibir TODAS as semanas no eixo X (S1 até última)",
     descricao: "AJUSTE pedido pelo usuário (IMG_0210): a Rev. 1526 introduziu intervalo inteligente que mostrava ~25 labels distribuídos, mas o usuário quer ver TODAS as semanas (S1, S2, S3... até a última) sem pulos. Como na Rev. 1526 os labels já foram encurtados para `S1, S2...` (3-4 caracteres), agora cabem todos no eixo X mesmo em obras de 60+ semanas. Trocado `interval={Math.max(0, Math.ceil(len/25) - 1)}` para `interval={0}` nos 8 gráficos de Curvas S (4 internos + 4 portal). Tipografia mantida: fontSize 10, ângulo -45°, height 55px.",
