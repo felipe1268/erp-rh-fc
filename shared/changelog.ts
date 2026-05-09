@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1542,
+    titulo: "Programação Semanal — pill visual de aderência ao lado do Desvio (Atrasada / No prazo / Adiantada)",
+    descricao: "Pedido do usuário: 'quando o desvio for menor [que zero] quero que apareça que a atividade está atrasada em vermelho, e quando for maior que zero adiantada, e o que estiver no prazo indica disso — quero algo visual de fácil acesso'. Agora a coluna Desvio mostra, ao lado do valor numérico em pp, um pill colorido com ícone: ▼ Atrasada (vermelho) quando desvio < −2pp, ● No prazo (verde) na faixa neutra ±2pp, ▲ Adiantada (azul) quando desvio > +2pp. Semana futura segue cinza neutro com '—'. Faixa de ±2pp evita marcar 'atraso' por ruído de arredondamento de cronograma. Tooltip mostra Real% vs Previsto%. Aplica-se igualmente ao módulo interno e ao Portal do Cliente (mesmo componente ProgramacaoSemanal).",
+    tipo: 'melhoria',
+    modulos: 'Planejamento, Programação Semanal, Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 17:00:00',
+  },
+  {
     version: 1541,
     titulo: "Programação Semanal — tabela linha-a-linha agora usa a mesma janela Mon-Dom do cabeçalho",
     descricao: "BUGFIX (continuação Rev. 1540): mesmo após alinhar a fórmula de Previsto agregado com a per-row, o cabeçalho continuava cobrando mais (1,98%) do que a tabela linha-a-linha (todas em dia). Causa raiz REAL: as duas usavam fórmulas alinhadas, mas referências de FIM DA SEMANA diferentes. O cabeçalho (PlanejamentoDetalhe) usa janela calendário Mon-Dom (semanaFim = próxima segunda exclusiva). A tabela (ProgramacaoSemanal) usava semanaAtual.fim = SEXTA-FEIRA. Atividades começando no sábado, domingo, ou na própria sexta (ex. 'Locação de gradil' MAIOR PESO 8,83% iniciando 08/05/sex) ficavam com prevInd=0% per-row ('em dia') enquanto o cabeçalho contava o overlap fim-de-semana e cobrava ~0,06pp+ de avanço previsto. Multiplicado por várias atividades nessa situação, gerava o desvio 'fantasma' do cabeçalho. Correção: per-row agora usa DOMINGO 23:59 (semanaAtual.fim + 2 dias) como ref, mesma janela Mon-Dom do cabeçalho. Linhas e cabeçalho passam a contar exatamente o mesmo intervalo de tempo.",

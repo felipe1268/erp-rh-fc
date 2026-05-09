@@ -764,11 +764,21 @@ export function ProgramacaoSemanal({
                       // chance de ser executada, seria injusto pintar de vermelho.
                       const desvio = av - prevInd;
                       const semanaFutura = !!semanaAtual && dateStr(semanaAtual.ini) > today;
+                      // Rev. 1542 — Pill visual de aderência por atividade.
+                      // Faixa neutra de ±2pp evita "ruído" para microvariações de
+                      // arredondamento; > +2pp = adiantada (azul); < −2pp = atrasada
+                      // (vermelho); semana futura = cinza neutro.
+                      const aderencia = semanaFutura
+                        ? { label: "—", icon: "·",  cls: "bg-slate-100 text-slate-500 ring-slate-200" }
+                        : desvio >  2 ? { label: "Adiantada", icon: "▲", cls: "bg-blue-50 text-blue-700 ring-blue-200" }
+                        : desvio < -2 ? { label: "Atrasada",  icon: "▼", cls: "bg-red-50 text-red-700 ring-red-200" }
+                        :               { label: "No prazo",  icon: "●", cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" };
                       const desvioCor = semanaFutura
                         ? "text-slate-400"
-                        : desvio >= -2  ? "text-emerald-600" :  // dentro da tolerância ou adiantada
-                          desvio >= -10 ? "text-amber-600"   :  // pequeno atraso
-                                          "text-red-600";       // atraso significativo
+                        : desvio >  2  ? "text-blue-600"    :
+                          desvio >= -2 ? "text-emerald-600" :
+                          desvio >= -10 ? "text-amber-600"  :
+                                          "text-red-600";
                       return (
                         <tr key={a.id ?? i}
                           className={`border-b border-slate-50 ${
@@ -811,8 +821,21 @@ export function ProgramacaoSemanal({
                           <td className={`py-2 px-3 text-right font-medium ${isMaiorPeso ? "text-orange-700 font-bold" : "text-slate-600"}`}>{parseFloat(a.pesoFinanceiro ?? "0").toFixed(2)}%</td>
                           <td className="py-2 px-3 text-right text-slate-500 tabular-nums">{prevInd.toFixed(1)}%</td>
                           <td className="py-2 px-3 text-right font-semibold text-slate-800 tabular-nums">{av.toFixed(1)}%</td>
-                          <td className={`py-2 px-3 text-right font-bold tabular-nums ${desvioCor}`}>
-                            {desvio > 0 ? "+" : ""}{desvio.toFixed(1)}pp
+                          <td className="py-2 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <span className={`font-bold tabular-nums ${desvioCor}`}>
+                                {desvio > 0 ? "+" : ""}{desvio.toFixed(1)}pp
+                              </span>
+                              <span
+                                title={semanaFutura
+                                  ? "Semana futura — atividade ainda não devia ter avançado."
+                                  : `${aderencia.label}: Real ${av.toFixed(1)}% vs Previsto ${prevInd.toFixed(1)}% (faixa neutra ±2pp).`}
+                                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold ring-1 ${aderencia.cls}`}
+                              >
+                                <span className="leading-none">{aderencia.icon}</span>
+                                <span className="leading-none">{aderencia.label}</span>
+                              </span>
+                            </div>
                           </td>
                           {/* Rev. 1534 — Recuperação por atividade DILUÍDA em N semanas:
                               gap = max(0, Previsto% − Real%); pp/sem = gap ÷ N.
