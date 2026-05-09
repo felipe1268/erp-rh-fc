@@ -794,8 +794,12 @@ export default function PortalPlanejamentoCliente() {
           if (aba === "refis") return <AbaRefis refisLista={refisLista} atividades={atividadesTodas} curvaData={curvaData} curvaMedicoes={curvaMedicoes} obra={obra} projeto={projeto} />;
           if (aba === "caminho_critico") return <AbaCaminhoCritico atividades={atividadesTodas} projeto={projeto} />;
           if (aba === "efetivo") return <AbaEfetivo token={token} obraId={obraId} />;
-          if (aba === "crono_financeiro") return <AbaCronoFinanceiro curvaS={curvaS} valorContrato={projeto?.valorContrato || 0} />;
-          if (aba === "prev_medicao") return <AbaPrevMedicao curvaS={curvaS} valorContrato={projeto?.valorContrato || 0} />;
+          // Rev. 1535 — Mesma regra da aba Curva S Financeira: prefere o
+          // total de venda do orçamento vinculado e cai no valorContrato
+          // cadastrado só como fallback, garantindo que o cliente veja R$
+          // em obras com orçamento bem definido mas sem valorContrato.
+          if (aba === "crono_financeiro") return <AbaCronoFinanceiro curvaS={curvaS} valorContrato={Number(projeto?.orcamentoTotalVenda) || Number(projeto?.valorContrato) || 0} />;
+          if (aba === "prev_medicao") return <AbaPrevMedicao curvaS={curvaS} valorContrato={Number(projeto?.orcamentoTotalVenda) || Number(projeto?.valorContrato) || 0} />;
           if (aba === "diagrama_rede") return <AbaDiagramaRede atividades={atividadesTodas} />;
           if (aba === "custo_rh") return <AbaCustoRh efetivoMensal={efetivoMensal} />;
           if (aba === "bim_3d") return <AbaBim3D obra={obra} />;
@@ -2020,7 +2024,14 @@ function AbaCurvaS({ curvaData, kpis, projeto, curvaMedicoes = [] }: any) {
       ))}
 
       {curvaTipo === "financeira" && (() => {
-        const totalContrato = Number(projeto?.valorContrato ?? 0);
+        // Rev. 1535 — Mesma regra do PlanejamentoDetalhe interno: prefere o
+        // total de venda do orçamento (vem do cruzamento EAP × Orçamento) e
+        // só cai no valorContrato cadastrado quando não há orçamento ligado.
+        // Antes o portal mostrava "Sem valor de contrato cadastrado." mesmo
+        // com orçamento bem definido (ex: REVTE-CIVIL R$ 1.359.798,88).
+        const totalContrato =
+          Number(projeto?.orcamentoTotalVenda ?? 0) ||
+          Number(projeto?.valorContrato ?? 0);
         if (!totalContrato || merged.length === 0) {
           return (
             <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-12 flex flex-col items-center gap-3 text-slate-400">
@@ -2596,7 +2607,10 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
   const fmt = (v: number) => Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const fPct_ = (v: number) => `${Number(v || 0).toFixed(2)}%`;
 
-  const totalContrato = Number(projeto?.valorContrato ?? 0);
+  // Rev. 1535 — Curva S Financeira do REFIS também precisa do fallback p/
+  // orcamentoTotalVenda; antes ocultava o bloco financeiro em obras com
+  // orçamento ligado mas sem valorContrato preenchido.
+  const totalContrato = Number(projeto?.orcamentoTotalVenda ?? 0) || Number(projeto?.valorContrato ?? 0);
 
   // ── Rev. 1513: Estados do toolbar de análise/impressão
   // - incluirIndiretas: alterna entre "Só Diretas" e "Global (c/ Indiretas)"

@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb, getEquipeObra } from "../db";
-import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, jobFunctions } from "../../drizzle/schema";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, jobFunctions, orcamentos } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1161,6 +1161,18 @@ export const portalExternoRouter = router({
         return { obra, abasLiberadas, projeto: null, atividades: [], avancos: [], kpis: null, revisoes: [] };
       }
 
+      // Rev. 1535 — Total do orçamento vinculado (fallback do valorContrato
+      // para a Curva S Financeira do portal). Igual ao getCurvaSFinanceira
+      // interno: usa orcamentos.totalVenda quando existe orçamento ligado.
+      let orcTotalVenda = 0;
+      if ((projeto as any).orcamentoId) {
+        const [orc] = await db.select({ totalVenda: orcamentos.totalVenda })
+          .from(orcamentos)
+          .where(eq(orcamentos.id, (projeto as any).orcamentoId))
+          .limit(1);
+        if (orc) orcTotalVenda = _n(orc.totalVenda);
+      }
+
       // Histórico de revisões (para a aba "Revisões")
       const revisoesHist = await db.select().from(planejamentoRevisoes)
         .where(eq(planejamentoRevisoes.projetoId, projeto.id))
@@ -1558,6 +1570,13 @@ export const portalExternoRouter = router({
           id: projeto.id, nome: projeto.nome, dataInicio: projeto.dataInicio,
           dataTerminoContratual: projeto.dataTerminoContratual, status: projeto.status,
           valorContrato: _n((projeto as any).valorContrato),
+          // Rev. 1535 — Curva S Financeira: cliente precisa do total de venda
+          // do orçamento vinculado para escalar % → R$ (mesma lógica do
+          // PlanejamentoDetalhe interno: prefere orcamento.totalVenda, cai
+          // pra valorContrato se não houver orçamento). Sem isso, a aba
+          // Curva S Financeira do portal mostra "Sem valor de contrato
+          // cadastrado" mesmo com orçamento bem definido.
+          orcamentoTotalVenda: orcTotalVenda,
           revisaoNumero: revisao.numero, revisaoData: revisao.dataRevisao,
           // Rev. 1534 — Janela de Recovery Schedule (AACE 23R-02). Cliente vê o
           // compromisso que o engenheiro definiu pra diluir o atraso.
