@@ -113,6 +113,42 @@ function parsePreds(pred?: string | null): string[] {
   return pred.split(/[,;|\s]+/).map(s => s.trim()).filter(Boolean);
 }
 
+// Retorna o prefixo EAP no nível desejado (1, 2 ou 3). Ex.: ("2.3.1.4", 2) → "2.3"
+function eapPrefixAtLevel(code: string, level: number): string {
+  const parts = code.split(".");
+  return parts.slice(0, Math.max(1, level)).join(".");
+}
+
+// Paleta de 16 cores distinguíveis (P6/Primavera-style) para colorir por WBS
+const WBS_PALETTE = [
+  { dot: "#3b82f6", bg: "#eff6ff", border: "#bfdbfe" }, // azul
+  { dot: "#10b981", bg: "#ecfdf5", border: "#a7f3d0" }, // verde
+  { dot: "#f59e0b", bg: "#fffbeb", border: "#fde68a" }, // âmbar
+  { dot: "#ef4444", bg: "#fef2f2", border: "#fecaca" }, // vermelho
+  { dot: "#8b5cf6", bg: "#f5f3ff", border: "#ddd6fe" }, // roxo
+  { dot: "#ec4899", bg: "#fdf2f8", border: "#fbcfe8" }, // rosa
+  { dot: "#14b8a6", bg: "#f0fdfa", border: "#99f6e4" }, // teal
+  { dot: "#f97316", bg: "#fff7ed", border: "#fed7aa" }, // laranja
+  { dot: "#6366f1", bg: "#eef2ff", border: "#c7d2fe" }, // índigo
+  { dot: "#84cc16", bg: "#f7fee7", border: "#d9f99d" }, // lima
+  { dot: "#06b6d4", bg: "#ecfeff", border: "#a5f3fc" }, // ciano
+  { dot: "#a855f7", bg: "#faf5ff", border: "#e9d5ff" }, // violeta
+  { dot: "#eab308", bg: "#fefce8", border: "#fef08a" }, // amarelo
+  { dot: "#0ea5e9", bg: "#f0f9ff", border: "#bae6fd" }, // sky
+  { dot: "#d946ef", bg: "#fdf4ff", border: "#f5d0fe" }, // fúcsia
+  { dot: "#64748b", bg: "#f8fafc", border: "#cbd5e1" }, // slate
+];
+
+function wbsColor(prefix: string): { dot: string; bg: string; border: string } {
+  // Hash simples e estável (FNV-like) para indexar a paleta
+  let h = 2166136261;
+  for (let i = 0; i < prefix.length; i++) {
+    h ^= prefix.charCodeAt(i);
+    h = (h * 16777619) >>> 0;
+  }
+  return WBS_PALETTE[h % WBS_PALETTE.length];
+}
+
 // ── EAP Hierarchy Layout (inclui grupos como nós pai) ───────────────────────
 
 function buildHierarchyLayout(
@@ -335,11 +371,18 @@ function Arrow({
 
 // ── Node Card ─────────────────────────────────────────────────────────────────
 
+interface NodeCardProps {
+  node: Node;
+  selected: boolean;
+  highlighted: boolean;
+  dimmed: boolean;
+  onClick: () => void;
+  wbsStripe?: string | null;
+}
+
 function NodeCard({
-  node, selected, highlighted, dimmed, onClick,
-}: {
-  node: Node; selected: boolean; highlighted: boolean; dimmed: boolean; onClick: () => void;
-}) {
+  node, selected, highlighted, dimmed, onClick, wbsStripe,
+}: NodeCardProps) {
   const opacity = dimmed ? 0.2 : 1;
   const name = node.nome.length > 30 ? node.nome.slice(0, 28) + "…" : node.nome;
 
@@ -403,6 +446,13 @@ function NodeCard({
         stroke={selected ? "#2563eb" : highlighted ? "#60a5fa" : c.border}
         strokeWidth={selected ? 2.5 : 1.5}
       />
+      {/* WBS top stripe (cor por pacote EAP — só na Rede) */}
+      {wbsStripe && (
+        <>
+          <rect width={NW} height={4} rx={0} fill={wbsStripe} />
+          <rect width={NW} height={4} y={0} fill={wbsStripe} />
+        </>
+      )}
       {/* Left status stripe */}
       <rect width={5} height={NH} rx={0} fill={c.dot} />
       <rect width={5} height={10} rx={0} fill={c.dot} />
@@ -517,6 +567,9 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
   const [periodoFim, setPeriodoFim]       = useState("");
   const [showPeriodoCustom, setShowPeriodoCustom] = useState(false);
   const [showSemanas, setShowSemanas] = useState(false);
+  // ── NOVO: filtro por pacote EAP + cor por WBS (só aplicado no modo Rede) ─
+  const [filtroPacoteEap, setFiltroPacoteEap] = useState<string>("todos");
+  const [corPorNivel, setCorPorNivel] = useState<1 | 2 | 3>(1);
 
   // Escape key exits fullscreen
   useEffect(() => {
@@ -606,8 +659,33 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
   const folhasFiltradas = useMemo(() => {
     let list = filtroGrupo === "todos" ? folhas : folhas.filter(a => a.grupo === filtroGrupo);
     if (periodoAtivo) list = list.filter(a => overlaps(a, periodoAtivo));
+    // Filtro por pacote EAP (só relevante no modo Rede; mantém-se no Hierarquia para folhas)
+    if (filtroPacoteEap !== "todos" && viewMode === "rede") {
+      list = list.filter(a => {
+        const code = a.eapCodigo ?? "";
+        return code === filtroPacoteEap || code.startsWith(filtroPacoteEap + ".");
+      });
+    }
     return list;
-  }, [folhas, filtroGrupo, periodoAtivo, overlaps]);
+  }, [folhas, filtroGrupo, periodoAtivo, overlaps, filtroPacoteEap, viewMode]);
+
+  // Pacotes EAP disponíveis no nível N1 (top-level) — para o dropdown de filtro
+  const pacotesEapN1 = useMemo(() => {
+    const map = new Map<string, string>(); // prefixo → nome do primeiro grupo encontrado
+    atividades.forEach(a => {
+      const code = a.eapCodigo ?? "";
+      if (!code) return;
+      const top = eapPrefixAtLevel(code, 1);
+      if (a.isGrupo && code === top && !map.has(top)) {
+        map.set(top, a.nome);
+      } else if (!map.has(top)) {
+        map.set(top, "");
+      }
+    });
+    return Array.from(map.entries())
+      .map(([code, nome]) => ({ code, nome }))
+      .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+  }, [atividades]);
 
   // Build graph
   const hierarquia = useMemo(
@@ -815,6 +893,48 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
               </select>
               <ChevronDown className="h-3 w-3 text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
+          )}
+
+          {/* ── NOVO: Pacote EAP + Cor por nível (só no modo Rede) ───────── */}
+          {viewMode === "rede" && pacotesEapN1.length > 0 && (
+            <>
+              <div className="relative" title="Mostrar apenas a rede de um pacote EAP (e seus descendentes)">
+                <select
+                  value={filtroPacoteEap}
+                  onChange={e => setFiltroPacoteEap(e.target.value)}
+                  className={`text-[11px] border rounded-lg pl-2.5 pr-6 py-1.5 appearance-none transition-colors ${
+                    filtroPacoteEap !== "todos"
+                      ? "border-blue-300 bg-blue-50 text-blue-700 font-semibold"
+                      : "border-slate-200 bg-white text-slate-600"
+                  }`}
+                >
+                  <option value="todos">Todos os pacotes EAP</option>
+                  {pacotesEapN1.map(p => (
+                    <option key={p.code} value={p.code}>
+                      {p.code}{p.nome ? ` — ${p.nome.length > 32 ? p.nome.slice(0, 30) + "…" : p.nome}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="h-3 w-3 text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+
+              {/* Cor por nível WBS — só faz sentido quando "Todos os pacotes" */}
+              {filtroPacoteEap === "todos" && (
+                <div className="relative" title="Cor automática por nível da WBS — facilita identificar a qual pacote cada atividade pertence">
+                  <select
+                    value={corPorNivel}
+                    onChange={e => setCorPorNivel(Number(e.target.value) as 1 | 2 | 3)}
+                    className="text-[11px] border border-slate-200 rounded-lg pl-7 pr-6 py-1.5 text-slate-600 bg-white appearance-none"
+                  >
+                    <option value={1}>Cor por N1</option>
+                    <option value={2}>Cor por N2</option>
+                    <option value={3}>Cor por N3</option>
+                  </select>
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 rounded-sm bg-gradient-to-r from-blue-400 via-emerald-400 to-amber-400 pointer-events-none" />
+                  <ChevronDown className="h-3 w-3 text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              )}
+            </>
           )}
 
           {/* ── Semana toggle (abre pill bar abaixo) ──────────────────────── */}
@@ -1077,6 +1197,10 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
                 const isSelected   = node.id === selectedId;
                 const isHighlighted = selectedId !== null && connectedIds.has(node.id);
                 const isDimmed      = selectedId !== null && !isSelected && !isHighlighted;
+                // Cor por WBS: só na Rede, só folhas, só quando não há filtro de pacote ativo
+                const stripe = (viewMode === "rede" && !node.isGrupo && filtroPacoteEap === "todos")
+                  ? wbsColor(eapPrefixAtLevel(node.eap, corPorNivel)).dot
+                  : null;
                 return (
                   <NodeCard
                     key={node.id}
@@ -1085,6 +1209,7 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
                     highlighted={isHighlighted}
                     dimmed={isDimmed}
                     onClick={() => setSelectedId(id => id === node.id ? null : node.id)}
+                    wbsStripe={stripe}
                   />
                 );
               })}

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1502,
+    titulo: "Diagrama de Rede — Cor automática por WBS + Filtro por pacote EAP (padrão Primavera P6)",
+    descricao: "PEDIDO DO USUÁRIO + ALINHAMENTO COM LITERATURA (PMBOK, AACE, Kerzner, prática P6/MS Project): em vez de unificar Hierarquia EAP e Rede de Precedências num único diagrama (que vira sopa de setas em projetos grandes — Kerzner alerta acima de ~50 nós, e o usuário tem 463), foram adicionados na view 'Rede de Precedências' DOIS controles que cruzam as duas dimensões sem perder rigor técnico: (1) Dropdown 'Pacote EAP' — quando selecionado um pacote N1 (ex.: '2 — SERVIÇOS PRELIMINARES'), a rede mostra APENAS as folhas daquele pacote e descendentes (eapCodigo === prefixo OU startsWith(prefixo + '.')), permitindo isolar a lógica de execução de uma frente específica. (2) Dropdown 'Cor por N1/N2/N3' (default N1) — cada nó folha ganha uma faixa colorida no topo identificando seu pacote WBS via hash determinístico (FNV) sobre 16 cores distinguíveis (paleta P6-style: azul, verde, âmbar, vermelho, roxo, rosa, teal, laranja, índigo, lima, ciano, violeta, amarelo, sky, fúcsia, slate). Resultado: o engenheiro bate o olho na rede e sabe a qual pacote da obra cada atividade pertence, sem precisar abrir nada. Status (concluída/em andamento/atrasada/em risco) continua na faixa lateral esquerda — duas dimensões visuais em um nó. Hierarquia EAP NÃO foi alterada (continua útil para a outra pergunta: 'o que faz parte de quê'). Cor por WBS desliga automaticamente quando há filtro de pacote único (ficaria redundante).",
+    tipo: 'melhoria',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 11:00:00',
+  },
+  {
     version: 1501,
     titulo: "Responsividade global — modais, tabelas, tabs e toolbars no celular/tablet",
     descricao: "MELHORIA TRANSVERSAL pedida pelo usuário: o ERP estava 'bagunçado' em celular e tablet. Foram aplicadas mudanças GLOBAIS de baixo risco (sem reescrever páginas) que cascateiam para todos os módulos: (1) DialogContent (modal global do shadcn) agora tem max-h-[92dvh] + overflow-y-auto, padding p-4 no mobile / p-6 desktop e largura útil de 100vw - 1rem, evitando que modais grandes (Folha, Compras, Planejamento) estourem a tela; (2) html/body recebem overflow-x:hidden + max-width:100vw para impedir scroll horizontal acidental causado por componentes mal dimensionados; (3) todos os containers .overflow-x-auto / .overflow-auto / .overflow-y-auto ganham -webkit-overflow-scrolling:touch + overscroll-behavior:contain para inércia natural no iOS; (4) imagens, vídeos e SVGs limitados a max-width:100% para nunca estourar; (5) no breakpoint mobile (<768px) botões têm min-height:40px (target de toque), tablists e toolbars com classe .toolbar-scroll viram scroll horizontal ao invés de quebrar linha, headings encolhem; (6) no breakpoint tablet (768-1023px) modais usam max-width:calc(100vw - 2rem). Nada foi removido ou reescrito — apenas defaults globais melhores. Layout desktop permanece idêntico.",
