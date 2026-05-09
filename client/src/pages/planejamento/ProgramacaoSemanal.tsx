@@ -532,7 +532,9 @@ export function ProgramacaoSemanal({
                       <th className="py-2 px-3 w-24">Fim</th>
                       <th className="py-2 px-3 w-28">Recurso</th>
                       <th className="py-2 px-3 w-20 text-right">Peso%</th>
+                      <th className="py-2 px-3 w-20 text-right" title="% que esta atividade DEVERIA estar concluída até o fim desta semana, calculado linearmente entre data de início e fim">Previsto%</th>
                       <th className="py-2 px-3 w-20 text-right">Real%</th>
+                      <th className="py-2 px-3 w-20 text-right" title="Desvio = Previsto% − Real%. Positivo = atividade atrasada na semana. Negativo = adiantada.">Desvio</th>
                       <th className="py-2 px-3 w-24 text-center">Status</th>
                     </tr>
                   </thead>
@@ -541,6 +543,24 @@ export function ProgramacaoSemanal({
                       const av       = avancosMap[a.id] ?? 0;
                       const atrasada = !!a.dataFim && a.dataFim < today && av < 100;
                       const isMaiorPeso = pesoSemana.maiorPesoIds.has(a.id);
+
+                      // Previsto% individual — % que a atividade DEVERIA estar
+                      // concluída no fim desta semana (interpolação linear pela data).
+                      let prevInd = 0;
+                      if (a.dataInicio && a.dataFim && semanaAtual?.fim) {
+                        const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+                        const fim = new Date(a.dataFim    + "T12:00:00").getTime();
+                        const ref = new Date(dateStr(semanaAtual.fim) + "T12:00:00").getTime();
+                        if (ref >= fim)       prevInd = 100;
+                        else if (ref > ini)   prevInd = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
+                      }
+                      // Opção (a): Desvio = Previsto − Real. Positivo = atrasada.
+                      const desvio = prevInd - av;
+                      const desvioAbs = Math.abs(desvio);
+                      const desvioCor =
+                        desvioAbs <= 2  ? "text-emerald-600" :
+                        desvioAbs <= 10 ? "text-amber-600"   :
+                                          "text-red-600";
                       return (
                         <tr key={a.id ?? i}
                           className={`border-b border-slate-50 ${
@@ -579,7 +599,11 @@ export function ProgramacaoSemanal({
                           <td className="py-2 px-3 text-slate-600">{fmtBR(a.dataFim)}</td>
                           <td className="py-2 px-3 text-slate-500 max-w-[120px] truncate">{a.recursoPrincipal || "—"}</td>
                           <td className={`py-2 px-3 text-right font-medium ${isMaiorPeso ? "text-orange-700 font-bold" : "text-slate-600"}`}>{parseFloat(a.pesoFinanceiro ?? "0").toFixed(2)}%</td>
-                          <td className="py-2 px-3 text-right font-semibold text-slate-800">{av.toFixed(1)}%</td>
+                          <td className="py-2 px-3 text-right text-slate-500 tabular-nums">{prevInd.toFixed(1)}%</td>
+                          <td className="py-2 px-3 text-right font-semibold text-slate-800 tabular-nums">{av.toFixed(1)}%</td>
+                          <td className={`py-2 px-3 text-right font-bold tabular-nums ${desvioCor}`}>
+                            {desvio > 0 ? "+" : ""}{desvio.toFixed(1)}pp
+                          </td>
                           <td className="py-2 px-3 text-center">
                             <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusColor(atrasada, av)}`}>
                               {statusLabel(atrasada, av)}

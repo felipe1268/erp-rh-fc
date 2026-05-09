@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1509,
+    titulo: "Programação Semanal — colunas Previsto% e Desvio por atividade",
+    descricao: "AJUSTE pedido pelo usuário: a tabela 'Atividades da Semana' agora mostra 3 colunas comparativas lado a lado em cada atividade: Previsto% (% em que a atividade DEVERIA estar concluída até o fim desta semana, calculado linearmente entre data de início e fim) | Real% (% efetivamente lançado, já existia) | Desvio (Previsto − Real, em pontos percentuais — opção (a) confirmada pelo usuário, positivo = atrasada). O Desvio é colorido: verde quando |desvio| ≤ 2pp, amarelo até 10pp, vermelho acima. Permite análise rápida atividade-a-atividade de quem está dentro do plano semanal e quem está derrapando, sem precisar abrir cada item. Mudança no componente compartilhado ProgramacaoSemanal — vale tanto pra view interna quanto pro Portal do Cliente.",
+    tipo: 'melhoria',
+    modulos: 'Planejamento, Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 16:00:00',
+  },
+  {
     version: 1508,
     titulo: "Portal do Cliente — aba Revisões com mesmo layout do interno",
     descricao: "AJUSTE pedido pelo usuário: a aba 'Revisões' do Portal do Cliente (Tela Inicial do Portal) mostrava só uma tabelinha mínima (Revisão / Data / Motivo / Consolidada), enquanto a versão interna (PlanejamentoDetalhe) já tinha o card rico 'Controle de Revisões do Cronograma' com badge ATIVA, status colorido (aprovada/cancelada), responsável, motivo, aprovado por e o painel azul 'Sobre o controle de revisões'. Agora o portal usa exatamente o mesmo layout do interno, mantendo o mesmo fluxo de informação — porém em modo somente leitura: SEM o botão 'Nova Revisão' e SEM ações de Editar/Cancelar/Excluir, já que essas operações são da equipe da gerenciadora. Backend (portalExterno) também foi expandido para devolver isBaseline, descricao, responsavel, aprovadoPor, status, observacao e a flag 'ativa' calculada com base na revisão oficial em uso.",
