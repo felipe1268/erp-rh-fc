@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1495,
+    titulo: "Planejamento — Importador MS Project agora lê Predecessoras (habilita Rede de Precedências/CPM)",
+    descricao: "BUG CORRIGIDO no parser do XML do MS Project: o código procurava o seletor errado ('PredecessorLink UID') quando o XML real usa a tag <PredecessorUID> dentro de <PredecessorLink>. Por isso TODAS as importações anteriores resultaram em campo predecessora vazio, deixando a aba 'Rede de Precedências' do Diagrama de Rede sem setas (cai no fallback Hierarquia EAP). Correções: (1) parser XML agora lê corretamente PredecessorLink → PredecessorUID e converte UID → WBS para gravar a predecessora como string de códigos EAP separados por vírgula; (2) parser também aceita o seletor antigo 'UID' por segurança; (3) leitura do UID da própria tarefa foi blindada para usar SOMENTE filhos diretos (antes, querySelector('UID') podia pegar UIDs aninhados de PredecessorLink/Assignment, embaralhando o mapa UID→WBS); (4) preview do importador ganhou uma nova coluna 'Predecessora' editável (placeholder 'ex: 2.1.1, 2.1.2') para o usuário revisar/ajustar antes de salvar; (5) cabeçalho do preview mostra um contador 'N com predecessora' em destaque azul; (6) banner de instruções na tela inicial agora explica que predecessoras serão lidas e habilitarão a Rede de Precedências (CPM). Para ativar o CPM em projetos já existentes, basta re-importar o XML do MS Project — o sistema substitui as atividades da revisão ativa.",
+    tipo: 'bugfix',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 06:30:00',
+  },
+  {
     version: 1494,
     titulo: "Planejamento — Diagrama de Rede ganhou seletor visual de semanas (igual Avanço Semanal) + intervalo de datas customizado",
     descricao: "O Diagrama de Rede (Hierarquia EAP / Rede de Precedências), tanto no módulo INTERNO de Planejamento quanto no Portal do Cliente (mesmo componente), agora oferece duas formas de filtrar atividades por janela temporal: (1) botão 'Semanas' que abre uma barra visual com setas anterior/próxima, cabeçalho 'Semana NN — dd/MM/aaaa — dd/MM/aaaa • N atividades' e pílulas numeradas (1, 2, 3 ... N) para clique direto em qualquer semana — semanas vazias aparecem em cinza claro; e (2) botão 'Período' que abre dois campos de data (De/até) para qualquer intervalo customizado. Os dois filtros são excludentes (selecionar um zera o outro), combinam com filtros de status, grupo e busca, e funcionam em ambos os modos de visualização (Hierarquia EAP e Rede de Precedências). O dropdown anterior 'Todas as semanas' foi substituído pela nova barra visual, mais clara e consistente com a UX do Avanço Semanal.",

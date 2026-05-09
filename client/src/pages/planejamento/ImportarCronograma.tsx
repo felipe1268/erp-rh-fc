@@ -110,10 +110,15 @@ export function parseMSProjectXML(text: string): TarefaImportada[] {
 
   const taskEls = Array.from(doc.querySelectorAll("Task"));
 
-  // First pass: build UID → WBS map so we can resolve predecessor UIDs to WBS codes
+  // First pass: build UID → WBS map so we can resolve predecessor UIDs to WBS codes.
+  // Importante: usamos `task.children` para pegar APENAS o UID direto da tarefa
+  // (não os UIDs de PredecessorLink/Assignment, que são filhos aninhados).
   const uidToWbs = new Map<string, string>();
   for (const task of taskEls) {
-    const uid = task.querySelector("UID")?.textContent ?? "";
+    let uid = "";
+    for (const child of Array.from(task.children)) {
+      if (child.tagName === "UID") { uid = child.textContent ?? ""; break; }
+    }
     const wbs = task.querySelector("WBS")?.textContent?.trim() ?? "";
     if (uid && wbs) uidToWbs.set(uid, wbs);
   }
@@ -121,7 +126,11 @@ export function parseMSProjectXML(text: string): TarefaImportada[] {
   const result: TarefaImportada[] = [];
 
   for (const task of taskEls) {
-    const uid   = task.querySelector("UID")?.textContent ?? "";
+    // UID direto da tarefa (filhos imediatos), não dos PredecessorLink/Assignment aninhados
+    let uid = "";
+    for (const child of Array.from(task.children)) {
+      if (child.tagName === "UID") { uid = child.textContent ?? ""; break; }
+    }
     const name  = task.querySelector("Name")?.textContent?.trim() ?? "";
     const wbs   = task.querySelector("WBS")?.textContent?.trim() ?? "";
     const level = parseInt(task.querySelector("OutlineLevel")?.textContent ?? "0");
@@ -133,9 +142,19 @@ export function parseMSProjectXML(text: string): TarefaImportada[] {
     const isMarco = milestoneTag === "1" || (!summ && parseDuration(durRaw) === 0 && durRaw !== "" && durRaw !== "0");
     const res   = task.querySelector("Assignment ResourceUID")?.textContent ?? "";
 
-    // Collect ALL predecessor UIDs and convert them to WBS codes
-    const predUids = Array.from(task.querySelectorAll("PredecessorLink UID")).map(el => el.textContent ?? "");
-    const predWbs  = predUids.map(uid => uidToWbs.get(uid) ?? "").filter(Boolean);
+    // Collect ALL predecessor UIDs and convert them to WBS codes.
+    // O MS Project usa <PredecessorLink><PredecessorUID>N</PredecessorUID>...</PredecessorLink>
+    // (e não <UID> dentro de PredecessorLink). Aceitamos ambos por segurança.
+    const predLinks = Array.from(task.querySelectorAll("PredecessorLink"));
+    const predUids: string[] = [];
+    for (const link of predLinks) {
+      const predUid =
+        link.querySelector("PredecessorUID")?.textContent ??
+        link.querySelector("UID")?.textContent ??
+        "";
+      if (predUid) predUids.push(predUid);
+    }
+    const predWbs  = predUids.map(u => uidToWbs.get(u) ?? "").filter(Boolean);
     const pred     = predWbs.join(",");
 
     // % Concluído — campo PercentComplete no XML do MS Project (0-100)
@@ -471,6 +490,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                 <p>• <strong>Excel</strong>: Arquivo → Salvar Como → <em>Pasta de Trabalho do Excel (*.xlsx)</em></p>
                 <p>As atividades serão vinculadas automaticamente à EAP do orçamento (se disponível).</p>
                 <p className="text-blue-600 font-medium mt-1">O campo <strong>% Concluído</strong> de cada tarefa será importado automaticamente e registrado como Avanço Realizado da semana atual — mantendo o sistema alinhado com o Project.</p>
+                <p className="text-emerald-600 font-medium mt-1">As <strong>Predecessoras</strong> (links FS/SS/FF/SF do MS Project) serão lidas e convertidas para códigos EAP — habilitando o modo <strong>Rede de Precedências (CPM)</strong> com setas reais de dependência no Diagrama de Rede.</p>
               </div>
 
               <div
@@ -527,6 +547,15 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                       {vinculados}/{tarefas.length} vinculadas ao orçamento
                     </span>
                   )}
+                  {(() => {
+                    const comPred = tarefas.filter(t => !t.isGrupo && t.pred && t.pred.trim() !== "").length;
+                    return (
+                      <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${comPred > 0 ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}`} title="Atividades com predecessora detectada — habilita a Rede de Precedências (CPM)">
+                        <Link2 className="h-3 w-3" />
+                        {comPred} com predecessora
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="ghost" className="text-xs gap-1" onClick={redistribuirPesos}>
@@ -604,6 +633,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                         <th className="py-2 px-2 text-right w-16 text-blue-200">% Conc.</th>
                       )}
                       <th className="py-2 px-2 text-left w-28">Recurso</th>
+                      <th className="py-2 px-2 text-left w-28">Predecessora</th>
                       {orcamentoId && <th className="py-2 px-2 text-center w-8">EAP</th>}
                     </tr>
                   </thead>
@@ -682,6 +712,15 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                             </td>
                           )}
                           <td className="px-2 py-1 text-slate-500 truncate max-w-[100px]">{t.recurso}</td>
+                          <td className="px-2 py-1">
+                            <Input
+                              value={t.pred}
+                              onChange={e => updateTarefa(idx, "pred", e.target.value)}
+                              placeholder="ex: 2.1.1, 2.1.2"
+                              className="h-6 text-[11px] px-1 py-0 w-full"
+                              title="Códigos EAP (WBS) separados por vírgula"
+                            />
+                          </td>
                           {orcamentoId && (
                             <td className="px-2 py-1 text-center">
                               {vinculado
