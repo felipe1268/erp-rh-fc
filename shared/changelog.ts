@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1549,
+    titulo: "Planejamento — abas responsivas no iPad (sem mais 'Caminho Cri...' cortado)",
+    descricao: "Em iPad e laptops menores que 1280px as 16 abas do detalhe do projeto (Visão Geral, Cronograma, Gantt, Crono. Financeiro, Curva S, Avanço Semanal, Caminho Crítico, Prev. Medição, Prog. Semanal, Diagrama de Rede, Custo RH, Efetivo, Revisões, REFIS, BIM 3D) tentavam caber em 2 linhas com flex-1 e a última de cada linha ficava cortada na borda direita. Subido o breakpoint de duas linhas de lg (1024px) para xl (1280px): agora abaixo de 1280px as abas viram uma faixa única com rolagem horizontal suave, igual em celular. Acima de 1280px continua o layout de duas linhas que já funcionava bem.",
+    tipo: 'melhoria',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 20:30:00',
+  },
+  {
     version: 1548,
     titulo: "Planejamento — alertas de confirmação modernizados (sai o popup feio do navegador)",
     descricao: "Substituídos os 5 window.confirm() do módulo Planejamento (popup nativo do navegador, com URL feia e visual quebrado em mobile/tablet) por toasts estilizados (sonner) com botão de ação colorido + Cancelar. Trocados em: (1) Importar custos de MO; (2) Cancelar revisão do cronograma; (3) Reativar revisão; (4) Consolidar REFIS; (5) Cancelar consolidação do REFIS. Duração 15s, ação principal destacada.",

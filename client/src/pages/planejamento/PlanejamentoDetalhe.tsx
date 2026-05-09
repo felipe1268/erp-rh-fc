@@ -643,23 +643,27 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
               </button>
             );
           };
+          // Rev. 1549 — Breakpoint subido para xl (1280px): em telas
+          // de iPad/laptop pequeno (até ~1279px) usamos a faixa de
+          // rolagem horizontal pra evitar abas cortadas tipo
+          // "Caminho Cri..." na borda direita.
           return (
             <div className="mb-4 rounded-xl border border-slate-200 select-none bg-white p-1 space-y-0.5">
-              <div className="hidden lg:flex gap-1">
+              <div className="hidden xl:flex gap-1">
                 {visibleTabs.slice(0, half).map((id, i) => (
-                  <div key={id} className="flex-1">
+                  <div key={id} className="flex-1 min-w-0">
                     {renderTabBtn(id, i)}
                   </div>
                 ))}
               </div>
-              <div className="hidden lg:flex gap-1">
+              <div className="hidden xl:flex gap-1">
                 {visibleTabs.slice(half).map((id, i) => (
-                  <div key={id} className="flex-1">
+                  <div key={id} className="flex-1 min-w-0">
                     {renderTabBtn(id, half + i)}
                   </div>
                 ))}
               </div>
-              <div className="flex lg:hidden gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+              <div className="flex xl:hidden gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
                 {visibleTabs.map((id, i) => (
                   <div key={id} className="flex-shrink-0">
                     {renderTabBtn(id, i)}
