@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1531,
+    titulo: "Planejamento interno — Replica melhorias do Portal (KPIs por semana + Pred./Suc. clicáveis)",
+    descricao: "REPLICAÇÃO pedida pelo usuário: aplicadas no módulo INTERNO de Planejamento as 3 melhorias feitas no Portal do Cliente (Rev. 1528, 1529, 1530). (1) Cronograma — colunas Pred./Suc. continuam como chip compacto MAS agora são CLICÁVEIS abrindo Popover com a lista completa das EAPs em chips coloridos (funciona em mouse e touch — antes só hover). (2) Avanço Semanal — banner 'Peso da Semana' agora mostra também 'Previsto', 'Realizado' e 'Aderência' computados via DELTA DA CURVA S (overlap dias × peso ÷ duração para Previsto; Δ% acumulado × peso para Realizado). Atividades multi-semana contribuem proporcionalmente em vez de pelo peso integral. Peso bruto mantido como info auxiliar com nota 'Como ler'. (3) Programação Semanal — banner 'Peso da Semana' substituído por 'Previsto na semana' (delta via overlap), peso bruto vira info auxiliar. Mesmo layout/conceito do Portal para manter consistência. Arquivos: PlanejamentoDetalhe.tsx (Cronograma + AvancoSemanal), ProgramacaoSemanal.tsx.",
+    tipo: 'fix',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 04:00:00',
+  },
+  {
     version: 1530,
     titulo: "Portal Cronograma — Pred./Suc. clicáveis com popover (lista completa)",
     descricao: "AJUSTE pedido pelo usuário (IMG_0215): na Rev. 1529 transformamos as colunas Pred./Suc. em chip compacto (← N / N →) com a lista completa apenas no tooltip (atributo title). Em iPad/celular o tooltip não funciona — só hover de mouse — então o usuário não conseguia ver QUAIS eram os 17 sucessores. SOLUÇÃO: chips agora são botões clicáveis que abrem um Popover (já existente no shadcn) mostrando a lista completa das EAPs em chips coloridos e organizados em wrap. Funciona em mouse E touch. Aplicado em PortalPlanejamentoCliente.tsx > AbaCronograma (Pred. azul, Suc. violeta).",

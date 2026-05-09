@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider as UiTooltipProvider, TooltipTrigger as UiTooltipTrigger } from "@/components/ui/tooltip";
+import { Popover as UiPopover, PopoverContent as UiPopoverContent, PopoverTrigger as UiPopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -3304,34 +3305,60 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                       <td className="py-1.5 px-2 text-right text-slate-500 text-[11px] tabular-nums">
                         {a.duracaoDias ? `${a.duracaoDias}d` : <span className="text-slate-300">—</span>}
                       </td>
-                      {/* Predecessoras — chip compacto com contagem */}
-                      <td className="py-1.5 px-2 text-center">
+                      {/* Predecessoras — chip clicável com popover (lista completa) */}
+                      <td className="py-1.5 px-2 text-center align-middle">
                         {(() => {
                           const raw = (a.predecessora ?? "").toString();
                           const arr = raw ? raw.split(/[,;]/).map((s: string) => s.trim()).filter(Boolean) : [];
                           if (arr.length === 0) return <span className="text-slate-300 text-[11px]">—</span>;
                           return (
-                            <span
-                              title={`Predecessoras (${arr.length}): ${arr.join("; ")}`}
-                              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-semibold border border-blue-200 cursor-help"
-                            >
-                              ← {arr.length}
-                            </span>
+                            <UiPopover>
+                              <UiPopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  title={`Clique para ver as ${arr.length} predecessoras`}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-semibold border border-blue-200 hover:bg-blue-100 active:bg-blue-200 transition cursor-pointer"
+                                >
+                                  ← {arr.length}
+                                </button>
+                              </UiPopoverTrigger>
+                              <UiPopoverContent side="bottom" align="center" className="w-auto max-w-[260px] p-3">
+                                <div className="text-[11px] font-semibold text-slate-700 mb-2">Predecessoras ({arr.length})</div>
+                                <div className="flex flex-wrap gap-1">
+                                  {arr.map((p: string, i: number) => (
+                                    <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-mono border border-blue-200">{p}</span>
+                                  ))}
+                                </div>
+                              </UiPopoverContent>
+                            </UiPopover>
                           );
                         })()}
                       </td>
-                      {/* Sucessoras (computada) — chip compacto com contagem */}
-                      <td className="py-1.5 px-2 text-center">
+                      {/* Sucessoras (computada) — chip clicável com popover (lista completa) */}
+                      <td className="py-1.5 px-2 text-center align-middle">
                         {(() => {
                           const sucs = a.eapCodigo ? (sucessorasMap[a.eapCodigo] ?? []) : [];
                           if (sucs.length === 0) return <span className="text-slate-300 text-[11px]">—</span>;
                           return (
-                            <span
-                              title={`Sucessoras (${sucs.length}): ${sucs.join("; ")}`}
-                              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 text-[10px] font-semibold border border-violet-200 cursor-help"
-                            >
-                              {sucs.length} →
-                            </span>
+                            <UiPopover>
+                              <UiPopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  title={`Clique para ver as ${sucs.length} sucessoras`}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 text-[10px] font-semibold border border-violet-200 hover:bg-violet-100 active:bg-violet-200 transition cursor-pointer"
+                                >
+                                  {sucs.length} →
+                                </button>
+                              </UiPopoverTrigger>
+                              <UiPopoverContent side="bottom" align="center" className="w-auto max-w-[260px] p-3">
+                                <div className="text-[11px] font-semibold text-slate-700 mb-2">Sucessoras ({sucs.length})</div>
+                                <div className="flex flex-wrap gap-1">
+                                  {sucs.map((s: string, i: number) => (
+                                    <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 text-[10px] font-mono border border-violet-200">{s}</span>
+                                  ))}
+                                </div>
+                              </UiPopoverContent>
+                            </UiPopover>
                           );
                         })()}
                       </td>
@@ -4494,6 +4521,39 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     return { somaSemana, pctSemana, maiorPesoIds, maiorPesoVal };
   }, [folhas, folhasNaSemana]);
 
+  // Rev. 1531 — DELTA de semana (espelha o fix do Portal Rev. 1528).
+  // "Previsto na semana" = soma de (peso × overlap dias seg-dom / duracaoDias).
+  // Atividades multi-semana contribuem proporcionalmente, não pelo peso integral.
+  // "Realizado na semana" = soma de (peso × Δ% acumulado entre fim-semana e fim-semana-anterior).
+  const previstoRealizadoSemana = useMemo(() => {
+    const semIniDate = new Date(semanaAtual + "T00:00:00").getTime();
+    const semFimDate = new Date(semanaFim + "T00:00:00").getTime(); // exclusivo (próx Seg)
+    const semAntStr = new Date(semIniDate - 7 * 86400000).toISOString().slice(0, 10);
+    let prev = 0;
+    let real = 0;
+    folhas.forEach((a: any) => {
+      const peso = n(a.pesoFinanceiro);
+      // Previsto via overlap
+      if (a.dataInicio && a.dataFim) {
+        const aIni = new Date(a.dataInicio + "T00:00:00").getTime();
+        const aFim = new Date(a.dataFim + "T00:00:00").getTime() + 86400000;
+        const overlapMs = Math.max(0, Math.min(aFim, semFimDate) - Math.max(aIni, semIniDate));
+        const overlapDays = overlapMs / 86400000;
+        const dur = (a.duracaoDias && a.duracaoDias > 0) ? a.duracaoDias : Math.max(1, (aFim - aIni) / 86400000);
+        prev += peso * (overlapDays / dur);
+      }
+      // Realizado via Δ acumulado
+      const avs = (avancos as any[]).filter((av: any) => av.atividadeId === a.id);
+      const avsAteAtual = avs.filter((av: any) => av.semana <= semanaAtual).sort((x: any, y: any) => y.semana.localeCompare(x.semana));
+      const avsAteAntes = avs.filter((av: any) => av.semana <= semAntStr).sort((x: any, y: any) => y.semana.localeCompare(x.semana));
+      const acumAtual = avsAteAtual.length ? n(avsAteAtual[0].percentualAcumulado) : 0;
+      const acumAntes = avsAteAntes.length ? n(avsAteAntes[0].percentualAcumulado) : 0;
+      real += peso * Math.max(0, acumAtual - acumAntes) / 100;
+    });
+    const aderencia = prev > 0 ? (real / prev) * 100 : null;
+    return { previsto: prev, realizado: real, aderencia };
+  }, [folhas, avancos, semanaAtual, semanaFim]);
+
   // Avanço anterior por atividade
   const avancoAnterior = useMemo(() => {
     const m: Record<number, number> = {};
@@ -5138,33 +5198,44 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
         </div>
       )}
 
-      {/* ── Resumo de pesos da semana ──────────────────────────────────────── */}
+      {/* ── Resumo da semana — Previsto/Realizado por DELTA + peso bruto info ── */}
       {folhasNaSemana.length > 0 && filtroAtivo !== "todas" && (
-        <div className="flex items-center gap-4 px-4 py-2.5 rounded-lg border border-blue-200 bg-blue-50/60">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-blue-600" />
-            <span className="text-xs font-semibold text-blue-800">
-              Peso da Semana {semanaNum}:
-            </span>
-            <span className="text-sm font-bold text-blue-700 tabular-nums">
-              {pesoSemana.somaSemana.toFixed(2)}%
-            </span>
-            <span className="text-[10px] text-blue-500">
-              ({pesoSemana.pctSemana.toFixed(1)}% do projeto)
-            </span>
+        <div className="rounded-lg border border-blue-200 bg-blue-50/60 px-4 py-2.5 space-y-1.5">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-blue-600" />
+              <span className="text-xs font-semibold text-blue-800">Semana {semanaNum} —</span>
+              <span className="text-[11px] text-slate-600">Previsto:</span>
+              <span className="text-sm font-bold text-orange-600 tabular-nums">{previstoRealizadoSemana.previsto.toFixed(2)}%</span>
+            </div>
+            <span className="text-slate-300">|</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-600">Realizado:</span>
+              <span className="text-sm font-bold text-emerald-600 tabular-nums">{previstoRealizadoSemana.realizado.toFixed(2)}%</span>
+            </div>
+            <span className="text-slate-300">|</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-600">Aderência:</span>
+              <span className={`text-sm font-bold tabular-nums ${previstoRealizadoSemana.aderencia == null ? "text-slate-400" : previstoRealizadoSemana.aderencia >= 95 ? "text-emerald-600" : "text-red-600"}`}>
+                {previstoRealizadoSemana.aderencia == null ? "—" : `${previstoRealizadoSemana.aderencia.toFixed(0)}%`}
+              </span>
+            </div>
+            <span className="text-slate-300">|</span>
+            <div className="text-[11px] text-slate-600">
+              <span className="font-medium">{folhasNaSemana.length}</span> atividades diretas
+            </div>
+            {atividades.some((a: any) => a.isIndireta) && (
+              <>
+                <span className="text-slate-300">|</span>
+                <div className="text-[10px] text-slate-400">
+                  {atividades.filter((a: any) => a.isIndireta && !a.isGrupo).length} indiretas ocultas
+                </div>
+              </>
+            )}
           </div>
-          <span className="text-slate-300">|</span>
-          <div className="text-[11px] text-slate-600">
-            <span className="font-medium">{folhasNaSemana.length}</span> atividades diretas
+          <div className="text-[10px] text-slate-400">
+            <strong>Como ler:</strong> &quot;Previsto&quot; e &quot;Realizado&quot; são o <strong>delta da Curva S nesta semana</strong> (atividades multi-semana contribuem proporcionalmente). Peso bruto das atividades ativas: <strong className="tabular-nums">{pesoSemana.somaSemana.toFixed(2)}%</strong> ({pesoSemana.pctSemana.toFixed(1)}% do projeto, informativo).
           </div>
-          {atividades.some((a: any) => a.isIndireta) && (
-            <>
-              <span className="text-slate-300">|</span>
-              <div className="text-[10px] text-slate-400">
-                {atividades.filter((a: any) => a.isIndireta && !a.isGrupo).length} indiretas ocultas
-              </div>
-            </>
-          )}
         </div>
       )}
 

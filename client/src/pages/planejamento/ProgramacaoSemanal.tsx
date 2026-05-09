@@ -8,6 +8,7 @@ import {
   Info, Hammer, BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Popover as UiPopover, PopoverContent as UiPopoverContent, PopoverTrigger as UiPopoverTrigger } from "@/components/ui/popover";
 
 const n = (v: any) => parseFloat(v) || 0;
 
@@ -215,6 +216,26 @@ export function ProgramacaoSemanal({
   };
 
   const folhasTodas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.isIndireta), [atividades]);
+
+  // Rev. 1531 — Previsto na semana via OVERLAP (espelha fix Portal Rev. 1528).
+  // Atividades multi-semana contribuem proporcionalmente em vez de pelo peso integral.
+  const previstoSemanaDelta = useMemo(() => {
+    if (!semanaAtual) return 0;
+    const semIniMs = semanaAtual.ini.getTime();
+    const semFimMs = semanaAtual.fim.getTime() + 3 * 86400000 + 86400000; // Sex+3d=Dom; +1d exclusivo
+    let prev = 0;
+    folhasTodas.forEach((a: any) => {
+      if (!a.dataInicio || !a.dataFim) return;
+      const aIni = new Date(a.dataInicio + "T00:00:00").getTime();
+      const aFim = new Date(a.dataFim + "T00:00:00").getTime() + 86400000;
+      const overlapMs = Math.max(0, Math.min(aFim, semFimMs) - Math.max(aIni, semIniMs));
+      const overlapDays = overlapMs / 86400000;
+      const dur = (a.duracaoDias && a.duracaoDias > 0) ? a.duracaoDias : Math.max(1, (aFim - aIni) / 86400000);
+      prev += n(a.pesoFinanceiro) * (overlapDays / dur);
+    });
+    return prev;
+  }, [folhasTodas, semanaAtual]);
+
   const pesoSemana = useMemo(() => {
     const indiretas = atividadesSemAtualTodas.filter((a: any) => a.isIndireta);
     const pesoTotal = folhasTodas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0) || 1;
@@ -464,19 +485,20 @@ export function ProgramacaoSemanal({
             })}
           </div>
 
-          {/* Banner de pesos da semana */}
+          {/* Banner da semana — Previsto via DELTA (overlap) + peso bruto info */}
           {atividadesSemAtual.length > 0 && (
-            <div className="flex flex-wrap items-center gap-4 px-4 py-2.5 rounded-lg border border-blue-200 bg-blue-50/60">
+            <div className="rounded-lg border border-blue-200 bg-blue-50/60 px-4 py-2.5 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <div className="flex items-center gap-2">
                 <BarChart3 className="h-4 w-4 text-blue-600" />
                 <span className="text-xs font-semibold text-blue-800">
-                  Peso da Semana {semanaAtual?.numero}:
+                  Semana {semanaAtual?.numero} — Previsto:
                 </span>
-                <span className="text-sm font-bold text-blue-700 tabular-nums">
-                  {pesoSemana.somaSemana.toFixed(2)}%
+                <span className="text-sm font-bold text-orange-600 tabular-nums">
+                  {previstoSemanaDelta.toFixed(2)}%
                 </span>
-                <span className="text-[10px] text-blue-500">
-                  ({pesoSemana.pctSemana.toFixed(1)}% do projeto)
+                <span className="text-[10px] text-slate-500" title="Delta da Curva S — quanto o projeto deve avançar nesta semana">
+                  (delta da Curva S)
                 </span>
               </div>
               <span className="text-slate-300">|</span>
@@ -502,6 +524,10 @@ export function ProgramacaoSemanal({
                   </div>
                 </>
               )}
+            </div>
+            <div className="text-[10px] text-slate-400">
+              <strong>Como ler:</strong> &quot;Previsto&quot; é o <strong>delta da Curva S nesta semana</strong> (atividades multi-semana contribuem proporcionalmente). Peso bruto das atividades ativas: <strong className="tabular-nums">{pesoSemana.somaSemana.toFixed(2)}%</strong> ({pesoSemana.pctSemana.toFixed(1)}% do projeto, informativo).
+            </div>
             </div>
           )}
 
