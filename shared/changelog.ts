@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1524,
+    titulo: "Portal do Cliente — REFIS: legendas das Curvas S clicáveis (toggle ativar/desativar) + eixo X completo na Financeira",
+    descricao: "MELHORIA pedida pelo usuário (IMG_0205/IMG_0206): nas Curvas S do REFIS (Física e Financeira), as legendas no header (Baseline, Faturamento Previsto, Faturamento Realizado, Tendência, Faturado Real) eram apenas decorativas. Agora cada item é um botão clicável que liga/desliga a respectiva linha no gráfico (com line-through visual + opacity-40 quando desativado). Estado compartilhado `serRefis` entre os 2 blocos (3A Física + 3B Financeira). Click nas legendas é isolado com stopPropagation para não colapsar o bloco. Aproveitado para corrigir o eixo X do BLOCO 3B (Financeira) que ainda usava `interval={Math.max(0, Math.floor(len/10)-1)}` e pulava semanas — agora `interval={0}` com fontSize 8 + angle -60° + height 70px (mesmo padrão da Rev. 1523).",
+    tipo: 'feature',
+    modulos: 'Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 23:35:00',
+  },
+  {
     version: 1523,
     titulo: "Portal do Cliente — Curva S: todas as semanas no eixo X + alerta de tendência × prazo contratual",
     descricao: "MELHORIA pedida pelo usuário (IMG_0203/IMG_0204): (1) os 3 gráficos de Curva S do Portal (Curva S de Trabalho, Curva S Financeira da aba Curva S e Curva S Física da aba REFIS) estavam com `interval={\"preserveStartEnd\"}` e ticks aleatórios que pulavam semanas. Trocado para `interval={0}` com fonte 8px e angle -60° + height 70px → mostra TODAS as semanas sem pular nenhuma. (2) Adicionado novo componente AlertaTendenciaBanner acima dos 2 gráficos da aba Curva S calculando a data estimada de conclusão (ETA) com base no SPI atual (= realizado/previsto) e comparando com dataTerminoContratual. 4 níveis de alerta visual: 🟢 'No prazo' (SPI ≥ 1 ou diferença ≤ 0 dias), 🟡 'Atenção' (1-30 dias atraso projetado), 🟠 'Alerta' (31-90 dias), 🔴 'Crítico' (>90 dias) + 'Sem dados' cinza enquanto não há previsto. Cada nível mostra SPI exato, dias de atraso/antecipação projetados, conclusão estimada (dd/MM/aaaa), prazo contratual (dd/MM/aaaa) e recomendação de ação. Cálculo: ETA = dataInicio + (duração contratual / SPI).",
