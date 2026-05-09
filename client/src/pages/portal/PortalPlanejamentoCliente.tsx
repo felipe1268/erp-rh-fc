@@ -3161,6 +3161,13 @@ function AbaCaminhoCritico({ atividades, projeto }: { atividades: any[]; projeto
   const quaseCrit = atividadesComFloat.filter((a: any) => a.float > 0 && a.float <= 14);
   const comFolga  = atividadesComFloat.filter((a: any) => a.float > 14);
 
+  // Rev. 1520: filtro por card. null = mostrar todas as 3 listas.
+  const [filtroCategoria, setFiltroCategoria] = useState<null | "critico" | "quase" | "folga">(null);
+  const toggleFiltro = (k: "critico" | "quase" | "folga") => setFiltroCategoria((prev) => (prev === k ? null : k));
+  const mostrarCriticas = filtroCategoria === null || filtroCategoria === "critico";
+  const mostrarQuase = filtroCategoria === null || filtroCategoria === "quase";
+  const mostrarFolga = filtroCategoria === null || filtroCategoria === "folga";
+
   const hoje = new Date().toISOString().split("T")[0];
 
   function GanttBar({ a }: { a: any }) {
@@ -3225,24 +3232,73 @@ function AbaCaminhoCritico({ atividades, projeto }: { atividades: any[]; projeto
         </div>
       </div>
 
-      {/* 3 cards de KPI por categoria */}
+      {/* 3 cards de KPI por categoria — Rev. 1520: clicáveis. Clicar filtra a lista
+          abaixo só para aquela categoria; clicar de novo volta a mostrar todas. */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+        <button
+          type="button"
+          onClick={() => toggleFiltro("critico")}
+          className={`text-center rounded-xl p-3 transition-all border-2 ${
+            filtroCategoria === "critico"
+              ? "bg-red-100 border-red-500 shadow-md ring-2 ring-red-300/50"
+              : "bg-red-50 border-red-200 hover:border-red-400 hover:shadow-sm"
+          }`}
+          title={filtroCategoria === "critico" ? "Clique para mostrar todas as categorias" : "Clique para ver só as atividades do Caminho Crítico"}
+        >
           <p className="text-2xl font-bold text-red-600">{criticas.length}</p>
-          <p className="text-xs text-red-700 mt-0.5">Caminho Crítico</p>
+          <p className="text-xs text-red-700 mt-0.5 font-medium">Caminho Crítico</p>
           <p className="text-[10px] text-red-400">Float = 0 dias</p>
-        </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+          {filtroCategoria === "critico" && <p className="text-[10px] text-red-700 mt-1 font-semibold">✓ filtrando</p>}
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleFiltro("quase")}
+          className={`text-center rounded-xl p-3 transition-all border-2 ${
+            filtroCategoria === "quase"
+              ? "bg-amber-100 border-amber-500 shadow-md ring-2 ring-amber-300/50"
+              : "bg-amber-50 border-amber-200 hover:border-amber-400 hover:shadow-sm"
+          }`}
+          title={filtroCategoria === "quase" ? "Clique para mostrar todas as categorias" : "Clique para ver só as atividades Quase Críticas"}
+        >
           <p className="text-2xl font-bold text-amber-600">{quaseCrit.length}</p>
-          <p className="text-xs text-amber-700 mt-0.5">Quase Crítico</p>
+          <p className="text-xs text-amber-700 mt-0.5 font-medium">Quase Crítico</p>
           <p className="text-[10px] text-amber-400">Float ≤ 14 dias</p>
-        </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+          {filtroCategoria === "quase" && <p className="text-[10px] text-amber-700 mt-1 font-semibold">✓ filtrando</p>}
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleFiltro("folga")}
+          className={`text-center rounded-xl p-3 transition-all border-2 ${
+            filtroCategoria === "folga"
+              ? "bg-blue-100 border-blue-500 shadow-md ring-2 ring-blue-300/50"
+              : "bg-blue-50 border-blue-200 hover:border-blue-400 hover:shadow-sm"
+          }`}
+          title={filtroCategoria === "folga" ? "Clique para mostrar todas as categorias" : "Clique para ver só as atividades Com Folga"}
+        >
           <p className="text-2xl font-bold text-blue-600">{comFolga.length}</p>
-          <p className="text-xs text-blue-700 mt-0.5">Com Folga</p>
+          <p className="text-xs text-blue-700 mt-0.5 font-medium">Com Folga</p>
           <p className="text-[10px] text-blue-400">Float &gt; 14 dias</p>
-        </div>
+          {filtroCategoria === "folga" && <p className="text-[10px] text-blue-700 mt-1 font-semibold">✓ filtrando</p>}
+        </button>
       </div>
+
+      {/* Banner do filtro ativo (com botão limpar) */}
+      {filtroCategoria !== null && (
+        <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-600">
+          <span>
+            Filtrando por:{" "}
+            <strong className={
+              filtroCategoria === "critico" ? "text-red-700" :
+              filtroCategoria === "quase" ? "text-amber-700" : "text-blue-700"
+            }>
+              {filtroCategoria === "critico" ? "Caminho Crítico" : filtroCategoria === "quase" ? "Quase Crítico" : "Com Folga"}
+            </strong>
+          </span>
+          <button onClick={() => setFiltroCategoria(null)} className="text-blue-600 hover:underline font-medium">
+            Limpar filtro · ver todas
+          </button>
+        </div>
+      )}
 
       {/* Rev. 1518: legendas explicativas por categoria — sempre visíveis,
           em linguagem de engenharia, indicando como TRATAR cada grupo de risco. */}
@@ -3283,7 +3339,7 @@ function AbaCaminhoCritico({ atividades, projeto }: { atividades: any[]; projeto
         <span className="ml-auto text-slate-400">Período: {fmtBR(projectStart)} → {fmtBR(projectEnd)}</span>
       </div>
 
-      {criticas.length > 0 && (
+      {mostrarCriticas && criticas.length > 0 && (
         <div className="bg-white rounded-xl border border-red-200 shadow-sm p-4">
           <p className="text-sm font-semibold text-red-700 mb-1 flex items-center gap-2">
             <AlertOctagon className="h-4 w-4" />
@@ -3296,7 +3352,7 @@ function AbaCaminhoCritico({ atividades, projeto }: { atividades: any[]; projeto
         </div>
       )}
 
-      {quaseCrit.length > 0 && (
+      {mostrarQuase && quaseCrit.length > 0 && (
         <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-4">
           <p className="text-sm font-semibold text-amber-700 mb-1 flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" />
@@ -3309,7 +3365,7 @@ function AbaCaminhoCritico({ atividades, projeto }: { atividades: any[]; projeto
         </div>
       )}
 
-      {comFolga.length > 0 && (
+      {mostrarFolga && comFolga.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
           <p className="text-sm font-semibold text-slate-700 mb-1 flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-blue-500" />

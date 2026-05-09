@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1520,
+    titulo: "Portal do Cliente — Cards do Caminho Crítico viram filtros clicáveis",
+    descricao: "MELHORIA pedida pelo usuário (screenshots IMG_0198/IMG_0199): os 3 cards de KPI do topo da aba Caminho Crítico (Caminho Crítico / Quase Crítico / Com Folga) eram apenas decorativos. Agora cada card é um BOTÃO clicável que filtra as listas abaixo para mostrar apenas a categoria escolhida. Clicar de novo no mesmo card desativa o filtro e volta a mostrar as 3 listas. Quando há filtro ativo, aparece um banner cinza acima das listas indicando a categoria filtrada e um botão 'Limpar filtro · ver todas'. O card ativo recebe destaque visual (fundo mais saturado, borda 2px colorida, ring sutil e marcador '✓ filtrando').",
+    tipo: 'melhoria',
+    modulos: 'Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 21:15:00',
+  },
+  {
     version: 1519,
     titulo: "Portal do Cliente — Aba Efetivo: removida distinção CLT/PJ (cliente não precisa ver regime)",
     descricao: "AJUSTE pedido pelo usuário (screenshots IMG_0196/IMG_0197): a Rev. 1514 já havia removido as colunas EMPRESA/SETOR e TIPO da TABELA, mas os KPIs do topo (TOTAL CLT, TOTAL PJ) e os filtros (Apenas CLT, Apenas PJ) ainda expunham o regime de contratação para o cliente. Consolidado em uma única linha 'Próprios FC' (soma CLT + PJ). Mudanças: (1) KPIs do topo passaram de 4 para 3 — Próprios FC, Total Terceiros, Total Geral. (2) Chips de filtro: 'Apenas CLT' e 'Apenas PJ' viraram 'Apenas Próprios FC'. (3) Subtítulo 'CLT, PJ e Terceiros alocados' → 'Próprios FC e terceiros alocados'. Lógica do filtro adaptada: ao escolher 'Próprios FC' o sistema filtra todos com tipo ≠ Terceiro.",
