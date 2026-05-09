@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1517,
+    titulo: "Portal do Cliente — Recolher barra lateral vira modo 'rail' (só ícones), igual ao ERP",
+    descricao: "AJUSTE pedido pelo usuário: ao recolher a barra lateral do Portal do Cliente, ela sumia totalmente da tela. O usuário pediu para manter a mesma lógica usada no resto do ERP, em que a barra apenas DIMINUI de largura e fica no formato 'rail' mostrando apenas os ícones. Implementado: a barra alterna suavemente entre w-64 (expandida) e w-16 (rail), com transição. No modo rail aparecem: logo FC, botão de expandir (PanelLeftOpen), botão Home (Tela Inicial), ícone de prédio (clique abre/expande para trocar de obra), todos os ícones das abas do projeto (com tooltip do nome e ponto âmbar para 'em breve') e botão Trocar de Obra. Removido o botão flutuante de expandir que ficava no header branco — não é mais necessário pois o rail tem o seu próprio.",
+    tipo: 'melhoria',
+    modulos: 'Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 20:15:00',
+  },
+  {
     version: 1516,
     titulo: "Portal do Cliente — Pílula da obra vira seletor rápido de OBRA + MÓDULO",
     descricao: "MELHORIA de navegação pedida pelo usuário (screenshot IMG_0160): a pílula 'OBRA — REVTE-CIVIL' que ficava na barra lateral era apenas decorativa. Agora é um botão clicável que abre um painel expansível com duas seções: (1) 'Outras obras' — lista todas as obras às quais o cliente tem acesso (consulta cliente.minhasObras), permitindo trocar com 1 clique; a obra atual aparece destacada em azul com check. (2) 'Outros módulos' — lista os 4 módulos do Portal (Planejamento, RH & Docs, Proj./Doc., Mensagens) com suas descrições, permitindo o cliente saltar para outro módulo da MESMA obra sem voltar ao hub. Resultado: o usuário não precisa mais ir até o final da barra lateral clicar em 'Trocar de Obra' nem voltar ao 'Hub Inicial' para mudar de módulo — tudo está acessível em 2 cliques no topo da barra.",

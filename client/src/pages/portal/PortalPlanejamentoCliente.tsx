@@ -417,12 +417,82 @@ export default function PortalPlanejamentoCliente() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 flex">
-      {/* ── Sidebar (desktop) ──────────────────────────────────────── */}
-      {sidebarOpen && (
-        <aside className="hidden lg:flex flex-col w-64 bg-slate-800 border-r border-slate-700 sticky top-0 h-screen shrink-0 shadow-xl">
-          {sidebarContent}
-        </aside>
-      )}
+      {/* ── Sidebar (desktop) ────────────────────────────────────────
+           Rev. 1517: ao recolher, a barra NÃO some mais — vira um rail
+           estreito (w-16) com apenas os ícones, igual ao padrão do ERP. */}
+      <aside className={`hidden lg:flex flex-col bg-slate-800 border-r border-slate-700 sticky top-0 h-screen shrink-0 shadow-xl transition-[width] duration-200 ${sidebarOpen ? "w-64" : "w-16"}`}>
+        {sidebarOpen ? sidebarContent : (
+          // ── Variante "rail" / só ícones ────────────────────────────
+          <>
+            {/* Topo: logo + botão expandir */}
+            <div className="px-2 pt-3 pb-2 border-b border-slate-700/60 flex flex-col items-center gap-2">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow text-slate-900 font-bold text-xs" title="FC Engenharia — Portal do Cliente">
+                FC
+              </div>
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="h-8 w-8 flex items-center justify-center rounded-md text-slate-300 hover:text-white hover:bg-slate-700/60 transition-colors"
+                title="Expandir menu lateral"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Atalhos rápidos */}
+            <div className="px-2 py-2 border-b border-slate-700/60 flex flex-col items-center gap-1.5">
+              <button
+                onClick={() => navigate("/portal/cliente/hub")}
+                className="h-9 w-9 flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-sm"
+                title="Tela Inicial do Portal"
+              >
+                <Home className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="h-9 w-9 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-700/60 hover:text-white transition-colors"
+                title={`Obra atual: ${obra?.nome || "—"} — clique para trocar`}
+              >
+                <Building2 className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Lista de abas (só ícone) */}
+            <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
+              {abasVisiveis.map((a) => {
+                const Icon = ABA_ICONS[a.key] || TrendingUp;
+                const isActive = aba === a.key;
+                const isEmBreve = a.status === "em_breve";
+                return (
+                  <button
+                    key={a.key}
+                    onClick={() => setAba(a.key)}
+                    className={`relative h-9 w-full flex items-center justify-center rounded-lg transition-colors ${
+                      isActive
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-300 hover:bg-slate-700/60 hover:text-white"
+                    }`}
+                    title={a.label + (isEmBreve ? " (em breve)" : "")}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {isEmBreve && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-amber-400" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Rodapé */}
+            <div className="border-t border-slate-700/60 px-2 py-2 flex flex-col items-center gap-1.5">
+              <button
+                onClick={() => navigate("/portal/cliente/modulo/planejamento")}
+                className="h-9 w-9 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-700/60 hover:text-white transition-colors"
+                title="Trocar de Obra"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+            </div>
+          </>
+        )}
+      </aside>
 
       {/* ── Sidebar (mobile overlay) ───────────────────────────────── */}
       {mobileSidebarOpen && (
@@ -495,18 +565,8 @@ export default function PortalPlanejamentoCliente() {
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600" />
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="flex items-start gap-3 min-w-0 flex-1">
-              {/* Botão expandir menu — Rev. 1515: aparece SOMENTE quando a barra está recolhida.
-                  Quando aberta, o botão de recolher fica dentro do header da própria barra lateral
-                  (padrão usado no resto do sistema). */}
-              {!sidebarOpen && (
-                <button
-                  onClick={() => setSidebarOpen(true)}
-                  className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100 mt-0.5 flex-shrink-0"
-                  title="Expandir menu lateral"
-                >
-                  <PanelLeftOpen className="h-4 w-4" />
-                </button>
-              )}
+              {/* Rev. 1517: o botão de expandir agora vive na própria barra rail (w-16),
+                  então não precisamos mais de botão flutuante no header da página. */}
               <button
                 onClick={() => setMobileSidebarOpen(true)}
                 className="lg:hidden h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100 mt-0.5 flex-shrink-0"
