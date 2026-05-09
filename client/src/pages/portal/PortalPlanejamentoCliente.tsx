@@ -9,7 +9,7 @@ import {
   CalendarDays, User, CalendarCheck, FileText, GitBranch, HardHat,
   DollarSign, Cloud, Droplets, Wind, Loader2, ClipboardList, ChevronRight,
   ChevronDown, Search, Menu, X, PanelLeftClose, PanelLeftOpen, Users, Handshake, Home,
-  AlertOctagon,
+  AlertOctagon, Printer,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, LineChart, BarChart, Bar, Cell,
@@ -2191,10 +2191,21 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
 
   const totalContrato = Number(projeto?.valorContrato ?? 0);
 
+  // ── Rev. 1513: Estados do toolbar de análise/impressão
+  // - incluirIndiretas: alterna entre "Só Diretas" e "Global (c/ Indiretas)"
+  // - orientacaoPdf: define @page size para impressão (retrato/paisagem)
+  const [incluirIndiretas, setIncluirIndiretas] = useState(false);
+  const [orientacaoPdf, setOrientacaoPdf]       = useState<"portrait" | "landscape">("portrait");
+
+  // Conta indiretas existentes para mostrar contador no toggle
+  const qtdIndiretas = (atividades || []).filter((a: any) => !a.isGrupo && a.isIndireta && !a.disabled).length;
+
   // ── Reconstroi grupos/etapas a partir das atividades + valores acumulados na semanaRef
   // (replica a lógica de cálculo de "grupos" da função interna usando acumPrev/acumReal já gravados em refis)
-  // Para simplificação: usa atividades não-disabled, não-grupo, não-indireta.
-  const folhas = (atividades || []).filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
+  // Quando "incluirIndiretas" estiver ligado, as atividades indiretas entram nos cálculos.
+  const folhas = (atividades || []).filter((a: any) =>
+    !a.isGrupo && !a.disabled && (incluirIndiretas || !a.isIndireta)
+  );
 
   // Helper: progresso previsto linear em data específica
   const progPrevistoNa = (a: any, dataStr: string) => {
@@ -2264,13 +2275,25 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
     };
   }).sort((a, b) => String(a.eapCodigo).localeCompare(String(b.eapCodigo)));
 
-  // ── Métricas globais (usar valores do refis para garantir paridade com o emitido)
-  const avancoPrevisto  = Number(refisAtual.avancoPrevisto ?? 0);
-  const avancoRealAtual = Number(refisAtual.avancoRealizado ?? 0);
+  // ── Métricas globais
+  // Quando "Só Diretas" → usa os valores oficiais salvos no REFIS (paridade com o emitido).
+  // Quando "Global (c/ Indiretas)" → recalcula a partir das folhas (média ponderada por peso),
+  // refletindo o impacto das indiretas no avanço da obra.
+  const totalPesosFolhas = folhas.reduce((s: number, a: any) => s + (Number(a.pesoFinanceiro) || 0), 0);
+  const previstoRecalc = totalPesosFolhas > 0
+    ? folhas.reduce((s: number, a: any) => s + (Number(a.pesoFinanceiro) || 0) * progPrevistoNa(a, semanaRef), 0) / totalPesosFolhas
+    : 0;
+  const realizadoRecalc = totalPesosFolhas > 0
+    ? folhas.reduce((s: number, a: any) => s + (Number(a.pesoFinanceiro) || 0) * (Number(a.percentRealizado) || 0), 0) / totalPesosFolhas
+    : 0;
+  const avancoPrevisto  = incluirIndiretas ? previstoRecalc  : Number(refisAtual.avancoPrevisto ?? 0);
+  const avancoRealAtual = incluirIndiretas ? realizadoRecalc : Number(refisAtual.avancoRealizado ?? 0);
   const avancoSemPrev   = Number(refisAtual.avancoSemanalPrevisto ?? (refisAnterior ? avancoPrevisto - Number(refisAnterior.avancoPrevisto) : 0));
   const avancoSemReal   = Number(refisAtual.avancoSemanalRealizado ?? (refisAnterior ? avancoRealAtual - Number(refisAnterior.avancoRealizado) : 0));
   const desvioFisico    = avancoRealAtual - avancoPrevisto;
-  const spi = Number(refisAtual.spi ?? (avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0));
+  const spi = incluirIndiretas
+    ? (avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0)
+    : Number(refisAtual.spi ?? (avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0));
 
   // ── Curva S Física: usa curvaData do backend, recortando até o último ponto realizado/projetado
   const curvaFiltrada = (() => {
@@ -2355,7 +2378,108 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
   const rowHG = 72;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" id="refis-portal-print-area">
+      {/* ── Rev. 1513: TOOLBAR DE ANÁLISE / IMPRESSÃO ─────────────────────── */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 refis-no-print">
+        <div className="flex items-center gap-3 flex-wrap">
+          <p className="text-xs font-semibold text-slate-700 uppercase tracking-wider">REFIS — Análise</p>
+          {qtdIndiretas > 0 && (
+            <label className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-blue-100 transition-colors select-none">
+              <input
+                type="checkbox"
+                checked={incluirIndiretas}
+                onChange={e => setIncluirIndiretas(e.target.checked)}
+                className="accent-blue-600 h-3.5 w-3.5"
+              />
+              <span className="text-[11px] font-semibold text-blue-700">
+                {incluirIndiretas ? "Global (c/ Indiretas)" : "Só Diretas"}
+              </span>
+              <span className="text-[9px] text-blue-500">({qtdIndiretas} ind.)</span>
+            </label>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center rounded-md border border-slate-200 overflow-hidden">
+            <button
+              type="button"
+              title="Retrato (vertical)"
+              onClick={() => setOrientacaoPdf("portrait")}
+              className={`px-2 py-1.5 text-xs flex items-center gap-1 transition-colors ${orientacaoPdf === "portrait" ? "bg-slate-700 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
+            >
+              <svg width="10" height="14" viewBox="0 0 10 14"><rect x="1" y="1" width="8" height="12" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5"/></svg>
+              Retrato
+            </button>
+            <div className="w-px h-5 bg-slate-200" />
+            <button
+              type="button"
+              title="Paisagem (horizontal)"
+              onClick={() => setOrientacaoPdf("landscape")}
+              className={`px-2 py-1.5 text-xs flex items-center gap-1 transition-colors ${orientacaoPdf === "landscape" ? "bg-slate-700 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
+            >
+              <svg width="14" height="10" viewBox="0 0 14 10"><rect x="1" y="1" width="12" height="8" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5"/></svg>
+              Paisagem
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 text-xs font-medium transition-colors"
+          >
+            <Printer className="h-3.5 w-3.5" />
+            Imprimir / PDF
+          </button>
+        </div>
+      </div>
+
+      {/* ── Rev. 1513: Estilos de impressão dedicados (orientação dinâmica + layout limpo) */}
+      <style>{`
+        @media print {
+          @page { size: A4 ${orientacaoPdf}; margin: 10mm 10mm 12mm 10mm; }
+          html, body { background: white !important; margin: 0 !important; padding: 0 !important; }
+          body * { visibility: hidden !important; }
+          #refis-portal-print-area, #refis-portal-print-area * {
+            visibility: visible !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+          #refis-portal-print-area {
+            position: absolute !important;
+            top: 0 !important; left: 0 !important;
+            width: 100% !important;
+            background: white !important;
+            font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif !important;
+            font-size: 8pt !important;
+            color: #1e293b !important;
+            z-index: 99999 !important;
+          }
+          .refis-no-print { display: none !important; }
+          /* Cards/blocos: sem sombra, borda mais leve, evitar quebra no meio */
+          #refis-portal-print-area .shadow-sm,
+          #refis-portal-print-area .shadow,
+          #refis-portal-print-area .shadow-md,
+          #refis-portal-print-area .shadow-lg,
+          #refis-portal-print-area .shadow-xl { box-shadow: none !important; }
+          #refis-portal-print-area .rounded-xl,
+          #refis-portal-print-area .rounded-lg { border-radius: 4pt !important; }
+          #refis-portal-print-area .border { border-color: #cbd5e1 !important; }
+          #refis-portal-print-area .bg-white { background: #ffffff !important; }
+          #refis-portal-print-area > div { page-break-inside: avoid !important; break-inside: avoid !important; }
+          #refis-portal-print-area .space-y-4 > * + * { margin-top: 6pt !important; }
+          /* Cabeçalhos de bloco mais compactos */
+          #refis-portal-print-area .px-5 { padding-left: 8pt !important; padding-right: 8pt !important; }
+          #refis-portal-print-area .py-3 { padding-top: 4pt !important; padding-bottom: 4pt !important; }
+          #refis-portal-print-area .py-4 { padding-top: 5pt !important; padding-bottom: 5pt !important; }
+          /* Gráficos: garantir que tomem largura cheia da página */
+          #refis-portal-print-area .recharts-responsive-container,
+          #refis-portal-print-area .recharts-wrapper,
+          #refis-portal-print-area svg { max-width: 100% !important; }
+          /* Tabelas mais legíveis em P&B */
+          #refis-portal-print-area table { font-size: 7.5pt !important; border-collapse: collapse !important; }
+          #refis-portal-print-area th, #refis-portal-print-area td { padding: 3pt 5pt !important; }
+        }
+      `}</style>
+
       {/* ══════ BLOCO 1 — CABEÇALHO ══════ */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="bg-gradient-to-r from-slate-800 to-slate-700 text-white px-5 py-3 flex items-center justify-between flex-wrap gap-2">

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1513,
+    titulo: "Portal do Cliente — REFIS: toggle Diretas/Indiretas, retrato/paisagem e layout de impressão",
+    descricao: "MELHORIA pedida pelo usuário na aba REFIS do Portal do Cliente: (1) Novo toggle 'Só Diretas' / 'Global (c/ Indiretas)' permitindo ao gerenciador analisar o impacto das atividades indiretas sobre o avanço da obra. Quando ativado, todas as métricas globais (Previsto Acumulado, Realizado Acumulado, Desvio, SPI) e os blocos de Avanço por Grupo/Etapa são RECALCULADOS incluindo as indiretas (média ponderada pelos pesos). Quando desativado, mantém os valores OFICIAIS salvos no REFIS para garantir paridade com o documento emitido. O toggle só aparece se houver indiretas no projeto e mostra contador (ex.: '3 ind.'). (2) Novo seletor de orientação de impressão Retrato / Paisagem (vetor SVG ilustrativo em cada botão), gravando dinamicamente em @page size. (3) Botão 'Imprimir / PDF' dedicado dentro da aba. (4) Folha de estilos @media print otimizada: oculta toolbar e elementos com classe 'refis-no-print', remove sombras, bordas mais leves, padding compacto, page-break-inside: avoid em cada bloco para evitar quebras no meio de gráficos/tabelas, fontes ajustadas para 8pt (tabelas 7.5pt) garantindo legibilidade em A4. Cores e gráficos preservados via -webkit-print-color-adjust: exact.",
+    tipo: 'feature',
+    modulos: 'Portal do Cliente, Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 19:00:00',
+  },
+  {
     version: 1512,
     titulo: "Programação Semanal — Desvio neutralizado em semanas futuras (sem falso vermelho)",
     descricao: "AJUSTE de justiça pedido pelo usuário: ao navegar para uma SEMANA FUTURA na Programação Semanal, todas as atividades apareciam com desvio negativo em vermelho/amarelo, porque o Previsto% (calculado linearmente até o fim daquela semana futura) era > 0% mas o Real% naturalmente ainda era 0% — ninguém pode executar uma atividade antes da semana acontecer. Marcar como 'atrasada' nesse caso era injusto. Agora: para semanas cujo INÍCIO é posterior à data de hoje (semana ainda não começou), o desvio é exibido em CINZA NEUTRO (slate-400), mantendo o valor visível para o usuário antecipar o gap mas sem dar falsa sensação de problema. Para semanas PASSADAS e a SEMANA ATUAL o comportamento da Rev. 1511 é mantido (verde adiantada / amarelo pequeno atraso / vermelho atraso relevante). Tooltip do cabeçalho atualizado.",
