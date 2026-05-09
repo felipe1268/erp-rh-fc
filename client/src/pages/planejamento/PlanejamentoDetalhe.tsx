@@ -3995,7 +3995,7 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
           <LineChart data={merged} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis dataKey="semana" tick={{ fontSize: 10 }} angle={-45} textAnchor="end"
-              height={55} interval={Math.max(0, Math.ceil(merged.length / 25) - 1)}
+              height={55} interval={0}
               tickFormatter={v => semanaLabel[v] ?? v} />
             <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
             <Tooltip
@@ -4236,7 +4236,7 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
               <LineChart data={finFull} margin={{ left: 10, right: 80, top: 5, bottom: finFull.length > 10 ? 55 : 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="semana" tick={{ fontSize: 10 }} angle={-45} textAnchor="end"
-                  height={55} interval={Math.max(0, Math.ceil(finFull.length / 25) - 1)}
+                  height={55} interval={0}
                   tickFormatter={(v: string) => finSemLabel[v] ?? v} />
                 <YAxis tickFormatter={finTickFmt} tick={{ fontSize: 10 }} width={72} />
                 <Tooltip
@@ -10884,7 +10884,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                       angle={-45}
                       textAnchor="end"
                       height={55}
-                      interval={Math.max(0, Math.ceil(curvaFiltrada.length / 25) - 1)}
+                      interval={0}
                     />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
                     <Tooltip
@@ -11043,7 +11043,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                       angle={-45}
                       textAnchor="end"
                       height={55}
-                      interval={Math.max(0, Math.ceil((curvaFinanceiraFull as any[]).length / 25) - 1)}
+                      interval={0}
                     />
                     <YAxis
                       tickFormatter={finTickFmt}

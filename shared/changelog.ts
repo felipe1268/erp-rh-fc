@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1527,
+    titulo: "Curvas S — exibir TODAS as semanas no eixo X (S1 até última)",
+    descricao: "AJUSTE pedido pelo usuário (IMG_0210): a Rev. 1526 introduziu intervalo inteligente que mostrava ~25 labels distribuídos, mas o usuário quer ver TODAS as semanas (S1, S2, S3... até a última) sem pulos. Como na Rev. 1526 os labels já foram encurtados para `S1, S2...` (3-4 caracteres), agora cabem todos no eixo X mesmo em obras de 60+ semanas. Trocado `interval={Math.max(0, Math.ceil(len/25) - 1)}` para `interval={0}` nos 8 gráficos de Curvas S (4 internos + 4 portal). Tipografia mantida: fontSize 10, ângulo -45°, height 55px.",
+    tipo: 'fix',
+    modulos: 'Planejamento, Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 01:30:00',
+  },
+  {
     version: 1526,
     titulo: "Curvas S — labels limpos (S1, S2...) + intervalo inteligente do eixo X",
     descricao: "AJUSTE pedido pelo usuário (IMG_0207/IMG_0208): a Rev. 1523/1525 deixou as Curvas S com `interval={0}` mostrando TODAS as semanas no eixo X. Em obras longas (60+ semanas) ficava ilegível, com datas dd/MM/aa empilhadas. Solução: (1) Labels reformatados de `Sem 01` (Planejamento interno) e `dd/MM/aa` (Portal) para `S1, S2, S3...` — formato curto e claro. Aplicado em `semanaLabel` (interno + portal) e nos `label` de `curvaFiltrada`/`curvaFinanceira` (interno + portal). (2) Eixo X agora usa `interval={Math.max(0, Math.ceil(len/25) - 1)}` que mostra ~20-25 labels distribuídos uniformemente, mantendo TODOS os pontos do gráfico (linhas continuam suaves). (3) fontSize 10 + ângulo -45° + height 55px (antes 8/-60°/70px) deixa labels mais legíveis. Aplicado nos 4 gráficos do Planejamento interno (AbaCurvaS Trabalho/Financeira + REFIS 3A/3B) e nos 4 equivalentes do Portal do Cliente.",
