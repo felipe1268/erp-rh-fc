@@ -1383,7 +1383,21 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
           {/* No deps banner */}
           {viewMode === "rede" && !hasDeps && <NoDepsInfo />}
 
-          <svg width="100%" height="100%" style={{ position: "absolute", inset: 0 }}>
+          <svg
+            width="100%"
+            height="100%"
+            style={{ position: "absolute", inset: 0 }}
+            onClick={(e) => {
+              // Clique na área branca (fora de qualquer caixa/seta) → desseleciona
+              // e devolve todas as atividades à cor viva.
+              const target = e.target as SVGElement;
+              if (target.tagName === "svg" || target.getAttribute("data-bg") === "1") {
+                setSelectedId(null);
+              }
+            }}
+          >
+            {/* Camada de fundo clicável — garante que clique em qualquer área vazia desseleciona */}
+            <rect x={0} y={0} width="100%" height="100%" fill="transparent" data-bg="1" />
             <defs>
               <marker id="arr-default" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
                 <polygon points="0 0,9 3.5,0 7" fill="#94a3b8" />

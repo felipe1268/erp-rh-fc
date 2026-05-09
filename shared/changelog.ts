@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1507,
+    titulo: "Diagrama de Rede — Clique no fundo branco desseleciona",
+    descricao: "AJUSTE pedido pelo usuário: agora basta clicar em qualquer área branca/vazia do diagrama (fora de qualquer caixa de atividade) para DESSELECIONAR a atividade ativa. Com isso, todas as outras atividades voltam à cor viva imediatamente, sem precisar caçar o 'X' do painel lateral. Implementado via camada de fundo transparente clicável dentro do SVG, que reconhece se o clique foi no nada ou em um elemento real e só limpa a seleção no primeiro caso.",
+    tipo: 'melhoria',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 14:30:00',
+  },
+  {
     version: 1506,
     titulo: "Diagrama de Rede — Legenda de cores VISÍVEL (nada de tooltip escondido)",
     descricao: "AJUSTE pedido pelo usuário: tooltip ao passar o mouse não funciona em iPad/celular, e mesmo no desktop o usuário não estava entendendo o que era 'Cor por N1/N2/N3'. Agora, sempre que esse modo está ativo (view Rede + 'Todos os pacotes EAP'), aparece um painel azul-claro logo abaixo da barra de ferramentas com: (1) frase explicativa direta — 'Cada cor = um pacote da obra (EAP nível N). Atividades do mesmo pacote ganham a mesma faixa colorida no topo da caixa'; (2) chips coloridos mostrando A LEGENDA REAL — quadradinho com a cor + código do pacote + nome do grupo (ex.: '🟦 2 — SERVIÇOS PRELIMINARES', '🟩 3 — FUNDAÇÕES'). Os chips são calculados a partir das folhas EFETIVAMENTE visíveis no nível atual, então o usuário vê exatamente o que está na tela. Se há mais de 24 pacotes, mostra '+N pacotes' no fim. Mudou para N2/N3? A legenda recalcula automaticamente. Tooltip do dropdown foi mantido como reforço.",
