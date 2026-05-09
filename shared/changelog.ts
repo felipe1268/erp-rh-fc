@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1497,
+    titulo: "Planejamento — Coluna % Concluído editável (0-100%) no preview do importador MS Project",
+    descricao: "ATENDENDO PEDIDO DO USUÁRIO: a coluna '% Conc.' no preview do importador de cronograma agora é SEMPRE exibida (antes só aparecia se alguma atividade já viesse com avanço > 0) e VIROU UM CAMPO EDITÁVEL aceitando valores de 0 a 100. Cada atividade não-grupo tem agora um input numérico onde o usuário pode digitar o percentual concluído antes de confirmar a importação. O sistema clampa automaticamente entre 0 e 100. Ao confirmar a importação em qualquer modo (Substituir / Mesclar / Apenas Predecessora), os percentuais editados são gravados como avanço físico da semana atual (segunda-feira ISO) na tabela planejamento_avancos: cria registro novo com percentualSemanal calculado a partir do último avanço anterior, ou atualiza o registro existente da semana corrente. Backend: nova procedure planejamento.importarAvancosDoArquivo que reaproveita a mesma lógica de matching por eapCodigo (e fallback por nome) já usada em salvarAtividades. O modo 'substituir' já gravava avanços via salvarAtividades; agora os modos 'mesclar' e 'apenas_predecessora' também gravam, garantindo paridade entre os 3 fluxos.",
+    tipo: 'feature',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 09:25:00',
+  },
+  {
     version: 1496,
     titulo: "Planejamento — Importador MS Project com 3 modos: Mesclar, Apenas Predecessora, Substituir tudo",
     descricao: "ATENDENDO PEDIDO DO USUÁRIO: o importador agora permite escolher COMO os dados do XML serão aplicados sobre a revisão, evitando perder marcos, atividades indiretas, atividades desativadas e outros ajustes feitos diretamente no ERP. (1) MESCLAR (recomendado, padrão): casa cada atividade do XML por eapCodigo com a atividade existente e atualiza apenas datas/duração/peso/predecessora/nome/nivel/ordem; PRESERVA isMarco, isIndireta, disabled, recursoPrincipal e quantidadePlanejada já cadastrados no ERP; atividades novas (presentes no XML mas não no ERP) são INSERIDAS; atividades existentes que NÃO vieram no XML são MANTIDAS. (2) APENAS PREDECESSORA: percorre o XML e atualiza SOMENTE a coluna predecessora das atividades correspondentes (match por eapCodigo). Não toca em mais nada. Ideal para destravar a Rede de Precedências (CPM) sem mexer no resto do cronograma já cadastrado. (3) SUBSTITUIR TUDO: comportamento clássico — apaga as atividades da revisão e recria a partir do XML. Indicado apenas para revisões novas/recém-criadas. UI: novo painel de seleção de modo no preview do importador (3 cards radio com cores distintas verde/azul/laranja e descrição clara dos efeitos), resumo pós-importação mostrando quantas foram atualizadas, inseridas e ignoradas, label do botão muda conforme o modo (Mesclar/Atualizar predecessoras/Substituir). Backend: nova procedure trpc planejamento.importarComModo cobrindo os modos 'mesclar' e 'apenas_predecessora'; modo 'substituir' continua usando salvarAtividades.",

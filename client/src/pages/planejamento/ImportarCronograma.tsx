@@ -347,15 +347,37 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
     },
   });
 
+  const importarAvancosMutation = trpc.planejamento.importarAvancosDoArquivo.useMutation();
+
   const importarComModoMutation = trpc.planejamento.importarComModo.useMutation({
-    onSuccess: (res: any) => {
+    onSuccess: async (res: any) => {
       utils.planejamento.listarAtividades.invalidate();
+      // Após mesclar/atualizar predecessora, grava também os % Concluído editados como avanço da semana
+      if (revisaoAtiva) {
+        const comPct = tarefas
+          .filter(t => !t.isGrupo && (t.percentConcluido ?? 0) > 0)
+          .map(t => ({
+            eapCodigo: t.eapCodigo || t.wbs,
+            nome: t.nome,
+            percentConcluido: t.percentConcluido ?? 0,
+          }));
+        if (comPct.length > 0) {
+          try {
+            await importarAvancosMutation.mutateAsync({
+              revisaoId: revisaoAtiva.id,
+              projetoId,
+              atividades: comPct,
+            });
+          } catch (e) {
+            console.error("Erro ao gravar avanços do preview:", e);
+          }
+        }
+      }
       setResultadoImport({
         atualizados:    res?.atualizados ?? 0,
         inseridos:      res?.inseridos ?? 0,
         naoEncontrados: res?.naoEncontrados ?? 0,
       });
-      // Mantém o modal aberto por 2.5s para mostrar o resumo, depois fecha
       setTimeout(() => {
         setOpen(false);
         resetState();
@@ -676,9 +698,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                       <th className="py-2 px-2 text-left w-24">Fim</th>
                       <th className="py-2 px-2 text-right w-14">Dias</th>
                       <th className="py-2 px-2 text-right w-16">Peso%</th>
-                      {tarefas.some(t => (t.percentConcluido ?? 0) > 0) && (
-                        <th className="py-2 px-2 text-right w-16 text-blue-200">% Conc.</th>
-                      )}
+                      <th className="py-2 px-2 text-right w-16 text-blue-200" title="% Concluído (0-100). Editável. Será gravado como avanço da semana atual.">% Conc.</th>
                       <th className="py-2 px-2 text-left w-28">Recurso</th>
                       <th className="py-2 px-2 text-left w-28">Predecessora</th>
                       {orcamentoId && <th className="py-2 px-2 text-center w-8">EAP</th>}
@@ -750,14 +770,24 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                               />
                             )}
                           </td>
-                          {tarefas.some(t => (t.percentConcluido ?? 0) > 0) && (
-                            <td className="px-2 py-1 text-right">
-                              {(t.percentConcluido ?? 0) > 0
-                                ? <span className="text-blue-600 font-medium text-[11px]">{t.percentConcluido}%</span>
-                                : <span className="text-slate-300 text-[10px]">—</span>
-                              }
-                            </td>
-                          )}
+                          <td className="px-2 py-1">
+                            {t.isGrupo ? (
+                              <span className="text-[10px] text-slate-400 block text-right">—</span>
+                            ) : (
+                              <Input
+                                type="number"
+                                min={0} max={100} step={1}
+                                value={t.percentConcluido ?? 0}
+                                onChange={e => {
+                                  const v = parseFloat(e.target.value);
+                                  const clamped = isNaN(v) ? 0 : Math.min(100, Math.max(0, v));
+                                  updateTarefa(idx, "percentConcluido", clamped);
+                                }}
+                                className={`h-6 text-[11px] px-1 py-0 w-full text-right ${(t.percentConcluido ?? 0) > 0 ? "text-blue-600 font-medium" : "text-slate-400"}`}
+                                title="0 a 100%"
+                              />
+                            )}
+                          </td>
                           <td className="px-2 py-1 text-slate-500 truncate max-w-[100px]">{t.recurso}</td>
                           <td className="px-2 py-1">
                             <Input

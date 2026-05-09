@@ -962,9 +962,10 @@ export const planejamentoRouter = router({
         ordem:            z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
         isGrupo:          z.boolean().optional(),
         isMarco:          z.boolean().optional(),
+        percentConcluido: z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
       })),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
 
       // Carrega atividades existentes da revisão
@@ -1052,6 +1053,93 @@ export const planejamentoRouter = router({
       // ── Modo 3: SUBSTITUIR (não cai aqui — frontend chama salvarAtividades) ─
       // Por segurança, retorna erro orientando o caller correto.
       throw new Error("Para modo 'substituir', use a procedure salvarAtividades.");
+    }),
+
+  // Helper interno exposto para gravar % Concluído editado no preview do importador
+  // como avanço da semana atual (semana ISO segunda-feira). Usado pelos modos
+  // mesclar / apenas_predecessora — o modo "substituir" já grava direto via salvarAtividades.
+  importarAvancosDoArquivo: protectedProcedure
+    .input(z.object({
+      revisaoId: z.number(),
+      projetoId: z.number(),
+      atividades: z.array(z.object({
+        eapCodigo:        z.string().nullish(),
+        nome:             z.string().nullish(),
+        percentConcluido: z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
+      })),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const comAvanco = input.atividades.filter(a => (a.percentConcluido ?? 0) > 0);
+      if (comAvanco.length === 0) return { atualizados: 0, inseridos: 0, naoEncontrados: 0 };
+
+      const hoje = new Date();
+      const diaSemana = hoje.getUTCDay();
+      const diffParaSeg = diaSemana === 0 ? -6 : 1 - diaSemana;
+      const segunda = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate() + diffParaSeg));
+      const semanaIso = segunda.toISOString().slice(0, 10);
+
+      const atividadesSalvas = await db.select({
+        id: planejamentoAtividades.id,
+        eapCodigo: planejamentoAtividades.eapCodigo,
+        nome: planejamentoAtividades.nome,
+      }).from(planejamentoAtividades)
+        .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
+
+      const eapToId = new Map<string, number>();
+      const nomeToId = new Map<string, number>();
+      for (const a of atividadesSalvas) {
+        if (a.eapCodigo) eapToId.set(a.eapCodigo.trim(), a.id);
+        if (a.nome) nomeToId.set(a.nome.trim().toLowerCase(), a.id);
+      }
+
+      const userName = (ctx as any).user?.name ?? "Importação MS Project";
+      let inseridos = 0, atualizados = 0, naoEncontrados = 0;
+
+      for (const a of comAvanco) {
+        const eap = (a.eapCodigo ?? "").trim();
+        const nome = (a.nome ?? "").trim().toLowerCase();
+        const atividadeId = eapToId.get(eap) ?? nomeToId.get(nome);
+        if (!atividadeId) { naoEncontrados++; continue; }
+
+        const pct = String((a.percentConcluido ?? 0).toFixed(4));
+        const [existente] = await db.select({ id: planejamentoAvancos.id })
+          .from(planejamentoAvancos)
+          .where(and(
+            eq(planejamentoAvancos.atividadeId, atividadeId),
+            eq(planejamentoAvancos.semana, semanaIso),
+          )).limit(1);
+
+        if (existente) {
+          await db.update(planejamentoAvancos)
+            .set({ percentualAcumulado: pct, criadoPor: userName })
+            .where(eq(planejamentoAvancos.id, existente.id));
+          atualizados++;
+        } else {
+          const [ultimo] = await db.select({ percentualAcumulado: planejamentoAvancos.percentualAcumulado })
+            .from(planejamentoAvancos)
+            .where(and(
+              eq(planejamentoAvancos.atividadeId, atividadeId),
+              sql`semana < ${semanaIso}`,
+            ))
+            .orderBy(desc(planejamentoAvancos.semana))
+            .limit(1);
+          const ultimoPct = parseFloat(String(ultimo?.percentualAcumulado ?? "0")) || 0;
+          const semanal = Math.max(0, (a.percentConcluido ?? 0) - ultimoPct);
+          await db.insert(planejamentoAvancos).values({
+            projetoId:           input.projetoId,
+            atividadeId,
+            revisaoId:           input.revisaoId,
+            semana:              semanaIso,
+            percentualAcumulado: pct,
+            percentualSemanal:   String(semanal.toFixed(4)),
+            observacao:          "Importado do MS Project (preview editado)",
+            criadoPor:           userName,
+          });
+          inseridos++;
+        }
+      }
+      return { atualizados, inseridos, naoEncontrados };
     }),
 
   // ── Avanços físicos semanais ──────────────────────────────────────────────
