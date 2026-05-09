@@ -420,6 +420,14 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     return +soma.toFixed(2);
   }, [atividades, semanaVisualizacao, usarPesoPorDuracao]);
 
+  // ── Cabeçalho de impressão (idêntico ao Portal do Cliente) ──────────
+  // ATENÇÃO: este useMemo precisa ficar ANTES dos early returns abaixo,
+  // senão a ordem de hooks muda entre renders e o React quebra a tela.
+  const obraDoProjeto = useMemo(() => {
+    if (!proj?.obraId) return null;
+    return (obrasLista as any[]).find((o: any) => o.id === proj.obraId) || null;
+  }, [obrasLista, proj?.obraId]);
+
   if (loadingProj) return (
     <DashboardLayout>
       <div className="flex items-center justify-center py-32 gap-2 text-slate-400">
@@ -442,15 +450,6 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   );
 
   const diasRestantes = calcDesvio(proj.dataTerminoContratual);
-
-  // ── Cabeçalho de impressão (idêntico ao Portal do Cliente) ──────────
-  // Resolve a obra associada ao projeto a partir da lista já carregada
-  // (obrasLista) e a empresa atualmente selecionada para extrair os 3 logos:
-  // Executora · Cliente · Gerenciadora.
-  const obraDoProjeto = useMemo(() => {
-    if (!proj?.obraId) return null;
-    return (obrasLista as any[]).find((o: any) => o.id === proj.obraId) || null;
-  }, [obrasLista, proj?.obraId]);
   const tituloAbaAtual = TAB_DEFS.find(t => t.id === aba)?.label || "Planejamento";
 
   return (

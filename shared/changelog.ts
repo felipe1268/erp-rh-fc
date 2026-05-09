@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1493,
+    titulo: "Hotfix — Tela do Planejamento (interno) quebrava ao abrir um projeto ('Ocorreu um erro inesperado')",
+    descricao: "Na Rev. 1489 o useMemo que resolve a obra do projeto (para o cabeçalho de impressão) foi posicionado por engano DEPOIS dos early returns de carregamento ('Carregando projeto...') e ausência de projeto ('Projeto não encontrado'). Isso violou as Rules of Hooks do React (a ordem de hooks mudava entre renders), derrubando a página inteira de Planejamento com a mensagem 'Ocorreu um erro inesperado'. O hook foi movido para antes dos early returns, restaurando o funcionamento normal de TODAS as abas do módulo.",
+    tipo: "fix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 09:45:00",
+  },
+  {
     version: 1492,
     titulo: "Portal do Cliente — Marcos (duração zero) NÃO entram mais como 'Atrasada'",
     descricao: "Atividades importadas do MS Project com duração zero (data de início igual à data de fim) — tipicamente 'Início', 'Fim do projeto', marcos contratuais — são pontos de referência do cronograma, não atividades executáveis. Antes, quando a data desses marcos passava, eles apareciam como 'Atrasada' com 0% de realizado, poluindo o painel e gerando confusão (ex.: a linha 'Início' de um projeto que começou em março/abril aparecia em vermelho semanas depois). Agora: (1) Backend (server/routers/portalExterno.ts): a lista de Atrasadas exclui atividades com dataInicio === dataFim. (2) Frontend (PortalPlanejamentoCliente.tsx): a função statusBadge usa o status 'Marco' (cinza) em vez de 'Atrasada' (vermelho) para esses casos, e o destaque vermelho na linha do cronograma também não é aplicado. O cálculo do avanço previsto/realizado continua intacto — apenas o rótulo e a inclusão na lista de atrasadas mudaram.",
