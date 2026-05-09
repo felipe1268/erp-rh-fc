@@ -424,11 +424,12 @@ export const terceirosRouter = router({
   // ============================================================
   funcionarios: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), empresaTerceiraId: z.number().optional() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), empresaTerceiraId: z.number().optional(), obraId: z.number().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const conditions = [companyFilter(funcionariosTerceiros.companyId, input), isNull(funcionariosTerceiros.deletedAt)];
         if (input.empresaTerceiraId) conditions.push(eq(funcionariosTerceiros.empresaTerceiraId, input.empresaTerceiraId));
+        if (input.obraId) conditions.push(eq(funcionariosTerceiros.obraId, input.obraId));
         return db.select().from(funcionariosTerceiros).where(and(...conditions)).orderBy(funcionariosTerceiros.nome);
       }),
 

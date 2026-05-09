@@ -7772,6 +7772,33 @@ function EfetivoObraTab({ proj }: { proj: any }) {
     { enabled: obraId > 0 && companyId > 0 }
   );
 
+  // Terceiros alocados na obra — mesma listagem usada no módulo Terceiros,
+  // filtrada por obraId. Normalizamos para o shape do efetivo CLT/PJ.
+  const { data: terceirosRaw = [], isLoading: isLoadingTerc } =
+    trpc.terceiros.funcionarios.list.useQuery(
+      { companyId, obraId },
+      { enabled: obraId > 0 && companyId > 0 }
+    );
+
+  const terceirosNormalizados = useMemo(() => {
+    return (terceirosRaw as any[]).map((t: any) => ({
+      id: `terc-${t.id}`,
+      nomeCompleto: t.nomeCompleto || t.nome || "—",
+      funcao: t.funcao || null,
+      cargo: t.funcao || null,
+      fotoUrl: t.fotoUrl || null,
+      dataAdmissao: t.dataAdmissao || null,
+      tipoContrato: "TERCEIRO",
+      effectiveStatus: (t.status || "ativo").toLowerCase() === "ativo" ? "Ativo" : "Inativo",
+      _empresaTerceiraId: t.empresaTerceiraId,
+    }));
+  }, [terceirosRaw]);
+
+  const equipeMerged = useMemo(
+    () => [...(equipeRaw as any[]), ...terceirosNormalizados],
+    [equipeRaw, terceirosNormalizados]
+  );
+
   if (!obraId) {
     return (
       <div className="text-center py-16 text-slate-400">
@@ -7782,7 +7809,7 @@ function EfetivoObraTab({ proj }: { proj: any }) {
     );
   }
 
-  return <EfetivoObraView equipeRaw={equipeRaw as any[]} isLoading={isLoading} />;
+  return <EfetivoObraView equipeRaw={equipeMerged as any[]} isLoading={isLoading || isLoadingTerc} />;
 }
 
 export function EfetivoObraView({ equipeRaw, isLoading }: { equipeRaw: any[]; isLoading: boolean }) {
@@ -7951,12 +7978,15 @@ export function EfetivoObraView({ equipeRaw, isLoading }: { equipeRaw: any[]; is
                     const tipoRaw = String(e.tipoContrato || "").toUpperCase();
                     const isPJ = tipoRaw === "PJ";
                     const isCLT = tipoRaw === "CLT";
-                    const vincLabel = isPJ ? "PJ" : isCLT ? "CLT" : (e.tipoContrato || "—");
+                    const isTerc = tipoRaw === "TERCEIRO" || tipoRaw === "TERC";
+                    const vincLabel = isPJ ? "PJ" : isCLT ? "CLT" : isTerc ? "TERCEIRO" : (e.tipoContrato || "—");
                     const vincCls = isPJ
                       ? "bg-purple-100 text-purple-700 border-purple-200"
                       : isCLT
                         ? "bg-blue-100 text-blue-700 border-blue-200"
-                        : "bg-slate-100 text-slate-500 border-slate-200";
+                        : isTerc
+                          ? "bg-orange-100 text-orange-700 border-orange-200"
+                          : "bg-slate-100 text-slate-500 border-slate-200";
                     return (
                     <tr key={e.id || i} className="hover:bg-blue-50/30 transition-colors">
                       <td className="px-4 py-2">

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1504,
+    titulo: "Efetivo da Obra — Terceiros agora aparecem junto com CLT/PJ",
+    descricao: "PEDIDO DO USUÁRIO: a aba 'Efetivo' do Planejamento (Lista de Funcionários) só mostrava colaboradores CLT/PJ vinculados via obra_funcionarios — terceiros (cadastrados em funcionarios_terceiros) ficavam invisíveis, mesmo tendo obraId preenchido. Agora a lista é UNIFICADA: além do trpc.obras.equipeObra (CLT/PJ), a aba também consulta trpc.terceiros.funcionarios.list filtrando por obraId, normaliza o shape (nomeCompleto, funcao, fotoUrl, dataAdmissao, status) e mescla na mesma tabela. Distribuição por Função, contagens, busca, ordenação e filtros de status passam a contemplar os 3 vínculos. Badge nova 'TERCEIRO' em laranja na coluna Vínculo (CLT azul, PJ roxo, TERCEIRO laranja). Backend: terceiros.funcionarios.list ganhou parâmetro opcional obraId. Tenant isolation preservada (companyFilter + deletedAt IS NULL).",
+    tipo: 'melhoria',
+    modulos: 'Planejamento, Terceiros',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 13:00:00',
+  },
+  {
     version: 1503,
     titulo: "Diagrama de Rede — Filtros de status agora respondem na rede + Layout 'Por Semana'",
     descricao: "DUAS MELHORIAS PEDIDAS PELO USUÁRIO no Diagrama de Rede: (1) FILTROS DE STATUS NA REDE: as pílulas Todos/Concluída/Em andamento/Atrasada/Em risco/Não iniciada agora também atuam na view 'Rede de Precedências' (antes pareciam não fazer efeito porque, ao filtrar status, a cadeia de setas quebrava deixando a tela esquisita). Agora, na rede, ao filtrar por status mostramos as atividades que casam + os vizinhos diretos (1 hop: predecessores e sucessores), preservando o fluxo de execução visual. Na hierarquia EAP o comportamento anterior foi mantido (matched + ancestrais EAP). (2) LAYOUT 'POR SEMANA': novo toggle CPM/Por semana na barra de ferramentas (só aparece na view Rede e quando o cronograma tem semanas). No modo 'Por semana', as folhas são organizadas em colunas verticais — uma por semana do cronograma — com base na data de início, ordenadas internamente por ordem/EAP. Cabeçalhos azuis no topo de cada coluna mostram 'Semana NN' + intervalo dd/MM/aaaa — dd/MM/aaaa. Faixas alternadas (slate-50/white) ajudam a separar visualmente as colunas. Setas de precedência continuam sendo desenhadas, agora cruzando entre semanas (deixa óbvio quando uma atividade depende de outra de semana anterior — ou pior, posterior). Atividades sem dataInicio caem numa coluna 'Sem prazo' no fim. Modo CPM (default) permanece intocado: layout topológico clássico por nível de profundidade.",
