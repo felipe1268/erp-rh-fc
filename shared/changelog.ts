@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1484,
+    titulo: "Portal do Cliente — Aba 'Diagrama de Rede' agora usa o componente visual completo do módulo Planejamento",
+    descricao: "A aba 'Diagrama de Rede' do Portal do Cliente foi atualizada para usar exatamente o mesmo componente visual do módulo interno de Planejamento (somente leitura). Antes mostrava apenas uma tabela de texto com a coluna predecessora; agora mostra o diagrama gráfico completo, com dois modos de visualização: (1) HIERARQUIA — exibe toda a estrutura da obra agrupada por EAP em forma de árvore, com cores por status (verde concluída, azul em andamento, vermelho atrasada, amarelo em risco, cinza não iniciada); funciona MESMO SE NENHUMA atividade tiver predecessora cadastrada, garantindo conteúdo útil em obras antigas; (2) REDE — exibe a sequência lógica de execução com setas predecessora → sucessora. Recursos adicionais herdados do módulo interno: zoom in/out, tela cheia, busca por EAP/nome, filtros por status / grupo / semana / período, seleção de atividade com painel lateral de detalhes, badge mostrando 'X de Y atividades têm predecessora'. O cliente NÃO pode editar atividades, predecessoras ou o diagrama (o componente é puramente de visualização — não emite mutações).",
+    tipo: "feature",
+    modulos: "Portal do Cliente, Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 05:00:00",
+  },
+  {
     version: 1483,
     titulo: "Portal do Cliente — Tooltips explicativos nos 5 cards de KPI da Visão Geral",
     descricao: "Adicionado tooltip explicativo ao passar o mouse (ou tocar no iPad) sobre cada um dos 5 cards de KPI no topo da Visão Geral do Portal do Cliente: (1) 'Atividades' — explica concluídas/total; (2) 'Avanço Físico' — explica que é a média ponderada pelo peso financeiro; (3) 'SPI (prazo)' — explica o índice de desempenho de prazo (Realizado ÷ Previsto), com leitura clara de >1 adiantado, =1 no prazo, <1 atrasado; (4) 'CPI (custo)' — explica o índice de desempenho de custo (Valor Agregado ÷ Custo Real); (5) 'REFIs emitidos' — explica que é o total de Relatórios Físicos semanais consolidados. Os tooltips usam fundo escuro com texto claro, aparecem após 150ms de hover, possuem cursor 'help' e elevam a sombra do card no hover, deixando claro que são interativos. Atende o pedido do cliente para que cada KPI tenha legenda objetiva sem precisar abrir documentação.",

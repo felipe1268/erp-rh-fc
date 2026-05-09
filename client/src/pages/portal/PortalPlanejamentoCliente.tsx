@@ -17,6 +17,7 @@ import {
 import { PORTAL_CLIENTE_ABAS, type PortalClienteAbaKey } from "@shared/portalClienteAbas";
 import { ProgramacaoSemanal } from "@/pages/planejamento/ProgramacaoSemanal";
 import { EfetivoObraView } from "@/pages/planejamento/PlanejamentoDetalhe";
+import { DiagramaRede as DiagramaRedeInterno } from "@/pages/planejamento/DiagramaRede";
 import PortalPrintHeader from "@/components/PortalPrintHeader";
 import PrintActions from "@/components/PrintActions";
 import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider as UiTooltipProvider, TooltipTrigger as UiTooltipTrigger } from "@/components/ui/tooltip";
@@ -3197,55 +3198,37 @@ function AbaPrevMedicao({ curvaS, valorContrato }: { curvaS: any[]; valorContrat
 }
 
 // ─────────────────────── ABA: DIAGRAMA DE REDE ──────────────────────────
+// Espelha exatamente o componente do módulo interno (DiagramaRede.tsx) — mostra
+// dois modos (Hierarquia e Rede), com nodes coloridos por status, busca, filtros
+// de status/grupo/semana, zoom e seleção. Em modo SOMENTE LEITURA: o cliente
+// não pode editar atividades, predecessoras nem o próprio diagrama (o componente
+// interno já é puramente de visualização — não emite mutações).
 function AbaDiagramaRede({ atividades }: { atividades: any[] }) {
-  const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo), [atividades]);
+  // Mapa { atividadeId → percentual realizado } esperado pelo componente interno.
+  const avancosMap = useMemo<Record<number, number>>(() => {
+    const m: Record<number, number> = {};
+    for (const a of atividades || []) {
+      m[a.id] = Number(a.percentRealizado ?? 0);
+    }
+    return m;
+  }, [atividades]);
+
+  // Banner de contexto + componente visual idêntico ao interno.
+  const folhas = (atividades || []).filter((a: any) => !a.isGrupo);
   const comDep = folhas.filter((a: any) => a.predecessora && String(a.predecessora).trim());
+
   return (
     <div className="space-y-4">
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
         <GitBranch className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
         <div className="text-xs text-blue-800">
-          <strong className="block mb-1">Diagrama de Rede — Dependências entre Atividades</strong>
-          Mostra a sequência lógica de execução: cada atividade lista as predecessoras (atividades que devem terminar antes).
+          <strong className="block mb-1">Diagrama de Rede — Sequência lógica de execução</strong>
+          Use o botão <em>Hierarquia</em> para ver toda a estrutura da obra agrupada por EAP, ou <em>Rede</em> para ver apenas
+          as dependências (predecessoras → sucessoras). Clique em qualquer atividade para destacá-la e ver detalhes.
+          {" "}<span className="font-medium">{comDep.length} de {folhas.length} atividades</span> têm predecessora cadastrada.
         </div>
       </div>
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-blue-50/60 to-white flex items-center gap-2">
-          <GitBranch className="h-4 w-4 text-blue-600" />
-          <h3 className="font-semibold text-slate-800">Rede de Dependências</h3>
-          <span className="text-xs text-slate-500 ml-auto">{comDep.length} de {folhas.length} com predecessora</span>
-        </div>
-        {comDep.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 text-sm">Nenhuma atividade com predecessora cadastrada.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-50/80">
-                <tr className="text-slate-500">
-                  <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">EAP</th>
-                  <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Atividade</th>
-                  <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Predecessora(s)</th>
-                  <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">% Real.</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {comDep.map((a: any) => (
-                  <tr key={a.id} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{a.eapCodigo || "—"}</td>
-                    <td className="px-4 py-2.5 text-slate-800 max-w-md truncate" title={a.nome}>{a.nome}</td>
-                    <td className="px-4 py-2.5 text-slate-700 font-mono text-[11px]">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                        ← {a.predecessora}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-slate-700">{fmtPct(a.percentRealizado ?? 0)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <DiagramaRedeInterno atividades={atividades || []} avancosMap={avancosMap} />
     </div>
   );
 }
