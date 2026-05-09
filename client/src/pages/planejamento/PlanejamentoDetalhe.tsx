@@ -2684,7 +2684,8 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
   );
   const displayAtiv = useMemo(() => {
     if (editando) return linhas;
-    let base = atividades;
+    // Atividades desativadas ficam ocultas no modo visualização — só aparecem ao entrar em "Editar Cronograma"
+    let base = atividades.filter((a: any) => !a.disabled);
     if (periodoRange) {
       const [ini, fim] = periodoRange;
       const matchIds = new Set(

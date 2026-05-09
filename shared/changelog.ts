@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1499,
+    titulo: "Planejamento — Atividades desativadas ficam ocultas no Cronograma (só aparecem em modo Edição)",
+    descricao: "ATENDENDO PEDIDO DO USUÁRIO: na aba Cronograma, atividades marcadas como 'Desativada' (campo disabled=true) NÃO aparecem mais na visualização normal — antes ficavam visíveis com texto cinza riscado, poluindo a tela. Agora elas só voltam a ser exibidas quando o usuário clica em 'Editar Cronograma', podendo então re-habilitá-las desmarcando o checkbox de desativada. Filtro aplicado em displayAtiv (memo): quando editando=false, base = atividades.filter(a => !a.disabled). Filtros de período, busca, hierarquia e cálculos de soma de peso/avanço ficam mais limpos automaticamente. Não altera nenhum dado no banco — apenas visibilidade.",
+    tipo: 'melhoria',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 09:50:00',
+  },
+  {
     version: 1498,
     titulo: "Planejamento — Cronograma: colunas Pred./Suc. com truncamento (cap 3 + badge '+N') para evitar quebra de layout",
     descricao: "BUGFIX visual reportado pelo usuário após importação MS Project: quando o XML do MS Project linka todas as atividades ao mesmo marco (ex.: 'Início' como predecessora de tudo), a linha do marco passava a exibir centenas de códigos WBS na coluna Sucessoras, esticando a linha verticalmente em várias telas e quebrando o layout do cronograma. Agora as colunas Predecessoras e Sucessoras na aba Cronograma mostram no máximo os 3 primeiros códigos seguidos de um badge clicável '+N' (azul para Pred., violeta para Suc.) com tooltip exibindo a lista completa ao passar o mouse. Largura máxima das células fixada em 120px. Corrige a percepção de 'importação quebrada' sem alterar nenhum dado importado — a correção é apenas de renderização.",
