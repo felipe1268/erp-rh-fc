@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1536,
+    titulo: "Portal — Programação Semanal: coluna 'Recurso' removida (era sempre vazia)",
+    descricao: "AJUSTE de UX no Portal do Cliente: a coluna 'Recurso' da tabela de Programação Semanal vinha quase sempre vazia (apenas '—'), pois o campo recursoPrincipal de planejamento_atividades é texto livre raramente preenchido pelo engenheiro — que costuma usar o orçamento vinculado para detalhar mão-de-obra e materiais. A coluna ocupava espaço útil sem agregar valor para o cliente. Aplicado em ProgramacaoSemanal.tsx (componente compartilhado): o cabeçalho e a célula da coluna agora só renderizam quando portalMode=false, ou seja, somem do portal mas continuam disponíveis no módulo interno de Planejamento (engenheiro pode continuar consultando). Os recursos previstos no orçamento permanecem visíveis em bloco próprio abaixo da tabela quando há orcamentoId vinculado (esse bloco já era escondido em portalMode).",
+    tipo: 'melhoria',
+    modulos: 'Portal do Cliente, Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 14:45:00',
+  },
+  {
     version: 1535,
     titulo: "Portal do Cliente — Curva S Financeira agora usa o orçamento vinculado como fallback do Valor de Contrato",
     descricao: "BUGFIX reportado pelo cliente: na obra REVTE-CIVIL (e qualquer obra com orçamento bem definido mas sem campo 'Valor de Contrato' preenchido em planejamento_projetos.valorContrato) a aba Curva S → Curva S Financeira do Portal do Cliente exibia 'Sem valor de contrato cadastrado.' enquanto o módulo interno de Planejamento mostrava normalmente os R$ 1.359.798,88 (BCWS/BCWP/Desvio). A divergência acontecia porque o portal escalava % → R$ usando APENAS projeto.valorContrato, enquanto o getCurvaSFinanceira interno já tinha a regra correta: prefere orcamentos.totalVenda quando existe orçamento ligado e só cai em valorContrato como fallback. Correção aplicada nos 2 pontos: (1) server/routers/portalExterno.ts — planejamentoObra agora consulta orcamentos.totalVenda quando projeto.orcamentoId existe e expõe orcamentoTotalVenda dentro do objeto projeto retornado ao portal; (2) client/src/pages/portal/PortalPlanejamentoCliente.tsx — bloco curvaTipo='financeira' usa Number(projeto.orcamentoTotalVenda) || Number(projeto.valorContrato) como totalContrato. Cliente passa a ver a Curva S Financeira em R$ exatamente igual ao módulo interno, sem precisar editar manualmente o campo Valor de Contrato.",

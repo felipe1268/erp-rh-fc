@@ -715,7 +715,11 @@ export function ProgramacaoSemanal({
                       <th className="py-2 px-3">Atividade</th>
                       <th className="py-2 px-3 w-24">Início</th>
                       <th className="py-2 px-3 w-24">Fim</th>
-                      <th className="py-2 px-3 w-28">Recurso</th>
+                      {/* Rev. 1536 — Coluna "Recurso" removida no portal:
+                          é texto livre que quase sempre vem vazio (só "—") e
+                          os recursos previstos do orçamento já aparecem em
+                          bloco próprio abaixo. No módulo interno mantemos. */}
+                      {!portalMode && <th className="py-2 px-3 w-28">Recurso</th>}
                       <th className="py-2 px-3 w-20 text-right">Peso%</th>
                       <th className="py-2 px-3 w-20 text-right" title="% que esta atividade DEVERIA estar concluída até o fim desta semana, calculado linearmente entre data de início e fim">Previsto%</th>
                       <th className="py-2 px-3 w-20 text-right">Real%</th>
@@ -788,7 +792,9 @@ export function ProgramacaoSemanal({
                           </td>
                           <td className="py-2 px-3 text-slate-600">{fmtBR(a.dataInicio)}</td>
                           <td className="py-2 px-3 text-slate-600">{fmtBR(a.dataFim)}</td>
-                          <td className="py-2 px-3 text-slate-500 max-w-[120px] truncate">{a.recursoPrincipal || "—"}</td>
+                          {!portalMode && (
+                            <td className="py-2 px-3 text-slate-500 max-w-[120px] truncate">{a.recursoPrincipal || "—"}</td>
+                          )}
                           <td className={`py-2 px-3 text-right font-medium ${isMaiorPeso ? "text-orange-700 font-bold" : "text-slate-600"}`}>{parseFloat(a.pesoFinanceiro ?? "0").toFixed(2)}%</td>
                           <td className="py-2 px-3 text-right text-slate-500 tabular-nums">{prevInd.toFixed(1)}%</td>
                           <td className="py-2 px-3 text-right font-semibold text-slate-800 tabular-nums">{av.toFixed(1)}%</td>
