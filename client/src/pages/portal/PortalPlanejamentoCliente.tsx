@@ -2480,10 +2480,20 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
   const semPesoFolhas   = pesoBrutoFolhas === 0;
   const denomPrev = semPesoFolhas ? (folhasComDatas.length || 1) : pesoBrutoFolhas;
   const denomReal = semPesoFolhas ? (folhas.length        || 1) : pesoBrutoFolhas;
+  // Rev. 1521-fix2 — Usar FIM da semana (segunda + 7 dias) como referência
+  // do previsto. O módulo Planejamento (PlanejamentoDetalhe.tsx 4266-4272 e
+  // 9442-9448) calcula `semanaFim = semanas[idx+1]` ou `semana + 7` quando
+  // não há próxima. Sem isto, todas as atividades retornam 0% previsto na
+  // segunda-feira de início → Portal mostra 0,00% em vez de 2,28%.
+  const semanaFimRef = (() => {
+    const d = new Date(semanaRef + "T12:00:00");
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().split("T")[0];
+  })();
   const previstoRecalc = folhasComDatas.reduce(
     (s: number, a: any) => {
       const peso = semPesoFolhas ? 1 : (Number(a.pesoFinanceiro) || 0);
-      return s + (progPrevistoNa(a, semanaRef) * peso) / denomPrev;
+      return s + (progPrevistoNa(a, semanaFimRef) * peso) / denomPrev;
     }, 0);
   const realizadoRecalc = folhas.reduce(
     (s: number, a: any) => {

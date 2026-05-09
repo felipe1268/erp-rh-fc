@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1522,
+    titulo: "Portal do Cliente — REFIS: usa FIM da semana como referência (fix definitivo do 0,00%)",
+    descricao: "BUGFIX complementar à Rev. 1521 reportado pelo usuário (IMG_0202): após a Rev. 1521 corrigir o fallback de pesos, o Portal AINDA mostrava 0,00% Previsto Acumulado quando o toggle 'Global (c/ Indiretas)' era ativado. Causa: a função AbaRefis usava `semanaRef` (segunda-feira de início = 04/05/2026) como data de corte do cálculo previsto, mas o módulo Planejamento (PlanejamentoDetalhe.tsx 4266-4272 e 9442-9448) usa `semanaFim = semanas[idx+1]` (próxima segunda = 11/05/2026) ou `semana + 7` quando não há próxima. Como o REFIS Nº 001 é o PRIMEIRO da obra e a maioria das atividades começa exatamente em 04/05/2026, no início da semana o progresso linear de cada atividade é 0% — daí o Portal somar zero. Usando o FIM da semana (11/05/2026), as atividades já têm uma semana de progresso linear → bate com os 2,28% do interno. Solução: criada constante `semanaFimRef = semanaRef + 7 dias` no Portal e usada em `progPrevistoNa(a, semanaFimRef)`. Comentário explícito apontando os arquivos/linhas do interno como fonte de verdade.",
+    tipo: 'bugfix',
+    modulos: 'Portal do Cliente, Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 22:55:00',
+  },
+  {
     version: 1521,
     titulo: "Portal do Cliente — REFIS: divergência corrigida (fonte de verdade = módulo Planejamento)",
     descricao: "BUGFIX crítico apontado pelo usuário (screenshots IMG_0200/IMG_0201): a aba REFIS do Portal do Cliente exibia 0,00% Previsto Acumulado / 0,91% Realizado Acumulado / SPI 0,00 enquanto o REFIS Nº 001 (semana 04/05/2026) no módulo interno de Planejamento mostrava 2,28% / 1,60% / SPI 0,70 para a MESMA obra/semana com o mesmo toggle 'Global (c/ Indiretas)' ativo. Causa raiz: a função AbaRefis do Portal calculava `previstoRecalc`/`realizadoRecalc` SEM o fallback de média simples — quando a soma de pesoFinanceiro das atividades folha era zero, a divisão retornava 0. Já o módulo Planejamento (PlanejamentoDetalhe.tsx linhas 4427-4466) tem o fallback `semPeso → peso=1, denom=count` (média simples). Solução: replicada EXATAMENTE a mesma lógica do módulo Planejamento dentro de AbaRefis do Portal, garantindo que o Portal sempre assuma a verdade do Planejamento. Comentário explícito adicionado no código apontando o arquivo/linhas de origem para futuras manutenções.",
