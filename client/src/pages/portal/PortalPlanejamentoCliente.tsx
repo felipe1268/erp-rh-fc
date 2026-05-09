@@ -322,6 +322,46 @@ export default function PortalPlanejamentoCliente() {
         {/* ── Cabeçalho exclusivo de impressão (logos cliente + FC + gerenciadora) ── */}
         <PortalPrintHeader obra={obra} titulo={`Portal do Cliente — ${PORTAL_CLIENTE_ABAS.find(x=>x.key===aba)?.label || "Planejamento"}`} />
 
+        {/* ── Faixa de logos (visível em tela, escondida na impressão pois o
+              PortalPrintHeader acima já cumpre esse papel no PDF). Mostra os
+              3 atores envolvidos: Construtora (executora) · Cliente · Gerenciadora.
+              Ocultada quando NENHUM logo está disponível. ─────────────── */}
+        {(((obra as any)?.empresaLogoUrl) || ((obra as any)?.clienteLogoUrl) || ((obra as any)?.gerenciadoraLogoUrl)) && (
+          <div className="mb-4 bg-white rounded-2xl border border-slate-200/70 shadow-sm px-4 py-3 print:hidden">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              {/* Executora (FC) */}
+              <div className="flex flex-col items-start gap-1 min-w-0">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Executora</span>
+                {(obra as any)?.empresaLogoUrl ? (
+                  <img src={(obra as any).empresaLogoUrl} alt={(obra as any)?.empresaNome || "Executora"} className="h-9 max-w-[160px] object-contain" />
+                ) : (
+                  <span className="text-xs font-semibold text-slate-700 truncate max-w-[160px]">{(obra as any)?.empresaNome || "FC Engenharia"}</span>
+                )}
+              </div>
+              {/* Cliente */}
+              <div className="flex flex-col items-center gap-1 min-w-0 flex-1">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Cliente</span>
+                {(obra as any)?.clienteLogoUrl ? (
+                  <img src={(obra as any).clienteLogoUrl} alt={obra?.cliente || "Cliente"} className="h-9 max-w-[180px] object-contain" />
+                ) : (
+                  <span className="text-xs font-semibold text-slate-700 truncate max-w-[200px] text-center">{obra?.cliente || "—"}</span>
+                )}
+              </div>
+              {/* Gerenciadora */}
+              <div className="flex flex-col items-end gap-1 min-w-0">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Gerenciadora</span>
+                {(obra as any)?.gerenciadoraLogoUrl ? (
+                  <img src={(obra as any).gerenciadoraLogoUrl} alt={(obra as any)?.gerenciadoraNome || "Gerenciadora"} className="h-9 max-w-[160px] object-contain" />
+                ) : (obra as any)?.gerenciadoraNome ? (
+                  <span className="text-xs font-semibold text-slate-700 truncate max-w-[160px] text-right">{(obra as any).gerenciadoraNome}</span>
+                ) : (
+                  <span className="text-[10px] italic text-slate-300">—</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Header moderno ──────────────────────────────────────────── */}
         <div className="relative bg-white rounded-2xl border border-slate-200/70 shadow-[0_4px_24px_-8px_rgba(15,23,42,0.08)] p-4 sm:p-5 mb-4 overflow-hidden">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600" />

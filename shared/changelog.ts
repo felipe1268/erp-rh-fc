@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1488,
+    titulo: "Portal do Cliente — Faixa de logos no topo da tela (Executora · Cliente · Gerenciadora), igual ao cabeçalho de impressão",
+    descricao: "Adicionada faixa branca arredondada no topo da área de conteúdo do Portal do Cliente exibindo os 3 atores envolvidos no projeto: Construtora Executora (à esquerda), Cliente (centro) e Gerenciadora (direita). Cada bloco mostra o logo (quando cadastrado) ou o nome em texto. A faixa só aparece se ao menos um dos 3 tiver logo cadastrado, evitando faixa vazia. Reaproveita os mesmos dados já enviados pelo backend para o cabeçalho de impressão (empresaLogoUrl, clienteLogoUrl, gerenciadoraLogoUrl). Oculta na impressão (print:hidden) porque o PortalPrintHeader já cumpre esse papel no PDF — evita duplicidade.",
+    tipo: "feature",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 07:00:00",
+  },
+  {
     version: 1487,
     titulo: "Portal do Cliente — Nova barra horizontal de navegação por pílulas (2ª opção de menu, ao lado da sidebar)",
     descricao: "Adicionada uma barra horizontal de navegação no topo da área de conteúdo do Portal do Cliente, com todas as abas liberadas em formato de pílulas (estilo do mockup enviado pelo usuário). Cada pílula mostra ícone + label, com a aba atual destacada em azul claro com anel azul. A barra fica logo acima do conteúdo da aba e SE SOMA à navegação lateral existente (sidebar) — agora o cliente pode navegar de duas formas: (1) pela sidebar à esquerda (com busca, drag-to-reorder e modo recolhido); (2) pela barra horizontal de pílulas no topo, ideal para iPad/celular onde o toque é mais natural que arrastar. A barra usa flex-wrap para se adaptar a qualquer largura — em telas grandes mostra todas as pílulas em uma ou duas linhas, em telas pequenas elas quebram automaticamente. Removido o indicador antigo de 'aba atual' (já é redundante com a barra). Oculta na impressão.",
