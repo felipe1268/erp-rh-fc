@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1492,
+    titulo: "Portal do Cliente — Marcos (duração zero) NÃO entram mais como 'Atrasada'",
+    descricao: "Atividades importadas do MS Project com duração zero (data de início igual à data de fim) — tipicamente 'Início', 'Fim do projeto', marcos contratuais — são pontos de referência do cronograma, não atividades executáveis. Antes, quando a data desses marcos passava, eles apareciam como 'Atrasada' com 0% de realizado, poluindo o painel e gerando confusão (ex.: a linha 'Início' de um projeto que começou em março/abril aparecia em vermelho semanas depois). Agora: (1) Backend (server/routers/portalExterno.ts): a lista de Atrasadas exclui atividades com dataInicio === dataFim. (2) Frontend (PortalPlanejamentoCliente.tsx): a função statusBadge usa o status 'Marco' (cinza) em vez de 'Atrasada' (vermelho) para esses casos, e o destaque vermelho na linha do cronograma também não é aplicado. O cálculo do avanço previsto/realizado continua intacto — apenas o rótulo e a inclusão na lista de atrasadas mudaram.",
+    tipo: "fix",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 09:30:00",
+  },
+  {
     version: 1491,
     titulo: "Diagrama de Rede / Hierarquia EAP — filtros de status agora filtram de verdade (mostram só as atividades pertinentes + cadeia de ancestrais)",
     descricao: "Antes: ao clicar em 'Em andamento' (ou Concluída, Atrasada, Em risco, Não iniciada) na barra de pílulas, o diagrama mantinha TODOS os grupos visíveis e só destacava as folhas — visualmente parecia que nada havia sido filtrado. Agora: o clique no filtro restringe o diagrama para mostrar APENAS as atividades que casam com o status selecionado, mais a cadeia de ancestrais EAP (ex.: 4.5.1.2 → 4.5.1 → 4.5 → 4) para preservar o contexto hierárquico. Mesma regra aplicada à busca por texto. Funciona em ambos os modos: 'Hierarquia EAP' e 'Rede de Precedências'. As arestas (ligações) acompanham automaticamente porque já filtram pelo conjunto de nós visíveis.",

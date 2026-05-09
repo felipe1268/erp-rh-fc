@@ -46,10 +46,14 @@ const ABA_ICONS: Record<string, any> = {
   bim_3d: BarChart3,
 };
 
-function statusBadge(realizado: number, dataFim: string | null) {
+function statusBadge(realizado: number, dataFim: string | null, dataInicio?: string | null) {
   const today = new Date().toISOString().slice(0, 10);
   if (realizado >= 100) return { label: "Concluída", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" };
-  if (dataFim && dataFim < today && realizado < 100) return { label: "Atrasada", cls: "bg-red-100 text-red-700 border-red-200" };
+  // Marcos (duração zero) não entram como Atrasada — são pontos de referência
+  // do cronograma (ex.: "Início", "Fim do projeto"), não atividades executáveis.
+  const isMarco = dataInicio && dataFim && dataInicio === dataFim;
+  if (!isMarco && dataFim && dataFim < today && realizado < 100) return { label: "Atrasada", cls: "bg-red-100 text-red-700 border-red-200" };
+  if (isMarco && dataFim && dataFim < today) return { label: "Marco", cls: "bg-slate-100 text-slate-600 border-slate-200" };
   if (realizado > 0) return { label: "Em execução", cls: "bg-blue-100 text-blue-700 border-blue-200" };
   return { label: "Prevista", cls: "bg-slate-100 text-slate-600 border-slate-200" };
 }
@@ -1284,7 +1288,8 @@ function AbaCronograma({ atividades }: { atividades: any[] }) {
               const isCollapsed = collapsed.has(a.eapCodigo);
               const indent = a.nivel ? (a.nivel - 1) * 16 : 0;
               const avanco = Number(a.percentRealizado ?? 0);
-              const atrasada = !hasChildren && a.dataFim && a.dataFim < hoje && avanco < 100;
+              const isMarco = a.dataInicio && a.dataFim && a.dataInicio === a.dataFim;
+              const atrasada = !hasChildren && !isMarco && a.dataFim && a.dataFim < hoje && avanco < 100;
               const concluida = !hasChildren && avanco >= 100;
               const nivel = a.nivel ?? 1;
 
@@ -3495,7 +3500,7 @@ function SecaoAtividades({ titulo, vazio, itens, cor }: { titulo: string; vazio:
             <tbody>
               {itens.map((a: any) => {
                 const real = a.percentRealizado ?? 0;
-                const st = statusBadge(real, a.dataFim);
+                const st = statusBadge(real, a.dataFim, a.dataInicio);
                 return (
                   <tr key={a.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
                     <td className="px-3 py-2 text-slate-500 whitespace-nowrap">{a.eapCodigo || "—"}</td>

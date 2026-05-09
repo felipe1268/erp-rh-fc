@@ -1278,8 +1278,13 @@ export const portalExternoRouter = router({
       ).map((a: any) => ({ ...a, percentRealizado: ultimoAvancoPorAtiv[a.id] ?? 0 }));
 
       // Atrasadas: dataFim < hoje E avanço < 100
+      // Marcos (duração zero — dataInicio === dataFim) NÃO entram, pois são
+      // pontos de referência do MS Project (ex.: "Início", "Fim do projeto"),
+      // não atividades executáveis.
       const atrasadas = folhas.filter((a: any) =>
-        a.dataFim! < todayStr && (ultimoAvancoPorAtiv[a.id] ?? 0) < 100
+        a.dataFim! < todayStr
+        && (ultimoAvancoPorAtiv[a.id] ?? 0) < 100
+        && a.dataInicio !== a.dataFim
       ).map((a: any) => ({ ...a, percentRealizado: ultimoAvancoPorAtiv[a.id] ?? 0 }))
        .sort((x: any, y: any) => x.dataFim!.localeCompare(y.dataFim!))
        .slice(0, 20);
