@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1565,
+    titulo: "Portal do Cliente — Visualizador de Projetos/Documentos: corrige 'Erro interno'",
+    descricao: "A tela de visualização de Projetos/Documentos Técnicos do Portal do Cliente estava mostrando 'Erro interno' ao abrir certos arquivos (PDF, JPG, PNG). Causa: o backend tentava baixar o próprio arquivo via HTTP no domínio público (loop pelo proxy do Replit), o que falhava silenciosamente. Agora, quando o arquivo está em /uploads/* o backend lê diretamente do disco e, se não encontrar, do banco de dados (tabela uploaded_files) — sem HTTP roundtrip. URLs externas (storage Manus etc.) continuam sendo baixadas normalmente. Mesma correção aplicada ao endpoint de documentos SST (ASO/Treinamento).",
+    tipo: 'correcao',
+    modulos: 'Portal do Cliente, Projetos Técnicos',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 04:10:00',
+  },
+  {
     version: 1564,
     titulo: "Portal do Cliente — controle granular de Módulos e Abas por usuário",
     descricao: "O botão antigo 'Abas' do admin do Portal do Cliente virou 'Módulos & Abas' e abre uma única tela em duas seções: (1) Módulos do Portal — liga/desliga cada um dos 4 cards do Hub (Planejamento, RH&Docs, Proj./Doc. Técnicos, Avaliação); o card 'Avaliação' é obrigatório para que o cliente sempre possa enviar feedback. (2) Abas do módulo Planejamento — controla quais abas internas (Visão Geral, Cronograma, Curva S, Gantt, etc.) ficam visíveis. Quando o módulo Planejamento está desligado, a seção de abas fica desativada visualmente. RH&Docs / Proj./Doc. / Avaliação ainda não têm sub-abas configuráveis. As liberações são respeitadas no Hub do Cliente (esconde os cards bloqueados) e na barra lateral 'Outros módulos' do Planejamento. Tudo continua salvo na mesma coluna existente — registros antigos continuam funcionando (todos os módulos liberados por padrão).",

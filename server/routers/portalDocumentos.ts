@@ -14,9 +14,56 @@
 //   o download casual, não impedir captura.
 import type { Express, Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import * as fs from "fs";
+import * as path from "path";
 import { getDb, getEquipeObra } from "../db";
+import { dbRetrieve } from "../storage";
 import { asos, trainings, clientes, obras, gdDocumentos } from "../../drizzle/schema";
 import { and, eq, ilike, isNull, or, inArray } from "drizzle-orm";
+
+// Rev. 1565 — Resolve o conteúdo de um arquivoUrl. Para URLs locais
+// ("/uploads/<key>") lê direto do disco ou do DB (uploaded_files),
+// SEM fazer um HTTP roundtrip pelo próprio domínio externo — esse
+// roundtrip falha em Replit dev (mTLS proxy) e gera "Erro interno".
+async function resolveArquivo(arquivoUrl: string): Promise<{ buffer: Buffer; contentType?: string } | null> {
+  try {
+    // URLs externas (Manus Forge / outros) seguem por fetch.
+    if (/^https?:\/\//i.test(arquivoUrl)) {
+      const r = await fetch(arquivoUrl);
+      if (!r.ok) {
+        console.warn(`[PortalDoc] fetch upstream ${arquivoUrl} → ${r.status}`);
+        return null;
+      }
+      return { buffer: Buffer.from(await r.arrayBuffer()), contentType: r.headers.get("content-type") || undefined };
+    }
+    // Para fontes locais aceitamos APENAS /uploads/<key> e validamos
+    // contra path traversal: a chave não pode conter "..", não pode ser
+    // absoluta e o caminho final tem que ficar contido em server/uploads.
+    if (!arquivoUrl.startsWith("/uploads/")) {
+      console.warn(`[PortalDoc] arquivoUrl rejeitada (formato inválido): ${arquivoUrl}`);
+      return null;
+    }
+    const rawKey = arquivoUrl.slice("/uploads/".length);
+    if (!rawKey || rawKey.includes("..") || rawKey.includes("\0") || path.isAbsolute(rawKey)) {
+      console.warn(`[PortalDoc] arquivoUrl rejeitada (key suspeita): ${arquivoUrl}`);
+      return null;
+    }
+    const baseDir = path.resolve(process.cwd(), "server/uploads");
+    const localPath = path.resolve(baseDir, rawKey);
+    if (localPath !== baseDir && !localPath.startsWith(baseDir + path.sep)) {
+      console.warn(`[PortalDoc] arquivoUrl rejeitada (escape de baseDir): ${arquivoUrl}`);
+      return null;
+    }
+    // DB primeiro (fonte autoritativa em Replit) e depois disco.
+    const fromDb = await dbRetrieve(rawKey);
+    if (fromDb) return { buffer: fromDb.buffer, contentType: fromDb.contentType };
+    if (fs.existsSync(localPath)) return { buffer: fs.readFileSync(localPath) };
+    return null;
+  } catch (e: any) {
+    console.error(`[PortalDoc] resolveArquivo("${arquivoUrl}") falhou:`, e?.message || e);
+    return null;
+  }
+}
 
 function getExtAndMime(url: string): { ext: string; mime: string } {
   let ext = "bin";
@@ -120,20 +167,15 @@ export function registerPortalDocumentosRoute(app: Express) {
 
       if (!docUrl) { res.status(404).send("Sem documento anexado"); return; }
 
-      // Resolve URL: se for relativa (/uploads/...), monta absoluta usando o
-      // próprio host. Senão usa a URL como está.
-      const absUrl = docUrl.startsWith("http")
-        ? docUrl
-        : `${req.protocol}://${req.get("host")}${docUrl.startsWith("/") ? "" : "/"}${docUrl}`;
-
-      const upstream = await fetch(absUrl);
-      if (!upstream.ok) {
-        console.warn(`[PortalDoc] Upstream falhou: ${absUrl} → ${upstream.status}`);
+      // Rev. 1565 — Lê /uploads/* direto do disco/DB (sem HTTP loop).
+      const resolved = await resolveArquivo(docUrl);
+      if (!resolved) {
         res.status(502).send("Falha ao buscar documento");
         return;
       }
-      const buf = Buffer.from(await upstream.arrayBuffer());
-      const { mime } = getExtAndMime(docUrl);
+      const buf = resolved.buffer;
+      const { mime: mimeByExt } = getExtAndMime(docUrl);
+      const mime = resolved.contentType || mimeByExt;
 
       res.setHeader("Content-Type", mime);
       res.setHeader("Content-Disposition", `inline; filename="${downloadName.replace(/[^a-zA-Z0-9._-]/g, "_")}"`);
@@ -196,18 +238,16 @@ export function registerPortalDocumentosRoute(app: Express) {
       if (!row) { res.status(404).send("Documento não encontrado"); return; }
       if (!row.arquivoUrl) { res.status(404).send("Sem arquivo anexado"); return; }
 
-      const absUrl = row.arquivoUrl.startsWith("http")
-        ? row.arquivoUrl
-        : `${req.protocol}://${req.get("host")}${row.arquivoUrl.startsWith("/") ? "" : "/"}${row.arquivoUrl}`;
-
-      const upstream = await fetch(absUrl);
-      if (!upstream.ok) {
-        console.warn(`[PortalProjDoc] Upstream falhou: ${absUrl} → ${upstream.status}`);
+      // Rev. 1565 — Resolve sem HTTP loop pelo próprio domínio (que falha
+      // em Replit dev por causa do proxy mTLS).
+      const resolved = await resolveArquivo(row.arquivoUrl);
+      if (!resolved) {
         res.status(502).send("Falha ao buscar documento");
         return;
       }
-      const buf = Buffer.from(await upstream.arrayBuffer());
-      const { ext, mime } = getExtAndMime(row.arquivoUrl);
+      const buf = resolved.buffer;
+      const { ext, mime: mimeByExt } = getExtAndMime(row.arquivoUrl);
+      const mime = resolved.contentType || mimeByExt;
       const filename = (row.arquivoNome || `${row.codigo || "documento"}.${ext}`).replace(/[^a-zA-Z0-9._-]/g, "_");
       // PDF e imagens podem inline; DWG/DXF/etc sempre vão como attachment
       // (não tem visualizador nativo no browser).
