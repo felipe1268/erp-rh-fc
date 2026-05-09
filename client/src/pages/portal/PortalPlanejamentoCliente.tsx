@@ -1785,31 +1785,57 @@ function AbaRevisoes({ revisoes }: { revisoes: any[] }) {
     return <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-12 text-center text-slate-400">Nenhuma revisão cadastrada.</div>;
   }
   return (
-    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-      <h3 className="text-sm font-semibold text-slate-800 mb-3">Histórico de revisões</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-slate-500 border-b">
-              <th className="text-left px-3 py-2 font-medium">Revisão</th>
-              <th className="text-left px-3 py-2 font-medium">Data</th>
-              <th className="text-left px-3 py-2 font-medium">Motivo</th>
-              <th className="text-center px-3 py-2 font-medium">Consolidada</th>
-            </tr>
-          </thead>
-          <tbody>
-            {revisoes.map((r) => (
-              <tr key={r.id} className="border-b border-slate-50">
-                <td className="px-3 py-2 font-semibold text-slate-700">Rev. {String(r.numero).padStart(2, "0")}</td>
-                <td className="px-3 py-2 text-slate-600">{fmtBR(r.dataRevisao)}</td>
-                <td className="px-3 py-2 text-slate-700">{r.motivo || <span className="text-slate-400">—</span>}</td>
-                <td className="px-3 py-2 text-center">
-                  {r.consolidado ? <Badge className="bg-emerald-600 text-[10px]">Sim</Badge> : <Badge variant="outline" className="text-[10px]">Não</Badge>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-700">Controle de Revisões do Cronograma</p>
+      </div>
+
+      <div className="space-y-3">
+        {revisoes.map((r: any) => (
+          <div
+            key={r.id}
+            className={`bg-white rounded-xl border shadow-sm p-4 ${r.ativa ? "border-blue-300 ring-1 ring-blue-200" : "border-slate-100"}`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${r.isBaseline ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-600"}`}>
+                  {r.isBaseline ? "B" : `R${r.numero}`}
+                </div>
+                <div>
+                  <p className="font-semibold text-sm text-slate-800">
+                    {r.isBaseline ? "Baseline (Rev 00)" : `Rev. ${String(r.numero).padStart(2, "0")}`}
+                    {r.descricao && !r.isBaseline && ` — ${r.descricao}`}
+                    {r.ativa && (
+                      <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">ATIVA</span>
+                    )}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">{fmtBR(r.dataRevisao)} · {r.responsavel ?? "—"}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                  r.status === "aprovada" ? "bg-emerald-100 text-emerald-700"
+                  : r.status === "cancelada" ? "bg-red-100 text-red-600"
+                  : "bg-amber-100 text-amber-700"
+                }`}>
+                  {r.status ?? "aprovada"}
+                </span>
+              </div>
+            </div>
+            {r.motivo && <p className="text-xs text-slate-500 mt-2 pl-10">Motivo: {r.motivo}</p>}
+            {r.observacao && <p className="text-xs text-slate-400 mt-1 pl-10">{r.observacao}</p>}
+            {r.aprovadoPor && <p className="text-xs text-slate-400 mt-1 pl-10">Aprovado por: {r.aprovadoPor}</p>}
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700 space-y-1">
+        <p className="font-semibold">Sobre o controle de revisões</p>
+        <p>• Rev 00 (Baseline) é criada automaticamente e nunca pode ser alterada.</p>
+        <p>• Cada nova revisão exige upload de um novo cronograma (MS Project) e torna-se o cronograma oficial imediatamente.</p>
+        <p>• A Curva S compara Baseline × todas as revisões × Realizado.</p>
+        <p>• Todos os outros módulos (Gantt, Avanço, REFIS, Caminho Crítico etc.) usam sempre a revisão ativa.</p>
+        <p>• A criação, edição e exclusão de revisões é feita pela equipe da gerenciadora — este portal mostra o histórico oficial em tempo real.</p>
       </div>
     </div>
   );
