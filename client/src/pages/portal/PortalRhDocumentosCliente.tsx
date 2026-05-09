@@ -4,7 +4,7 @@ import { useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
 import {
   ArrowLeft, ShieldCheck, Users, FileCheck2, FileX2, FileWarning,
-  Stethoscope, GraduationCap, AlertTriangle, ChevronDown, ChevronRight, Search, Home,
+  GraduationCap, ChevronDown, ChevronRight, Search, Home,
 } from "lucide-react";
 import PortalPrintHeader from "@/components/PortalPrintHeader";
 import PrintActions from "@/components/PrintActions";
@@ -43,7 +43,7 @@ export default function PortalRhDocumentosCliente() {
   );
 
   const funcionarios = (data?.funcionarios || []) as any[];
-  const totais = data?.totais || { funcionarios: 0, asoVigente: 0, asoVencido: 0, semAso: 0, comAdvertencia: 0, comAtestado: 0 };
+  const totais = data?.totais || { funcionarios: 0, asoVigente: 0, asoVencido: 0, semAso: 0 };
 
   const [busca, setBusca] = useState("");
   const [filtroAso, setFiltroAso] = useState<"todos" | "vigente" | "vencido" | "sem_aso">("todos");
@@ -110,13 +110,11 @@ export default function PortalRhDocumentosCliente() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
         <PortalPrintHeader obra={obra} titulo="RH / Controle de Documentos" />
         {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Kpi label="Funcionários" value={totais.funcionarios} color="text-blue-700" icon={Users} />
           <Kpi label="ASO Vigente" value={totais.asoVigente} color="text-emerald-700" icon={FileCheck2} />
           <Kpi label="ASO Vencido" value={totais.asoVencido} color="text-rose-700" icon={FileX2} />
           <Kpi label="Sem ASO" value={totais.semAso} color="text-slate-700" icon={FileWarning} />
-          <Kpi label="Com Atestado" value={totais.comAtestado} color="text-amber-700" icon={Stethoscope} />
-          <Kpi label="Com Advertência" value={totais.comAdvertencia} color="text-purple-700" icon={AlertTriangle} />
         </div>
 
         {/* Filtros */}
@@ -165,8 +163,6 @@ export default function PortalRhDocumentosCliente() {
                   <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Função</th>
                   <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">ASO</th>
                   <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Treinamentos</th>
-                  <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Atestados</th>
-                  <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Advertências</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -220,21 +216,11 @@ export default function PortalRhDocumentosCliente() {
                             <GraduationCap className="h-3.5 w-3.5 text-emerald-600" /> {f.treinamentosVigentes}
                           </span>
                         </td>
-                        <td className="px-4 py-2 text-center">
-                          <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-slate-700">
-                            <Stethoscope className="h-3.5 w-3.5 text-amber-600" /> {f.atestadosUltimos12m}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          <span className={`inline-flex items-center gap-1 text-[12px] font-semibold ${f.advertencias > 0 ? "text-purple-700" : "text-slate-400"}`}>
-                            <AlertTriangle className="h-3.5 w-3.5" /> {f.advertencias}
-                          </span>
-                        </td>
                       </tr>
                       {expanded && (
                         <tr className="bg-slate-50/50">
-                          <td colSpan={7} className="px-6 py-4">
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 text-xs">
+                          <td colSpan={5} className="px-6 py-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs">
                               <div>
                                 <p className="font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
                                   <FileCheck2 className="h-3.5 w-3.5 text-emerald-600" /> ASO
@@ -262,38 +248,6 @@ export default function PortalRhDocumentosCliente() {
                                       </li>
                                     ))}
                                   </ul>
-                                )}
-                              </div>
-                              <div>
-                                <p className="font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
-                                  <Stethoscope className="h-3.5 w-3.5 text-amber-600" /> Atestados / Advertências
-                                </p>
-                                {f.atestados.length > 0 && (
-                                  <>
-                                    <p className="text-[10px] uppercase font-semibold text-slate-400 mt-1">Atestados</p>
-                                    <ul className="space-y-1 text-slate-600 max-h-24 overflow-y-auto">
-                                      {f.atestados.map((a: any, i: number) => (
-                                        <li key={i}>
-                                          {fmtBR(a.dataEmissao)} — {a.tipo} ({a.diasAfastamento || 0}d)
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </>
-                                )}
-                                {f.advertenciasLista.length > 0 && (
-                                  <>
-                                    <p className="text-[10px] uppercase font-semibold text-slate-400 mt-1.5">Advertências</p>
-                                    <ul className="space-y-1 text-slate-600 max-h-24 overflow-y-auto">
-                                      {f.advertenciasLista.map((w: any, i: number) => (
-                                        <li key={i}>
-                                          {fmtBR(w.dataOcorrencia)} — {w.tipoAdvertencia}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </>
-                                )}
-                                {f.atestados.length === 0 && f.advertenciasLista.length === 0 && (
-                                  <p className="text-slate-400">Nenhum registro.</p>
                                 )}
                               </div>
                             </div>

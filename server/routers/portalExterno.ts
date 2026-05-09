@@ -1701,7 +1701,12 @@ export const portalExternoRouter = router({
       };
     }),
 
-    // ── Documentos RH dos funcionários alocados na obra (ASOs/Atestados/Treinamentos/Advertências) ──
+    // ── Documentos RH dos funcionários alocados na obra (ASOs/Treinamentos) ──
+    // Rev. 1553: Removidos atestados e advertências da resposta — informações
+    // internas (saúde do funcionário e questões disciplinares) que NÃO devem
+    // ser expostas ao cliente. Mantemos apenas ASO (segurança ocupacional)
+    // e treinamentos NR (qualificação/segurança), que são compromissos
+    // contratuais legítimos de comprovar ao cliente.
     documentosRhObra: publicProcedure.input(z.object({
       token: z.string(),
       obraId: z.number(),
@@ -1732,9 +1737,7 @@ export const portalExternoRouter = router({
       const today = new Date().toISOString().slice(0, 10);
 
       let asoMap = new Map<number, any>();
-      let atestMap = new Map<number, any[]>();
       let trainMap = new Map<number, any[]>();
-      let warnMap = new Map<number, any[]>();
 
       if (empIds.length > 0) {
         // ASO mais recente (vigente) por funcionário
@@ -1747,21 +1750,6 @@ export const portalExternoRouter = router({
           isNull(asos.deletedAt),
         )).orderBy(desc(asos.dataExame));
         for (const r of asoRows) if (!asoMap.has(r.employeeId)) asoMap.set(r.employeeId, r);
-
-        // Atestados últimos 12 meses
-        const atestRows = await db.select({
-          employeeId: atestados.employeeId, tipo: atestados.tipo,
-          dataEmissao: atestados.dataEmissao, diasAfastamento: atestados.diasAfastamento,
-          cid: atestados.cid,
-        }).from(atestados).where(and(
-          eq(atestados.companyId, decoded.companyId),
-          inArray(atestados.employeeId, empIds),
-          isNull(atestados.deletedAt),
-        )).orderBy(desc(atestados.dataEmissao));
-        for (const r of atestRows) {
-          const arr = atestMap.get(r.employeeId) || [];
-          arr.push(r); atestMap.set(r.employeeId, arr);
-        }
 
         // Treinamentos vigentes
         const trainRows = await db.select({
@@ -1777,27 +1765,11 @@ export const portalExternoRouter = router({
           const arr = trainMap.get(r.employeeId) || [];
           arr.push(r); trainMap.set(r.employeeId, arr);
         }
-
-        // Advertências
-        const warnRows = await db.select({
-          employeeId: warnings.employeeId, tipoAdvertencia: warnings.tipoAdvertencia,
-          dataOcorrencia: warnings.dataOcorrencia, motivo: warnings.motivo,
-        }).from(warnings).where(and(
-          eq(warnings.companyId, decoded.companyId),
-          inArray(warnings.employeeId, empIds),
-          isNull(warnings.deletedAt),
-        )).orderBy(desc(warnings.dataOcorrencia));
-        for (const r of warnRows) {
-          const arr = warnMap.get(r.employeeId) || [];
-          arr.push(r); warnMap.set(r.employeeId, arr);
-        }
       }
 
       const funcionarios = equipe.map((e: any) => {
         const aso = asoMap.get(e.id);
-        const atest = atestMap.get(e.id) || [];
         const trains = trainMap.get(e.id) || [];
-        const warns = warnMap.get(e.id) || [];
         const asoStatus = aso ? (aso.dataValidade && aso.dataValidade < today ? "vencido" : "vigente") : "sem_aso";
         const trainsVigentes = trains.filter((t: any) => !t.dataValidade || t.dataValidade >= today);
         return {
@@ -1808,12 +1780,8 @@ export const portalExternoRouter = router({
           fotoUrl: e.fotoUrl || null,
           aso: aso ? { tipo: aso.tipo, dataExame: aso.dataExame, dataValidade: aso.dataValidade, resultado: aso.resultado, status: asoStatus } : null,
           asoStatus,
-          atestadosUltimos12m: atest.length,
-          atestados: atest.slice(0, 5),
           treinamentosVigentes: trainsVigentes.length,
           treinamentos: trains.slice(0, 10),
-          advertencias: warns.length,
-          advertenciasLista: warns.slice(0, 5),
         };
       });
 
@@ -1822,8 +1790,6 @@ export const portalExternoRouter = router({
         asoVigente: funcionarios.filter(f => f.asoStatus === "vigente").length,
         asoVencido: funcionarios.filter(f => f.asoStatus === "vencido").length,
         semAso: funcionarios.filter(f => f.asoStatus === "sem_aso").length,
-        comAdvertencia: funcionarios.filter(f => f.advertencias > 0).length,
-        comAtestado: funcionarios.filter(f => f.atestadosUltimos12m > 0).length,
       };
       return { funcionarios, totais };
     }),

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1553,
+    titulo: "Portal do Cliente — RH/Docs: removida exposição de atestados e advertências dos funcionários",
+    descricao: "Informações internas e sensíveis (atestados médicos e advertências disciplinares de funcionários CLT) foram removidas do Portal do Cliente. Não fazem sentido para o cliente — são questões trabalhistas/de saúde da relação FC × funcionário. O painel agora mostra apenas o que interessa ao cliente provar contratualmente: ASO (segurança ocupacional) e treinamentos NR (qualificação). Mudanças: KPIs 'Com Atestado' e 'Com Advertência' removidos; colunas 'Atestados' e 'Advertências' da tabela removidas; bloco 'Atestados / Advertências' do detalhe expandido removido. Backend: query documentosRhObra deixou de buscar e retornar esses dados (proteção em duas camadas).",
+    tipo: 'melhoria',
+    modulos: 'Portal do Cliente, RH, LGPD',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 22:30:00',
+  },
+  {
     version: 1552,
     titulo: "Portal do Cliente — Switcher de obra e módulo: lista com ícone colorido ao lado",
     descricao: "Refinamento visual: o painel 'Outras obras' e 'Outros módulos' voltou para o formato de lista (mais sutil que a grade de cards anterior, considerada agressiva), porém mantendo o ícone branco em pequeno quadrado com gradiente accent ao lado do nome. Cada item: linha clicável com ícone 28×28 px em gradiente colorido + título e subtítulo (módulos) ao lado. Item atual fica destacado com fundo cinza-escuro e check da cor do accent à direita. Diferenciação: obras usam gradiente âmbar→laranja (combina com a logo FC); módulos usam suas cores próprias (Planejamento verde, RH & Docs esmeralda, Proj./Doc. índigo, Mensagens âmbar).",
