@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1483,
+    titulo: "Portal do Cliente — Tooltips explicativos nos 5 cards de KPI da Visão Geral",
+    descricao: "Adicionado tooltip explicativo ao passar o mouse (ou tocar no iPad) sobre cada um dos 5 cards de KPI no topo da Visão Geral do Portal do Cliente: (1) 'Atividades' — explica concluídas/total; (2) 'Avanço Físico' — explica que é a média ponderada pelo peso financeiro; (3) 'SPI (prazo)' — explica o índice de desempenho de prazo (Realizado ÷ Previsto), com leitura clara de >1 adiantado, =1 no prazo, <1 atrasado; (4) 'CPI (custo)' — explica o índice de desempenho de custo (Valor Agregado ÷ Custo Real); (5) 'REFIs emitidos' — explica que é o total de Relatórios Físicos semanais consolidados. Os tooltips usam fundo escuro com texto claro, aparecem após 150ms de hover, possuem cursor 'help' e elevam a sombra do card no hover, deixando claro que são interativos. Atende o pedido do cliente para que cada KPI tenha legenda objetiva sem precisar abrir documentação.",
+    tipo: "feature",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 02:10:00",
+  },
+  {
     version: 1482,
     titulo: "Portal do Cliente — Aba 'Cronograma' agora espelha a UX do módulo Planejamento (somente leitura)",
     descricao: "Reescrita da aba 'Cronograma' do Portal do Cliente para replicar visual e navegação idênticas ao módulo interno Planejamento, mas em modo somente leitura (cliente não pode alterar nada). Recursos adicionados: (1) Filtros de período — Tudo / Hoje / Semana / Mês / Ano / Intervalo personalizado com datas; (2) Filtros de nível EAP — N1, N2, N3... com botões Tudo (expandir tudo) e Recolher (fechar tudo); (3) Hierarquia colapsável — clique no ▶/▼ ao lado do grupo para expandir/recolher filhos, com indentação proporcional ao nível; (4) Busca por EAP ou nome — campo dedicado com botão limpar (X) e contador de resultados; (5) Indicador de Soma Peso% — pílula colorida (verde se 100%, amarelo se faltam, vermelho se passou); (6) Atividades CONCLUÍDAS aparecem com fundo verde + ícone ✓ e nome em verde; (7) Atividades ATRASADAS aparecem com fundo vermelho + ícone ⚠ + nome em vermelho (com tooltip mostrando data fim e % atual); (8) Marcos aparecem com badge roxo ◆ Marco e fundo roxo claro; (9) Atividades indiretas com tag cinza 'Indireta'; (10) Colunas completas: EAP, Atividade, Início, Fim, Duração, Predecessoras (azul), Sucessoras (violeta — calculadas), Peso%, Recurso, Avanço (com mini barra de progresso). Removidos do portal (visualização-apenas): editar/importar/excluir cronograma, consolidar, seleção em bloco para desativar atividades.",

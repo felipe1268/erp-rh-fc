@@ -19,6 +19,7 @@ import { ProgramacaoSemanal } from "@/pages/planejamento/ProgramacaoSemanal";
 import { EfetivoObraView } from "@/pages/planejamento/PlanejamentoDetalhe";
 import PortalPrintHeader from "@/components/PortalPrintHeader";
 import PrintActions from "@/components/PrintActions";
+import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider as UiTooltipProvider, TooltipTrigger as UiTooltipTrigger } from "@/components/ui/tooltip";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
 const fmtPct = (n: number) => `${n.toFixed(2).replace(".", ",")}%`;
@@ -588,25 +589,76 @@ function AbaVisaoGeral({ kpis, projeto: _projeto, obra, semanaAtual: _sa, atrasa
   });
 
   const kpiCards = [
-    { label: "Atividades",     value: `${concluidas}/${totalAtiv}`,         color: "text-blue-600",    bg: "bg-blue-50",    icon: <ClipboardList className="h-4 w-4" /> },
-    { label: "Avanço Físico",  value: fmtPct(realizado),                     color: "text-emerald-600", bg: "bg-emerald-50", icon: <TrendingUp className="h-4 w-4" /> },
-    { label: "SPI (prazo)",    value: spiValido ? spi.toFixed(2) : "—",      color: !spiValido ? "text-slate-400" : spi >= 1 ? "text-emerald-600" : "text-red-600", bg: !spiValido ? "bg-slate-100" : spi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <Activity className="h-4 w-4" />, detail: spiValido ? `${realizado.toFixed(1)}% ÷ ${previsto.toFixed(1)}%` : undefined },
-    { label: "CPI (custo)",    value: cpi.toFixed(2),                        color: cpi >= 1 ? "text-emerald-600" : "text-red-600", bg: cpi >= 1 ? "bg-emerald-50" : "bg-red-50", icon: <DollarSign className="h-4 w-4" /> },
-    { label: "REFIs emitidos", value: String((refisLista || []).length),     color: "text-purple-600",  bg: "bg-purple-50",  icon: <FileText className="h-4 w-4" /> },
+    {
+      label: "Atividades",
+      value: `${concluidas}/${totalAtiv}`,
+      color: "text-blue-600",
+      bg: "bg-blue-50",
+      icon: <ClipboardList className="h-4 w-4" />,
+      titulo: "Atividades concluídas / total",
+      explicacao: "Mostra quantas atividades já chegaram a 100% de avanço (numerador) em relação ao total cadastrado no cronograma (denominador). Quanto mais alto, mais perto do encerramento da obra.",
+    },
+    {
+      label: "Avanço Físico",
+      value: fmtPct(realizado),
+      color: "text-emerald-600",
+      bg: "bg-emerald-50",
+      icon: <TrendingUp className="h-4 w-4" />,
+      titulo: "Avanço Físico Realizado",
+      explicacao: "Percentual ponderado de execução acumulada da obra, calculado pela média do progresso de cada atividade multiplicado pelo seu peso financeiro. Representa o quanto, em valor, da obra já foi efetivamente entregue.",
+    },
+    {
+      label: "SPI (prazo)",
+      value: spiValido ? spi.toFixed(2) : "—",
+      color: !spiValido ? "text-slate-400" : spi >= 1 ? "text-emerald-600" : "text-red-600",
+      bg: !spiValido ? "bg-slate-100" : spi >= 1 ? "bg-emerald-50" : "bg-red-50",
+      icon: <Activity className="h-4 w-4" />,
+      detail: spiValido ? `${realizado.toFixed(1)}% ÷ ${previsto.toFixed(1)}%` : undefined,
+      titulo: "SPI — Schedule Performance Index (prazo)",
+      explicacao: "Indicador de desempenho de prazo: divide o avanço Realizado pelo avanço Previsto na data de hoje. SPI = 1,00 → no prazo. SPI > 1,00 → adiantado. SPI < 1,00 → atrasado. Ex.: 0,57 significa que a obra está executando apenas 57% do que deveria nesta data.",
+    },
+    {
+      label: "CPI (custo)",
+      value: cpi.toFixed(2),
+      color: cpi >= 1 ? "text-emerald-600" : "text-red-600",
+      bg: cpi >= 1 ? "bg-emerald-50" : "bg-red-50",
+      icon: <DollarSign className="h-4 w-4" />,
+      titulo: "CPI — Cost Performance Index (custo)",
+      explicacao: "Indicador de desempenho de custo: divide o valor agregado (trabalho entregue convertido em R$) pelo custo real gasto até a data. CPI = 1,00 → orçamento exato. CPI > 1,00 → economia. CPI < 1,00 → estouro de orçamento.",
+    },
+    {
+      label: "REFIs emitidos",
+      value: String((refisLista || []).length),
+      color: "text-purple-600",
+      bg: "bg-purple-50",
+      icon: <FileText className="h-4 w-4" />,
+      titulo: "REFIs (Relatórios Físicos) Emitidos",
+      explicacao: "Total de Relatórios Físicos semanais já emitidos e consolidados pela equipe da obra. Cada REFI é o documento oficial assinado contendo o avanço físico e financeiro daquela semana de referência. Acesse a aba REFIS para ver todos.",
+    },
   ];
 
   return (
     <div className="space-y-5">
       {/* KPIs (idênticos ao interno) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {kpiCards.map((k, i) => (
-          <div key={i} className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 flex flex-col gap-2">
-            <div className={`w-8 h-8 rounded-lg ${k.bg} ${k.color} flex items-center justify-center`}>{k.icon}</div>
-            <p className="text-[10px] text-slate-500 leading-tight">{k.label}</p>
-            <p className={`text-base font-bold ${k.color} leading-tight`}>{k.value}</p>
-            {(k as any).detail && <p className="text-[9px] text-slate-400 leading-tight -mt-1">{(k as any).detail}</p>}
-          </div>
-        ))}
+        <UiTooltipProvider delayDuration={150}>
+          {kpiCards.map((k, i) => (
+            <UiTooltip key={i}>
+              <UiTooltipTrigger asChild>
+                <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 flex flex-col gap-2 cursor-help transition-shadow hover:shadow-md hover:border-slate-200">
+                  <div className={`w-8 h-8 rounded-lg ${k.bg} ${k.color} flex items-center justify-center`}>{k.icon}</div>
+                  <p className="text-[10px] text-slate-500 leading-tight">{k.label}</p>
+                  <p className={`text-base font-bold ${k.color} leading-tight`}>{k.value}</p>
+                  {(k as any).detail && <p className="text-[9px] text-slate-400 leading-tight -mt-1">{(k as any).detail}</p>}
+                </div>
+              </UiTooltipTrigger>
+              <UiTooltipContent side="bottom" className="max-w-[280px] p-3 bg-slate-900 text-white border-slate-700">
+                <p className="font-semibold text-[12px] mb-1 leading-tight">{(k as any).titulo}</p>
+                <p className="text-[11px] leading-snug text-slate-200">{(k as any).explicacao}</p>
+              </UiTooltipContent>
+            </UiTooltip>
+          ))}
+        </UiTooltipProvider>
       </div>
 
       {/* Atividades em Atraso (com barras Deveria/Hoje) */}
