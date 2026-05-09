@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1548,
+    titulo: "Planejamento — alertas de confirmação modernizados (sai o popup feio do navegador)",
+    descricao: "Substituídos os 5 window.confirm() do módulo Planejamento (popup nativo do navegador, com URL feia e visual quebrado em mobile/tablet) por toasts estilizados (sonner) com botão de ação colorido + Cancelar. Trocados em: (1) Importar custos de MO; (2) Cancelar revisão do cronograma; (3) Reativar revisão; (4) Consolidar REFIS; (5) Cancelar consolidação do REFIS. Duração 15s, ação principal destacada.",
+    tipo: 'melhoria',
+    modulos: 'Planejamento, REFIS, Revisões, Custos MO',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 20:00:00',
+  },
+  {
     version: 1547,
     titulo: "Programação Semanal — coluna 'Recurso' removida no módulo interno também",
     descricao: "Pedido do usuário: a coluna Recurso é texto livre que quase sempre vem vazio ('—') e polui visualmente a tabela. Já estava removida do Portal do Cliente desde a Rev. 1536; agora removida também no módulo interno. Os recursos previstos do orçamento continuam aparecendo no bloco 'Recursos previstos no orçamento' logo abaixo da tabela.",

@@ -1154,11 +1154,18 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                 (verificarMoQuery.data?.totalCargosConfigurados ?? 0) === 0
               }
               onClick={() => {
-                if (!window.confirm(`Importar custos de MO do mês ${mesMoSelecionado}? Os custos serão alocados nas atividades do cronograma.`)) return;
-                executarTransferenciaMut.mutate({
-                  companyId: proj?.companyId ?? 0,
-                  mesReferencia: mesMoSelecionado,
-                  executadoPor: user?.name ?? user?.email ?? "Sistema",
+                toast.warning(`Importar custos de MO do mês ${mesMoSelecionado}?`, {
+                  description: "Os custos serão alocados nas atividades do cronograma.",
+                  action: {
+                    label: "Importar",
+                    onClick: () => executarTransferenciaMut.mutate({
+                      companyId: proj?.companyId ?? 0,
+                      mesReferencia: mesMoSelecionado,
+                      executadoPor: user?.name ?? user?.email ?? "Sistema",
+                    }),
+                  },
+                  cancel: { label: "Cancelar", onClick: () => {} },
+                  duration: 15000,
                 });
               }}
             >
@@ -9282,8 +9289,13 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
                     className="text-xs h-6 px-2 gap-1 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
                     disabled={cancelarMutation.isPending}
                     onClick={() => {
-                      if (window.confirm(`Cancelar a Rev. ${String(r.numero).padStart(2,"0")}? O sistema voltará a usar a revisão anterior como oficial.`))
-                        cancelarMutation.mutate({ id: r.id });
+                      const num = String(r.numero).padStart(2, "0");
+                      toast.warning(`Cancelar a Rev. ${num}?`, {
+                        description: "O sistema voltará a usar a revisão anterior como oficial.",
+                        action: { label: "Cancelar revisão", onClick: () => cancelarMutation.mutate({ id: r.id }) },
+                        cancel: { label: "Voltar", onClick: () => {} },
+                        duration: 15000,
+                      });
                     }}
                   >
                     <XCircle className="h-3 w-3" /> Cancelar
@@ -9295,8 +9307,13 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
                     className="text-xs h-6 px-2 gap-1 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
                     disabled={reativarMutation.isPending}
                     onClick={() => {
-                      if (window.confirm(`Reativar a Rev. ${String(r.numero).padStart(2,"0")}? Esta revisão será aprovada novamente e voltará a ser considerada no cronograma.`))
-                        reativarMutation.mutate({ id: r.id });
+                      const num = String(r.numero).padStart(2, "0");
+                      toast.warning(`Reativar a Rev. ${num}?`, {
+                        description: "Esta revisão será aprovada novamente e voltará a ser considerada no cronograma.",
+                        action: { label: "Reativar", onClick: () => reativarMutation.mutate({ id: r.id }) },
+                        cancel: { label: "Voltar", onClick: () => {} },
+                        duration: 15000,
+                      });
                     }}
                   >
                     {reativarMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />} Reativar
@@ -10209,7 +10226,15 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             <Button size="sm" variant="outline"
               className="gap-1.5 border-emerald-400 text-emerald-700 hover:bg-emerald-50 no-print"
               disabled={consolidarMutation.isPending}
-              onClick={() => { if (window.confirm(`Confirma a consolidação do REFIS Nº ${String(existente.numero ?? "—").padStart(3, "0")}? Após consolidar, somente o ADM poderá cancelar.`)) consolidarMutation.mutate({ id: existente.id }); }}>
+              onClick={() => {
+                const num = String(existente.numero ?? "—").padStart(3, "0");
+                toast.warning(`Consolidar REFIS Nº ${num}?`, {
+                  description: "Após consolidar, somente o ADM poderá cancelar.",
+                  action: { label: "Consolidar", onClick: () => consolidarMutation.mutate({ id: existente.id }) },
+                  cancel: { label: "Cancelar", onClick: () => {} },
+                  duration: 15000,
+                });
+              }}>
               {consolidarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Lock className="h-3.5 w-3.5" />}
               Consolidar
             </Button>
@@ -10218,7 +10243,15 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             <Button size="sm" variant="outline"
               className="gap-1.5 border-amber-400 text-amber-700 hover:bg-amber-50 no-print"
               disabled={cancelarConsolidacaoMutation.isPending}
-              onClick={() => { if (window.confirm(`Cancelar a consolidação do REFIS Nº ${String(existente.numero ?? "—").padStart(3, "0")}? O REFIS voltará para "emitido".`)) cancelarConsolidacaoMutation.mutate({ id: existente.id }); }}>
+              onClick={() => {
+                const num = String(existente.numero ?? "—").padStart(3, "0");
+                toast.warning(`Cancelar consolidação do REFIS Nº ${num}?`, {
+                  description: 'O REFIS voltará para o status "emitido".',
+                  action: { label: "Cancelar consolidação", onClick: () => cancelarConsolidacaoMutation.mutate({ id: existente.id }) },
+                  cancel: { label: "Voltar", onClick: () => {} },
+                  duration: 15000,
+                });
+              }}>
               {cancelarConsolidacaoMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LockOpen className="h-3.5 w-3.5" />}
               Desfazer Consolidação
             </Button>
