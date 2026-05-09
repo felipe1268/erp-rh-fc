@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1500,
+    titulo: "Planejamento — Cronograma: colunas Pred./Suc. agora exibem chip compacto com contagem (← N / N →)",
+    descricao: "MELHORIA VISUAL pedida pelo usuário: as colunas Predecessoras e Sucessoras na aba Cronograma estavam visualmente pesadas, mostrando até 3 códigos WBS por linha + badge '+N'. Ficou amontoado, especialmente em atividades com muitas relações. Agora cada célula exibe um chip único, pequeno e colorido apenas com a CONTAGEM e uma seta direcional: '← N' (azul) para predecessoras e 'N →' (violeta) para sucessoras. A lista completa dos códigos WBS aparece em tooltip ao passar o mouse sobre o chip ('Predecessoras (N): 2.1.1; 2.1.2; ...'). Resultado: linhas finas, layout limpo, informação preserva 100% via tooltip. Atividades sem relação continuam mostrando '—' cinza.",
+    tipo: 'melhoria',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 10:00:00',
+  },
+  {
     version: 1499,
     titulo: "Planejamento — Atividades desativadas ficam ocultas no Cronograma (só aparecem em modo Edição)",
     descricao: "ATENDENDO PEDIDO DO USUÁRIO: na aba Cronograma, atividades marcadas como 'Desativada' (campo disabled=true) NÃO aparecem mais na visualização normal — antes ficavam visíveis com texto cinza riscado, poluindo a tela. Agora elas só voltam a ser exibidas quando o usuário clica em 'Editar Cronograma', podendo então re-habilitá-las desmarcando o checkbox de desativada. Filtro aplicado em displayAtiv (memo): quando editando=false, base = atividades.filter(a => !a.disabled). Filtros de período, busca, hierarquia e cálculos de soma de peso/avanço ficam mais limpos automaticamente. Não altera nenhum dado no banco — apenas visibilidade.",
