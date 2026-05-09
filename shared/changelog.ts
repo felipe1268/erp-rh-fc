@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1506,
+    titulo: "Diagrama de Rede — Legenda de cores VISÍVEL (nada de tooltip escondido)",
+    descricao: "AJUSTE pedido pelo usuário: tooltip ao passar o mouse não funciona em iPad/celular, e mesmo no desktop o usuário não estava entendendo o que era 'Cor por N1/N2/N3'. Agora, sempre que esse modo está ativo (view Rede + 'Todos os pacotes EAP'), aparece um painel azul-claro logo abaixo da barra de ferramentas com: (1) frase explicativa direta — 'Cada cor = um pacote da obra (EAP nível N). Atividades do mesmo pacote ganham a mesma faixa colorida no topo da caixa'; (2) chips coloridos mostrando A LEGENDA REAL — quadradinho com a cor + código do pacote + nome do grupo (ex.: '🟦 2 — SERVIÇOS PRELIMINARES', '🟩 3 — FUNDAÇÕES'). Os chips são calculados a partir das folhas EFETIVAMENTE visíveis no nível atual, então o usuário vê exatamente o que está na tela. Se há mais de 24 pacotes, mostra '+N pacotes' no fim. Mudou para N2/N3? A legenda recalcula automaticamente. Tooltip do dropdown foi mantido como reforço.",
+    tipo: 'melhoria',
+    modulos: 'Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 14:00:00',
+  },
+  {
     version: 1505,
     titulo: "Diagrama de Rede — Legenda 'Cor por N1/N2/N3' explicada",
     descricao: "AJUSTE DE UX pedido pelo usuário: o seletor 'Cor por N1/N2/N3' do Diagrama de Rede tinha rótulos cifrados que não diziam para que serviam. Agora os rótulos do dropdown são autoexplicativos — 'Cor por N1 — pacote macro', 'Cor por N2 — subpacote', 'Cor por N3 — detalhe' — e o tooltip (passar o mouse) traz a explicação completa: 'pinta cada atividade com uma cor de acordo com o pacote da EAP a que ela pertence — assim você bate o olho na rede e sabe a qual frente da obra cada caixa pertence', com exemplos práticos por nível e a observação de que a faixa do topo é o pacote WBS enquanto a faixa lateral esquerda continua sendo o status. Cursor 'help' no seletor reforça que tem informação ao passar o mouse.",

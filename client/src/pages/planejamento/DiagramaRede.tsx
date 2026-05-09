@@ -803,6 +803,33 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
       .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
   }, [atividades]);
 
+  // Legenda das cores (nível atual) — calculada SOMENTE com base nas folhas
+  // efetivamente visíveis na rede, para mostrar só o que aparece.
+  const legendaCores = useMemo(() => {
+    if (viewMode !== "rede" || filtroPacoteEap !== "todos") return [];
+    // 1) prefixos únicos no nível atual a partir das folhas filtradas
+    const prefixos = new Set<string>();
+    folhasFiltradas.forEach(a => {
+      const code = a.eapCodigo ?? "";
+      if (code) prefixos.add(eapPrefixAtLevel(code, corPorNivel));
+    });
+    // 2) busca o nome do grupo correspondente em "atividades" (qualquer profundidade)
+    const nomePorPrefixo = new Map<string, string>();
+    atividades.forEach(a => {
+      const code = a.eapCodigo ?? "";
+      if (a.isGrupo && prefixos.has(code) && !nomePorPrefixo.has(code)) {
+        nomePorPrefixo.set(code, a.nome);
+      }
+    });
+    return Array.from(prefixos)
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      .map(p => ({
+        prefixo: p,
+        nome: nomePorPrefixo.get(p) ?? "",
+        cor: wbsColor(p).dot,
+      }));
+  }, [folhasFiltradas, atividades, corPorNivel, viewMode, filtroPacoteEap]);
+
   // Build graph
   const hierarquia = useMemo(
     () => buildHierarchyLayout(todosFiltrados, avancosMap, hoje),
@@ -1305,6 +1332,37 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
           </div>
         );
       })()}
+
+      {/* ── LEGENDA DE CORES (visível, p/ tirar dúvida do "Cor por N1/N2/N3") ── */}
+      {viewMode === "rede" && filtroPacoteEap === "todos" && legendaCores.length > 0 && (
+        <div className="bg-blue-50/60 border border-blue-100 rounded-xl px-3 py-2">
+          <div className="flex items-start gap-2 mb-1.5">
+            <Info className="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-blue-900 leading-snug">
+              <span className="font-semibold">Cada cor = um pacote da obra (EAP nível {corPorNivel}).</span>{" "}
+              Atividades do mesmo pacote ganham a mesma faixa colorida no topo da caixa, pra você bater o olho na rede e saber a qual frente cada uma pertence. Mude entre N1/N2/N3 acima para agrupar em níveis mais ou menos detalhados.
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {legendaCores.slice(0, 24).map(item => (
+              <span
+                key={item.prefixo}
+                className="inline-flex items-center gap-1.5 bg-white border border-slate-200 rounded-md px-1.5 py-0.5 text-[10px] text-slate-700 shadow-sm"
+                title={item.nome ? `${item.prefixo} — ${item.nome}` : item.prefixo}
+              >
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: item.cor }} />
+                <span className="font-mono font-bold">{item.prefixo}</span>
+                {item.nome && (
+                  <span className="text-slate-500 truncate max-w-[140px]">— {item.nome}</span>
+                )}
+              </span>
+            ))}
+            {legendaCores.length > 24 && (
+              <span className="text-[10px] text-blue-700 font-semibold">+{legendaCores.length - 24} pacotes</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── CANVAS + DETAIL PANEL ───────────────────────────────────────────── */}
       <div className="flex gap-2 flex-1 min-h-0">
