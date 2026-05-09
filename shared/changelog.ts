@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1557,
+    titulo: "Portal do Cliente — RH/Docs: KPIs do topo viraram filtros clicáveis",
+    descricao: "No Portal do Cliente → RH/Controle de Documentos, os 4 cards do topo (Funcionários, ASO Vigente, ASO Vencido, Sem ASO) agora são clicáveis e filtram a lista de funcionários. Clicar no card ativo remove o filtro. Visual: card ativo ganha contorno colorido + leve background tonal e mostra '• filtrando' na legenda. Sincroniza com a barra de filtros pílula que já existia abaixo.",
+    tipo: 'melhoria',
+    modulos: 'Portal do Cliente, RH',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 00:05:00',
+  },
+  {
     version: 1556,
     titulo: "Portal do Cliente — Treinamentos: descrição da NR ao lado do código",
     descricao: "Na lista de treinamentos do funcionário (Portal do Cliente → RH/Docs → expandir funcionário), agora ao lado do código aparece a descrição curta da norma (ex: 'NR-12 Segurança em Máquinas e Equipamentos', 'NR-35 Trabalho em Altura'). A validade fica em uma linha secundária mais discreta. Se o treinamento tiver um nome específico gravado (ex: 'Operador de Empilhadeira'), esse nome é usado no lugar da descrição genérica. Tabela de descrições centralizada em shared/trainingRules.ts (NR_DESCRICAO_CURTA + helper getNrDescricao) — reutilizável em outras telas.",

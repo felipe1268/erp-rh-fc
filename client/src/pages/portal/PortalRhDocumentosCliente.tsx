@@ -71,19 +71,38 @@ export default function PortalRhDocumentosCliente() {
     return [...l].sort((a, b) => (a.nome || "").localeCompare(b.nome || ""));
   }, [funcionarios, filtroAso, busca]);
 
-  const Kpi = ({ label, value, color, icon: Icon }: any) => (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide truncate">{label}</p>
-          <p className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
+  // Rev. 1557 — KPIs viraram botões de filtro. Clicar alterna o filtro
+  // (clicou de novo no ativo → volta pra "todos"). Visual: ring + leve
+  // bg colorido quando ativo; hover sutil quando inativo.
+  const Kpi = ({ label, value, color, icon: Icon, filterKey }: any) => {
+    const ativo = filtroAso === filterKey;
+    const ringClr = color.replace("text-", "ring-").replace("-700", "-400").replace("-600", "-400");
+    const bgSoft = color.replace("text-", "bg-").replace("-700", "-50").replace("-600", "-50");
+    const iconBg = color.replace("text-", "bg-").replace("-700", "-100").replace("-600", "-100");
+    return (
+      <button
+        type="button"
+        onClick={() => setFiltroAso((cur) => (cur === filterKey ? "todos" : filterKey))}
+        className={`text-left bg-white rounded-xl border shadow-sm px-4 py-3 transition cursor-pointer w-full
+          ${ativo ? `${bgSoft} border-transparent ring-2 ${ringClr}` : "border-slate-200 hover:border-slate-300 hover:shadow-md"}`}
+        aria-pressed={ativo}
+        title={ativo ? "Clique para remover o filtro" : `Filtrar por ${label}`}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide truncate">
+              {label}
+              {ativo && <span className="ml-1.5 text-[9px] text-emerald-600">• filtrando</span>}
+            </p>
+            <p className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
+          </div>
+          <div className={`p-2 rounded-lg ${iconBg} shrink-0`}>
+            <Icon className={`h-5 w-5 ${color}`} />
+          </div>
         </div>
-        <div className={`p-2 rounded-lg ${color.replace("text-", "bg-").replace("-700", "-100").replace("-600", "-100")} shrink-0`}>
-          <Icon className={`h-5 w-5 ${color}`} />
-        </div>
-      </div>
-    </div>
-  );
+      </button>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-emerald-50">
@@ -122,10 +141,10 @@ export default function PortalRhDocumentosCliente() {
         <PortalPrintHeader obra={obra} titulo="RH / Controle de Documentos" />
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Kpi label="Funcionários" value={totais.funcionarios} color="text-blue-700" icon={Users} />
-          <Kpi label="ASO Vigente" value={totais.asoVigente} color="text-emerald-700" icon={FileCheck2} />
-          <Kpi label="ASO Vencido" value={totais.asoVencido} color="text-rose-700" icon={FileX2} />
-          <Kpi label="Sem ASO" value={totais.semAso} color="text-slate-700" icon={FileWarning} />
+          <Kpi label="Funcionários" value={totais.funcionarios} color="text-blue-700" icon={Users} filterKey="todos" />
+          <Kpi label="ASO Vigente" value={totais.asoVigente} color="text-emerald-700" icon={FileCheck2} filterKey="vigente" />
+          <Kpi label="ASO Vencido" value={totais.asoVencido} color="text-rose-700" icon={FileX2} filterKey="vencido" />
+          <Kpi label="Sem ASO" value={totais.semAso} color="text-slate-700" icon={FileWarning} filterKey="sem_aso" />
         </div>
 
         {/* Filtros */}
