@@ -4022,6 +4022,7 @@ export const userGroups = pgTable("user_groups", {
         ativo: smallint().default(1).notNull(),
         somenteVisualizacao: smallint().default(1).notNull(),
         ocultarDadosSensiveis: smallint().default(1).notNull(),
+        acessoTodasObras: smallint("acesso_todas_obras").default(0).notNull(),
         moduleAccess: text("module_access"),
         createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),

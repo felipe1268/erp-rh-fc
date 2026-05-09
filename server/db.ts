@@ -261,6 +261,49 @@ export async function getEffectiveAllowedObraIds(
   const db = await getDb();
   if (!db) return [];
   const set = new Set<number>();
+  // Rev. 1510 — Escritório Central: se o usuário pertence a algum grupo ativo
+  // com `acesso_todas_obras = 1`, expande o conjunto com TODAS as obras ativas
+  // das EMPRESAS às quais o usuário tem acesso (não retorna `null` para evitar
+  // vazar obras de empresas não autorizadas em rotas que filtram somente por
+  // `companyId` vindo do input).
+  try {
+    const flagRes = await db.execute(sql`
+      SELECT 1
+        FROM user_group_members ugm
+        JOIN user_groups ug ON ug.id = ugm."groupId"
+       WHERE ugm."userId" = ${userId}
+         AND ug.acesso_todas_obras = 1
+         AND ug.ativo = 1
+       LIMIT 1
+    `);
+    const flagRows: any[] = (flagRes as any)?.rows ?? (flagRes as any) ?? [];
+    if (flagRows.length > 0) {
+      // Empresas que o usuário pode ver (vínculos em user_companies).
+      const compRes = await db.execute(sql`
+        SELECT c.id
+          FROM companies c
+          JOIN user_companies uc ON uc."companyId" = c.id
+         WHERE uc."userId" = ${userId}
+           AND c."deletedAt" IS NULL
+      `);
+      const compRows: any[] = (compRes as any)?.rows ?? (compRes as any) ?? [];
+      const companyIds = compRows.map((c: any) => Number(c.id)).filter(Number.isFinite);
+      if (companyIds.length > 0) {
+        const obrasAll = await db.execute(sql`
+          SELECT id
+            FROM obras
+           WHERE "companyId" = ANY(${companyIds})
+             AND "deletedAt" IS NULL
+             AND "isActive" = 1
+        `);
+        const obrasRows: any[] = (obrasAll as any)?.rows ?? (obrasAll as any) ?? [];
+        for (const o of obrasRows) {
+          const n = Number(o.id);
+          if (Number.isFinite(n)) set.add(n);
+        }
+      }
+    }
+  } catch {}
   try {
     const r = await db.execute(sql`SELECT allowed_obra_ids, email FROM users WHERE id = ${userId}`);
     const rows: any[] = (r as any)?.rows ?? (r as any) ?? [];
@@ -2889,6 +2932,7 @@ export async function listUserGroups() {
   const exec = await db.execute(sql`
     SELECT ug.id, ug.nome, ug.descricao, ug.cor, ug.icone, ug.ativo,
            ug."somenteVisualizacao", ug."ocultarDadosSensiveis",
+           ug.acesso_todas_obras AS "acessoTodasObras",
            ug.module_access AS "moduleAccess",
            ug.created_at AS "createdAt", ug.updated_at AS "updatedAt",
            (SELECT COUNT(*)::int FROM user_group_members ugm WHERE ugm."groupId" = ug.id) AS "memberCount"
@@ -2904,6 +2948,7 @@ export async function getUserGroupById(id: number) {
   const exec = await db.execute(sql`
     SELECT ug.id, ug.nome, ug.descricao, ug.cor, ug.icone, ug.ativo,
            ug."somenteVisualizacao", ug."ocultarDadosSensiveis",
+           ug.acesso_todas_obras AS "acessoTodasObras",
            ug.module_access AS "moduleAccess",
            ug.created_at AS "createdAt", ug.updated_at AS "updatedAt",
            (SELECT COUNT(*)::int FROM user_group_members ugm WHERE ugm."groupId" = ug.id) AS "memberCount"
@@ -2915,7 +2960,7 @@ export async function getUserGroupById(id: number) {
   return rows[0] ?? null;
 }
 
-export async function createUserGroup(data: { nome: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number }) {
+export async function createUserGroup(data: { nome: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number; acessoTodasObras?: number }) {
   const db = await getDb();
   if (!db) throw new Error("DB indisponível");
   const nome = data.nome;
@@ -2924,17 +2969,18 @@ export async function createUserGroup(data: { nome: string; descricao?: string; 
   const icone = data.icone ?? 'Users';
   const somenteViz = data.somenteVisualizacao ?? 1;
   const ocultarDados = data.ocultarDadosSensiveis ?? 1;
+  const acessoTodas = data.acessoTodasObras ?? 0;
   const exec = await db.execute(sql`
     INSERT INTO user_groups
-      (nome, descricao, cor, icone, "somenteVisualizacao", "ocultarDadosSensiveis", created_at, updated_at)
-    VALUES (${nome}, ${descricao}, ${cor}, ${icone}, ${somenteViz}, ${ocultarDados}, now(), now())
+      (nome, descricao, cor, icone, "somenteVisualizacao", "ocultarDadosSensiveis", acesso_todas_obras, created_at, updated_at)
+    VALUES (${nome}, ${descricao}, ${cor}, ${icone}, ${somenteViz}, ${ocultarDados}, ${acessoTodas}, now(), now())
     RETURNING id
   `) as any;
   const rows = (exec?.rows ?? exec ?? []) as any[];
   return { id: Number(rows[0].id) };
 }
 
-export async function updateUserGroup(id: number, data: { nome?: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number; ativo?: number }) {
+export async function updateUserGroup(id: number, data: { nome?: string; descricao?: string; cor?: string; icone?: string; somenteVisualizacao?: number; ocultarDadosSensiveis?: number; acessoTodasObras?: number; ativo?: number }) {
   const db = await getDb();
   if (!db) throw new Error("DB indisponível");
   const setObj: Record<string, any> = { updatedAt: sql`now()` };
@@ -2944,6 +2990,7 @@ export async function updateUserGroup(id: number, data: { nome?: string; descric
   if (data.icone !== undefined)                setObj.icone = data.icone;
   if (data.somenteVisualizacao !== undefined)  setObj.somenteVisualizacao = data.somenteVisualizacao;
   if (data.ocultarDadosSensiveis !== undefined) setObj.ocultarDadosSensiveis = data.ocultarDadosSensiveis;
+  if (data.acessoTodasObras !== undefined)     setObj.acessoTodasObras = data.acessoTodasObras;
   if (data.ativo !== undefined)                setObj.ativo = data.ativo;
   await db.update(userGroups).set(setObj).where(eq(userGroups.id, id));
 }

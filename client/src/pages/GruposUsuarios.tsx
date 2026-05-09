@@ -242,6 +242,7 @@ export default function GruposUsuarios() {
   const [editCor, setEditCor] = useState("#6b7280");
   const [editSomenteVis, setEditSomenteVis] = useState(true);
   const [editOcultarDados, setEditOcultarDados] = useState(true);
+  const [editAcessoTodasObras, setEditAcessoTodasObras] = useState(false);
 
   // Permissions state
   const [routePerms, setRoutePerms] = useState<Record<string, RoutePermission>>({});
@@ -270,7 +271,7 @@ export default function GruposUsuarios() {
       toast.success("Grupo criado com sucesso!");
       setShowNewForm(false);
       setEditNome(""); setEditDescricao(""); setEditCor("#6b7280");
-      setEditSomenteVis(true); setEditOcultarDados(true);
+      setEditSomenteVis(true); setEditOcultarDados(true); setEditAcessoTodasObras(false);
       utils.userGroups.list.invalidate();
     },
     onError: (e) => toast.error(e.message),
@@ -387,6 +388,7 @@ export default function GruposUsuarios() {
     setEditCor(g.cor || "#6b7280");
     setEditSomenteVis(g.somenteVisualizacao);
     setEditOcultarDados(g.ocultarDadosSensiveis);
+    setEditAcessoTodasObras(!!g.acessoTodasObras);
     setShowNewForm(false);
     setMemberSearch("");
   };
@@ -493,7 +495,7 @@ export default function GruposUsuarios() {
             </div>
             {isAdmin && (
               <button
-                onClick={() => { setShowNewForm(true); setSelectedGroupId(null); setEditNome(""); setEditDescricao(""); setEditCor("#6b7280"); setEditSomenteVis(true); setEditOcultarDados(true); }}
+                onClick={() => { setShowNewForm(true); setSelectedGroupId(null); setEditNome(""); setEditDescricao(""); setEditCor("#6b7280"); setEditSomenteVis(true); setEditOcultarDados(true); setEditAcessoTodasObras(false); }}
                 className="h-7 w-7 rounded-lg bg-green-500 hover:bg-green-400 flex items-center justify-center transition-colors"
                 title="Novo Grupo"
               >
@@ -657,6 +659,13 @@ export default function GruposUsuarios() {
                         <p className="text-xs text-slate-500">Oculta salários, CPF, RG, dados bancários e valores financeiros</p>
                       </div>
                     </label>
+                    <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-blue-200 bg-blue-50/40 cursor-pointer hover:bg-blue-50 transition-colors">
+                      <Checkbox checked={editAcessoTodasObras} onCheckedChange={(c) => setEditAcessoTodasObras(!!c)} className="mt-0.5" />
+                      <div>
+                        <span className="text-sm font-medium text-slate-800">🏗️ Acesso a todas as obras em andamento</span>
+                        <p className="text-xs text-slate-500">Membros enxergam <strong>automaticamente</strong> todas as obras ativas (de qualquer empresa que tenham acesso), sem precisar liberar obra por obra. Ideal para o <strong>Escritório Central</strong> (Compras, Adm, Planejamento, Projetos, RH, Orçamento).</p>
+                      </div>
+                    </label>
                   </div>
                 </div>
 
@@ -665,7 +674,7 @@ export default function GruposUsuarios() {
                   <Button
                     onClick={() => {
                       if (!editNome.trim()) { toast.error("Nome é obrigatório"); return; }
-                      createMut.mutate({ nome: editNome.trim(), descricao: editDescricao.trim() || undefined, cor: editCor, somenteVisualizacao: editSomenteVis, ocultarDadosSensiveis: editOcultarDados });
+                      createMut.mutate({ nome: editNome.trim(), descricao: editDescricao.trim() || undefined, cor: editCor, somenteVisualizacao: editSomenteVis, ocultarDadosSensiveis: editOcultarDados, acessoTodasObras: editAcessoTodasObras });
                     }}
                     disabled={createMut.isPending}
                     className="flex-1 bg-green-600 hover:bg-green-700 gap-2"
@@ -686,7 +695,7 @@ export default function GruposUsuarios() {
                 <p className="text-sm text-slate-400 mt-1">Clique em um grupo na lista para editar suas permissões e membros</p>
               </div>
               {isAdmin && (
-                <Button onClick={() => { setShowNewForm(true); setEditNome(""); setEditDescricao(""); setEditCor("#6b7280"); setEditSomenteVis(true); setEditOcultarDados(true); }} className="gap-2 bg-green-600 hover:bg-green-700 mt-2">
+                <Button onClick={() => { setShowNewForm(true); setEditNome(""); setEditDescricao(""); setEditCor("#6b7280"); setEditSomenteVis(true); setEditOcultarDados(true); setEditAcessoTodasObras(false); }} className="gap-2 bg-green-600 hover:bg-green-700 mt-2">
                   <Plus className="h-4 w-4" /> Criar Primeiro Grupo
                 </Button>
               )}
@@ -710,6 +719,9 @@ export default function GruposUsuarios() {
                       )}
                       {selectedGroup.ocultarDadosSensiveis && (
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">Oculta Dados Sensíveis</span>
+                      )}
+                      {selectedGroup.acessoTodasObras && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">🏗️ Todas as Obras</span>
                       )}
                     </div>
                   </div>
@@ -788,13 +800,20 @@ export default function GruposUsuarios() {
                             <p className="text-xs text-slate-500">Oculta salários, CPF, RG, dados bancários e valores financeiros para membros deste grupo</p>
                           </div>
                         </label>
+                        <label className="flex items-start gap-3 p-3 rounded-lg border-2 border-blue-200 bg-blue-50/40 cursor-pointer hover:bg-blue-50 transition-colors">
+                          <Checkbox checked={editAcessoTodasObras} onCheckedChange={(c) => setEditAcessoTodasObras(!!c)} className="mt-0.5" />
+                          <div>
+                            <span className="text-sm font-medium text-slate-800">🏗️ Acesso a todas as obras em andamento</span>
+                            <p className="text-xs text-slate-500">Membros enxergam <strong>automaticamente</strong> todas as obras ativas (de qualquer empresa que tenham acesso), sem precisar liberar obra por obra na tela de cada usuário. Ideal para o <strong>Escritório Central</strong> (Compras, Adm, Planejamento, Projetos, RH, Orçamento).</p>
+                          </div>
+                        </label>
                       </div>
                     </div>
                     {isAdmin && (
                       <Button
                         onClick={() => {
                           if (!editNome.trim()) { toast.error("Nome é obrigatório"); return; }
-                          updateMut.mutate({ id: selectedGroup.id, nome: editNome.trim(), descricao: editDescricao.trim() || undefined, cor: editCor, somenteVisualizacao: editSomenteVis, ocultarDadosSensiveis: editOcultarDados });
+                          updateMut.mutate({ id: selectedGroup.id, nome: editNome.trim(), descricao: editDescricao.trim() || undefined, cor: editCor, somenteVisualizacao: editSomenteVis, ocultarDadosSensiveis: editOcultarDados, acessoTodasObras: editAcessoTodasObras });
                         }}
                         disabled={updateMut.isPending}
                         className="mt-4 gap-2"

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1510,
+    titulo: "Grupos de Acesso — flag 'Acesso a todas as obras' (Escritório Central)",
+    descricao: "NOVA REGRA pedida pelo usuário: usuários do Escritório Central (Compras, Adm, Planejamento, Projetos, RH, Orçamento, etc.) precisam enxergar TODAS as obras em andamento automaticamente, sem o admin ter que liberar obra por obra na tela de cada usuário toda vez que uma nova obra é criada. Implementação por flag no grupo (mais flexível do que hardcode por nome): nova coluna 'acesso_todas_obras' em user_groups + checkbox '🏗️ Acesso a todas as obras em andamento' no formulário do grupo (criação e edição). Quando ligada, qualquer membro daquele grupo recebe automaticamente, dentro do helper canônico getEffectiveAllowedObraIds, todos os IDs de obras ATIVAS (deletedAt IS NULL e isActive=1) das EMPRESAS às quais o usuário tem vínculo em user_companies. Mantém-se o isolamento por empresa (não vaza obras de companies não autorizadas) e a regra é universal: TODOS os módulos que respeitam o filtro de obra (Compras, Planejamento, Operacional, Medição, Financeiro, etc.) já enxergam a regra automaticamente, sem tocar em cada router. Para ativar: acessar Configurações → Grupos de Usuários → editar o grupo do Escritório Central → marcar a nova opção → Salvar.",
+    tipo: 'feature',
+    modulos: 'Grupos de Usuários, Permissões, Compras, Planejamento, Operacional',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 17:30:00',
+  },
+  {
     version: 1509,
     titulo: "Programação Semanal — colunas Previsto% e Desvio por atividade",
     descricao: "AJUSTE pedido pelo usuário: a tabela 'Atividades da Semana' agora mostra 3 colunas comparativas lado a lado em cada atividade: Previsto% (% em que a atividade DEVERIA estar concluída até o fim desta semana, calculado linearmente entre data de início e fim) | Real% (% efetivamente lançado, já existia) | Desvio (Previsto − Real, em pontos percentuais — opção (a) confirmada pelo usuário, positivo = atrasada). O Desvio é colorido: verde quando |desvio| ≤ 2pp, amarelo até 10pp, vermelho acima. Permite análise rápida atividade-a-atividade de quem está dentro do plano semanal e quem está derrapando, sem precisar abrir cada item. Mudança no componente compartilhado ProgramacaoSemanal — vale tanto pra view interna quanto pro Portal do Cliente.",

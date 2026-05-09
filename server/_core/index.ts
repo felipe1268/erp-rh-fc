@@ -801,7 +801,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1393-2026-05-07-fornecedor-tipos";
+    const COLFIX_VERSION = "v1510-2026-05-09-acesso-todas-obras";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -910,6 +910,8 @@ Regras:
             ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS diferencas TEXT;
             ALTER TABLE planejamento_revisoes ADD COLUMN IF NOT EXISTS consolidado BOOLEAN DEFAULT FALSE;
             ALTER TABLE user_groups ADD COLUMN IF NOT EXISTS module_access TEXT;
+            -- Rev. 1510 — Escritório Central: acesso automático a todas as obras em andamento
+            ALTER TABLE user_groups ADD COLUMN IF NOT EXISTS acesso_todas_obras SMALLINT NOT NULL DEFAULT 0;
             ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS is_marco BOOLEAN DEFAULT FALSE;
             ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS disabled BOOLEAN DEFAULT FALSE;
             ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS is_indireta BOOLEAN DEFAULT FALSE;
