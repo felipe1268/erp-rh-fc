@@ -9,6 +9,7 @@ import {
   CalendarDays, User, CalendarCheck, FileText, GitBranch, HardHat,
   DollarSign, Cloud, Droplets, Wind, Loader2, ClipboardList, ChevronRight,
   ChevronDown, Search, Menu, X, PanelLeftClose, PanelLeftOpen, Users, Handshake, Home,
+  AlertOctagon,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, LineChart, BarChart, Bar, Cell,
@@ -536,7 +537,7 @@ export default function PortalPlanejamentoCliente() {
           if (aba === "curva_s") return <AbaCurvaS curvaData={curvaData} kpis={kpis} projeto={projeto} curvaMedicoes={curvaMedicoes} />;
           if (aba === "gantt") return <AbaGantt atividades={atividadesTodas} />;
           if (aba === "refis") return <AbaRefis refisLista={refisLista} atividades={atividadesTodas} curvaData={curvaData} curvaMedicoes={curvaMedicoes} obra={obra} projeto={projeto} />;
-          if (aba === "caminho_critico") return <AbaCaminhoCritico criticas={caminhoCritico} />;
+          if (aba === "caminho_critico") return <AbaCaminhoCritico atividades={atividadesTodas} projeto={projeto} />;
           if (aba === "efetivo") return <AbaEfetivo token={token} obraId={obraId} />;
           if (aba === "crono_financeiro") return <AbaCronoFinanceiro curvaS={curvaS} valorContrato={projeto?.valorContrato || 0} />;
           if (aba === "prev_medicao") return <AbaPrevMedicao curvaS={curvaS} valorContrato={projeto?.valorContrato || 0} />;
@@ -2711,67 +2712,169 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
 }
 
 // ─────────────────────── ABA: CAMINHO CRÍTICO ───────────────────────────
-function AbaCaminhoCritico({ criticas }: { criticas: any[] }) {
-  if (criticas.length === 0) {
-    return <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 text-sm">Sem atividades críticas no momento.</div>;
+// Espelha a função interna `CaminhoCritico` em PlanejamentoDetalhe.tsx (~7945)
+// em modo SOMENTE LEITURA: 3 categorias (Crítico / Quase Crítico / Com Folga),
+// cada categoria com mini-Gantt visual por atividade, expandir/recolher (ver mais),
+// linha "Hoje", barras de avanço e legenda.
+function AbaCaminhoCritico({ atividades, projeto }: { atividades: any[]; projeto: any }) {
+  const folhas = useMemo(
+    () => (atividades || []).filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim),
+    [atividades]
+  );
+
+  const projectStart = useMemo(() => {
+    const datas = folhas.map((a: any) => a.dataInicio).sort();
+    return datas[0] ?? projeto?.dataInicio ?? null;
+  }, [folhas, projeto]);
+
+  const projectEnd = useMemo(() => {
+    const datas = folhas.map((a: any) => a.dataFim).sort();
+    return datas[datas.length - 1] ?? projeto?.dataTerminoContratual ?? null;
+  }, [folhas, projeto]);
+
+  const totalDays = useMemo(() => {
+    if (!projectStart || !projectEnd) return 1;
+    return Math.max(1, (new Date(projectEnd).getTime() - new Date(projectStart).getTime()) / 86400000);
+  }, [projectStart, projectEnd]);
+
+  const atividadesComFloat = useMemo(() => {
+    if (!projectEnd) return [];
+    return folhas.map((a: any) => {
+      const float = Math.round((new Date(projectEnd).getTime() - new Date(a.dataFim).getTime()) / 86400000);
+      const dur = Math.round((new Date(a.dataFim).getTime() - new Date(a.dataInicio).getTime()) / 86400000) + 1;
+      return { ...a, float, dur, avanco: Number(a.percentRealizado ?? 0) };
+    }).sort((a: any, b: any) => a.float - b.float);
+  }, [folhas, projectEnd]);
+
+  const criticas  = atividadesComFloat.filter((a: any) => a.float === 0);
+  const quaseCrit = atividadesComFloat.filter((a: any) => a.float > 0 && a.float <= 14);
+  const comFolga  = atividadesComFloat.filter((a: any) => a.float > 14);
+
+  const hoje = new Date().toISOString().split("T")[0];
+
+  function GanttBar({ a }: { a: any }) {
+    if (!projectStart || !projectEnd) return null;
+    const startPct = Math.max(0, (new Date(a.dataInicio).getTime() - new Date(projectStart).getTime()) / 86400000 / totalDays * 100);
+    const widthPct = Math.min(100 - startPct, a.dur / totalDays * 100);
+    const color = a.float === 0 ? "bg-red-500" : a.float <= 14 ? "bg-amber-400" : "bg-blue-300";
+    const avancoPct = a.avanco;
+    return (
+      <div className="relative w-full h-5 bg-slate-100 rounded overflow-hidden">
+        <div className={`absolute h-full rounded ${color} opacity-60`} style={{ left: `${startPct}%`, width: `${Math.max(widthPct, 0.5)}%` }}>
+          <div className="h-full bg-current opacity-60 rounded" style={{ width: `${avancoPct}%` }} />
+        </div>
+        {a.dataFim >= hoje && a.dataInicio <= hoje && (
+          <div className="absolute top-0 h-full w-0.5 bg-slate-700 z-10 opacity-60"
+            style={{ left: `${Math.max(0, (new Date(hoje).getTime() - new Date(projectStart).getTime()) / 86400000 / totalDays * 100)}%` }} />
+        )}
+      </div>
+    );
   }
+
+  function AtivList({ list, badgeClass }: { list: any[]; badgeClass: string }) {
+    const [exp, setExp] = useState(false);
+    const shown = exp ? list : list.slice(0, 15);
+    return (
+      <div className="space-y-1">
+        {shown.map((a: any) => (
+          <div key={a.id} className="grid gap-x-2 items-center text-xs" style={{ gridTemplateColumns: "2.5rem minmax(0,1fr) 6rem 4.5rem 5rem" }}>
+            <span className="font-mono text-slate-400 truncate">{a.eapCodigo ?? ""}</span>
+            <span className="text-slate-700 truncate" title={a.nome}>{a.nome}</span>
+            <GanttBar a={a} />
+            <span className="text-right text-slate-500 whitespace-nowrap">{fmtBR(a.dataFim)}</span>
+            <div className="flex items-center justify-end gap-1">
+              <div className="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden min-w-[40px]">
+                <div className={`h-full rounded-full ${a.avanco >= 100 ? "bg-emerald-500" : a.float === 0 ? "bg-red-400" : "bg-blue-400"}`} style={{ width: `${Math.min(100, a.avanco)}%` }} />
+              </div>
+              <span className={`font-semibold shrink-0 tabular-nums ${badgeClass}`}>{a.avanco.toFixed(0)}%</span>
+            </div>
+          </div>
+        ))}
+        {list.length > 15 && (
+          <button className="text-[10px] text-blue-600 hover:underline mt-1" onClick={() => setExp(v => !v)}>
+            {exp ? "Ver menos" : `Ver mais ${list.length - 15} atividades...`}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (folhas.length === 0) {
+    return <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 text-sm">Sem atividades para calcular o Caminho Crítico.</div>;
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
         <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
         <div className="text-xs text-amber-800">
           <strong className="block mb-1">Caminho Crítico</strong>
-          Atividades com maior impacto no prazo da obra. Atrasadas aparecem primeiro, seguidas pelas que apresentam maior desvio entre Realizado e Previsto.
+          Cada atividade é classificada pelo seu <strong>float</strong> (folga em dias até o fim da obra). <strong>Float = 0</strong> são as atividades que se atrasarem empurram o término da obra inteira; <strong>Float ≤ 14d</strong> são quase críticas; o restante tem folga confortável. Cada lista mostra mini-Gantt visual e barra de avanço.
         </div>
       </div>
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-200 bg-gradient-to-r from-red-50/60 to-white flex items-center gap-2">
-          <GitBranch className="h-4 w-4 text-red-600" />
-          <h3 className="font-semibold text-slate-800">Atividades Críticas</h3>
-          <span className="text-xs text-slate-500 ml-auto">{criticas.length} atividades</span>
+
+      {/* 3 cards de KPI por categoria */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+          <p className="text-2xl font-bold text-red-600">{criticas.length}</p>
+          <p className="text-xs text-red-700 mt-0.5">Caminho Crítico</p>
+          <p className="text-[10px] text-red-400">Float = 0 dias</p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-slate-50/80">
-              <tr className="text-slate-500">
-                <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">EAP</th>
-                <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider">Atividade</th>
-                <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider whitespace-nowrap">Início</th>
-                <th className="text-left px-4 py-2.5 font-semibold uppercase tracking-wider whitespace-nowrap">Fim</th>
-                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider whitespace-nowrap">Duração</th>
-                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">% Prev.</th>
-                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">% Real.</th>
-                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider">Desvio</th>
-                <th className="text-right px-4 py-2.5 font-semibold uppercase tracking-wider whitespace-nowrap">Folga (d)</th>
-                <th className="text-center px-4 py-2.5 font-semibold uppercase tracking-wider">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {criticas.map((a: any) => {
-                const desvCls = a.desvio >= 0 ? "text-emerald-700" : "text-red-700";
-                const folgaCls = a.folgaDias < 0 ? "text-red-700 font-bold" : a.folgaDias < 5 ? "text-amber-700 font-semibold" : "text-slate-600";
-                const st = statusBadge(a.percentRealizado, a.dataFim);
-                return (
-                  <tr key={a.id} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{a.eapCodigo || "—"}</td>
-                    <td className="px-4 py-2.5 text-slate-800 max-w-xs truncate" title={a.nome}>{a.nome}</td>
-                    <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{fmtBR(a.dataInicio)}</td>
-                    <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{fmtBR(a.dataFim)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-600">{a.duracaoDias}d</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{fmtPct(a.percentPrevisto)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-slate-800">{fmtPct(a.percentRealizado)}</td>
-                    <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${desvCls}`}>{a.desvio > 0 ? "+" : ""}{fmtPct(a.desvio)}</td>
-                    <td className={`px-4 py-2.5 text-right tabular-nums ${folgaCls}`}>{a.folgaDias}</td>
-                    <td className="px-4 py-2.5 text-center">
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${st.cls}`}>{st.label}</span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+          <p className="text-2xl font-bold text-amber-600">{quaseCrit.length}</p>
+          <p className="text-xs text-amber-700 mt-0.5">Quase Crítico</p>
+          <p className="text-[10px] text-amber-400">Float ≤ 14 dias</p>
+        </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+          <p className="text-2xl font-bold text-blue-600">{comFolga.length}</p>
+          <p className="text-xs text-blue-700 mt-0.5">Com Folga</p>
+          <p className="text-[10px] text-blue-400">Float &gt; 14 dias</p>
         </div>
       </div>
+
+      {/* Legenda Gantt */}
+      <div className="flex items-center gap-1 text-[10px] text-slate-400 bg-white border border-slate-100 rounded-lg p-2 shadow-sm flex-wrap">
+        <span className="font-medium text-slate-500 mr-2">Gantt:</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 rounded bg-red-400 opacity-60" /> Crítico</span>
+        <span className="flex items-center gap-1 ml-2"><span className="inline-block w-3 h-2 rounded bg-amber-400 opacity-60" /> Quase crítico</span>
+        <span className="flex items-center gap-1 ml-2"><span className="inline-block w-3 h-2 rounded bg-blue-300 opacity-60" /> Com folga</span>
+        <span className="flex items-center gap-1 ml-2"><span className="inline-block w-px h-3 bg-slate-700 opacity-60" /> Hoje</span>
+        <span className="ml-auto text-slate-400">Período: {fmtBR(projectStart)} → {fmtBR(projectEnd)}</span>
+      </div>
+
+      {criticas.length > 0 && (
+        <div className="bg-white rounded-xl border border-red-200 shadow-sm p-4">
+          <p className="text-sm font-semibold text-red-700 mb-3 flex items-center gap-2">
+            <AlertOctagon className="h-4 w-4" />
+            Caminho Crítico — {criticas.length} atividades (Float = 0)
+          </p>
+          <AtivList list={criticas} badgeClass="text-red-600" />
+        </div>
+      )}
+
+      {quaseCrit.length > 0 && (
+        <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-4">
+          <p className="text-sm font-semibold text-amber-700 mb-3 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            Quase Crítico — {quaseCrit.length} atividades (Float ≤ 14 dias)
+          </p>
+          <AtivList list={quaseCrit} badgeClass="text-amber-600" />
+        </div>
+      )}
+
+      {comFolga.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+          <p className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-blue-500" />
+            Com Folga — {comFolga.length} atividades (Float &gt; 14 dias)
+          </p>
+          <AtivList list={comFolga} badgeClass="text-blue-600" />
+        </div>
+      )}
+
+      <p className="text-[10px] text-slate-400 text-center">
+        * Float calculado como diferença entre a data fim da atividade e a data fim do projeto. Sem dados de predecessoras esta é uma aproximação heurística (mesma fórmula usada no módulo interno de Planejamento).
+      </p>
     </div>
   );
 }

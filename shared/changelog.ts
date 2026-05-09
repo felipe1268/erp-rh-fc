@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1485,
+    titulo: "Portal do Cliente — Aba 'Caminho Crítico' agora espelha a UX do módulo interno (3 categorias + mini-Gantt + expandir/recolher)",
+    descricao: "A aba 'Caminho Crítico' do Portal do Cliente foi totalmente reescrita para espelhar exatamente a função interna `CaminhoCritico` do módulo de Planejamento, em modo somente leitura. Antes era apenas uma tabela plana; agora apresenta: (1) 3 cards de KPI no topo separando atividades por categoria — Caminho Crítico (Float = 0), Quase Crítico (Float ≤ 14 dias) e Com Folga (Float > 14 dias); (2) Legenda visual do mini-Gantt com cores e marcador 'Hoje', mostrando o período total da obra; (3) Para cada categoria, uma seção dedicada com cor própria (vermelho, âmbar, azul) listando as atividades com mini-Gantt visual ao lado — mostra a posição da atividade no tempo total da obra, a barra de avanço sobreposta e a linha vertical 'Hoje' quando aplicável; (4) Botão 'Ver mais N atividades / Ver menos' em cada lista (mostra 15 por padrão, expande para todas); (5) Coluna de avanço com mini-barra de progresso (verde se 100%, vermelho se crítica, azul caso contrário) + percentual; (6) Banner explicativo de como o float é calculado e por que algumas atividades são críticas. Cliente NÃO pode editar — toda a tela é puramente de visualização.",
+    tipo: "feature",
+    modulos: "Portal do Cliente, Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-09 05:30:00",
+  },
+  {
     version: 1484,
     titulo: "Portal do Cliente — Aba 'Diagrama de Rede' agora usa o componente visual completo do módulo Planejamento",
     descricao: "A aba 'Diagrama de Rede' do Portal do Cliente foi atualizada para usar exatamente o mesmo componente visual do módulo interno de Planejamento (somente leitura). Antes mostrava apenas uma tabela de texto com a coluna predecessora; agora mostra o diagrama gráfico completo, com dois modos de visualização: (1) HIERARQUIA — exibe toda a estrutura da obra agrupada por EAP em forma de árvore, com cores por status (verde concluída, azul em andamento, vermelho atrasada, amarelo em risco, cinza não iniciada); funciona MESMO SE NENHUMA atividade tiver predecessora cadastrada, garantindo conteúdo útil em obras antigas; (2) REDE — exibe a sequência lógica de execução com setas predecessora → sucessora. Recursos adicionais herdados do módulo interno: zoom in/out, tela cheia, busca por EAP/nome, filtros por status / grupo / semana / período, seleção de atividade com painel lateral de detalhes, badge mostrando 'X de Y atividades têm predecessora'. O cliente NÃO pode editar atividades, predecessoras ou o diagrama (o componente é puramente de visualização — não emite mutações).",
