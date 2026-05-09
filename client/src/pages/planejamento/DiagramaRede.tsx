@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState, useCallback, useEffect } from "react"
 import {
   ZoomIn, ZoomOut, Maximize2, Minimize2, RefreshCw,
   CheckCircle2, Clock, AlertTriangle, TrendingDown, Circle,
-  Search, X, ChevronDown, GitBranch, LayoutDashboard, Info,
+  Search, X, ChevronDown, ChevronLeft, ChevronRight, GitBranch, LayoutDashboard, Info,
   CalendarRange, Calendar,
 } from "lucide-react";
 
@@ -516,6 +516,7 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
   const [periodoInicio, setPeriodoInicio] = useState("");
   const [periodoFim, setPeriodoFim]       = useState("");
   const [showPeriodoCustom, setShowPeriodoCustom] = useState(false);
+  const [showSemanas, setShowSemanas] = useState(false);
 
   // Escape key exits fullscreen
   useEffect(() => {
@@ -816,24 +817,20 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
             </div>
           )}
 
-          {/* ── Semana filter ────────────────────────────────────────────── */}
+          {/* ── Semana toggle (abre pill bar abaixo) ──────────────────────── */}
           {semanas.length > 0 && (
-            <div className="relative">
-              <select
-                value={filtroSemana}
-                onChange={e => {
-                  setFiltroSemana(e.target.value);
-                  setPeriodoInicio("");
-                  setPeriodoFim("");
-                  setShowPeriodoCustom(false);
-                }}
-                className={`text-[11px] border rounded-lg pl-2.5 pr-6 py-1.5 bg-white appearance-none transition-colors ${filtroSemana !== "todas" ? "border-blue-400 text-blue-700 font-semibold" : "border-slate-200 text-slate-600"}`}
-              >
-                <option value="todas">Todas as semanas</option>
-                {semanas.map(s => <option key={s.num} value={String(s.num)}>{s.label}</option>)}
-              </select>
-              <ChevronDown className="h-3 w-3 text-slate-400 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
+            <button
+              onClick={() => {
+                setShowSemanas(s => !s);
+                if (showPeriodoCustom) { setShowPeriodoCustom(false); }
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors ${showSemanas || filtroSemana !== "todas" ? "bg-blue-50 border-blue-300 text-blue-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
+              title="Filtrar por semana"
+            >
+              <Calendar className="h-3.5 w-3.5" />
+              {filtroSemana === "todas" ? "Semanas" : `Semana ${String(filtroSemana).padStart(2,"0")}`}
+              {filtroSemana !== "todas" && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+            </button>
           )}
 
           {/* ── Período custom toggle ─────────────────────────────────── */}
@@ -842,6 +839,7 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
               setShowPeriodoCustom(p => !p);
               if (showPeriodoCustom) { setPeriodoInicio(""); setPeriodoFim(""); }
               setFiltroSemana("todas");
+              setShowSemanas(false);
             }}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors ${showPeriodoCustom || (periodoInicio || periodoFim) ? "bg-violet-50 border-violet-300 text-violet-700" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}
             title="Filtrar por período personalizado"
@@ -940,6 +938,90 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
           )}
         </div>
       </div>
+
+      {/* ── BARRA DE SEMANAS (visual, igual Avanço Semanal) ──────────────── */}
+      {showSemanas && semanas.length > 0 && (() => {
+        const semIdx = filtroSemana === "todas" ? -1 : semanas.findIndex(s => String(s.num) === filtroSemana);
+        const semSel = semIdx >= 0 ? semanas[semIdx] : null;
+        const fmtBR = (s: string) => { const [y,m,d] = s.split("-"); return `${d}/${m}/${y}`; };
+        const countNaSem = semSel
+          ? folhas.filter(a => overlaps(a, { ini: semSel.inicio, fim: semSel.fim })).length
+          : folhas.length;
+        const goPrev = () => {
+          if (semIdx <= 0) { setFiltroSemana(String(semanas[0].num)); return; }
+          setFiltroSemana(String(semanas[semIdx - 1].num));
+        };
+        const goNext = () => {
+          if (semIdx < 0) { setFiltroSemana(String(semanas[0].num)); return; }
+          if (semIdx >= semanas.length - 1) return;
+          setFiltroSemana(String(semanas[semIdx + 1].num));
+        };
+        return (
+          <div className="bg-white rounded-xl border border-blue-100 shadow-sm p-3 space-y-2">
+            {/* Cabeçalho com prev/next */}
+            <div className="flex items-center justify-between gap-3">
+              <button
+                onClick={goPrev}
+                disabled={semIdx <= 0}
+                className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-30 transition-colors shrink-0"
+                title="Semana anterior"
+              >
+                <ChevronLeft className="h-4 w-4 text-slate-600" />
+              </button>
+              <div className="text-center flex-1 min-w-0">
+                <p className="text-xs text-slate-500 font-medium">
+                  {semSel ? `Semana ${String(semSel.num).padStart(2,"0")}` : "Todas as semanas"}
+                </p>
+                <p className="text-base font-bold text-slate-800 truncate">
+                  {semSel ? `${fmtBR(semSel.inicio)} — ${fmtBR(semSel.fim)}` : "Período completo do projeto"}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  {countNaSem} atividade{countNaSem !== 1 ? "s" : ""}
+                  {semSel && " • Segunda a Domingo"}
+                </p>
+              </div>
+              <button
+                onClick={goNext}
+                disabled={semIdx >= semanas.length - 1}
+                className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-30 transition-colors shrink-0"
+                title="Próxima semana"
+              >
+                <ChevronRight className="h-4 w-4 text-slate-600" />
+              </button>
+            </div>
+            {/* Pílulas das semanas */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              <button
+                onClick={() => setFiltroSemana("todas")}
+                className={`h-6 px-2 text-[10px] font-bold rounded border shrink-0 transition-colors ${filtroSemana === "todas"
+                  ? "bg-slate-700 text-white border-slate-700"
+                  : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"}`}
+              >
+                Todas
+              </button>
+              {semanas.map(s => {
+                const isSel = filtroSemana === String(s.num);
+                const cnt = folhas.filter(a => overlaps(a, { ini: s.inicio, fim: s.fim })).length;
+                const empty = cnt === 0;
+                return (
+                  <button
+                    key={s.num}
+                    onClick={() => setFiltroSemana(isSel ? "todas" : String(s.num))}
+                    title={`Semana ${s.num} — ${fmtBR(s.inicio)} a ${fmtBR(s.fim)} • ${cnt} atividade${cnt !== 1 ? "s" : ""}`}
+                    className={`h-6 min-w-[36px] px-1.5 text-[10px] font-bold rounded border shrink-0 transition-colors ${isSel
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : empty
+                        ? "bg-slate-50 text-slate-300 border-slate-100 hover:bg-slate-100"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-blue-50 hover:border-blue-300"}`}
+                  >
+                    {s.num}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── CANVAS + DETAIL PANEL ───────────────────────────────────────────── */}
       <div className="flex gap-2 flex-1 min-h-0">

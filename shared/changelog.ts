@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1494,
+    titulo: "Planejamento — Diagrama de Rede ganhou seletor visual de semanas (igual Avanço Semanal) + intervalo de datas customizado",
+    descricao: "O Diagrama de Rede (Hierarquia EAP / Rede de Precedências), tanto no módulo INTERNO de Planejamento quanto no Portal do Cliente (mesmo componente), agora oferece duas formas de filtrar atividades por janela temporal: (1) botão 'Semanas' que abre uma barra visual com setas anterior/próxima, cabeçalho 'Semana NN — dd/MM/aaaa — dd/MM/aaaa • N atividades' e pílulas numeradas (1, 2, 3 ... N) para clique direto em qualquer semana — semanas vazias aparecem em cinza claro; e (2) botão 'Período' que abre dois campos de data (De/até) para qualquer intervalo customizado. Os dois filtros são excludentes (selecionar um zera o outro), combinam com filtros de status, grupo e busca, e funcionam em ambos os modos de visualização (Hierarquia EAP e Rede de Precedências). O dropdown anterior 'Todas as semanas' foi substituído pela nova barra visual, mais clara e consistente com a UX do Avanço Semanal.",
+    tipo: 'feature',
+    modulos: 'Planejamento, Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 06:00:00',
+  },
+  {
     version: 1493,
     titulo: "Hotfix — Tela do Planejamento (interno) quebrava ao abrir um projeto ('Ocorreu um erro inesperado')",
     descricao: "Na Rev. 1489 o useMemo que resolve a obra do projeto (para o cabeçalho de impressão) foi posicionado por engano DEPOIS dos early returns de carregamento ('Carregando projeto...') e ausência de projeto ('Projeto não encontrado'). Isso violou as Rules of Hooks do React (a ordem de hooks mudava entre renders), derrubando a página inteira de Planejamento com a mensagem 'Ocorreu um erro inesperado'. O hook foi movido para antes dos early returns, restaurando o funcionamento normal de TODAS as abas do módulo.",
