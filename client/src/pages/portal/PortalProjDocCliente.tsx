@@ -6,6 +6,7 @@ import {
   ArrowLeft, FileText, Search, Download, FileCheck2, Clock, Edit3, FileX2, FolderOpen, Home,
 } from "lucide-react";
 import PortalPrintHeader from "@/components/PortalPrintHeader";
+import PrintActions from "@/components/PrintActions";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
 
@@ -108,7 +109,9 @@ export default function PortalProjDocCliente() {
               <p className="text-[11px] text-slate-500 truncate">{obra?.nome || "Obra"}</p>
             </div>
           </div>
-          <div className="w-12" />
+          <div className="flex items-center gap-2 portal-no-print">
+            <PrintActions />
+          </div>
         </div>
       </header>
 

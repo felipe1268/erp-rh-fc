@@ -18,6 +18,7 @@ import { PORTAL_CLIENTE_ABAS, type PortalClienteAbaKey } from "@shared/portalCli
 import { ProgramacaoSemanal } from "@/pages/planejamento/ProgramacaoSemanal";
 import { EfetivoObraView } from "@/pages/planejamento/PlanejamentoDetalhe";
 import PortalPrintHeader from "@/components/PortalPrintHeader";
+import PrintActions from "@/components/PrintActions";
 
 const fmtBR = (s?: string | null) => (s ? s.split("T")[0].split("-").reverse().join("/") : "—");
 const fmtPct = (n: number) => `${n.toFixed(2).replace(".", ",")}%`;
@@ -378,7 +379,8 @@ export default function PortalPlanejamentoCliente() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 portal-no-print">
+              <PrintActions />
               <button
                 onClick={() => navigate("/portal/cliente/hub")}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-sm"

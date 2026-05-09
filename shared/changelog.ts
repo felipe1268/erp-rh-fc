@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1472,
+    titulo: "Portal do Cliente — Botões 'Imprimir' e 'Gerar PDF' visíveis em todas as telas + impressão A4 organizada",
+    descricao: "Adicionados os botões 'Imprimir' e 'PDF' (ao lado do 'Tela Inicial do Portal' / no canto direito do cabeçalho) em todas as telas do Portal do Cliente: Planejamento (todas as abas — Visão Geral, Cronograma, Avanço Semanal, Programação, Curva S, Gantt, Caminho Crítico, Efetivo, Revisões, REFIS, BIM 3D), RH/Controle de Documentos e Projetos/Documentos Técnicos. Botões usam o componente padrão PrintActions: 'Imprimir' abre o diálogo de impressão; 'PDF' mostra um aviso e abre o mesmo diálogo onde o cliente seleciona 'Salvar como PDF' (todos os browsers modernos suportam nativamente). CSS de impressão refinado: papel A4 com margens (12mm topo / 10mm laterais / 14mm rodapé), cards/divs/tabelas com page-break-inside avoid (nunca quebram no meio), thead repetido em cada página e os 3 logos do cabeçalho de impressão (Executora FC + Cliente + Gerenciadora) garantidos em toda página. Botões ficam ocultos na impressão via classe portal-no-print.",
+    tipo: "melhoria",
+    modulos: "Portal do Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-08 21:30:00",
+  },
+  {
     version: 1471,
     titulo: "Portal do Cliente — Bugfix: Avanço Físico Previsto agora reflete EXATAMENTE o módulo Planejamento (1,84% e não 1,80%)",
     descricao: "O card 'Avanço Físico' da Visão Geral do Portal do Cliente mostrava 1,80% Previsto enquanto o módulo Planejamento interno (REFIS) mostrava 1,84% para a mesma obra/semana. Causa: o cálculo de pctTotalPrevisto no backend portalExterno.planejamentoObra fazia toFixed(1) (1 casa decimal), arredondando 1,838% para 1,8 (exibido como 1,80%). Já a tela interna passou a usar toFixed(2) na Rev. 1470. Correção: trocado para toFixed(2) também no backend do portal, garantindo que o número exibido ao cliente seja IDÊNTICO ao número exibido internamente. Os cálculos de fórmula sempre foram idênticos (mesmas folhas, mesma referência de fim de semana, mesma exclusão de indiretas/grupos) — só o arredondamento divergia.",

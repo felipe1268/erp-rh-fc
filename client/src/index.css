@@ -301,6 +301,19 @@
   }
   /* Evita quebra de cards/seções no meio */
   .print-break-avoid { break-inside: avoid; page-break-inside: avoid; }
+  /* Cards do portal: nunca quebrar no meio */
+  .portal-print-clean .bg-white,
+  main > div,
+  .rounded-xl, .rounded-2xl {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  /* Tabelas no portal: cabeçalho repetido em cada página */
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  tr, td, th { page-break-inside: avoid; break-inside: avoid; }
+  /* Margens de impressão A4 */
+  @page { size: A4; margin: 12mm 10mm 14mm 10mm; }
   .equipe-print-header img {
     display: inline-block !important;
   }
