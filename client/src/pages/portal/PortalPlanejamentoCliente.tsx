@@ -219,14 +219,22 @@ export default function PortalPlanejamentoCliente() {
     <>
       {/* Header logo / título */}
       <div className="px-4 py-4 border-b border-slate-700/60">
-        <div className="flex items-center gap-2.5 mb-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow text-slate-900 font-bold text-sm">
+        <div className="flex items-start gap-2.5 mb-3">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow text-slate-900 font-bold text-sm shrink-0">
             FC
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Portal do Cliente</p>
             <p className="text-sm font-bold text-white leading-tight truncate">FC Engenharia</p>
           </div>
+          {/* Botão recolher menu (desktop) — Rev. 1515: vive aqui na barra lateral, em vez de no header da página, para manter o padrão usado no resto do sistema */}
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="hidden lg:flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:text-white hover:bg-slate-700/60 transition-colors shrink-0"
+            title="Recolher menu lateral"
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
         </div>
         <button
           onClick={() => navigate("/portal/cliente/hub")}
@@ -371,14 +379,18 @@ export default function PortalPlanejamentoCliente() {
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600" />
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="flex items-start gap-3 min-w-0 flex-1">
-              {/* Toggle sidebar */}
-              <button
-                onClick={() => setSidebarOpen((v) => !v)}
-                className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100 mt-0.5 flex-shrink-0"
-                title={sidebarOpen ? "Recolher menu" : "Expandir menu"}
-              >
-                {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
-              </button>
+              {/* Botão expandir menu — Rev. 1515: aparece SOMENTE quando a barra está recolhida.
+                  Quando aberta, o botão de recolher fica dentro do header da própria barra lateral
+                  (padrão usado no resto do sistema). */}
+              {!sidebarOpen && (
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100 mt-0.5 flex-shrink-0"
+                  title="Expandir menu lateral"
+                >
+                  <PanelLeftOpen className="h-4 w-4" />
+                </button>
+              )}
               <button
                 onClick={() => setMobileSidebarOpen(true)}
                 className="lg:hidden h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100 mt-0.5 flex-shrink-0"

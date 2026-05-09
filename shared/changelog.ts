@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1515,
+    titulo: "Portal do Cliente — botão de recolher menu movido para dentro da barra lateral",
+    descricao: "AJUSTE de UX pedido pelo usuário: o botão de fechar/recolher a barra de menu lateral do Portal do Cliente estava no header branco da página (ao lado do título da obra), o que destoava do padrão do resto do sistema. Agora o botão (ícone PanelLeftClose) vive no canto superior direito do cabeçalho da própria barra lateral escura, junto do logotipo FC e do rótulo 'Portal do Cliente' — exatamente como em todos os outros módulos. No header da página permanece apenas o botão de EXPANDIR (PanelLeftOpen), que aparece somente quando a barra está recolhida, para o usuário poder reabri-la. No mobile, nada muda: continua usando o botão Menu (hambúrguer).",
+    tipo: 'melhoria',
+    modulos: 'Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 19:45:00',
+  },
+  {
     version: 1514,
     titulo: "Portal do Cliente — Aba Efetivo: ocultar 'Empresa/Setor' e 'Tipo (CLT/PJ)'",
     descricao: "AJUSTE de privacidade pedido pelo usuário: na tabela de funcionários da aba Efetivo do Portal do Cliente, foram removidas as colunas 'EMPRESA/SETOR' (que mostrava sempre 'OBRA' ou nome do setor interno) e 'TIPO' (que mostrava CLT/PJ/Terceiro como badge). O cliente externo não precisa visualizar a estrutura interna de setores nem o regime de contratação dos profissionais alocados — informações administrativas/sensíveis. A tabela agora exibe apenas: Foto, Nome, Função, Categoria (Direto/Indireto) e Status. KPIs e filtros internos foram preservados (CLT/PJ/Terceiros continuam disponíveis nas estatísticas, mas não expostos linha-a-linha).",
