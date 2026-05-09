@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1541,
+    titulo: "Programação Semanal — tabela linha-a-linha agora usa a mesma janela Mon-Dom do cabeçalho",
+    descricao: "BUGFIX (continuação Rev. 1540): mesmo após alinhar a fórmula de Previsto agregado com a per-row, o cabeçalho continuava cobrando mais (1,98%) do que a tabela linha-a-linha (todas em dia). Causa raiz REAL: as duas usavam fórmulas alinhadas, mas referências de FIM DA SEMANA diferentes. O cabeçalho (PlanejamentoDetalhe) usa janela calendário Mon-Dom (semanaFim = próxima segunda exclusiva). A tabela (ProgramacaoSemanal) usava semanaAtual.fim = SEXTA-FEIRA. Atividades começando no sábado, domingo, ou na própria sexta (ex. 'Locação de gradil' MAIOR PESO 8,83% iniciando 08/05/sex) ficavam com prevInd=0% per-row ('em dia') enquanto o cabeçalho contava o overlap fim-de-semana e cobrava ~0,06pp+ de avanço previsto. Multiplicado por várias atividades nessa situação, gerava o desvio 'fantasma' do cabeçalho. Correção: per-row agora usa DOMINGO 23:59 (semanaAtual.fim + 2 dias) como ref, mesma janela Mon-Dom do cabeçalho. Linhas e cabeçalho passam a contar exatamente o mesmo intervalo de tempo.",
+    tipo: 'bugfix',
+    modulos: 'Planejamento, Programação Semanal',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 16:30:00',
+  },
+  {
     version: 1540,
     titulo: "Planejamento — 'Previsto/Realizado da semana' agora bate com a tabela linha-a-linha",
     descricao: "BUGFIX reportado pelo usuário: na semana 1 da REVTE-CIVIL o cabeçalho mostrava Previsto 1,98% / Realizado 1,38% (Aderência 70%) enquanto TODAS as 13 atividades da tabela 'Atividades da Semana' estavam marcadas como 'em dia' — contradição evidente. Causa: o cálculo do Previsto agregado usava `peso × diasOverlap_calendário ÷ duracaoDias`. Quando duracaoDias vinha em dias ÚTEIS (cronograma com calendário de obra ou import MS Project) e o overlap era em dias CORRIDOS, a divisão ficava inflada e o cabeçalho cobrava mais do que deveria — diferente da tabela linha-a-linha que usa interpolação linear pura por datas (((ref − ini)/(fim − ini)) × 100). Correção: o agregado agora usa a MESMA interpolação linear por datas, calculando o Previsto da semana como Σ peso × (prev_fimSemana − prev_inicioSemana) ÷ 100. Resultado: se cada atividade individual está em dia, o cabeçalho também mostra em dia.",

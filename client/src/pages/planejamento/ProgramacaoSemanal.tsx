@@ -736,11 +736,24 @@ export function ProgramacaoSemanal({
 
                       // Previsto% individual — % que a atividade DEVERIA estar
                       // concluída no fim desta semana (interpolação linear pela data).
+                      // Rev. 1541 — usa DOMINGO 23:59 como fim da semana (mesma janela
+                      // calendário Mon-Dom que o cabeçalho 'Previsto/Realizado da semana'
+                      // do PlanejamentoDetalhe usa). Antes usávamos a sexta-feira
+                      // (semanaAtual.fim), o que escondia atividades começando no
+                      // sáb/dom: ex. 'Locação de gradil' inicia 08/05 (sex) — com ref=sex
+                      // o per-row dava prevInd=0% e marcava 'em dia', enquanto o
+                      // cabeçalho contava 3 dias de overlap (sex→dom) e cobrava o avanço
+                      // proporcional. Resultado: cada linha verde, agregado vermelho.
+                      // Agora as duas visões usam a MESMA janela calendário.
                       let prevInd = 0;
                       if (a.dataInicio && a.dataFim && semanaAtual?.fim) {
                         const ini = new Date(a.dataInicio + "T12:00:00").getTime();
                         const fim = new Date(a.dataFim    + "T12:00:00").getTime();
-                        const ref = new Date(dateStr(semanaAtual.fim) + "T12:00:00").getTime();
+                        // Domingo = sexta + 2 dias; usamos 23:59:59 para fechar a semana.
+                        const domingo = new Date(semanaAtual.fim);
+                        domingo.setDate(domingo.getDate() + 2);
+                        domingo.setHours(23, 59, 59, 999);
+                        const ref = domingo.getTime();
                         if (ref >= fim)       prevInd = 100;
                         else if (ref > ini)   prevInd = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
                       }
