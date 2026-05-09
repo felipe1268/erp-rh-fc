@@ -584,11 +584,32 @@ Regras:
             nota_qualidade INTEGER,
             nota_geral INTEGER,
             comentario_positivo TEXT,
-            comentario_negativo TEXT,
+            comentario_melhoria TEXT,
+            recomendaria SMALLINT,
             criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
           )`);
+          // Rev. 1551 — sincroniza schema legado: bancos antigos têm
+          // comentario_negativo (varchar) em vez de comentario_melhoria.
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS comentario_melhoria TEXT`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS recomendaria SMALLINT`);
+          await db.execute(sql`UPDATE cliente_avaliacoes SET comentario_melhoria = comentario_negativo WHERE comentario_melhoria IS NULL AND comentario_negativo IS NOT NULL`).catch(() => {});
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes DROP COLUMN IF EXISTS comentario_negativo`).catch(() => {});
           await db.execute(sql`CREATE INDEX IF NOT EXISTS ca_company ON cliente_avaliacoes (company_id)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS ca_obra ON cliente_avaliacoes (obra_id)`);
+          // Rev. 1551 — Marcação anônima por mês: garante que cada
+          // credencial (usuário do portal) só envie uma avaliação por
+          // mês. NÃO referencia avaliação alguma — preserva o
+          // anonimato do conteúdo (LGPD).
+          // Anonimato máximo: NÃO guardamos timestamp (`marcado_em`)
+          // pra evitar correlação temporal com cliente_avaliacoes.criado_em.
+          // Só (cred_id, ano_mes) — nada mais.
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS cliente_avaliacao_marcacoes (
+            cred_id INTEGER NOT NULL,
+            ano_mes VARCHAR(7) NOT NULL,
+            PRIMARY KEY (cred_id, ano_mes)
+          )`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacao_marcacoes DROP COLUMN IF EXISTS marcado_em`).catch(() => {});
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cam_anomes ON cliente_avaliacao_marcacoes (ano_mes)`);
           console.log(`[SyncSchema+] Tabelas Portal Cliente (comentarios + avaliacoes) garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA cliente_comentarios/avaliacoes:`, e?.message || e); }
 
@@ -969,9 +990,18 @@ Regras:
               recomendaria SMALLINT,
               criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
             );
+            ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS comentario_melhoria TEXT;
+            ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS recomendaria SMALLINT;
             CREATE INDEX IF NOT EXISTS ca_company ON cliente_avaliacoes (company_id);
             CREATE INDEX IF NOT EXISTS ca_obra ON cliente_avaliacoes (obra_id);
             CREATE INDEX IF NOT EXISTS ca_data ON cliente_avaliacoes (criado_em);
+            CREATE TABLE IF NOT EXISTS cliente_avaliacao_marcacoes (
+              cred_id INTEGER NOT NULL,
+              ano_mes VARCHAR(7) NOT NULL,
+              PRIMARY KEY (cred_id, ano_mes)
+            );
+            ALTER TABLE cliente_avaliacao_marcacoes DROP COLUMN IF EXISTS marcado_em;
+            CREATE INDEX IF NOT EXISTS cam_anomes ON cliente_avaliacao_marcacoes (ano_mes);
             CREATE TABLE IF NOT EXISTS notification_views (
               user_id INTEGER NOT NULL,
               notification_key VARCHAR(100) NOT NULL,

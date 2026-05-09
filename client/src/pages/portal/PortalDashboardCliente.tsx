@@ -110,9 +110,40 @@ export default function PortalDashboardCliente() {
     comentarioPositivo: "", comentarioMelhoria: "", recomendaria: null,
   });
   const [avaliado, setAvaliado] = useState(false);
+  // Rev. 1551 — Lembrete mensal anônimo: o backend devolve apenas se a
+  // credencial deste mês já tem marcação (ano_mes), sem ligar ao
+  // conteúdo da avaliação. Mostramos um modal de boas-vindas que abre
+  // automaticamente assim que o portal carrega para quem ainda não
+  // avaliou no mês corrente.
+  const podeAvaliarQ = trpc.portalExterno.cliente.podeAvaliarEsteMes.useQuery(
+    { token },
+    { enabled: !!token && tipo === "cliente" }
+  );
+  const jaAvaliouEsteMes = !!podeAvaliarQ.data?.jaAvaliou;
+  const [lembreteAberto, setLembreteAberto] = useState(false);
+  const [lembreteDispensado, setLembreteDispensado] = useState(false);
+  useEffect(() => {
+    if (
+      podeAvaliarQ.data &&
+      podeAvaliarQ.data.podeAvaliar &&
+      !lembreteDispensado &&
+      tab !== "avaliacao"
+    ) {
+      setLembreteAberto(true);
+    }
+  }, [podeAvaliarQ.data, lembreteDispensado, tab]);
   const enviarAvalMut = trpc.portalExterno.cliente.criarAvaliacao.useMutation({
-    onSuccess: () => { setAvaliado(true); toast.success("Obrigado! Sua avaliação foi enviada."); },
-    onError: (e) => toast.error(e.message),
+    onSuccess: () => {
+      setAvaliado(true);
+      toast.success("Obrigado! Sua avaliação foi enviada.");
+      podeAvaliarQ.refetch();
+    },
+    onError: (e) => {
+      toast.error(e.message);
+      // Se a rejeição foi por duplicidade/concorrência, sincroniza
+      // a UI com o estado real (mostra a tela "já registrada").
+      podeAvaliarQ.refetch();
+    },
   });
   const enviarAvaliacao = () => {
     if (aval.notaGeral === null) { toast.error("Informe pelo menos a nota geral (NPS)"); return; }
@@ -175,6 +206,41 @@ export default function PortalDashboardCliente() {
           </div>
         </div>
       </header>
+
+      {/* Rev. 1551 — Modal de lembrete mensal anônimo (LGPD) */}
+      {lembreteAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => { setLembreteAberto(false); setLembreteDispensado(true); }}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                <Star className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Avaliação mensal pendente</h3>
+                <p className="text-sm text-slate-500 mt-0.5">Sua opinião é essencial para a evolução da FC Engenharia.</p>
+              </div>
+            </div>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-4 flex items-start gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-emerald-900">
+                <b>100% anônima.</b> Não armazenamos sua identidade, CNPJ ou IP. Apenas registramos que você já enviou a avaliação deste mês — sem ligar isso ao conteúdo das respostas (LGPD).
+              </p>
+            </div>
+            <p className="text-sm text-slate-700 mb-5">Leva menos de 1 minuto. Você pode preencher agora ou depois — só lembre-se: <b>uma avaliação por mês</b>.</p>
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+              <Button variant="outline" onClick={() => { setLembreteAberto(false); setLembreteDispensado(true); }}>
+                Mais tarde
+              </Button>
+              <Button
+                onClick={() => { setLembreteAberto(false); setLembreteDispensado(true); setTab("avaliacao"); }}
+                className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+              >
+                <Sparkles className="w-4 h-4" /> Avaliar agora
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-6xl mx-auto px-4 py-6">
         {/* TAB OBRAS */}
@@ -289,7 +355,14 @@ export default function PortalDashboardCliente() {
         {/* TAB AVALIAÇÃO */}
         {tab === "avaliacao" && (
           <div className="max-w-3xl mx-auto">
-            {avaliado ? (
+            {jaAvaliouEsteMes && !avaliado ? (
+              <div className="bg-white border rounded-2xl p-12 text-center">
+                <ShieldCheck className="w-20 h-20 text-emerald-500 mx-auto mb-4" />
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">Avaliação deste mês já registrada</h2>
+                <p className="text-slate-600 mb-2">Para preservar o anonimato (LGPD), cada usuário envia apenas <b>uma avaliação por mês</b>.</p>
+                <p className="text-slate-500 text-sm">Volte no próximo mês para registrar uma nova avaliação. Obrigado!</p>
+              </div>
+            ) : avaliado ? (
               <div className="bg-white border rounded-2xl p-12 text-center">
                 <CheckCircle2 className="w-20 h-20 text-emerald-500 mx-auto mb-4" />
                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Obrigado pela avaliação!</h2>

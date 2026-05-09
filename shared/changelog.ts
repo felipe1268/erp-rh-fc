@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1551,
+    titulo: "Portal do Cliente — Avaliação mensal anônima (LGPD) com lembrete e limite 1×/mês",
+    descricao: "Três entregas: (1) Bug fix do envio: a tabela cliente_avaliacoes no banco estava com schema legado (comentario_negativo + sem recomendaria), causando 'Failed query' no insert. Schema sincronizado: comentario_melhoria TEXT + recomendaria SMALLINT, com migração automática que copia comentario_negativo → comentario_melhoria e remove a coluna antiga. (2) Limite anônimo de 1 avaliação por mês por usuário do portal: nova tabela cliente_avaliacao_marcacoes guarda APENAS (cred_id, ano_mes) — sem qualquer referência ao registro da avaliação, preservando 100% o anonimato do conteúdo (atende LGPD: não dá pra ligar uma resposta a uma pessoa nem por query bruta). Backend rejeita o segundo envio do mesmo mês com mensagem clara. (3) Modal de lembrete: ao acessar o portal, se ainda não avaliou no mês corrente, abre automaticamente um modal 'Avaliação mensal pendente' com selo verde de garantia LGPD e botões 'Mais tarde' / 'Avaliar agora' (que joga direto na aba). Quem já avaliou vê tela de confirmação ao abrir a aba.",
+    tipo: 'melhoria',
+    modulos: 'Portal do Cliente, Avaliações, NPS, LGPD',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 21:30:00',
+  },
+  {
     version: 1550,
     titulo: "Portal do Cliente — comentários assinam com o nome da pessoa (e data legível)",
     descricao: "Dois bugs no chat 'Conversa' do Portal do Cliente: (1) as mensagens enviadas pelo cliente vinham assinadas com o nome da EMPRESA (ex.: 'SANTUARIO NACIONAL DE NOSSA SENHORA DA CONCEIÇÃO APARECIDA') ao invés do nome da pessoa que está logada — agora usa o 'nomeResponsavel' do acesso, com fallback para o contato do cliente; (2) a data aparecia como '09 20:53:35.290665/05/2026' porque o formatador só sabia separar timestamps com 'T' e o Postgres devolve com espaço — agora aceita os dois formatos e mostra dd/MM/aaaa HH:mm. JWT do portal passou a carregar nomeResponsavel/email para identificar o usuário humano (compatível com tokens antigos: faz fallback consultando portalCredentials).",

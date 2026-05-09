@@ -1019,6 +1019,27 @@ export const portalExternoRouter = router({
         const [o] = await db.select().from(obras).where(eq(obras.id, input.obraId));
         obraNome = o?.nome ?? null;
       }
+      // Rev. 1551 — Limite mensal anônimo por credencial.
+      // ATÔMICO: insere a marcação PRIMEIRO via ON CONFLICT DO NOTHING
+      // RETURNING. Se nada voltou, alguém já registrou neste mês
+      // (concorrência ou repetição), então rejeitamos antes de
+      // gravar a avaliação. Só insere a resposta se conseguimos
+      // a marcação. Isso elimina race conditions e duplicidade.
+      // ano_mes calculado no banco com fuso America/Sao_Paulo
+      // pra não errar a virada do mês na janela UTC-3.
+      const credId = decoded.portalId as number | undefined;
+      if (credId) {
+        const claim = await db.execute(sql`
+          INSERT INTO cliente_avaliacao_marcacoes (cred_id, ano_mes)
+          VALUES (${credId}, to_char(now() AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM'))
+          ON CONFLICT (cred_id, ano_mes) DO NOTHING
+          RETURNING cred_id
+        `);
+        const claimRows = ((claim as any).rows ?? claim ?? []) as any[];
+        if (claimRows.length === 0) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Você já enviou a avaliação deste mês. Volte no próximo mês." });
+        }
+      }
       await db.insert(clienteAvaliacoes).values({
         companyId: decoded.companyId,
         obraId: input.obraId ?? null,
@@ -1034,6 +1055,25 @@ export const portalExternoRouter = router({
         recomendaria: input.recomendaria ?? null,
       });
       return { success: true };
+    }),
+
+    // Rev. 1551 — verifica de forma anônima se o usuário do portal
+    // já enviou avaliação no mês corrente (fuso Brasília).
+    podeAvaliarEsteMes: publicProcedure.input(z.object({
+      token: z.string(),
+    })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") return { podeAvaliar: false, jaAvaliou: false, anoMes: "" };
+      const credId = decoded.portalId as number | undefined;
+      const anoMesRow = await db.execute(sql`SELECT to_char(now() AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') AS ano_mes`);
+      const anoMes = (((anoMesRow as any).rows ?? anoMesRow ?? [])[0] as any)?.ano_mes ?? "";
+      if (!credId) return { podeAvaliar: true, jaAvaliou: false, anoMes };
+      const ja = await db.execute(sql`SELECT 1 FROM cliente_avaliacao_marcacoes WHERE cred_id = ${credId} AND ano_mes = ${anoMes} LIMIT 1`);
+      const rows = ((ja as any).rows ?? ja ?? []) as any[];
+      return { podeAvaliar: rows.length === 0, jaAvaliou: rows.length > 0, anoMes };
     }),
 
     efetivoObra: publicProcedure.input(z.object({
