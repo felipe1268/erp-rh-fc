@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb, getEquipeObra } from "../db";
-import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, jobFunctions, orcamentos } from "../../drizzle/schema";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1868,6 +1868,10 @@ export const portalExternoRouter = router({
         dataValidade: gdDocumentos.dataValidade,
         arquivoUrl: gdDocumentos.arquivoUrl,
         arquivoNome: gdDocumentos.arquivoNome,
+        // Rev. 1562 — campos extras p/ paridade com o módulo Documentos.
+        arquivoTamanho: gdDocumentos.arquivoTamanho,
+        subpasta: gdDocumentos.subpasta,
+        disciplinaId: gdDocumentos.disciplinaId,
         tipoDocumentoId: gdDocumentos.tipoDocumentoId,
         criadoEm: gdDocumentos.criadoEm,
         atualizadoEm: gdDocumentos.atualizadoEm,
@@ -1885,11 +1889,42 @@ export const portalExternoRouter = router({
           .from(gdTiposDocumento).where(inArray(gdTiposDocumento.id, tiposIds));
         tipos.forEach(t => tiposMap.set(t.id, { nome: t.nome, sigla: t.sigla }));
       }
-      const documentos = docs.map(d => ({
-        ...d,
-        tipoNome: d.tipoDocumentoId ? (tiposMap.get(d.tipoDocumentoId)?.nome || "—") : "—",
-        tipoSigla: d.tipoDocumentoId ? (tiposMap.get(d.tipoDocumentoId)?.sigla || "") : "",
-      }));
+      // Rev. 1562 — Disciplinas (nome + sigla + cor) p/ exibir badge no
+      // detalhe do documento. Restringe ao mesmo companyId.
+      const discIds = Array.from(new Set(docs.map(d => d.disciplinaId).filter(Boolean) as number[]));
+      let discMap = new Map<number, { nome: string; sigla: string; cor: string | null }>();
+      if (discIds.length > 0) {
+        const ds = await db.select({ id: gdDisciplinas.id, nome: gdDisciplinas.nome, sigla: gdDisciplinas.sigla, cor: gdDisciplinas.cor })
+          .from(gdDisciplinas).where(and(
+            eq(gdDisciplinas.companyId, decoded.companyId),
+            inArray(gdDisciplinas.id, discIds),
+          ));
+        ds.forEach(d => discMap.set(d.id, { nome: d.nome, sigla: d.sigla, cor: d.cor }));
+      }
+      // Rev. 1561 — não expõe a URL real do arquivo; o front passa a usar
+      // o endpoint autenticado /api/portal/cliente/projdoc/:id. Devolvemos
+      // só extensão e nome para a UI decidir (Abrir PDF vs Baixar DWG/etc.).
+      const getExt = (u?: string | null, n?: string | null): string => {
+        const src = (n || u || "").split("?")[0];
+        const dot = src.lastIndexOf(".");
+        return dot >= 0 ? src.slice(dot + 1).toLowerCase() : "";
+      };
+      const documentos = docs.map(d => {
+        const extensao = getExt(d.arquivoUrl, d.arquivoNome);
+        const { arquivoUrl: _ignored, ...rest } = d as any;
+        const disc = d.disciplinaId ? discMap.get(d.disciplinaId) : null;
+        return {
+          ...rest,
+          tipoNome: d.tipoDocumentoId ? (tiposMap.get(d.tipoDocumentoId)?.nome || "—") : "—",
+          tipoSigla: d.tipoDocumentoId ? (tiposMap.get(d.tipoDocumentoId)?.sigla || "") : "",
+          disciplinaNome: disc?.nome || null,
+          disciplinaSigla: disc?.sigla || null,
+          disciplinaCor: disc?.cor || null,
+          temArquivo: !!d.arquivoUrl,
+          extensao,
+          podeVisualizarInline: ["pdf", "jpg", "jpeg", "png", "webp"].includes(extensao),
+        };
+      });
 
       const totais = {
         total: documentos.length,
@@ -1899,6 +1934,67 @@ export const portalExternoRouter = router({
         reprovados: documentos.filter(d => d.status === "reprovado").length,
       };
       return { documentos, totais };
+    }),
+
+    // Rev. 1562 — Histórico de revisões de um documento (read-only).
+    // Espelha o gestaoDocumentos.listRevisoes do módulo principal, mas
+    // valida que o documento pertence a uma obra do cliente do token.
+    projDocRevisoes: publicProcedure.input(z.object({
+      token: z.string(),
+      documentoId: z.number(),
+    })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+
+      const [c] = await db.select().from(clientes).where(eq(clientes.id, decoded.clienteId));
+      if (!c) throw new TRPCError({ code: "NOT_FOUND" });
+      const nomes = [c.razaoSocial, c.nomeFantasia].filter(Boolean) as string[];
+      if (nomes.length === 0) throw new TRPCError({ code: "FORBIDDEN" });
+      const orConds = nomes.map((n) => ilike(obras.cliente, n));
+      const obrasCliente = await db.select({ id: obras.id }).from(obras).where(and(
+        eq(obras.companyId, decoded.companyId),
+        isNull(obras.deletedAt),
+        or(...orConds)!,
+      ));
+      if (obrasCliente.length === 0) throw new TRPCError({ code: "FORBIDDEN" });
+      const obraIds = obrasCliente.map((o) => o.id);
+
+      // Confirma que o documento é de uma obra do cliente
+      const [doc] = await db.select({
+        id: gdDocumentos.id,
+        revisaoAtual: gdDocumentos.revisaoAtual,
+        titulo: gdDocumentos.titulo,
+        codigo: gdDocumentos.codigo,
+      }).from(gdDocumentos).where(and(
+        eq(gdDocumentos.id, input.documentoId),
+        eq(gdDocumentos.companyId, decoded.companyId),
+        inArray(gdDocumentos.obraId, obraIds),
+        isNull(gdDocumentos.deletedAt),
+      ));
+      if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const revs = await db.select({
+        id: gdRevisoes.id,
+        numero: gdRevisoes.numero,
+        descricao: gdRevisoes.descricao,
+        status: gdRevisoes.status,
+        arquivoNome: gdRevisoes.arquivoNome,
+        arquivoTamanho: gdRevisoes.arquivoTamanho,
+        motivoRevisao: gdRevisoes.motivoRevisao,
+        aprovadoEm: gdRevisoes.aprovadoEm,
+        criadoEm: gdRevisoes.criadoEm,
+        // arquivoUrl propositalmente fora — revisões antigas ficam read-only
+        // sem download direto (na portal v1.562). Se quiser permitir baixar
+        // depois, criamos endpoint específico /api/portal/cliente/projdoc-rev/:id
+      }).from(gdRevisoes).where(and(
+        eq(gdRevisoes.companyId, decoded.companyId),
+        eq(gdRevisoes.documentoId, input.documentoId),
+      )).orderBy(desc(gdRevisoes.criadoEm));
+
+      return { revisoes: revs, revisaoAtual: doc.revisaoAtual || "0" };
     }),
   }),
 

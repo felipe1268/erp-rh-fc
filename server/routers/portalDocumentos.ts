@@ -15,7 +15,7 @@
 import type { Express, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { getDb, getEquipeObra } from "../db";
-import { asos, trainings, clientes, obras } from "../../drizzle/schema";
+import { asos, trainings, clientes, obras, gdDocumentos } from "../../drizzle/schema";
 import { and, eq, ilike, isNull, or, inArray } from "drizzle-orm";
 
 function getExtAndMime(url: string): { ext: string; mime: string } {
@@ -31,6 +31,11 @@ function getExtAndMime(url: string): { ext: string; mime: string } {
     pdf: "application/pdf",
     jpg: "image/jpeg", jpeg: "image/jpeg",
     png: "image/png", webp: "image/webp",
+    // Rev. 1561 — DWG/DXF/DWF não têm visualizador nativo no browser, mas
+    // setamos o mime correto pra que o navegador faça download direto.
+    dwg: "application/acad",
+    dxf: "application/dxf",
+    dwf: "model/vnd.dwf",
   };
   return { ext, mime: mimeMap[ext] || "application/octet-stream" };
 }
@@ -139,6 +144,85 @@ export function registerPortalDocumentosRoute(app: Express) {
       res.send(buf);
     } catch (err: any) {
       console.error("[PortalDocumentos] Erro:", err?.message || err);
+      if (!res.headersSent) res.status(500).send("Erro interno");
+    }
+  });
+
+  // Rev. 1561 — Streaming de Projetos / Documentos Técnicos (gd_documentos)
+  // pro Portal do Cliente. Aceita ?download=1 pra forçar attachment (DWG etc.)
+  // ou inline (default, pra PDF).
+  app.get("/api/portal/cliente/projdoc/:id", async (req: Request, res: Response) => {
+    try {
+      const recordId = parseInt(req.params.id);
+      const token = String(req.query.token || "");
+      const forceDownload = String(req.query.download || "") === "1";
+
+      if (!token) { res.status(401).send("Token ausente"); return; }
+      if (!recordId || isNaN(recordId)) { res.status(400).send("ID inválido"); return; }
+
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(token, secret); } catch { res.status(401).send("Token inválido"); return; }
+      if (decoded.tipo !== "cliente") { res.status(403).send("Acesso negado"); return; }
+
+      const db = (await getDb())!;
+
+      // Cliente do token + autoriza pelas obras dele
+      const [c] = await db.select().from(clientes).where(eq(clientes.id, decoded.clienteId));
+      if (!c) { res.status(404).send("Cliente não encontrado"); return; }
+      const nomes = [c.razaoSocial, c.nomeFantasia].filter(Boolean) as string[];
+      if (nomes.length === 0) { res.status(403).send("Cliente sem nome"); return; }
+      const orConds = nomes.map((n) => ilike(obras.cliente, n));
+      const obrasCliente = await db.select({ id: obras.id }).from(obras).where(and(
+        eq(obras.companyId, decoded.companyId),
+        isNull(obras.deletedAt),
+        or(...orConds)!,
+      ));
+      if (obrasCliente.length === 0) { res.status(403).send("Sem obras vinculadas"); return; }
+      const obraIds = obrasCliente.map((o) => o.id);
+
+      const [row] = await db.select({
+        arquivoUrl: gdDocumentos.arquivoUrl,
+        arquivoNome: gdDocumentos.arquivoNome,
+        codigo: gdDocumentos.codigo,
+        titulo: gdDocumentos.titulo,
+        obraId: gdDocumentos.obraId,
+      }).from(gdDocumentos).where(and(
+        eq(gdDocumentos.id, recordId),
+        eq(gdDocumentos.companyId, decoded.companyId),
+        inArray(gdDocumentos.obraId, obraIds),
+        isNull(gdDocumentos.deletedAt),
+      ));
+      if (!row) { res.status(404).send("Documento não encontrado"); return; }
+      if (!row.arquivoUrl) { res.status(404).send("Sem arquivo anexado"); return; }
+
+      const absUrl = row.arquivoUrl.startsWith("http")
+        ? row.arquivoUrl
+        : `${req.protocol}://${req.get("host")}${row.arquivoUrl.startsWith("/") ? "" : "/"}${row.arquivoUrl}`;
+
+      const upstream = await fetch(absUrl);
+      if (!upstream.ok) {
+        console.warn(`[PortalProjDoc] Upstream falhou: ${absUrl} → ${upstream.status}`);
+        res.status(502).send("Falha ao buscar documento");
+        return;
+      }
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      const { ext, mime } = getExtAndMime(row.arquivoUrl);
+      const filename = (row.arquivoNome || `${row.codigo || "documento"}.${ext}`).replace(/[^a-zA-Z0-9._-]/g, "_");
+      // PDF e imagens podem inline; DWG/DXF/etc sempre vão como attachment
+      // (não tem visualizador nativo no browser).
+      const inlineSafe = ["pdf", "jpg", "jpeg", "png", "webp"].includes(ext);
+      const dispo = (forceDownload || !inlineSafe) ? "attachment" : "inline";
+
+      res.setHeader("Content-Type", mime);
+      res.setHeader("Content-Disposition", `${dispo}; filename="${filename}"`);
+      res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("X-Frame-Options", "SAMEORIGIN");
+      res.send(buf);
+    } catch (err: any) {
+      console.error("[PortalProjDoc] Erro:", err?.message || err);
       if (!res.headersSent) res.status(500).send("Erro interno");
     }
   });

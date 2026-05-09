@@ -25,6 +25,24 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1562,
+    titulo: "Portal do Cliente — Projetos/Documentos: organização em pastas por Disciplina e Formato (PDF/DWG/...)",
+    descricao: "A tela de Projetos / Documentos Técnicos do Portal do Cliente agora organiza os arquivos em pastas hierárquicas: nível 1 = Disciplina (Arquitetura, Estrutural, Elétrica, etc., com a cor cadastrada no módulo Documentos), nível 2 = Formato (PDF, DWG, DXF, JPG, etc.). Cada pasta mostra a contagem de arquivos por formato. Botão de alternância entre 'Pastas' (padrão) e 'Lista' plana — na lista plana foram adicionadas as colunas Disciplina (com bolinha colorida + sigla) e Formato (badge colorido). Quando o cliente faz busca ou filtra por status, todas as pastas se expandem automaticamente. Histórico de revisões e endpoint /api/portal/cliente/projdoc/:id continuam autenticados pelo token JWT.",
+    tipo: 'novo',
+    modulos: 'Portal do Cliente, Projetos Técnicos',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 02:30:00',
+  },
+  {
+    version: 1561,
+    titulo: "Portal do Cliente — Projetos/Documentos Técnicos: Abrir PDF inline + Baixar DWG no próprio ERP",
+    descricao: "Na tela de Projetos / Documentos Técnicos do Portal do Cliente, cada documento agora tem dois botões: 'Abrir' (visualiza o arquivo direto no ERP, sem sair da tela — funciona para PDF, JPG, PNG e WebP) e 'Baixar' (com badge da extensão do arquivo, ex.: PDF, DWG, DXF). DWG não tem visualizador nativo no navegador, então abre direto como download. Antes só existia o botão 'Baixar' que apontava pra URL crua do storage. Agora tudo passa por um endpoint autenticado /api/portal/cliente/projdoc/:id que valida o token JWT do cliente, confirma que o documento pertence a uma obra do cliente, e faz proxy do arquivo (sem expor a URL real do storage). Visualizador inline com iframe sandbox, marca d'água diagonal com nome do cliente e bloqueio do menu de contexto — mesmo padrão de segurança da tela RH/Docs (Rev. 1555).",
+    tipo: 'novo',
+    modulos: 'Portal do Cliente, Projetos Técnicos',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 02:00:00',
+  },
+  {
     version: 1560,
     titulo: "Portal do Cliente — RH/Docs: KPIs de Treinamentos com controle de validade",
     descricao: "O Portal RH/Controle de Documentos agora tem uma segunda fileira de KPIs específica para Treinamentos: 'Trein. Vigente' (todos os treinamentos do funcionário estão dentro da validade), 'Trein. Vencido' (tem ao menos 1 treinamento vencido) e 'Sem Treinamento'. Os 3 cards são clicáveis e filtram a lista de forma independente do filtro de ASO. Na coluna Treinamentos da tabela, além da contagem de vigentes (verde), agora aparece um selo vermelho com a quantidade de treinamentos vencidos quando houver, e a etiqueta 'sem treinamento' quando o funcionário não tiver nenhum cadastrado. Backend retorna treinVigente/treinVencido/semTreinamento e trainStatus por funcionário.",
