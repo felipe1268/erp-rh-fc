@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1516,
+    titulo: "Portal do Cliente — Pílula da obra vira seletor rápido de OBRA + MÓDULO",
+    descricao: "MELHORIA de navegação pedida pelo usuário (screenshot IMG_0160): a pílula 'OBRA — REVTE-CIVIL' que ficava na barra lateral era apenas decorativa. Agora é um botão clicável que abre um painel expansível com duas seções: (1) 'Outras obras' — lista todas as obras às quais o cliente tem acesso (consulta cliente.minhasObras), permitindo trocar com 1 clique; a obra atual aparece destacada em azul com check. (2) 'Outros módulos' — lista os 4 módulos do Portal (Planejamento, RH & Docs, Proj./Doc., Mensagens) com suas descrições, permitindo o cliente saltar para outro módulo da MESMA obra sem voltar ao hub. Resultado: o usuário não precisa mais ir até o final da barra lateral clicar em 'Trocar de Obra' nem voltar ao 'Hub Inicial' para mudar de módulo — tudo está acessível em 2 cliques no topo da barra.",
+    tipo: 'feature',
+    modulos: 'Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 20:00:00',
+  },
+  {
     version: 1515,
     titulo: "Portal do Cliente — botão de recolher menu movido para dentro da barra lateral",
     descricao: "AJUSTE de UX pedido pelo usuário: o botão de fechar/recolher a barra de menu lateral do Portal do Cliente estava no header branco da página (ao lado do título da obra), o que destoava do padrão do resto do sistema. Agora o botão (ícone PanelLeftClose) vive no canto superior direito do cabeçalho da própria barra lateral escura, junto do logotipo FC e do rótulo 'Portal do Cliente' — exatamente como em todos os outros módulos. No header da página permanece apenas o botão de EXPANDIR (PanelLeftOpen), que aparece somente quando a barra está recolhida, para o usuário poder reabri-la. No mobile, nada muda: continua usando o botão Menu (hambúrguer).",
