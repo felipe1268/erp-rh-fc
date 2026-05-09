@@ -534,7 +534,7 @@ export function ProgramacaoSemanal({
                       <th className="py-2 px-3 w-20 text-right">Peso%</th>
                       <th className="py-2 px-3 w-20 text-right" title="% que esta atividade DEVERIA estar concluída até o fim desta semana, calculado linearmente entre data de início e fim">Previsto%</th>
                       <th className="py-2 px-3 w-20 text-right">Real%</th>
-                      <th className="py-2 px-3 w-20 text-right" title="Desvio = Previsto% − Real%. Positivo = atividade atrasada na semana. Negativo = adiantada.">Desvio</th>
+                      <th className="py-2 px-3 w-20 text-right" title="Desvio = Real% − Previsto%. Positivo = atividade adiantada (verde). Negativo = atrasada (vermelho).">Desvio</th>
                       <th className="py-2 px-3 w-24 text-center">Status</th>
                     </tr>
                   </thead>
@@ -554,13 +554,13 @@ export function ProgramacaoSemanal({
                         if (ref >= fim)       prevInd = 100;
                         else if (ref > ini)   prevInd = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
                       }
-                      // Opção (a): Desvio = Previsto − Real. Positivo = atrasada.
-                      const desvio = prevInd - av;
-                      const desvioAbs = Math.abs(desvio);
+                      // Rev. 1511: Desvio = Real − Previsto. Positivo = adiantada (verde).
+                      // Negativo = atrasada (vermelho). Ajuste pedido pelo usuário.
+                      const desvio = av - prevInd;
                       const desvioCor =
-                        desvioAbs <= 2  ? "text-emerald-600" :
-                        desvioAbs <= 10 ? "text-amber-600"   :
-                                          "text-red-600";
+                        desvio >= -2  ? "text-emerald-600" :  // dentro da tolerância ou adiantada
+                        desvio >= -10 ? "text-amber-600"   :  // pequeno atraso
+                                        "text-red-600";       // atraso significativo
                       return (
                         <tr key={a.id ?? i}
                           className={`border-b border-slate-50 ${

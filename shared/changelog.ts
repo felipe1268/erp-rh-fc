@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1511,
+    titulo: "Programação Semanal — Desvio invertido (Real − Previsto): adiantada = +verde, atrasada = −vermelho",
+    descricao: "CORREÇÃO conceitual pedida pelo usuário: a coluna 'Desvio' da tabela 'Atividades da Semana' (em Programação Semanal e Portal do Cliente) estava calculando como Previsto − Real (positivo = atrasada). Estava antiintuitivo: uma atividade que executou 100% quando o previsto era 0% aparecia como −100pp em vermelho, dando a falsa sensação de problema. Agora segue a leitura natural do executivo: Desvio = Real − Previsto. Quando a equipe adianta a obra (Real > Previsto) o desvio aparece com sinal POSITIVO e cor VERDE (executou mais do que tinha sido planejado para a semana). Quando a equipe atrasa (Real < Previsto) o desvio aparece com sinal NEGATIVO e cor VERMELHA. Cores: verde quando desvio ≥ −2pp (dentro da tolerância ou adiantada), amarelo entre −2pp e −10pp (pequeno atraso), vermelho < −10pp (atraso relevante). Tooltip do cabeçalho atualizado.",
+    tipo: 'bugfix',
+    modulos: 'Planejamento, Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-09 18:00:00',
+  },
+  {
     version: 1510,
     titulo: "Grupos de Acesso — flag 'Acesso a todas as obras' (Escritório Central)",
     descricao: "NOVA REGRA pedida pelo usuário: usuários do Escritório Central (Compras, Adm, Planejamento, Projetos, RH, Orçamento, etc.) precisam enxergar TODAS as obras em andamento automaticamente, sem o admin ter que liberar obra por obra na tela de cada usuário toda vez que uma nova obra é criada. Implementação por flag no grupo (mais flexível do que hardcode por nome): nova coluna 'acesso_todas_obras' em user_groups + checkbox '🏗️ Acesso a todas as obras em andamento' no formulário do grupo (criação e edição). Quando ligada, qualquer membro daquele grupo recebe automaticamente, dentro do helper canônico getEffectiveAllowedObraIds, todos os IDs de obras ATIVAS (deletedAt IS NULL e isActive=1) das EMPRESAS às quais o usuário tem vínculo em user_companies. Mantém-se o isolamento por empresa (não vaza obras de companies não autorizadas) e a regra é universal: TODOS os módulos que respeitam o filtro de obra (Compras, Planejamento, Operacional, Medição, Financeiro, etc.) já enxergam a regra automaticamente, sem tocar em cada router. Para ativar: acessar Configurações → Grupos de Usuários → editar o grupo do Escritório Central → marcar a nova opção → Salvar.",
