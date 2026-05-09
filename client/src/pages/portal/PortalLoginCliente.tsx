@@ -135,15 +135,19 @@ export default function PortalLoginCliente() {
                     value={senha}
                     onChange={(e) => setSenha(e.target.value)}
                     placeholder="Digite sua senha"
-                    className="pl-10 pr-10 h-11"
+                    className="pl-10 pr-12 h-11"
+                    autoComplete="current-password"
                   />
+                  {/* Rev. 1567 — vide PortalLogin: tap area + z-20 +
+                      onPointerDown garantem o toggle no iPad. */}
                   <button
                     type="button"
-                    onClick={() => setShowSenha(!showSenha)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    onPointerDown={(e) => { e.preventDefault(); setShowSenha((v) => !v); }}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 z-20 p-2 text-slate-500 hover:text-slate-700 rounded-md hover:bg-slate-100"
                     aria-label={showSenha ? "Ocultar senha" : "Mostrar senha"}
+                    tabIndex={-1}
                   >
-                    {showSenha ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showSenha ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
               </div>

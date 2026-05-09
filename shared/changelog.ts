@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1567,
+    titulo: "Portal Externo / Cliente — Olho da senha funciona no iPad/iOS",
+    descricao: "O ícone de olho ao lado do campo de Senha não revelava a senha quando clicado pelo iPad/iPhone (Safari). Agora o botão tem área de toque maior, ficou em uma camada acima do input e responde no toque (onPointerDown), evitando que o gesto fosse 'engolido' pelo campo de senha ou pelo AutoFill do iOS. Vale para os logins do Portal Externo (terceiros/parceiros) e do Portal do Cliente.",
+    tipo: 'correcao',
+    modulos: 'Portal Externo, Portal do Cliente',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 04:50:00',
+  },
+  {
     version: 1566,
     titulo: "Portal do Cliente — Projetos/Documentos: ações compactas (olho + seta)",
     descricao: "Na tela de Projetos/Documentos Técnicos do Portal do Cliente os botões 'Abrir' e 'Baixar EXT' estavam se sobrepondo em algumas linhas (especialmente no iPad e em larguras menores). Agora a coluna 'Ações' usa uma pílula única e elegante com: chip da extensão do arquivo (PDF/DWG/...) + ícone de olho (visualizar) + ícone de seta (baixar), separados por divisórias finas. Vale tanto na visão por Pastas quanto na visão Lista. Tooltip em cada ícone mantém clareza para o usuário.",

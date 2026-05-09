@@ -75,9 +75,18 @@ export default function PortalLogin() {
               <Label className="text-gray-700 font-medium">Senha</Label>
               <div className="relative mt-1">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input type={showSenha ? "text" : "password"} value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Digite sua senha" className="pl-10 pr-10 h-12" />
-                <button type="button" onClick={() => setShowSenha(!showSenha)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showSenha ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                <Input type={showSenha ? "text" : "password"} value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Digite sua senha" className="pl-10 pr-12 h-12" autoComplete="current-password" />
+                {/* Rev. 1567 — botão olho com tap area maior (p-2), z-20
+                    e onPointerDown p/ funcionar bem no iPad/iOS Safari
+                    (clique antes era engolido pelo input/AutoFill). */}
+                <button
+                  type="button"
+                  onPointerDown={(e) => { e.preventDefault(); setShowSenha((v) => !v); }}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 z-20 p-2 text-gray-500 hover:text-gray-700 rounded-md hover:bg-gray-100"
+                  aria-label={showSenha ? "Ocultar senha" : "Mostrar senha"}
+                  tabIndex={-1}
+                >
+                  {showSenha ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
             </div>
