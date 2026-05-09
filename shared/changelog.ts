@@ -26,8 +26,8 @@ export type RevisionEntry = {
 export const CHANGELOG: RevisionEntry[] = [
   {
     version: 1552,
-    titulo: "Portal do Cliente — Switcher de obra e módulo com o mesmo desenho do ModuleHub do ERP",
-    descricao: "Antes o painel 'Outras obras' e 'Outros módulos' eram listas simples (linha de texto + ícone pequeno cinza), iguais entre si. Agora cada item virou um card colorido idêntico ao tile do ModuleHub interno do ERP: ícone branco em quadrado com gradiente accent, borda da cor do módulo, glow no hover e selo de check no item atual. Diferenciação visual: obras usam gradiente âmbar→laranja (combina com a logo FC); módulos usam suas cores próprias (Planejamento verde, RH & Docs esmeralda, Proj./Doc. índigo, Mensagens âmbar). Layout em grade 2-colunas, com hover scale + glow igual ao ERP. Mantidos: comportamento de troca, marcação do item ativo, fechamento do painel ao escolher.",
+    titulo: "Portal do Cliente — Switcher de obra e módulo: lista com ícone colorido ao lado",
+    descricao: "Refinamento visual: o painel 'Outras obras' e 'Outros módulos' voltou para o formato de lista (mais sutil que a grade de cards anterior, considerada agressiva), porém mantendo o ícone branco em pequeno quadrado com gradiente accent ao lado do nome. Cada item: linha clicável com ícone 28×28 px em gradiente colorido + título e subtítulo (módulos) ao lado. Item atual fica destacado com fundo cinza-escuro e check da cor do accent à direita. Diferenciação: obras usam gradiente âmbar→laranja (combina com a logo FC); módulos usam suas cores próprias (Planejamento verde, RH & Docs esmeralda, Proj./Doc. índigo, Mensagens âmbar).",
     tipo: 'melhoria',
     modulos: 'Portal do Cliente, Navegação, UI',
     criadoPor: 'Sistema',

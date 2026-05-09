@@ -311,121 +311,88 @@ export default function PortalPlanejamentoCliente() {
                 )}
               </p>
             </div>
-            <div className="max-h-72 overflow-y-auto px-2.5 pb-3">
+            <div className="max-h-56 overflow-y-auto px-2 pb-2 space-y-1">
               {minhasObras.length === 0 ? (
                 <p className="text-[11px] text-slate-500 italic px-2 py-3 text-center">Nenhuma outra obra disponível</p>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {minhasObras.map((o: any) => {
-                    const isAtual = o.id === obraId;
-                    return (
-                      <button
-                        key={o.id}
-                        onClick={() => {
-                          if (isAtual) { setObraSwitcherOpen(false); return; }
-                          setObraSwitcherOpen(false);
-                          setMobileSidebarOpen(false);
-                          navigate(`/portal/cliente/obra/${o.id}`);
-                        }}
-                        className="group relative flex flex-col items-center justify-center text-center rounded-2xl p-2.5 cursor-pointer transition-all duration-200 hover:scale-[1.04] select-none min-h-[92px]"
-                        style={{
-                          background: `linear-gradient(145deg, ${OBRA_ACCENT_FROM}26, ${OBRA_ACCENT_TO}10)`,
-                          border: isAtual ? `1.5px solid ${OBRA_ACCENT_FROM}` : `1.5px solid ${OBRA_ACCENT_FROM}40`,
-                          boxShadow: isAtual
-                            ? `0 6px 22px -6px ${OBRA_ACCENT_FROM}66`
-                            : `0 4px 16px -8px ${OBRA_ACCENT_FROM}40`,
-                        }}
-                        title={o.nome}
-                      >
-                        {/* Hover glow */}
-                        <div
-                          className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                          style={{ background: `radial-gradient(ellipse at 50% 60%, ${OBRA_ACCENT_FROM}33 0%, transparent 70%)` }}
-                        />
-                        {/* Ícone */}
-                        <div
-                          className="h-10 w-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5 shrink-0"
-                          style={{
-                            background: `linear-gradient(135deg, ${OBRA_ACCENT_FROM}, ${OBRA_ACCENT_TO})`,
-                            boxShadow: `0 4px 12px -3px ${OBRA_ACCENT_FROM}80`,
-                          }}
-                        >
-                          <Building2 className="h-5 w-5 text-white" />
-                        </div>
-                        {/* Nome obra */}
-                        <p className="text-[11px] font-bold leading-tight text-white tracking-tight w-full line-clamp-2">{o.nome}</p>
-                        {isAtual && (
-                          <span className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full bg-amber-400 flex items-center justify-center shadow">
-                            <Check className="h-2.5 w-2.5 text-slate-900" strokeWidth={3} />
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* ═══ MÓDULOS ═══ */}
-            <div className="border-t border-slate-700/60 px-3 pt-3 pb-1.5">
-              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1.5">
-                <Layers className="h-3 w-3" /> Outros módulos
-              </p>
-            </div>
-            <div className="px-2.5 pb-3">
-              <div className="grid grid-cols-2 gap-2">
-                {MODULOS_CLIENTE_NAV.map((m) => {
-                  const isAtual = m.id === moduloAtualId;
-                  const Icon = m.icon;
+                minhasObras.map((o: any) => {
+                  const isAtual = o.id === obraId;
                   return (
                     <button
-                      key={m.id}
+                      key={o.id}
                       onClick={() => {
                         if (isAtual) { setObraSwitcherOpen(false); return; }
                         setObraSwitcherOpen(false);
                         setMobileSidebarOpen(false);
-                        navigate(m.route(obraId));
+                        navigate(`/portal/cliente/obra/${o.id}`);
                       }}
-                      className="group relative flex flex-col items-center justify-center text-center rounded-2xl p-2.5 cursor-pointer transition-all duration-200 hover:scale-[1.04] select-none min-h-[96px]"
-                      style={{
-                        background: `linear-gradient(145deg, ${m.accentFrom}26, ${m.accentTo}10)`,
-                        border: isAtual ? `1.5px solid ${m.accentFrom}` : `1.5px solid ${m.accentFrom}40`,
-                        boxShadow: isAtual
-                          ? `0 6px 22px -6px ${m.accentFrom}66`
-                          : `0 4px 16px -8px ${m.accentFrom}40`,
-                      }}
-                      title={`${m.title} — ${m.subtitle}`}
+                      className={`group w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left transition-colors ${
+                        isAtual
+                          ? "bg-slate-700/60"
+                          : "hover:bg-slate-700/40"
+                      }`}
+                      title={o.nome}
                     >
-                      {/* Hover glow */}
-                      <div
-                        className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                        style={{ background: `radial-gradient(ellipse at 50% 60%, ${m.accentFrom}33 0%, transparent 70%)` }}
-                      />
-                      {/* Ícone */}
-                      <div
-                        className="h-10 w-10 rounded-xl flex items-center justify-center mb-1.5 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5 shrink-0"
+                      <span
+                        className="h-7 w-7 rounded-md flex items-center justify-center shrink-0"
                         style={{
-                          background: `linear-gradient(135deg, ${m.accentFrom}, ${m.accentTo})`,
-                          boxShadow: `0 4px 12px -3px ${m.accentFrom}80`,
+                          background: `linear-gradient(135deg, ${OBRA_ACCENT_FROM}, ${OBRA_ACCENT_TO})`,
                         }}
                       >
-                        <Icon className="h-5 w-5 text-white" />
-                      </div>
-                      {/* Título + subtítulo */}
-                      <p className="text-[11px] font-extrabold leading-tight text-white tracking-tight w-full truncate">{m.title}</p>
-                      <p className="text-[9.5px] text-slate-400 leading-tight mt-0.5 w-full truncate">{m.subtitle}</p>
-                      {isAtual && (
-                        <span
-                          className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full flex items-center justify-center shadow"
-                          style={{ background: m.accentFrom }}
-                        >
-                          <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
-                        </span>
-                      )}
+                        <Building2 className="h-3.5 w-3.5 text-white" />
+                      </span>
+                      <span className={`flex-1 truncate text-[12px] ${isAtual ? "text-white font-semibold" : "text-slate-200"}`}>{o.nome}</span>
+                      {isAtual && <Check className="h-3.5 w-3.5 text-amber-400 shrink-0" strokeWidth={3} />}
                     </button>
                   );
-                })}
-              </div>
+                })
+              )}
+            </div>
+
+            {/* ═══ MÓDULOS ═══ */}
+            <div className="border-t border-slate-700/60 px-3 pt-2.5 pb-1">
+              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1.5">
+                <Layers className="h-3 w-3" /> Outros módulos
+              </p>
+            </div>
+            <div className="px-2 pb-2 space-y-1">
+              {MODULOS_CLIENTE_NAV.map((m) => {
+                const isAtual = m.id === moduloAtualId;
+                const Icon = m.icon;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => {
+                      if (isAtual) { setObraSwitcherOpen(false); return; }
+                      setObraSwitcherOpen(false);
+                      setMobileSidebarOpen(false);
+                      navigate(m.route(obraId));
+                    }}
+                    className={`group w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left transition-colors ${
+                      isAtual
+                        ? "bg-slate-700/60"
+                        : "hover:bg-slate-700/40"
+                    }`}
+                    title={`${m.title} — ${m.subtitle}`}
+                  >
+                    <span
+                      className="h-7 w-7 rounded-md flex items-center justify-center shrink-0"
+                      style={{
+                        background: `linear-gradient(135deg, ${m.accentFrom}, ${m.accentTo})`,
+                      }}
+                    >
+                      <Icon className="h-3.5 w-3.5 text-white" />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className={`block truncate text-[12px] leading-tight ${isAtual ? "text-white font-semibold" : "text-slate-200"}`}>{m.title}</span>
+                      <span className="block truncate text-[10px] text-slate-500 leading-tight">{m.subtitle}</span>
+                    </span>
+                    {isAtual && (
+                      <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={3} style={{ color: m.accentFrom }} />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
