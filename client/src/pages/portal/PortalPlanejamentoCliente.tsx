@@ -232,18 +232,45 @@ export default function PortalPlanejamentoCliente() {
   const OBRA_ACCENT_FROM = "#F59E0B";
   const OBRA_ACCENT_TO = "#EA580C";
 
-  // Ordem customizada das abas (persistida no localStorage por obra)
+  // Ordem customizada das abas (persistida no localStorage por obra).
+  // Rev. 1606 — A ordem definida pelo Admin (em "Liberações do Portal —
+  // Módulos e Abas") é a FONTE DA VERDADE. Guardamos junto com a ordem
+  // local um snapshot da ordem do servidor que valia quando o cliente
+  // arrastou. Se o servidor mudou (qualquer aba adicionada/removida ou
+  // ordem alterada pelo admin), a ordem local fica obsoleta e é
+  // descartada automaticamente — assim o portal sempre reflete o que
+  // foi configurado no admin.
   const ordemKey = `portalCliente_ordemAbas_${obraId}`;
   const [ordemAbas, setOrdemAbas] = useState<string[]>([]);
+  const baseServerOrder = useMemo(() => abasVisiveisBase.map((a) => a.key).join("|"), [abasVisiveisBase]);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(ordemKey);
-      if (raw) setOrdemAbas(JSON.parse(raw));
-    } catch {/* ignora */}
-  }, [ordemKey]);
+      if (!raw) { setOrdemAbas([]); return; }
+      const parsed = JSON.parse(raw);
+      // Formato novo: { baseline, ordem }
+      if (parsed && typeof parsed === "object" && Array.isArray(parsed.ordem) && typeof parsed.baseline === "string") {
+        if (parsed.baseline === baseServerOrder) {
+          setOrdemAbas(parsed.ordem);
+        } else {
+          // Admin mudou a configuração → descarta a ordem local antiga.
+          localStorage.removeItem(ordemKey);
+          setOrdemAbas([]);
+        }
+        return;
+      }
+      // Formato legado (array puro) — descarta para forçar adoção da nova ordem do admin.
+      localStorage.removeItem(ordemKey);
+      setOrdemAbas([]);
+    } catch { setOrdemAbas([]); }
+  }, [ordemKey, baseServerOrder]);
+
   const persistOrdem = (nova: string[]) => {
     setOrdemAbas(nova);
-    try { localStorage.setItem(ordemKey, JSON.stringify(nova)); } catch {/* ignora */}
+    try {
+      localStorage.setItem(ordemKey, JSON.stringify({ baseline: baseServerOrder, ordem: nova }));
+    } catch {/* ignora */}
   };
 
   const abasVisiveis = useMemo(() => {
