@@ -662,35 +662,43 @@ export default function PortalPlanejamentoCliente() {
               Ocultada quando NENHUM logo está disponível. ─────────────── */}
         {(((obra as any)?.empresaLogoUrl) || ((obra as any)?.clienteLogoUrl) || ((obra as any)?.gerenciadoraLogoUrl)) && (
           <div className="mb-4 bg-white rounded-2xl border border-slate-200/70 shadow-sm px-4 py-3 print:hidden">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
+            {/* Rev. 1602 — 3 logos com tamanho idêntico (mesma caixa) e
+                object-contain para preservar a forma original de cada um. */}
+            <div className="grid grid-cols-3 gap-4 items-center">
               {/* Executora (FC) */}
-              <div className="flex flex-col items-start gap-1 min-w-0">
+              <div className="flex flex-col items-center gap-1.5 min-w-0">
                 <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Executora</span>
-                {(obra as any)?.empresaLogoUrl ? (
-                  <img src={(obra as any).empresaLogoUrl} alt={(obra as any)?.empresaNome || "Executora"} className="h-9 max-w-[160px] object-contain" />
-                ) : (
-                  <span className="text-xs font-semibold text-slate-700 truncate max-w-[160px]">{(obra as any)?.empresaNome || "FC Engenharia"}</span>
-                )}
+                <div className="h-20 w-full max-w-[200px] flex items-center justify-center">
+                  {(obra as any)?.empresaLogoUrl ? (
+                    <img src={(obra as any).empresaLogoUrl} alt={(obra as any)?.empresaNome || "Executora"} className="max-h-full max-w-full object-contain" />
+                  ) : (
+                    <span className="text-xs font-semibold text-slate-700 truncate text-center">{(obra as any)?.empresaNome || "FC Engenharia"}</span>
+                  )}
+                </div>
               </div>
               {/* Cliente */}
-              <div className="flex flex-col items-center gap-1 min-w-0 flex-1">
+              <div className="flex flex-col items-center gap-1.5 min-w-0">
                 <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Cliente</span>
-                {(obra as any)?.clienteLogoUrl ? (
-                  <img src={(obra as any).clienteLogoUrl} alt={obra?.cliente || "Cliente"} className="h-9 max-w-[180px] object-contain" />
-                ) : (
-                  <span className="text-xs font-semibold text-slate-700 truncate max-w-[200px] text-center">{obra?.cliente || "—"}</span>
-                )}
+                <div className="h-20 w-full max-w-[200px] flex items-center justify-center">
+                  {(obra as any)?.clienteLogoUrl ? (
+                    <img src={(obra as any).clienteLogoUrl} alt={obra?.cliente || "Cliente"} className="max-h-full max-w-full object-contain" />
+                  ) : (
+                    <span className="text-xs font-semibold text-slate-700 truncate text-center">{obra?.cliente || "—"}</span>
+                  )}
+                </div>
               </div>
               {/* Gerenciadora */}
-              <div className="flex flex-col items-end gap-1 min-w-0">
+              <div className="flex flex-col items-center gap-1.5 min-w-0">
                 <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Gerenciadora</span>
-                {(obra as any)?.gerenciadoraLogoUrl ? (
-                  <img src={(obra as any).gerenciadoraLogoUrl} alt={(obra as any)?.gerenciadoraNome || "Gerenciadora"} className="h-9 max-w-[160px] object-contain" />
-                ) : (obra as any)?.gerenciadoraNome ? (
-                  <span className="text-xs font-semibold text-slate-700 truncate max-w-[160px] text-right">{(obra as any).gerenciadoraNome}</span>
-                ) : (
-                  <span className="text-[10px] italic text-slate-300">—</span>
-                )}
+                <div className="h-20 w-full max-w-[200px] flex items-center justify-center">
+                  {(obra as any)?.gerenciadoraLogoUrl ? (
+                    <img src={(obra as any).gerenciadoraLogoUrl} alt={(obra as any)?.gerenciadoraNome || "Gerenciadora"} className="max-h-full max-w-full object-contain" />
+                  ) : (obra as any)?.gerenciadoraNome ? (
+                    <span className="text-xs font-semibold text-slate-700 truncate text-center">{(obra as any).gerenciadoraNome}</span>
+                  ) : (
+                    <span className="text-[10px] italic text-slate-300">—</span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
