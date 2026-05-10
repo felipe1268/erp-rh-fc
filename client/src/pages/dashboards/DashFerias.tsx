@@ -144,6 +144,68 @@ export default function DashFerias() {
     if (items.length > 0) setDrillDialog({ title, items });
   }
 
+  // Rev. 1611 — Drill-down dos donuts (Períodos / Fracionamento) e linhas
+  // de "Indicadores Adicionais". Filtra `data.feriasLista` por critério.
+  function drillByPeriodo(tipo: "primeiro" | "segundo") {
+    if (!data?.feriasLista) return;
+    const items = data.feriasLista.filter((f: any) =>
+      tipo === "primeiro" ? (f.numeroPeriodo || 1) === 1 : (f.numeroPeriodo || 1) >= 2
+    );
+    setDrillDialog({
+      title: tipo === "primeiro" ? "1º Período Aquisitivo" : "2º+ Período (Acumulado)",
+      items,
+    });
+  }
+  function drillByFracionamento(qtde: 1 | 2 | 3) {
+    if (!data?.feriasLista) return;
+    const items = data.feriasLista.filter((f: any) => (f.fracionamento || 1) === qtde);
+    const titles: Record<number, string> = {
+      1: "Férias Integrais (30 dias)",
+      2: "Férias em 2 Períodos",
+      3: "Férias em 3 Períodos",
+    };
+    setDrillDialog({ title: titles[qtde], items });
+  }
+  function drillByIndicador(
+    tipo: "abono" | "dobro" | "sugerido" | "alteradoRh" | "vence30" | "vence60"
+  ) {
+    if (!data?.feriasLista) return;
+    // Mesma fórmula do backend (server/routers/dashboards.ts ~2395-2408):
+    // `new Date()` sem zerar horas, comparação direta com `periodoConcessivoFim`.
+    const hoje = new Date();
+    const em30 = new Date(hoje); em30.setDate(em30.getDate() + 30);
+    const em60 = new Date(hoje); em60.setDate(em60.getDate() + 60);
+    let items: any[] = [];
+    let title = "";
+    switch (tipo) {
+      case "abono":
+        items = data.feriasLista.filter((f: any) => f.abonoPecuniario === 1);
+        title = "Abono Pecuniário (1/3 Convertido)"; break;
+      case "dobro":
+        items = data.feriasLista.filter((f: any) => f.pagamentoEmDobro === 1);
+        title = "Pagamento em Dobro (CLT Art. 137)"; break;
+      case "sugerido":
+        items = data.feriasLista.filter((f: any) => !!f.dataSugeridaInicio);
+        title = "Datas Sugeridas pelo Sistema"; break;
+      case "alteradoRh":
+        items = data.feriasLista.filter((f: any) => f.dataAlteradaPeloRh === 1);
+        title = "Datas Alteradas pelo RH"; break;
+      case "vence30":
+      case "vence60": {
+        const limite = tipo === "vence30" ? em30 : em60;
+        items = data.feriasLista.filter((f: any) => {
+          if (f.status !== "pendente" && f.status !== "agendada") return false;
+          if (!f.periodoConcessivoFim) return false;
+          const fim = new Date(f.periodoConcessivoFim);
+          return fim >= hoje && fim <= limite;
+        });
+        title = tipo === "vence30" ? "Vencem em 30 dias" : "Vencem em 60 dias";
+        break;
+      }
+    }
+    setDrillDialog({ title, items });
+  }
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -429,6 +491,7 @@ export default function DashFerias() {
             backgroundColor: [CHART_PALETTE[0], CHART_PALETTE[2]],
           }]}
           height={250}
+          onChartClick={(info) => drillByPeriodo(info.dataIndex === 0 ? "primeiro" : "segundo")}
         />
         <DashChart
           title="Fracionamento de Férias"
@@ -439,36 +502,41 @@ export default function DashFerias() {
             backgroundColor: [CHART_PALETTE[1], CHART_PALETTE[3], CHART_PALETTE[4]],
           }]}
           height={250}
+          onChartClick={(info) => drillByFracionamento((info.dataIndex + 1) as 1 | 2 | 3)}
         />
         <Card className="bg-white">
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle className="text-sm font-semibold text-[#0F172A]">Indicadores Adicionais</CardTitle>
           </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-3">
-            <div className="flex items-center justify-between p-2 rounded-lg bg-[#F8FAFC]">
-              <span className="text-xs text-[#64748B]">Abono Pecuniário</span>
-              <Badge variant="secondary" className="bg-blue-100 text-blue-700">{financeiro.totalAbonoPecuniario}</Badge>
-            </div>
-            <div className="flex items-center justify-between p-2 rounded-lg bg-[#F8FAFC]">
-              <span className="text-xs text-[#64748B]">Pagamento em Dobro</span>
-              <Badge variant={financeiro.pagamentosEmDobro > 0 ? "destructive" : "secondary"} className={financeiro.pagamentosEmDobro === 0 ? "bg-gray-100 text-gray-500" : ""}>{financeiro.pagamentosEmDobro}</Badge>
-            </div>
-            <div className="flex items-center justify-between p-2 rounded-lg bg-[#F8FAFC]">
-              <span className="text-xs text-[#64748B]">Datas Sugeridas pelo Sistema</span>
-              <Badge variant="secondary" className="bg-green-100 text-green-700">{rhOverride.totalSugerido}</Badge>
-            </div>
-            <div className="flex items-center justify-between p-2 rounded-lg bg-[#F8FAFC]">
-              <span className="text-xs text-[#64748B]">Alteradas pelo RH</span>
-              <Badge variant="secondary" className="bg-purple-100 text-purple-700">{rhOverride.totalAlteradoRH}</Badge>
-            </div>
-            <div className="flex items-center justify-between p-2 rounded-lg bg-[#F8FAFC]">
-              <span className="text-xs text-[#64748B]">Vencem em 30 dias</span>
-              <Badge variant="secondary" className="bg-amber-100 text-amber-700">{alertas.vencendo30dias}</Badge>
-            </div>
-            <div className="flex items-center justify-between p-2 rounded-lg bg-[#F8FAFC]">
-              <span className="text-xs text-[#64748B]">Vencem em 60 dias</span>
-              <Badge variant="secondary" className="bg-blue-100 text-blue-700">{alertas.vencendo60dias}</Badge>
-            </div>
+          <CardContent className="px-4 pb-4 space-y-2">
+            {/* Rev. 1611 — Cada linha agora é clicável e abre a tabela
+                com a lista de funcionários daquela métrica. */}
+            {([
+              { key: "abono", label: "Abono Pecuniário", value: financeiro.totalAbonoPecuniario, badge: "bg-blue-100 text-blue-700", hoverRing: "hover:ring-blue-300" },
+              { key: "dobro", label: "Pagamento em Dobro", value: financeiro.pagamentosEmDobro, badge: financeiro.pagamentosEmDobro > 0 ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500", hoverRing: "hover:ring-red-300" },
+              { key: "sugerido", label: "Datas Sugeridas pelo Sistema", value: rhOverride.totalSugerido, badge: "bg-green-100 text-green-700", hoverRing: "hover:ring-green-300" },
+              { key: "alteradoRh", label: "Alteradas pelo RH", value: rhOverride.totalAlteradoRH, badge: "bg-purple-100 text-purple-700", hoverRing: "hover:ring-purple-300" },
+              { key: "vence30", label: "Vencem em 30 dias", value: alertas.vencendo30dias, badge: "bg-amber-100 text-amber-700", hoverRing: "hover:ring-amber-300" },
+              { key: "vence60", label: "Vencem em 60 dias", value: alertas.vencendo60dias, badge: "bg-blue-100 text-blue-700", hoverRing: "hover:ring-blue-300" },
+            ] as const).map(row => {
+              const disabled = !row.value;
+              return (
+                <button
+                  key={row.key}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => drillByIndicador(row.key as any)}
+                  title={disabled ? "Sem registros nesta métrica" : "Clique para ver os funcionários"}
+                  className={`w-full flex items-center justify-between p-2 rounded-lg bg-[#F8FAFC] text-left transition-all ${disabled ? "opacity-60 cursor-not-allowed" : `cursor-pointer hover:bg-white hover:shadow-sm hover:ring-1 ${row.hoverRing}`}`}
+                >
+                  <span className="text-xs text-[#64748B] flex items-center gap-1.5">
+                    {row.label}
+                    {!disabled && <ArrowRight className="w-3 h-3 text-[#CBD5E1]" />}
+                  </span>
+                  <Badge variant="secondary" className={row.badge}>{row.value}</Badge>
+                </button>
+              );
+            })}
           </CardContent>
         </Card>
       </div>
@@ -605,7 +673,7 @@ export default function DashFerias() {
                         <Link href={`/colaboradores?id=${f.employeeId}`} className="text-[#1e3a5f] hover:underline font-medium text-xs">
                           {f.nomeCompleto}
                         </Link>
-                        {f.dataAlteradaPeloRH === 1 && (
+                        {f.dataAlteradaPeloRh === 1 && (
                           <Badge variant="secondary" className="ml-1 bg-purple-100 text-purple-700 text-[9px] px-1">RH</Badge>
                         )}
                       </td>

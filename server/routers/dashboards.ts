@@ -2433,6 +2433,9 @@ async function getDashFerias(companyId: number, ano?: number, companyIds?: numbe
     valorTotal: p.valorTotal, status: p.status, vencida: p.vencida,
     pagamentoEmDobro: p.pagamentoEmDobro, numeroPeriodo: p.numeroPeriodo,
     dataAlteradaPeloRh: p.dataAlteradaPeloRh,
+    abonoPecuniario: p.abonoPecuniario,
+    dataSugeridaInicio: p.dataSugeridaInicio,
+    fracionamento: p.fracionamento,
   }));
 
   return {
