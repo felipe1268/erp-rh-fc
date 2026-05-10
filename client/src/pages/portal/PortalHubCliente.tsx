@@ -120,6 +120,7 @@ export default function PortalHubCliente() {
   const nomeEmpresa = localStorage.getItem("portal_nome") || "Cliente";
   const nomeResponsavelLS = localStorage.getItem("portal_responsavel") || "";
   const [mounted, setMounted] = useState(false);
+  const [tourOpen, setTourOpen] = useState<boolean | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
@@ -194,7 +195,7 @@ export default function PortalHubCliente() {
   return (
     <>
       <style>{hubStyles}</style>
-      <PortalTour userName={nomeResponsavel} />
+      <PortalTour userName={nomeResponsavel} open={tourOpen ?? undefined} onClose={() => setTourOpen(false)} />
       <div className="min-h-screen hub-mesh-bg relative overflow-hidden">
         {/* Wave decorations */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -232,11 +233,17 @@ export default function PortalHubCliente() {
               </div>
               <PortalHelpButton />
               <button
-                onClick={() => { resetPortalTour(); window.location.reload(); }}
-                title="Refazer o tour de boas-vindas"
-                className="hidden md:inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 hover:text-blue-600 px-2.5 py-1.5 rounded-xl bg-white/50 hover:bg-blue-50 border border-white/60 transition"
+                onClick={() => {
+                  setTourOpen(prev => {
+                    const next = !prev;
+                    if (next) resetPortalTour();
+                    return next;
+                  });
+                }}
+                title={tourOpen ? "Fechar tour" : "Iniciar tour de boas-vindas"}
+                className={`hidden md:inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1.5 rounded-xl border border-white/60 transition ${tourOpen ? "bg-blue-600 text-white hover:bg-blue-700" : "text-slate-500 hover:text-blue-600 bg-white/50 hover:bg-blue-50"}`}
               >
-                <HelpCircle className="h-3.5 w-3.5" /> Tour
+                <HelpCircle className="h-3.5 w-3.5" /> {tourOpen ? "Fechar Tour" : "Tour"}
               </button>
               <button
                 onClick={logout}

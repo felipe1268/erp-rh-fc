@@ -30,7 +30,7 @@ function buildSteps(nomeArg?: string | null): Step[] {
   });
 }
 
-export function PortalTour({ forceStart = false, onClose, userName }: { forceStart?: boolean; onClose?: () => void; userName?: string | null }) {
+export function PortalTour({ forceStart = false, open, onClose, userName }: { forceStart?: boolean; open?: boolean; onClose?: () => void; userName?: string | null }) {
   const [run, setRun] = useState(false);
   const [steps, setSteps] = useState<Step[]>(() => buildSteps(userName));
 
@@ -40,7 +40,13 @@ export function PortalTour({ forceStart = false, onClose, userName }: { forceSta
     setSteps(buildSteps(userName));
   }, [userName]);
 
+  // Rev. 1586 — modo controlado: pai dita abrir/fechar via prop `open`.
   useEffect(() => {
+    if (typeof open === "boolean") setRun(open);
+  }, [open]);
+
+  useEffect(() => {
+    if (typeof open === "boolean") return; // controlado pelo pai
     if (forceStart) {
       setRun(true);
       return;
@@ -56,11 +62,11 @@ export function PortalTour({ forceStart = false, onClose, userName }: { forceSta
       const t = setTimeout(() => setRun(true), 1200);
       return () => clearTimeout(t);
     }
-  }, [forceStart]);
+  }, [forceStart, open]);
 
   const handleCallback = (data: CallBackProps) => {
     const { status } = data;
-    const finished: string[] = [STATUS.FINISHED, STATUS.SKIPPED];
+    const finished: string[] = [STATUS.FINISHED, STATUS.SKIPPED, STATUS.PAUSED];
     if (finished.includes(status)) {
       try { localStorage.setItem(TOUR_STORAGE_KEY, "1"); } catch { /* ignore */ }
       setRun(false);

@@ -11272,4 +11272,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 23:30:00",
   },
+  {
+    version: 1586,
+    titulo: "Portal do Cliente — Botão 'Tour' agora funciona como toggle (abre/fecha sem reload)",
+    descricao: "Antes o botão 'Tour' no Hub apenas chamava resetPortalTour() e dava window.location.reload(), o que (a) recarregava a tela inteira sem feedback claro, (b) não permitia fechar o tour clicando de novo no mesmo botão. Agora o componente PortalTour aceita uma nova prop controlada `open` (modo controlado pelo pai). O Hub mantém um estado `tourOpen` e o botão alterna: clique abre o tour (resetando o flag de 'já visto'); clicar de novo fecha. Quando o tour termina/é pulado, o estado volta para fechado via `onClose`. Texto e estilo do botão mudam dinamicamente ('Tour' cinza ↔ 'Fechar Tour' azul) para deixar claro qual ação será executada. Sem mais reload de página.",
+    tipo: "melhoria",
+    modulos: "Portal Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 08:00:00",
+  },
 ];
