@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb, getEquipeObra } from "../db";
-import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalClienteConfig, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos } from "../../drizzle/schema";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalClienteConfig, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos, sstIntegracaoRegistros } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1966,6 +1966,8 @@ export const portalExternoRouter = router({
 
       let asoMap = new Map<number, any>();
       let trainMap = new Map<number, any[]>();
+      // Rev. 1590 — Integração de Segurança SST por funcionário (último aprovado).
+      let integMap = new Map<number, any>();
 
       if (empIds.length > 0) {
         // ASO mais recente (vigente) por funcionário
@@ -2000,11 +2002,30 @@ export const portalExternoRouter = router({
           const arr = trainMap.get(r.employeeId) || [];
           arr.push(r); trainMap.set(r.employeeId, arr);
         }
+
+        // Rev. 1590 — Integração SST: pega o último registro APROVADO por
+        // funcionário (mais recente). No portal do cliente só exibimos a
+        // data de validade — alerta de 30 dias é só pra engenheiro.
+        const integRows = await db.select({
+          id: sstIntegracaoRegistros.id,
+          employeeId: sstIntegracaoRegistros.employeeId,
+          dataRealizacao: sstIntegracaoRegistros.dataRealizacao,
+          dataValidade: sstIntegracaoRegistros.dataValidade,
+          status: sstIntegracaoRegistros.status,
+          certificadoUrl: sstIntegracaoRegistros.certificadoUrl,
+        }).from(sstIntegracaoRegistros).where(and(
+          eq(sstIntegracaoRegistros.companyId, decoded.companyId),
+          inArray(sstIntegracaoRegistros.employeeId, empIds),
+          eq(sstIntegracaoRegistros.status, "aprovado"),
+          isNull(sstIntegracaoRegistros.deletedAt),
+        )).orderBy(desc(sstIntegracaoRegistros.dataRealizacao));
+        for (const r of integRows) if (!integMap.has(r.employeeId)) integMap.set(r.employeeId, r);
       }
 
       const funcionarios = equipe.map((e: any) => {
         const aso = asoMap.get(e.id);
         const trains = trainMap.get(e.id) || [];
+        const integ = integMap.get(e.id);
         const asoStatus = aso ? (aso.dataValidade && aso.dataValidade < today ? "vencido" : "vigente") : "sem_aso";
         const trainsVigentes = trains.filter((t: any) => !t.dataValidade || t.dataValidade >= today);
         const trainsVencidos = trains.filter((t: any) => t.dataValidade && t.dataValidade < today);
@@ -2044,6 +2065,15 @@ export const portalExternoRouter = router({
             status: (t.dataValidade && t.dataValidade < today) ? "vencido" : "vigente",
             temPdf: !!t.certificadoUrl,
           })),
+          // Rev. 1590 — Integração de Segurança SST. Portal só exibe data de
+          // validade (sem alerta). Status "vencido" calculado no servidor.
+          integracao: integ ? {
+            id: integ.id,
+            dataRealizacao: integ.dataRealizacao ? String(integ.dataRealizacao).slice(0, 10) : null,
+            dataValidade: integ.dataValidade ? String(integ.dataValidade).slice(0, 10) : null,
+            status: (integ.dataValidade && String(integ.dataValidade).slice(0, 10) < today) ? "vencido" : "vigente",
+            temPdf: !!integ.certificadoUrl,
+          } : null,
         };
       });
 

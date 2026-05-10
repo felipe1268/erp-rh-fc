@@ -44,7 +44,7 @@ import {
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb, encerrarContratosPjDoFuncionario } from "./db";
 import { normalizeCidadeInput } from "../shared/normalizeCidade";
-import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings } from "../drizzle/schema";
+import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros } from "../drizzle/schema";
 import { eq, and, sql, or, ilike, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
@@ -1520,15 +1520,24 @@ export const appRouter = router({
     // Rev. 1558 — Documentos SST (ASO + Treinamentos) por lote de funcionários,
     // usado na aba Efetivo do Planejamento. Devolve, por employeeId:
     // { aso: { id, tipo, dataExame, dataValidade, resultado, status, temPdf },
-    //   treinamentos: [{ id, nome, norma, dataValidade, statusTreinamento, temPdf }] }
+    //   treinamentos: [{ id, nome, norma, dataValidade, statusTreinamento, temPdf }],
+    //   integracao: { id, dataRealizacao, dataValidade, status, temPdf } | null }
+    // Rev. 1590 — Adicionado campo `integracao` (último registro aprovado da
+    // Integração de Segurança SST) com flag `vence_em_breve` quando faltam
+    // ≤30 dias para o vencimento — usado pelo módulo Planejamento (engenheiro)
+    // para alerta antecipado de reciclagem.
     docsSstFuncionarios: protectedProcedure.input(z.object({
       companyId: z.number(),
       employeeIds: z.array(z.number()),
     })).query(async ({ input }) => {
-      const result: Record<number, { aso: any | null; treinamentos: any[] }> = {};
+      const result: Record<number, { aso: any | null; treinamentos: any[]; integracao: any | null }> = {};
       if (input.employeeIds.length === 0) return result;
       const db = (await getDb())!;
       const today = new Date().toISOString().slice(0, 10);
+      // Rev. 1590 — limite p/ "vence_em_breve": 30 dias
+      const limite30 = new Date();
+      limite30.setDate(limite30.getDate() + 30);
+      const limite30Str = limite30.toISOString().slice(0, 10);
 
       const asoRows = await db.select({
         id: asos.id, employeeId: asos.employeeId, tipo: asos.tipo,
@@ -1553,7 +1562,24 @@ export const appRouter = router({
         isNull(trainings.deletedAt),
       )).orderBy(sql`${trainings.dataRealizacao} DESC`);
 
-      for (const eid of input.employeeIds) result[eid] = { aso: null, treinamentos: [] };
+      // Rev. 1590 — Integração de Segurança SST. Pega o último registro
+      // APROVADO por funcionário (ordenado por dataRealizacao DESC) e
+      // calcula status: vigente / vence_em_breve (≤30d) / vencido / sem.
+      const integRows = await db.select({
+        id: sstIntegracaoRegistros.id,
+        employeeId: sstIntegracaoRegistros.employeeId,
+        dataRealizacao: sstIntegracaoRegistros.dataRealizacao,
+        dataValidade: sstIntegracaoRegistros.dataValidade,
+        status: sstIntegracaoRegistros.status,
+        certificadoUrl: sstIntegracaoRegistros.certificadoUrl,
+      }).from(sstIntegracaoRegistros).where(and(
+        eq(sstIntegracaoRegistros.companyId, input.companyId),
+        inArray(sstIntegracaoRegistros.employeeId, input.employeeIds),
+        eq(sstIntegracaoRegistros.status, "aprovado"),
+        isNull(sstIntegracaoRegistros.deletedAt),
+      )).orderBy(sql`${sstIntegracaoRegistros.dataRealizacao} DESC`);
+
+      for (const eid of input.employeeIds) result[eid] = { aso: null, treinamentos: [], integracao: null };
       for (const a of asoRows) {
         const slot = result[a.employeeId]; if (!slot || slot.aso) continue;
         slot.aso = {
@@ -1569,6 +1595,21 @@ export const appRouter = router({
           dataRealizacao: t.dataRealizacao, dataValidade: t.dataValidade,
           statusTreinamento: t.statusTreinamento, temPdf: !!t.certificadoUrl,
         });
+      }
+      for (const i of integRows) {
+        const slot = result[i.employeeId]; if (!slot || slot.integracao) continue;
+        const dv = i.dataValidade ? String(i.dataValidade).slice(0, 10) : null;
+        const status = !dv ? "vigente"
+          : dv < today ? "vencido"
+          : dv <= limite30Str ? "vence_em_breve"
+          : "vigente";
+        slot.integracao = {
+          id: i.id,
+          dataRealizacao: i.dataRealizacao ? String(i.dataRealizacao).slice(0, 10) : null,
+          dataValidade: dv,
+          status,
+          temPdf: !!i.certificadoUrl,
+        };
       }
       return result;
     }),

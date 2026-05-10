@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1590,
+    titulo: "Aba Efetivo — Documento de Integração SST + alerta 30 dias (engenheiro) e visualização (cliente)",
+    descricao: "Adicionado o documento da Integração de Segurança SST no painel expandido (santuário) do funcionário, tanto no módulo Planejamento quanto no Portal do Cliente. (1) Backend: o endpoint obras.docsSstFuncionarios e portalExterno.documentosRhObra agora trazem o último registro APROVADO de integração (data de realização, validade, certificado) por funcionário. (2) Novo proxy /api/portal/cliente/documento/integracao/:id permite ao cliente visualizar o certificado em PDF inline (mesma segurança dos ASOs/treinamentos). (3) MÓDULO PLANEJAMENTO (engenheiro): no painel expandido aparece um alerta âmbar 'Vence em Xd. Programar reciclagem.' quando faltam ≤30 dias para o vencimento — e alerta vermelho 'VENCIDA há Xd' se já passou. (4) PORTAL DO CLIENTE: mostra apenas as datas de realização e validade da integração + botão 'Ver Certificado' (sem alerta de 30 dias, conforme regra do portal). Grid do painel passou de 2 para 3 colunas (Integração / ASO / Treinamentos).",
+    tipo: 'feature',
+    modulos: 'Planejamento, Portal do Cliente, Integração SST',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 09:30:00',
+  },
+  {
     version: 1589,
     titulo: "Portal do Cliente — Projetos/Documentos Técnicos: alertas de documentos sem arquivo + revisões pendentes",
     descricao: "Adicionada verificação de pendências na tela de Projetos/Documentos Técnicos do Portal do Cliente: (1) novo KPI clicável 'Sem arquivo' (cor âmbar/alerta) que conta documentos cadastrados mas sem o DWG/PDF anexado e atua como atalho de filtro. (2) Banner de alerta no topo da página quando há documentos sem arquivo OU documentos em revisão pendentes — com botões 'Ver sem arquivo' e 'Ver em revisão' que aplicam o filtro correspondente. (3) Linhas sem arquivo na tabela agora mostram um badge âmbar 'Sem arquivo' em vez do '—' silencioso, com tooltip explicando a pendência. (4) Todos os KPIs do topo viraram botões interativos (toggle: clicar de novo no card ativo limpa o filtro), com indicador visual '• filtrando' e ring colorido. (5) Adicionada opção 'Sem arquivo' na barra de filtros rápidos.",

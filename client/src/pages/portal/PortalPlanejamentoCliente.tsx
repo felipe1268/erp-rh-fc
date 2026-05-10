@@ -3958,7 +3958,7 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
   }, [rhData]);
   const [exp, setExp] = useState<Record<string, boolean>>({});
   const [pdfViewer, setPdfViewer] = useState<{ url: string; titulo: string; subtitulo: string } | null>(null);
-  const abrirPdf = (kind: "aso" | "treinamento", id: number, titulo: string, subtitulo: string) => {
+  const abrirPdf = (kind: "aso" | "treinamento" | "integracao", id: number, titulo: string, subtitulo: string) => {
     const url = `/api/portal/cliente/documento/${kind}/${id}?token=${encodeURIComponent(token)}#toolbar=0&navpanes=0&scrollbar=1`;
     setPdfViewer({ url, titulo, subtitulo });
   };
@@ -4271,7 +4271,31 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
                             {!docs ? (
                               <p className="text-xs text-slate-400">Sem dados de documentos para este funcionário.</p>
                             ) : (
-                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs">
+                              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 text-xs">
+                                {/* Rev. 1590 — Integração de Segurança SST.
+                                    Portal do Cliente: SÓ data de validade
+                                    (sem alerta de 30 dias). */}
+                                <div>
+                                  <p className="font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                                    <ShieldCheck className="h-3.5 w-3.5 text-blue-600" /> Integração SST
+                                  </p>
+                                  {docs.integracao ? (
+                                    <>
+                                      <ul className="space-y-1 text-slate-600">
+                                        <li><b>Realização:</b> {fmtBR(docs.integracao.dataRealizacao)}</li>
+                                        <li><b>Validade:</b> {fmtBR(docs.integracao.dataValidade)}</li>
+                                      </ul>
+                                      {docs.integracao.temPdf && (
+                                        <button
+                                          onClick={(ev) => { ev.stopPropagation(); abrirPdf("integracao", docs.integracao.id, `Integração — ${e.nomeCompleto}`, `Validade ${fmtBR(docs.integracao.dataValidade)}`); }}
+                                          className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 text-[11px] font-semibold border border-blue-200 transition"
+                                        >
+                                          <Eye className="h-3 w-3" /> Ver Certificado
+                                        </button>
+                                      )}
+                                    </>
+                                  ) : <p className="text-slate-400">Sem integração registrada.</p>}
+                                </div>
                                 <div>
                                   <p className="font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
                                     <FileCheck2 className="h-3.5 w-3.5 text-emerald-600" /> ASO

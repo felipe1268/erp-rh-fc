@@ -18,7 +18,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { getDb, getEquipeObra } from "../db";
 import { dbRetrieve } from "../storage";
-import { asos, trainings, clientes, obras, gdDocumentos } from "../../drizzle/schema";
+import { asos, trainings, clientes, obras, gdDocumentos, sstIntegracaoRegistros } from "../../drizzle/schema";
 import { and, eq, ilike, isNull, or, inArray } from "drizzle-orm";
 
 // Rev. 1565 — Resolve o conteúdo de um arquivoUrl. Para URLs locais
@@ -90,12 +90,12 @@ function getExtAndMime(url: string): { ext: string; mime: string } {
 export function registerPortalDocumentosRoute(app: Express) {
   app.get("/api/portal/cliente/documento/:tipo/:id", async (req: Request, res: Response) => {
     try {
-      const tipo = req.params.tipo as "aso" | "treinamento";
+      const tipo = req.params.tipo as "aso" | "treinamento" | "integracao";
       const recordId = parseInt(req.params.id);
       const token = String(req.query.token || "");
 
       if (!token) { res.status(401).send("Token ausente"); return; }
-      if (!["aso", "treinamento"].includes(tipo)) { res.status(400).send("Tipo inválido"); return; }
+      if (!["aso", "treinamento", "integracao"].includes(tipo)) { res.status(400).send("Tipo inválido"); return; }
       if (!recordId || isNaN(recordId)) { res.status(400).send("ID inválido"); return; }
 
       const secret = process.env.JWT_SECRET || "portal-secret";
@@ -147,7 +147,7 @@ export function registerPortalDocumentosRoute(app: Express) {
         if (!row) { res.status(404).send("ASO não encontrado"); return; }
         docUrl = row.documentoUrl || null;
         downloadName = `ASO_${row.tipo || ""}_${(row.dataExame || "").slice(0, 10)}`;
-      } else {
+      } else if (tipo === "treinamento") {
         const [row] = await db.select({
           certificadoUrl: trainings.certificadoUrl,
           employeeId: trainings.employeeId,
@@ -163,6 +163,26 @@ export function registerPortalDocumentosRoute(app: Express) {
         if (!row) { res.status(404).send("Treinamento não encontrado"); return; }
         docUrl = row.certificadoUrl || null;
         downloadName = `Treinamento_${row.norma || row.nome || ""}_${(row.dataRealizacao || "").slice(0, 10)}`;
+      } else {
+        // Rev. 1590 — Certificado da Integração de Segurança SST
+        // Rev. 1590 — `status = "aprovado"` espelha exatamente a regra de
+        // listagem do portal (último APROVADO por funcionário). Sem isso,
+        // um cliente poderia tentar abrir certificados de integrações
+        // pendentes/reprovadas de funcionários autorizados.
+        const [row] = await db.select({
+          certificadoUrl: sstIntegracaoRegistros.certificadoUrl,
+          employeeId: sstIntegracaoRegistros.employeeId,
+          dataRealizacao: sstIntegracaoRegistros.dataRealizacao,
+        }).from(sstIntegracaoRegistros).where(and(
+          eq(sstIntegracaoRegistros.id, recordId),
+          eq(sstIntegracaoRegistros.companyId, decoded.companyId),
+          inArray(sstIntegracaoRegistros.employeeId, empIds),
+          eq(sstIntegracaoRegistros.status, "aprovado"),
+          isNull(sstIntegracaoRegistros.deletedAt),
+        ));
+        if (!row) { res.status(404).send("Integração não encontrada"); return; }
+        docUrl = row.certificadoUrl || null;
+        downloadName = `Integracao_${(row.dataRealizacao || "").slice(0, 10)}`;
       }
 
       if (!docUrl) { res.status(404).send("Sem documento anexado"); return; }

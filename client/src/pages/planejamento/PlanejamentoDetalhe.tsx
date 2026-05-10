@@ -25,7 +25,7 @@ import {
 import {
   ArrowLeft, Loader2, CalendarRange, Building2, User, DollarSign,
   TrendingUp, Plus, Save, GitBranch, BarChart3, FileText, ClipboardList,
-  Activity, AlertTriangle, CheckCircle2, Clock, Edit3, ChevronRight,
+  Activity, AlertTriangle, CheckCircle2, Clock, Edit3, ChevronRight, ShieldCheck,
   ChevronDown, Minus, Upload, XCircle, GripVertical,
   ShoppingCart, AlertOctagon, Cloud, CloudRain, Wind, Sun, Droplets,
   MapPin, Package, Filter, Trash2, Pencil, X, RefreshCw, Search,
@@ -8221,7 +8221,7 @@ function EfetivoObraTab({ proj }: { proj: any }) {
   return <EfetivoObraView equipeRaw={equipeMerged as any[]} isLoading={isLoading || isLoadingTerc} docsMap={docsMap as any} />;
 }
 
-export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipeRaw: any[]; isLoading: boolean; docsMap?: Record<number, { aso: any | null; treinamentos: any[] }> }) {
+export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipeRaw: any[]; isLoading: boolean; docsMap?: Record<number, { aso: any | null; treinamentos: any[]; integracao?: any | null }> }) {
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
   // Rev. 1558 — linhas expandidas para mostrar ASO + Treinamentos (mesma UI
@@ -8414,7 +8414,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
                         : isTerc
                           ? "bg-orange-100 text-orange-700 border-orange-200"
                           : "bg-slate-100 text-slate-500 border-slate-200";
-                    const podeExpandir = !isTerceiro && (aso || (docs.treinamentos && docs.treinamentos.length > 0));
+                    const podeExpandir = !isTerceiro && (aso || (docs.treinamentos && docs.treinamentos.length > 0) || docs.integracao);
                     return (
                     <React.Fragment key={e.id || i}>
                     <tr className="hover:bg-blue-50/30 transition-colors">
@@ -8492,7 +8492,46 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
                     {expanded && podeExpandir && (
                       <tr className="bg-slate-50/60">
                         <td colSpan={9} className="px-6 py-4">
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 text-xs">
+                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 text-xs">
+                            {/* Rev. 1590 — Integração de Segurança SST.
+                                Módulo Planejamento (engenheiro): mostra
+                                ALERTA âmbar quando faltam ≤30 dias para
+                                vencer e vermelho se já venceu — para
+                                acionar reciclagem antes do prazo. */}
+                            <div>
+                              <p className="font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                                <ShieldCheck className="h-3.5 w-3.5 text-blue-600" /> Integração SST
+                              </p>
+                              {docs.integracao ? (() => {
+                                const integ = docs.integracao;
+                                const dv = integ.dataValidade;
+                                const diasRestantes = dv ? Math.ceil((new Date(dv).getTime() - new Date().getTime()) / 86400000) : null;
+                                const venceu = integ.status === "vencido";
+                                const venceEmBreve = integ.status === "vence_em_breve";
+                                return (
+                                  <>
+                                    <ul className="space-y-1 text-slate-600">
+                                      <li><b>Realização:</b> {fmtBR(integ.dataRealizacao)}</li>
+                                      <li><b>Validade:</b> {fmtBR(integ.dataValidade)}</li>
+                                    </ul>
+                                    {(venceu || venceEmBreve) && (
+                                      <div className={`mt-2 flex items-start gap-1.5 px-2 py-1.5 rounded border text-[11px] font-semibold ${
+                                        venceu
+                                          ? "bg-rose-50 text-rose-700 border-rose-200"
+                                          : "bg-amber-50 text-amber-800 border-amber-200"
+                                      }`}>
+                                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                        <span>
+                                          {venceu
+                                            ? `Integração VENCIDA ${diasRestantes != null ? `há ${Math.abs(diasRestantes)} dia(s)` : ""}. Programar reciclagem.`
+                                            : `Vence em ${diasRestantes} dia(s). Programar reciclagem.`}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })() : <p className="text-slate-400">Sem integração registrada.</p>}
+                            </div>
                             <div>
                               <p className="font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
                                 <FileCheck2 className="h-3.5 w-3.5 text-emerald-600" /> ASO
