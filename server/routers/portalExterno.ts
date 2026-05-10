@@ -105,6 +105,7 @@ export const portalExternoRouter = router({
         tipo: cred.tipo,
         nomeEmpresa: cred.nomeEmpresa,
         cnpj: cred.cnpj,
+        nomeResponsavel: (cred as any).nomeResponsavel ?? null,
       };
     }),
 
@@ -112,6 +113,7 @@ export const portalExternoRouter = router({
       cnpj: z.string(),
       senhaAtual: z.string(),
       novaSenha: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
+      nomeResponsavel: z.string().trim().min(2).max(120).optional(),
     })).mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       const cnpjClean = input.cnpj.replace(/\D/g, "");
@@ -125,11 +127,15 @@ export const portalExternoRouter = router({
       }
       if (!cred) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha atual incorreta" });
       const novaSenhaHash = await bcrypt.hash(input.novaSenha, 10);
-      await db.update(portalCredentials).set({
+      const updateSet: Record<string, unknown> = {
         senhaHash: novaSenhaHash,
         primeiroAcesso: 0,
-      }).where(eq(portalCredentials.id, cred.id));
-      return { success: true };
+      };
+      if (input.nomeResponsavel && input.nomeResponsavel.trim().length >= 2) {
+        updateSet.nomeResponsavel = input.nomeResponsavel.trim();
+      }
+      await db.update(portalCredentials).set(updateSet).where(eq(portalCredentials.id, cred.id));
+      return { success: true, nomeResponsavel: (updateSet as any).nomeResponsavel ?? (cred as any).nomeResponsavel ?? null };
     }),
 
     verificarToken: publicProcedure.input(z.object({ token: z.string() })).query(({ input }) => {

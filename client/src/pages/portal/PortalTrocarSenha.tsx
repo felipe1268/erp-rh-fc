@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
-import { Lock, ShieldCheck, Eye, EyeOff } from "lucide-react";
+import { Lock, ShieldCheck, Eye, EyeOff, User } from "lucide-react";
 
 export default function PortalTrocarSenha() {
   const [, navigate] = useLocation();
@@ -15,20 +15,27 @@ export default function PortalTrocarSenha() {
   const [showSenha, setShowSenha] = useState(false);
   const cnpj = localStorage.getItem("portal_cnpj") || "";
   const nome = localStorage.getItem("portal_nome") || "";
+  const responsavelAtual = localStorage.getItem("portal_responsavel") || "";
+  const tipoLogado = localStorage.getItem("portal_tipo") || "";
+  const [nomeResponsavel, setNomeResponsavel] = useState(responsavelAtual);
 
   const trocarMut = trpc.portalExterno.auth.trocarSenha.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
+      const finalNome = (data as any)?.nomeResponsavel || nomeResponsavel.trim();
+      if (finalNome) localStorage.setItem("portal_responsavel", finalNome);
       toast.success("Senha alterada com sucesso!");
-      navigate("/portal/dashboard");
+      if (tipoLogado === "cliente") navigate("/portal/cliente/hub");
+      else navigate("/portal/dashboard");
     },
     onError: (e) => toast.error(e.message),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (nomeResponsavel.trim().length < 2) { toast.error("Informe o seu nome completo"); return; }
     if (novaSenha.length < 6) { toast.error("Senha deve ter pelo menos 6 caracteres"); return; }
     if (novaSenha !== confirmar) { toast.error("As senhas não conferem"); return; }
-    trocarMut.mutate({ cnpj, senhaAtual, novaSenha });
+    trocarMut.mutate({ cnpj, senhaAtual, novaSenha, nomeResponsavel: nomeResponsavel.trim() });
   };
 
   return (
@@ -47,6 +54,22 @@ export default function PortalTrocarSenha() {
             <p className="text-xs text-amber-600">Por segurança, crie uma nova senha para continuar.</p>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label>Seu nome completo</Label>
+              <div className="relative mt-1">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  type="text"
+                  value={nomeResponsavel}
+                  onChange={(e) => setNomeResponsavel(e.target.value)}
+                  placeholder="Ex.: Maria Silva"
+                  autoComplete="name"
+                  maxLength={120}
+                  className="pl-10 h-11"
+                />
+              </div>
+              <p className="text-[11px] text-gray-500 mt-1">Esse nome aparecerá na saudação do portal e nas mensagens enviadas.</p>
+            </div>
             <div>
               <Label>Senha Temporária (atual)</Label>
               <div className="relative mt-1">

@@ -118,6 +118,7 @@ export default function PortalHubCliente() {
   const token = localStorage.getItem("portal_token") || "";
   const tipo = localStorage.getItem("portal_tipo") || "";
   const nomeEmpresa = localStorage.getItem("portal_nome") || "Cliente";
+  const nomeResponsavel = localStorage.getItem("portal_responsavel") || "";
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
@@ -159,7 +160,8 @@ export default function PortalHubCliente() {
 
   const greeting = useMemo(() => getGreeting(), []);
   const formattedDate = useMemo(() => getFormattedDate(), []);
-  const firstName = (nomeEmpresa || "Cliente").split(" ").slice(0, 2).join(" ");
+  const displayName = (nomeResponsavel || nomeEmpresa || "Cliente").trim();
+  const firstName = displayName.split(/\s+/).slice(0, 2).join(" ");
 
   const handleClick = (modulo: Modulo) => {
     if (modulo.id === "avaliacao") { navigate("/portal/cliente/dashboard?tab=avaliacao"); return; }
@@ -291,6 +293,11 @@ export default function PortalHubCliente() {
                   <span className="text-gray-200 hidden sm:inline">|</span>
                   <p className="text-gray-300 text-xs hidden sm:block">{formattedDate}</p>
                 </div>
+                {nomeResponsavel && nomeEmpresa && nomeResponsavel.trim().toLowerCase() !== nomeEmpresa.trim().toLowerCase() ? (
+                  <p className="text-[11px] text-gray-400 mt-1 truncate max-w-[420px]">
+                    {nomeEmpresa}
+                  </p>
+                ) : null}
                 <p className="text-xs text-gray-500 mt-2">
                   {minhasObras.length} obra{minhasObras.length !== 1 ? "s" : ""} vinculada{minhasObras.length !== 1 ? "s" : ""} ao seu acesso.
                 </p>

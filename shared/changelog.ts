@@ -11137,4 +11137,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 09:00:00",
   },
+  {
+    version: 1571,
+    titulo: "Portal do Cliente — Saudação usa o NOME DA PESSOA (não o da empresa) + cadastro do nome no 1º acesso",
+    descricao: "Antes a saudação do Hub mostrava 'Bom dia, SANTUARIO NACIONAL DE NOSSA SENHORA…' (nome da empresa em CAPS), o que ficava impessoal e estranho. Agora: (1) a tela 'Trocar Senha' do primeiro acesso ganhou um campo obrigatório 'Seu nome completo' (com ícone, autoComplete='name', máx. 120 caracteres) — o nome é salvo em `portalCredentials.nomeResponsavel` junto com a nova senha; (2) o login (`auth.login`) passou a devolver `nomeResponsavel` e o front guarda em `localStorage.portal_responsavel`; (3) o Hub do cliente (`PortalHubCliente`) usa esse nome na saudação ('Bom dia, Maria Silva') e mostra o nome da empresa logo abaixo em fonte menor para contexto, sem perder a informação. Compatível com usuários antigos: se o cadastro ainda não tiver nome de responsável, o Hub continua exibindo o nome da empresa como antes (fallback).",
+    tipo: "melhoria",
+    modulos: "Portal Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 10:00:00",
+  },
 ];

@@ -19,6 +19,11 @@ export default function PortalLoginCliente() {
       localStorage.setItem("portal_tipo", data.tipo);
       localStorage.setItem("portal_nome", data.nomeEmpresa || "");
       localStorage.setItem("portal_cnpj", data.cnpj);
+      if ((data as any).nomeResponsavel) {
+        localStorage.setItem("portal_responsavel", (data as any).nomeResponsavel);
+      } else {
+        localStorage.removeItem("portal_responsavel");
+      }
       if (data.primeiroAcesso) {
         navigate("/portal/trocar-senha");
       } else {
