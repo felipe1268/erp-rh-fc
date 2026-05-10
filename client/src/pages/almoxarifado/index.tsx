@@ -495,7 +495,6 @@ export default function AlmoxarifadoPage() {
   );
 
   // ── AÇÕES RÁPIDAS MOBILE ─────────────────────────────────────────
-  const utils = trpc.useUtils();
 
   // Modal Entrada Rápida (legacy)
   const [modalEntrada, setModalEntrada] = useState(false);
