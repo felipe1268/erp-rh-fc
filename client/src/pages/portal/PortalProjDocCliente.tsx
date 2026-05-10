@@ -4,7 +4,7 @@ import { useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
 import {
   ArrowLeft, FileText, Search, Download, FileCheck2, Clock, Edit3, FileX2, FolderOpen, Folder, Home, Eye, X,
-  ChevronRight, ChevronDown, List, FolderTree, FileImage, File as FileIcon,
+  ChevronRight, ChevronDown, List, FolderTree, FileImage, File as FileIcon, AlertTriangle,
 } from "lucide-react";
 import PortalPrintHeader from "@/components/PortalPrintHeader";
 import PrintActions from "@/components/PrintActions";
@@ -52,6 +52,12 @@ export default function PortalProjDocCliente() {
   const docs = (data?.documentos || []) as any[];
   const totais = data?.totais || { total: 0, aprovados: 0, emRevisao: 0, emElaboracao: 0, reprovados: 0 };
 
+  // Rev. 1589 — Verificação de "falta de arquivo": se o documento existe no
+  // sistema mas não tem o DWG/PDF anexado (temArquivo=false), o cliente
+  // recebe um alerta visual (banner + KPI clicável + badge na linha).
+  const semArquivo = useMemo(() => docs.filter((d: any) => !d.temArquivo).length, [docs]);
+  const totalEmRevisao = totais.emRevisao || 0;
+
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<string>("todos");
   // Rev. 1562 — modos de visualização: árvore (default — agrupa por
@@ -76,7 +82,8 @@ export default function PortalProjDocCliente() {
 
   const lista = useMemo(() => {
     let l = docs;
-    if (filtro !== "todos") l = l.filter((d) => d.status === filtro);
+    if (filtro === "sem_arquivo") l = l.filter((d: any) => !d.temArquivo);
+    else if (filtro !== "todos") l = l.filter((d: any) => d.status === filtro);
     if (busca) {
       const q = busca.toLowerCase();
       l = l.filter((d) =>
@@ -146,19 +153,50 @@ export default function PortalProjDocCliente() {
     return { color: "text-slate-600", bg: "bg-slate-50 border-slate-200", icon: FileIcon };
   };
 
-  const Kpi = ({ label, value, color, icon: Icon }: any) => (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide truncate">{label}</p>
-          <p className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
+  // Rev. 1589 — KPIs viraram botões clicáveis (atalho de filtro).
+  // filterKey opcional: quando presente, clicar alterna o filtro
+  // correspondente. Cliques no card já ativo voltam para "todos".
+  const Kpi = ({ label, value, color, icon: Icon, filterKey }: {
+    label: string;
+    value: number;
+    color: string;
+    icon: any;
+    filterKey?: string;
+  }) => {
+    const ativo = !!filterKey && filtro === filterKey;
+    const ringClr = color.replace("text-", "ring-").replace("-700", "-400").replace("-600", "-400");
+    const bgSoft = color.replace("text-", "bg-").replace("-700", "-50").replace("-600", "-50");
+    const iconBg = color.replace("text-", "bg-").replace("-700", "-100").replace("-600", "-100");
+    const onClick = () => {
+      if (!filterKey) return;
+      if (filterKey === "todos") setFiltro("todos");
+      else setFiltro((cur) => (cur === filterKey ? "todos" : filterKey));
+    };
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={ativo}
+        title={filterKey ? (ativo ? "Clique para remover o filtro" : `Filtrar por ${label}`) : undefined}
+        className={`text-left bg-white rounded-xl border shadow-sm px-4 py-3 transition w-full ${
+          filterKey ? "cursor-pointer" : "cursor-default"
+        } ${ativo ? `${bgSoft} border-transparent ring-2 ${ringClr}` : "border-slate-200 hover:border-slate-300 hover:shadow-md"}`}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase font-semibold text-slate-500 tracking-wide truncate">
+              {label}
+              {ativo && <span className="ml-1.5 text-[9px] text-emerald-600 normal-case">• filtrando</span>}
+            </p>
+            <p className={`text-2xl font-bold mt-0.5 ${color}`}>{value}</p>
+          </div>
+          <div className={`p-2 rounded-lg ${iconBg} shrink-0`}>
+            <Icon className={`h-5 w-5 ${color}`} />
+          </div>
         </div>
-        <div className={`p-2 rounded-lg ${color.replace("text-", "bg-").replace("-700", "-100")} shrink-0`}>
-          <Icon className={`h-5 w-5 ${color}`} />
-        </div>
-      </div>
-    </div>
-  );
+      </button>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50">
@@ -195,13 +233,56 @@ export default function PortalProjDocCliente() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
         <PortalPrintHeader obra={obra} titulo="Projetos / Documentos Técnicos" />
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <Kpi label="Total Documentos" value={totais.total} color="text-purple-700" icon={FolderOpen} />
-          <Kpi label="Aprovados" value={totais.aprovados} color="text-emerald-700" icon={FileCheck2} />
-          <Kpi label="Em Revisão" value={totais.emRevisao} color="text-blue-700" icon={Clock} />
-          <Kpi label="Em Elaboração" value={totais.emElaboracao} color="text-yellow-700" icon={Edit3} />
-          <Kpi label="Reprovados" value={totais.reprovados} color="text-rose-700" icon={FileX2} />
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <Kpi label="Total Documentos" value={totais.total} color="text-purple-700" icon={FolderOpen} filterKey="todos" />
+          <Kpi label="Aprovados" value={totais.aprovados} color="text-emerald-700" icon={FileCheck2} filterKey="aprovado" />
+          <Kpi label="Em Revisão" value={totais.emRevisao} color="text-blue-700" icon={Clock} filterKey="em_revisao" />
+          <Kpi label="Em Elaboração" value={totais.emElaboracao} color="text-yellow-700" icon={Edit3} filterKey="em_elaboracao" />
+          <Kpi label="Reprovados" value={totais.reprovados} color="text-rose-700" icon={FileX2} filterKey="reprovado" />
+          <Kpi label="Sem arquivo" value={semArquivo} color="text-amber-700" icon={AlertTriangle} filterKey="sem_arquivo" />
         </div>
+
+        {/* Rev. 1589 — Banner de alerta quando há documentos sem arquivo
+            anexado (DWG/PDF faltando) ou documentos em revisão pendentes
+            de aprovação do cliente. Clicar no botão filtra a lista. */}
+        {(semArquivo > 0 || totalEmRevisao > 0) && (
+          <div className="rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 shadow-sm p-3 flex flex-wrap items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-100 shrink-0">
+              <AlertTriangle className="h-5 w-5 text-amber-700" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-amber-900">Atenção — Pendências detectadas</p>
+              <p className="text-[11px] text-amber-800 mt-0.5">
+                {semArquivo > 0 && (
+                  <span><b>{semArquivo}</b> documento{semArquivo === 1 ? "" : "s"} sem arquivo anexado (DWG/PDF faltando){totalEmRevisao > 0 ? " · " : ""}</span>
+                )}
+                {totalEmRevisao > 0 && (
+                  <span><b>{totalEmRevisao}</b> documento{totalEmRevisao === 1 ? "" : "s"} em revisão</span>
+                )}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 portal-no-print">
+              {semArquivo > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFiltro("sem_arquivo")}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-600 text-white text-[11px] font-semibold hover:bg-amber-500 shadow-sm"
+                >
+                  <FileX2 className="h-3.5 w-3.5" /> Ver sem arquivo
+                </button>
+              )}
+              {totalEmRevisao > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFiltro("em_revisao")}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-semibold hover:bg-blue-500 shadow-sm"
+                >
+                  <Clock className="h-3.5 w-3.5" /> Ver em revisão
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 flex flex-wrap items-center gap-2">
           {([
@@ -210,6 +291,7 @@ export default function PortalProjDocCliente() {
             { k: "em_revisao", label: "Em Revisão", count: totais.emRevisao },
             { k: "em_elaboracao", label: "Em Elaboração", count: totais.emElaboracao },
             { k: "reprovado", label: "Reprovados", count: totais.reprovados },
+            { k: "sem_arquivo", label: "Sem arquivo", count: semArquivo },
           ] as const).map((f) => (
             <button
               key={f.k}
@@ -366,7 +448,12 @@ export default function PortalProjDocCliente() {
                                                 onBaixar={() => baixar(d.id)}
                                               />
                                             ) : (
-                                              <span className="text-[11px] text-slate-400">—</span>
+                                              <span
+                                                className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-800"
+                                                title={`Falta o arquivo .${(f.fmt || "").toUpperCase()} deste documento`}
+                                              >
+                                                <AlertTriangle className="h-3 w-3" /> Sem arquivo
+                                              </span>
                                             )}
                                           </td>
                                         </tr>
@@ -446,7 +533,12 @@ export default function PortalProjDocCliente() {
                             onBaixar={() => baixar(d.id)}
                           />
                         ) : (
-                          <span className="text-[11px] text-slate-400">—</span>
+                          <span
+                            className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-800"
+                            title="Documento sem arquivo anexado"
+                          >
+                            <AlertTriangle className="h-3 w-3" /> Sem arquivo
+                          </span>
                         )}
                       </td>
                     </tr>

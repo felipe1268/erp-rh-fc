@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1589,
+    titulo: "Portal do Cliente — Projetos/Documentos Técnicos: alertas de documentos sem arquivo + revisões pendentes",
+    descricao: "Adicionada verificação de pendências na tela de Projetos/Documentos Técnicos do Portal do Cliente: (1) novo KPI clicável 'Sem arquivo' (cor âmbar/alerta) que conta documentos cadastrados mas sem o DWG/PDF anexado e atua como atalho de filtro. (2) Banner de alerta no topo da página quando há documentos sem arquivo OU documentos em revisão pendentes — com botões 'Ver sem arquivo' e 'Ver em revisão' que aplicam o filtro correspondente. (3) Linhas sem arquivo na tabela agora mostram um badge âmbar 'Sem arquivo' em vez do '—' silencioso, com tooltip explicando a pendência. (4) Todos os KPIs do topo viraram botões interativos (toggle: clicar de novo no card ativo limpa o filtro), com indicador visual '• filtrando' e ring colorido. (5) Adicionada opção 'Sem arquivo' na barra de filtros rápidos.",
+    tipo: 'feature',
+    modulos: 'Portal do Cliente, Documentos Técnicos',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 08:50:00',
+  },
+  {
     version: 1588,
     titulo: "Portal do Cliente — Aba Efetivo: KPIs viraram filtros clicáveis",
     descricao: "Os cards do topo da aba Efetivo agora são botões interativos: 'Próprios FC' filtra só CLT/PJ, 'Total Terceiros' filtra só terceiros e 'Total Geral' limpa o filtro. Os cards de baixo ('Mão de Obra Direta' e 'Mão de Obra Indireta') filtram por categoria. Clicar de novo no card ativo desliga o filtro. Visual: card ativo ganha anel colorido, fundo suave e badge '• filtrando'. Mantém a busca por nome/função/empresa funcionando em paralelo aos filtros.",
