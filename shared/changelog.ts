@@ -11389,4 +11389,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-10 13:00:00",
   },
+  {
+    version: 1599,
+    titulo: "Editor do Questionário — Assistente de IA para criar e refinar perguntas",
+    descricao: "Adicionado um assistente de IA dentro do Editor do Questionário (Portal do Cliente). Dois novos recursos para o admin: (1) botão 'Sugerir com IA' no bloco de Perguntas Personalizadas — abre um painel onde a IA, ciente das 8 perguntas core e das personalizadas já cadastradas, propõe 6 perguntas NOVAS e relevantes (com seção, tipo, texto de ajuda e motivo). Cada sugestão pode ser adicionada direto ou aberta no modal de criação para edição. Aceita também um campo opcional de foco/tema (ex.: pós-obra, sustentabilidade, segurança); (2) botão 'Refinar com IA' dentro do modal de criação — melhora o texto da pergunta e a ajuda preservando intenção, tipo e seção. Endpoints novos: portalExterno.admin.sugerirPerguntasIA e portalExterno.admin.refinarPerguntaIA, ambos restritos a admin/admin_master e usando o invokeLLM (Claude com fallback Gemini) com saída JSON saneada server-side.",
+    tipo: "novo",
+    modulos: "Portal Cliente, Configurações",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-10 14:00:00",
+  },
 ];

@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import {
   Sliders, Plus, Pencil, Trash2, ArrowUp, ArrowDown,
   Eye, EyeOff, Lock, AlertCircle, ListChecks, Type, AlignLeft, ThumbsUp,
-  Loader2, RotateCcw, Crown,
+  Loader2, RotateCcw, Crown, Sparkles, Wand2, Check, X as XIcon,
 } from "lucide-react";
 
 type Tipo = "nota_0_10" | "texto_curto" | "texto_longo" | "sim_nao_talvez";
@@ -72,6 +72,68 @@ export default function QuestionarioPortalAdmin() {
 
   const [editando, setEditando] = useState<any | null>(null);
   const [criando, setCriando] = useState(false);
+
+  // Rev. 1599 — Assistente de IA (sugerir + refinar)
+  const [sugestoesOpen, setSugestoesOpen] = useState(false);
+  const [iaFoco, setIaFoco] = useState("");
+  const [iaSugestoes, setIaSugestoes] = useState<Array<{
+    label: string; secaoTitulo: string; tipo: Tipo; ajuda: string | null; motivo: string | null;
+    _adicionada?: boolean;
+  }>>([]);
+  const sugerirIAMut = trpc.portalExterno.admin.sugerirPerguntasIA.useMutation({
+    onSuccess: (data: any) => {
+      const list = Array.isArray(data?.sugestoes) ? data.sugestoes : [];
+      setIaSugestoes(list);
+      if (list.length === 0) toast.info("A IA não devolveu sugestões. Tente refinar o foco.");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const refinarIAMut = trpc.portalExterno.admin.refinarPerguntaIA.useMutation({
+    onSuccess: (data: any) => {
+      setEditando((prev: any) => prev ? ({
+        ...prev,
+        label: data?.label ?? prev.label,
+        ajuda: data?.ajuda ?? prev.ajuda,
+      }) : prev);
+      toast.success("Pergunta refinada com IA.");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const adicionarSugestaoDireto = (idx: number) => {
+    const s = iaSugestoes[idx];
+    if (!s) return;
+    salvarMut.mutate({
+      companyId,
+      secaoTitulo: s.secaoTitulo || "Personalizadas",
+      tipo: s.tipo,
+      label: s.label,
+      ajuda: s.ajuda || null,
+      placeholder: null,
+      obrigatoria: false,
+      ativa: true,
+    }, {
+      onSuccess: () => {
+        setIaSugestoes(prev => prev.map((it, i) => i === idx ? { ...it, _adicionada: true } : it));
+      }
+    });
+  };
+  const editarSugestaoEAdicionar = (idx: number) => {
+    const s = iaSugestoes[idx];
+    if (!s) return;
+    setSugestoesOpen(false);
+    setCriando(true);
+    setEditando({
+      companyId,
+      secaoTitulo: s.secaoTitulo || "Personalizadas",
+      tipo: s.tipo,
+      label: s.label,
+      ajuda: s.ajuda || "",
+      placeholder: "",
+      obrigatoria: false,
+      ativa: true,
+    });
+  };
 
   const salvarMut = trpc.portalExterno.admin.salvarPerguntaExtra.useMutation({
     onSuccess: () => {
@@ -212,7 +274,19 @@ export default function QuestionarioPortalAdmin() {
             <ListChecks className="w-4 h-4 text-indigo-600" />
             <h2 className="font-semibold text-slate-800">Perguntas personalizadas</h2>
             <Badge className="ml-1 bg-indigo-100 text-indigo-700 hover:bg-indigo-100">{(perguntas as any[]).length}</Badge>
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIaSugestoes([]);
+                  setIaFoco("");
+                  setSugestoesOpen(true);
+                }}
+                className="gap-2 border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-800"
+                title="Pedir à IA para sugerir perguntas relevantes"
+              >
+                <Sparkles className="w-4 h-4" /> Sugerir com IA
+              </Button>
               <Button onClick={() => { setCriando(true); setEditando({
                 companyId, secaoTitulo: "Personalizadas", tipo: "nota_0_10",
                 label: "", ajuda: "", placeholder: "", obrigatoria: false, ativa: true,
@@ -344,6 +418,109 @@ export default function QuestionarioPortalAdmin() {
         </DialogContent>
       </Dialog>
 
+      {/* Rev. 1599 — Modal: Sugerir perguntas com IA */}
+      <Dialog open={sugestoesOpen} onOpenChange={(o) => { if (!o) setSugestoesOpen(false); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-violet-600" />
+              Sugerir perguntas com IA
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 text-xs text-violet-800">
+              A IA conhece as 8 perguntas <b>core</b> e as personalizadas já cadastradas — então só sugere perguntas <b>novas</b> e relevantes para a operação. Você pode adicionar direto ou abrir uma sugestão para editar antes de salvar.
+            </div>
+            <div>
+              <Label className="text-xs">Foco / tema (opcional)</Label>
+              <Input
+                value={iaFoco}
+                maxLength={300}
+                onChange={(e) => setIaFoco(e.target.value)}
+                placeholder="Ex.: pós-obra · sustentabilidade · comunicação · segurança · atendimento comercial"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">Deixe em branco para sugestões abrangentes.</p>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                onClick={() => sugerirIAMut.mutate({ companyId, foco: iaFoco.trim() || undefined, quantidade: 6 })}
+                disabled={sugerirIAMut.isPending}
+                className="gap-2 bg-violet-600 hover:bg-violet-700"
+              >
+                {sugerirIAMut.isPending
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <Sparkles className="w-4 h-4" />}
+                {iaSugestoes.length > 0 ? "Gerar novamente" : "Gerar sugestões"}
+              </Button>
+            </div>
+
+            {sugerirIAMut.isPending && iaSugestoes.length === 0 && (
+              <div className="border border-dashed border-violet-200 rounded-xl p-8 text-center text-violet-400">
+                <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin" />
+                <p className="text-sm">Gerando sugestões com IA…</p>
+              </div>
+            )}
+
+            {iaSugestoes.length > 0 && (
+              <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
+                {iaSugestoes.map((s, idx) => {
+                  const Icon = TIPO_ICON[s.tipo];
+                  return (
+                    <div
+                      key={idx}
+                      className={`border rounded-lg p-3 ${s._adicionada ? "bg-emerald-50 border-emerald-200" : "bg-white"}`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <Icon className="w-4 h-4 text-violet-500 shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-800">{s.label}</p>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <Badge variant="outline" className="text-[10px] py-0 px-1.5">{s.secaoTitulo}</Badge>
+                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-violet-200 text-violet-700">{TIPO_LABEL[s.tipo]}</Badge>
+                          </div>
+                          {s.ajuda && (
+                            <p className="text-[11px] text-slate-500 mt-1.5"><b>Ajuda:</b> {s.ajuda}</p>
+                          )}
+                          {s.motivo && (
+                            <p className="text-[11px] text-violet-700 mt-1 italic"><b>Por quê:</b> {s.motivo}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-end gap-2 mt-2">
+                        {s._adicionada ? (
+                          <span className="text-[12px] text-emerald-700 inline-flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5" /> Adicionada
+                          </span>
+                        ) : (
+                          <>
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                              onClick={() => editarSugestaoEAdicionar(idx)}
+                            >
+                              <Pencil className="w-3 h-3" /> Editar e adicionar
+                            </Button>
+                            <Button size="sm" className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
+                              disabled={salvarMut.isPending}
+                              onClick={() => adicionarSugestaoDireto(idx)}
+                            >
+                              <Plus className="w-3 h-3" /> Adicionar
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSugestoesOpen(false)} className="gap-1">
+              <XIcon className="w-4 h-4" /> Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal de edição/criação */}
       <Dialog open={!!editando} onOpenChange={(o) => { if (!o) { setEditando(null); setCriando(false); } }}>
         <DialogContent className="max-w-lg">
@@ -375,7 +552,30 @@ export default function QuestionarioPortalAdmin() {
                 )}
               </div>
               <div>
-                <Label className="text-xs">Pergunta (texto exibido para o cliente)</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs">Pergunta (texto exibido para o cliente)</Label>
+                  <button
+                    type="button"
+                    title="Refinar texto e ajuda com IA"
+                    disabled={!editando?.label?.trim() || refinarIAMut.isPending}
+                    onClick={() => {
+                      if (!editando?.label?.trim()) { toast.error("Digite o texto da pergunta antes de refinar."); return; }
+                      refinarIAMut.mutate({
+                        companyId,
+                        label: editando.label,
+                        tipo: editando.tipo,
+                        secaoTitulo: editando.secaoTitulo,
+                        ajuda: editando.ajuda || null,
+                      });
+                    }}
+                    className="text-[11px] inline-flex items-center gap-1 px-2 py-0.5 rounded border border-violet-300 text-violet-700 hover:bg-violet-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {refinarIAMut.isPending
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <Wand2 className="w-3 h-3" />}
+                    Refinar com IA
+                  </button>
+                </div>
                 <textarea
                   value={editando.label} maxLength={240} rows={2}
                   onChange={(e) => setEditando({ ...editando, label: e.target.value })}

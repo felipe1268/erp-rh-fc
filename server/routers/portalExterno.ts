@@ -10,6 +10,7 @@ import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
 import { sendEmail } from "../services/smtpService";
 import crypto from "crypto";
+import { invokeLLM } from "../_core/llm";
 
 // ── Helpers idênticos aos do server/routers/planejamento.ts ─────────────────
 // Mantemos cópias locais para garantir que o Portal do Cliente produza
@@ -1007,6 +1008,194 @@ export const portalExternoRouter = router({
         WHERE company_id = ${input.companyId} AND chave = ${input.chave}
       `);
       return { success: true };
+    }),
+
+    // ===== Rev. 1599 — Assistente de IA para criação de perguntas =====
+    // Sugere novas perguntas personalizadas para o questionário do Portal do
+    // Cliente, levando em conta as 8 perguntas CORE (não duplicar) e as
+    // perguntas extras já cadastradas. Devolve sempre JSON com array de
+    // sugestões { label, secaoTitulo, tipo, ajuda, motivo }.
+    sugerirPerguntasIA: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      foco: z.string().max(500).optional(),
+      quantidade: z.number().int().min(1).max(10).optional(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
+      }
+      // Tenant isolation: admin não-master só pode operar na própria empresa.
+      if (ctx.user.role !== "admin_master" && ctx.user.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado a esta empresa." });
+      }
+      const db = (await getDb())!;
+      const [emp] = await db.select().from(companies).where(eq(companies.id, input.companyId)).limit(1);
+      const empresaNome = (emp as any)?.razaoSocial || (emp as any)?.nome || "FC Engenharia";
+
+      // Perguntas CORE (não duplicar) + extras já cadastradas
+      const { PERGUNTAS_CORE_DEFAULTS } = await import("../../shared/portalPerguntasCore");
+      const extras = await db.select().from(clientePerguntasExtras)
+        .where(eq(clientePerguntasExtras.companyId, input.companyId));
+
+      const corePart = PERGUNTAS_CORE_DEFAULTS.map((p, i) => `${i + 1}. [${p.secao}] ${p.label}`).join("\n");
+      const extrasPart = (extras as any[]).length > 0
+        ? (extras as any[]).map((p, i) => `${i + 1}. [${p.secaoTitulo}] (${p.tipo}) ${p.label}`).join("\n")
+        : "(nenhuma pergunta personalizada cadastrada ainda)";
+
+      const tipoLabel: Record<string, string> = {
+        nota_0_10: "Nota 0–10 (escala numérica, ideal para satisfação/NPS)",
+        texto_curto: "Texto curto (frase rápida)",
+        texto_longo: "Texto longo (comentário aberto, feedback detalhado)",
+        sim_nao_talvez: "Sim / Talvez / Não (resposta categórica)",
+      };
+
+      const systemPrompt = `Você é um especialista em pesquisa de satisfação e NPS para empresas de engenharia/construção civil. Está ajudando a equipe da FC Engenharia (gestão de obras, terceirização, projetos) a desenhar perguntas adicionais para o questionário que o cliente responde no Portal do Cliente.
+
+Regras OBRIGATÓRIAS:
+- NÃO sugira nada que duplique ou se sobreponha às 8 perguntas CORE (que já cobrem: nota geral, equipe, gestor, empresa, obra, prazo, qualidade, escritório).
+- NÃO sugira nada que duplique perguntas personalizadas já cadastradas.
+- Cada sugestão precisa ser ACIONÁVEL (gera insight para a operação) e respondível em poucos segundos.
+- Tipos de resposta disponíveis: ${Object.entries(tipoLabel).map(([k, v]) => `"${k}" — ${v}`).join("; ")}.
+- Prefira "nota_0_10" para perguntas que entram em métricas; "texto_longo" para feedback aberto; "sim_nao_talvez" para diagnósticos rápidos.
+- Texto da pergunta direto, em português do Brasil, máx. 180 caracteres.
+- Seção (agrupador visual) curta — reaproveite quando fizer sentido (ex.: "Pós-obra", "Comunicação", "Comercial", "Sustentabilidade", "Segurança", "Documentação"). Máx. 60 caracteres.
+- Ajuda/contexto opcional, máx. 200 caracteres, ajuda o cliente a responder.
+
+Devolva ESTRITAMENTE um JSON válido, SEM markdown, SEM comentários, no formato:
+{"sugestoes":[{"label":"...","secaoTitulo":"...","tipo":"nota_0_10|texto_curto|texto_longo|sim_nao_talvez","ajuda":"...","motivo":"..."}]}`;
+
+      const userPrompt = `Empresa: ${empresaNome}
+
+Perguntas CORE (FIXAS — não duplicar):
+${corePart}
+
+Perguntas personalizadas já cadastradas (não duplicar):
+${extrasPart}
+
+${input.foco ? `Foco/tema solicitado pelo administrador: ${input.foco}\n\n` : ""}Sugira ${input.quantidade ?? 6} perguntas NOVAS e relevantes que NÃO se sobreponham às acima. Para cada uma, inclua um campo "motivo" curto (máx. 120 caracteres) explicando por que é útil para a operação da empresa.`;
+
+      let parsed: any = { sugestoes: [] };
+      try {
+        const result = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          maxTokens: 2000,
+        });
+        const raw = (() => {
+          const c = result?.choices?.[0]?.message?.content;
+          return typeof c === "string" ? c : Array.isArray(c) ? (c[0] as any)?.text ?? "" : "";
+        })();
+        const cleaned = raw.replace(/```json\s*|\s*```/g, "").trim();
+        const start = cleaned.indexOf("{");
+        const end = cleaned.lastIndexOf("}");
+        if (start >= 0 && end > start) parsed = JSON.parse(cleaned.slice(start, end + 1));
+      } catch (e: any) {
+        console.error("[Questionario IA] sugerirPerguntasIA falhou:", e?.message);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "A IA não conseguiu gerar sugestões agora. Tente novamente em instantes." });
+      }
+
+      const tiposValidos = new Set(["nota_0_10", "texto_curto", "texto_longo", "sim_nao_talvez"]);
+      const sugestoes = Array.isArray(parsed?.sugestoes) ? parsed.sugestoes : [];
+
+      // Dedupe defensivo: mesmo com a instrução no prompt, a IA pode devolver
+      // sugestões que se sobreponham às CORE / extras existentes ou repetidas
+      // entre si. Comparamos por uma chave normalizada (lowercase, sem
+      // acentos, sem pontuação) do label.
+      const norm = (s: string) => s.toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, " ").trim();
+      const jaUsadas = new Set<string>([
+        ...PERGUNTAS_CORE_DEFAULTS.map(p => norm(p.label)),
+        ...(extras as any[]).map(p => norm(String(p.label || ""))),
+      ]);
+
+      const limpa: Array<any> = [];
+      for (const s of sugestoes) {
+        const item = {
+          label: String(s?.label ?? "").trim().slice(0, 240),
+          secaoTitulo: String(s?.secaoTitulo ?? "Personalizadas").trim().slice(0, 80) || "Personalizadas",
+          tipo: tiposValidos.has(String(s?.tipo)) ? String(s.tipo) : "nota_0_10",
+          ajuda: String(s?.ajuda ?? "").trim().slice(0, 240) || null,
+          motivo: String(s?.motivo ?? "").trim().slice(0, 200) || null,
+        };
+        if (!item.label) continue;
+        const key = norm(item.label);
+        if (!key || jaUsadas.has(key)) continue;
+        jaUsadas.add(key);
+        limpa.push(item);
+      }
+
+      return { sugestoes: limpa };
+    }),
+
+    // Refina o rascunho de uma pergunta personalizada (clareza, neutralidade,
+    // tamanho ideal). NÃO altera o tipo nem a seção — apenas o texto e a ajuda.
+    refinarPerguntaIA: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      label: z.string().min(1).max(500),
+      tipo: z.enum(["nota_0_10", "texto_curto", "texto_longo", "sim_nao_talvez"]),
+      secaoTitulo: z.string().max(80).optional(),
+      ajuda: z.string().max(2000).optional().nullable(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
+      }
+      // Tenant isolation: admin não-master só pode operar na própria empresa.
+      if (ctx.user.role !== "admin_master" && ctx.user.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado a esta empresa." });
+      }
+
+      const tipoLabel: Record<string, string> = {
+        nota_0_10: "Nota 0–10",
+        texto_curto: "Texto curto",
+        texto_longo: "Texto longo",
+        sim_nao_talvez: "Sim / Talvez / Não",
+      };
+
+      const systemPrompt = `Você é um especialista em pesquisa de satisfação para empresas de engenharia/construção. Sua tarefa é REFINAR o texto de uma pergunta de questionário (Portal do Cliente da FC Engenharia) para que fique:
+- Clara, direta e neutra (sem viés positivo nem negativo).
+- Em português do Brasil, máx. 180 caracteres.
+- Coerente com o tipo de resposta indicado (não mudar o tipo).
+- Sem repetir o conceito do tipo no texto (ex.: não escrever "dê uma nota").
+
+Também sugira um texto de "ajuda" curto (máx. 200 caracteres) que dê contexto ao cliente.
+
+Devolva ESTRITAMENTE um JSON válido, SEM markdown:
+{"label":"...","ajuda":"..."}`;
+
+      const userPrompt = `Tipo de resposta: ${tipoLabel[input.tipo]}
+Seção: ${input.secaoTitulo || "Personalizadas"}
+
+Texto atual: ${input.label}
+Ajuda atual: ${input.ajuda || "(nenhuma)"}
+
+Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
+
+      try {
+        const result = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          maxTokens: 600,
+        });
+        const raw = (() => {
+          const c = result?.choices?.[0]?.message?.content;
+          return typeof c === "string" ? c : Array.isArray(c) ? (c[0] as any)?.text ?? "" : "";
+        })();
+        const cleaned = raw.replace(/```json\s*|\s*```/g, "").trim();
+        const start = cleaned.indexOf("{");
+        const end = cleaned.lastIndexOf("}");
+        const obj = start >= 0 && end > start ? JSON.parse(cleaned.slice(start, end + 1)) : {};
+        return {
+          label: String(obj?.label ?? "").trim().slice(0, 240) || input.label,
+          ajuda: String(obj?.ajuda ?? "").trim().slice(0, 240) || (input.ajuda || ""),
+        };
+      } catch (e: any) {
+        console.error("[Questionario IA] refinarPerguntaIA falhou:", e?.message);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "A IA não conseguiu refinar a pergunta agora. Tente novamente em instantes." });
+      }
     }),
 
     // Rev. 1569 — Master pode CANCELAR uma avaliação registrada.
