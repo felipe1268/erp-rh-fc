@@ -1251,6 +1251,15 @@ export async function gerarAlertasVencimento(companyId: number): Promise<number>
 // Fundamentação: NBC TG 16 — estoques; accrual no recebimento
 // ─────────────────────────────────────────────────────────────
 export async function importComprasOrdensToFinancial(companyId: number, mesRef?: string): Promise<number> {
+  // Rev. 1622 — DESATIVADO. A criação de financial_entries para OCs é responsabilidade
+  // exclusiva de purchaseFinancialBridge.criarParcelasFinanceiras (event-driven, em
+  // tempo real, com parcelas individuais e integração com purchase_accounts_payable).
+  // Esta função criava registros redundantes com origem_modulo='compra_oc' que
+  // duplicavam visualmente o Contas a Pagar. Mantida como no-op p/ retro-compat.
+  console.log(`[FinancialBridge][compras_ordens] DISABLED (Rev.1622) company=${companyId} mes=${mesRef ?? mesComp()}`);
+  return 0;
+
+  // eslint-disable-next-line no-unreachable
   const db = await getDb();
   if (!db) return 0;
   const targetMes = mesRef ?? mesComp();
@@ -1617,7 +1626,10 @@ export async function runAllDespesasImport(companyId: number, mesRef?: string) {
     importProcessosTrabalistasToFinancial(companyId, mes),
     gerarGuiasTributarias(companyId, mes),
     // NOVOS — Compras e RH/DP
-    importComprasOrdensToFinancial(companyId, mes),
+    // Rev. 1622 — importComprasOrdensToFinancial REMOVIDO do pipeline.
+    // OCs vão para Contas a Pagar via purchaseFinancialBridge.criarParcelasFinanceiras
+    // (event-driven). Esta função gerava lançamentos duplicados com origem='compra_oc'.
+    // importComprasOrdensToFinancial(companyId, mes),
     importFolhaRHToFinancial(companyId, mes),
   ]);
 
