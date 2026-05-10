@@ -11182,4 +11182,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 14:00:00",
   },
+  {
+    version: 1576,
+    titulo: "ERP — Sidebar fechada por padrão em telefone e tablet (incluindo iPad)",
+    descricao: "Antes a barra lateral do ERP só entrava em modo 'drawer' (gaveta) abaixo de 768px de largura — ou seja, em iPad portrait (768px) e tablets em geral o menu lateral aparecia ABERTO por padrão e o usuário tinha que fechar manualmente toda vez. Bump do breakpoint mobile de 768px → 1024px no hook `useIsMobile`. Agora qualquer dispositivo até 1023px (telefones, iPad portrait E landscape, tablets Android) entra em modo gaveta: a barra lateral começa FECHADA e só aparece quando o usuário toca no ícone de menu no cabeçalho (CompanyHeader já renderiza o SidebarTrigger nesse modo). Em desktop (≥1024px) nada muda — a barra continua persistindo o estado aberta/fechada via cookie como antes.",
+    tipo: "feature",
+    modulos: "Plataforma",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 15:00:00",
+  },
 ];
