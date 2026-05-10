@@ -161,3 +161,9 @@ id = "HLSN7zzP8TD1zSTUE__9V"
 uri = "file://comparacao_vale_mar2026_pdf_vs_erp.txt"
 type = "text"
 title = "Comparação Vale Março/2026 — PDF Pago vs ERP"
+
+[[outputs]]
+id = "HkREE6_aEVSSeu8p-1ylP"
+uri = "file://MANUAL-PORTAL-CLIENTE.md"
+type = "text"
+title = "Manual do Portal do Cliente — Rev. 1570 (NotebookLM-ready)"

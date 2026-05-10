@@ -11128,4 +11128,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-08 12:00:00",
   },
+  {
+    version: 1570,
+    titulo: "Portal do Cliente — Central de Ajuda + Tour guiado de boas-vindas + Manual completo (NotebookLM)",
+    descricao: "Pacote de onboarding e documentação do Portal do Cliente. (1) Botão 'Ajuda' (HelpCircle) no header do Hub abre um drawer lateral com 6 artigos navegáveis: Login e primeiro acesso, Tela inicial (Hub), Planejamento (Curva S/SPI/CPI/banner de tendência), Documentos & Projetos Técnicos (visualização inline + download), Avaliação NPS Anônima (LGPD/blocos Equipe/Gestor/Empresa/Obra) e Configurações da conta (trocar senha/logout/multi-usuário). Cada artigo é renderizado por mini-renderer Markdown próprio (cabeçalhos, tabelas, listas, blockquotes, código inline, negrito) com busca instantânea por palavra-chave. (2) Tour guiado com react-joyride disparado automaticamente no primeiro acesso ao Hub (flag `portal_cliente_tour_v1` no localStorage); apresenta saudação, cards dos módulos liberados, botão de Ajuda e botão Sair em 4 passos sequenciais com botões 'Voltar/Próximo/Pular/Concluir' em PT-BR. Botão 'Tour' (visível em desktop) permite refazer o tour a qualquer momento. (3) Manual textual completo em `MANUAL-PORTAL-CLIENTE.md` na raiz, organizado em 6 capítulos + FAQ + glossário, pronto para ser ingerido pelo NotebookLM e gerar uma apresentação corporativa para clientes. Fonte de verdade única em `shared/help/portalClienteHelp.ts` (artigos + passos do tour). Dependência adicionada: react-joyride 3.1.0.",
+    tipo: "feature",
+    modulos: "Portal Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 09:00:00",
+  },
 ];

@@ -55,9 +55,14 @@ function MdRenderer({ md }: { md: string }) {
     return out;
   }, [md]);
 
+  // React já escapa entidades quando usamos {text}; ainda assim aplicamos
+  // sanitização defensiva removendo qualquer tag HTML antes de processar
+  // os tokens de markdown (caso conteúdo venha de banco no futuro).
+  const stripHtml = (s: string) => s.replace(/<\/?[^>]+(>|$)/g, "");
   const inline = (text: string) => {
+    const safe = stripHtml(text);
     const parts: any[] = [];
-    let rest = text;
+    let rest = safe;
     let key = 0;
     const re = /(\*\*[^*]+\*\*|`[^`]+`)/;
     while (rest.length) {

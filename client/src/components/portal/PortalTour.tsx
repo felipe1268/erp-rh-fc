@@ -20,14 +20,16 @@ export function PortalTour({ forceStart = false, onClose }: { forceStart?: boole
       setRun(true);
       return;
     }
+    let done = false;
     try {
-      const done = typeof window !== "undefined" && localStorage.getItem(TOUR_STORAGE_KEY) === "1";
-      if (!done) {
-        const t = setTimeout(() => setRun(true), 600);
-        return () => clearTimeout(t);
-      }
+      done = typeof window !== "undefined" && localStorage.getItem(TOUR_STORAGE_KEY) === "1";
     } catch {
-      /* ignore */
+      /* ignore — modo privado etc. */
+    }
+    if (!done) {
+      // Espera as animações de fade-up do Hub terminarem (max 0.7s + delay 0.3s)
+      const t = setTimeout(() => setRun(true), 1200);
+      return () => clearTimeout(t);
     }
   }, [forceStart]);
 

@@ -8,6 +8,9 @@ import {
 } from "lucide-react";
 import { APP_VERSION } from "../../../../shared/version";
 import { PORTAL_CLIENTE_MODULOS, type PortalClienteModuloKey } from "@shared/portalClienteAbas";
+import { PortalHelpButton } from "@/components/portal/PortalHelpDrawer";
+import { PortalTour, resetPortalTour } from "@/components/portal/PortalTour";
+import { HelpCircle } from "lucide-react";
 
 type Modulo = {
   id: string;
@@ -178,6 +181,7 @@ export default function PortalHubCliente() {
   return (
     <>
       <style>{hubStyles}</style>
+      <PortalTour />
       <div className="min-h-screen hub-mesh-bg relative overflow-hidden">
         {/* Wave decorations */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -213,9 +217,17 @@ export default function PortalHubCliente() {
                 <Building2 className="h-4 w-4 text-gray-400 shrink-0" />
                 <span className="text-xs font-semibold text-gray-700 truncate">{nomeEmpresa}</span>
               </div>
+              <PortalHelpButton />
+              <button
+                onClick={() => { resetPortalTour(); window.location.reload(); }}
+                title="Refazer o tour de boas-vindas"
+                className="hidden md:inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 hover:text-blue-600 px-2.5 py-1.5 rounded-xl bg-white/50 hover:bg-blue-50 border border-white/60 transition"
+              >
+                <HelpCircle className="h-3.5 w-3.5" /> Tour
+              </button>
               <button
                 onClick={logout}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-rose-600 px-3 py-1.5 rounded-xl bg-white/50 hover:bg-rose-50 border border-white/60 transition"
+                className="tour-hub-sair inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-rose-600 px-3 py-1.5 rounded-xl bg-white/50 hover:bg-rose-50 border border-white/60 transition"
               >
                 <LogOut className="h-3.5 w-3.5" /> Sair
               </button>
@@ -257,7 +269,7 @@ export default function PortalHubCliente() {
                 </span>
               </div>
 
-              <div className={`mb-2 relative z-10 ${mounted ? 'hub-animate-up' : 'opacity-0'}`} style={{ animationDelay: '0.2s' }}>
+              <div className={`tour-hub-saudacao mb-2 relative z-10 ${mounted ? 'hub-animate-up' : 'opacity-0'}`} style={{ animationDelay: '0.2s' }}>
                 <div className="flex items-center gap-2 mb-1">
                   <div className="h-1.5 w-1.5 rounded-full bg-[#D4A843] hub-glow-dot" />
                   <span className="text-[10px] font-bold text-[#D4A843] uppercase tracking-[0.25em]">Plataforma do Cliente</span>
@@ -285,7 +297,7 @@ export default function PortalHubCliente() {
               </div>
 
               {/* Tiles */}
-              <div className="flex flex-wrap gap-3 mt-3 relative z-10">
+              <div className="tour-hub-cards flex flex-wrap gap-3 mt-3 relative z-10">
                 {modulosLiberados.map((mod, idx) => {
                   const Icon = mod.icon;
                   return (
