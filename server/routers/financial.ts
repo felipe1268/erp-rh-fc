@@ -278,6 +278,41 @@ export const financialRouter = router({
     return { ok: true };
   }),
 
+  // Rev. 1620 — Pagamento em lote (Onda 2: APQC 8.7.5 — Process Payments)
+  bulkUpdateStatus: protectedProcedure.input(z.object({
+    ids: z.array(z.number()).min(1).max(500),
+    companyId: z.number(),
+    status: z.string(),
+    dataPagamento: z.string().optional(),
+    formaPagamento: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const idList = input.ids.filter(n => Number.isInteger(n) && n > 0);
+    if (idList.length === 0) return { ok: true, updated: 0 };
+    // Para "pago": força valor_realizado = valor_previsto (substituindo eventuais parciais).
+    // Para outros status: preserva valor_realizado existente.
+    const isPago = input.status === "pago";
+    const res = await dbExecute(db,
+      `UPDATE financial_entries
+         SET status=$1,
+             data_pagamento=COALESCE($2, data_pagamento),
+             forma_pagamento=COALESCE($3, forma_pagamento),
+             valor_realizado=${isPago ? "valor_previsto" : "valor_realizado"},
+             updated_at=NOW()
+       WHERE company_id=$4 AND id = ANY($5::int[]) AND status != 'cancelado'`,
+      [input.status, input.dataPagamento ?? null, input.formaPagamento ?? null, input.companyId, idList]
+    );
+    const updated = (res as any).rowCount ?? idList.length;
+    await createAuditLog({
+      action: "financial_entries_bulk_updated",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `${updated} título(s) atualizado(s) → ${input.status} (de ${idList.length} solicitado(s))`
+    });
+    return { ok: true, updated };
+  }),
+
   cancelEntry: protectedProcedure.input(z.object({
     id: z.number(),
     companyId: z.number(),
@@ -1989,6 +2024,7 @@ export const financialRouter = router({
               valor_previsto AS "valorPrevisto",
               valor_realizado AS "valorRealizado", status,
               data_vencimento AS "dataVencimento", data_pagamento AS "dataPagamento",
+              data_competencia AS "dataCompetencia",
               forma_pagamento AS "formaPagamento",
               origem_modulo AS "origemModulo", origem_id AS "origemId",
               origem_descricao AS "origemDescricao",
