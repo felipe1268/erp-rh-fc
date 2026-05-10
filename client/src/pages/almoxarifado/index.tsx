@@ -412,7 +412,10 @@ export default function AlmoxarifadoPage() {
   });
   const atualizarMut = trpc.compras.atualizarItem.useMutation({
     onSuccess: () => { refetch(); setModalItem(false); toast.success("Item atualizado!"); },
-    onError: (e) => toast.error("Erro ao atualizar item: " + e.message),
+    onError: (e: any) => {
+      console.error("[atualizarItem onError]", e, "data:", e?.data, "shape:", e?.shape, "cause:", e?.cause);
+      toast.error("Erro ao atualizar item: " + e.message);
+    },
   });
   const excluirMut = trpc.compras.excluirItem.useMutation({
     onSuccess: () => { refetch(); toast.success("Item removido."); },
@@ -454,14 +457,21 @@ export default function AlmoxarifadoPage() {
     } : { origem: "proprio" as const, fornecedorLocacao: null, dataInicioLocacao: null, dataVencimentoLocacao: null, valorLocacaoMensal: null, diasAlertaLocacao: null, observacoesLocacao: null };
     const obraParaCriar = obraContexto === "todos" ? null : obraContexto;
     if (editandoId) {
-      atualizarMut.mutate({
+      const payload = {
         id: editandoId, nome: formItem.nome, unidade: formItem.unidade,
         categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined,
         quantidadeMinima: pQtdMin, observacoes: formItem.observacoes || undefined,
         fotoUrl: formItem.fotoUrl || null, quantidadeAtual: pQtdAtual,
         valorUnitario: pValUnit || null,
         ...locacaoPayload,
-      });
+      };
+      console.log("[salvarItem→atualizar] payload:", payload);
+      try {
+        atualizarMut.mutate(payload);
+      } catch (e: any) {
+        console.error("[salvarItem→atualizar] sync throw:", e, "stack:", e?.stack);
+        toast.error("Erro ao atualizar item: " + (e?.message ?? e));
+      }
     } else {
       criarMut.mutate({
         companyId, obraId: obraParaCriar, nome: formItem.nome, unidade: formItem.unidade,
