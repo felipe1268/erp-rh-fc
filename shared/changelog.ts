@@ -11362,4 +11362,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-12 14:00:00",
   },
+  {
+    version: 1596,
+    titulo: "Efetivo da Obra — separação Direto/Indireto (paridade c/ Portal do Cliente)",
+    descricao: "A aba 'Efetivo' em Planejamento → Detalhe agora separa Mão de Obra Direta e Indireta com a mesma lógica do Portal do Cliente (jobFunctions.categoriaMO: 'direto' → Direto; 'indireta_obra'/'escritorio_central' → Indireto). Inclui: 2 KPIs clicáveis (Mão de Obra Direta / Indireta), filtros 'Apenas Diretos / Apenas Indiretos / Direto+Indireto' integrados à barra de status, nova coluna 'Categoria' na lista de funcionários (badge verde/cinza) e a 'Distribuição por Função' agora respeita o filtro de categoria. Para terceiros, a categoria é calculada no client a partir de jobFunctions.list. Servidor: getEquipeObra agora retorna `categoria` por funcionário, eliminando inconsistências entre o ERP e o Portal do Cliente.",
+    tipo: "melhoria",
+    modulos: "Planejamento, Portal Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-10 09:30:00",
+  },
 ];

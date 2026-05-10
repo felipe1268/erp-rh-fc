@@ -2747,6 +2747,22 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
   if (emps.length === 0) return [];
   const empIds = emps.map(e => e.id);
 
+  // Rev. 1596 — Categoria (Direto/Indireto) por nome de função, espelhando a
+  // mesma lógica usada no Portal do Cliente para preservar a paridade.
+  const jobFns = await db.select({
+    nome: jobFunctions.nome,
+    categoriaMO: jobFunctions.categoriaMO,
+  }).from(jobFunctions).where(inArray(jobFunctions.companyId, idsCompany));
+  const catByFn = new Map<string, string>();
+  for (const j of jobFns) {
+    if (j.nome) catByFn.set(j.nome.trim().toUpperCase(), (j.categoriaMO || "").toLowerCase());
+  }
+  const categoriaDe = (funcao: string | null | undefined): "Direto" | "Indireto" => {
+    const cat = catByFn.get((funcao || "").trim().toUpperCase()) || "";
+    if (cat === "indireta_obra" || cat === "escritorio_central") return "Indireto";
+    return "Direto";
+  };
+
   // Cross-reference termination_notices for Aviso Prévio
   const today = new Date().toISOString().split('T')[0];
   const avisoRows = await db.select({
@@ -2812,6 +2828,7 @@ export async function getEquipeObra(obraId: number, companyId: number, obraIds?:
       avisoDispensado: avisoInfo?.dispensado || false,
       feriasDataInicio: feriasInfo?.dataInicio || null,
       feriasDataFim: feriasInfo?.dataFim || null,
+      categoria: categoriaDe(e.funcao || e.cargo),
     };
   }).sort((a, b) => (a.nomeCompleto || '').localeCompare(b.nomeCompleto || ''));
 }

@@ -8441,6 +8441,25 @@ function EfetivoObraTab({ proj }: { proj: any }) {
       { enabled: obraId > 0 && companyId > 0 }
     );
 
+  // Rev. 1596 — categoria (Direto/Indireto) também p/ terceiros, espelhando
+  // a lógica do servidor (jobFunctions.categoriaMO por nome de função).
+  const { data: jobFnsList = [] } = trpc.jobFunctions.list.useQuery(
+    { companyId },
+    { enabled: companyId > 0 }
+  );
+  const catByFn = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const j of (jobFnsList as any[])) {
+      if (j?.nome) m.set(String(j.nome).trim().toUpperCase(), String(j.categoriaMO || "").toLowerCase());
+    }
+    return m;
+  }, [jobFnsList]);
+  const categoriaDe = (funcao: string | null | undefined): "Direto" | "Indireto" => {
+    const cat = catByFn.get((funcao || "").trim().toUpperCase()) || "";
+    if (cat === "indireta_obra" || cat === "escritorio_central") return "Indireto";
+    return "Direto";
+  };
+
   const terceirosNormalizados = useMemo(() => {
     return (terceirosRaw as any[]).map((t: any) => ({
       id: `terc-${t.id}`,
@@ -8452,8 +8471,9 @@ function EfetivoObraTab({ proj }: { proj: any }) {
       tipoContrato: "TERCEIRO",
       effectiveStatus: (t.status || "ativo").toLowerCase() === "ativo" ? "Ativo" : "Inativo",
       _empresaTerceiraId: t.empresaTerceiraId,
+      categoria: categoriaDe(t.funcao || null),
     }));
-  }, [terceirosRaw]);
+  }, [terceirosRaw, catByFn]);
 
   const equipeMerged = useMemo(
     () => [...(equipeRaw as any[]), ...terceirosNormalizados],
@@ -8489,6 +8509,8 @@ function EfetivoObraTab({ proj }: { proj: any }) {
 export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipeRaw: any[]; isLoading: boolean; docsMap?: Record<number, { aso: any | null; treinamentos: any[]; integracao?: any | null }> }) {
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
+  // Rev. 1596 — filtro Direto/Indireto (paridade c/ Portal do Cliente).
+  const [filtroCat, setFiltroCat] = useState<"todos" | "Direto" | "Indireto">("todos");
   // Rev. 1558 — linhas expandidas para mostrar ASO + Treinamentos (mesma UI
   // do Portal do Cliente). Estado por employeeId.
   const [expandidos, setExpandidos] = useState<Record<string | number, boolean>>({});
@@ -8507,18 +8529,24 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
     return c;
   }, [equipe]);
 
+  // Rev. 1596 — totais Direto/Indireto.
+  const totDireto = useMemo(() => equipe.filter((e: any) => (e.categoria || "Direto") === "Direto").length, [equipe]);
+  const totIndireto = useMemo(() => equipe.filter((e: any) => (e.categoria || "Direto") === "Indireto").length, [equipe]);
+
   const funcaoMap = useMemo(() => {
     const m = new Map<string, number>();
     equipe.forEach((e: any) => {
       if (filtroStatus !== "todos" && e.effectiveStatus !== filtroStatus) return;
+      if (filtroCat !== "todos" && (e.categoria || "Direto") !== filtroCat) return;
       const f = e.funcao || e.cargo || "Não informado";
       m.set(f, (m.get(f) || 0) + 1);
     });
     return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
-  }, [equipe, filtroStatus]);
+  }, [equipe, filtroStatus, filtroCat]);
 
   const listaFiltrada = useMemo(() => {
     let lista = filtroStatus === "todos" ? [...equipe] : equipe.filter((e: any) => e.effectiveStatus === filtroStatus);
+    if (filtroCat !== "todos") lista = lista.filter((e: any) => (e.categoria || "Direto") === filtroCat);
     if (busca) {
       const q = busca.toLowerCase();
       lista = lista.filter((e: any) =>
@@ -8529,7 +8557,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
     }
     lista.sort((a: any, b: any) => (a.nomeCompleto || "").localeCompare(b.nomeCompleto || ""));
     return lista;
-  }, [equipe, filtroStatus, busca]);
+  }, [equipe, filtroStatus, filtroCat, busca]);
 
   const maxBar = funcaoMap.length > 0 ? funcaoMap[0][1] : 1;
 
@@ -8595,11 +8623,64 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
                 </button>
               );
             })}
-            {filtroStatus !== "todos" && (
-              <button onClick={() => setFiltroStatus("todos")} className="ml-auto text-[10px] text-slate-400 hover:text-slate-600 flex items-center gap-1">
+            <span className="mx-1 h-5 w-px bg-slate-200" />
+            {/* Rev. 1596 — Filtros Direto/Indireto (paridade c/ Portal do Cliente). */}
+            {(["todos", "Direto", "Indireto"] as const).map(k => {
+              const active = filtroCat === k;
+              const count = k === "todos" ? equipe.length : k === "Direto" ? totDireto : totIndireto;
+              const cls = k === "Direto"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-300"
+                : k === "Indireto"
+                  ? "bg-slate-100 text-slate-700 border-slate-300"
+                  : "bg-blue-50 text-blue-700 border-blue-300";
+              return (
+                <button
+                  key={`cat-${k}`}
+                  onClick={() => setFiltroCat(filtroCat === k && k !== "todos" ? "todos" : k)}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all border ${active ? `${cls} shadow-sm` : "text-slate-500 hover:bg-slate-50 border-transparent"}`}
+                >
+                  <span className="font-bold">{count}</span>
+                  <span>{k === "todos" ? "Direto + Indireto" : `Apenas ${k}s`}</span>
+                </button>
+              );
+            })}
+            {(filtroStatus !== "todos" || filtroCat !== "todos") && (
+              <button onClick={() => { setFiltroStatus("todos"); setFiltroCat("todos"); }} className="ml-auto text-[10px] text-slate-400 hover:text-slate-600 flex items-center gap-1">
                 <X className="h-3 w-3" /> Limpar
               </button>
             )}
+          </div>
+
+          {/* Rev. 1596 — KPIs Direto / Indireto (espelham os do Portal do Cliente). */}
+          <div className="grid grid-cols-2 gap-3">
+            {([
+              { key: "Direto",   label: "Mão de Obra Direta",   value: totDireto,   color: "text-emerald-700", iconBg: "bg-emerald-100", soft: "bg-emerald-50",  ring: "ring-emerald-400", icon: HardHat },
+              { key: "Indireto", label: "Mão de Obra Indireta", value: totIndireto, color: "text-slate-700",   iconBg: "bg-slate-100",   soft: "bg-slate-50",    ring: "ring-slate-400",   icon: Users },
+            ] as const).map(k => {
+              const ativo = filtroCat === k.key;
+              const Icon = k.icon;
+              return (
+                <button
+                  key={k.key}
+                  type="button"
+                  onClick={() => setFiltroCat(filtroCat === k.key ? "todos" : k.key)}
+                  aria-pressed={ativo}
+                  className={`flex-1 text-left bg-white rounded-xl border shadow-sm px-4 py-3 transition cursor-pointer w-full ${ativo ? `${k.soft} border-transparent ring-2 ${k.ring}` : "border-slate-200 hover:border-slate-300 hover:shadow-md"}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0">
+                      <p className="text-[11px] uppercase font-semibold text-slate-500 tracking-wide truncate">
+                        {k.label}{ativo && <span className="ml-1.5 text-[9px] text-emerald-600 normal-case">• filtrando</span>}
+                      </p>
+                      <p className={`text-2xl font-bold mt-1 ${k.color}`}>{k.value}</p>
+                    </div>
+                    <div className={`p-2 rounded-lg ${k.iconBg} shrink-0`}>
+                      <Icon className={`h-5 w-5 ${k.color}`} />
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
@@ -8607,6 +8688,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
               <BarChart3 className="h-4 w-4 text-blue-500" />
               Distribuição por Função
               {filtroStatus !== "todos" && <span className="text-[10px] font-normal text-slate-400">— {statusPills.find(p => p.key === filtroStatus)?.label}</span>}
+              {filtroCat !== "todos" && <span className="text-[10px] font-normal text-slate-400">— {filtroCat === "Direto" ? "Direto" : "Indireto"}</span>}
               <span className="text-[10px] font-normal text-slate-400 ml-auto">{funcaoMap.reduce((s, [, c]) => s + c, 0)} funcionários em {funcaoMap.length} funções</span>
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
@@ -8647,6 +8729,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Nome</th>
                     <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Função / Cargo</th>
                     <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Vínculo</th>
+                    <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Categoria</th>
                     <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Status</th>
                     <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">ASO</th>
                     <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Trein.</th>
@@ -8711,6 +8794,19 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
                         </span>
                       </td>
                       <td className="px-4 py-2 text-center">
+                        {(() => {
+                          const cat = (e.categoria || "Direto") as "Direto" | "Indireto";
+                          const catCls = cat === "Direto"
+                            ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                            : "bg-slate-200 text-slate-700 border-slate-300";
+                          return (
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold border ${catCls}`}>
+                              {cat}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-4 py-2 text-center">
                         <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[e.effectiveStatus] || "bg-slate-100 text-slate-600"}`}>
                           {STATUS_LABELS[e.effectiveStatus] || e.effectiveStatus}
                         </span>
@@ -8756,7 +8852,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
                     </tr>
                     {expanded && podeExpandir && (
                       <tr className="bg-slate-50/60">
-                        <td colSpan={9} className="px-6 py-4">
+                        <td colSpan={10} className="px-6 py-4">
                           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 text-xs">
                             {/* Rev. 1590 — Integração de Segurança SST.
                                 Módulo Planejamento (engenheiro): mostra
@@ -8848,7 +8944,7 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
                     );
                   })}
                   {listaFiltrada.length === 0 && (
-                    <tr><td colSpan={9} className="text-center py-10 text-slate-400 text-sm">Nenhum funcionário encontrado</td></tr>
+                    <tr><td colSpan={10} className="text-center py-10 text-slate-400 text-sm">Nenhum funcionário encontrado</td></tr>
                   )}
                 </tbody>
               </table>
