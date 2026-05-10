@@ -14,12 +14,13 @@ import {
   CheckCircle2, Loader2, X, Sun, Palmtree, TrendingUp,
   Building2, ArrowRight, Timer, ShieldAlert, Wallet,
   BarChart3, PieChart, CalendarClock, CalendarCheck, Ban,
-  ChevronLeft, ChevronRight, ArrowLeft
+  ChevronLeft, ChevronRight, ArrowLeft, Search, Download
 } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 function fmtBRL(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -39,6 +40,8 @@ export default function DashFerias() {
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const [ano, setAno] = useState(new Date().getFullYear());
   const [drillDialog, setDrillDialog] = useState<{ title: string; items: any[] } | null>(null);
+  const [drillSearch, setDrillSearch] = useState("");
+  const [drillStatusFilter, setDrillStatusFilter] = useState<string>("todos");
   const [ganttEmployeeId, setGanttEmployeeId] = useState<number | null>(null);
 
   const feriasDoFunc = trpc.avisoPrevio.ferias.feriasDoFuncionario.useQuery(
@@ -626,79 +629,223 @@ export default function DashFerias() {
         </Card>
       )}
 
-      {/* Drill-down Dialog */}
-      <Dialog open={!!drillDialog} onOpenChange={() => setDrillDialog(null)}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Palmtree className="w-5 h-5 text-[#10B981]" />
-              {drillDialog?.title}
-              <Badge variant="secondary" className="ml-2">{drillDialog?.items.length || 0}</Badge>
-            </DialogTitle>
-          </DialogHeader>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[#E2E8F0]">
-                  <th className="text-left py-2 text-xs font-medium text-[#64748B]">Funcionário</th>
-                  <th className="text-left py-2 text-xs font-medium text-[#64748B]">Função</th>
-                  <th className="text-left py-2 text-xs font-medium text-[#64748B]">Setor</th>
-                  <th className="text-left py-2 text-xs font-medium text-[#64748B]">Per. Aquisitivo</th>
-                  <th className="text-left py-2 text-xs font-medium text-[#64748B]">Concessivo Até</th>
-                  <th className="text-left py-2 text-xs font-medium text-[#64748B]">Início</th>
-                  <th className="text-left py-2 text-xs font-medium text-[#64748B]">Fim</th>
-                  <th className="text-center py-2 text-xs font-medium text-[#64748B]">Dias</th>
-                  <th className="text-right py-2 text-xs font-medium text-[#64748B]">Valor</th>
-                  <th className="text-center py-2 text-xs font-medium text-[#64748B]">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {drillDialog?.items.map((f: any) => {
-                  const statusColors: Record<string, string> = {
-                    pendente: "bg-amber-100 text-amber-700",
-                    agendada: "bg-blue-100 text-blue-700",
-                    vencida: "bg-red-100 text-red-700",
-                    em_gozo: "bg-green-100 text-green-700",
-                    concluida: "bg-gray-100 text-gray-700",
-                    cancelada: "bg-slate-100 text-slate-500",
-                  };
-                  const statusLabel: Record<string, string> = {
-                    pendente: "Pendente", agendada: "Agendada", vencida: "Vencida",
-                    em_gozo: "Em Gozo", concluida: "Concluída", cancelada: "Cancelada",
-                  };
-                  const fmtDate = (d: string | null) => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "—";
-                  return (
-                    <tr key={f.id} className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors">
-                      <td className="py-2">
-                        <Link href={`/colaboradores?id=${f.employeeId}`} className="text-[#1e3a5f] hover:underline font-medium text-xs">
-                          {f.nomeCompleto}
-                        </Link>
-                        {f.dataAlteradaPeloRh === 1 && (
-                          <Badge variant="secondary" className="ml-1 bg-purple-100 text-purple-700 text-[9px] px-1">RH</Badge>
-                        )}
-                      </td>
-                      <td className="py-2 text-xs text-[#64748B]">{f.funcao}</td>
-                      <td className="py-2 text-xs text-[#64748B]">{f.setor}</td>
-                      <td className="py-2 text-xs text-[#64748B]">{fmtDate(f.periodoAquisitivoInicio)} — {fmtDate(f.periodoAquisitivoFim)}</td>
-                      <td className="py-2 text-xs text-[#64748B]" title="Data limite p/ iniciar o gozo (30 dias antes do próximo período aquisitivo)">{fmtDate(dataLimiteInicioGozoFerias(f.periodoConcessivoFim))}</td>
-                      <td className="py-2 text-xs text-[#64748B]">{fmtDate(f.dataInicio)}</td>
-                      <td className="py-2 text-xs text-[#64748B]">{fmtDate(f.dataFim)}</td>
-                      <td className="py-2 text-xs text-center">{f.diasGozo || 30}</td>
-                      <td className="py-2 text-xs text-right font-medium">{f.valorTotal ? fmtBRL(parseFloat(f.valorTotal)) : "—"}</td>
-                      <td className="py-2 text-center">
-                        <Badge className={`text-[10px] ${statusColors[f.status] || "bg-gray-100 text-gray-700"}`}>
-                          {statusLabel[f.status] || f.status}
-                        </Badge>
-                        {f.pagamentoEmDobro === 1 && (
-                          <Badge variant="destructive" className="ml-1 text-[9px] px-1">2x</Badge>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+      {/* Rev. 1612 — Drill-down Dialog: full-screen, layout moderno,
+           busca, filtro de status, KPIs no topo, export CSV, sem cortes. */}
+      <Dialog open={!!drillDialog} onOpenChange={(open) => { if (!open) { setDrillDialog(null); setDrillSearch(""); setDrillStatusFilter("todos"); } }}>
+        <DialogContent className="w-screen sm:w-[98vw] sm:max-w-[1600px] h-[100dvh] sm:h-[95vh] max-h-[100dvh] sm:max-h-[95vh] p-0 gap-0 flex flex-col overflow-hidden rounded-none sm:rounded-lg">
+          {(() => {
+            const fmtDate = (d: string | null | undefined) => {
+              if (!d) return "—";
+              const s = String(d).slice(0, 10);
+              return s.includes("-") ? s.split("-").reverse().join("/") : s;
+            };
+            const statusColors: Record<string, string> = {
+              pendente: "bg-amber-100 text-amber-700 border-amber-200",
+              agendada: "bg-blue-100 text-blue-700 border-blue-200",
+              vencida: "bg-red-100 text-red-700 border-red-200",
+              em_gozo: "bg-green-100 text-green-700 border-green-200",
+              concluida: "bg-gray-100 text-gray-700 border-gray-200",
+              cancelada: "bg-slate-100 text-slate-500 border-slate-200",
+            };
+            const statusLabel: Record<string, string> = {
+              pendente: "Pendente", agendada: "Agendada", vencida: "Vencida",
+              em_gozo: "Em Gozo", concluida: "Concluída", cancelada: "Cancelada",
+            };
+            const items = drillDialog?.items || [];
+            // Distribuição de status p/ chips de filtro
+            const statusCounts = items.reduce((acc: Record<string, number>, f: any) => {
+              const s = f.status || "—"; acc[s] = (acc[s] || 0) + 1; return acc;
+            }, {});
+            const totalValor = items.reduce((s: number, f: any) => s + (parseFloat(f.valorTotal || "0") || 0), 0);
+            const totalEmDobro = items.filter((f: any) => f.pagamentoEmDobro === 1).length;
+            const totalAbono = items.filter((f: any) => f.abonoPecuniario === 1).length;
+            // Filtro local
+            const q = drillSearch.trim().toLowerCase();
+            const filtered = items.filter((f: any) => {
+              if (drillStatusFilter !== "todos" && f.status !== drillStatusFilter) return false;
+              if (!q) return true;
+              return [f.nomeCompleto, f.funcao, f.setor].filter(Boolean).some((v: string) => String(v).toLowerCase().includes(q));
+            });
+            const exportCsv = () => {
+              const header = ["Funcionário", "Função", "Setor", "Per. Aquisitivo Início", "Per. Aquisitivo Fim", "Limite p/ iniciar gozo", "Início Gozo", "Fim Gozo", "Dias", "Valor", "Status", "Pag. Dobro", "Abono Pec.", "Alterado RH"];
+              const rows = filtered.map((f: any) => [
+                f.nomeCompleto || "", f.funcao || "", f.setor || "",
+                fmtDate(f.periodoAquisitivoInicio), fmtDate(f.periodoAquisitivoFim),
+                fmtDate(dataLimiteInicioGozoFerias(f.periodoConcessivoFim) as any),
+                fmtDate(f.dataInicio), fmtDate(f.dataFim),
+                String(f.diasGozo || 30),
+                f.valorTotal ? parseFloat(f.valorTotal).toFixed(2).replace(".", ",") : "",
+                statusLabel[f.status] || f.status || "",
+                f.pagamentoEmDobro === 1 ? "Sim" : "",
+                f.abonoPecuniario === 1 ? "Sim" : "",
+                f.dataAlteradaPeloRh === 1 ? "Sim" : "",
+              ]);
+              const csv = [header, ...rows].map(r => r.map((c: any) => {
+                const s = String(c ?? ""); return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+              }).join(";")).join("\n");
+              const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url; a.download = `ferias-${(drillDialog?.title || "drill").replace(/[^a-z0-9]+/gi, "_").toLowerCase()}-${ano}.csv`;
+              document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            };
+            return (
+              <>
+                {/* Header sticky */}
+                <DialogHeader className="px-5 sm:px-6 py-4 border-b border-[#E2E8F0] bg-gradient-to-r from-emerald-50/60 via-white to-white shrink-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl text-[#0F172A]">
+                        <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 shrink-0">
+                          <Palmtree className="w-5 h-5" />
+                        </span>
+                        <span className="truncate">{drillDialog?.title}</span>
+                        <Badge variant="secondary" className="ml-1 bg-[#0F172A] text-white shrink-0">{items.length}</Badge>
+                      </DialogTitle>
+                      <p className="text-xs text-[#64748B] mt-1 ml-11">Lista detalhada de funcionários — ano de referência {ano}</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={exportCsv} className="shrink-0 gap-1.5" disabled={!filtered.length}>
+                      <Download className="w-4 h-4" /> CSV
+                    </Button>
+                  </div>
+
+                  {/* Linha de KPIs do recorte */}
+                  <div className="flex flex-wrap items-center gap-2 mt-3 ml-11">
+                    <div className="px-2.5 py-1 rounded-md bg-white border border-[#E2E8F0] text-xs">
+                      <span className="text-[#64748B]">Valor total: </span>
+                      <span className="font-semibold text-[#0F172A]">{fmtBRL(totalValor)}</span>
+                    </div>
+                    {totalEmDobro > 0 && (
+                      <div className="px-2.5 py-1 rounded-md bg-red-50 border border-red-200 text-xs text-red-700">
+                        <span className="font-medium">{totalEmDobro}</span> em dobro
+                      </div>
+                    )}
+                    {totalAbono > 0 && (
+                      <div className="px-2.5 py-1 rounded-md bg-blue-50 border border-blue-200 text-xs text-blue-700">
+                        <span className="font-medium">{totalAbono}</span> com abono
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Busca + chips de status */}
+                  <div className="flex flex-col sm:flex-row gap-2 mt-3 ml-11">
+                    <div className="relative flex-1 max-w-md">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
+                      <Input
+                        placeholder="Buscar por nome, função ou setor…"
+                        value={drillSearch}
+                        onChange={(e) => setDrillSearch(e.target.value)}
+                        className="pl-8 h-9 text-sm"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setDrillStatusFilter("todos")}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${drillStatusFilter === "todos" ? "bg-[#0F172A] text-white border-[#0F172A]" : "bg-white text-[#64748B] border-[#E2E8F0] hover:bg-[#F8FAFC]"}`}
+                      >Todos · {items.length}</button>
+                      {Object.entries(statusCounts).filter(([s]) => s !== "—").map(([s, n]) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setDrillStatusFilter(s)}
+                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${drillStatusFilter === s ? statusColors[s] + " font-medium" : "bg-white text-[#64748B] border-[#E2E8F0] hover:bg-[#F8FAFC]"}`}
+                        >{statusLabel[s] || s} · {n as number}</button>
+                      ))}
+                    </div>
+                  </div>
+                </DialogHeader>
+
+                {/* Tabela com scroll interno e header sticky */}
+                <div className="flex-1 min-h-0 overflow-auto">
+                  {filtered.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-[#94A3B8] py-16">
+                      <Palmtree className="w-12 h-12 opacity-40 mb-2" />
+                      <p className="text-sm">Nenhum registro corresponde aos filtros.</p>
+                    </div>
+                  ) : (
+                    <table className="w-full text-sm border-separate border-spacing-0">
+                      <thead className="sticky top-0 z-10 bg-[#F8FAFC]/95 backdrop-blur">
+                        <tr>
+                          <th className="text-left py-2.5 px-4 text-[11px] font-semibold uppercase tracking-wide text-[#64748B] border-b border-[#E2E8F0]">Funcionário</th>
+                          <th className="text-left py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wide text-[#64748B] border-b border-[#E2E8F0] whitespace-nowrap">Função</th>
+                          <th className="text-left py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wide text-[#64748B] border-b border-[#E2E8F0] whitespace-nowrap">Setor</th>
+                          <th className="text-left py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wide text-[#64748B] border-b border-[#E2E8F0] whitespace-nowrap">Per. Aquisitivo</th>
+                          <th className="text-left py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wide text-[#64748B] border-b border-[#E2E8F0] whitespace-nowrap" title="Data limite p/ iniciar o gozo (30 dias antes do próximo período aquisitivo)">Limite Gozo</th>
+                          <th className="text-left py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wide text-[#64748B] border-b border-[#E2E8F0] whitespace-nowrap">Início</th>
+                          <th className="text-left py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wide text-[#64748B] border-b border-[#E2E8F0] whitespace-nowrap">Fim</th>
+                          <th className="text-center py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wide text-[#64748B] border-b border-[#E2E8F0] whitespace-nowrap">Dias</th>
+                          <th className="text-right py-2.5 px-3 text-[11px] font-semibold uppercase tracking-wide text-[#64748B] border-b border-[#E2E8F0] whitespace-nowrap">Valor</th>
+                          <th className="text-center py-2.5 px-4 text-[11px] font-semibold uppercase tracking-wide text-[#64748B] border-b border-[#E2E8F0] whitespace-nowrap">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map((f: any, idx: number) => (
+                          <tr key={f.id} className={`group border-b border-[#F1F5F9] hover:bg-emerald-50/40 transition-colors ${idx % 2 === 0 ? "bg-white" : "bg-[#FAFBFC]"}`}>
+                            <td className="py-2.5 px-4 align-top">
+                              <div className="flex items-start gap-2">
+                                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-[#1e3a5f]/10 text-[#1e3a5f] text-[10px] font-bold shrink-0 mt-0.5">
+                                  {(f.nomeCompleto || "?").trim().split(/\s+/).slice(0, 2).map((n: string) => n[0]).join("").toUpperCase()}
+                                </span>
+                                <div className="min-w-0">
+                                  <Link href={`/colaboradores?id=${f.employeeId}`} className="text-[#0F172A] hover:text-[#1e3a5f] hover:underline font-medium text-sm leading-tight block">
+                                    {f.nomeCompleto}
+                                  </Link>
+                                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                    {f.dataAlteradaPeloRh === 1 && (
+                                      <Badge variant="secondary" className="bg-purple-100 text-purple-700 text-[9px] px-1.5 py-0 font-medium">RH</Badge>
+                                    )}
+                                    {f.abonoPecuniario === 1 && (
+                                      <Badge variant="secondary" className="bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0 font-medium">Abono</Badge>
+                                    )}
+                                    {(f.numeroPeriodo || 1) >= 2 && (
+                                      <Badge variant="secondary" className="bg-orange-100 text-orange-700 text-[9px] px-1.5 py-0 font-medium">{f.numeroPeriodo}º Per.</Badge>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-3 text-xs text-[#475569] align-top whitespace-nowrap">{f.funcao || "—"}</td>
+                            <td className="py-2.5 px-3 text-xs text-[#475569] align-top whitespace-nowrap">{f.setor || "—"}</td>
+                            <td className="py-2.5 px-3 text-xs text-[#475569] align-top whitespace-nowrap font-mono">
+                              {fmtDate(f.periodoAquisitivoInicio)}<span className="text-[#CBD5E1] mx-1">→</span>{fmtDate(f.periodoAquisitivoFim)}
+                            </td>
+                            <td className="py-2.5 px-3 text-xs align-top whitespace-nowrap font-mono" title="Data limite p/ iniciar o gozo (30 dias antes do próximo período aquisitivo)">
+                              {(() => {
+                                const limite = dataLimiteInicioGozoFerias(f.periodoConcessivoFim) as any;
+                                const isVencida = f.status === "vencida" || f.vencida === 1;
+                                return <span className={isVencida ? "text-red-600 font-medium" : "text-[#475569]"}>{fmtDate(limite)}</span>;
+                              })()}
+                            </td>
+                            <td className="py-2.5 px-3 text-xs text-[#475569] align-top whitespace-nowrap font-mono">{fmtDate(f.dataInicio)}</td>
+                            <td className="py-2.5 px-3 text-xs text-[#475569] align-top whitespace-nowrap font-mono">{fmtDate(f.dataFim)}</td>
+                            <td className="py-2.5 px-3 text-xs text-center text-[#0F172A] font-semibold align-top">{f.diasGozo || 30}</td>
+                            <td className="py-2.5 px-3 text-xs text-right font-semibold text-[#0F172A] align-top whitespace-nowrap">{f.valorTotal ? fmtBRL(parseFloat(f.valorTotal)) : "—"}</td>
+                            <td className="py-2.5 px-4 text-center align-top whitespace-nowrap">
+                              <div className="inline-flex items-center gap-1">
+                                <Badge className={`text-[10px] border ${statusColors[f.status] || "bg-gray-100 text-gray-700 border-gray-200"}`}>
+                                  {statusLabel[f.status] || f.status}
+                                </Badge>
+                                {f.pagamentoEmDobro === 1 && (
+                                  <Badge variant="destructive" className="text-[9px] px-1.5">2x</Badge>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                {/* Footer com contagem */}
+                <div className="px-5 sm:px-6 py-2.5 border-t border-[#E2E8F0] bg-[#F8FAFC] text-xs text-[#64748B] flex items-center justify-between shrink-0">
+                  <span>Exibindo <span className="font-semibold text-[#0F172A]">{filtered.length}</span> de <span className="font-semibold text-[#0F172A]">{items.length}</span> registros</span>
+                  <span className="hidden sm:inline">Clique no nome para abrir a ficha do colaborador</span>
+                </div>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
