@@ -5647,6 +5647,9 @@ export const almoxarifadoItens = pgTable("almoxarifado_itens", {
   criadoPorNome:         varchar("criado_por_nome", { length: 255 }),
   atualizadoPorId:       integer("atualizado_por_id"),
   atualizadoPorNome:     varchar("atualizado_por_nome", { length: 255 }),
+  // Rev. 1604 — preço estimado por IA (preenchimento em lote a partir do nome)
+  precoPreenchidoIa:     boolean("preco_preenchido_ia").default(false),
+  precoIaEm:             timestamp("preco_ia_em", { mode: 'string' }),
   criadoEm:             timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
   atualizadoEm:         timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
 });

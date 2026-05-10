@@ -1404,6 +1404,7 @@ export const comprasRouter = router({
             codigoInterno: item.codigoInterno,
             quantidadeTotal: 0, quantidadeMinima: 0, valorUnitario: null,
             valorTotalEstoque: 0, almoxarifados: [], fotoUrl: null,
+            precoPreenchidoIa: false,
           });
         }
         const entry = map.get(key)!;
@@ -1411,7 +1412,13 @@ export const comprasRouter = router({
         entry.quantidadeTotal += qty;
         entry.quantidadeMinima += n(item.quantidadeMinima);
         if (!entry.fotoUrl && (item as any).fotoUrl) entry.fotoUrl = (item as any).fotoUrl;
-        if (!entry.valorUnitario && item.valorUnitario) entry.valorUnitario = item.valorUnitario;
+        if (!entry.valorUnitario && item.valorUnitario) {
+          entry.valorUnitario = item.valorUnitario;
+        }
+        // Flag "IA" no agrupado: true se QUALQUER item contribuinte com preço foi preenchido por IA
+        if (item.valorUnitario && (item as any).precoPreenchidoIa) {
+          entry.precoPreenchidoIa = true;
+        }
         if (item.obraId) {
           entry.almoxarifados.push({ tipo: "obra", obraId: item.obraId, quantidade: qty, itemId: item.id });
         } else {
@@ -1424,6 +1431,118 @@ export const comprasRouter = router({
       }));
       const totalGeral = result.reduce((s, r) => s + r.valorTotalEstoque, 0);
       return { itens: result, totalGeral };
+    }),
+
+  // ══════════════════════════════════════════════════════════════
+  // ALMOXARIFADO — IA: PREENCHIMENTO EM LOTE DE PREÇOS FALTANTES
+  // ══════════════════════════════════════════════════════════════
+  // Rev. 1604 — Para todos os itens da company que estão sem valor_unitario
+  // (NULL ou 0), pede à IA estimar o preço médio de mercado em lotes,
+  // grava `valor_unitario` + flag `preco_preenchido_ia=true` + `preco_ia_em`.
+  preencherPrecosFaltantesIA: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId: z.number().nullable().optional(), // se passado, restringe à obra
+      tamanhoLote: z.number().min(5).max(40).default(20),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+
+      // 1) Pega todos itens sem preço
+      const conds: any[] = [
+        eq(almoxarifadoItens.companyId, input.companyId),
+        eq(almoxarifadoItens.ativo, true),
+        or(isNull(almoxarifadoItens.valorUnitario), eq(almoxarifadoItens.valorUnitario, "0")),
+      ];
+      if (input.obraId === null) {
+        conds.push(isNull(almoxarifadoItens.obraId));
+      } else if (input.obraId !== undefined) {
+        conds.push(eq(almoxarifadoItens.obraId, input.obraId));
+      }
+      // Aplica filtro de obras permitidas (mesma regra de listarItens) para impedir
+      // que um usuário com escopo restrito atualize preços de obras que não administra.
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null) {
+        if (allowed.length === 0) {
+          return { processados: 0, atualizados: 0, falhas: 0, mensagem: "Sem permissão em nenhuma obra desta empresa." };
+        }
+        if (input.obraId !== undefined && input.obraId !== null && !allowed.includes(input.obraId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta obra." });
+        }
+        conds.push(or(isNull(almoxarifadoItens.obraId), inArray(almoxarifadoItens.obraId, allowed)));
+      }
+      const todos = await db.select().from(almoxarifadoItens).where(and(...conds));
+      if (todos.length === 0) {
+        return { processados: 0, atualizados: 0, falhas: 0, mensagem: "Nenhum item sem preço encontrado." };
+      }
+
+      // 2) Processa em lotes
+      const lotes: typeof todos[] = [];
+      for (let i = 0; i < todos.length; i += input.tamanhoLote) {
+        lotes.push(todos.slice(i, i + input.tamanhoLote));
+      }
+
+      let atualizados = 0;
+      let falhas = 0;
+
+      for (const lote of lotes) {
+        const linhas = lote.map((it) => `${it.id}|${it.nome}|${it.unidade}|${it.categoria ?? "-"}`).join("\n");
+        const prompt = `Você é um especialista em precificação de materiais e equipamentos de construção civil no Brasil em 2025.
+
+Para CADA item abaixo (formato: id|nome|unidade|categoria), estime o PREÇO MÉDIO UNITÁRIO de mercado para compra/aquisição em Reais (R$). Use seu conhecimento de mercado para itens comuns (cimento, aço, ferramentas, EPIs, hidráulica, elétrica, etc).
+
+Itens:
+${linhas}
+
+REGRAS IMPORTANTES:
+- Se o nome for muito vago (ex.: "Almoço", "Diversos", "Material X") ou se for impossível estimar com confiança, use preco=0 e confianca="baixa".
+- Caso contrário, dê o melhor preço médio realista para o varejo brasileiro de construção.
+- Considere a unidade (kg, m², un, sc, L etc) ao precificar.
+- NÃO invente valores absurdos. Para itens incertos, prefira preco=0.
+
+Responda APENAS com um JSON no formato (sem markdown, sem comentários):
+{"itens":[{"id":<id>,"preco":<numero_em_reais>,"confianca":"alta"|"media"|"baixa"}]}`;
+
+        try {
+          const result = await invokeLLM({
+            messages: [{ role: "user", content: prompt }],
+            maxTokens: 4096,
+          });
+          const text = result.content ?? "";
+          const match = text.match(/\{[\s\S]*\}/);
+          if (!match) { falhas += lote.length; continue; }
+          const parsed = JSON.parse(match[0]);
+          const respostas: Array<{ id: number; preco: number; confianca?: string }> = parsed.itens || [];
+          const byId = new Map(respostas.map((r) => [Number(r.id), r]));
+
+          const agora = new Date().toISOString();
+          for (const it of lote) {
+            const r = byId.get(it.id);
+            if (!r || !Number.isFinite(Number(r.preco)) || Number(r.preco) <= 0) {
+              falhas++;
+              continue;
+            }
+            await db.update(almoxarifadoItens)
+              .set({
+                valorUnitario: String(Number(r.preco).toFixed(2)),
+                precoPreenchidoIa: true,
+                precoIaEm: agora,
+              } as any)
+              .where(eq(almoxarifadoItens.id, it.id));
+            atualizados++;
+          }
+        } catch (err: any) {
+          console.error("[preencherPrecosFaltantesIA] Lote falhou:", err?.message || err);
+          falhas += lote.length;
+        }
+      }
+
+      return {
+        processados: todos.length,
+        atualizados,
+        falhas,
+        mensagem: `${atualizados} de ${todos.length} itens atualizados pela IA${falhas > 0 ? ` · ${falhas} falharam (nome muito vago ou erro de IA)` : ""}.`,
+      };
     }),
 
   // ══════════════════════════════════════════════════════════════

@@ -148,6 +148,42 @@ export default function AlmoxarifadoPage() {
     },
     onError: (e) => { toast.error(e.message); setSugerindoPreco(false); },
   });
+  const utils = trpc.useUtils();
+  const [preenchendoIA, setPreenchendoIA] = useState(false);
+  const preencherIAMut = trpc.compras.preencherPrecosFaltantesIA.useMutation({
+    onSuccess: (d: any) => {
+      setPreenchendoIA(false);
+      toast.success(`✨ ${d.mensagem}`, { duration: 8000 });
+      utils.compras.listarItens.invalidate();
+      utils.compras.listarItensConsolidado.invalidate();
+    },
+    onError: (e) => {
+      setPreenchendoIA(false);
+      toast.error(`Falha ao preencher preços: ${e.message}`);
+    },
+  });
+  const dispararPreencherIA = (escopo: "empresa" | "obra") => {
+    if (!companyId) return;
+    const itensSemPreco = escopo === "empresa"
+      ? (consolidado?.itens || []).filter((i: any) => !i.valorUnitario || parseFloat(i.valorUnitario) === 0).length
+      : itens.filter((i: any) => !i.valorUnitario || parseFloat(i.valorUnitario) === 0).length;
+    if (itensSemPreco === 0) {
+      toast.info("Não há itens sem preço para preencher.");
+      return;
+    }
+    const ok = window.confirm(
+      `A IA vai estimar o preço médio de mercado de ${itensSemPreco} item(ns) sem valor cadastrado.\n\n` +
+      `• Os preços serão marcados com a tag "🤖 IA" para revisão posterior.\n` +
+      `• Pode levar 1-3 minutos. Os preços só substituem onde está vazio.\n\n` +
+      `Deseja continuar?`
+    );
+    if (!ok) return;
+    setPreenchendoIA(true);
+    preencherIAMut.mutate({
+      companyId,
+      ...(escopo === "obra" && obraContexto !== "todos" ? { obraId: obraContexto === "central" ? null : Number(obraContexto) } : {}),
+    });
+  };
   const [buscandoBarcode, setBuscandoBarcode] = useState(false);
   const buscarBarcodeMut = trpc.compras.buscarPorCodigoBarras.useMutation({
     onSuccess: (d: any) => {
@@ -866,7 +902,23 @@ export default function AlmoxarifadoPage() {
                   <p className="text-3xl font-black mt-1">R$ {consolidado.totalGeral.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
                   <p className="text-xs opacity-70 mt-1">{consolidado.itens.length} ite{consolidado.itens.length !== 1 ? "ns" : "m"} agrupado{consolidado.itens.length !== 1 ? "s" : ""} · {consolidado.itens.filter((i: any) => i.valorUnitario).length} com preço cadastrado</p>
                 </div>
-                <BarChart2 className="h-12 w-12 opacity-30" />
+                <div className="flex items-center gap-3">
+                  {consolidado.itens.filter((i: any) => !i.valorUnitario || parseFloat(i.valorUnitario) === 0).length > 0 && (
+                    <button
+                      onClick={() => dispararPreencherIA("empresa")}
+                      disabled={preenchendoIA}
+                      title="Estimar preço médio de mercado dos itens sem valor cadastrado usando IA"
+                      className="inline-flex items-center gap-2 bg-white/95 hover:bg-white text-purple-700 font-semibold px-3 py-2 rounded-xl shadow-sm transition disabled:opacity-60 disabled:cursor-not-allowed text-sm"
+                    >
+                      {preenchendoIA ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Preenchendo {consolidado.itens.filter((i: any) => !i.valorUnitario || parseFloat(i.valorUnitario) === 0).length} itens…</>
+                      ) : (
+                        <>🤖 Preencher {consolidado.itens.filter((i: any) => !i.valorUnitario || parseFloat(i.valorUnitario) === 0).length} preços com IA</>
+                      )}
+                    </button>
+                  )}
+                  <BarChart2 className="h-12 w-12 opacity-30" />
+                </div>
               </div>
             )}
 
@@ -980,8 +1032,11 @@ export default function AlmoxarifadoPage() {
                           </p>
                           <StatusBadge atual={item.quantidadeTotal} minimo={item.quantidadeMinima} />
                           {item.valorUnitario && parseFloat(item.valorUnitario) > 0 && (
-                            <p className="text-[10px] text-emerald-700 font-medium mt-0.5">
+                            <p className="text-[10px] text-emerald-700 font-medium mt-0.5 flex items-center gap-1 flex-wrap">
                               R$ {parseFloat(item.valorUnitario).toFixed(2)}/{item.unidade}
+                              {(item as any).precoPreenchidoIa && (
+                                <span title="Preço estimado pela IA — revisar antes de usar para cotação" className="inline-flex items-center gap-0.5 bg-purple-100 text-purple-700 px-1 rounded text-[9px] font-bold">🤖 IA</span>
+                              )}
                             </p>
                           )}
                         </div>
@@ -1126,7 +1181,23 @@ export default function AlmoxarifadoPage() {
               <p className="text-3xl font-black mt-1">R$ {fmtBRLi(valorTotalObra)}</p>
               <p className="text-xs opacity-70 mt-1">{itens.length} ite{itens.length !== 1 ? "ns" : "m"} · {itens.filter((i: any) => parseValorI(i.valorUnitario) > 0).length} com preço cadastrado</p>
             </div>
-            <BarChart2 className="h-12 w-12 opacity-30" />
+            <div className="flex items-center gap-3">
+              {itens.filter((i: any) => !i.valorUnitario || parseFloat(i.valorUnitario) === 0).length > 0 && (
+                <button
+                  onClick={() => dispararPreencherIA("obra")}
+                  disabled={preenchendoIA}
+                  title="Estimar preço médio de mercado dos itens sem valor cadastrado deste almoxarifado usando IA"
+                  className="inline-flex items-center gap-2 bg-white/95 hover:bg-white text-purple-700 font-semibold px-3 py-2 rounded-xl shadow-sm transition disabled:opacity-60 disabled:cursor-not-allowed text-sm"
+                >
+                  {preenchendoIA ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Preenchendo {itens.filter((i: any) => !i.valorUnitario || parseFloat(i.valorUnitario) === 0).length} itens…</>
+                  ) : (
+                    <>🤖 Preencher {itens.filter((i: any) => !i.valorUnitario || parseFloat(i.valorUnitario) === 0).length} preços com IA</>
+                  )}
+                </button>
+              )}
+              <BarChart2 className="h-12 w-12 opacity-30" />
+            </div>
           </div>
 
           {/* Filtros */}
@@ -1243,8 +1314,11 @@ export default function AlmoxarifadoPage() {
                         </p>
                         <StatusBadge atual={atual} minimo={minimo} />
                         {(item as any).valorUnitario && parseFloat((item as any).valorUnitario) > 0 && (
-                          <p className="text-[10px] text-emerald-700 font-medium mt-0.5">
+                          <p className="text-[10px] text-emerald-700 font-medium mt-0.5 flex items-center gap-1 flex-wrap">
                             R$ {parseFloat((item as any).valorUnitario).toFixed(2)}/un · Total: R$ {(atual * parseFloat((item as any).valorUnitario)).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                            {(item as any).precoPreenchidoIa && (
+                              <span title="Preço estimado pela IA — revisar antes de usar para cotação" className="inline-flex items-center gap-0.5 bg-purple-100 text-purple-700 px-1 rounded text-[9px] font-bold">🤖 IA</span>
+                            )}
                           </p>
                         )}
                       </div>
