@@ -89,6 +89,8 @@ async function getDashFuncionarios(companyId: number, companyIds?: number[]) {
         isNull(vacationPeriods.deletedAt), isNull(employees.deletedAt),
         sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
         sql`${employees.status} != 'Ferias'`,
+        // Rev. 1613 — Sócios e PJ não têm direito a férias (CLT Art. 129)
+        sql`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))`,
         sql`(${vacationPeriods.status} = 'em_gozo' OR (${vacationPeriods.status} = 'agendada' AND ${vacationPeriods.dataInicio} IS NOT NULL AND ${vacationPeriods.dataFim} IS NOT NULL AND ${vacationPeriods.dataInicio} <= ${today} AND ${vacationPeriods.dataFim} >= ${today}))`,
       )),
 
@@ -2227,6 +2229,8 @@ async function getDashFerias(companyId: number, ano?: number, companyIds?: numbe
       isNull(vacationPeriods.deletedAt),
       sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
       isNull(employees.deletedAt),
+      // Rev. 1613 — Sócios e PJ não têm direito a férias (CLT Art. 129)
+      sql`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))`,
     ))
     .orderBy(desc(vacationPeriods.createdAt));
 

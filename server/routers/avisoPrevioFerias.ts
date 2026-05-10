@@ -2138,6 +2138,8 @@ export const avisoPrevioFeriasRouter = router({
           isNull(vacationPeriods.deletedAt),
           sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
           isNull(employees.deletedAt),
+          // Rev. 1613 — Sócios e PJ não têm direito a férias (CLT Art. 129)
+          sql`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))`,
         ];
         if (input.status) {
           if (input.status === 'vencida') {
@@ -2301,6 +2303,8 @@ export const avisoPrevioFeriasRouter = router({
           isNull(employees.deletedAt),
           eq(vacationPeriods.status, 'pendente'),
           sql`${vacationPeriods.periodoConcessivoFim} < ${hoje}`,
+          // Rev. 1613 — Sócios e PJ não têm direito a férias (CLT Art. 129)
+          sql`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))`,
         ));
         
         // Prestes a vencer = todos os próximos 60 dias (1º e 2º período)
@@ -2322,6 +2326,8 @@ export const avisoPrevioFeriasRouter = router({
           isNull(employees.deletedAt),
           eq(vacationPeriods.status, 'pendente'),
           sql`${vacationPeriods.periodoConcessivoFim} BETWEEN ${hoje} AND ${em60diasStr}`,
+          // Rev. 1613 — Sócios e PJ não têm direito a férias (CLT Art. 129)
+          sql`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))`,
         ));
         
         return { vencidas, prestesVencer };
@@ -2333,8 +2339,10 @@ export const avisoPrevioFeriasRouter = router({
         const db = (await getDb())!;
         const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
         if (!emp || !emp.dataAdmissao) throw new TRPCError({ code: "BAD_REQUEST", message: "Funcionário sem data de admissão" });
-        if (emp.tipoContrato && emp.tipoContrato.toLowerCase() === 'pj') {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Prestadores de serviço (PJ) não têm direito a férias" });
+        // Rev. 1613 — Sócios e PJ não têm direito a férias (CLT Art. 129)
+        const tipoLower = (emp.tipoContrato || '').toLowerCase();
+        if (tipoLower === 'pj' || tipoLower === 'socio' || tipoLower === 'sócio') {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Sócios e Prestadores de serviço (PJ) não têm direito a férias" });
         }
         
         const periodos = calcularPeriodosFerias(emp.dataAdmissao);
@@ -2390,6 +2398,8 @@ export const avisoPrevioFeriasRouter = router({
           companyFilter(employees.companyId, input),
           eq(employees.status, 'Ativo'),
           isNull(employees.deletedAt),
+          // Rev. 1613 — Sócios e PJ não têm direito a férias (CLT Art. 129)
+          sql`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))`,
         ));
         
         // Also fetch DB vacation periods to get actual status (agendada, em_gozo, etc.)
@@ -2750,6 +2760,8 @@ export const avisoPrevioFeriasRouter = router({
           companyFilter(employees.companyId, input),
           sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
           isNull(employees.deletedAt),
+          // Rev. 1613 — Sócios e PJ não têm direito a férias (CLT Art. 129)
+          sql`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))`,
         ));
 
         let totalCriados = 0;
@@ -2757,7 +2769,9 @@ export const avisoPrevioFeriasRouter = router({
         let funcionariosSemAdmissao = 0;
 
         for (const emp of ativos) {
-          if (emp.tipoContrato && emp.tipoContrato.toLowerCase() === 'pj') continue;
+          // Rev. 1613 — defesa em profundidade (PJ/Sócio)
+          const tc = (emp.tipoContrato || '').toLowerCase();
+          if (tc === 'pj' || tc === 'socio' || tc === 'sócio') continue;
           if (!emp.dataAdmissao) {
             funcionariosSemAdmissao++;
             continue;
@@ -3248,6 +3262,8 @@ export const avisoPrevioFeriasRouter = router({
           isNull(vacationPeriods.deletedAt),
           sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
           isNull(employees.deletedAt),
+          // Rev. 1613 — Sócios e PJ não têm direito a férias (CLT Art. 129)
+          sql`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))`,
         ))
         .orderBy(asc(employees.nomeCompleto), asc(vacationPeriods.periodoAquisitivoInicio));
 

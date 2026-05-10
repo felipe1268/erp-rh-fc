@@ -239,9 +239,13 @@ export const homeDataRouter = router({
         abonoPecuniario: vacationPeriods.abonoPecuniario,
         valorTotal: vacationPeriods.valorTotal,
       }).from(vacationPeriods)
+        .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
         .where(and(
           companyFilter(vacationPeriods.companyId, input),
           sql`${vacationPeriods.deletedAt} IS NULL`,
+          isNull(employees.deletedAt),
+          // Rev. 1613 — Sócios e PJ não têm direito a férias (CLT Art. 129)
+          sql`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))`,
         ));
 
       // Férias agendadas nos próximos 60 dias

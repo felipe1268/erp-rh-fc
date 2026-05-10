@@ -194,7 +194,14 @@ async function getVisaoPanoramica(companyId: number, companyIds?: number[]) {
     status: vacationPeriods.status,
     valorTotal: vacationPeriods.valorTotal,
   }).from(vacationPeriods)
-    .where(and(companyWhere(vacationPeriods, companyId, companyIds), sql`${vacationPeriods.deletedAt} IS NULL`));
+    .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
+    .where(and(
+      companyWhere(vacationPeriods, companyId, companyIds),
+      sql`${vacationPeriods.deletedAt} IS NULL`,
+      isNull(employees.deletedAt),
+      // Rev. 1613 — Sócios e PJ não têm direito a férias (CLT Art. 129)
+      sql`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))`,
+    ));
 
   const feriasVencidas = feriasRows.filter(f => f.status === 'vencida').length;
   const feriasAgendadas = feriasRows.filter(f => f.status === 'agendada').length;
