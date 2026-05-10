@@ -45,40 +45,63 @@ function fmtDateBR(dateStr: string | null | undefined): string {
 
 const ORIGEM_LABELS: Record<string, string> = {
   compras: "Compras",
+  compra_oc: "OC Compras",
   folha: "Folha CLT",
+  folha_rh: "Folha CLT",
+  folha_clt: "Folha CLT",
+  payroll_agregado: "Folha Consolidada",
   pj: "Contrato PJ",
+  pro_labore: "Pró-labore",
+  medicao_pj: "Medição PJ",
   terceiros: "Terceiros",
+  terceiro_medicao: "Med. Terceiros",
+  medicao_obra: "Medição Obra",
+  pagamento_parceiro: "Parceiros",
   frota: "Frota",
+  frota_abastecimento: "Frota — Combustível",
+  frota_manutencao: "Frota — Manutenção",
   beneficios: "Benefícios",
+  beneficio_va: "Vale Alimentação",
+  beneficio_vr: "Vale Refeição",
+  beneficio_vt: "Vale Transporte",
+  seguro_vida: "Seguro de Vida",
   tributario: "Tributário",
+  guia_tributaria: "Guia Tributária",
   juridico: "Jurídico",
+  processo_trabalhista: "Proc. Trabalhista",
   almoxarifado: "Almoxarifado",
+  almoxarifado_saida: "Saída Almox.",
+  adiantamento: "Adiantamento",
+  fechamento_ponto: "Fechamento Ponto",
+  comissao_comprador: "Comissão",
   manual: "Manual",
 };
 
 const ORIGEM_ICONS: Record<string, any> = {
-  compras: ShoppingCart,
-  folha: Users,
-  pj: Briefcase,
-  terceiros: Users,
-  frota: Truck,
-  beneficios: Receipt,
-  tributario: Scale,
-  juridico: Scale,
-  almoxarifado: Package,
+  compras: ShoppingCart, compra_oc: ShoppingCart,
+  folha: Users, folha_rh: Users, folha_clt: Users, payroll_agregado: Users, fechamento_ponto: Users,
+  pj: Briefcase, pro_labore: Briefcase, medicao_pj: Briefcase,
+  terceiros: Users, terceiro_medicao: Users, medicao_obra: Users, pagamento_parceiro: Users,
+  frota: Truck, frota_abastecimento: Truck, frota_manutencao: Truck,
+  beneficios: Receipt, beneficio_va: Receipt, beneficio_vr: Receipt, beneficio_vt: Receipt, seguro_vida: Receipt,
+  tributario: Scale, guia_tributaria: Scale,
+  juridico: Scale, processo_trabalhista: Scale,
+  almoxarifado: Package, almoxarifado_saida: Package,
+  adiantamento: Wallet, comissao_comprador: Wallet,
   manual: Wallet,
 };
 
 const ORIGEM_COLORS: Record<string, string> = {
-  compras: "bg-blue-50 text-blue-700 border-blue-200",
-  folha: "bg-purple-50 text-purple-700 border-purple-200",
-  pj: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  terceiros: "bg-cyan-50 text-cyan-700 border-cyan-200",
-  frota: "bg-amber-50 text-amber-700 border-amber-200",
-  beneficios: "bg-pink-50 text-pink-700 border-pink-200",
-  tributario: "bg-red-50 text-red-700 border-red-200",
-  juridico: "bg-rose-50 text-rose-700 border-rose-200",
-  almoxarifado: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  compras: "bg-blue-50 text-blue-700 border-blue-200", compra_oc: "bg-blue-50 text-blue-700 border-blue-200",
+  folha: "bg-purple-50 text-purple-700 border-purple-200", folha_rh: "bg-purple-50 text-purple-700 border-purple-200", folha_clt: "bg-purple-50 text-purple-700 border-purple-200", payroll_agregado: "bg-purple-50 text-purple-700 border-purple-200", fechamento_ponto: "bg-purple-50 text-purple-700 border-purple-200",
+  pj: "bg-indigo-50 text-indigo-700 border-indigo-200", pro_labore: "bg-indigo-50 text-indigo-700 border-indigo-200", medicao_pj: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  terceiros: "bg-cyan-50 text-cyan-700 border-cyan-200", terceiro_medicao: "bg-cyan-50 text-cyan-700 border-cyan-200", medicao_obra: "bg-cyan-50 text-cyan-700 border-cyan-200", pagamento_parceiro: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  frota: "bg-amber-50 text-amber-700 border-amber-200", frota_abastecimento: "bg-amber-50 text-amber-700 border-amber-200", frota_manutencao: "bg-amber-50 text-amber-700 border-amber-200",
+  beneficios: "bg-pink-50 text-pink-700 border-pink-200", beneficio_va: "bg-pink-50 text-pink-700 border-pink-200", beneficio_vr: "bg-pink-50 text-pink-700 border-pink-200", beneficio_vt: "bg-pink-50 text-pink-700 border-pink-200", seguro_vida: "bg-pink-50 text-pink-700 border-pink-200",
+  tributario: "bg-red-50 text-red-700 border-red-200", guia_tributaria: "bg-red-50 text-red-700 border-red-200",
+  juridico: "bg-rose-50 text-rose-700 border-rose-200", processo_trabalhista: "bg-rose-50 text-rose-700 border-rose-200",
+  almoxarifado: "bg-emerald-50 text-emerald-700 border-emerald-200", almoxarifado_saida: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  adiantamento: "bg-gray-50 text-gray-700 border-gray-200", comissao_comprador: "bg-gray-50 text-gray-700 border-gray-200",
   manual: "bg-gray-50 text-gray-700 border-gray-200",
 };
 
@@ -127,21 +150,38 @@ function categoriaFor(c: any): string {
 // Rev. 1625 — Consolidação RH/Benefícios/Recorrentes
 // Retorna { sub, label } para entries agrupáveis (folha, benefícios, PJ, frota, terceiros).
 // Retorna null para entries que devem aparecer como linhas individuais (compras, manuais, jurídico, etc).
-function consolidateSubtype(c: any): { sub: string; label: string } | null {
-  const o = c.origemModulo;
-  if (o === "folha") return { sub: "folha", label: "Folha de Pagamento" };
+function consolidateSubtype(c: any): { sub: string; label: string; origemBase: string } | null {
+  const o = (c.origemModulo ?? "").toString();
+  // Folha
+  if (o === "folha" || o === "folha_rh" || o === "folha_clt" || o === "payroll_agregado" || o === "fechamento_ponto") {
+    return { sub: "folha", label: "Folha de Pagamento", origemBase: "folha_rh" };
+  }
+  // Benefícios — origens dedicadas (preferencial)
+  if (o === "beneficio_va") return { sub: "VA", label: "Vale Alimentação", origemBase: "beneficio_va" };
+  if (o === "beneficio_vr") return { sub: "VR", label: "Vale Refeição", origemBase: "beneficio_vr" };
+  if (o === "beneficio_vt") return { sub: "VT", label: "Vale Transporte", origemBase: "beneficio_vt" };
+  if (o === "seguro_vida") return { sub: "seguro", label: "Seguro de Vida", origemBase: "seguro_vida" };
+  // Benefícios — fallback genérico (legado)
   if (o === "beneficios") {
     const txt = `${c.descricao ?? ""} ${c.origemDescricao ?? ""} ${c.contaNome ?? ""}`
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    if (/alimenta/.test(txt) || /\bva\b/.test(txt)) return { sub: "VA", label: "Vale Alimentação" };
-    if (/refei/.test(txt) || /\bvr\b/.test(txt)) return { sub: "VR", label: "Vale Refeição" };
-    if (/transp|\bvt\b/.test(txt)) return { sub: "VT", label: "Vale Transporte" };
-    if (/saude|odonto|plano/.test(txt)) return { sub: "saude", label: "Saúde/Odonto" };
-    return { sub: "outros", label: "Outros Benefícios" };
+    // ORDEM IMPORTA: refeição checa antes de alimentação porque "Vale Refeição / Alimentação" matcha ambos.
+    if (/refei/.test(txt) || /\bvr\b/.test(txt)) return { sub: "VR", label: "Vale Refeição", origemBase: "beneficio_vr" };
+    if (/alimenta/.test(txt) || /\bva\b/.test(txt)) return { sub: "VA", label: "Vale Alimentação", origemBase: "beneficio_va" };
+    if (/transp|\bvt\b/.test(txt)) return { sub: "VT", label: "Vale Transporte", origemBase: "beneficio_vt" };
+    if (/saude|odonto|plano/.test(txt)) return { sub: "saude", label: "Saúde/Odonto", origemBase: "beneficios" };
+    return { sub: "outros", label: "Outros Benefícios", origemBase: "beneficios" };
   }
-  if (o === "pj") return { sub: "pj", label: "Pagamentos PJ" };
-  if (o === "frota") return { sub: "frota", label: "Frota (combustível/mensal)" };
-  if (o === "terceiros") return { sub: "med", label: "Medições Terceiros" };
+  // PJ
+  if (o === "pj" || o === "pro_labore" || o === "medicao_pj") return { sub: "pj", label: "Pagamentos PJ", origemBase: "pj" };
+  // Frota (separa combustível de manutenção, mas agrupa cada um)
+  if (o === "frota" || o === "frota_abastecimento") return { sub: "frota_comb", label: "Frota — Combustível", origemBase: "frota_abastecimento" };
+  if (o === "frota_manutencao") return { sub: "frota_man", label: "Frota — Manutenção", origemBase: "frota_manutencao" };
+  // Terceiros / Parceiros
+  if (o === "terceiros" || o === "terceiro_medicao" || o === "medicao_obra") return { sub: "med", label: "Medições Terceiros", origemBase: "terceiro_medicao" };
+  if (o === "pagamento_parceiro") return { sub: "parc", label: "Pagamentos Parceiros", origemBase: "pagamento_parceiro" };
+  // Tributário
+  if (o === "tributario" || o === "guia_tributaria") return { sub: "trib", label: "Guias Tributárias", origemBase: "guia_tributaria" };
   return null;
 }
 
@@ -759,8 +799,9 @@ export default function FinanceiroContasAPagar() {
                           const sub = consolidateSubtype(c);
                           const venc = (c.dataVencimento ?? "").slice(0, 7);
                           if (sub && venc) {
-                            const k = `${c.origemModulo}|${sub.sub}|${venc}`;
-                            if (!groupMap.has(k)) groupMap.set(k, { sub: sub.sub, label: sub.label, origem: c.origemModulo, items: [], mesAno: venc });
+                            // Rev. 1625b — agrupa por origemBase (não origemModulo) para consolidar folha_rh+folha_clt
+                            const k = `${sub.origemBase}|${sub.sub}|${venc}`;
+                            if (!groupMap.has(k)) groupMap.set(k, { sub: sub.sub, label: sub.label, origem: sub.origemBase, items: [], mesAno: venc });
                             groupMap.get(k)!.items.push(c);
                           } else {
                             singles.push(c);
@@ -873,7 +914,7 @@ export default function FinanceiroContasAPagar() {
                                       <span className="text-xs text-slate-500">— {mesLabel}</span>
                                     </div>
                                     <p className="text-[11px] text-slate-500 mt-0.5">
-                                      {gp.items.length} {gp.origem === "folha" || gp.origem === "beneficios" || gp.origem === "pj" ? "funcionário(s)" : gp.origem === "frota" ? "veículo(s)" : "registro(s)"}
+                                      {gp.items.length} {/^(folha|beneficio_|pj|seguro_vida|pro_labore)/.test(gp.origem) ? "funcionário(s)" : /^frota/.test(gp.origem) ? "veículo(s)" : /^(terceiro|medicao|pagamento_parceiro)/.test(gp.origem) ? "contrato(s)" : "registro(s)"}
                                       {pagosCount > 0 && <span className="text-green-600"> · {pagosCount} pago(s)</span>}
                                       {vencCount > 0 && <span className="text-red-600"> · {vencCount} vencido(s)</span>}
                                     </p>
