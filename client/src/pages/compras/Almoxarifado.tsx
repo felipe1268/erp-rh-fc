@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import {
   Search, Plus, Pencil, Package, ArrowDownCircle, ArrowUpCircle,
   AlertTriangle, Loader2, History, X, BarChart2, Boxes, Sparkles, DollarSign,
-  Truck, ChevronDown, ChevronRight, RefreshCcw,
+  Truck, ChevronDown, ChevronRight, RefreshCcw, PackageX,
 } from "lucide-react";
 
 const UNIDADES = ["un", "m", "m²", "m³", "kg", "t", "L", "sc", "cx", "pc", "vb", "gl", "barra", "rolo", "pç"];
@@ -55,6 +55,9 @@ export default function Almoxarifado() {
   const [busca, setBusca] = useState("");
   const [filtroCateg, setFiltroCateg] = useState("todas");
   const [apenasAbaixo, setApenasAbaixo] = useState(false);
+  // Rev. 1608 — Itens zerados (saldo = 0) somem da lista principal por padrão.
+  // Toggle "Apenas zerados" mostra somente eles. Card de KPI dedicado leva ao filtro.
+  const [apenasZerados, setApenasZerados] = useState(false);
   // Rev. 1606 — Ordenação: nome (A→Z padrão), valor total estoque (maior/menor),
   // quantidade em estoque (maior/menor) e valor unitário (maior/menor).
   type SortKey = "nome_asc" | "nome_desc" | "valor_desc" | "valor_asc" | "qtd_desc" | "qtd_asc" | "unit_desc" | "unit_asc";
@@ -89,6 +92,13 @@ export default function Almoxarifado() {
       r = r.filter(i => i.nome.toLowerCase().includes(b) || i.codigoInterno?.toLowerCase().includes(b) || i.categoria?.toLowerCase().includes(b));
     }
     if (filtroCateg !== "todas") r = r.filter(i => i.categoria === filtroCateg);
+    // Rev. 1608 — Por padrão, itens com saldo zero somem da lista principal.
+    // Toggle "Apenas zerados" inverte: mostra SOMENTE quem está em 0.
+    if (apenasZerados) {
+      r = r.filter(i => n(i.quantidadeAtual) <= 0);
+    } else {
+      r = r.filter(i => n(i.quantidadeAtual) > 0);
+    }
     if (apenasAbaixo) r = r.filter(i => n(i.quantidadeMinima) > 0 && n(i.quantidadeAtual) < n(i.quantidadeMinima));
     // Rev. 1606 — Ordenação configurável (valor/quantidade/nome).
     const cmpStr = (a: string, b: string) => a.localeCompare(b, "pt-BR", { sensitivity: "base" });
@@ -107,12 +117,29 @@ export default function Almoxarifado() {
       case "unit_asc":   sorted.sort((a, b) => valorUnit(a) - valorUnit(b) || cmpStr(a.nome, b.nome)); break;
     }
     return sorted;
-  }, [itens, busca, filtroCateg, apenasAbaixo, sortBy]);
+  }, [itens, busca, filtroCateg, apenasAbaixo, apenasZerados, sortBy]);
 
   const totalCriticos = useMemo(() =>
     itens.filter(i => n(i.quantidadeMinima) > 0 && n(i.quantidadeAtual) < n(i.quantidadeMinima)).length,
     [itens]
   );
+
+  // Rev. 1608 — Itens com saldo zero (escondidos da lista principal por padrão).
+  const totalZerados = useMemo(() =>
+    itens.filter(i => n(i.quantidadeAtual) <= 0).length,
+    [itens]
+  );
+
+  // Rev. 1608 — Item mais caro em estoque (alerta de capital "parado").
+  const itemMaisCaro = useMemo(() => {
+    let topo: any = null;
+    let topoVal = 0;
+    for (const i of itens) {
+      const v = n((i as any).valorUnitario) * n(i.quantidadeAtual);
+      if (v > topoVal) { topoVal = v; topo = i; }
+    }
+    return topo ? { nome: topo.nome, valor: topoVal } : null;
+  }, [itens]);
 
   const valorTotalEstoque = useMemo(() =>
     itens.reduce((acc, i) => acc + n((i as any).valorUnitario) * n(i.quantidadeAtual), 0),
@@ -279,20 +306,84 @@ export default function Almoxarifado() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-5 space-y-4">
-        {/* KPIs */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          {[
-            { label: "Total de Itens", v: itens.length.toString(), icon: Package, color: "text-blue-600" },
-            { label: "Itens OK", v: itens.filter(i => n(i.quantidadeMinima) === 0 || n(i.quantidadeAtual) >= n(i.quantidadeMinima)).length.toString(), icon: BarChart2, color: "text-emerald-600" },
-            { label: "Estoque Baixo", v: itens.filter(i => { const a = n(i.quantidadeAtual), m = n(i.quantidadeMinima); return m > 0 && a < m && a >= m * 0.5; }).length.toString(), icon: AlertTriangle, color: "text-yellow-600" },
-            { label: "Estoque Crítico", v: totalCriticos.toString(), icon: AlertTriangle, color: "text-red-600" },
-            { label: "Valor Total em Estoque", v: valorTotalEstoque > 0 ? valorTotalEstoque.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—", icon: DollarSign, color: "text-violet-600" },
-          ].map((k, i) => (
-            <div key={i} className="bg-white rounded-xl border border-slate-100 shadow-sm p-3">
-              <p className="text-[11px] text-slate-400 uppercase tracking-wide">{k.label}</p>
-              <p className={`text-xl font-bold mt-1 ${k.color} ${k.v.length > 8 ? "text-sm" : ""}`}>{k.v}</p>
-            </div>
-          ))}
+        {/* KPIs — Rev. 1608: cards clicáveis aplicam filtro correspondente */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          {(() => {
+            const cards: Array<{ label: string; v: string; sub?: string; color: string; bg: string; border: string; onClick?: () => void; active?: boolean; icon: any }> = [
+              {
+                label: "Total de Itens",
+                v: itens.length.toString(),
+                color: "text-blue-600", bg: "bg-blue-50/40", border: "border-blue-100",
+                icon: Package,
+                onClick: () => { setApenasAbaixo(false); setApenasZerados(false); },
+                active: !apenasAbaixo && !apenasZerados,
+              },
+              {
+                label: "Itens OK",
+                v: itens.filter(i => n(i.quantidadeAtual) > 0 && (n(i.quantidadeMinima) === 0 || n(i.quantidadeAtual) >= n(i.quantidadeMinima))).length.toString(),
+                color: "text-emerald-600", bg: "bg-emerald-50/40", border: "border-emerald-100",
+                icon: BarChart2,
+              },
+              {
+                label: "Estoque Baixo",
+                v: itens.filter(i => { const a = n(i.quantidadeAtual), m = n(i.quantidadeMinima); return m > 0 && a < m && a >= m * 0.5; }).length.toString(),
+                color: "text-yellow-600", bg: "bg-yellow-50/40", border: "border-yellow-100",
+                icon: AlertTriangle,
+              },
+              {
+                label: "Estoque Crítico",
+                v: totalCriticos.toString(),
+                color: "text-red-600", bg: "bg-red-50/40", border: "border-red-100",
+                icon: AlertTriangle,
+                onClick: () => { setApenasZerados(false); setApenasAbaixo(true); },
+                active: apenasAbaixo && !apenasZerados,
+              },
+              {
+                label: "Itens Zerados",
+                v: totalZerados.toString(),
+                sub: totalZerados > 0 ? "ocultos da lista" : "—",
+                color: "text-rose-600", bg: "bg-rose-50/40", border: "border-rose-100",
+                icon: PackageX,
+                onClick: () => { setApenasAbaixo(false); setApenasZerados(true); },
+                active: apenasZerados,
+              },
+              {
+                label: "Aplicação Direta",
+                v: itensAplicDireta.length.toString(),
+                sub: "IA — não estoca",
+                color: "text-amber-600", bg: "bg-amber-50/40", border: "border-amber-100",
+                icon: Truck,
+                onClick: () => { setShowAplicDireta(true); setTimeout(() => document.getElementById("secao-aplic-direta")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); },
+              },
+              {
+                label: "Valor Total em Estoque",
+                v: valorTotalEstoque > 0 ? valorTotalEstoque.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—",
+                sub: itemMaisCaro ? `Topo: ${itemMaisCaro.nome.length > 20 ? itemMaisCaro.nome.slice(0, 20) + "…" : itemMaisCaro.nome}` : undefined,
+                color: "text-violet-600", bg: "bg-violet-50/40", border: "border-violet-100",
+                icon: DollarSign,
+                onClick: () => { setApenasAbaixo(false); setApenasZerados(false); setSortBy("valor_desc"); },
+              },
+            ];
+            return cards.map((k, i) => {
+              const Icon = k.icon;
+              const Wrap: any = k.onClick ? "button" : "div";
+              return (
+                <Wrap
+                  key={i}
+                  type={k.onClick ? "button" : undefined}
+                  onClick={k.onClick}
+                  className={`text-left bg-white rounded-xl border shadow-sm p-3 transition ${k.border} ${k.onClick ? "hover:shadow-md hover:border-slate-300 cursor-pointer" : ""} ${k.active ? `ring-2 ring-offset-1 ring-current ${k.color}` : ""}`}
+                >
+                  <div className="flex items-start justify-between">
+                    <p className="text-[11px] text-slate-400 uppercase tracking-wide">{k.label}</p>
+                    <Icon className={`h-4 w-4 ${k.color} opacity-70`} />
+                  </div>
+                  <p className={`text-xl font-bold mt-1 ${k.color} ${k.v.length > 10 ? "text-sm" : ""}`}>{k.v}</p>
+                  {k.sub && <p className="text-[10px] text-slate-400 mt-0.5 truncate">{k.sub}</p>}
+                </Wrap>
+              );
+            });
+          })()}
         </div>
 
         {/* Filtros */}
@@ -337,8 +428,31 @@ export default function Almoxarifado() {
             <input type="checkbox" checked={apenasAbaixo} onChange={e => setApenasAbaixo(e.target.checked)} className="rounded" />
             Apenas abaixo do mínimo
           </label>
+          {/* Rev. 1608 — Toggle dedicado p/ itens com saldo zerado */}
+          <label className={`flex items-center gap-2 text-sm cursor-pointer select-none px-2 py-1 rounded-md border ${apenasZerados ? "bg-rose-50 border-rose-200 text-rose-700" : "border-transparent text-slate-600 hover:bg-slate-50"}`}>
+            <input type="checkbox" checked={apenasZerados} onChange={e => setApenasZerados(e.target.checked)} className="rounded" />
+            <PackageX className="h-3.5 w-3.5" />
+            Apenas zerados {totalZerados > 0 && <span className="text-[10px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded-full font-bold">{totalZerados}</span>}
+          </label>
           <span className="text-xs text-slate-400">{lista.length} resultado{lista.length !== 1 ? "s" : ""}</span>
         </div>
+
+        {/* Rev. 1608 — Aviso quando há itens zerados ocultos da lista normal */}
+        {!apenasZerados && totalZerados > 0 && (
+          <div className="flex items-center gap-2 bg-rose-50/60 border border-rose-100 rounded-lg px-3 py-2">
+            <PackageX className="h-4 w-4 text-rose-500 shrink-0" />
+            <p className="text-xs text-rose-700 flex-1">
+              <strong>{totalZerados}</strong> item{totalZerados !== 1 ? "ns" : ""} com saldo zerado {totalZerados !== 1 ? "estão ocultos" : "está oculto"} desta lista.
+            </p>
+            <button
+              type="button"
+              onClick={() => { setApenasAbaixo(false); setApenasZerados(true); }}
+              className="text-[11px] font-semibold text-rose-700 hover:text-rose-900 underline underline-offset-2"
+            >
+              Ver apenas zerados
+            </button>
+          </div>
+        )}
 
         {/* Tabela */}
         {isLoading ? (
@@ -454,7 +568,7 @@ export default function Almoxarifado() {
 
         {/* Rev. 1607 — Itens de Aplicação Direta (IA) — não entram no almoxarifado */}
         {itensAplicDireta.length > 0 && (
-          <div className="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden">
+          <div id="secao-aplic-direta" className="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden scroll-mt-24">
             <button
               type="button"
               onClick={() => setShowAplicDireta(v => !v)}
