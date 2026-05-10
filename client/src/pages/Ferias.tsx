@@ -894,12 +894,16 @@ export default function Ferias() {
 
         {/* Stats Cards */}
         {(() => {
-          // Rev. 1610 — Cards de risco por período (1º e 2º) usando o mesmo
-          // dataset dos alertas (prestesVencer = janela de 60 dias antes do
-          // limite do período concessivo, conforme CLT Art. 134/137).
-          // Clicar leva à aba "Férias Vencidas" que detalha cada caso.
-          const aVencer1 = (alertas?.prestesVencer || []).filter((v: any) => (v.numeroPeriodo || 1) === 1).length;
-          const aVencer2 = (alertas?.prestesVencer || []).filter((v: any) => (v.numeroPeriodo || 1) >= 2).length;
+          // Rev. 1614 — Cards de risco por período (1º e 2º) usam a lista
+          // COMPLETA de pendentes, agrupada por numeroPeriodo. O recorte de 60
+          // dias do prestesVencer dava 0 quase sempre (concessivos costumam
+          // estar a 6-12 meses). O que importa para o RH é:
+          //   • 1º Período pendente: férias a conceder dentro do prazo normal.
+          //   • 2º Período pendente: funcionário JÁ acumulou 2 períodos não
+          //     gozados — risco IMEDIATO de pagamento em dobro (CLT Art. 137).
+          const pendentesList = (allFeriasList as any[]).filter(a => a.status === "pendente");
+          const aVencer1 = pendentesList.filter(v => (v.numeroPeriodo || 1) === 1).length;
+          const aVencer2 = pendentesList.filter(v => (v.numeroPeriodo || 1) >= 2).length;
           return (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <Card className={`cursor-pointer hover:shadow-md transition-shadow ${statusFilter === "todos" && tab === "lista" ? "ring-2 ring-primary shadow-md" : ""}`} onClick={() => { setStatusFilter("todos"); setTab("lista"); }}>
@@ -925,7 +929,7 @@ export default function Ferias() {
                 <Clock className="h-3 w-3" /> A Vencer · 1º Período
               </p>
               <p className="text-2xl font-bold text-amber-700">{fmtNum(aVencer1)}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Próximos 60 dias</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Pendentes a conceder</p>
             </CardContent>
           </Card>
           {/* Rev. 1610 — Risco 2º período (acumulado — risco de multa em dobro) */}
