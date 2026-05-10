@@ -11236,4 +11236,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 20:00:00",
   },
+  {
+    version: 1582,
+    titulo: "Portal do Cliente — REFIS Global (c/ Indiretas) agora bate com o ERP (regra de ouro)",
+    descricao: "Continuação da Rev. 1581. O usuário comprovou que o ERP já mostrava o número certo (Realizado Global = 1,88%) mas o Portal do Cliente continuava mostrando 1,19% para a mesma obra/semana. Causa: o Portal tinha cálculo próprio em `PortalPlanejamentoCliente.tsx` (linhas ~2793-2817) com DUAS divergências em relação ao ERP: (1) `denomPrev` usava só `folhasComDatas` mas `denomReal` usava TODAS as folhas — indiretas sem datas inflavam o divisor do realizado com numerador zero, exatamente o mesmo bug corrigido no ERP; (2) o realizado do Portal usava `percentRealizado` para TODAS as atividades (incluindo indiretas), enquanto o ERP usa a curva PREVISTA linear (`prevIndRef`) para indiretas — convenção correta porque indiretas (canteiro, mob/desmob, administração) não têm apontamento físico. Correção: o Portal agora replica EXATAMENTE `refisPrevistoComInd` e `refisRealComInd` do ERP — universo único `folhasComDatas` em ambos numeradores E denominadores, e indiretas no realizado usando `progPrevistoNa(a, semanaFimRef)`. REGRA DE OURO instaurada: Portal e ERP devem mostrar SEMPRE o mesmo número, e o módulo Planejamento é a fonte da verdade.",
+    tipo: "bugfix",
+    modulos: "Portal Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 21:00:00",
+  },
 ];

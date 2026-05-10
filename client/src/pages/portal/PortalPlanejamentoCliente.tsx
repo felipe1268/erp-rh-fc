@@ -2783,18 +2783,26 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
   // Quando "Global (c/ Indiretas)" → recalcula a partir das folhas (média ponderada por peso),
   // refletindo o impacto das indiretas no avanço da obra.
   //
-  // Rev. 1521 — Fonte de verdade = módulo Planejamento.
-  // Replica EXATAMENTE a lógica de `previsto`/`realizadoAcum` em
-  // client/src/pages/planejamento/PlanejamentoDetalhe.tsx (linhas 4427-4466):
-  // se a soma de pesoFinanceiro for 0, cai em fallback `semPeso=true`
-  // → cada atividade vira peso 1 e denom = nº de folhas (média simples).
-  // Sem este fallback o Portal mostrava 0,00% / 0,91% enquanto o REFIS
-  // interno mostrava 2,28% / 1,60% para a mesma semana (REFIS Nº 001).
+  // Rev. 1582 — REGRA DE OURO: Portal NUNCA pode divergir do módulo
+  // Planejamento. Toda a lógica de cálculo agora replica EXATAMENTE
+  // `refisPrevistoComInd` e `refisRealComInd` em PlanejamentoDetalhe.tsx
+  // (linhas ~10024 e ~10032 após Rev. 1581):
+  //   1. Universo único de atividades = folhas COM dataInicio E dataFim
+  //      (mesmo filtro nos dois numeradores e nos dois denominadores).
+  //      Sem isso, indiretas sem datas inflavam o denominador do realizado
+  //      com numerador 0 e o "Realizado (Global)" CAÍA no Portal mesmo
+  //      depois de já termos corrigido o ERP — o usuário viu 1,19% no
+  //      Portal vs 1,88% no ERP para a mesma semana/obra.
+  //   2. Para INDIRETAS no realizado, usa a curva PREVISTA linear no tempo
+  //      (`progPrevistoNa(a, semanaFimRef)`), igual ao ERP. Indiretas
+  //      (canteiro/mob/desmob) não têm apontamento físico — convenção é
+  //      considerá-las "no cronograma" para fins de avanço global.
+  //   3. Mantido o fallback `semPeso=true` quando a soma de pesoFinanceiro
+  //      é zero, replicando `calcPesoTotal` do ERP.
   const folhasComDatas = folhas.filter((a: any) => a.dataInicio && a.dataFim);
-  const pesoBrutoFolhas = folhas.reduce((s: number, a: any) => s + (Number(a.pesoFinanceiro) || 0), 0);
+  const pesoBrutoFolhas = folhasComDatas.reduce((s: number, a: any) => s + (Number(a.pesoFinanceiro) || 0), 0);
   const semPesoFolhas   = pesoBrutoFolhas === 0;
-  const denomPrev = semPesoFolhas ? (folhasComDatas.length || 1) : pesoBrutoFolhas;
-  const denomReal = semPesoFolhas ? (folhas.length        || 1) : pesoBrutoFolhas;
+  const denomFolhas     = semPesoFolhas ? (folhasComDatas.length || 1) : pesoBrutoFolhas;
   // Rev. 1521-fix2 — Usar FIM da semana (segunda + 7 dias) como referência
   // do previsto. O módulo Planejamento (PlanejamentoDetalhe.tsx 4266-4272 e
   // 9442-9448) calcula `semanaFim = semanas[idx+1]` ou `semana + 7` quando
@@ -2808,12 +2816,18 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
   const previstoRecalc = folhasComDatas.reduce(
     (s: number, a: any) => {
       const peso = semPesoFolhas ? 1 : (Number(a.pesoFinanceiro) || 0);
-      return s + (progPrevistoNa(a, semanaFimRef) * peso) / denomPrev;
+      return s + (progPrevistoNa(a, semanaFimRef) * peso) / denomFolhas;
     }, 0);
-  const realizadoRecalc = folhas.reduce(
+  const realizadoRecalc = folhasComDatas.reduce(
     (s: number, a: any) => {
       const peso = semPesoFolhas ? 1 : (Number(a.pesoFinanceiro) || 0);
-      return s + ((Number(a.percentRealizado) || 0) * peso) / denomReal;
+      // Indiretas no realizado seguem a curva prevista linear (mesma
+      // convenção de `refisRealComInd` no ERP). Diretas usam o avanço real
+      // apontado em `percentRealizado`.
+      const val = a.isIndireta
+        ? progPrevistoNa(a, semanaFimRef)
+        : (Number(a.percentRealizado) || 0);
+      return s + (val * peso) / denomFolhas;
     }, 0);
   const avancoPrevisto  = incluirIndiretas ? previstoRecalc  : Number(refisAtual.avancoPrevisto ?? 0);
   const avancoRealAtual = incluirIndiretas ? realizadoRecalc : Number(refisAtual.avancoRealizado ?? 0);
