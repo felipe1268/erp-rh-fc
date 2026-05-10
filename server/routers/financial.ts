@@ -322,6 +322,11 @@ export const financialRouter = router({
     let parcelas: any[] = [];
     let bancoEmpresa: any = null;
 
+    // Rev. 1628 — origemDetalhes genérico para módulos não-Compras (cronograma, folha,
+    // pj, frota, parceiro, beneficio, almoxarifado, medição, seguro, etc.). Retorna
+    // {tipo, titulo, subtitulo?, campos: [{label, value}], link?} para o client renderizar.
+    let origemDetalhes: any = null;
+
     // 2) Se vier de Compras → busca OC, itens, fornecedor
     if ((entry.origemModulo === "compras" || entry.origemModulo === "compra_oc") && entry.origemId) {
       const ordRes = await dbExecute(db,
@@ -361,6 +366,263 @@ export const financialRouter = router({
           );
           fornecedor = (rows(fRes) as any[])[0] ?? null;
         }
+      }
+    }
+
+    // 2.5) Origens não-Compras → origemDetalhes genérico
+    if (!ordem && entry.origemModulo && entry.origemId) {
+      const om = entry.origemModulo;
+      try {
+        if (om === "cronograma_atividade") {
+          const r = await dbExecute(db,
+            `SELECT pa.eap_codigo AS "eapCodigo", pa.nome, pa.data_inicio AS "dataInicio",
+                    pa.data_fim AS "dataFim", pa.duracao_dias AS "duracaoDias",
+                    pa.peso_financeiro AS "pesoFinanceiro", pa.quantidade_planejada AS "quantidadePlanejada",
+                    pa.unidade, pa.recurso_principal AS "recursoPrincipal", pa.is_indireta AS "isIndireta",
+                    pa.projeto_id AS "projetoId", pp.nome AS "projetoNome", pp.cliente,
+                    pp.valor_contrato AS "valorContrato"
+             FROM planejamento_atividades pa
+             LEFT JOIN planejamento_projetos pp ON pp.id = pa.projeto_id
+             WHERE pa.id = $1 AND pa.company_id = $2`, [entry.origemId, input.companyId]);
+          const a = (rows(r) as any[])[0];
+          if (a) {
+            origemDetalhes = {
+              tipo: "cronograma",
+              titulo: `Atividade ${a.eapCodigo ?? ""} — ${a.nome}`.trim(),
+              subtitulo: a.projetoNome ? `📊 Projeto: ${a.projetoNome}${a.cliente ? ` · ${a.cliente}` : ""}` : null,
+              campos: [
+                { label: "EAP", value: a.eapCodigo ?? "—" },
+                { label: "Início", value: a.dataInicio, kind: "date" },
+                { label: "Fim", value: a.dataFim, kind: "date" },
+                { label: "Duração (dias)", value: a.duracaoDias ?? "—" },
+                { label: "Peso Financeiro", value: a.pesoFinanceiro != null ? `${Number(a.pesoFinanceiro).toFixed(4)}%` : "—" },
+                { label: "Quantidade Planejada", value: a.quantidadePlanejada != null ? `${Number(a.quantidadePlanejada).toLocaleString("pt-BR")} ${a.unidade ?? ""}`.trim() : "—" },
+                { label: "Recurso", value: a.recursoPrincipal ?? "—" },
+                { label: "Tipo", value: a.isIndireta ? "Indireta" : "Direta" },
+              ],
+            };
+          }
+        } else if (om === "beneficio_vr" || om === "beneficio_va") {
+          const r = await dbExecute(db,
+            `SELECT vb."employeeId", vb."mesReferencia", vb."valorDiario", vb."diasUteis",
+                    vb."valorTotal", vb.operadora, vb."valorVa", vb.status, vb."diasFerias",
+                    vb."cidadeObra", e."nomeCompleto" AS employee_nome, e.matricula
+             FROM vr_benefits vb
+             LEFT JOIN employees e ON e.id = vb."employeeId"
+             WHERE vb.id = $1 AND vb."companyId" = $2`, [entry.origemId, input.companyId]);
+          const b = (rows(r) as any[])[0];
+          if (b) {
+            const isVa = om === "beneficio_va";
+            origemDetalhes = {
+              tipo: om,
+              titulo: `${isVa ? "Vale Alimentação" : "Vale Refeição"} — ${b.employee_nome ?? "Funcionário " + b.employeeId}`,
+              subtitulo: b.matricula ? `Matrícula: ${b.matricula}` : null,
+              campos: [
+                { label: "Competência", value: b.mesReferencia ?? "—" },
+                { label: "Operadora", value: b.operadora ?? "—" },
+                { label: "Valor Diário", value: b.valorDiario != null ? `R$ ${Number(b.valorDiario).toFixed(2)}` : "—" },
+                { label: "Dias Úteis", value: b.diasUteis ?? "—" },
+                { label: "Dias Férias", value: b.diasFerias ?? 0 },
+                { label: "Valor Total", value: b.valorTotal != null ? `R$ ${Number(b.valorTotal).toFixed(2)}` : "—" },
+                { label: "Cidade Obra", value: b.cidadeObra ?? "—" },
+                { label: "Status", value: b.status ?? "—" },
+              ],
+            };
+          }
+        } else if (om === "frota_abastecimento" || om === "frota_manutencao") {
+          // origemId pode apontar para registro de abastecimento/manutenção; vehicleId já vem do entry
+          const vid = entry.vehicleId;
+          if (vid) {
+            const r = await dbExecute(db,
+              `SELECT placa, modelo, marca, "anoFabricacao", cor, "tipoVeiculo",
+                      "statusVeiculo", responsavel, km_atual, obra_id AS "obraId"
+               FROM vehicles WHERE id=$1 AND "companyId"=$2`, [vid, input.companyId]);
+            const v = (rows(r) as any[])[0];
+            if (v) {
+              origemDetalhes = {
+                tipo: om,
+                titulo: `${om === "frota_manutencao" ? "Manutenção" : "Abastecimento"} — ${v.placa ?? ""} ${v.modelo ?? ""}`.trim(),
+                subtitulo: `${v.marca ?? ""} ${v.modelo ?? ""} ${v.anoFabricacao ?? ""}`.trim(),
+                campos: [
+                  { label: "Placa", value: v.placa ?? "—" },
+                  { label: "Tipo", value: v.tipoVeiculo ?? "—" },
+                  { label: "Cor", value: v.cor ?? "—" },
+                  { label: "Status", value: v.statusVeiculo ?? "—" },
+                  { label: "Responsável", value: v.responsavel ?? "—" },
+                  { label: "KM Atual", value: v.km_atual != null ? Number(v.km_atual).toLocaleString("pt-BR") : "—" },
+                ],
+              };
+            }
+          }
+        } else if (om === "pagamento_pj") {
+          const r = await dbExecute(db,
+            `SELECT pp.tipo, pp."mesReferencia", pp.valor, pp.descricao, pp.status,
+                    pp."dataPagamento", pp.data_prevista AS "dataPrevista", pp.observacoes,
+                    pc.id AS contract_id, pc."numeroContrato", pc."razaoSocialPrestador",
+                    pc."cnpjPrestador", pc."valorMensal", pc."dataInicio", pc."dataFim",
+                    e."nomeCompleto" AS employee_nome
+             FROM pj_payments pp
+             LEFT JOIN pj_contracts pc ON pc.id = pp."contractId"
+             LEFT JOIN employees e ON e.id = pp."employeeId"
+             WHERE pp.id = $1 AND pp."companyId" = $2`, [entry.origemId, input.companyId]);
+          const p = (rows(r) as any[])[0];
+          if (p) {
+            origemDetalhes = {
+              tipo: "pj",
+              titulo: `Pagamento PJ (${p.tipo ?? "—"}) — ${p.employee_nome ?? p.razaoSocialPrestador ?? "—"}`,
+              subtitulo: p.numeroContrato ? `Contrato ${p.numeroContrato}${p.cnpjPrestador ? ` · CNPJ ${p.cnpjPrestador}` : ""}` : null,
+              campos: [
+                { label: "Competência", value: p.mesReferencia ?? "—" },
+                { label: "Tipo", value: p.tipo ?? "—" },
+                { label: "Valor", value: p.valor != null ? `R$ ${Number(p.valor).toFixed(2)}` : "—" },
+                { label: "Status", value: p.status ?? "—" },
+                { label: "Data Prevista", value: p.dataPrevista, kind: "date" },
+                { label: "Data Pagamento", value: p.dataPagamento, kind: "date" },
+                { label: "Razão Social", value: p.razaoSocialPrestador ?? "—" },
+                { label: "Contrato Vigência", value: p.dataInicio && p.dataFim ? `${String(p.dataInicio).slice(0,10)} a ${String(p.dataFim).slice(0,10)}` : "—" },
+                ...(p.descricao ? [{ label: "Descrição", value: p.descricao }] : []),
+              ],
+            };
+          }
+        } else if (om === "parceiro_lancamento") {
+          const r = await dbExecute(db,
+            `SELECT lp."employeeId", lp.employee_nome, lp.data_compra AS "dataCompra",
+                    lp.descricao_itens AS "descricaoItens", lp.valor, lp.status,
+                    lp.competencia_desconto AS "competenciaDesconto",
+                    lp.aprovado_por AS "aprovadoPor", lp.aprovado_em AS "aprovadoEm",
+                    pc.razao_social AS parceiro_razao, pc.nome_fantasia AS parceiro_fantasia
+             FROM lancamentos_parceiros lp
+             LEFT JOIN parceiros_conveniados pc ON pc.id = lp."parceiroId"
+             WHERE lp.id = $1 AND lp."companyId" = $2`, [entry.origemId, input.companyId]);
+          const l = (rows(r) as any[])[0];
+          if (l) {
+            origemDetalhes = {
+              tipo: "parceiro",
+              titulo: `Parceiro Conveniado — ${l.parceiro_fantasia ?? l.parceiro_razao ?? "—"}`,
+              subtitulo: `Funcionário: ${l.employee_nome}`,
+              campos: [
+                { label: "Data Compra", value: l.dataCompra, kind: "date" },
+                { label: "Valor", value: l.valor != null ? `R$ ${Number(l.valor).toFixed(2)}` : "—" },
+                { label: "Status", value: l.status ?? "—" },
+                { label: "Competência Desconto", value: l.competenciaDesconto ?? "—" },
+                { label: "Aprovado Por", value: l.aprovadoPor ?? "—" },
+                ...(l.descricaoItens ? [{ label: "Descrição", value: l.descricaoItens }] : []),
+              ],
+            };
+          }
+        } else if (om === "almoxarifado_saida") {
+          const r = await dbExecute(db,
+            `SELECT item_nome AS "itemNome", unidade, quantidade, funcionario_nome AS "funcionarioNome",
+                    funcionario_codigo AS "funcionarioCodigo", obra_nome AS "obraNome",
+                    motivo, almoxarife_nome AS "almoxarifeNome", created_at AS "createdAt"
+             FROM almoxarifado_saidas_insumo WHERE id=$1 AND company_id=$2`,
+            [entry.origemId, input.companyId]);
+          const s = (rows(r) as any[])[0];
+          if (s) {
+            origemDetalhes = {
+              tipo: "almoxarifado",
+              titulo: `Saída de Almoxarifado — ${s.itemNome}`,
+              subtitulo: s.obraNome ? `📍 ${s.obraNome}` : null,
+              campos: [
+                { label: "Item", value: s.itemNome },
+                { label: "Quantidade", value: `${Number(s.quantidade).toLocaleString("pt-BR")} ${s.unidade ?? ""}`.trim() },
+                { label: "Funcionário", value: `${s.funcionarioNome ?? "—"}${s.funcionarioCodigo ? ` (${s.funcionarioCodigo})` : ""}` },
+                { label: "Almoxarife", value: s.almoxarifeNome ?? "—" },
+                ...(s.motivo ? [{ label: "Motivo", value: s.motivo }] : []),
+              ],
+            };
+          }
+        } else if (om === "planejamento_medicao") {
+          const r = await dbExecute(db,
+            `SELECT pm.numero, pm.competencia, pm.valor_previsto AS "valorPrevisto",
+                    pm.valor_medido AS "valorMedido", pm.percentual_previsto AS "percentualPrevisto",
+                    pm.percentual_medido AS "percentualMedido", pm.status,
+                    pp.nome AS projeto_nome, pp.cliente
+             FROM planejamento_medicoes pm
+             LEFT JOIN planejamento_projetos pp ON pp.id = pm.projeto_id
+             WHERE pm.id = $1 AND pm.company_id = $2`, [entry.origemId, input.companyId]);
+          const m = (rows(r) as any[])[0];
+          if (m) {
+            origemDetalhes = {
+              tipo: "medicao",
+              titulo: `Medição #${m.numero} — ${m.competencia}`,
+              subtitulo: m.projeto_nome ? `📊 ${m.projeto_nome}${m.cliente ? ` · ${m.cliente}` : ""}` : null,
+              campos: [
+                { label: "Número", value: m.numero ?? "—" },
+                { label: "Competência", value: m.competencia ?? "—" },
+                { label: "Status", value: m.status ?? "—" },
+                { label: "Valor Previsto", value: m.valorPrevisto != null ? `R$ ${Number(m.valorPrevisto).toFixed(2)}` : "—" },
+                { label: "Valor Medido", value: m.valorMedido != null ? `R$ ${Number(m.valorMedido).toFixed(2)}` : "—" },
+                { label: "% Previsto", value: m.percentualPrevisto != null ? `${Number(m.percentualPrevisto).toFixed(2)}%` : "—" },
+                { label: "% Medido", value: m.percentualMedido != null ? `${Number(m.percentualMedido).toFixed(2)}%` : "—" },
+              ],
+            };
+          }
+        } else if (om === "medicao_obra") {
+          const r = await dbExecute(db,
+            `SELECT tm.numero, tm.periodo, tm.data_referencia AS "dataReferencia",
+                    tm.valor_medido AS "valorMedido", tm.valor_acumulado AS "valorAcumulado",
+                    tm.percentual_global AS "percentualGlobal", tm.status,
+                    et.razao_social AS empresa_terceira, et.cnpj
+             FROM terceiro_medicoes tm
+             LEFT JOIN empresas_terceiras et ON et.id = tm.empresa_terceira_id
+             WHERE tm.id = $1 AND tm.company_id = $2`, [entry.origemId, input.companyId]);
+          const m = (rows(r) as any[])[0];
+          if (m) {
+            origemDetalhes = {
+              tipo: "medicao_terceiro",
+              titulo: `Medição Terceiro #${m.numero} — ${m.periodo}`,
+              subtitulo: m.empresa_terceira ? `${m.empresa_terceira}${m.cnpj ? ` · CNPJ ${m.cnpj}` : ""}` : null,
+              campos: [
+                { label: "Período", value: m.periodo ?? "—" },
+                { label: "Data Ref.", value: m.dataReferencia, kind: "date" },
+                { label: "Status", value: m.status ?? "—" },
+                { label: "Valor Medido", value: m.valorMedido != null ? `R$ ${Number(m.valorMedido).toFixed(2)}` : "—" },
+                { label: "Valor Acumulado", value: m.valorAcumulado != null ? `R$ ${Number(m.valorAcumulado).toFixed(2)}` : "—" },
+                { label: "% Global", value: m.percentualGlobal != null ? `${Number(m.percentualGlobal).toFixed(2)}%` : "—" },
+              ],
+            };
+          }
+        } else if (om === "seguro_vida") {
+          const r = await dbExecute(db,
+            `SELECT competencia, total_segurados AS "totalSegurados", total_ativos AS "totalAtivos",
+                    total_ok AS "totalOk", total_sem_seguro AS "totalSemSeguro",
+                    total_pagar_indevido AS "totalPagarIndevido", importado_por AS "importadoPor",
+                    data_importacao AS "dataImportacao"
+             FROM seguro_vida_importacoes WHERE id=$1 AND company_id=$2`,
+            [entry.origemId, input.companyId]);
+          const s = (rows(r) as any[])[0];
+          if (s) {
+            origemDetalhes = {
+              tipo: "seguro_vida",
+              titulo: `Seguro de Vida — ${s.competencia}`,
+              subtitulo: s.importadoPor ? `Importado por ${s.importadoPor}` : null,
+              campos: [
+                { label: "Competência", value: s.competencia ?? "—" },
+                { label: "Total Segurados", value: s.totalSegurados ?? 0 },
+                { label: "Ativos", value: s.totalAtivos ?? 0 },
+                { label: "OK", value: s.totalOk ?? 0 },
+                { label: "Sem Seguro", value: s.totalSemSeguro ?? 0 },
+                { label: "Pgto Indevido", value: s.totalPagarIndevido ?? 0 },
+              ],
+            };
+          }
+        }
+      } catch (err: any) {
+        console.error("[getEntryDetalhe] origemDetalhes error", om, entry.origemId, err?.message);
+      }
+      // fallback genérico — qualquer origem reconhecida sem fetch específico
+      if (!origemDetalhes) {
+        origemDetalhes = {
+          tipo: om,
+          titulo: entry.origemDescricao ?? `Lançamento de ${om}`,
+          subtitulo: entry.obraNome ? `📍 ${entry.obraNome}` : null,
+          campos: [
+            { label: "Módulo de Origem", value: om },
+            { label: "ID Origem", value: entry.origemId ?? "—" },
+            { label: "Descrição", value: entry.origemDescricao ?? "—" },
+          ],
+        };
       }
     }
 
@@ -408,7 +670,7 @@ export const financialRouter = router({
     // expected pattern.". Normalizamos para ISO-8601 antes de devolver pro client.
     const TS_FIELDS = [
       "createdAt", "updatedAt", "dataConciliacao", "chequeDataBomPara",
-      "aprovadoEm", "dataEntregaPrevista",
+      "aprovadoEm", "dataEntregaPrevista", "dataCompra", "dataImportacao",
     ];
     const toIso = (v: any): any => {
       if (typeof v !== "string") return v;
@@ -431,8 +693,14 @@ export const financialRouter = router({
     (itens ?? []).forEach(normTs);
     (parcelas ?? []).forEach(normTs);
     (auditoria ?? []).forEach(normTs);
+    if (origemDetalhes?.campos) {
+      origemDetalhes.campos = origemDetalhes.campos.map((c: any) => ({
+        ...c,
+        value: c.kind === "date" ? toIso(c.value) : c.value,
+      }));
+    }
 
-    return { entry, ordem, itens, fornecedor, parcelas, bancoEmpresa, auditoria };
+    return { entry, ordem, itens, fornecedor, parcelas, bancoEmpresa, auditoria, origemDetalhes };
   }),
 
   // Rev. 1620 — Pagamento em lote (Onda 2: APQC 8.7.5 — Process Payments)

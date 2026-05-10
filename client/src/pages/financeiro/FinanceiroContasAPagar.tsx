@@ -1201,11 +1201,11 @@ export default function FinanceiroContasAPagar() {
                   <Tabs defaultValue="geral" className="w-full">
                     <TabsList className="grid w-full grid-cols-4">
                       <TabsTrigger value="geral" className="text-xs"><Info className="w-3 h-3 mr-1" />Geral</TabsTrigger>
-                      <TabsTrigger value="origem" className="text-xs" disabled={!d.ordem && !d.fornecedor}>
-                        <Building2 className="w-3 h-3 mr-1" />Origem {d.ordem ? "(OC)" : d.fornecedor ? "(Forn.)" : ""}
+                      <TabsTrigger value="origem" className="text-xs" disabled={!d.ordem && !d.fornecedor && !d.origemDetalhes}>
+                        <Building2 className="w-3 h-3 mr-1" />Origem {d.ordem ? "(OC)" : d.fornecedor ? "(Forn.)" : d.origemDetalhes ? `(${ORIGEM_LABELS[e.origemModulo] ?? e.origemModulo ?? ""})` : ""}
                       </TabsTrigger>
-                      <TabsTrigger value="parcelas" className="text-xs" disabled={!d.parcelas?.length || d.parcelas.length <= 1}>
-                        <Hash className="w-3 h-3 mr-1" />Parcelas {d.parcelas?.length > 1 ? `(${d.parcelas.length})` : ""}
+                      <TabsTrigger value="parcelas" className="text-xs">
+                        <Hash className="w-3 h-3 mr-1" />Parcelas {d.parcelas?.length > 1 ? `(${d.parcelas.length})` : "(1)"}
                       </TabsTrigger>
                       <TabsTrigger value="historico" className="text-xs"><History className="w-3 h-3 mr-1" />Histórico</TabsTrigger>
                     </TabsList>
@@ -1326,6 +1326,27 @@ export default function FinanceiroContasAPagar() {
                         </div>
                       )}
 
+                      {/* Rev. 1628 — Origem genérica (cronograma, folha, pj, frota, parceiro, beneficio, almox, medição, seguro) */}
+                      {!d.ordem && !d.fornecedor && d.origemDetalhes && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                            <Building2 className="w-4 h-4 text-violet-600" />{d.origemDetalhes.titulo}
+                          </h4>
+                          {d.origemDetalhes.subtitulo && (
+                            <p className="text-xs text-slate-600 mb-3">{d.origemDetalhes.subtitulo}</p>
+                          )}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {d.origemDetalhes.campos.map((c: any, i: number) => (
+                              <KV key={i} label={c.label}>
+                                {c.value == null || c.value === "" ? "—" :
+                                 c.kind === "date" ? fmtDateBR(String(c.value)) :
+                                 String(c.value)}
+                              </KV>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {d.itens && d.itens.length > 0 && (
                         <div>
                           <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
@@ -1377,7 +1398,22 @@ export default function FinanceiroContasAPagar() {
                             </tr>
                           </thead>
                           <tbody>
-                            {d.parcelas.map((p: any) => (
+                            {(!d.parcelas || d.parcelas.length === 0) && (
+                              <tr className="bg-blue-50 border-t border-slate-100">
+                                <td className="px-2 py-1.5 font-semibold">1/1 <span className="text-blue-600 ml-1">←</span></td>
+                                <td className="px-2 py-1.5">{fmtDateBR(e.dataVencimento)}</td>
+                                <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{formatBRL(Number(e.valorPrevisto))}</td>
+                                <td className="px-2 py-1.5">{e.dataPagamento ? `${fmtDateBR(e.dataPagamento)} (${e.formaPagamento ?? "—"})` : "—"}</td>
+                                <td className="px-2 py-1.5 text-center">
+                                  <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                    e.status === "pago" ? "bg-green-100 text-green-700" :
+                                    e.dataVencimento && String(e.dataVencimento).slice(0,10) < hojeStr ? "bg-red-100 text-red-700" :
+                                    "bg-orange-100 text-orange-700"
+                                  }`}>{e.status}</span>
+                                </td>
+                              </tr>
+                            )}
+                            {d.parcelas?.map((p: any) => (
                               <tr key={p.id} className={`border-t border-slate-100 ${p.id === e.id ? "bg-blue-50" : ""}`}>
                                 <td className="px-2 py-1.5 font-semibold">{p.parcelaNumero}/{p.parcelaTotal} {p.id === e.id && <span className="text-blue-600 ml-1">←</span>}</td>
                                 <td className="px-2 py-1.5">{fmtDateBR(p.dataVencimento)}</td>
