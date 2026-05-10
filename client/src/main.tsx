@@ -2,8 +2,38 @@
 import { patchDomForReact } from "@/lib/dom-patch";
 patchDomForReact();
 
+// Captura erros do client e envia ao servidor pra logar (debug em iPad/mobile sem devtools)
+let __reporterDepth = 0;
+function reportClientError(kind: string, err: any, extra?: any) {
+  if (__reporterDepth > 0) return;
+  __reporterDepth++;
+  try {
+    const payload = {
+      kind,
+      message: err?.message ?? String(err ?? ""),
+      stack: err?.stack ?? err?.cause?.stack ?? null,
+      url: location.href,
+      ua: navigator.userAgent,
+      extra,
+    };
+    fetch("/api/diag/client-error", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {}
+  finally { __reporterDepth--; }
+}
+(window as any).__reportClientError = reportClientError;
+
+window.addEventListener("error", (event) => {
+  reportClientError("error", event.error || event.message, { filename: event.filename, lineno: event.lineno, colno: event.colno });
+});
+
 window.addEventListener("unhandledrejection", (event) => {
   const msg = event.reason?.message || String(event.reason || "");
+  reportClientError("unhandledrejection", event.reason, { msg });
   if (
     msg.includes("Failed to fetch dynamically imported module") ||
     msg.includes("Importing a module script failed") ||

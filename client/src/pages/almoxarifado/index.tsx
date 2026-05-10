@@ -414,6 +414,16 @@ export default function AlmoxarifadoPage() {
     onSuccess: () => { refetch(); setModalItem(false); toast.success("Item atualizado!"); },
     onError: (e: any) => {
       console.error("[atualizarItem onError]", e, "data:", e?.data, "shape:", e?.shape, "cause:", e?.cause);
+      try {
+        (window as any).__reportClientError?.("trpc.atualizarItem", e, {
+          code: e?.data?.code || e?.shape?.data?.code,
+          httpStatus: e?.data?.httpStatus || e?.shape?.data?.httpStatus,
+          causeMessage: e?.cause?.message,
+          causeName: e?.cause?.name,
+          causeStack: e?.cause?.stack,
+          shape: e?.shape,
+        });
+      } catch {}
       const code = e?.data?.code || e?.shape?.data?.code || "";
       const httpStatus = e?.data?.httpStatus || e?.shape?.data?.httpStatus || "";
       const causeMsg = e?.cause?.message ? ` | cause: ${e.cause.message}` : "";

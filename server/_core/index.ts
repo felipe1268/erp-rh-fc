@@ -96,6 +96,16 @@ async function startServer() {
       res.status(500).json({ ok: false, error: e.message, stack: e.stack?.substring(0, 500) });
     }
   });
+  // Endpoint de captura de erros do client — para debug em iPad/mobile sem devtools
+  app.post("/api/diag/client-error", apiRateLimit, express.json({ limit: "200kb" }), (req: any, res: any) => {
+    try {
+      const { kind, message, stack, url, ua, extra } = req.body || {};
+      console.error(`[CLIENT ERROR] kind=${kind} url=${url} ua=${(ua || "").substring(0, 80)} msg=${message}`);
+      if (stack) console.error(`[CLIENT ERROR stack]`, stack.substring(0, 1500));
+      if (extra) console.error(`[CLIENT ERROR extra]`, JSON.stringify(extra).substring(0, 1000));
+    } catch {}
+    res.json({ ok: true });
+  });
   // Endpoint de diagnóstico financeiro — consulta Neon DB diretamente
   app.get("/api/diag/financial-neon", async (_req: any, res: any) => {
     try {
