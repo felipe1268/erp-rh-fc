@@ -902,7 +902,7 @@ export default function FinanceiroContasAPagar() {
 
         {/* Rev. 1621 — Modal de DETALHE do título (drill-down completo p/ validação final) */}
         <Dialog open={!!detailEntryId} onOpenChange={(o) => !o && setDetailEntryId(null)}>
-          <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
+          <DialogContent className="max-w-6xl w-[95vw] max-h-[88vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-lg">
                 <Info className="w-5 h-5 text-blue-600" />
@@ -971,7 +971,7 @@ export default function FinanceiroContasAPagar() {
 
                     {/* GERAL */}
                     <TabsContent value="geral" className="mt-4 space-y-3">
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <KV label="Tipo">{e.tipo ?? "—"}</KV>
                         <KV label="Natureza">{e.natureza ?? "—"}</KV>
                         <KV label="Conta Contábil">{e.contaNome ?? "—"}</KV>
@@ -1031,7 +1031,7 @@ export default function FinanceiroContasAPagar() {
                           <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
                             <ShoppingCart className="w-4 h-4 text-blue-600" />Ordem de Compra {d.ordem.numeroOc}
                           </h4>
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <KV label="Status OC">{d.ordem.status} · {d.ordem.aprovacaoStatus}</KV>
                             <KV label="Aprovador">{d.ordem.aprovadorNome ?? "—"}</KV>
                             <KV label="Aprovado em">{d.ordem.aprovadoEm ? fmtDateBR(d.ordem.aprovadoEm.slice(0,10)) : "—"}</KV>
@@ -1070,7 +1070,7 @@ export default function FinanceiroContasAPagar() {
                           <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
                             <Building2 className="w-4 h-4 text-indigo-600" />Fornecedor
                           </h4>
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <KV label="Razão Social">{d.fornecedor.razaoSocial}</KV>
                             <KV label="Nome Fantasia">{d.fornecedor.nomeFantasia ?? "—"}</KV>
                             <KV label="CNPJ"><span className="font-mono">{d.fornecedor.cnpj ?? "—"}</span></KV>
