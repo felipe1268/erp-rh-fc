@@ -114,6 +114,9 @@ export default function PortalDashboardCliente() {
     obraId: number | null;
     notaEquipe: number | null; notaObra: number | null; notaAtendimento: number | null;
     notaPrazo: number | null; notaQualidade: number | null;
+    // Rev. 1592 — Escritório Central
+    notaEscritorio: number | null; notaFaturamento: number | null;
+    comentarioEscritorio: string;
     notaEmpresa: number | null; notaGestor: number | null;
     notaGeral: number | null;
     comentarioPositivo: string; comentarioMelhoria: string;
@@ -123,6 +126,8 @@ export default function PortalDashboardCliente() {
   }>({
     obraId: null, notaEquipe: null, notaObra: null, notaAtendimento: null,
     notaPrazo: null, notaQualidade: null,
+    notaEscritorio: null, notaFaturamento: null,
+    comentarioEscritorio: "",
     notaEmpresa: null, notaGestor: null,
     notaGeral: null,
     comentarioPositivo: "", comentarioMelhoria: "",
@@ -178,6 +183,10 @@ export default function PortalDashboardCliente() {
       notaQualidade: aval.notaQualidade ?? undefined,
       notaEmpresa: aval.notaEmpresa ?? undefined,
       notaGestor: aval.notaGestor ?? undefined,
+      // Rev. 1592 — Escritório Central
+      notaEscritorio: aval.notaEscritorio ?? undefined,
+      notaFaturamento: aval.notaFaturamento ?? undefined,
+      comentarioEscritorio: aval.comentarioEscritorio || undefined,
       notaGeral: aval.notaGeral,
       comentarioPositivo: aval.comentarioPositivo || undefined,
       comentarioMelhoria: aval.comentarioMelhoria || undefined,
@@ -415,7 +424,7 @@ export default function PortalDashboardCliente() {
                 <CheckCircle2 className="w-20 h-20 text-emerald-500 mx-auto mb-4" />
                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Obrigado pela avaliação!</h2>
                 <p className="text-slate-600 mb-6">Suas respostas foram registradas <b>de forma totalmente anônima</b> e ajudarão a FC Engenharia a melhorar continuamente.</p>
-                <Button onClick={() => { setAvaliado(false); setAval({ ...aval, notaGeral: null, notaEquipe: null, notaObra: null, notaAtendimento: null, notaPrazo: null, notaQualidade: null, notaEmpresa: null, notaGestor: null, comentarioPositivo: "", comentarioMelhoria: "", comentarioEquipe: "", comentarioEmpresa: "", comentarioGestor: "", gestorNome: "", recomendaria: null, obraId: null }); }} variant="outline">
+                <Button onClick={() => { setAvaliado(false); setAval({ ...aval, notaGeral: null, notaEquipe: null, notaObra: null, notaAtendimento: null, notaPrazo: null, notaQualidade: null, notaEmpresa: null, notaGestor: null, notaEscritorio: null, notaFaturamento: null, comentarioEscritorio: "", comentarioPositivo: "", comentarioMelhoria: "", comentarioEquipe: "", comentarioEmpresa: "", comentarioGestor: "", gestorNome: "", recomendaria: null, obraId: null }); }} variant="outline">
                   Enviar nova avaliação
                 </Button>
               </div>
@@ -504,6 +513,24 @@ export default function PortalDashboardCliente() {
                   </div>
                 </div>
 
+                {/* Bloco ESCRITÓRIO CENTRAL — Rev. 1592 */}
+                <div className="border rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-purple-600" />
+                    <h3 className="font-semibold text-slate-800 text-sm">Escritório Central / Backoffice</h3>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <NotaSelector label="Atendimento administrativo (suporte, retorno de e-mails, agilidade)" value={aval.notaEscritorio} onChange={(n) => setAval({ ...aval, notaEscritorio: n })} />
+                    <NotaSelector label="Faturamento, contratos e financeiro" value={aval.notaFaturamento} onChange={(n) => setAval({ ...aval, notaFaturamento: n })} />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Comentário sobre o Escritório Central <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                    <textarea value={aval.comentarioEscritorio} onChange={(e) => setAval({ ...aval, comentarioEscritorio: e.target.value })}
+                      rows={2} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
+                      placeholder="Suporte administrativo, contratos, faturamento, agilidade nas respostas..." />
+                  </div>
+                </div>
+
                 {/* Bloco OBRA */}
                 <div className="border rounded-xl p-4 space-y-3">
                   <div className="flex items-center gap-2">
@@ -542,17 +569,24 @@ export default function PortalDashboardCliente() {
                   </div>
                 </div>
 
+                {/* Rev. 1592 — Pontos Fortes / Pontos Fracos (rótulos diretos) */}
                 <div>
-                  <Label className="text-sm font-medium">O que está indo bem? <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                    <Smile className="w-4 h-4 text-emerald-600" />
+                    Pontos fortes — o que mais te impressionou positivamente? <span className="text-slate-400 text-xs">(opcional)</span>
+                  </Label>
                   <textarea value={aval.comentarioPositivo} onChange={(e) => setAval({ ...aval, comentarioPositivo: e.target.value })}
                     rows={3} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
-                    placeholder="Pontos positivos da equipe e do trabalho..." />
+                    placeholder="O que está funcionando bem na obra, equipe, gestão ou no escritório central..." />
                 </div>
                 <div>
-                  <Label className="text-sm font-medium">O que pode melhorar? <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                    <Frown className="w-4 h-4 text-rose-600" />
+                    Pontos fracos — o que precisa melhorar? <span className="text-slate-400 text-xs">(opcional)</span>
+                  </Label>
                   <textarea value={aval.comentarioMelhoria} onChange={(e) => setAval({ ...aval, comentarioMelhoria: e.target.value })}
                     rows={3} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
-                    placeholder="Sugestões e oportunidades de melhoria..." />
+                    placeholder="Sugestões, oportunidades de melhoria, gargalos identificados..." />
                 </div>
 
                 <div className="flex justify-end pt-3 border-t">

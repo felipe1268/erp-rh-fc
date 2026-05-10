@@ -507,6 +507,9 @@ export default function ClientesPortalAdmin() {
                       { k: "atendimento", label: "Atendimento" },
                       { k: "prazo", label: "Prazos" },
                       { k: "qualidade", label: "Qualidade" },
+                      // Rev. 1592 — Escritório Central
+                      { k: "escritorio", label: "Escritório Central" },
+                      { k: "faturamento", label: "Faturamento / Contratos" },
                     ].map((c) => {
                       const v = (dashAval.medias as any)[c.k];
                       const cor = v == null ? "bg-slate-200" : v >= 8 ? "bg-emerald-500" : v >= 6 ? "bg-amber-500" : "bg-rose-500";
@@ -607,6 +610,8 @@ export default function ClientesPortalAdmin() {
                             { k: "notaEmpresa", l: "Empresa" }, { k: "notaObra", l: "Obra" },
                             { k: "notaAtendimento", l: "Atend." }, { k: "notaPrazo", l: "Prazo" },
                             { k: "notaQualidade", l: "Qualidade" },
+                            // Rev. 1592 — Escritório Central
+                            { k: "notaEscritorio", l: "Escritório" }, { k: "notaFaturamento", l: "Faturamento" },
                           ].filter((c) => a[c.k] != null).map((c) => (
                             <span key={c.k} className="px-1.5 py-0.5 rounded bg-slate-100 border">{c.l}: <b>{a[c.k]}</b></span>
                           ))}
@@ -616,6 +621,8 @@ export default function ClientesPortalAdmin() {
                         {a.comentarioEquipe && <p className="text-sm text-blue-700 mt-1"><Users className="inline w-4 h-4 mr-1" /><b>Equipe:</b> {a.comentarioEquipe}</p>}
                         {a.comentarioGestor && <p className="text-sm text-amber-700 mt-1"><Star className="inline w-4 h-4 mr-1" /><b>Gestor:</b> {a.comentarioGestor}</p>}
                         {a.comentarioEmpresa && <p className="text-sm text-emerald-700 mt-1"><Building2 className="inline w-4 h-4 mr-1" /><b>Empresa:</b> {a.comentarioEmpresa}</p>}
+                        {/* Rev. 1592 — comentário do bloco Escritório Central */}
+                        {a.comentarioEscritorio && <p className="text-sm text-purple-700 mt-1"><Building2 className="inline w-4 h-4 mr-1" /><b>Escritório:</b> {a.comentarioEscritorio}</p>}
                       </div>
                     ))}
                     {(dashAval.avaliacoes as any[]).length === 0 && (

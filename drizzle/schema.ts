@@ -4002,12 +4002,17 @@ export const clienteAvaliacoes = pgTable("cliente_avaliacoes", {
   // Rev. 1569 — perguntas adicionais (Empresa / Gestor)
   notaEmpresa: integer("nota_empresa"),
   notaGestor: integer("nota_gestor"),
+  // Rev. 1592 — bloco Escritório Central (administrativo / faturamento)
+  notaEscritorio: integer("nota_escritorio"),
+  notaFaturamento: integer("nota_faturamento"),
   comentarioPositivo: text("comentario_positivo"),
   comentarioMelhoria: text("comentario_melhoria"),
   // Rev. 1569 — comentários por bloco
   comentarioEquipe: text("comentario_equipe"),
   comentarioEmpresa: text("comentario_empresa"),
   comentarioGestor: text("comentario_gestor"),
+  // Rev. 1592 — comentário do bloco Escritório Central
+  comentarioEscritorio: text("comentario_escritorio"),
   gestorNome: varchar("gestor_nome", { length: 255 }),
   recomendaria: smallint(), // 0=não, 1=talvez, 2=sim
   // Rev. 1569 — período da avaliação (YYYY-MM ou YYYY) e cancelamento pelo Master

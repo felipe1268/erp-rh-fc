@@ -451,6 +451,16 @@ Regras:
         await db.execute(sql`ALTER TABLE curriculos ADD COLUMN IF NOT EXISTS historico_status_json TEXT`);
         console.log(`[SyncSchema+] Coluna historico_status_json garantida na tabela curriculos.`);
 
+        // Rev. 1592: bloco Escritório Central na avaliação anônima do Portal do Cliente.
+        // Garantido aqui (e não só em ColFix) porque o version guard do ColFix pode
+        // pular as migrations quando a versão já estiver aplicada.
+        try {
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_escritorio INTEGER`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_faturamento INTEGER`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS comentario_escritorio TEXT`);
+          console.log(`[SyncSchema+] Colunas Escritório Central garantidas em cliente_avaliacoes.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA cliente_avaliacoes escritório:`, e?.message || e); }
+
         // Rastreio de quem cadastrou/atualizou itens do almoxarifado
         try {
           await db.execute(sql`ALTER TABLE almoxarifado_itens ADD COLUMN IF NOT EXISTS criado_por_id INTEGER`);
@@ -623,6 +633,10 @@ Regras:
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS ano_periodo VARCHAR(7)`);
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS cancelada_em TIMESTAMP WITHOUT TIME ZONE`);
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS cancelada_por VARCHAR(255)`);
+          // Rev. 1592 — bloco Escritório Central
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_escritorio INTEGER`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_faturamento INTEGER`);
+          await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS comentario_escritorio TEXT`);
           await db.execute(sql`CREATE TABLE IF NOT EXISTS portal_cliente_config (
             company_id INTEGER PRIMARY KEY,
             periodicidade VARCHAR(8) NOT NULL DEFAULT 'mensal',

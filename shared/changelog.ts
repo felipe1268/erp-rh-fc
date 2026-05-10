@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1592,
+    titulo: "Avaliação Anônima do Cliente — novo bloco Escritório Central + Pontos Fortes/Fracos com rótulo direto",
+    descricao: "A pesquisa anônima do Portal do Cliente passa a ter um novo bloco temático: ESCRITÓRIO CENTRAL / BACKOFFICE, com duas notas (atendimento administrativo e faturamento/contratos/financeiro) + comentário aberto. Os comentários abertos finais foram renomeados para PONTOS FORTES (com ícone Smile) e PONTOS FRACOS (com ícone Frown), com placeholders mais claros. (1) Schema/ColFix: 3 novas colunas em cliente_avaliacoes (nota_escritorio, nota_faturamento, comentario_escritorio) garantidas idempotentemente no startup. (2) Backend: portalExterno.cliente.criarAvaliacao aceita os novos campos; dashboardAvaliacoesCliente passa a calcular medias.escritorio e medias.faturamento. (3) Formulário do cliente (PortalDashboardCliente): novo bloco roxo entre 'Empresa' e 'Obra', state/reset/mutate atualizados. (4) Análise mês a mês (ClientesPortalAdmin): médias por critério ganham 2 novos cards, badges das avaliações detalhadas mostram 'Escritório' e 'Faturamento', e o comentário do escritório aparece em roxo na lista de avaliações recebidas. Mantém todas as garantias de anonimato (cliente_avaliacao_marcacoes intocada).",
+    tipo: 'feature',
+    modulos: 'Portal do Cliente, Avaliação Anônima, NPS',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 14:00:00',
+  },
+  {
     version: 1591,
     titulo: "Portal do Cliente — Avaliação Anônima desativa automaticamente após envio (1×/período)",
     descricao: "O módulo de Avaliação Anônima do Portal do Cliente passa a respeitar de forma visível a regra '1 avaliação por período' (mensal ou anual conforme configuração do admin). Assim que o usuário envia a avaliação do período corrente (fuso Brasília), o módulo é DESATIVADO automaticamente em todos os pontos de entrada e só reabre na próxima janela: (1) Hub do Cliente — o card 'Avaliação' fica em estado desativado (cinza, traçado pontilhado, badge 'OK', subtítulo 'Disponível em junho/2026' ou 'Disponível em 2027') e o clique exibe um toast informando a próxima janela. (2) Dashboard — a aba 'Avaliação Anônima' some automaticamente da barra de tabs (a tela de status 'já registrada' continua acessível via link direto ?tab=avaliacao). (3) Menu lateral do Planejamento — o item 'Avaliação' em 'Outros módulos' fica desabilitado, com check verde e texto 'Disponível em <próximo período>'. Novo helper compartilhado shared/portalAvaliacao.ts gera o rótulo do próximo período de forma consistente nos 3 pontos. Backend inalterado (já entregava { jaAvaliou, anoMes, periodicidade } via portalExterno.cliente.podeAvaliarEsteMes).",
