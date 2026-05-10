@@ -801,6 +801,40 @@ export default function AlmoxarifadoPage() {
           const consEstoqueCritico = consItens.filter((i: any) => { const m = i.quantidadeMinima; return m > 0 && i.quantidadeTotal < m * 0.5; }).length;
           const consCategs = [...new Set(consItens.map((i: any) => i.categoria).filter(Boolean))].sort();
 
+          // ── Valor de Equipamentos por Almoxarifado ───────────────
+          const isEquip = (c: any) => (c || "").toString().toLowerCase().includes("equipamento");
+          const parseValor = (v: any): number => {
+            if (v === null || v === undefined) return 0;
+            const s = String(v).trim().replace(/\./g, "").replace(",", ".");
+            const n2 = parseFloat(s);
+            if (!isNaN(n2)) return n2;
+            const n1 = parseFloat(String(v));
+            return isNaN(n1) ? 0 : n1;
+          };
+          // Inicializa Central + todas as obras ativas (para sempre listar, mesmo com zero)
+          const equipMap = new Map<string, { nome: string; valor: number; itens: number }>();
+          equipMap.set("central", { nome: "Almoxarifado Central", valor: 0, itens: 0 });
+          for (const o of (obrasAtivas as any[])) {
+            equipMap.set(`obra:${o.id}`, { nome: o.nome || `Obra #${o.id}`, valor: 0, itens: 0 });
+          }
+          for (const item of consItens) {
+            if (!isEquip(item.categoria)) continue;
+            const vu = parseValor(item.valorUnitario);
+            for (const a of (item.almoxarifados ?? [])) {
+              const key = a.tipo === "central" ? "central" : `obra:${a.obraId}`;
+              const nome = a.tipo === "central"
+                ? "Almoxarifado Central"
+                : ((obrasAtivas as any[]).find((o: any) => o.id === a.obraId)?.nome || `Obra #${a.obraId}`);
+              const cur = equipMap.get(key) || { nome, valor: 0, itens: 0 };
+              cur.valor += vu * (Number(a.quantidade) || 0);
+              cur.itens += 1;
+              equipMap.set(key, cur);
+            }
+          }
+          const equipPorAlmox = Array.from(equipMap.values()).sort((a, b) => b.valor - a.valor);
+          const equipTotal = equipPorAlmox.reduce((s, e) => s + e.valor, 0);
+          const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
           return (
           <div className="max-w-7xl mx-auto px-4 py-4 space-y-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -830,6 +864,42 @@ export default function AlmoxarifadoPage() {
                   <p className="text-xs opacity-70 mt-1">{consolidado.itens.length} ite{consolidado.itens.length !== 1 ? "ns" : "m"} agrupado{consolidado.itens.length !== 1 ? "s" : ""} · {consolidado.itens.filter((i: any) => i.valorUnitario).length} com preço cadastrado</p>
                 </div>
                 <BarChart2 className="h-12 w-12 opacity-30" />
+              </div>
+            )}
+
+            {equipPorAlmox.length > 0 && (
+              <div className="bg-white rounded-2xl border border-orange-200 shadow-sm overflow-hidden">
+                <div className="bg-gradient-to-r from-orange-600 to-amber-500 px-6 py-4 flex items-center justify-between text-white">
+                  <div>
+                    <p className="text-sm font-medium opacity-90 flex items-center gap-2">
+                      <Wrench className="h-4 w-4" /> Valor de Equipamentos por Almoxarifado
+                    </p>
+                    <p className="text-xs opacity-80 mt-0.5">Soma de itens da categoria <b>Equipamentos</b> com preço cadastrado</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[11px] uppercase tracking-wide opacity-80">Total geral</p>
+                    <p className="text-2xl font-black">R$ {fmtBRL(equipTotal)}</p>
+                  </div>
+                </div>
+                <div className="divide-y divide-orange-100">
+                  {equipPorAlmox.map((e, idx) => {
+                    const pct = equipTotal > 0 ? (e.valor / equipTotal) * 100 : 0;
+                    return (
+                      <div key={idx} className="px-6 py-3 flex items-center gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 truncate">{e.nome}</p>
+                          <div className="mt-1.5 h-1.5 bg-orange-50 rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-orange-500 to-amber-400" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-base font-bold text-orange-700">R$ {fmtBRL(e.valor)}</p>
+                          <p className="text-[11px] text-gray-400">{pct.toFixed(1)}% · {e.itens} ite{e.itens !== 1 ? "ns" : "m"}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -1009,7 +1079,23 @@ export default function AlmoxarifadoPage() {
           );
         })()}
 
-        {obraContexto !== "todos" && (
+        {obraContexto !== "todos" && (() => {
+          const isEquipInd = (c: any) => (c || "").toString().toLowerCase().includes("equipamento");
+          const parseValorI = (v: any): number => {
+            if (v === null || v === undefined) return 0;
+            const s = String(v).trim().replace(/\./g, "").replace(",", ".");
+            const n2 = parseFloat(s);
+            if (!isNaN(n2)) return n2;
+            const n1 = parseFloat(String(v));
+            return isNaN(n1) ? 0 : n1;
+          };
+          const valorEquipObra = itens.reduce((s, i: any) => {
+            if (!isEquipInd(i.categoria)) return s;
+            return s + n(i.quantidadeAtual) * parseValorI(i.valorUnitario);
+          }, 0);
+          const valorTotalObra = itens.reduce((s, i: any) => s + n(i.quantidadeAtual) * parseValorI(i.valorUnitario), 0);
+          const fmtBRLi = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          return (
         <div className="max-w-7xl mx-auto px-6 py-5 space-y-4">
           {/* KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1029,6 +1115,31 @@ export default function AlmoxarifadoPage() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Banners de Valor (Total + Equipamentos) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="bg-gradient-to-r from-emerald-700 to-emerald-500 rounded-2xl px-5 py-4 flex items-center justify-between text-white shadow-md">
+              <div>
+                <p className="text-xs font-medium opacity-80 uppercase tracking-wide">Valor Total do Estoque</p>
+                <p className="text-2xl font-black mt-0.5">R$ {fmtBRLi(valorTotalObra)}</p>
+                <p className="text-[11px] opacity-70 mt-0.5">{itens.length} ite{itens.length !== 1 ? "ns" : "m"} · {itens.filter((i: any) => n(i.valorUnitario) > 0).length} com preço</p>
+              </div>
+              <BarChart2 className="h-10 w-10 opacity-30" />
+            </div>
+            <div className="bg-gradient-to-r from-orange-600 to-amber-500 rounded-2xl px-5 py-4 flex items-center justify-between text-white shadow-md">
+              <div>
+                <p className="text-xs font-medium opacity-90 uppercase tracking-wide flex items-center gap-1.5">
+                  <Wrench className="h-3.5 w-3.5" /> Valor de Equipamentos
+                </p>
+                <p className="text-2xl font-black mt-0.5">R$ {fmtBRLi(valorEquipObra)}</p>
+                <p className="text-[11px] opacity-80 mt-0.5">
+                  {itens.filter((i: any) => isEquipInd(i.categoria)).length} equipamento(s)
+                  {valorTotalObra > 0 && ` · ${((valorEquipObra / valorTotalObra) * 100).toFixed(1)}% do estoque`}
+                </p>
+              </div>
+              <Wrench className="h-10 w-10 opacity-30" />
+            </div>
           </div>
 
           {/* Filtros */}
@@ -1280,7 +1391,8 @@ export default function AlmoxarifadoPage() {
             </div>
           )}
         </div>
-        )}
+        );
+        })()}
 
       </div>
 
