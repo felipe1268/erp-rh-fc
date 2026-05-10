@@ -1,6 +1,27 @@
 import { getDb } from "../server/db";
 import { sql } from "drizzle-orm";
 const db = await getDb();
-const r = await db.execute(sql`SELECT id, nome, unidade, categoria, valor_unitario::text AS valor, foto_url IS NOT NULL AS has_foto, length(coalesce(foto_url,'')) AS foto_len, substring(coalesce(foto_url,''), 1, 80) AS foto_prefix, codigo_interno, observacoes, data_inicio_locacao, data_vencimento_locacao, valor_locacao_mensal::text AS vlm, dias_alerta_locacao, origem FROM almoxarifado_itens WHERE nome ILIKE '%Pino para Pistola%' OR nome ILIKE '%Areia Lavada%' OR nome ILIKE '%Fincapino Magazinado%' OR nome ILIKE '%Finca pino%' LIMIT 10`);
-console.log(JSON.stringify(r.rows ?? r, null, 2));
+
+const users = await db.execute(sql`
+  SELECT id, email, name, role, allowed_obra_ids
+  FROM users
+  ORDER BY id
+`);
+console.log("USUÁRIOS:", JSON.stringify(users.rows, null, 2));
+
+const groups = await db.execute(sql`
+  SELECT id, nome, acesso_todas_obras, ativo
+  FROM user_groups
+  ORDER BY id
+`);
+console.log("\nGRUPOS:", JSON.stringify(groups.rows, null, 2));
+
+const members = await db.execute(sql`
+  SELECT ugm."userId", ugm."groupId", ug.nome AS grupo_nome, ug.acesso_todas_obras, ug.ativo
+  FROM user_group_members ugm
+  JOIN user_groups ug ON ug.id = ugm."groupId"
+  ORDER BY ugm."userId"
+`);
+console.log("\nMEMBROS DE GRUPOS:", JSON.stringify(members.rows, null, 2));
+
 process.exit(0);

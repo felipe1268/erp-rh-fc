@@ -1200,8 +1200,12 @@ export const comprasRouter = router({
 
       // Filtro centralizado por obras permitidas. null => sem restrição.
       const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      console.log(`[listarItens] user=${ctx.user.id}/${ctx.user.role} company=${input.companyId} obra=${input.obraId === undefined ? 'undef' : input.obraId} allowed=${allowed === null ? 'null(admin)' : '[' + allowed.length + ']' + JSON.stringify(allowed.slice(0, 5))}`);
       if (allowed !== null) {
-        if (allowed.length === 0) return [];
+        if (allowed.length === 0) {
+          console.log(`[listarItens] RETORNANDO VAZIO — user sem obras permitidas`);
+          return [];
+        }
         // Inclui itens do estoque central (obraId IS NULL) e dos obras permitidas.
         // Usar só inArray() excluiria os itens centrais porque NULL nunca satisfaz IN(...).
         conditions.push(or(isNull(almoxarifadoItens.obraId), inArray(almoxarifadoItens.obraId, allowed)));
@@ -1210,6 +1214,7 @@ export const comprasRouter = router({
       const rows = await db.select().from(almoxarifadoItens)
         .where(and(...conditions))
         .orderBy(asc(almoxarifadoItens.nome));
+      console.log(`[listarItens] retornando ${rows.length} itens`);
 
       let result = rows;
       if (input.busca) {
@@ -1400,11 +1405,12 @@ export const comprasRouter = router({
 
   listarItensConsolidado: protectedProcedure
     .input(z.object({ companyId: z.number(), busca: z.string().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       const rows = await db.select().from(almoxarifadoItens)
         .where(and(eq(almoxarifadoItens.companyId, input.companyId), eq(almoxarifadoItens.ativo, true)))
         .orderBy(asc(almoxarifadoItens.nome));
+      console.log(`[listarItensConsolidado] user=${ctx.user.id}/${ctx.user.role} company=${input.companyId} → ${rows.length} itens`);
 
       const busca = input.busca?.toLowerCase();
       const filtered = busca
