@@ -185,3 +185,9 @@ id = "146jfM-88U-GrlRUZyofV"
 uri = "file://docs/Manual_Portal_Cliente_FC.pdf"
 type = "pdf"
 title = "Manual do Portal do Cliente FC — PDF para NotebookLM"
+
+[[outputs]]
+id = "mGHP7pgNvbxtQ98AOBYKS"
+uri = "file://docs/Manual_Portal_Cliente_FC_Iniciante.pdf"
+type = "pdf"
+title = "Manual Prático do Portal do Cliente — Versão Iniciante (FC Engenharia)"
