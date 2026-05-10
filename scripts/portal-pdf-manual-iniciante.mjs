@@ -239,15 +239,17 @@ const ABAS_PLANEJAMENTO = [
     <p><b>Os números do Portal batem com o que a gerenciadora me mandou?</b> Sim. O Portal é fonte única e usa as mesmas fórmulas do ERP interno (regra de paridade Portal × Planejamento).</p>`
   }),
   abaPlan({
-    num: 2, titulo: "Cronograma",
-    paraQueServe: "Visão tabular detalhada de todas as atividades da obra organizadas pela hierarquia EAP (Estrutura Analítica do Projeto). Mostra datas, responsáveis e percentuais de execução.",
+    num: 2, titulo: "Cronograma", print: "06-planejamento-cronograma.jpg",
+    paraQueServe: "Visão tabular completa de TODAS as atividades da obra organizadas pela hierarquia EAP (Estrutura Analítica do Projeto). Mostra datas, percentuais previstos/realizados, pesos financeiros e status de cada item — é o 'extrato' detalhado do cronograma.",
     comoLer: `<ul>
-      <li>Cada linha é uma atividade ou um <i>grupo</i> de atividades (níveis 1, 2, 3 da EAP).</li>
-      <li>Colunas: código EAP, descrição, data início/fim, % previsto, % realizado, status.</li>
-      <li>Pode usar filtros para esconder atividades já concluídas ou ver só um pacote específico.</li>
+      <li><b>Cabeçalho:</b> código EAP, descrição, data início, data fim, peso financeiro (%), avanço previsto (%), avanço realizado (%), status (cor).</li>
+      <li><b>Hierarquia:</b> linhas em negrito são <i>grupos</i> (níveis 1, 2, 3); linhas comuns são <i>atividades-folha</i> (onde o avanço é realmente apontado).</li>
+      <li><b>Cores de status:</b> verde = concluída, azul = em execução, cinza = futura/prevista, vermelho = atrasada.</li>
+      <li><b>Soma dos pesos:</b> no rodapé aparece "100,00%" (a EAP foi totalmente decomposta) ou um valor diferente (lacuna a investigar).</li>
     </ul>`,
-    exemploPratico: "Buscar 'instalação' filtra todas as atividades de instalação elétrica e hidráulica de uma vez.",
-    dicaIniciante: "Use esta aba quando precisar saber a <b>data prevista</b> de uma atividade específica (ex.: 'quando vai começar o reboco do 2º pavimento?')."
+    exemploPratico: "Buscar 'instalação' filtra todas as atividades de instalação elétrica/hidráulica de uma vez. Útil para ver, dentro de um pacote, o que está concluído (verde) vs. o que ainda não começou (cinza).",
+    dicaIniciante: "Use esta aba quando precisar saber a <b>data prevista exata</b> de uma atividade (ex.: 'quando vai começar o reboco do 2º pavimento?'). É o equivalente ao 'gantt em tabela'.",
+    faq: `<p><b>Por que algumas atividades aparecem com avanço 0% mas a data já passou?</b> São atividades planejadas mas não iniciadas. Elas entram nos cálculos de "atividades em atraso" da Visão Geral.</p>`
   }),
   abaPlan({
     num: 3, titulo: "Avanço Semanal", print: "06-planejamento-avanco-semanal.jpg",
@@ -262,14 +264,16 @@ const ABAS_PLANEJAMENTO = [
     faq: `<p><b>Domingo aparece zerado, é normal?</b> Sim, a semana é seg→dom mas atividades raramente são lançadas no domingo. O cálculo se ajusta na segunda.</p>`
   }),
   abaPlan({
-    num: 4, titulo: "Prog. Semanal",
-    paraQueServe: "Programação detalhada da semana com responsáveis, equipes e marcos esperados. Diferente do Avanço Semanal (que olha pra trás), a Prog. Semanal olha pra frente.",
+    num: 4, titulo: "Prog. Semanal", print: "06-planejamento-prog-semanal.jpg",
+    paraQueServe: "Programação <b>antecipada</b> da semana com marcos, entregáveis e responsáveis. Diferente do Avanço Semanal (olha para trás, mostra o que foi feito), a Prog. Semanal olha para FRENTE — o que vai acontecer.",
     comoLer: `<ul>
-      <li>Lista de marcos e entregáveis previstos para a semana corrente.</li>
-      <li>Útil para o cliente saber <i>com antecedência</i> o que vai ser feito.</li>
+      <li><b>Lista de atividades-folha</b> que TÊM apontamento previsto na janela seg→dom.</li>
+      <li>Cada item mostra: código EAP, descrição, data início e fim na janela, % previsto da semana, equipe responsável.</li>
+      <li>Marcos importantes ficam destacados (losango roxo).</li>
     </ul>`,
-    exemploPratico: "Programação da semana 11→17 de maio: 'Conclusão de protensão laje 3º pav', 'Início de alvenaria 2º pav', 'Recebimento de esquadrias'.",
-    dicaIniciante: "Use esta aba na <b>segunda-feira</b> para ter visão antecipada da semana e planejar visitas técnicas."
+    exemploPratico: "Programação da semana 11→17 de maio: 'Conclusão de protensão laje 3º pav' (marco), 'Início de alvenaria 2º pav', 'Recebimento de esquadrias'. O cliente vê o que esperar antes de visitar a obra.",
+    dicaIniciante: "Use esta aba na <b>segunda-feira de manhã</b> para ter a visão antecipada da semana e <b>planejar visitas técnicas</b> nos dias-chave (entregas, marcos, concretagens).",
+    faq: `<p><b>Por que minha semana está vazia?</b> Pode ser que a obra esteja em pausa programada (recesso, paralisação por chuva) ou que ainda não haja apontamento. Confira a aba REFIS para ver a última semana com movimento oficial.</p>`
   }),
   abaPlan({
     num: 5, titulo: "Curva S", print: "06-planejamento-curva-s.jpg",
@@ -369,13 +373,50 @@ const FAQ_PLANEJAMENTO = `
 `;
 
 // ─── MÓDULO PROJETOS / DOCUMENTOS ─────────────────────────────────
+const PROJDOC_IMG = imgB64("08-projdoc-detalhado.jpg") || imgB64("08-projdoc-obra.jpg");
 const MOD_PROJDOC = `
 <h2>Módulo Projetos / Documentos Técnicos</h2>
 
 <div class="callout callout-blue">
   <p class="callout-title">O que é este módulo?</p>
   <p>É a <b>biblioteca técnica</b> da sua obra. Aqui ficam todos os documentos oficiais: projetos arquitetônicos, estruturais, hidrossanitários, elétricos, ARTs, RRTs, memoriais, especificações, e qualquer documento técnico que precise ser entregue ao cliente.</p>
+  <p>Tudo é versionado (Rev. 00, 01, 02…) e o Portal sempre mostra a <b>versão mais recente aprovada</b>.</p>
 </div>
+
+${PROJDOC_IMG ? `<div class="full-print"><img src="${PROJDOC_IMG}" alt="Tela completa do Proj/Doc"/></div>
+<p class="legenda-print">Tela completa do módulo Proj./Doc. — REVTE-CIVIL · Santuário Aparecida</p>` : ""}
+
+<h3>Anatomia da tela — elementos numerados</h3>
+<table class="elementos-tab">
+  <thead><tr><th>Nº</th><th>Elemento</th><th>Função detalhada</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><b>Header com obra</b></td><td>Mostra nome da obra ativa, código e link "Trocar de obra" para voltar à seleção.</td></tr>
+    <tr><td>2</td><td><b>KPIs de status</b></td><td>6 cards no topo: <b>Total</b> · <b>Aprovados</b> (verde) · <b>Em Revisão</b> (azul) · <b>Em Elaboração</b> (amarelo) · <b>Reprovados</b> (rosa) · <b>Sem arquivo</b> (laranja). Mostram a contagem por status.</td></tr>
+    <tr><td>3</td><td><b>Banner "Falta arquivo"</b></td><td>(Rev. 1589) Aparece quando há documentos cadastrados mas SEM o PDF/DWG anexado. Indica pendência para o time da FC anexar o arquivo.</td></tr>
+    <tr><td>4</td><td><b>Campo busca</b></td><td>Pesquisa instantânea em código, título, tipo e disciplina do documento.</td></tr>
+    <tr><td>5</td><td><b>Filtros de status (chips)</b></td><td>Botões clicáveis em linha (não combobox): Todos · Em Elaboração · Em Revisão · Aprovado · Reprovado · Cancelado · Obsoleto · Sem Arquivo. Chip ativo fica destacado em azul.</td></tr>
+    <tr><td>6</td><td><b>Toggle Árvore × Lista</b></td><td><b>Árvore</b> (padrão): agrupa por Disciplina → Formato (PDF/DWG/etc), com expandir/recolher. <b>Lista</b>: tabela plana com todos juntos.</td></tr>
+    <tr><td>7</td><td><b>Linha de documento</b></td><td>Cada linha mostra: código, título, tipo, disciplina, revisão, data, badge de status colorido, e botões de ação à direita.</td></tr>
+    <tr><td>8</td><td><b>Botão 👁 Visualizar</b></td><td>Abre PDF/imagem inline no visualizador embutido (sem sair do Portal). Para DWG/DXF não abre — vai direto pro download.</td></tr>
+    <tr><td>9</td><td><b>Botão ⬇ Baixar</b></td><td>Faz download autenticado do arquivo da linha atual (a revisão exibida naquele item, qualquer que seja seu status, desde que tenha arquivo anexado).</td></tr>
+    <tr><td>10</td><td><b>Badge "Rev. NN"</b></td><td>Apenas indicação visual do número da revisão atual do documento. (Não clicável — para histórico completo de revisões consulte o time da FC.)</td></tr>
+    <tr><td>11</td><td><b>Visualizador inline (PDF)</b></td><td>Quando você clica em 👁, abre dentro de um modal com cabeçalho do Portal, sem barra de ferramentas do PDF (toolbar=0) — visual limpo para leitura técnica.</td></tr>
+    <tr><td>12</td><td><b>Botão Imprimir</b></td><td>Gera PDF da própria tela (lista filtrada) com cabeçalho institucional + nome do cliente + data — ótimo para enviar pra equipe interna.</td></tr>
+  </tbody>
+</table>
+
+<h3>Status dos documentos — entendendo as cores</h3>
+<table class="quando-tab">
+  <thead><tr><th>Status</th><th>Cor</th><th>O que significa</th></tr></thead>
+  <tbody>
+    <tr><td><b>Aprovado</b></td><td>🟢 Verde</td><td>Pronto para uso em obra. Versão oficial liberada para execução.</td></tr>
+    <tr><td><b>Em Revisão</b></td><td>🔵 Azul</td><td>Está sendo revisado por um responsável técnico. Não use ainda.</td></tr>
+    <tr><td><b>Em Elaboração</b></td><td>🟡 Amarelo</td><td>Ainda em desenvolvimento. NÃO use para execução.</td></tr>
+    <tr><td><b>Reprovado</b></td><td>🔴 Rosa</td><td>Foi rejeitado. Volta para correção.</td></tr>
+    <tr><td><b>Cancelado</b></td><td>⚪ Cinza</td><td>Documento descontinuado.</td></tr>
+    <tr><td><b>Obsoleto</b></td><td>⚪ Cinza claro</td><td>Foi superado por uma revisão mais nova. Não usar.</td></tr>
+  </tbody>
+</table>
 
 <h3>Tipos de documentos que você vai encontrar</h3>
 <table class="quando-tab">
@@ -446,13 +487,125 @@ const MOD_PROJDOC = `
 `;
 
 // ─── MÓDULO AVALIAÇÃO ─────────────────────────────────────────────
+const AVAL_FORM_IMG = imgB64("09-avaliacao-formulario-completo.jpg");
+const AVAL_JA_IMG = imgB64("09-avaliacao-ja-respondida.jpg");
 const MOD_AVALIACAO = `
-<h2>Módulo Avaliação (NPS)</h2>
+<h2>Módulo Avaliação (NPS Anônima)</h2>
 
 <div class="callout callout-blue">
   <p class="callout-title">Por que o seu feedback importa?</p>
-  <p>A FC Engenharia leva a sério a percepção do cliente. O módulo Avaliação aplica metodologia <b>NPS (Net Promoter Score)</b> mensal: 8 perguntas-chave que cobrem comunicação, qualidade técnica, prazo, segurança, organização e satisfação geral.</p>
+  <p>A FC Engenharia leva a sério a percepção do cliente. O módulo Avaliação aplica metodologia <b>NPS (Net Promoter Score)</b> com periodicidade <b>mensal ou anual</b> (configurável). O formulário cobre <b>5 dimensões</b>: Equipe, Gestor, Empresa, Escritório Central e Obra/Execução — além da nota geral (NPS) e blocos abertos de pontos fortes/fracos.</p>
 </div>
+
+<h3>Anonimato real (LGPD)</h3>
+<div class="callout callout-green">
+  <p class="callout-title">🔒 Como funciona o anonimato</p>
+  <p>O sistema NÃO armazena: identidade do respondente, CNPJ, IP, ou qualquer dado que ligue você à resposta. Apenas registramos uma <b>marcação</b> (cred_id + ano_mes) na tabela <code>cliente_avaliacao_marcacoes</code> dizendo "esta credencial já enviou no mês X" — para impedir múltiplos envios. Essa marcação NÃO se cruza com o conteúdo da avaliação (que vai para outra tabela <code>cliente_avaliacoes</code> sem ID do respondente).</p>
+  <p>Resultado: nem a equipe, nem a diretoria, nem os DBAs conseguem rastrear quem respondeu o quê. Pode ser <b>100% honesto</b>.</p>
+</div>
+
+${AVAL_FORM_IMG ? `<div class="full-print"><img src="${AVAL_FORM_IMG}" alt="Formulário completo de avaliação NPS"/></div>
+<p class="legenda-print">Formulário completo de Avaliação (capturado com a marcação do mês temporariamente desligada para fins de documentação)</p>` : ""}
+
+<h3>Anatomia do formulário — elementos numerados</h3>
+<table class="elementos-tab">
+  <thead><tr><th>Nº</th><th>Bloco / Campo</th><th>Função detalhada</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><b>Banner verde "100% anônima"</b></td><td>Selo de privacidade no topo do formulário, reforçando a promessa LGPD. Sempre visível durante o preenchimento.</td></tr>
+    <tr><td>2</td><td><b>Sobre qual obra? (opcional)</b></td><td>Combobox para vincular a avaliação a uma obra específica OU deixar como "geral / não específica". Útil quando o cliente tem várias obras e quer dar feedback de uma só.</td></tr>
+    <tr><td>3</td><td><b>Nota geral (NPS) ★</b></td><td>Campo OBRIGATÓRIO. Escala 0-10 em botões grandes. É a pergunta-síntese: "qual sua satisfação geral com a FC?". Esta é a nota que entra no cálculo numérico do NPS (Promotores 9-10 / Neutros 7-8 / Detratores 0-6).</td></tr>
+    <tr><td>4</td><td><b>Bloco "Equipe FC na obra"</b></td><td>Avalia a equipe presente em campo: Equipe FC (técnica e relacionamento), Atendimento e Comunicação. + Comentário aberto sobre postura, técnica, segurança, pontualidade.</td></tr>
+    <tr><td>5</td><td><b>Bloco "Gestor / Responsável FC"</b></td><td>Avalia o gestor responsável pela obra: liderança, decisões, proatividade. Permite informar o nome do gestor (opcional). + Comentário "como o gestor pode evoluir".</td></tr>
+    <tr><td>6</td><td><b>Bloco "FC Engenharia (Empresa)"</b></td><td>Avalia a empresa como instituição: reputação, transparência, comunicação institucional. + Comentário sobre a postura da empresa.</td></tr>
+    <tr><td>7</td><td><b>Bloco "Escritório Central / Backoffice"</b> (Rev. 1592)</td><td>Avalia o suporte administrativo (atendimento, retorno de e-mails, agilidade) e Faturamento/Contratos/Financeiro. + Comentário sobre suporte administrativo.</td></tr>
+    <tr><td>8</td><td><b>Bloco "Obra / Execução"</b></td><td>3 notas: Andamento da Obra, Cumprimento de Prazos, Qualidade do Serviço Entregue.</td></tr>
+    <tr><td>9</td><td><b>Recomendaria a FC?</b></td><td>Campo SEPARADO da nota geral. 3 opções com emoji: 😊 "Sim, com certeza" (verde) · 😐 "Talvez" (amarelo) · 😞 "Não" (vermelho). Complementa o NPS numérico do item 3 com uma resposta qualitativa rápida.</td></tr>
+    <tr><td>10</td><td><b>Pontos fortes — o que mais te impressionou positivamente?</b></td><td>Texto longo (opcional). Vai para reconhecimento da equipe.</td></tr>
+    <tr><td>11</td><td><b>Pontos fracos — o que precisa melhorar?</b></td><td>Texto longo (opcional). Vira plano de ação interno.</td></tr>
+    <tr><td>12</td><td><b>Perguntas extras (Rev. 1595)</b></td><td>Bloco opcional de perguntas personalizadas configuradas pelo admin da FC. Podem ser do tipo: nota 0-10, sim/não/talvez, texto curto ou texto longo. Aparecem agrupadas por seção (ex.: "Pós-obra", "Sustentabilidade").</td></tr>
+    <tr><td>13</td><td><b>Botão "Enviar avaliação anônima"</b></td><td>Verde, com ícone ✨. Bloqueado até preencher pelo menos a Nota Geral e as perguntas extras obrigatórias (marcadas com *).</td></tr>
+  </tbody>
+</table>
+
+<h3>Tela "já avaliei este mês" (estado pós-envio)</h3>
+${AVAL_JA_IMG ? `<div class="meio-print"><img src="${AVAL_JA_IMG}" alt="Estado já avaliou este mês"/></div>
+<p class="legenda-print">Quando você já enviou a avaliação do período, o módulo fica desativado até a próxima janela.</p>` : ""}
+<p>Após enviar, o card "Avaliação" no Hub fica marcado com <b>✓ OK</b> e tracejado, exibindo a data da próxima janela (ex.: "Disponível em junho/2026"). Se entrar no módulo, vê uma tela com o ícone verde 🛡 e a mensagem confirmando que o envio foi registrado anonimamente.</p>
+
+<h3>Tutorial completo — Como avaliar (passo a passo)</h3>
+<div class="passo">
+  <div class="passo-num">1</div>
+  <div class="passo-corpo">
+    <h4>Entre pelo Hub e clique no card "Avaliação"</h4>
+    <p>Se já avaliou este período, vai aparecer ✓ OK no card e a tela do módulo mostra a confirmação de envio.</p>
+  </div>
+</div>
+<div class="passo">
+  <div class="passo-num">2</div>
+  <div class="passo-corpo">
+    <h4>Leia o banner verde no topo</h4>
+    <p>Reforça que é 100% anônimo. Você pode ser duro nas críticas — ninguém vai saber que foi você.</p>
+  </div>
+</div>
+<div class="passo">
+  <div class="passo-num">3</div>
+  <div class="passo-corpo">
+    <h4>(Opcional) Selecione a obra</h4>
+    <p>Se quer avaliar especificamente uma obra (caso tenha várias), escolha no dropdown. Senão deixe "Avaliação geral".</p>
+  </div>
+</div>
+<div class="passo">
+  <div class="passo-num">4</div>
+  <div class="passo-corpo">
+    <h4>Dê a Nota Geral (★ obrigatório)</h4>
+    <p>De 0 a 10. É a única pergunta realmente obrigatória — todas as outras são opcionais (a não ser que o admin tenha configurado perguntas extras com *).</p>
+  </div>
+</div>
+<div class="passo">
+  <div class="passo-num">5</div>
+  <div class="passo-corpo">
+    <h4>Avance pelos 5 blocos</h4>
+    <p>Equipe → Gestor → Empresa → Escritório Central → Obra/Execução. Em cada um, dê notas e (se quiser) comentários abertos.</p>
+  </div>
+</div>
+<div class="passo">
+  <div class="passo-num">6</div>
+  <div class="passo-corpo">
+    <h4>Marque sua recomendação</h4>
+    <p>😊 Sim · 😐 Talvez · 😞 Não. É um indicador qualitativo complementar — a nota numérica do NPS já foi a do passo 4 (Nota Geral 0-10).</p>
+  </div>
+</div>
+<div class="passo">
+  <div class="passo-num">7</div>
+  <div class="passo-corpo">
+    <h4>Use os campos abertos sem reservas</h4>
+    <p>"Pontos fortes" vai para reconhecimento da equipe. "Pontos fracos" vira plano de ação interno. Seja específico — críticas vagas ajudam pouco.</p>
+  </div>
+</div>
+<div class="passo">
+  <div class="passo-num">8</div>
+  <div class="passo-corpo">
+    <h4>Clique em "Enviar avaliação anônima"</h4>
+    <p>Aparece toast de "Obrigado! Sua avaliação foi enviada." e o módulo é bloqueado até a próxima janela.</p>
+  </div>
+</div>
+
+<h3>As notas explicadas — o que cada nota mede</h3>
+<table class="quando-tab">
+  <thead><tr><th>Nota</th><th>O que significa</th><th>Exemplo de contexto</th></tr></thead>
+  <tbody>
+    <tr><td><b>Nota Geral</b></td><td>Sua satisfação global com a FC</td><td>Pergunta-chave do NPS — entra no cálculo de Promotores/Detratores</td></tr>
+    <tr><td><b>Equipe</b></td><td>Time técnico em campo</td><td>Mestres de obra, encarregados, técnicos de campo</td></tr>
+    <tr><td><b>Atendimento</b></td><td>Comunicação dia-a-dia</td><td>Retorno de WhatsApp, e-mail, telefone</td></tr>
+    <tr><td><b>Gestor</b></td><td>Engenheiro/responsável da obra</td><td>Liderança, decisões técnicas, proatividade</td></tr>
+    <tr><td><b>Empresa</b></td><td>FC como instituição</td><td>Reputação, postura, comunicação institucional</td></tr>
+    <tr><td><b>Escritório</b></td><td>Backoffice administrativo</td><td>Suporte, retorno de e-mails do escritório</td></tr>
+    <tr><td><b>Faturamento</b></td><td>Contratos e financeiro</td><td>Cobrança, notas fiscais, contratos administrativos</td></tr>
+    <tr><td><b>Andamento</b></td><td>Como a obra está fluindo</td><td>Ritmo geral, organização do canteiro</td></tr>
+    <tr><td><b>Prazo</b></td><td>Cumprimento de cronograma</td><td>SPI, atrasos, replanejamentos</td></tr>
+    <tr><td><b>Qualidade</b></td><td>Acabamento entregue</td><td>Padrão técnico, retrabalhos, inspeções</td></tr>
+  </tbody>
+</table>
 
 <h3>Como funciona o anonimato</h3>
 <p>Suas respostas são <b>100% anônimas</b>. A equipe operacional da obra recebe apenas a nota agregada (média) e os comentários sem nome. Apenas a diretoria executiva e o time de qualidade têm acesso ao painel completo, e mesmo assim sem identificar o respondente individual.</p>
@@ -735,7 +888,8 @@ code { background: #f1f5f9; padding: 1pt 4pt; border-radius: 3pt; font-size: 9.5
 .kpi-card p { font-size: 10pt; }
 
 /* Aba Planejamento */
-.aba-planejamento { margin: 16pt 0 24pt; page-break-inside: avoid; }
+.aba-planejamento { margin: 16pt 0 24pt; }
+.aba-planejamento .aba-print img { max-height: 720pt; object-fit: contain; object-position: top; }
 .aba-badge { display: inline-block; background: #2563eb; color: #fff; padding: 2pt 8pt; border-radius: 4pt; font-size: 10pt; margin-right: 6pt; }
 .aba-corpo { display: grid; grid-template-columns: 1fr 1fr; gap: 14pt; margin-top: 8pt; }
 .aba-explica h4 { margin: 8pt 0 3pt; font-size: 10.5pt; color: #1e3a8a; }
@@ -748,6 +902,21 @@ code { background: #f1f5f9; padding: 1pt 4pt; border-radius: 3pt; font-size: 9.5
 .glossario, .faq-list { margin: 10pt 0; }
 .glossario dt, .faq-list dt { font-weight: 700; color: #0a3d62; margin-top: 8pt; }
 .glossario dd, .faq-list dd { margin: 2pt 0 6pt 14pt; color: #374151; }
+
+/* Prints fullPage (módulos detalhados) — sem avoid pra deixar quebrar entre páginas se for alto */
+.full-print { margin: 14pt 0 4pt; }
+.full-print img { width: 100%; max-height: 920pt; object-fit: contain; object-position: top; border: 1pt solid #94a3b8; border-radius: 6pt; box-shadow: 0 2pt 6pt rgba(0,0,0,0.08); }
+.meio-print { margin: 12pt 0 4pt; max-width: 70%; page-break-inside: avoid; }
+.meio-print img { width: 100%; border: 1pt solid #94a3b8; border-radius: 6pt; }
+.legenda-print { font-size: 9pt; color: #64748b; font-style: italic; text-align: center; margin: 0 0 12pt; }
+
+/* Tabela detalhada de elementos numerados */
+.elementos-tab { width: 100%; border-collapse: collapse; margin: 8pt 0 14pt; font-size: 9.5pt; }
+.elementos-tab th { background: #1e3a8a; color: #fff; text-align: left; padding: 6pt 8pt; }
+.elementos-tab td { border: 1pt solid #e5e7eb; padding: 5pt 8pt; vertical-align: top; }
+.elementos-tab td:first-child { width: 28pt; text-align: center; font-weight: 700; background: #eff6ff; color: #1e3a8a; }
+.elementos-tab td:nth-child(2) { width: 30%; }
+.elementos-tab tr:nth-child(even) td:not(:first-child) { background: #f8fafc; }
 
 /* Tabela "quando" */
 .quando-tab { width: 100%; border-collapse: collapse; margin: 8pt 0; font-size: 10pt; }
