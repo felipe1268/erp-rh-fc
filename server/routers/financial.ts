@@ -278,6 +278,134 @@ export const financialRouter = router({
     return { ok: true };
   }),
 
+  // Rev. 1621 — Detalhe completo de um título (Contas a Pagar drill-down)
+  // Retorna entry + ordem de compra + itens + fornecedor + parcelas + auditoria
+  getEntryDetalhe: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    // 1) Entry principal (todos os campos)
+    const entryRes = await dbExecute(db,
+      `SELECT id, "company_id" AS "companyId", obra_id AS "obraId", obra_nome AS "obraNome",
+              conta_id AS "contaId", conta_nome AS "contaNome",
+              tipo, natureza,
+              valor_previsto AS "valorPrevisto", valor_realizado AS "valorRealizado",
+              data_competencia AS "dataCompetencia", data_vencimento AS "dataVencimento",
+              data_pagamento AS "dataPagamento",
+              status, conta_bancaria_id AS "contaBancariaId",
+              origem_modulo AS "origemModulo", origem_id AS "origemId", origem_descricao AS "origemDescricao",
+              parcela_numero AS "parcelaNumero", parcela_total AS "parcelaTotal",
+              parcela_grupo_id AS "parcelaGrupoId",
+              forma_pagamento AS "formaPagamento", comprovante_url AS "comprovanteUrl",
+              codigo_barras AS "codigoBarras",
+              cheque_numero AS "chequeNumero", cheque_banco AS "chequeBanco", cheque_data_bom_para AS "chequeDataBomPara",
+              conciliado, data_conciliacao AS "dataConciliacao", extrato_banco_descricao AS "extratoBancoDescricao",
+              descricao, observacoes, motivo_cancelamento AS "motivoCancelamento",
+              criado_por_id AS "criadoPorId", criado_por_nome AS "criadoPorNome",
+              aprovado_por_id AS "aprovadoPorId", aprovado_por_nome AS "aprovadoPorNome",
+              vehicle_id AS "vehicleId",
+              created_at AS "createdAt", updated_at AS "updatedAt",
+              CASE WHEN data_vencimento < CURRENT_DATE AND status != 'pago' THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
+       FROM financial_entries
+       WHERE id=$1 AND company_id=$2`,
+      [input.id, input.companyId]
+    );
+    const entry = (rows(entryRes) as any[])[0];
+    if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado" });
+
+    let ordem: any = null;
+    let itens: any[] = [];
+    let fornecedor: any = null;
+    let parcelas: any[] = [];
+    let bancoEmpresa: any = null;
+
+    // 2) Se vier de Compras → busca OC, itens, fornecedor
+    if ((entry.origemModulo === "compras" || entry.origemModulo === "compra_oc") && entry.origemId) {
+      const ordRes = await dbExecute(db,
+        `SELECT id, numero_oc AS "numeroOc", fornecedor_id AS "fornecedorId", fornecedor_nome AS "fornecedorNome",
+                obra_id AS "obraId", data_entrega_prevista AS "dataEntregaPrevista", data_vencimento AS "dataVencimento",
+                tipo_pagamento AS "tipoPagamento", forma_pagamento AS "formaPagamento", numero_parcelas AS "numeroParcelas",
+                condicao_pagamento AS "condicaoPagamento", numero_nf AS "numeroNf",
+                subtotal, frete, frete_tipo AS "freteTipo", outras_despesas AS "outrasDespesas",
+                impostos, desconto, total,
+                status, aprovacao_status AS "aprovacaoStatus",
+                aprovador_nome AS "aprovadorNome", aprovado_em AS "aprovadoEm",
+                observacoes, anexos, pdf_url AS "pdfUrl",
+                criado_por_nome AS "criadoPorNome", created_at AS "createdAt"
+         FROM compras_ordens
+         WHERE id=$1 AND company_id=$2`,
+        [entry.origemId, input.companyId]
+      );
+      ordem = (rows(ordRes) as any[])[0] ?? null;
+
+      if (ordem) {
+        const itRes = await dbExecute(db,
+          `SELECT id, insumo_codigo AS "insumoCodigo", descricao, unidade,
+                  quantidade, quantidade_entregue AS "quantidadeEntregue",
+                  preco_unitario AS "precoUnitario", total
+           FROM compras_ordens_itens WHERE ordem_id=$1 ORDER BY id`,
+          [ordem.id]
+        );
+        itens = rows(itRes) as any[];
+
+        if (ordem.fornecedorId) {
+          const fRes = await dbExecute(db,
+            `SELECT id, cnpj, razao_social AS "razaoSocial", nome_fantasia AS "nomeFantasia",
+                    telefone, email, contato_nome AS "contatoNome", contato_celular AS "contatoCelular",
+                    banco, agencia, conta, pix, cidade, estado
+             FROM fornecedores WHERE id=$1 AND company_id=$2`,
+            [ordem.fornecedorId, input.companyId]
+          );
+          fornecedor = (rows(fRes) as any[])[0] ?? null;
+        }
+      }
+    }
+
+    // 3) Parcelas do mesmo grupo (se houver)
+    if (entry.parcelaGrupoId) {
+      const pRes = await dbExecute(db,
+        `SELECT id, parcela_numero AS "parcelaNumero", parcela_total AS "parcelaTotal",
+                valor_previsto AS "valorPrevisto", valor_realizado AS "valorRealizado",
+                data_vencimento AS "dataVencimento", data_pagamento AS "dataPagamento",
+                status, forma_pagamento AS "formaPagamento"
+         FROM financial_entries
+         WHERE parcela_grupo_id=$1 AND company_id=$2
+         ORDER BY parcela_numero ASC NULLS LAST, data_vencimento ASC NULLS LAST`,
+        [entry.parcelaGrupoId, input.companyId]
+      );
+      parcelas = rows(pRes) as any[];
+    }
+
+    // 4) Conta bancária da empresa (origem do pagamento, se já vinculada)
+    if (entry.contaBancariaId) {
+      const bRes = await dbExecute(db,
+        `SELECT id, banco, agencia, conta, "tipoConta", apelido
+         FROM company_bank_accounts WHERE id=$1 AND "companyId"=$2`,
+        [entry.contaBancariaId, input.companyId]
+      );
+      bancoEmpresa = (rows(bRes) as any[])[0] ?? null;
+    }
+
+    // 5) Histórico de auditoria (últimos 50 registros relativos ao entry id)
+    // audit_logs usa identifiers camelCase ("companyId", "createdAt", "entityType", "entityId", "userName")
+    const audRes = await dbExecute(db,
+      `SELECT id, "userName", action, module, details, "createdAt"
+       FROM audit_logs
+       WHERE "companyId"=$1
+         AND "entityType"='financial_entry'
+         AND "entityId"=$2
+       ORDER BY "createdAt" DESC
+       LIMIT 50`,
+      [input.companyId, input.id]
+    );
+    const auditoria = rows(audRes) as any[];
+
+    return { entry, ordem, itens, fornecedor, parcelas, bancoEmpresa, auditoria };
+  }),
+
   // Rev. 1620 — Pagamento em lote (Onda 2: APQC 8.7.5 — Process Payments)
   bulkUpdateStatus: protectedProcedure.input(z.object({
     ids: z.array(z.number()).min(1).max(500),

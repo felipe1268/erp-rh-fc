@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, Fragment } from "react";
+import { useState, useMemo, useEffect, Fragment, type ReactNode } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,10 +15,21 @@ import {
   CheckCircle, AlertTriangle, Search, Calendar, ShoppingCart, FileText,
   ChevronLeft, ChevronRight, CreditCard, Banknote, Clock, Hash, Tag,
   Users, Truck, Briefcase, Scale, Package, Receipt, Wallet,
-  Download, Copy, TrendingDown, TrendingUp, Zap, Activity, X
+  Download, Copy, TrendingDown, TrendingUp, Zap, Activity, X,
+  Eye, ExternalLink, History, Building2, Paperclip, Hash as HashIcon, Info
 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+function KV({ label, children, highlight }: { label: string; children: ReactNode; highlight?: boolean }) {
+  return (
+    <div className={`rounded-md border px-2.5 py-1.5 ${highlight ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white"}`}>
+      <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide leading-tight">{label}</div>
+      <div className={`text-sm leading-tight mt-0.5 ${highlight ? "font-bold text-amber-900" : "text-slate-800"}`}>{children}</div>
+    </div>
+  );
+}
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -156,6 +167,13 @@ export default function FinanceiroContasAPagar() {
   const [showBulkPay, setShowBulkPay] = useState(false);
   const [bulkDataPagamento, setBulkDataPagamento] = useState(hoje.toISOString().split("T")[0]);
   const [bulkFormaPagamento, setBulkFormaPagamento] = useState("pix");
+  // Rev. 1621 — modal de detalhes do título
+  const [detailEntryId, setDetailEntryId] = useState<number | null>(null);
+
+  const detailQuery = (trpc as any).financial.getEntryDetalhe.useQuery(
+    { id: detailEntryId ?? 0, companyId },
+    { enabled: !!detailEntryId && !!companyId }
+  );
 
   const { data: allContas, isLoading, refetch } = (trpc as any).financial.getContasAPagarByYear.useQuery(
     { companyId, ano },
@@ -704,9 +722,17 @@ export default function FinanceiroContasAPagar() {
                           const isDup = duplicateKeys.has(dupKeyOf(c));
                           const isSelected = selectedIds.has(c.id);
                           return (
-                            <tr key={c.id} className={`hover:bg-slate-50 border-b border-slate-100 ${isSelected ? "bg-blue-50/40" : vencida ? "bg-red-50/30" : ""}`}>
+                            <tr key={c.id}
+                              onClick={(e) => {
+                                // Não abrir detalhe quando o clique foi em checkbox/botão
+                                const tag = (e.target as HTMLElement).tagName.toLowerCase();
+                                const isInteractive = (e.target as HTMLElement).closest("button, [role=checkbox], input, a");
+                                if (isInteractive || tag === "input") return;
+                                setDetailEntryId(c.id);
+                              }}
+                              className={`hover:bg-blue-50/30 cursor-pointer border-b border-slate-100 ${isSelected ? "bg-blue-50/40" : vencida ? "bg-red-50/30" : ""}`}>
                               {/* Checkbox */}
-                              <td className="px-2 py-2.5 text-center">
+                              <td className="px-2 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
                                 {c.status !== "pago" && (
                                   <Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(c.id)} aria-label={`Selecionar ${oc}`} />
                                 )}
@@ -787,13 +813,19 @@ export default function FinanceiroContasAPagar() {
                                 )}
                               </td>
                               {/* Ações */}
-                              <td className="px-3 py-2.5 text-right">
-                                {c.status !== "pago" && (
-                                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-7 px-2.5 text-xs"
-                                    onClick={() => setShowPay(c)}>
-                                    <CheckCircle className="w-3 h-3 mr-1" />Pagar
+                              <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                                <div className="inline-flex items-center gap-1">
+                                  <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Ver detalhes"
+                                    onClick={() => setDetailEntryId(c.id)}>
+                                    <Eye className="w-3.5 h-3.5" />
                                   </Button>
-                                )}
+                                  {c.status !== "pago" && (
+                                    <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-7 px-2.5 text-xs"
+                                      onClick={() => setShowPay(c)}>
+                                      <CheckCircle className="w-3 h-3 mr-1" />Pagar
+                                    </Button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -867,6 +899,297 @@ export default function FinanceiroContasAPagar() {
             </CardContent>
           </Card>
         )}
+
+        {/* Rev. 1621 — Modal de DETALHE do título (drill-down completo p/ validação final) */}
+        <Dialog open={!!detailEntryId} onOpenChange={(o) => !o && setDetailEntryId(null)}>
+          <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-lg">
+                <Info className="w-5 h-5 text-blue-600" />
+                Detalhe do Título
+                {detailQuery.data?.entry && (
+                  <span className="ml-auto text-xs font-normal text-slate-500 tabular-nums">
+                    Lançamento #{detailQuery.data.entry.id}
+                  </span>
+                )}
+              </DialogTitle>
+            </DialogHeader>
+
+            {detailQuery.isLoading ? (
+              <div className="py-12 text-center text-slate-500 text-sm">Carregando detalhes...</div>
+            ) : detailQuery.error ? (
+              <div className="py-8 text-center text-red-600 text-sm">{(detailQuery.error as any).message}</div>
+            ) : detailQuery.data ? (() => {
+              const d = detailQuery.data;
+              const e = d.entry;
+              const vencida = e.dataVencimento && e.dataVencimento.slice(0,10) < hojeStr && e.status !== "pago";
+              return (
+                <div className="space-y-4">
+                  {/* Cabeçalho de status */}
+                  <div className={`rounded-lg border-2 p-4 ${
+                    e.status === "pago" ? "border-green-300 bg-green-50" :
+                    vencida ? "border-red-300 bg-red-50" :
+                    "border-orange-300 bg-orange-50"
+                  }`}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold uppercase tracking-wide mb-1 text-slate-600">
+                          {ORIGEM_LABELS[e.origemModulo] ?? e.origemModulo ?? "Lançamento Manual"}
+                          {d.ordem?.numeroOc && <span className="ml-2 font-mono text-slate-700">· {d.ordem.numeroOc}</span>}
+                        </div>
+                        <h3 className="text-base font-bold text-slate-900 leading-tight">
+                          {e.descricao || e.origemDescricao || e.contaNome || "—"}
+                        </h3>
+                        {e.obraNome && (
+                          <p className="text-xs text-slate-600 mt-1">📍 {e.obraNome}</p>
+                        )}
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className="text-2xl font-bold tabular-nums text-slate-900">{formatBRL(Number(e.valorPrevisto))}</div>
+                        <div className={`text-xs font-semibold mt-1 ${
+                          e.status === "pago" ? "text-green-700" : vencida ? "text-red-700" : "text-orange-700"
+                        }`}>
+                          {e.status === "pago" ? `✓ Pago em ${fmtDateBR(e.dataPagamento)}` :
+                            vencida ? `⚠ Vencido há ${e.diasAtraso} dia(s)` :
+                            `Vence em ${fmtDateBR(e.dataVencimento)}`}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Tabs defaultValue="geral" className="w-full">
+                    <TabsList className="grid w-full grid-cols-4">
+                      <TabsTrigger value="geral" className="text-xs"><Info className="w-3 h-3 mr-1" />Geral</TabsTrigger>
+                      <TabsTrigger value="origem" className="text-xs" disabled={!d.ordem && !d.fornecedor}>
+                        <Building2 className="w-3 h-3 mr-1" />Origem {d.ordem ? "(OC)" : d.fornecedor ? "(Forn.)" : ""}
+                      </TabsTrigger>
+                      <TabsTrigger value="parcelas" className="text-xs" disabled={!d.parcelas?.length || d.parcelas.length <= 1}>
+                        <Hash className="w-3 h-3 mr-1" />Parcelas {d.parcelas?.length > 1 ? `(${d.parcelas.length})` : ""}
+                      </TabsTrigger>
+                      <TabsTrigger value="historico" className="text-xs"><History className="w-3 h-3 mr-1" />Histórico</TabsTrigger>
+                    </TabsList>
+
+                    {/* GERAL */}
+                    <TabsContent value="geral" className="mt-4 space-y-3">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <KV label="Tipo">{e.tipo ?? "—"}</KV>
+                        <KV label="Natureza">{e.natureza ?? "—"}</KV>
+                        <KV label="Conta Contábil">{e.contaNome ?? "—"}</KV>
+                        <KV label="Competência">{fmtDateBR(e.dataCompetencia)}</KV>
+                        <KV label="Vencimento" highlight={vencida}>{fmtDateBR(e.dataVencimento)}</KV>
+                        <KV label="Pagamento">{e.dataPagamento ? fmtDateBR(e.dataPagamento) : "—"}</KV>
+                        <KV label="Valor Previsto">{formatBRL(Number(e.valorPrevisto))}</KV>
+                        <KV label="Valor Realizado">{e.valorRealizado != null ? formatBRL(Number(e.valorRealizado)) : "—"}</KV>
+                        <KV label="Forma">{e.formaPagamento ?? "—"}</KV>
+                        {e.parcelaNumero && (
+                          <KV label="Parcela">{e.parcelaNumero}/{e.parcelaTotal}</KV>
+                        )}
+                        {e.codigoBarras && <KV label="Cód. de Barras"><span className="font-mono text-[11px]">{e.codigoBarras}</span></KV>}
+                        {e.chequeNumero && <KV label="Cheque">{e.chequeNumero} ({e.chequeBanco})</KV>}
+                        <KV label="Conciliação">{e.conciliado ? `✓ ${fmtDateBR(e.dataConciliacao)}` : "Não conciliado"}</KV>
+                        <KV label="Criado por">{e.criadoPorNome ?? "—"}</KV>
+                        {e.aprovadoPorNome && <KV label="Aprovado por">{e.aprovadoPorNome}</KV>}
+                      </div>
+
+                      {d.bancoEmpresa && (
+                        <div className="rounded-lg border border-slate-200 p-3 bg-slate-50">
+                          <p className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">Conta de Saída (Empresa)</p>
+                          <p className="text-sm font-medium text-slate-800">
+                            {d.bancoEmpresa.banco} · Ag. {d.bancoEmpresa.agencia} · CC {d.bancoEmpresa.conta}
+                            {d.bancoEmpresa.apelido && <span className="text-slate-500 ml-2">({d.bancoEmpresa.apelido})</span>}
+                          </p>
+                        </div>
+                      )}
+
+                      {e.observacoes && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                          <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide mb-1">Observações</p>
+                          <p className="text-sm text-amber-900 whitespace-pre-wrap">{e.observacoes}</p>
+                        </div>
+                      )}
+
+                      {e.motivoCancelamento && (
+                        <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                          <p className="text-[11px] font-semibold text-red-700 uppercase tracking-wide mb-1">Motivo do Cancelamento</p>
+                          <p className="text-sm text-red-900">{e.motivoCancelamento}</p>
+                        </div>
+                      )}
+
+                      {e.comprovanteUrl && (
+                        <a href={e.comprovanteUrl} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 text-sm text-blue-700 hover:underline">
+                          <Paperclip className="w-4 h-4" />Ver comprovante de pagamento
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </TabsContent>
+
+                    {/* ORIGEM */}
+                    <TabsContent value="origem" className="mt-4 space-y-4">
+                      {d.ordem && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                            <ShoppingCart className="w-4 h-4 text-blue-600" />Ordem de Compra {d.ordem.numeroOc}
+                          </h4>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            <KV label="Status OC">{d.ordem.status} · {d.ordem.aprovacaoStatus}</KV>
+                            <KV label="Aprovador">{d.ordem.aprovadorNome ?? "—"}</KV>
+                            <KV label="Aprovado em">{d.ordem.aprovadoEm ? fmtDateBR(d.ordem.aprovadoEm.slice(0,10)) : "—"}</KV>
+                            <KV label="NF">{d.ordem.numeroNf ?? "—"}</KV>
+                            <KV label="Cond. Pagto">{d.ordem.condicaoPagamento ?? "—"}</KV>
+                            <KV label="Parcelas">{d.ordem.numeroParcelas ?? 1}</KV>
+                            <KV label="Subtotal">{formatBRL(Number(d.ordem.subtotal ?? 0))}</KV>
+                            <KV label={`Frete (${d.ordem.freteTipo ?? "—"})`}>{formatBRL(Number(d.ordem.frete ?? 0))}</KV>
+                            <KV label="Outras Desp.">{formatBRL(Number(d.ordem.outrasDespesas ?? 0))}</KV>
+                            <KV label="Impostos">{formatBRL(Number(d.ordem.impostos ?? 0))}</KV>
+                            <KV label="Desconto">{formatBRL(Number(d.ordem.desconto ?? 0))}</KV>
+                            <KV label="TOTAL OC" highlight>{formatBRL(Number(d.ordem.total ?? 0))}</KV>
+                          </div>
+                          {d.ordem.observacoes && (
+                            <div className="mt-2 text-xs text-slate-600 italic">{d.ordem.observacoes}</div>
+                          )}
+                          <div className="flex gap-2 mt-3">
+                            {d.ordem.pdfUrl && (
+                              <a href={d.ordem.pdfUrl} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-blue-700 hover:underline border border-blue-200 px-2 py-1 rounded bg-blue-50">
+                                <FileText className="w-3 h-3" />PDF da OC<ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                            {Array.isArray(d.ordem.anexos) && d.ordem.anexos.length > 0 && d.ordem.anexos.map((a: any, i: number) => (
+                              <a key={i} href={typeof a === "string" ? a : a.url} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-blue-700 hover:underline border border-slate-200 px-2 py-1 rounded">
+                                <Paperclip className="w-3 h-3" />{typeof a === "string" ? `Anexo ${i+1}` : (a.nome ?? a.name ?? `Anexo ${i+1}`)}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {d.fornecedor && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                            <Building2 className="w-4 h-4 text-indigo-600" />Fornecedor
+                          </h4>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            <KV label="Razão Social">{d.fornecedor.razaoSocial}</KV>
+                            <KV label="Nome Fantasia">{d.fornecedor.nomeFantasia ?? "—"}</KV>
+                            <KV label="CNPJ"><span className="font-mono">{d.fornecedor.cnpj ?? "—"}</span></KV>
+                            <KV label="Cidade/UF">{[d.fornecedor.cidade, d.fornecedor.estado].filter(Boolean).join("/") || "—"}</KV>
+                            <KV label="Telefone">{d.fornecedor.telefone ?? "—"}</KV>
+                            <KV label="E-mail">{d.fornecedor.email ?? "—"}</KV>
+                            <KV label="Contato">{d.fornecedor.contatoNome ?? "—"}</KV>
+                            <KV label="Banco">{d.fornecedor.banco ?? "—"}</KV>
+                            <KV label="Ag./Conta">{[d.fornecedor.agencia, d.fornecedor.conta].filter(Boolean).join(" / ") || "—"}</KV>
+                            {d.fornecedor.pix && <KV label="PIX" highlight><span className="font-mono text-[11px]">{d.fornecedor.pix}</span></KV>}
+                          </div>
+                        </div>
+                      )}
+
+                      {d.itens && d.itens.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                            <Package className="w-4 h-4 text-amber-600" />Itens da OC ({d.itens.length})
+                          </h4>
+                          <div className="border border-slate-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
+                            <table className="w-full text-xs">
+                              <thead className="bg-slate-100 sticky top-0">
+                                <tr>
+                                  <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Cód.</th>
+                                  <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Descrição</th>
+                                  <th className="px-2 py-1.5 text-center font-semibold text-slate-600">Un.</th>
+                                  <th className="px-2 py-1.5 text-right font-semibold text-slate-600">Qtd</th>
+                                  <th className="px-2 py-1.5 text-right font-semibold text-slate-600">Entr.</th>
+                                  <th className="px-2 py-1.5 text-right font-semibold text-slate-600">Preço</th>
+                                  <th className="px-2 py-1.5 text-right font-semibold text-slate-600">Total</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {d.itens.map((it: any) => (
+                                  <tr key={it.id} className="border-t border-slate-100">
+                                    <td className="px-2 py-1 font-mono text-[10px]">{it.insumoCodigo ?? "—"}</td>
+                                    <td className="px-2 py-1">{it.descricao}</td>
+                                    <td className="px-2 py-1 text-center">{it.unidade ?? "—"}</td>
+                                    <td className="px-2 py-1 text-right tabular-nums">{Number(it.quantidade).toLocaleString("pt-BR", {maximumFractionDigits: 3})}</td>
+                                    <td className="px-2 py-1 text-right tabular-nums text-slate-500">{Number(it.quantidadeEntregue ?? 0).toLocaleString("pt-BR", {maximumFractionDigits: 3})}</td>
+                                    <td className="px-2 py-1 text-right tabular-nums">{formatBRL(Number(it.precoUnitario ?? 0))}</td>
+                                    <td className="px-2 py-1 text-right tabular-nums font-semibold">{formatBRL(Number(it.total ?? 0))}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </TabsContent>
+
+                    {/* PARCELAS */}
+                    <TabsContent value="parcelas" className="mt-4">
+                      <div className="border border-slate-200 rounded-lg overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead className="bg-slate-100">
+                            <tr>
+                              <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Parcela</th>
+                              <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Vencimento</th>
+                              <th className="px-2 py-1.5 text-right font-semibold text-slate-600">Valor</th>
+                              <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Pgto</th>
+                              <th className="px-2 py-1.5 text-center font-semibold text-slate-600">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {d.parcelas.map((p: any) => (
+                              <tr key={p.id} className={`border-t border-slate-100 ${p.id === e.id ? "bg-blue-50" : ""}`}>
+                                <td className="px-2 py-1.5 font-semibold">{p.parcelaNumero}/{p.parcelaTotal} {p.id === e.id && <span className="text-blue-600 ml-1">←</span>}</td>
+                                <td className="px-2 py-1.5">{fmtDateBR(p.dataVencimento)}</td>
+                                <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{formatBRL(Number(p.valorPrevisto))}</td>
+                                <td className="px-2 py-1.5">{p.dataPagamento ? `${fmtDateBR(p.dataPagamento)} (${p.formaPagamento ?? "—"})` : "—"}</td>
+                                <td className="px-2 py-1.5 text-center">
+                                  <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                    p.status === "pago" ? "bg-green-100 text-green-700" :
+                                    p.dataVencimento && p.dataVencimento.slice(0,10) < hojeStr ? "bg-red-100 text-red-700" :
+                                    "bg-orange-100 text-orange-700"
+                                  }`}>{p.status}</span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </TabsContent>
+
+                    {/* HISTÓRICO */}
+                    <TabsContent value="historico" className="mt-4">
+                      {d.auditoria && d.auditoria.length > 0 ? (
+                        <div className="space-y-2 max-h-80 overflow-y-auto">
+                          {d.auditoria.map((a: any) => (
+                            <div key={a.id} className="border-l-2 border-slate-300 pl-3 py-1">
+                              <div className="text-xs font-semibold text-slate-700">{a.action}</div>
+                              <div className="text-[11px] text-slate-500">
+                                {fmtDateBR(a.createdAt.slice(0,10))} · {a.userName ?? "—"} · {a.module}
+                              </div>
+                              {a.details && <div className="text-xs text-slate-600 mt-0.5">{a.details}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-500 text-center py-6">Nenhum registro de auditoria.</p>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              );
+            })() : null}
+
+            <DialogFooter className="border-t pt-3">
+              <Button variant="outline" onClick={() => setDetailEntryId(null)}>Fechar</Button>
+              {detailQuery.data?.entry && detailQuery.data.entry.status !== "pago" && (
+                <Button className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => { setShowPay(detailQuery.data.entry); setDetailEntryId(null); }}>
+                  <CheckCircle className="w-4 h-4 mr-1" />Validar e Pagar
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Rev. 1620 — Modal pagamento em lote (Onda 2) */}
         <Dialog open={showBulkPay} onOpenChange={setShowBulkPay}>
