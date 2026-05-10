@@ -414,7 +414,10 @@ export default function AlmoxarifadoPage() {
     onSuccess: () => { refetch(); setModalItem(false); toast.success("Item atualizado!"); },
     onError: (e: any) => {
       console.error("[atualizarItem onError]", e, "data:", e?.data, "shape:", e?.shape, "cause:", e?.cause);
-      toast.error("Erro ao atualizar item: " + e.message);
+      const code = e?.data?.code || e?.shape?.data?.code || "";
+      const httpStatus = e?.data?.httpStatus || e?.shape?.data?.httpStatus || "";
+      const causeMsg = e?.cause?.message ? ` | cause: ${e.cause.message}` : "";
+      toast.error(`Erro ao atualizar item: ${e.message}${code ? ` [${code}${httpStatus ? " " + httpStatus : ""}]` : ""}${causeMsg}`, { duration: 12000 });
     },
   });
   const excluirMut = trpc.compras.excluirItem.useMutation({
