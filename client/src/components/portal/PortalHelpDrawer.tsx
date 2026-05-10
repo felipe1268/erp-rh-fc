@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { HelpCircle, Search, X, ChevronRight, ArrowLeft } from "lucide-react";
-import { PORTAL_CLIENTE_ARTIGOS, type HelpArticle } from "@shared/portalClienteHelp";
+import { PORTAL_CLIENTE_ARTIGOS, type HelpArticle } from "@shared/help/portalClienteHelp";
 
 function MdRenderer({ md }: { md: string }) {
   const blocks = useMemo(() => {

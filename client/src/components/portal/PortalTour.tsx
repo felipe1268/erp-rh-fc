@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Joyride, { type CallBackProps, STATUS, type Step } from "react-joyride";
-import { PORTAL_CLIENTE_TOUR } from "@shared/portalClienteHelp";
+import { PORTAL_CLIENTE_TOUR } from "@shared/help/portalClienteHelp";
 
 const TOUR_STORAGE_KEY = "portal_cliente_tour_v1";
 
