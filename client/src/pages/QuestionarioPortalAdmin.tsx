@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import {
   Sliders, Plus, Pencil, Trash2, ArrowUp, ArrowDown,
   Eye, EyeOff, Lock, AlertCircle, ListChecks, Type, AlignLeft, ThumbsUp,
-  Loader2,
+  Loader2, RotateCcw, Crown,
 } from "lucide-react";
 
 type Tipo = "nota_0_10" | "texto_curto" | "texto_longo" | "sim_nao_talvez";
@@ -30,17 +30,13 @@ const TIPO_ICON: Record<Tipo, any> = {
   sim_nao_talvez: ThumbsUp,
 };
 
-// 8 perguntas core fixas (preserva NPS + paridade Portal × Planejamento) — read-only.
-const PERGUNTAS_CORE: Array<{ chave: string; tipo: Tipo; label: string; secao: string }> = [
-  { chave: "notaGeral",        tipo: "nota_0_10", label: "Nota geral (NPS) ★",                 secao: "Geral" },
-  { chave: "notaEquipe",       tipo: "nota_0_10", label: "Equipe FC (técnica e relacionamento)", secao: "Equipe FC" },
-  { chave: "notaGestor",       tipo: "nota_0_10", label: "Gestor responsável",                  secao: "Gestor" },
-  { chave: "notaEmpresa",      tipo: "nota_0_10", label: "Empresa FC (institucional)",          secao: "Empresa" },
-  { chave: "notaObra",         tipo: "nota_0_10", label: "Andamento da obra",                   secao: "Obra / Execução" },
-  { chave: "notaPrazo",        tipo: "nota_0_10", label: "Cumprimento de prazos",               secao: "Obra / Execução" },
-  { chave: "notaQualidade",    tipo: "nota_0_10", label: "Qualidade do serviço entregue",       secao: "Obra / Execução" },
-  { chave: "notaEscritorio",   tipo: "nota_0_10", label: "Atendimento administrativo",          secao: "Escritório Central" },
-];
+// 8 perguntas core: chave/tipo/seção são fixos (preserva NPS + paridade Portal × Planejamento).
+// Os rótulos default vêm de shared/portalPerguntasCore.ts (mesma fonte usada pelo Portal),
+// garantindo que o "texto padrão" exibido aqui case 1:1 com o fallback do Portal — assim a
+// detecção de reset (digitar o texto padrão) funciona corretamente.
+import { PERGUNTAS_CORE_DEFAULTS } from "../../../shared/portalPerguntasCore";
+const PERGUNTAS_CORE: Array<{ chave: string; tipo: Tipo; label: string; secao: string }> =
+  PERGUNTAS_CORE_DEFAULTS.map(p => ({ chave: p.chave, tipo: "nota_0_10" as Tipo, label: p.label, secao: p.secao }));
 
 export default function QuestionarioPortalAdmin() {
   const { selectedCompanyId } = useCompany();
@@ -52,6 +48,27 @@ export default function QuestionarioPortalAdmin() {
   const { data: perguntas = [], isLoading } = trpc.portalExterno.admin.listarPerguntasExtras.useQuery(
     { companyId }, { enabled: !!companyId }
   );
+
+  // Rev. 1597 — Overrides de rótulo das 8 perguntas CORE (Admin Master).
+  const { data: labelsCoreOverride = {} } = trpc.portalExterno.admin.listarLabelsCoreOverride.useQuery(
+    { companyId }, { enabled: !!companyId }
+  );
+  const salvarLabelCoreMut = trpc.portalExterno.admin.salvarLabelCoreOverride.useMutation({
+    onSuccess: () => {
+      toast.success("Rótulo da pergunta atualizado.");
+      utils.portalExterno.admin.listarLabelsCoreOverride.invalidate();
+      setEditandoCore(null);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const resetarLabelCoreMut = trpc.portalExterno.admin.resetarLabelCoreOverride.useMutation({
+    onSuccess: () => {
+      toast.success("Rótulo restaurado para o padrão.");
+      utils.portalExterno.admin.listarLabelsCoreOverride.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const [editandoCore, setEditandoCore] = useState<{ chave: string; labelOriginal: string; label: string } | null>(null);
 
   const [editando, setEditando] = useState<any | null>(null);
   const [criando, setCriando] = useState(false);
@@ -120,33 +137,69 @@ export default function QuestionarioPortalAdmin() {
             <div className="flex-1">
               <h1 className="text-xl font-bold">Editor do Questionário — Portal do Cliente</h1>
               <p className="text-sm text-indigo-100 mt-1">
-                Edite as perguntas que o cliente responde no Portal. As 8 perguntas <b>core</b> (NPS, equipe, gestor, empresa, obra, prazo, qualidade e escritório) são fixas para preservar o histórico do NPS.
+                Edite as perguntas que o cliente responde no Portal. As 8 perguntas <b>core</b> (NPS, equipe, gestor, empresa, obra, prazo, qualidade e escritório) ficam fixas no <b>tipo</b> e na <b>seção</b> para preservar o histórico do NPS — mas o <b>texto exibido</b> pode ser personalizado pelo Admin Master.
                 Você pode adicionar perguntas <b>personalizadas</b> à vontade.
               </p>
             </div>
           </div>
         </div>
 
-        {/* CORE (read-only) */}
+        {/* CORE — tipo/seção fixos; rótulo editável pelo Admin Master (Rev. 1597) */}
         <div className="bg-white border rounded-xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <Lock className="w-4 h-4 text-slate-500" />
-            <h2 className="font-semibold text-slate-800">Perguntas core (fixas)</h2>
-            <Badge variant="outline" className="ml-2 text-[10px]">não editáveis</Badge>
+            <h2 className="font-semibold text-slate-800">Perguntas core</h2>
+            <Badge variant="outline" className="ml-2 text-[10px]">tipo e seção fixos</Badge>
+            {isMaster && (
+              <Badge className="ml-1 text-[10px] bg-amber-100 text-amber-800 hover:bg-amber-100 gap-1">
+                <Crown className="w-3 h-3" /> rótulo editável
+              </Badge>
+            )}
           </div>
           <p className="text-xs text-slate-500 mb-3">
-            Estas perguntas não podem ser editadas ou removidas porque alimentam o cálculo de NPS e a paridade entre o Portal do Cliente e o módulo Planejamento.
+            Estas perguntas alimentam o cálculo de NPS e a paridade entre o Portal do Cliente e o módulo Planejamento — por isso o <b>tipo</b> (Nota 0–10) e a <b>seção</b> não podem mudar.
+            {isMaster ? " Como Admin Master, você pode personalizar o texto exibido para o cliente." : " Apenas o Admin Master pode personalizar o texto exibido."}
           </p>
           <div className="grid md:grid-cols-2 gap-2">
             {PERGUNTAS_CORE.map((p) => {
               const Icon = TIPO_ICON[p.tipo];
+              const override = (labelsCoreOverride as Record<string, string>)[p.chave];
+              const labelEfetivo = override || p.label;
+              const customizado = !!override && override !== p.label;
               return (
                 <div key={p.chave} className="border rounded-lg px-3 py-2 flex items-center gap-2 bg-slate-50/60">
                   <Icon className="w-4 h-4 text-slate-400 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-slate-800 truncate">{p.label}</p>
-                    <p className="text-[11px] text-slate-500">{p.secao} · {TIPO_LABEL[p.tipo]}</p>
+                    <p className="text-sm text-slate-800 truncate" title={labelEfetivo}>{labelEfetivo}</p>
+                    <p className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                      <span>{p.secao} · {TIPO_LABEL[p.tipo]}</span>
+                      {customizado && <Badge variant="outline" className="text-[9px] py-0 px-1 border-amber-300 text-amber-700">personalizado</Badge>}
+                    </p>
                   </div>
+                  {isMaster && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        title="Editar rótulo (Admin Master)"
+                        onClick={() => setEditandoCore({ chave: p.chave, labelOriginal: p.label, label: labelEfetivo })}
+                        className="p-1.5 rounded hover:bg-white"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-blue-600" />
+                      </button>
+                      {customizado && (
+                        <button
+                          title="Restaurar texto padrão"
+                          onClick={() => {
+                            if (!confirm(`Restaurar o texto padrão da pergunta?\n\nPadrão: "${p.label}"`)) return;
+                            resetarLabelCoreMut.mutate({ companyId, chave: p.chave });
+                          }}
+                          disabled={resetarLabelCoreMut.isPending}
+                          className="p-1.5 rounded hover:bg-white"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -239,6 +292,57 @@ export default function QuestionarioPortalAdmin() {
           </div>
         </div>
       </div>
+
+      {/* Modal de edição do RÓTULO de pergunta CORE (Admin Master — Rev. 1597) */}
+      <Dialog open={!!editandoCore} onOpenChange={(o) => { if (!o) setEditandoCore(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Crown className="w-4 h-4 text-amber-600" />
+              Editar texto da pergunta core
+            </DialogTitle>
+          </DialogHeader>
+          {editandoCore && (
+            <div className="space-y-3">
+              <div className="bg-slate-50 border rounded-lg p-3 text-xs text-slate-600">
+                <p><b>Texto padrão:</b> {editandoCore.labelOriginal}</p>
+                <p className="mt-1 text-slate-500">O <b>tipo</b> (Nota 0–10) e a <b>seção</b> permanecem inalterados — apenas o texto exibido para o cliente muda.</p>
+              </div>
+              <div>
+                <Label className="text-xs">Texto da pergunta exibido no Portal</Label>
+                <textarea
+                  value={editandoCore.label} maxLength={240} rows={3}
+                  onChange={(e) => setEditandoCore({ ...editandoCore, label: e.target.value })}
+                  className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
+                  placeholder="Ex.: Como você avalia o andamento das obras da FC?"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">{editandoCore.label.length}/240 caracteres</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditandoCore(null)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (!editandoCore) return;
+                const novo = editandoCore.label.trim();
+                if (!novo) { toast.error("Informe o texto da pergunta"); return; }
+                if (novo === editandoCore.labelOriginal) {
+                  // Voltou ao padrão → equivalente a remover override
+                  resetarLabelCoreMut.mutate({ companyId, chave: editandoCore.chave });
+                  setEditandoCore(null);
+                  return;
+                }
+                salvarLabelCoreMut.mutate({ companyId, chave: editandoCore.chave as any, label: novo });
+              }}
+              disabled={salvarLabelCoreMut.isPending || resetarLabelCoreMut.isPending}
+              className="bg-indigo-600 hover:bg-indigo-700"
+            >
+              {salvarLabelCoreMut.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de edição/criação */}
       <Dialog open={!!editando} onOpenChange={(o) => { if (!o) { setEditando(null); setCriando(false); } }}>

@@ -11371,4 +11371,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-10 09:30:00",
   },
+  {
+    version: 1597,
+    titulo: "Editor do Questionário — Admin Master pode personalizar o texto das perguntas core",
+    descricao: "Antes, as 8 perguntas core (NPS Geral, Equipe, Gestor, Empresa, Obra, Prazo, Qualidade, Escritório) eram totalmente read-only no Editor do Questionário. Agora o Admin Master pode personalizar o TEXTO exibido para o cliente em cada uma delas (mantendo chave/tipo/seção fixos para preservar o cálculo do NPS e a paridade Portal × Planejamento). Cada item core ganha um botão de lápis (visível apenas para Admin Master) e, quando customizado, um botão para restaurar o texto padrão. O Portal do Cliente passa a buscar e aplicar esses overrides em todos os 8 NotaSelectors core. Nova tabela cliente_perguntas_core_overrides (company_id + chave UNIQUE) com upsert idempotente; endpoints admin (listar/salvar/resetar — master only) e endpoint público clientes para retornar o mapa chave→label.",
+    tipo: "melhoria",
+    modulos: "Portal Cliente, Configurações",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-10 12:30:00",
+  },
 ];

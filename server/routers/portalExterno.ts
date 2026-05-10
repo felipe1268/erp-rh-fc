@@ -949,6 +949,66 @@ export const portalExternoRouter = router({
       return { success: true };
     }),
 
+    // ===== Rev. 1597 — Override de RÓTULO das perguntas CORE =====
+    // Apenas o Admin Master pode personalizar o texto exibido das 8 perguntas
+    // core do questionário. Chave/tipo/seção continuam fixos para preservar o
+    // cálculo do NPS e a paridade Portal × Planejamento.
+    listarLabelsCoreOverride: protectedProcedure.input(z.object({
+      companyId: z.number(),
+    })).query(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
+      }
+      const db = (await getDb())!;
+      const rows = await db.execute(sql`
+        SELECT chave, label FROM cliente_perguntas_core_overrides
+        WHERE company_id = ${input.companyId}
+      `).then((r: any) => (r.rows ?? r ?? [])) as any[];
+      const map: Record<string, string> = {};
+      for (const r of rows) map[String(r.chave)] = String(r.label);
+      return map;
+    }),
+
+    salvarLabelCoreOverride: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      chave: z.enum([
+        "notaGeral", "notaEquipe", "notaGestor", "notaEmpresa",
+        "notaObra", "notaPrazo", "notaQualidade", "notaEscritorio",
+      ]),
+      label: z.string().min(1).max(240),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode editar o rótulo das perguntas core." });
+      }
+      const db = (await getDb())!;
+      const label = input.label.trim();
+      await db.execute(sql`
+        INSERT INTO cliente_perguntas_core_overrides (company_id, chave, label, updated_at)
+        VALUES (${input.companyId}, ${input.chave}, ${label}, NOW())
+        ON CONFLICT (company_id, chave)
+        DO UPDATE SET label = EXCLUDED.label, updated_at = NOW()
+      `);
+      return { success: true };
+    }),
+
+    resetarLabelCoreOverride: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      chave: z.enum([
+        "notaGeral", "notaEquipe", "notaGestor", "notaEmpresa",
+        "notaObra", "notaPrazo", "notaQualidade", "notaEscritorio",
+      ]),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode redefinir rótulos das perguntas core." });
+      }
+      const db = (await getDb())!;
+      await db.execute(sql`
+        DELETE FROM cliente_perguntas_core_overrides
+        WHERE company_id = ${input.companyId} AND chave = ${input.chave}
+      `);
+      return { success: true };
+    }),
+
     // Rev. 1569 — Master pode CANCELAR uma avaliação registrada.
     // Marca cancelada_em (soft-delete preservando auditoria) e remove
     // marcações de credencial daquele período da empresa, liberando
@@ -2514,6 +2574,22 @@ export const portalExternoRouter = router({
         ))
         .orderBy(clientePerguntasExtras.ordem, clientePerguntasExtras.id);
       return rows;
+    }),
+
+    // Rev. 1597 — Rótulos personalizados das 8 perguntas CORE para esta empresa.
+    listarLabelsCore: publicProcedure.input(z.object({ token: z.string() })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+      const rows = await db.execute(sql`
+        SELECT chave, label FROM cliente_perguntas_core_overrides
+        WHERE company_id = ${decoded.companyId}
+      `).then((r: any) => (r.rows ?? r ?? [])) as any[];
+      const map: Record<string, string> = {};
+      for (const r of rows) map[String(r.chave)] = String(r.label);
+      return map;
     }),
   }),
 

@@ -668,7 +668,18 @@ Regras:
           )`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS cre_aval ON cliente_respostas_extras (avaliacao_id)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS cre_pergunta ON cliente_respostas_extras (pergunta_id)`);
-          console.log(`[SyncSchema+] Tabelas Portal Cliente (comentarios + avaliacoes + config + perguntas/respostas extras) garantidas.`);
+          // Rev. 1597 — Override de RÓTULO das 8 perguntas CORE por empresa.
+          // chave/tipo/secao continuam fixos no código (preservar NPS); só o
+          // texto exibido pode ser personalizado pelo Admin Master.
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS cliente_perguntas_core_overrides (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            chave VARCHAR(60) NOT NULL,
+            label VARCHAR(240) NOT NULL,
+            updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+          )`);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS cpco_company_chave ON cliente_perguntas_core_overrides (company_id, chave)`);
+          console.log(`[SyncSchema+] Tabelas Portal Cliente (comentarios + avaliacoes + config + perguntas/respostas extras + core overrides) garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA cliente_comentarios/avaliacoes:`, e?.message || e); }
 
         try {

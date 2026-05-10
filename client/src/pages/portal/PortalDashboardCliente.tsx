@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { proximaJanelaAvaliacao } from "../../../../shared/portalAvaliacao";
+import { PERGUNTAS_CORE_DEFAULT_LABEL } from "../../../../shared/portalPerguntasCore";
 import {
   Building2, LogOut, MessageSquare, Star, Send, MapPin,
   CheckCircle2, ShieldCheck, Smile, Meh, Frown, Sparkles, Users,
@@ -137,6 +138,19 @@ export default function PortalDashboardCliente() {
   });
   const [avaliado, setAvaliado] = useState(false);
   // Rev. 1595 — Perguntas extras (personalizadas) configuradas pelo admin.
+  // Rev. 1597 — Rótulos personalizados (override) das 8 perguntas core, definidos pelo Admin Master.
+  const { data: labelsCoreOverride = {} } = trpc.portalExterno.cliente.listarLabelsCore.useQuery(
+    { token }, { enabled: !!token && tipo === "cliente" }
+  );
+  // Rev. 1597 — Usa o padrão centralizado (shared/portalPerguntasCore) como
+  // fallback final, ignorando o `padrao` passado in-line caso ele divirja da
+  // fonte única. Assim, admin (defaults) e portal (fallback) ficam sempre
+  // sincronizados e o reset-to-default funciona em todas as 8 perguntas.
+  const lbl = (chave: string, _padrao: string) =>
+    ((labelsCoreOverride as Record<string, string>)[chave]
+      || (PERGUNTAS_CORE_DEFAULT_LABEL as Record<string, string>)[chave]
+      || _padrao);
+
   const perguntasExtrasQ = trpc.portalExterno.cliente.listarPerguntasExtras.useQuery(
     { token }, { enabled: !!token && tipo === "cliente" }
   );
@@ -486,7 +500,7 @@ export default function PortalDashboardCliente() {
                 </div>
 
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                  <NotaSelector label="Nota geral (0 = péssimo · 10 = excelente) ★" value={aval.notaGeral} onChange={(n) => setAval({ ...aval, notaGeral: n })} />
+                  <NotaSelector label={lbl("notaGeral", "Nota geral (0 = péssimo · 10 = excelente) ★")} value={aval.notaGeral} onChange={(n) => setAval({ ...aval, notaGeral: n })} />
                 </div>
 
                 {/* Bloco EQUIPE FC */}
@@ -496,7 +510,7 @@ export default function PortalDashboardCliente() {
                     <h3 className="font-semibold text-slate-800 text-sm">Equipe FC na obra</h3>
                   </div>
                   <div className="grid md:grid-cols-2 gap-4">
-                    <NotaSelector label="Equipe FC (técnica e relacionamento)" value={aval.notaEquipe} onChange={(n) => setAval({ ...aval, notaEquipe: n })} />
+                    <NotaSelector label={lbl("notaEquipe", "Equipe FC (técnica e relacionamento)")} value={aval.notaEquipe} onChange={(n) => setAval({ ...aval, notaEquipe: n })} />
                     <NotaSelector label="Atendimento e comunicação" value={aval.notaAtendimento} onChange={(n) => setAval({ ...aval, notaAtendimento: n })} />
                   </div>
                   <div>
@@ -514,7 +528,7 @@ export default function PortalDashboardCliente() {
                     <h3 className="font-semibold text-slate-800 text-sm">Gestor / Responsável FC pela obra</h3>
                   </div>
                   <div className="grid md:grid-cols-2 gap-4">
-                    <NotaSelector label="Gestor responsável (liderança, decisões, proatividade)" value={aval.notaGestor} onChange={(n) => setAval({ ...aval, notaGestor: n })} />
+                    <NotaSelector label={lbl("notaGestor", "Gestor responsável (liderança, decisões, proatividade)")} value={aval.notaGestor} onChange={(n) => setAval({ ...aval, notaGestor: n })} />
                     <div>
                       <Label className="text-sm font-medium">Nome do gestor <span className="text-slate-400 text-xs">(opcional)</span></Label>
                       <Input value={aval.gestorNome} onChange={(e) => setAval({ ...aval, gestorNome: e.target.value })}
@@ -536,7 +550,7 @@ export default function PortalDashboardCliente() {
                     <h3 className="font-semibold text-slate-800 text-sm">FC Engenharia (Empresa)</h3>
                   </div>
                   <div className="grid md:grid-cols-2 gap-4">
-                    <NotaSelector label="Empresa FC (reputação, transparência, comunicação institucional)" value={aval.notaEmpresa} onChange={(n) => setAval({ ...aval, notaEmpresa: n })} />
+                    <NotaSelector label={lbl("notaEmpresa", "Empresa FC (reputação, transparência, comunicação institucional)")} value={aval.notaEmpresa} onChange={(n) => setAval({ ...aval, notaEmpresa: n })} />
                   </div>
                   <div>
                     <Label className="text-sm font-medium">Comentário sobre a Empresa <span className="text-slate-400 text-xs">(opcional)</span></Label>
@@ -553,7 +567,7 @@ export default function PortalDashboardCliente() {
                     <h3 className="font-semibold text-slate-800 text-sm">Escritório Central / Backoffice</h3>
                   </div>
                   <div className="grid md:grid-cols-2 gap-4">
-                    <NotaSelector label="Atendimento administrativo (suporte, retorno de e-mails, agilidade)" value={aval.notaEscritorio} onChange={(n) => setAval({ ...aval, notaEscritorio: n })} />
+                    <NotaSelector label={lbl("notaEscritorio", "Atendimento administrativo (suporte, retorno de e-mails, agilidade)")} value={aval.notaEscritorio} onChange={(n) => setAval({ ...aval, notaEscritorio: n })} />
                     <NotaSelector label="Faturamento, contratos e financeiro" value={aval.notaFaturamento} onChange={(n) => setAval({ ...aval, notaFaturamento: n })} />
                   </div>
                   <div>
@@ -571,9 +585,9 @@ export default function PortalDashboardCliente() {
                     <h3 className="font-semibold text-slate-800 text-sm">Obra / Execução</h3>
                   </div>
                   <div className="grid md:grid-cols-3 gap-4">
-                    <NotaSelector label="Andamento da obra" value={aval.notaObra} onChange={(n) => setAval({ ...aval, notaObra: n })} />
-                    <NotaSelector label="Cumprimento de prazos" value={aval.notaPrazo} onChange={(n) => setAval({ ...aval, notaPrazo: n })} />
-                    <NotaSelector label="Qualidade do serviço entregue" value={aval.notaQualidade} onChange={(n) => setAval({ ...aval, notaQualidade: n })} />
+                    <NotaSelector label={lbl("notaObra", "Andamento da obra")} value={aval.notaObra} onChange={(n) => setAval({ ...aval, notaObra: n })} />
+                    <NotaSelector label={lbl("notaPrazo", "Cumprimento de prazos")} value={aval.notaPrazo} onChange={(n) => setAval({ ...aval, notaPrazo: n })} />
+                    <NotaSelector label={lbl("notaQualidade", "Qualidade do serviço entregue")} value={aval.notaQualidade} onChange={(n) => setAval({ ...aval, notaQualidade: n })} />
                   </div>
                 </div>
 
