@@ -665,6 +665,9 @@ export const portalExternoRouter = router({
       dataInicio: z.string().optional(), dataFim: z.string().optional(),
       // Rev. 1569 — agrupamento opcional (mes | ano) p/ visão por período
       agruparPor: z.enum(["mes", "ano"]).optional(),
+      // Rev. 1593 — filtro opcional por obra (usado pela aba "Avaliação do Cliente"
+      // dentro de PlanejamentoDetalhe, para mostrar só as avaliações daquela obra).
+      obraId: z.number().optional(),
     })).query(async ({ input }) => {
       const db = (await getDb())!;
       // Rev. 1569 — Avaliações canceladas pelo Master ficam fora dos cálculos
@@ -675,6 +678,7 @@ export const portalExternoRouter = router({
       ];
       if (input.dataInicio) conds.push(sql`${clienteAvaliacoes.criadoEm} >= ${input.dataInicio}`);
       if (input.dataFim)    conds.push(sql`${clienteAvaliacoes.criadoEm} <= ${input.dataFim + " 23:59:59"}`);
+      if (input.obraId)     conds.push(eq(clienteAvaliacoes.obraId, input.obraId));
       const rows = await db.select().from(clienteAvaliacoes).where(and(...conds)).orderBy(desc(clienteAvaliacoes.criadoEm));
       const total = rows.length;
       const med = (k: string) => {

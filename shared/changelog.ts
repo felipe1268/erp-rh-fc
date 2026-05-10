@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1593,
+    titulo: "Planejamento — nova aba 'Avaliação Cliente' dentro da obra (NPS filtrado por obraId)",
+    descricao: "O módulo Planejamento ganha uma nova aba dentro de cada obra (PlanejamentoDetalhe → 'Avaliação Cliente') que mostra os indicadores da Avaliação Anônima do Cliente filtrados APENAS para aquela obra. Backend: o endpoint portalExterno.admin.dashboardAvaliacoesCliente recebeu um parâmetro opcional obraId que filtra as linhas por cliente_avaliacoes.obraId — quando ausente, mantém o comportamento consolidado por empresa (usado pelo módulo Clientes do Portal). Frontend: novo componente AvaliacaoClienteObraTab que reaproveita o mesmo dashboard (KPIs NPS, médias por critério incluindo Escritório Central e Faturamento, recomendação Sim/Talvez/Não, tabela Por mês/ano e lista de avaliações recebidas com Pontos Fortes/Fracos), agora contextualizado na obra. A aba é registrada em TAB_DEFS, no Tab union type e em TAB_TO_PAGEID ('avaliacao_cliente'), respeitando permissões. Quando o projeto não estiver vinculado a uma obra cadastrada (proj.obraId vazio), exibe aviso amigável pedindo para vincular. Cancelamento de avaliação continua restrito ao admin master via Clientes do Portal.",
+    tipo: 'feature',
+    modulos: 'Planejamento, Portal do Cliente, Avaliação Anônima, NPS',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 15:30:00',
+  },
+  {
     version: 1592,
     titulo: "Avaliação Anônima do Cliente — novo bloco Escritório Central + Pontos Fortes/Fracos com rótulo direto",
     descricao: "A pesquisa anônima do Portal do Cliente passa a ter um novo bloco temático: ESCRITÓRIO CENTRAL / BACKOFFICE, com duas notas (atendimento administrativo e faturamento/contratos/financeiro) + comentário aberto. Os comentários abertos finais foram renomeados para PONTOS FORTES (com ícone Smile) e PONTOS FRACOS (com ícone Frown), com placeholders mais claros. (1) Schema/ColFix: 3 novas colunas em cliente_avaliacoes (nota_escritorio, nota_faturamento, comentario_escritorio) garantidas idempotentemente no startup. (2) Backend: portalExterno.cliente.criarAvaliacao aceita os novos campos; dashboardAvaliacoesCliente passa a calcular medias.escritorio e medias.faturamento. (3) Formulário do cliente (PortalDashboardCliente): novo bloco roxo entre 'Empresa' e 'Obra', state/reset/mutate atualizados. (4) Análise mês a mês (ClientesPortalAdmin): médias por critério ganham 2 novos cards, badges das avaliações detalhadas mostram 'Escritório' e 'Faturamento', e o comentário do escritório aparece em roxo na lista de avaliações recebidas. Mantém todas as garantias de anonimato (cliente_avaliacao_marcacoes intocada).",

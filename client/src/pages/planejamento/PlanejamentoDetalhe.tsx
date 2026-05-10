@@ -36,6 +36,7 @@ import {
   TrendingDown, ArrowUpRight, ArrowDownRight, CalendarClock, Network,
   Users, HardHat, CheckCircle, Calculator, Info, Box,
   FileCheck2, FileX2, FileWarning, GraduationCap,
+  Star, Smile, Meh, Frown,
 } from "lucide-react";
 import { getNrDescricao } from "@shared/trainingRules";
 import {
@@ -48,7 +49,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(2)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "efetivo" | "bim-3d";
+type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "efetivo" | "bim-3d" | "avaliacao-cliente";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -126,6 +127,8 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "revisoes",             label: "Revisões",           Icon: GitBranch },
   { id: "refis",                label: "REFIS",              Icon: FileText },
   { id: "bim-3d",               label: "BIM 3D",             Icon: Box },
+  // Rev. 1593 — Avaliação Anônima do Cliente filtrada por esta obra
+  { id: "avaliacao-cliente",    label: "Avaliação Cliente",  Icon: Star },
 ];
 const TAB_IDS = TAB_DEFS.map(t => t.id);
 const LS_KEY  = "plan-tab-order";
@@ -183,6 +186,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     "revisoes": "revisoes",
     "refis": "refis",
     "bim-3d": "bim_3d",
+    "avaliacao-cliente": "avaliacao_cliente",
   };
 
   const canViewTab = (tabId: string): boolean => {
@@ -1029,6 +1033,10 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
           <React.Suspense fallback={<div className="flex items-center justify-center h-64"><Loader2 className="h-6 w-6 animate-spin text-blue-600" /><span className="ml-2 text-sm text-slate-500">Carregando visualizador 3D...</span></div>}>
             <BimViewer projetoId={projetoId} projetoNome={proj?.nome || ""} companyId={proj?.companyId ?? 0} />
           </React.Suspense>
+        )}
+
+        {canViewTab(aba) && aba === "avaliacao-cliente" && (
+          <AvaliacaoClienteObraTab proj={proj} />
         )}
 
       </div>
@@ -8157,6 +8165,229 @@ export const STATUS_LABELS: Record<string, string> = {
   Recluso: "Recluso",
 };
 const STATUS_ORDER = ["Ativo", "Aviso", "AvisoDispensado", "Ferias", "Afastado", "Licenca", "Recluso"];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rev. 1593 — Aba "Avaliação Cliente" dentro da obra.
+// Espelha os KPIs de NPS/Avaliação Anônima do dashboard admin
+// (ClientesPortalAdmin), mas filtrados apenas pelas avaliações desta obra
+// (via novo filtro obraId no endpoint dashboardAvaliacoesCliente).
+// ─────────────────────────────────────────────────────────────────────────────
+function AvaliacaoClienteObraTab({ proj }: { proj: any }) {
+  const { companyId } = useCompany();
+  const obraId: number = proj?.obraId ?? 0;
+  const [agruparPor, setAgruparPor] = React.useState<"mes" | "ano">("mes");
+
+  const { data: dash, isLoading } = trpc.portalExterno.admin.dashboardAvaliacoesCliente.useQuery(
+    { companyId, obraId, agruparPor },
+    { enabled: companyId > 0 && obraId > 0 }
+  );
+
+  if (!obraId) {
+    return (
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-sm text-yellow-800">
+        Este projeto de planejamento não está vinculado a uma obra cadastrada — sem obra não é possível filtrar as avaliações.
+        Edite o projeto e selecione a obra correspondente.
+      </div>
+    );
+  }
+
+  const fmtBR = (s: any) => {
+    if (!s) return "—";
+    const d = String(s).slice(0, 10);
+    return d.includes("-") ? d.split("-").reverse().join("/") : d;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white border rounded-xl p-4 flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <Star className="w-4 h-4 text-amber-500" />
+          <span className="text-sm font-semibold text-slate-800">Avaliação Anônima do Cliente — {proj?.nome ?? "esta obra"}</span>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-sm text-slate-700">Visualizar por:</span>
+          <div className="inline-flex border rounded-lg overflow-hidden">
+            {[
+              { v: "mes", label: "Mês" },
+              { v: "ano", label: "Ano" },
+            ].map((o) => {
+              const sel = agruparPor === o.v;
+              return (
+                <button
+                  key={o.v}
+                  onClick={() => setAgruparPor(o.v as "mes" | "ano")}
+                  className={`px-3 py-1.5 text-xs font-semibold transition ${sel ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                >
+                  {o.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>
+      ) : !dash || dash.total === 0 ? (
+        <div className="bg-white border rounded-xl p-12 text-center text-slate-400">
+          <Star className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">Nenhuma avaliação anônima recebida nesta obra ainda.</p>
+          <p className="text-xs mt-2">Quando o cliente preencher a pesquisa NPS no Portal e selecionar esta obra, os indicadores aparecerão aqui.</p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          <div className="grid md:grid-cols-4 gap-3">
+            <div className="bg-white border rounded-xl p-4">
+              <div className="text-xs text-slate-500">Respostas</div>
+              <div className="text-3xl font-bold text-slate-800 mt-1">{dash.total}</div>
+              <Users className="w-5 h-5 text-blue-500 mt-1" />
+            </div>
+            <div className={`rounded-xl p-4 text-white ${dash.nps == null ? "bg-slate-400" : dash.nps >= 50 ? "bg-emerald-600" : dash.nps >= 0 ? "bg-amber-500" : "bg-rose-600"}`}>
+              <div className="text-xs opacity-90">NPS</div>
+              <div className="text-3xl font-bold mt-1">{dash.nps ?? "—"}</div>
+              <TrendingUp className="w-5 h-5 mt-1 opacity-80" />
+            </div>
+            <div className="bg-white border rounded-xl p-4">
+              <div className="text-xs text-slate-500">Média geral</div>
+              <div className="text-3xl font-bold text-slate-800 mt-1">{dash.medias.geral ?? "—"}</div>
+              <Star className="w-5 h-5 text-amber-500 mt-1" />
+            </div>
+            <div className="bg-white border rounded-xl p-4">
+              <div className="text-xs text-slate-500">Promotores · Neutros · Detratores</div>
+              <div className="text-lg font-bold text-slate-800 mt-1 flex gap-2">
+                <span className="text-emerald-600">{dash.promotores}</span>·
+                <span className="text-amber-600">{dash.neutros}</span>·
+                <span className="text-rose-600">{dash.detratores}</span>
+              </div>
+            </div>
+          </div>
+
+          {dash.recomendacao && dash.recomendacao.total > 0 && (
+            <div className="bg-white border rounded-xl p-4">
+              <h3 className="font-semibold text-slate-800 mb-3">Recomendaria a FC para outras empresas?</h3>
+              <div className="grid grid-cols-3 gap-3 text-sm">
+                <div className="rounded-lg border-2 border-emerald-200 bg-emerald-50 p-3 text-center">
+                  <Smile className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
+                  <div className="text-2xl font-bold text-emerald-700">{dash.recomendacao.sim}</div>
+                  <div className="text-[11px] uppercase tracking-wide text-emerald-700">Sim</div>
+                </div>
+                <div className="rounded-lg border-2 border-amber-200 bg-amber-50 p-3 text-center">
+                  <Meh className="w-5 h-5 text-amber-600 mx-auto mb-1" />
+                  <div className="text-2xl font-bold text-amber-700">{dash.recomendacao.talvez}</div>
+                  <div className="text-[11px] uppercase tracking-wide text-amber-700">Talvez</div>
+                </div>
+                <div className="rounded-lg border-2 border-rose-200 bg-rose-50 p-3 text-center">
+                  <Frown className="w-5 h-5 text-rose-600 mx-auto mb-1" />
+                  <div className="text-2xl font-bold text-rose-700">{dash.recomendacao.nao}</div>
+                  <div className="text-[11px] uppercase tracking-wide text-rose-700">Não</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white border rounded-xl p-4">
+            <h3 className="font-semibold text-slate-800 mb-3">Médias por critério (0–10)</h3>
+            <div className="grid md:grid-cols-3 gap-3 text-sm">
+              {[
+                { k: "equipe",      label: "Equipe FC" },
+                { k: "gestor",      label: "Gestor responsável" },
+                { k: "empresa",     label: "Empresa FC" },
+                { k: "obra",        label: "Andamento da obra" },
+                { k: "atendimento", label: "Atendimento" },
+                { k: "prazo",       label: "Prazos" },
+                { k: "qualidade",   label: "Qualidade" },
+                { k: "escritorio",  label: "Escritório Central" },
+                { k: "faturamento", label: "Faturamento / Contratos" },
+              ].map((c) => {
+                const v = (dash.medias as any)[c.k];
+                const cor = v == null ? "bg-slate-200" : v >= 8 ? "bg-emerald-500" : v >= 6 ? "bg-amber-500" : "bg-rose-500";
+                return (
+                  <div key={c.k}>
+                    <div className="flex justify-between text-xs text-slate-500"><span>{c.label}</span><span className="font-bold text-slate-700">{v ?? "—"}</span></div>
+                    <div className="h-2 bg-slate-100 rounded-full mt-1 overflow-hidden">
+                      <div className={cor} style={{ width: `${(v ?? 0) * 10}%`, height: "100%" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {dash.porPeriodo && dash.porPeriodo.length > 0 && (
+            <div className="bg-white border rounded-xl p-4">
+              <h3 className="font-semibold text-slate-800 mb-3">Por {agruparPor === "ano" ? "ano" : "mês"}</h3>
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs uppercase text-slate-500">
+                  <tr><th className="py-2">{agruparPor === "ano" ? "Ano" : "Mês"}</th><th>Respostas</th><th>Média geral</th><th>NPS</th></tr>
+                </thead>
+                <tbody className="divide-y">
+                  {dash.porPeriodo.map((p: any, i: number) => {
+                    const label = agruparPor === "ano"
+                      ? p.periodo
+                      : (p.periodo && p.periodo.length === 7 ? p.periodo.split("-").reverse().join("/") : p.periodo);
+                    return (
+                      <tr key={i}>
+                        <td className="py-2 font-medium">{label}</td>
+                        <td>{p.respostas}</td>
+                        <td>{p.mediaGeral ?? "—"}</td>
+                        <td><Badge className={p.nps == null ? "bg-slate-400" : p.nps >= 50 ? "bg-emerald-500" : p.nps >= 0 ? "bg-amber-500" : "bg-rose-500"}>{p.nps ?? "—"}</Badge></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="bg-white border rounded-xl p-4">
+            <h3 className="font-semibold text-slate-800 mb-3">Avaliações recebidas (mais recentes)</h3>
+            <p className="text-xs text-slate-500 mb-3">
+              As respostas são totalmente <b>anônimas</b>. Para cancelar uma avaliação (e liberar o cliente para enviar uma nova no mesmo período),
+              use o módulo <b>Clientes do Portal → Avaliações</b> (apenas Admin Master).
+            </p>
+            <div className="space-y-2">
+              {(dash.avaliacoes as any[]).slice(0, 50).map((a: any) => (
+                <div key={a.id} className="border rounded-lg p-3">
+                  <div className="text-xs text-slate-500 mb-1 flex items-center gap-2 flex-wrap">
+                    <span>{fmtBR(a.criadoEm)}</span>
+                    <span>· Nota geral: <b className={a.notaGeral >= 9 ? "text-emerald-600" : a.notaGeral <= 6 ? "text-rose-600" : "text-amber-600"}>{a.notaGeral ?? "—"}</b></span>
+                    {a.recomendaria != null && (
+                      <Badge className={a.recomendaria === 2 ? "bg-emerald-500" : a.recomendaria === 1 ? "bg-amber-500" : "bg-rose-500"}>
+                        {a.recomendaria === 2 ? "Recomenda" : a.recomendaria === 1 ? "Talvez recomenda" : "Não recomenda"}
+                      </Badge>
+                    )}
+                    {a.gestorNome && <span className="text-slate-600">· Gestor: <b>{a.gestorNome}</b></span>}
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-1 text-[11px] text-slate-600">
+                    {[
+                      { k: "notaEquipe",      l: "Equipe" },
+                      { k: "notaGestor",      l: "Gestor" },
+                      { k: "notaEmpresa",     l: "Empresa" },
+                      { k: "notaObra",        l: "Obra" },
+                      { k: "notaAtendimento", l: "Atend." },
+                      { k: "notaPrazo",       l: "Prazo" },
+                      { k: "notaQualidade",   l: "Qualidade" },
+                      { k: "notaEscritorio",  l: "Escritório" },
+                      { k: "notaFaturamento", l: "Faturamento" },
+                    ].filter((c) => a[c.k] != null).map((c) => (
+                      <span key={c.k} className="px-1.5 py-0.5 rounded bg-slate-100 border">{c.l}: <b>{a[c.k]}</b></span>
+                    ))}
+                  </div>
+                  {a.comentarioPositivo  && <p className="text-sm text-emerald-700 mt-1"><Smile className="inline w-4 h-4 mr-1" /><b>Pontos fortes:</b> {a.comentarioPositivo}</p>}
+                  {a.comentarioMelhoria  && <p className="text-sm text-rose-700 mt-1"><Frown className="inline w-4 h-4 mr-1" /><b>Pontos fracos:</b> {a.comentarioMelhoria}</p>}
+                  {a.comentarioEquipe    && <p className="text-sm text-blue-700 mt-1"><Users className="inline w-4 h-4 mr-1" /><b>Equipe:</b> {a.comentarioEquipe}</p>}
+                  {a.comentarioGestor    && <p className="text-sm text-amber-700 mt-1"><Star className="inline w-4 h-4 mr-1" /><b>Gestor:</b> {a.comentarioGestor}</p>}
+                  {a.comentarioEmpresa   && <p className="text-sm text-emerald-700 mt-1"><Building2 className="inline w-4 h-4 mr-1" /><b>Empresa:</b> {a.comentarioEmpresa}</p>}
+                  {a.comentarioEscritorio && <p className="text-sm text-purple-700 mt-1"><Building2 className="inline w-4 h-4 mr-1" /><b>Escritório:</b> {a.comentarioEscritorio}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function EfetivoObraTab({ proj }: { proj: any }) {
   const { selectedCompanyId } = useCompany();

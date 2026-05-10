@@ -216,6 +216,8 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "simulador",         label: "Simulador",                              actions: ["view"] },
       { id: "bim_3d",            label: "BIM 3D / 4D",                            actions: ["view","create","edit","delete"] },
       { id: "ia_gestora",        label: "IA Gestora de Planejamento",             actions: ["view"] },
+      // Rev. 1593 — aba "Avaliação Cliente" dentro da obra (NPS filtrado por obraId)
+      { id: "avaliacao_cliente", label: "Avaliação do Cliente (NPS desta obra)",  actions: ["view"] },
     ],
     sensitiveFlags: [
       { id: "valores_planejamento", label: "Valores financeiros do cronograma" },
@@ -454,6 +456,7 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/planejamento?tab=refis": "refis",
     "/planejamento?tab=simulador": "simulador",
     "/planejamento?tab=bim-3d": "bim_3d",
+    "/planejamento?tab=avaliacao-cliente": "avaliacao_cliente",
   },
   "cadastro": {
     "/habilidades":            "habilidades",
