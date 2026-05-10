@@ -132,6 +132,66 @@ export default function PortalPlanejamentoCliente() {
   // Rev. 1516 — abre/fecha o seletor de obra+módulo embutido na pílula
   const [obraSwitcherOpen, setObraSwitcherOpen] = useState(false);
 
+  // Rev. 1584 — Toggle "Global (c/ Indiretas)" elevado para o componente
+  // pai. Antes vivia só dentro de AbaRefis, então a barra "Avanço Físico"
+  // do topo continuava mostrando os valores oficiais sem indiretas mesmo
+  // com o toggle ligado, criando divergência visível com o card REFIS.
+  // Agora a mesma fórmula do REFIS é aplicada à barra do topo quando
+  // `incluirIndiretas` está on. Mantém a regra de ouro Portal × ERP.
+  const [incluirIndiretas, setIncluirIndiretas] = useState(false);
+
+  // Recalcula previsto/realizado do topo SEMPRE com a mesma fórmula da
+  // aba REFIS quando `incluirIndiretas` está ligado (universo único de
+  // folhas com datas, indiretas no realizado pela curva prevista linear).
+  const { topPrevisto, topRealizado } = useMemo(() => {
+    if (!incluirIndiretas || !atividadesTodas?.length || !refisLista?.length) {
+      return {
+        topPrevisto: Number((kpis as any)?.previsto ?? 0),
+        topRealizado: Number((kpis as any)?.realizado ?? 0),
+      };
+    }
+    const refisOrd = [...refisLista].sort((a, b) => String(a.semana).localeCompare(String(b.semana)));
+    const refisAtual = refisOrd[refisOrd.length - 1];
+    const semanaRef = String(refisAtual?.semana || "");
+    if (!semanaRef) {
+      return {
+        topPrevisto: Number((kpis as any)?.previsto ?? 0),
+        topRealizado: Number((kpis as any)?.realizado ?? 0),
+      };
+    }
+    const semanaFimRef = (() => {
+      const d = new Date(semanaRef + "T12:00:00");
+      d.setDate(d.getDate() + 7);
+      return d.toISOString().split("T")[0];
+    })();
+    const progPrevistoNa = (a: any, dataStr: string) => {
+      if (!a.dataInicio || !a.dataFim) return 0;
+      if (dataStr >= a.dataFim) return 100;
+      if (dataStr < a.dataInicio) return 0;
+      const ini = new Date(a.dataInicio + "T12:00:00Z").getTime();
+      const fim = new Date(a.dataFim + "T12:00:00Z").getTime();
+      const tod = new Date(dataStr + "T12:00:00Z").getTime();
+      return ((tod - ini) / (fim - ini)) * 100;
+    };
+    const folhas = (atividadesTodas || []).filter(
+      (a: any) => !a.isGrupo && !a.disabled && (incluirIndiretas || !a.isIndireta)
+    );
+    const folhasComDatas = folhas.filter((a: any) => a.dataInicio && a.dataFim);
+    const pesoBruto = folhasComDatas.reduce((s: number, a: any) => s + (Number(a.pesoFinanceiro) || 0), 0);
+    const semPeso = pesoBruto === 0;
+    const denom = semPeso ? (folhasComDatas.length || 1) : pesoBruto;
+    const prev = folhasComDatas.reduce((s: number, a: any) => {
+      const peso = semPeso ? 1 : (Number(a.pesoFinanceiro) || 0);
+      return s + (progPrevistoNa(a, semanaFimRef) * peso) / denom;
+    }, 0);
+    const real = folhasComDatas.reduce((s: number, a: any) => {
+      const peso = semPeso ? 1 : (Number(a.pesoFinanceiro) || 0);
+      const val = a.isIndireta ? progPrevistoNa(a, semanaFimRef) : (Number(a.percentRealizado) || 0);
+      return s + (val * peso) / denom;
+    }, 0);
+    return { topPrevisto: prev, topRealizado: real };
+  }, [incluirIndiretas, atividadesTodas, refisLista, kpis]);
+
   // Lista de obras às quais o cliente tem acesso (para o seletor da pílula)
   const { data: minhasObras = [] } = trpc.portalExterno.cliente.minhasObras.useQuery(
     { token },
@@ -688,8 +748,10 @@ export default function PortalPlanejamentoCliente() {
 
         {/* ── Avanço Físico (modernizado) ─────────────────────────── */}
         {kpis && (() => {
-          const realizado = kpis.realizado as number;
-          const previsto = kpis.previsto as number;
+          // Rev. 1584 — usa os valores recalculados quando `incluirIndiretas`
+          // está ligado para manter paridade com o card REFIS abaixo.
+          const realizado = topRealizado;
+          const previsto = topPrevisto;
           const desvio = realizado - previsto;
           const desvioPositivo = desvio > 0;
           const fonte = kpis.fonte as string | undefined;
@@ -718,6 +780,14 @@ export default function PortalPlanejamentoCliente() {
                   >
                     💰 Peso Financeiro
                   </span>
+                  {incluirIndiretas && (
+                    <span
+                      title="Indiretas (canteiro, mob/desmob) entram nos cálculos pela curva prevista linear."
+                      className="text-[10px] font-semibold px-2 py-1 rounded-full bg-blue-50 text-blue-700 ring-1 ring-blue-200"
+                    >
+                      🌐 Global (c/ Indiretas)
+                    </span>
+                  )}
                 </div>
               </div>
               {/* Previsto — dourado moderno */}
@@ -843,7 +913,7 @@ export default function PortalPlanejamentoCliente() {
           );
           if (aba === "curva_s") return <AbaCurvaS curvaData={curvaData} kpis={kpis} projeto={projeto} curvaMedicoes={curvaMedicoes} />;
           if (aba === "gantt") return <AbaGantt atividades={atividadesTodas} />;
-          if (aba === "refis") return <AbaRefis refisLista={refisLista} atividades={atividadesTodas} curvaData={curvaData} curvaMedicoes={curvaMedicoes} obra={obra} projeto={projeto} />;
+          if (aba === "refis") return <AbaRefis refisLista={refisLista} atividades={atividadesTodas} curvaData={curvaData} curvaMedicoes={curvaMedicoes} obra={obra} projeto={projeto} incluirIndiretas={incluirIndiretas} setIncluirIndiretas={setIncluirIndiretas} />;
           if (aba === "caminho_critico") return <AbaCaminhoCritico atividades={atividadesTodas} projeto={projeto} />;
           if (aba === "efetivo") return <AbaEfetivo token={token} obraId={obraId} />;
           // Rev. 1535 — Mesma regra da aba Curva S Financeira: prefere o
@@ -2660,7 +2730,7 @@ function AbaGantt({ atividades }: { atividades: any[] }) {
 // ─────────────────────── ABA: REFIS ─────────────────────────────────────
 // Réplica visual da tela interna (PlanejamentoDetalhe.tsx → função Refis)
 // Read-only: sem toolbar, sem edição, sem IA, sem observações.
-function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, projeto }: {
+function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, projeto, incluirIndiretas, setIncluirIndiretas }: {
   refisLista: any[];
   atividades: any[];
   curvaData: null | {
@@ -2672,6 +2742,8 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
   curvaMedicoes: { competencia: string; valorMedido: number; valorAcumulado: number; status: string }[];
   obra: any;
   projeto: any;
+  incluirIndiretas: boolean;
+  setIncluirIndiretas: (v: boolean) => void;
 }) {
   if (!refisLista || refisLista.length === 0) {
     return <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-400 text-sm">Nenhum REFIS emitido ainda.</div>;
@@ -2695,9 +2767,9 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
   const totalContrato = Number(projeto?.orcamentoTotalVenda ?? 0) || Number(projeto?.valorContrato ?? 0);
 
   // ── Rev. 1513: Estados do toolbar de análise/impressão
-  // - incluirIndiretas: alterna entre "Só Diretas" e "Global (c/ Indiretas)"
+  // - incluirIndiretas: vem por props (Rev. 1584 — elevado ao componente
+  //   pai para que a barra "Avanço Físico" do topo da página acompanhe)
   // - orientacaoPdf: define @page size para impressão (retrato/paisagem)
-  const [incluirIndiretas, setIncluirIndiretas] = useState(false);
   const [orientacaoPdf, setOrientacaoPdf]       = useState<"portrait" | "landscape">("portrait");
 
   // Conta indiretas existentes para mostrar contador no toggle

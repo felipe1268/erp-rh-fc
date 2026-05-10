@@ -11254,4 +11254,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 22:00:00",
   },
+  {
+    version: 1584,
+    titulo: "Portal do Cliente — Barra 'Avanço Físico' do topo agora acompanha o toggle 'Global (c/ Indiretas)'",
+    descricao: "Continuação das Rev. 1582/1583. Mesmo após corrigir o card REFIS, a barra 'Avanço Físico' no TOPO da tela continuava mostrando os valores oficiais salvos (1,84% / 1,38%, sem indiretas) enquanto o card REFIS abaixo já mostrava 2,28% / 1,88% com o toggle 'Global' ligado — divergência visível na mesma tela. Causa: o estado `incluirIndiretas` vivia DENTRO de `AbaRefis`, então o componente pai (que renderiza a barra do topo a partir de `kpis.previsto/realizado` vindos do servidor) não tinha como saber. Correção: o estado foi ELEVADO para o componente pai `PortalPlanejamentoCliente`. Quando ligado, a barra do topo recalcula previsto/realizado pela MESMA fórmula da aba REFIS (universo único de folhas com datas + indiretas no realizado pela curva prevista linear). Adicionado badge azul '🌐 Global (c/ Indiretas)' ao lado do '💰 Peso Financeiro' para deixar claro que a barra está em modo global. Quando 'Só Diretas' a barra volta automaticamente aos valores oficiais do servidor.",
+    tipo: "bugfix",
+    modulos: "Portal Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 23:00:00",
+  },
 ];
