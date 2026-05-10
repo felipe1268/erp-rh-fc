@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import {
   Search, Plus, Pencil, Package, ArrowDownCircle, ArrowUpCircle,
   AlertTriangle, Loader2, History, X, BarChart2, Boxes, Sparkles, DollarSign,
+  Truck, ChevronDown, ChevronRight, RefreshCcw,
 } from "lucide-react";
 
 const UNIDADES = ["un", "m", "m²", "m³", "kg", "t", "L", "sc", "cx", "pc", "vb", "gl", "barra", "rolo", "pç"];
@@ -62,6 +63,21 @@ export default function Almoxarifado() {
   const { data: itens = [], refetch: refetchItens, isLoading } = trpc.compras.listarItens.useQuery(
     { companyId }, { enabled: !!companyId }
   );
+  // Rev. 1607 — itens classificados pela IA como "aplicação direta na obra"
+  // (ex.: concreto usinado, argamassa pronta). Não aparecem na lista normal acima.
+  const { data: itensAplicDireta = [], refetch: refetchAplicDireta } =
+    trpc.compras.listarItens.useQuery(
+      { companyId, apenasAplicacaoDireta: true },
+      { enabled: !!companyId }
+    );
+  const [showAplicDireta, setShowAplicDireta] = useState(false);
+  const reclassificarMut = trpc.compras.reclassificarTipoControleIA.useMutation({
+    onSuccess: (data) => {
+      toast.success(`IA reclassificou: ${data.tipoControle === "aplicacao_direta" ? "Aplicação Direta" : "Estoque"} — ${data.justificativa}`);
+      refetchItens(); refetchAplicDireta();
+    },
+    onError: (e) => toast.error("Erro na IA: " + e.message),
+  });
   const { data: categorias = [] } = trpc.compras.listarCategoriasAlmoxarifado.useQuery(
     { companyId }, { enabled: !!companyId }
   );
@@ -125,9 +141,18 @@ export default function Almoxarifado() {
     { enabled: !!histItemId && modalHist }
   );
 
-  const criarMut    = trpc.compras.criarItem.useMutation({ onSuccess: () => { refetchItens(); setModalItem(false); toast.success("Item criado!"); } });
-  const atualizarMut = trpc.compras.atualizarItem.useMutation({ onSuccess: () => { refetchItens(); setModalItem(false); toast.success("Item atualizado!"); } });
-  const excluirMut  = trpc.compras.excluirItem.useMutation({ onSuccess: () => { refetchItens(); toast.success("Item removido."); } });
+  const criarMut    = trpc.compras.criarItem.useMutation({
+    onSuccess: (item: any) => {
+      refetchItens(); refetchAplicDireta(); setModalItem(false);
+      if (item?.tipoControle === "aplicacao_direta") {
+        toast.success(`Item criado como APLICAÇÃO DIRETA (IA): ${item.tipoControleJustificativa || "consumido na obra, não entra no estoque"}`, { duration: 6000 });
+      } else {
+        toast.success("Item criado!");
+      }
+    }
+  });
+  const atualizarMut = trpc.compras.atualizarItem.useMutation({ onSuccess: () => { refetchItens(); refetchAplicDireta(); setModalItem(false); toast.success("Item atualizado!"); } });
+  const excluirMut  = trpc.compras.excluirItem.useMutation({ onSuccess: () => { refetchItens(); refetchAplicDireta(); toast.success("Item removido."); } });
   const movMut      = trpc.compras.registrarMovimento.useMutation({
     onSuccess: () => { refetchItens(); setModalMov(false); toast.success("Movimentação registrada!"); },
     onError: (e) => toast.error(e.message),
@@ -426,6 +451,87 @@ export default function Almoxarifado() {
             </table>
           </div>
         )}
+
+        {/* Rev. 1607 — Itens de Aplicação Direta (IA) — não entram no almoxarifado */}
+        {itensAplicDireta.length > 0 && (
+          <div className="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowAplicDireta(v => !v)}
+              className="w-full flex items-center gap-3 px-4 py-3 bg-amber-50/60 hover:bg-amber-50 transition border-b border-amber-100"
+            >
+              {showAplicDireta ? <ChevronDown className="h-4 w-4 text-amber-600" /> : <ChevronRight className="h-4 w-4 text-amber-600" />}
+              <Truck className="h-4 w-4 text-amber-600" />
+              <div className="flex-1 text-left">
+                <p className="text-sm font-semibold text-amber-800">
+                  Itens de Aplicação Direta (IA) — {itensAplicDireta.length}
+                </p>
+                <p className="text-[11px] text-amber-700/80">
+                  Recebidos e aplicados na obra na mesma operação. NÃO entram no estoque (ex.: concreto usinado, argamassa pronta, asfalto). Classificados automaticamente pela IA.
+                </p>
+              </div>
+            </button>
+            {showAplicDireta && (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-amber-50/30 border-b border-amber-100">
+                    <th className="text-left px-4 py-2 text-[11px] font-semibold text-amber-700 uppercase tracking-wide">Item</th>
+                    <th className="text-left px-3 py-2 text-[11px] font-semibold text-amber-700 uppercase tracking-wide">Categoria</th>
+                    <th className="text-left px-3 py-2 text-[11px] font-semibold text-amber-700 uppercase tracking-wide">Justificativa IA</th>
+                    <th className="px-4 py-2 text-[11px] font-semibold text-amber-700 uppercase tracking-wide text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {itensAplicDireta.map((it: any) => (
+                    <tr key={it.id} className="border-b border-amber-50 hover:bg-amber-50/30">
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-slate-800">{it.nome}</p>
+                          <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-amber-300">APLICAÇÃO DIRETA</span>
+                          {it.tipoControleClassificadoIa && (
+                            <span className="bg-violet-100 text-violet-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-violet-300 flex items-center gap-0.5">
+                              <Sparkles className="h-2.5 w-2.5" />IA
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">{it.unidade}</p>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {it.categoria ? <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">{it.categoria}</span> : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs text-slate-600 max-w-md">
+                        {it.tipoControleJustificativa || <span className="text-slate-400 italic">— sem justificativa —</span>}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-violet-700 border-violet-200 hover:bg-violet-50 text-xs"
+                            onClick={() => reclassificarMut.mutate({ itemId: it.id, companyId })}
+                            disabled={reclassificarMut.isPending}
+                            title="Reclassificar com IA"
+                          >
+                            {reclassificarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><RefreshCcw className="h-3.5 w-3.5 mr-1" />Reclassificar</>}
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => abrirHistorico(it)} title="Histórico de consumo">
+                            <History className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => abrirEditarItem(it)} title="Editar">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => excluirMut.mutate({ id: it.id })} title="Remover">
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Modal: Novo/Editar Item */}
@@ -435,6 +541,45 @@ export default function Almoxarifado() {
             <DialogTitle>{editandoItem ? "Editar Item" : "Novo Item de Estoque"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pb-2">
+            {/* Rev. 1607 — Classificação IA do tipo de controle (visível ao editar) */}
+            {editandoItem && (() => {
+              const it: any = [...itens, ...itensAplicDireta].find(x => x.id === editandoItem);
+              if (!it) return null;
+              const isAD = it.tipoControle === "aplicacao_direta";
+              return (
+                <div className={`rounded-lg border p-3 ${isAD ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"}`}>
+                  <div className="flex items-center gap-2">
+                    {isAD ? <Truck className="h-4 w-4 text-amber-600" /> : <Package className="h-4 w-4 text-emerald-600" />}
+                    <p className={`text-xs font-bold uppercase tracking-wide ${isAD ? "text-amber-800" : "text-emerald-800"}`}>
+                      {isAD ? "Aplicação Direta na obra" : "Estoque normal"}
+                    </p>
+                    {it.tipoControleClassificadoIa && (
+                      <span className="bg-violet-100 text-violet-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-violet-300 flex items-center gap-0.5">
+                        <Sparkles className="h-2.5 w-2.5" />IA
+                      </span>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="ml-auto h-6 px-2 text-[10px] text-violet-700 hover:bg-violet-100"
+                      onClick={() => reclassificarMut.mutate({ itemId: editandoItem, companyId })}
+                      disabled={reclassificarMut.isPending}
+                      title="Pedir à IA para reclassificar"
+                    >
+                      {reclassificarMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <><RefreshCcw className="h-3 w-3 mr-1" />Reclassificar IA</>}
+                    </Button>
+                  </div>
+                  {it.tipoControleJustificativa && (
+                    <p className="text-[11px] text-slate-600 mt-1.5 leading-snug">{it.tipoControleJustificativa}</p>
+                  )}
+                  {isAD && (
+                    <p className="text-[10px] text-amber-700 mt-1 italic">⚠ Este item NÃO entra no estoque. Recebimentos via OC geram movimentação de consumo direto na obra.</p>
+                  )}
+                </div>
+              );
+            })()}
+
             <div>
               <Label className="text-xs">Nome do Item *</Label>
               <Input value={formItem.nome} onChange={e => setFormItem(p => ({ ...p, nome: e.target.value }))} className="mt-1" placeholder="Ex: Cimento CP-II 50kg" />
@@ -672,12 +817,26 @@ export default function Almoxarifado() {
                     <tr key={m.id} className="border-b border-slate-50 hover:bg-slate-50/60">
                       <td className="px-3 py-2 text-xs text-slate-500">{m.criadoEm ? new Date(m.criadoEm).toLocaleDateString("pt-BR") : "—"}</td>
                       <td className="px-3 py-2 text-center">
-                        <Badge variant="outline" className={`text-[10px] ${m.tipo === "entrada" ? "border-emerald-300 text-emerald-700" : m.tipo === "saida" ? "border-orange-300 text-orange-700" : "border-blue-300 text-blue-700"}`}>
-                          {m.tipo === "entrada" ? "Entrada" : m.tipo === "saida" ? "Saída" : "Ajuste"}
-                        </Badge>
+                        {(() => {
+                          const t = m.tipo;
+                          const cfg =
+                            t === "entrada" ? { label: "Entrada", cls: "border-emerald-300 text-emerald-700" } :
+                            t === "saida" ? { label: "Saída", cls: "border-orange-300 text-orange-700" } :
+                            t === "consumo_direto" ? { label: "Aplicação Direta", cls: "border-amber-300 text-amber-700 bg-amber-50" } :
+                            t === "estorno_consumo_direto" ? { label: "Estorno Aplic. Direta", cls: "border-amber-300 text-amber-700" } :
+                            { label: "Ajuste", cls: "border-blue-300 text-blue-700" };
+                          return <Badge variant="outline" className={`text-[10px] ${cfg.cls}`}>{cfg.label}</Badge>;
+                        })()}
                       </td>
-                      <td className={`px-3 py-2 text-right font-semibold ${m.tipo === "saida" ? "text-orange-600" : "text-emerald-700"}`}>
-                        {m.tipo === "saida" ? "-" : "+"}{n(m.quantidade).toFixed(2)}
+                      <td className={`px-3 py-2 text-right font-semibold ${
+                        m.tipo === "saida" || m.tipo === "consumo_direto" ? "text-orange-600" :
+                        m.tipo === "estorno_consumo_direto" ? "text-amber-700" :
+                        "text-emerald-700"
+                      }`}>
+                        {(m.tipo === "saida" || m.tipo === "consumo_direto") ? "-" : "+"}{n(m.quantidade).toFixed(2)}
+                        {(m.tipo === "consumo_direto" || m.tipo === "estorno_consumo_direto") && (
+                          <span className="ml-1 text-[10px] text-slate-400 font-normal">(s/ saldo)</span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-xs text-slate-600">{m.obraNome || "—"}</td>
                       <td className="px-3 py-2 text-xs text-slate-500">{m.motivo || m.observacoes || "—"}</td>

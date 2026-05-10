@@ -5650,6 +5650,14 @@ export const almoxarifadoItens = pgTable("almoxarifado_itens", {
   // Rev. 1604 — preço estimado por IA (preenchimento em lote a partir do nome)
   precoPreenchidoIa:     boolean("preco_preenchido_ia").default(false),
   precoIaEm:             timestamp("preco_ia_em", { mode: 'string' }),
+  // Rev. 1607 — Tipo de controle do item (classificação automática por IA).
+  // 'estoque' (padrão): controla saldo no almoxarifado normalmente.
+  // 'aplicacao_direta': item recebido e aplicado na obra na mesma hora (ex.: concreto usinado,
+  // argamassa pronta, asfalto). NÃO entra no estoque, NÃO aparece na lista normal do almoxarifado,
+  // e o recebimento via OC gera movimentação "consumo direto" sem alterar saldo.
+  tipoControle:               varchar("tipo_controle", { length: 20 }).default("estoque"),
+  tipoControleClassificadoIa: boolean("tipo_controle_classificado_ia").default(false),
+  tipoControleJustificativa:  text("tipo_controle_justificativa"),
   criadoEm:             timestamp("criado_em", { mode: 'string' }).defaultNow().notNull(),
   atualizadoEm:         timestamp("atualizado_em", { mode: 'string' }).defaultNow().notNull(),
 });

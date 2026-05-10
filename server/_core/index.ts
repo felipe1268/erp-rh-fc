@@ -486,6 +486,15 @@ Regras:
           console.log(`[SyncSchema+] Colunas de rastreio (criado_por/atualizado_por) garantidas em almoxarifado_itens.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA almoxarifado_itens criado_por:`, e?.message || e); }
 
+        // Rev. 1607 — Tipo de controle do item (estoque vs aplicação direta classificado por IA)
+        try {
+          await db.execute(sql`ALTER TABLE almoxarifado_itens ADD COLUMN IF NOT EXISTS tipo_controle VARCHAR(20) DEFAULT 'estoque'`);
+          await db.execute(sql`ALTER TABLE almoxarifado_itens ADD COLUMN IF NOT EXISTS tipo_controle_classificado_ia BOOLEAN DEFAULT false`);
+          await db.execute(sql`ALTER TABLE almoxarifado_itens ADD COLUMN IF NOT EXISTS tipo_controle_justificativa TEXT`);
+          await db.execute(sql`UPDATE almoxarifado_itens SET tipo_controle = 'estoque' WHERE tipo_controle IS NULL`);
+          console.log(`[SyncSchema+] Colunas tipo_controle (IA) garantidas em almoxarifado_itens.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA almoxarifado_itens tipo_controle:`, e?.message || e); }
+
         // Data prevista de pagamento das medições PJ (forecast por contrato)
         try {
           await db.execute(sql`ALTER TABLE pj_payments ADD COLUMN IF NOT EXISTS data_prevista DATE`);

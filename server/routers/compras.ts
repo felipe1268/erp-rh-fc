@@ -42,6 +42,66 @@ import {
 } from "../../drizzle/schema";
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
+// Rev. 1607 — Classificador IA do tipo de controle do item de almoxarifado.
+// Decide se o item é de "estoque" (controle normal de saldo) ou "aplicacao_direta"
+// (recebido e aplicado na obra na mesma hora — concreto usinado, argamassa pronta,
+// asfalto a quente, fibras, aditivos químicos prontos para uso, locação de equipamento etc.).
+// Default seguro = "estoque" em caso de dúvida.
+async function classificarTipoControleIA(args: {
+  nome: string;
+  categoria?: string;
+  unidade?: string;
+}): Promise<{ tipoControle: "estoque" | "aplicacao_direta"; justificativa: string; confianca: "alta" | "media" | "baixa" }> {
+  const result = await invokeLLM({
+    messages: [{
+      role: "user",
+      content: `Você é um especialista em logística de obras de construção civil pesada e edificações no Brasil.
+
+Sua tarefa: classificar o item abaixo em um dos dois tipos de controle de almoxarifado:
+
+1) "estoque" → Item que é guardado no almoxarifado e tem controle de saldo (entrada/saída).
+   Ex.: cimento em sacos, areia ensacada, parafusos, tintas, ferramentas, EPIs, ferro, madeira,
+   tubos, conexões, registros, fios, lâmpadas, brita ensacada, materiais de pintura, miudezas.
+
+2) "aplicacao_direta" → Item recebido na obra e aplicado/consumido IMEDIATAMENTE,
+   que NÃO faz sentido guardar no almoxarifado porque tem cura, validade curtíssima
+   (perecível em horas), ou é entregue por caminhão direto no ponto de uso.
+   Ex.: concreto usinado (m³), argamassa industrializada pronta em silo, graute fluido pronto,
+   asfalto CBUQ a quente, emulsão asfáltica em obra, brita/areia a granel descarregada na pista,
+   solo-cimento usinado, gesso projetado em obra, jato de areia em obra, locação de bomba/grua/guindaste
+   por hora-máquina, serviços de bombeamento de concreto, mão-de-obra terceirizada.
+
+REGRA DE OURO: na dúvida, classifique como "estoque" (mais seguro — pode ser corrigido depois).
+Só use "aplicacao_direta" quando há ALTA confiança de que o item é consumido na hora.
+
+Item:
+- Nome: ${args.nome}
+${args.categoria ? `- Categoria: ${args.categoria}` : ""}
+${args.unidade ? `- Unidade: ${args.unidade}` : ""}
+
+Responda APENAS com um objeto JSON no formato:
+{
+  "tipoControle": "estoque" | "aplicacao_direta",
+  "justificativa": "<1 frase curta explicando o motivo>",
+  "confianca": "alta" | "media" | "baixa"
+}`,
+    }],
+    maxTokens: 200,
+  });
+  const text = (result.content ?? "").toString();
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("IA não retornou JSON válido");
+  const parsed = JSON.parse(match[0]);
+  const tipo = parsed.tipoControle === "aplicacao_direta" ? "aplicacao_direta" : "estoque";
+  // Por segurança, baixa confiança vira "estoque" para não bloquear o fluxo.
+  const tipoFinal = (tipo === "aplicacao_direta" && parsed.confianca === "baixa") ? "estoque" : tipo;
+  return {
+    tipoControle: tipoFinal,
+    justificativa: String(parsed.justificativa || "").slice(0, 500),
+    confianca: parsed.confianca === "alta" ? "alta" : parsed.confianca === "baixa" ? "baixa" : "media",
+  };
+}
+
 type InsumoWithAlloc = { alocacaoMat?: any; alocacaoMdo?: any; alocacaoEquip?: any; [k: string]: any };
 function filterInsumosByTipo(insumos: InsumoWithAlloc[], scTipo: string, incluirEquip = false): InsumoWithAlloc[] {
   return insumos.filter(i => {
@@ -1178,11 +1238,16 @@ export const comprasRouter = router({
 
   listarItens: protectedProcedure
     .input(z.object({
-      companyId:          z.number(),
-      obraId:             z.number().nullable().optional(),
-      busca:              z.string().optional(),
-      categoria:          z.string().optional(),
-      apenasAbaixoMinimo: z.boolean().optional(),
+      companyId:                z.number(),
+      obraId:                   z.number().nullable().optional(),
+      busca:                    z.string().optional(),
+      categoria:                z.string().optional(),
+      apenasAbaixoMinimo:       z.boolean().optional(),
+      // Rev. 1607 — Filtros do tipo de controle. Por padrão, oculta itens de
+      // "aplicação direta" (não fazem parte do estoque tradicional).
+      // Se `apenasAplicacaoDireta = true`, retorna SOMENTE esses itens.
+      incluirAplicacaoDireta:   z.boolean().optional(),
+      apenasAplicacaoDireta:    z.boolean().optional(),
     }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
@@ -1209,6 +1274,14 @@ export const comprasRouter = router({
         // Inclui itens do estoque central (obraId IS NULL) e dos obras permitidas.
         // Usar só inArray() excluiria os itens centrais porque NULL nunca satisfaz IN(...).
         conditions.push(or(isNull(almoxarifadoItens.obraId), inArray(almoxarifadoItens.obraId, allowed)));
+      }
+
+      // Rev. 1607 — Filtro do tipo de controle (estoque vs aplicação direta).
+      // Default: oculta aplicação direta. Se apenasAplicacaoDireta=true, mostra só esses.
+      if (input.apenasAplicacaoDireta) {
+        conditions.push(sql`${almoxarifadoItens.tipoControle} = 'aplicacao_direta'`);
+      } else if (!input.incluirAplicacaoDireta) {
+        conditions.push(sql`(${almoxarifadoItens.tipoControle} IS NULL OR ${almoxarifadoItens.tipoControle} <> 'aplicacao_direta')`);
       }
 
       const rows = await db.select().from(almoxarifadoItens)
@@ -1254,9 +1327,37 @@ export const comprasRouter = router({
       valorLocacaoMensal:    z.number().nullable().optional(),
       diasAlertaLocacao:     z.number().nullable().optional(),
       observacoesLocacao:    z.string().nullable().optional(),
+      // Rev. 1607 — Override manual do tipo de controle (admin). Quando ausente, IA classifica.
+      tipoControle:          z.enum(["estoque", "aplicacao_direta"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+
+      // Rev. 1607 — Classificação automática por IA do tipo de controle.
+      // Default seguro: 'estoque'. IA só decide 'aplicacao_direta' quando o item é claramente
+      // de aplicação imediata na obra (ex.: concreto usinado, argamassa pronta, asfalto a quente).
+      let tipoControle: "estoque" | "aplicacao_direta" = input.tipoControle ?? "estoque";
+      let tipoControleClassificadoIa = false;
+      let tipoControleJustificativa: string | null = null;
+      if (!input.tipoControle) {
+        try {
+          const cls = await classificarTipoControleIA({
+            nome: input.nome,
+            categoria: input.categoria ?? undefined,
+            unidade: input.unidade,
+          });
+          tipoControle = cls.tipoControle;
+          tipoControleClassificadoIa = true;
+          tipoControleJustificativa = cls.justificativa;
+        } catch (e: any) {
+          console.warn(`[criarItem] IA classificação falhou (default 'estoque'):`, e?.message || e);
+        }
+      }
+
+      // Rev. 1607 — Aplicação direta NÃO mantém saldo: força quantidadeAtual = 0
+      // mesmo se o usuário/IA tentou criar com saldo inicial.
+      const qtdInicial = tipoControle === "aplicacao_direta" ? 0 : (input.quantidadeAtual ?? 0);
+
       const [item] = await db.insert(almoxarifadoItens).values({
         companyId:             input.companyId,
         obraId:                input.obraId ?? null,
@@ -1264,7 +1365,7 @@ export const comprasRouter = router({
         unidade:               input.unidade,
         categoria:             input.categoria ?? null,
         codigoInterno:         input.codigoInterno ?? null,
-        quantidadeAtual:       String(input.quantidadeAtual ?? 0),
+        quantidadeAtual:       String(qtdInicial),
         quantidadeMinima:      String(input.quantidadeMinima ?? 0),
         observacoes:           input.observacoes ?? null,
         fotoUrl:               input.fotoUrl ?? null,
@@ -1277,10 +1378,64 @@ export const comprasRouter = router({
         valorLocacaoMensal:    input.valorLocacaoMensal != null ? String(input.valorLocacaoMensal) : null,
         diasAlertaLocacao:     input.diasAlertaLocacao ?? 7,
         observacoesLocacao:    input.observacoesLocacao ?? null,
+        tipoControle,
+        tipoControleClassificadoIa,
+        tipoControleJustificativa,
         criadoPorId:           ctx.user?.id ?? null,
         criadoPorNome:         ctx.user?.name || null,
       } as any).returning();
       return item;
+    }),
+
+  // Rev. 1607 — Reclassifica um item existente via IA (botão na UI; bom para backfill).
+  // Exige companyId para garantir isolamento por tenant (anti-IDOR).
+  reclassificarTipoControleIA: protectedProcedure
+    .input(z.object({ itemId: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+
+      // Tenant isolation — confirma que a empresa do item pertence ao usuário.
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      const allowedIds = allowedCompanies.map((c: any) => c.id);
+      if (!allowedIds.includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+      }
+
+      const [it] = await db.select().from(almoxarifadoItens).where(and(
+        eq(almoxarifadoItens.id, input.itemId),
+        eq(almoxarifadoItens.companyId, input.companyId),
+      ));
+      if (!it) throw new TRPCError({ code: "NOT_FOUND", message: "Item não encontrado nesta empresa" });
+
+      // Filtro adicional por obras permitidas (mesma regra de listarItens).
+      const allowedObras = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowedObras !== null && it.obraId !== null && !allowedObras.includes(it.obraId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta obra." });
+      }
+
+      const cls = await classificarTipoControleIA({
+        nome: it.nome,
+        categoria: it.categoria ?? undefined,
+        unidade: it.unidade,
+      });
+
+      // Se virou aplicação direta e ainda há saldo/movimentos não-zero, NÃO permite a troca
+      // sem reconciliação manual (evita "sumir" itens com estoque real).
+      const saldoAtual = n(it.quantidadeAtual);
+      if (cls.tipoControle === "aplicacao_direta" && saldoAtual > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `IA classificou como "Aplicação Direta", mas o item tem ${saldoAtual} ${it.unidade} em estoque. Zere o saldo manualmente antes de reclassificar.`,
+        });
+      }
+
+      await db.update(almoxarifadoItens).set({
+        tipoControle: cls.tipoControle,
+        tipoControleClassificadoIa: true,
+        tipoControleJustificativa: cls.justificativa,
+        atualizadoEm: new Date().toISOString(),
+      } as any).where(eq(almoxarifadoItens.id, input.itemId));
+      return cls;
     }),
 
   atualizarItem: protectedProcedure
@@ -6592,9 +6747,25 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             )).limit(1);
 
           let almoItemId: number;
+          let tipoControleItem: "estoque" | "aplicacao_direta" = "estoque";
           if (existing.length > 0) {
             almoItemId = existing[0].id;
+            tipoControleItem = ((existing[0] as any).tipoControle === "aplicacao_direta") ? "aplicacao_direta" : "estoque";
           } else {
+            // Rev. 1607 — IA classifica o tipo de controle ao criar item via OC entrega.
+            // Garante que itens como "Concreto Usinado FCK 25", "Argamassa pronta" etc. NÃO entrem
+            // no estoque automaticamente — eles geram apenas movimentação de consumo direto.
+            let cls: { tipoControle: "estoque" | "aplicacao_direta"; justificativa: string } | null = null;
+            try {
+              cls = await classificarTipoControleIA({
+                nome: item.descricao,
+                categoria: "Compras",
+                unidade: item.unidade ?? "un",
+              });
+            } catch (e: any) {
+              console.warn(`[OC entrega] IA classificação falhou (default 'estoque'):`, e?.message || e);
+            }
+            tipoControleItem = cls?.tipoControle ?? "estoque";
             const [novo] = await db.insert(almoxarifadoItens).values({
               companyId: oc.companyId,
               nome: item.descricao,
@@ -6602,29 +6773,51 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
               categoria: "Compras",
               ativo: true,
               obraId: oc.obraId ?? null,
-            }).returning();
+              tipoControle: tipoControleItem,
+              tipoControleClassificadoIa: !!cls,
+              tipoControleJustificativa: cls?.justificativa ?? null,
+            } as any).returning();
             almoItemId = novo.id;
           }
 
-          // cria movimentação de entrada
-          await db.insert(almoxarifadoMovimentacoes).values({
-            companyId: oc.companyId,
-            itemId: almoItemId,
-            tipo: "entrada",
-            quantidade: String(qtd),
-            obraId: oc.obraId ?? null,
-            obraNome: obraNome ?? null,
-            motivo: `OC ${oc.numeroOc} entregue`,
-            usuarioId,
-            usuarioNome,
-            observacoes: `Entrada automática via Ordem de Compra ${oc.numeroOc}`,
-          });
-
-          // atualiza quantidade no almoxarifado
-          await db.update(almoxarifadoItens).set({
-            quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric + ${qtd}`,
-            atualizadoEm: new Date().toISOString(),
-          }).where(eq(almoxarifadoItens.id, almoItemId));
+          if (tipoControleItem === "aplicacao_direta") {
+            // Rev. 1607 — Item de aplicação direta na obra: NÃO entra no estoque.
+            // Registra apenas movimentação de "consumo_direto" para audit trail
+            // (entrada+saída no mesmo instante, saldo permanece zero).
+            await db.insert(almoxarifadoMovimentacoes).values({
+              companyId: oc.companyId,
+              itemId: almoItemId,
+              tipo: "consumo_direto",
+              quantidade: String(qtd),
+              obraId: oc.obraId ?? null,
+              obraNome: obraNome ?? null,
+              motivo: `OC ${oc.numeroOc} — aplicação direta na obra (IA)`,
+              usuarioId,
+              usuarioNome,
+              observacoes: `Item classificado pela IA como aplicação direta — recebido e aplicado na obra na mesma operação. Não passa pelo almoxarifado.`,
+            });
+            await db.update(almoxarifadoItens).set({
+              atualizadoEm: new Date().toISOString(),
+            }).where(eq(almoxarifadoItens.id, almoItemId));
+          } else {
+            // Item de estoque normal — fluxo original (entrada + atualiza saldo).
+            await db.insert(almoxarifadoMovimentacoes).values({
+              companyId: oc.companyId,
+              itemId: almoItemId,
+              tipo: "entrada",
+              quantidade: String(qtd),
+              obraId: oc.obraId ?? null,
+              obraNome: obraNome ?? null,
+              motivo: `OC ${oc.numeroOc} entregue`,
+              usuarioId,
+              usuarioNome,
+              observacoes: `Entrada automática via Ordem de Compra ${oc.numeroOc}`,
+            });
+            await db.update(almoxarifadoItens).set({
+              quantidadeAtual: sql`${almoxarifadoItens.quantidadeAtual}::numeric + ${qtd}`,
+              atualizadoEm: new Date().toISOString(),
+            }).where(eq(almoxarifadoItens.id, almoItemId));
+          }
 
           // atualiza quantidadeEntregue no item da OC
           await db.update(comprasOrdensItens).set({
@@ -6724,25 +6917,32 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
             )).limit(1);
 
           if (almoItem) {
-            // cria movimentação de saída (estorno)
+            const isAplicDireta = (almoItem as any).tipoControle === "aplicacao_direta";
+
+            // Rev. 1607 — Item de aplicação direta: apenas registra estorno do consumo,
+            // NÃO mexe em saldo (item nunca esteve em estoque).
             await db.insert(almoxarifadoMovimentacoes).values({
               companyId: oc.companyId,
               itemId: almoItem.id,
-              tipo: "saida",
+              tipo: isAplicDireta ? "estorno_consumo_direto" : "saida",
               quantidade: String(qtdEntregue),
               obraId: oc.obraId ?? null,
               obraNome: obraNome ?? null,
               motivo: `Estorno OC ${oc.numeroOc} — ${input.motivo}`,
               usuarioId,
               usuarioNome,
-              observacoes: `Estorno automático de recebimento da Ordem de Compra ${oc.numeroOc}`,
+              observacoes: isAplicDireta
+                ? `Estorno do consumo direto registrado pela OC ${oc.numeroOc} (item de aplicação direta — não afeta estoque)`
+                : `Estorno automático de recebimento da Ordem de Compra ${oc.numeroOc}`,
             });
 
-            // decrementa quantidade no almoxarifado (não negativa)
-            await db.update(almoxarifadoItens).set({
-              quantidadeAtual: sql`GREATEST(0, ${almoxarifadoItens.quantidadeAtual}::numeric - ${qtdEntregue})`,
-              atualizadoEm: new Date().toISOString(),
-            }).where(eq(almoxarifadoItens.id, almoItem.id));
+            if (!isAplicDireta) {
+              // decrementa quantidade no almoxarifado (não negativa) somente para estoque normal
+              await db.update(almoxarifadoItens).set({
+                quantidadeAtual: sql`GREATEST(0, ${almoxarifadoItens.quantidadeAtual}::numeric - ${qtdEntregue})`,
+                atualizadoEm: new Date().toISOString(),
+              }).where(eq(almoxarifadoItens.id, almoItem.id));
+            }
           }
 
           // limpa quantidadeEntregue no item da OC
