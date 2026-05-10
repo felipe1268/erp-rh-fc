@@ -426,7 +426,13 @@ Regras:
   }
 
   const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
+  // Em produção (Cloud Run / Autoscale) é obrigatório escutar EXATAMENTE
+  // na PORT recebida do ambiente e bind em 0.0.0.0; senão o health check
+  // falha e o deploy é rejeitado. O fallback de "achar porta livre" é só
+  // pra dev quando a 3000 está ocupada.
+  const port = process.env.NODE_ENV === "production"
+    ? preferredPort
+    : await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
@@ -436,8 +442,8 @@ Regras:
   server.keepAliveTimeout = 65000;
   server.headersTimeout = 70000;
 
-  server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+  server.listen(port, "0.0.0.0", () => {
+    console.log(`Server running on http://0.0.0.0:${port}/`);
     // Bootstrap admin user and default company from env vars (Railway / fresh DB)
     import("./initSetup").then(m => m.initSetup()).catch(e => console.error("[InitSetup] Falha ao iniciar:", e));
     // Sincronizar revisões do changelog com o banco de dados
