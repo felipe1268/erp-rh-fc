@@ -11173,4 +11173,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 13:00:00",
   },
+  {
+    version: 1575,
+    titulo: "Portal do Cliente — Beacon do tour não sobrepõe mais a saudação",
+    descricao: "O primeiro passo do tour guiado de boas-vindas estava ancorado em `.tour-hub-saudacao` (o card central com 'Bom dia, FELIPE'). Em alguns navegadores (notadamente iPad Safari) o react-joyride exibe um beacon/indicador no canto do alvo do passo atual mesmo com `disableBeacon: true`, e essa bolinha caía sobre o nome do usuário. Movemos a âncora do 1º passo para o logo do cabeçalho (`.tour-hub-brand`) — sempre visível em mobile e desktop, e fora da área de conteúdo principal. Bonus: adicionado `spotlightPadding: 6` e `floaterProps.disableAnimation: true` no Joyride para reduzir flicker visual durante a transição entre passos.",
+    tipo: "bugfix",
+    modulos: "Portal Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 14:00:00",
+  },
 ];

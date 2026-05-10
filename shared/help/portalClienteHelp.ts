@@ -234,7 +234,10 @@ export type TourStep = {
 
 export const PORTAL_CLIENTE_TOUR: TourStep[] = [
   {
-    target: ".tour-hub-saudacao",
+    // Rev. 1575 — Ancoramos no logo do cabeçalho (sempre visível, mobile e
+    // desktop) para que o spotlight/beacon do Joyride NÃO sobreponha a
+    // saudação ("Bom dia, FELIPE") nem o card central da Hero.
+    target: ".tour-hub-brand",
     title: "Bem-vindo ao Portal do Cliente! 👋",
     content:
       "Aqui você acompanha sua obra de ponta a ponta — cronograma, documentos e avaliação. Vou te mostrar em 30 segundos como tudo funciona.",

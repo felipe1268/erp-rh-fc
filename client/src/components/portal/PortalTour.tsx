@@ -81,6 +81,8 @@ export function PortalTour({ forceStart = false, onClose, userName }: { forceSta
       disableScrolling={false}
       disableOverlayClose
       hideCloseButton={false}
+      spotlightPadding={6}
+      floaterProps={{ disableAnimation: true }}
       callback={handleCallback}
       locale={{
         back: "Voltar",

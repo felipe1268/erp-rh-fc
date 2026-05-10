@@ -212,7 +212,7 @@ export default function PortalHubCliente() {
           boxShadow: "0 1px 12px rgba(0,0,0,0.03)",
         }}>
           <div className="max-w-[1440px] mx-auto px-6 lg:px-10 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
+            <div className="tour-hub-brand flex items-center gap-3 min-w-0">
               <div className="relative shrink-0">
                 <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-[#1B2A4A] to-[#2C3E6A] flex items-center justify-center shadow-lg shadow-[#1B2A4A]/20">
                   <Layers className="h-5 w-5 text-white" />
