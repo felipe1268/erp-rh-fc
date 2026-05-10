@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1594,
+    titulo: "Portal do Cliente (Admin) — Apagar mensagens do mural de Comentários (Admin Master)",
+    descricao: "A aba 'Comentários' em Acessos do Portal (ClientesPortalAdmin) ganhou um botão 'Apagar' (vermelho, com ícone de lixeira) ao lado do 'Responder' em cada mensagem. Visível APENAS para usuários com role 'admin_master', com confirmação prévia mostrando uma prévia da mensagem. Backend: novo procedure portalExterno.admin.deletarComentarioCliente (hard-delete em cliente_comentarios) que valida (a) role admin_master e (b) que a mensagem pertence ao companyId selecionado, evitando vazamento entre tenants. O mural é uma caixa de mensagens viva — diferente das avaliações anônimas que ficam soft-deleted via cancelada_em — então a exclusão é definitiva. Após apagar, a lista é invalidada automaticamente.",
+    tipo: 'feature',
+    modulos: 'Portal do Cliente, Comentários, Admin',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-12 09:30:00',
+  },
+  {
     version: 1593,
     titulo: "Planejamento — nova aba 'Avaliação Cliente' dentro da obra (NPS filtrado por obraId)",
     descricao: "O módulo Planejamento ganha uma nova aba dentro de cada obra (PlanejamentoDetalhe → 'Avaliação Cliente') que mostra os indicadores da Avaliação Anônima do Cliente filtrados APENAS para aquela obra. Backend: o endpoint portalExterno.admin.dashboardAvaliacoesCliente recebeu um parâmetro opcional obraId que filtra as linhas por cliente_avaliacoes.obraId — quando ausente, mantém o comportamento consolidado por empresa (usado pelo módulo Clientes do Portal). Frontend: novo componente AvaliacaoClienteObraTab que reaproveita o mesmo dashboard (KPIs NPS, médias por critério incluindo Escritório Central e Faturamento, recomendação Sim/Talvez/Não, tabela Por mês/ano e lista de avaliações recebidas com Pontos Fortes/Fracos), agora contextualizado na obra. A aba é registrada em TAB_DEFS, no Tab union type e em TAB_TO_PAGEID ('avaliacao_cliente'), respeitando permissões. Quando o projeto não estiver vinculado a uma obra cadastrada (proj.obraId vazio), exibe aviso amigável pedindo para vincular. Cancelamento de avaliação continua restrito ao admin master via Clientes do Portal.",

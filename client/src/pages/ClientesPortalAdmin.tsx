@@ -191,6 +191,20 @@ export default function ClientesPortalAdmin() {
     onError: (e) => toast.error(e.message),
   });
 
+  // Rev. 1594 — Apagar mensagem (somente Admin Master)
+  const deletarComentarioMut = trpc.portalExterno.admin.deletarComentarioCliente.useMutation({
+    onSuccess: () => {
+      toast.success("Mensagem apagada");
+      utils.portalExterno.admin.listarComentariosCliente.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const handleDeletarComentario = (m: any) => {
+    const previa = (m.mensagem || "").trim().slice(0, 80);
+    if (!confirm(`Apagar esta mensagem?\n\n"${previa}${(m.mensagem || "").length > 80 ? "…" : ""}"\n\nEsta ação é permanente e não pode ser desfeita.`)) return;
+    deletarComentarioMut.mutate({ id: m.id, companyId });
+  };
+
   // ===== Filtragem clientes =====
   const filtrados = useMemo(() => (clientesList as any[]).filter((c) => {
     const t = busca.toLowerCase();
@@ -373,11 +387,25 @@ export default function ClientesPortalAdmin() {
                             </div>
                             <p className="text-sm text-slate-700 whitespace-pre-wrap">{m.mensagem}</p>
                           </div>
-                          {isCli && (
-                            <Button size="sm" variant="outline" onClick={() => { setRespondendo({ ...m, clienteRazao: cli?.razaoSocial }); setRespMsg(""); }} className="gap-1.5 shrink-0">
-                              <Reply className="w-3.5 h-3.5" /> Responder
-                            </Button>
-                          )}
+                          <div className="flex items-center gap-2 shrink-0">
+                            {isCli && (
+                              <Button size="sm" variant="outline" onClick={() => { setRespondendo({ ...m, clienteRazao: cli?.razaoSocial }); setRespMsg(""); }} className="gap-1.5">
+                                <Reply className="w-3.5 h-3.5" /> Responder
+                              </Button>
+                            )}
+                            {isMaster && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDeletarComentario(m)}
+                                disabled={deletarComentarioMut.isPending}
+                                className="gap-1.5 text-rose-600 hover:bg-rose-50 hover:text-rose-700 border-rose-200"
+                                title="Apagar mensagem (Admin Master)"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Apagar
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );

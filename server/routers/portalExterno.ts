@@ -642,6 +642,28 @@ export const portalExternoRouter = router({
       return { success: true };
     }),
 
+    // Rev. 1594 — Apagar mensagem do mural de comentários do Portal do Cliente.
+    // Restrito a Admin Master (mesma política de cancelarAvaliacaoCliente).
+    // Hard-delete: o mural é uma caixa de mensagens viva, não há valor de
+    // auditoria em manter mensagens apagadas (diferente das avaliações
+    // anônimas, que ficam soft-deleted via cancelada_em).
+    deletarComentarioCliente: protectedProcedure.input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode apagar mensagens." });
+      }
+      const db = (await getDb())!;
+      const [msg] = await db.select().from(clienteComentarios).where(eq(clienteComentarios.id, input.id));
+      if (!msg) throw new TRPCError({ code: "NOT_FOUND", message: "Mensagem não encontrada." });
+      if (msg.companyId !== input.companyId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Mensagem não pertence à empresa selecionada." });
+      }
+      await db.delete(clienteComentarios).where(eq(clienteComentarios.id, input.id));
+      return { success: true };
+    }),
+
     responderComentarioCliente: protectedProcedure.input(z.object({
       companyId: z.number(),
       clienteId: z.number(),
