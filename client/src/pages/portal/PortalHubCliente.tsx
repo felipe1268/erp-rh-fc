@@ -225,7 +225,7 @@ export default function PortalHubCliente() {
               </div>
             </div>
 
-            <div className="tour-hub-brand flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <div className="hidden sm:flex items-center gap-2 bg-white/50 border border-white/60 rounded-xl px-3 py-1.5 backdrop-blur-sm max-w-xs">
                 <Building2 className="h-4 w-4 text-gray-400 shrink-0" />
                 <span className="text-xs font-semibold text-gray-700 truncate">{nomeEmpresa}</span>
@@ -359,6 +359,20 @@ export default function PortalHubCliente() {
                   </p>
                 </div>
               )}
+              {/* Rev. 1579 — Âncora invisível para o beacon do tour, posicionada
+                  na área vazia ABAIXO E À DIREITA dos cards de módulos, conforme
+                  pedido do usuário. Não interfere em nada visualmente. */}
+              <div
+                className="tour-hub-brand pointer-events-none"
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  right: 80,
+                  top: 360,
+                  width: 12,
+                  height: 12,
+                }}
+              />
             </div>
           </div>
 

@@ -11209,4 +11209,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 17:00:00",
   },
+  {
+    version: 1579,
+    titulo: "Portal do Cliente — Beacon do tour reposicionado para área vazia à direita dos cards",
+    descricao: "Refinamento da posição do beacon (Rev. 1575/1577). O usuário pediu, com bolinha vermelha desenhada na imagem, que o beacon fique na área VAZIA do lado DIREITO, abaixo dos cards de módulos. Solução: criamos uma âncora invisível (`<div class='tour-hub-brand'>` 12x12, position absolute, right: 80px, top: 360px, pointer-events: none, aria-hidden) na área da Hero apontada e removemos a classe `.tour-hub-brand` da barra de ações do cabeçalho. Resultado: a bolinha do tour aparece exatamente no canto vazio indicado, sem sobrepor saudação, logo, robô, cards de módulos nem botões de ação.",
+    tipo: "bugfix",
+    modulos: "Portal Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 18:00:00",
+  },
 ];
