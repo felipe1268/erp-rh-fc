@@ -1985,11 +1985,13 @@ export const financialRouter = router({
     const ids = resolveCompanyIds(input);
     const res = await dbExecute(db,
       `SELECT id, obra_id AS "obraId", obra_nome AS "obraNome", descricao,
-              conta_nome AS "contaNome", valor_previsto AS "valorPrevisto",
+              conta_id AS "contaId", conta_nome AS "contaNome",
+              valor_previsto AS "valorPrevisto",
               valor_realizado AS "valorRealizado", status,
               data_vencimento AS "dataVencimento", data_pagamento AS "dataPagamento",
               forma_pagamento AS "formaPagamento",
-              origem_modulo AS "origemModulo", origem_descricao AS "origemDescricao",
+              origem_modulo AS "origemModulo", origem_id AS "origemId",
+              origem_descricao AS "origemDescricao",
               tipo,
               CASE WHEN data_vencimento < CURRENT_DATE AND status != 'pago' THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
        FROM financial_entries

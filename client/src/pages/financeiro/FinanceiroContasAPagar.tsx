@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, Fragment } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,14 +11,23 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
 import {
-  CheckCircle, AlertTriangle, Search, Calendar, ShoppingCart,
-  ChevronLeft, ChevronRight, CreditCard, Banknote, Clock
+  CheckCircle, AlertTriangle, Search, Calendar, ShoppingCart, FileText,
+  ChevronLeft, ChevronRight, CreditCard, Banknote, Clock, Hash, Tag,
+  Users, Truck, Briefcase, Scale, Package, Receipt, Wallet
 } from "lucide-react";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+}
+
+// Rev. 1619 — dd/MM/aaaa (regra de ouro do projeto)
+function fmtDateBR(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—";
+  const s = String(dateStr).slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.split("-").reverse().join("/");
+  return s;
 }
 
 const ORIGEM_LABELS: Record<string, string> = {
@@ -33,6 +42,91 @@ const ORIGEM_LABELS: Record<string, string> = {
   almoxarifado: "Almoxarifado",
   manual: "Manual",
 };
+
+const ORIGEM_ICONS: Record<string, any> = {
+  compras: ShoppingCart,
+  folha: Users,
+  pj: Briefcase,
+  terceiros: Users,
+  frota: Truck,
+  beneficios: Receipt,
+  tributario: Scale,
+  juridico: Scale,
+  almoxarifado: Package,
+  manual: Wallet,
+};
+
+const ORIGEM_COLORS: Record<string, string> = {
+  compras: "bg-blue-50 text-blue-700 border-blue-200",
+  folha: "bg-purple-50 text-purple-700 border-purple-200",
+  pj: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  terceiros: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  frota: "bg-amber-50 text-amber-700 border-amber-200",
+  beneficios: "bg-pink-50 text-pink-700 border-pink-200",
+  tributario: "bg-red-50 text-red-700 border-red-200",
+  juridico: "bg-rose-50 text-rose-700 border-rose-200",
+  almoxarifado: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  manual: "bg-gray-50 text-gray-700 border-gray-200",
+};
+
+// Rev. 1619 — Extrai nº OC/OS/MED/Folha de origem ou descrição
+function extractOcNumero(c: any): string {
+  const candidates = [c.origemDescricao, c.descricao, c.contaNome].filter(Boolean) as string[];
+  for (const txt of candidates) {
+    // OC-2026-0078, OS-123, MED-2026-012, NF 1234, SC-2026-0001
+    const m = txt.match(/\b(OC|OS|MED|SC|NF|PO|RC|RPS)[\s-]*\d{2,4}[\s/-]*\d+\b/i);
+    if (m) return m[0].toUpperCase().replace(/\s+/g, "-").replace(/\/+/g, "-");
+  }
+  // Fallbacks por origem + id
+  if (c.origemModulo === "folha" && c.origemId) {
+    const ref = c.dataVencimento ? c.dataVencimento.slice(0, 7).split("-").reverse().join("/") : "";
+    return `FOLHA${ref ? "-" + ref : ""}`;
+  }
+  if (c.origemModulo === "pj" && c.origemId) return `PJ-${c.origemId}`;
+  if (c.origemModulo === "frota" && c.origemId) return `FROTA-${c.origemId}`;
+  if (c.origemModulo === "terceiros" && c.origemId) return `MED-${c.origemId}`;
+  if (c.origemModulo === "tributario") return `TRIB${c.origemId ? "-" + c.origemId : ""}`;
+  if (c.origemModulo === "beneficios" && c.origemId) return `BEN-${c.origemId}`;
+  if (c.origemModulo === "almoxarifado" && c.origemId) return `ALM-${c.origemId}`;
+  if (c.origemId) return `#${c.origemId}`;
+  return "—";
+}
+
+// Rev. 1619 — Descrição com fallback inteligente
+function describeEntry(c: any): string {
+  const desc = (c.descricao ?? "").trim();
+  if (desc && desc !== "—") return desc;
+  const orig = (c.origemDescricao ?? "").trim();
+  if (orig) return orig;
+  if (c.contaNome && c.obraNome) return `${c.contaNome} — ${c.obraNome}`;
+  if (c.contaNome) return c.contaNome;
+  if (c.obraNome) return c.obraNome;
+  if (c.origemModulo) return `Lançamento ${ORIGEM_LABELS[c.origemModulo] ?? c.origemModulo}`;
+  return "—";
+}
+
+// Rev. 1619 — Categoria (plano de contas) + fallback por origem
+function categoriaFor(c: any): string {
+  if (c.contaNome && String(c.contaNome).trim()) return c.contaNome;
+  return ORIGEM_LABELS[c.origemModulo] ?? "Sem categoria";
+}
+
+// Rev. 1619 — Agrupamento por horizonte de vencimento (gestão de caixa Bragg/Brealey)
+function bucketKey(c: any, hojeStr: string): { key: string; order: number; label: string } {
+  if (c.status === "pago") return { key: "pago", order: 9, label: "Pagos no mês" };
+  if (!c.dataVencimento) return { key: "sem_data", order: 8, label: "Sem data definida" };
+  const venc = c.dataVencimento.slice(0, 10);
+  if (venc < hojeStr) return { key: "vencidas", order: 0, label: "Vencidas" };
+  if (venc === hojeStr) return { key: "hoje", order: 1, label: "Vence hoje" };
+  // Esta semana = próximos 7 dias incluindo hoje
+  const hoje = new Date(hojeStr + "T00:00:00");
+  const v = new Date(venc + "T00:00:00");
+  const diff = Math.round((v.getTime() - hoje.getTime()) / 86400000);
+  if (diff <= 7) return { key: "semana", order: 2, label: "Esta semana (7 dias)" };
+  if (diff <= 15) return { key: "quinzena", order: 3, label: "Próximos 15 dias" };
+  if (diff <= 30) return { key: "mes", order: 4, label: "Próximos 30 dias" };
+  return { key: "depois", order: 5, label: "Após 30 dias" };
+}
 
 function getMesFromDate(dateStr: string | null | undefined): number | null {
   if (!dateStr) return null;
@@ -101,11 +195,35 @@ export default function FinanceiroContasAPagar() {
       list = list.filter((c: any) =>
         (c.descricao ?? "").toLowerCase().includes(q) ||
         (c.contaNome ?? "").toLowerCase().includes(q) ||
-        (c.obraNome ?? "").toLowerCase().includes(q)
+        (c.obraNome ?? "").toLowerCase().includes(q) ||
+        (c.origemDescricao ?? "").toLowerCase().includes(q) ||
+        extractOcNumero(c).toLowerCase().includes(q)
       );
     }
-    return list;
-  }, [mesData, statusFilter, origemFilter, search]);
+    // Ordena por: bucket (vencidas primeiro) → data → valor desc
+    return list.slice().sort((a: any, b: any) => {
+      const ba = bucketKey(a, hojeStr).order;
+      const bb = bucketKey(b, hojeStr).order;
+      if (ba !== bb) return ba - bb;
+      const da = (a.dataVencimento || "9999-12-31").slice(0, 10);
+      const db = (b.dataVencimento || "9999-12-31").slice(0, 10);
+      if (da !== db) return da.localeCompare(db);
+      return Number(b.valorPrevisto ?? 0) - Number(a.valorPrevisto ?? 0);
+    });
+  }, [mesData, statusFilter, origemFilter, search, hojeStr]);
+
+  // Rev. 1619 — agrupamento por horizonte de vencimento (cabeçalhos sticky)
+  const grupos = useMemo(() => {
+    const map = new Map<string, { label: string; order: number; items: any[]; total: number }>();
+    for (const c of filtered) {
+      const b = bucketKey(c, hojeStr);
+      if (!map.has(b.key)) map.set(b.key, { label: b.label, order: b.order, items: [], total: 0 });
+      const g = map.get(b.key)!;
+      g.items.push(c);
+      g.total += Number(c.valorPrevisto ?? 0);
+    }
+    return Array.from(map.values()).sort((a, b) => a.order - b.order);
+  }, [filtered, hojeStr]);
 
   const pendentes = mesData.filter((c: any) => c.status !== "pago");
   const pagos = mesData.filter((c: any) => c.status === "pago");
@@ -261,71 +379,130 @@ export default function FinanceiroContasAPagar() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr>
-                      {["Descrição / Obra","Origem","Vencimento","Valor","Status",""].map(h => (
-                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">{h}</th>
-                      ))}
+                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap"><span className="inline-flex items-center gap-1"><Calendar className="w-3 h-3" />Data</span></th>
+                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap"><span className="inline-flex items-center gap-1"><Hash className="w-3 h-3" />Nº OC/OS</span></th>
+                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide">Descrição</th>
+                      <th className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap"><span className="inline-flex items-center gap-1"><Tag className="w-3 h-3" />Categoria</span></th>
+                      <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Valor</th>
+                      <th className="px-3 py-2.5 text-center text-[11px] font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Status</th>
+                      <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-gray-600 uppercase tracking-wide w-24">Ações</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {filtered.map((c: any) => {
-                      const vencida = c.dataVencimento && c.dataVencimento < hojeStr && c.status !== "pago";
-                      return (
-                        <tr key={c.id} className={`hover:bg-gray-50 ${vencida ? "bg-red-50/30" : ""}`}>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-gray-800 text-sm">{c.descricao ?? c.contaNome ?? "—"}</p>
+                  <tbody>
+                    {grupos.map((g) => (
+                      <Fragment key={g.label}>
+                        {/* Cabeçalho de grupo */}
+                        <tr className="bg-gradient-to-r from-slate-100 to-transparent border-y border-slate-200">
+                          <td colSpan={7} className="px-3 py-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className={`text-xs font-semibold uppercase tracking-wide ${
+                                g.order === 0 ? "text-red-700" :
+                                g.order === 1 ? "text-orange-700" :
+                                g.order === 2 ? "text-amber-700" :
+                                g.order === 9 ? "text-green-700" :
+                                "text-slate-700"
+                              }`}>
+                                {g.order === 0 && <AlertTriangle className="w-3 h-3 inline mr-1" />}
+                                {g.order === 1 && <Clock className="w-3 h-3 inline mr-1" />}
+                                {g.order === 9 && <CheckCircle className="w-3 h-3 inline mr-1" />}
+                                {g.label} <span className="text-slate-400 font-normal ml-1">· {g.items.length} {g.items.length === 1 ? "conta" : "contas"}</span>
+                              </span>
+                              <span className="text-xs font-bold text-slate-700">{formatBRL(g.total)}</span>
                             </div>
-                            {c.obraNome && <p className="text-xs text-gray-400 mt-0.5">{c.obraNome}</p>}
-                          </td>
-                          <td className="px-4 py-3">
-                            {c.origemModulo && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600 border border-gray-200">
-                                {c.origemModulo === "compras" && <ShoppingCart className="w-2.5 h-2.5" />}
-                                {ORIGEM_LABELS[c.origemModulo] ?? c.origemModulo}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-xs">
-                            {c.dataVencimento ? (
-                              <span className={vencida ? "text-red-600 font-semibold" : "text-gray-600"}>
-                                {c.dataVencimento}
-                                {vencida && <span className="block text-red-500">{c.diasAtraso}d atraso</span>}
-                              </span>
-                            ) : <span className="text-gray-400">Sem data</span>}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`font-semibold text-sm ${vencida ? "text-red-700" : c.status === "pago" ? "text-green-700" : "text-orange-700"}`}>
-                              {formatBRL(Number(c.valorPrevisto ?? 0))}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            {c.status === "pago" ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                                <CheckCircle className="w-3 h-3" />Pago
-                              </span>
-                            ) : vencida ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                                <AlertTriangle className="w-3 h-3" />Vencido
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
-                                <Clock className="w-3 h-3" />A Pagar
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            {c.status !== "pago" && (
-                              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-7 px-2 text-xs"
-                                onClick={() => setShowPay(c)}>
-                                <CheckCircle className="w-3 h-3 mr-1" />Pagar
-                              </Button>
-                            )}
                           </td>
                         </tr>
-                      );
-                    })}
+                        {g.items.map((c: any) => {
+                          const vencida = c.dataVencimento && c.dataVencimento.slice(0,10) < hojeStr && c.status !== "pago";
+                          const Icon = ORIGEM_ICONS[c.origemModulo] ?? FileText;
+                          const colorCls = ORIGEM_COLORS[c.origemModulo] ?? "bg-gray-50 text-gray-700 border-gray-200";
+                          const oc = extractOcNumero(c);
+                          const desc = describeEntry(c);
+                          const cat = categoriaFor(c);
+                          return (
+                            <tr key={c.id} className={`hover:bg-slate-50 border-b border-slate-100 ${vencida ? "bg-red-50/30" : ""}`}>
+                              {/* Data */}
+                              <td className="px-3 py-2.5 whitespace-nowrap">
+                                {c.dataVencimento ? (
+                                  <div className="flex flex-col leading-tight">
+                                    <span className={`text-sm font-semibold tabular-nums ${vencida ? "text-red-700" : c.status === "pago" ? "text-green-700" : "text-slate-800"}`}>
+                                      {fmtDateBR(c.dataVencimento)}
+                                    </span>
+                                    {vencida && <span className="text-[10px] text-red-500 font-medium">{c.diasAtraso}d atraso</span>}
+                                    {!vencida && c.status === "pago" && c.dataPagamento && (
+                                      <span className="text-[10px] text-green-600">pago {fmtDateBR(c.dataPagamento)}</span>
+                                    )}
+                                    {!vencida && c.status !== "pago" && c.dataVencimento.slice(0,10) === hojeStr && (
+                                      <span className="text-[10px] text-orange-600 font-medium">vence hoje</span>
+                                    )}
+                                  </div>
+                                ) : <span className="text-xs text-gray-400">Sem data</span>}
+                              </td>
+                              {/* Nº OC/OS */}
+                              <td className="px-3 py-2.5 whitespace-nowrap">
+                                <span className="text-xs font-mono font-semibold text-slate-700 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
+                                  {oc}
+                                </span>
+                              </td>
+                              {/* Descrição */}
+                              <td className="px-3 py-2.5 max-w-md">
+                                <p className="text-sm font-medium text-slate-800 truncate" title={desc}>{desc}</p>
+                                {c.obraNome && (
+                                  <p className="text-[11px] text-slate-400 truncate" title={c.obraNome}>📍 {c.obraNome}</p>
+                                )}
+                              </td>
+                              {/* Categoria */}
+                              <td className="px-3 py-2.5">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-xs font-medium text-slate-700 truncate max-w-[180px]" title={cat}>{cat}</span>
+                                  {c.origemModulo && (
+                                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border self-start ${colorCls}`}>
+                                      <Icon className="w-2.5 h-2.5" />
+                                      {ORIGEM_LABELS[c.origemModulo] ?? c.origemModulo}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              {/* Valor */}
+                              <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                                <span className={`text-sm font-bold tabular-nums ${vencida ? "text-red-700" : c.status === "pago" ? "text-green-700" : "text-slate-800"}`}>
+                                  {formatBRL(Number(c.valorPrevisto ?? 0))}
+                                </span>
+                                {c.status === "pago" && c.valorRealizado && Number(c.valorRealizado) !== Number(c.valorPrevisto) && (
+                                  <div className="text-[10px] text-green-600">pago: {formatBRL(Number(c.valorRealizado))}</div>
+                                )}
+                              </td>
+                              {/* Status */}
+                              <td className="px-3 py-2.5 text-center">
+                                {c.status === "pago" ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-100 text-green-700 border border-green-200">
+                                    <CheckCircle className="w-3 h-3" />Pago
+                                  </span>
+                                ) : vencida ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700 border border-red-200">
+                                    <AlertTriangle className="w-3 h-3" />Vencido
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 text-orange-700 border border-orange-200">
+                                    <Clock className="w-3 h-3" />A Pagar
+                                  </span>
+                                )}
+                              </td>
+                              {/* Ações */}
+                              <td className="px-3 py-2.5 text-right">
+                                {c.status !== "pago" && (
+                                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-7 px-2.5 text-xs"
+                                    onClick={() => setShowPay(c)}>
+                                    <CheckCircle className="w-3 h-3 mr-1" />Pagar
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </Fragment>
+                    ))}
                   </tbody>
                 </table>
               </div>
