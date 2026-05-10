@@ -11191,4 +11191,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 15:00:00",
   },
+  {
+    version: 1577,
+    titulo: "Portal do Cliente — Beacon do tour movido para a barra de ações (lado direito do cabeçalho)",
+    descricao: "Continuação do ajuste da Rev. 1575: o usuário pediu que a bolinha do beacon ficasse no lado DIREITO do cabeçalho, junto dos botões Ajuda / Tour / Sair, em vez do logo no canto esquerdo. A classe `.tour-hub-brand` foi movida do bloco do logo para o container da barra de ações à direita. Resultado: o spotlight/beacon do primeiro passo do tour fica naturalmente posicionado próximo aos próprios controles do tour, sem interferir no logo nem no card central da Hero.",
+    tipo: "bugfix",
+    modulos: "Portal Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 16:00:00",
+  },
 ];
