@@ -548,6 +548,7 @@ export default function Ferias() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [filtro2Periodo2026, setFiltro2Periodo2026] = useState(false);
+  const [sortBy, setSortBy] = useState<"alfa_asc" | "alfa_desc" | "venc_asc" | "venc_desc">("venc_asc");
   const [tab, setTab] = useState("lista");
   const [anoCalendario, setAnoCalendario] = useState(new Date().getFullYear());
   const [showDialog, setShowDialog] = useState(false);
@@ -760,7 +761,7 @@ export default function Ferias() {
 
   // Filtered list
   const filtered = useMemo(() => {
-    return (feriasList as any[]).filter((a: any) => {
+    const base = (feriasList as any[]).filter((a: any) => {
       if (search) {
         const s = removeAccents(search);
         if (!(a.employeeName || "").toLowerCase().includes(s) && !(a.employeeCpf || "").includes(s)) return false;
@@ -773,7 +774,29 @@ export default function Ferias() {
       }
       return true;
     });
-  }, [feriasList, search, filtro2Periodo2026]);
+    // Rev. 1615 — Ordenação configurável: alfabética ou por vencimento do concessivo.
+    const arr = [...base];
+    arr.sort((a, b) => {
+      switch (sortBy) {
+        case "alfa_asc":
+          return removeAccents(a.employeeName || "").localeCompare(removeAccents(b.employeeName || ""));
+        case "alfa_desc":
+          return removeAccents(b.employeeName || "").localeCompare(removeAccents(a.employeeName || ""));
+        case "venc_desc": {
+          const A = a.periodoConcessivoFim || ""; const B = b.periodoConcessivoFim || "";
+          if (!A && !B) return 0; if (!A) return 1; if (!B) return -1;
+          return B.localeCompare(A);
+        }
+        case "venc_asc":
+        default: {
+          const A = a.periodoConcessivoFim || ""; const B = b.periodoConcessivoFim || "";
+          if (!A && !B) return 0; if (!A) return 1; if (!B) return -1;
+          return A.localeCompare(B);
+        }
+      }
+    });
+    return arr;
+  }, [feriasList, search, filtro2Periodo2026, sortBy]);
 
   // Stats — calculados a partir da lista COMPLETA (sem filtro) para não mudar ao clicar nos cards
   const stats = useMemo(() => {
@@ -1045,6 +1068,16 @@ export default function Ferias() {
                   <SelectItem value="em_gozo">Em Gozo</SelectItem>
                   <SelectItem value="concluida">Concluída</SelectItem>
                   <SelectItem value="vencida">Vencida</SelectItem>
+                </SelectContent>
+              </Select>
+              {/* Rev. 1615 — Ordenação */}
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+                <SelectTrigger className="w-full sm:w-64"><SelectValue placeholder="Ordenar por" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="venc_asc">Vencimento — vence primeiro</SelectItem>
+                  <SelectItem value="venc_desc">Vencimento — vence por último</SelectItem>
+                  <SelectItem value="alfa_asc">Alfabética — A → Z</SelectItem>
+                  <SelectItem value="alfa_desc">Alfabética — Z → A</SelectItem>
                 </SelectContent>
               </Select>
             </div>
