@@ -2161,6 +2161,7 @@ export const financialRouter = router({
        FROM financial_entries
        WHERE company_id IN (${inlineIds(ids)})
          AND tipo = 'despesa'
+         AND status != 'cancelado'
          AND EXTRACT(year FROM COALESCE(data_vencimento::date, created_at::date)) = $1
        ORDER BY data_vencimento ASC NULLS LAST`,
       [input.ano]
