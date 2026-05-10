@@ -402,23 +402,53 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     return base;
   }, [avancos, semanaVisualizacao, avancosMap, avancoLocalLive]);
 
+  // Rev. 1584 — Toggle "Global (c/ Indiretas)" elevado ao componente pai
+  // para que a barra "Avanço Físico" do topo acompanhe o card REFIS abaixo.
+  // Antes vivia só dentro de `Refis()` e o topo continuava mostrando os
+  // valores oficiais (sem indiretas) mesmo com o switch ligado, gerando
+  // divergência visível na mesma tela. Mantém a regra de ouro Portal × ERP.
+  const [refisComIndiretasGlobal, setRefisComIndiretasGlobal] = useState(false);
+
   const avancoAtual = useMemo(() => {
     if (!atividades.length) return 0;
-    const folhas    = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
+    const folhas    = atividades.filter((a: any) => !a.isGrupo && !a.disabled && (refisComIndiretasGlobal || !a.isIndireta));
+    const folhasFiltradas = refisComIndiretasGlobal
+      ? folhas.filter((a: any) => a.dataInicio && a.dataFim) // mesmo universo do REFIS
+      : folhas;
     const pesoBruto = usarPesoPorDuracao
-      ? folhas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
-      : folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
+      ? folhasFiltradas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
+      : folhasFiltradas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
     const semPeso   = pesoBruto === 0;
-    const pesoTotal = semPeso ? folhas.length || 1 : pesoBruto;
-    const ponderado = folhas.reduce((s: number, a: any) => {
+    const pesoTotal = semPeso ? folhasFiltradas.length || 1 : pesoBruto;
+    // Quando "Global" ligado, indiretas no realizado seguem a curva prevista
+    // linear até o FIM da semana visualizada (mesma convenção do REFIS).
+    const semIni = semanaVisualizacao ?? toMonday(new Date());
+    const dRef = new Date(semIni + "T12:00:00");
+    dRef.setDate(dRef.getDate() + 7);
+    const refStr = dRef.toISOString().split("T")[0];
+    const prevLinear = (a: any): number => {
+      if (!a.dataInicio || !a.dataFim) return 0;
+      const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+      const fim = new Date(a.dataFim    + "T12:00:00").getTime();
+      const r   = new Date(refStr       + "T12:00:00").getTime();
+      if (r >= fim) return 100;
+      if (r <= ini) return 0;
+      return ((r - ini) / (fim - ini)) * 100;
+    };
+    const ponderado = folhasFiltradas.reduce((s: number, a: any) => {
       const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
-      return s + (avancosMapSemana[a.id] ?? 0) * (peso / pesoTotal);
+      const val = (refisComIndiretasGlobal && a.isIndireta) ? prevLinear(a) : (avancosMapSemana[a.id] ?? 0);
+      return s + val * (peso / pesoTotal);
     }, 0);
     return Math.min(100, ponderado);
-  }, [atividades, avancosMapSemana, usarPesoPorDuracao]);
+  }, [atividades, avancosMapSemana, usarPesoPorDuracao, refisComIndiretasGlobal, semanaVisualizacao]);
 
   const avancoPrevistoDia = useMemo(() => {
-    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
+    // Rev. 1584 — quando "Global (c/ Indiretas)" ligado, inclui indiretas
+    // pela mesma fórmula linear (idêntico ao card REFIS).
+    const folhas = atividades.filter((a: any) =>
+      !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim && (refisComIndiretasGlobal || !a.isIndireta)
+    );
     if (!folhas.length) return null;
     const semIni = semanaVisualizacao ?? toMonday(new Date());
     const d = new Date(semIni + "T12:00:00");
@@ -441,7 +471,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       soma += (exp * peso) / denom;
     });
     return +soma.toFixed(2);
-  }, [atividades, semanaVisualizacao, usarPesoPorDuracao]);
+  }, [atividades, semanaVisualizacao, usarPesoPorDuracao, refisComIndiretasGlobal]);
 
   // ── Cabeçalho de impressão (idêntico ao Portal do Cliente) ──────────
   // ATENÇÃO: este useMemo precisa ficar ANTES dos early returns abaixo,
@@ -560,6 +590,14 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                   >
                     💰 Peso Financeiro
                   </span>
+                  {refisComIndiretasGlobal && (
+                    <span
+                      title="Indiretas (canteiro, mob/desmob) entram nos cálculos pela curva prevista linear — mesma convenção do card REFIS."
+                      className="text-[10px] font-semibold px-2 py-0.5 rounded border bg-blue-50 text-blue-700 border-blue-200"
+                    >
+                      🌐 Global (c/ Indiretas)
+                    </span>
+                  )}
                 </div>
               </div>
               {/* Barra Previsto */}
@@ -763,6 +801,8 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             onInitialSemanaConsumed={() => setRefisInitSemana(null)}
             onSemanaChange={setSemanaVisualizacao}
             usarPesoPorDuracao={usarPesoPorDuracao}
+            refisComIndiretas={refisComIndiretasGlobal}
+            setRefisComIndiretas={setRefisComIndiretasGlobal}
           />
         )}
         {canViewTab(aba) && aba === "cronograma-financeiro" && (
@@ -9776,7 +9816,7 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: REFIS
 // ═════════════════════════════════════════════════════════════════════════════
-function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, hideFinancial, initialSemana, onInitialSemanaConsumed, onSemanaChange, usarPesoPorDuracao }: any) {
+function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, hideFinancial, initialSemana, onInitialSemanaConsumed, onSemanaChange, usarPesoPorDuracao, refisComIndiretas, setRefisComIndiretas }: any) {
   const [semana, setSemanaRaw] = useState(() => toMonday(new Date()));
   const setSemana = (s: string) => { setSemanaRaw(s); onSemanaChange?.(s); };
   const [obs, setObs] = useState("");
@@ -9823,7 +9863,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     baseline: true, planejada: true, realizada: true, tendencia: true, faturado: true,
   });
   const tglRefis = (k: string) => setSerRefis(p => ({ ...p, [k]: !p[k] }));
-  const [refisComIndiretas, setRefisComIndiretas] = useState(false);
+  // Rev. 1584 — `refisComIndiretas` e seu setter agora vêm por props,
+  // elevados ao componente pai PlanejamentoDetalheInner para que a barra
+  // "Avanço Físico" do topo acompanhe o card REFIS abaixo.
 
   // ── Cruzamento orçamento × cronograma (para calcular venda prevista/realizada mensal) ──
   const { data: cruzamento } = trpc.planejamento.obterCruzamentoOrcCronograma.useQuery(

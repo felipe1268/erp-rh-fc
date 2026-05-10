@@ -11263,4 +11263,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 23:00:00",
   },
+  {
+    version: 1585,
+    titulo: "Planejamento (ERP) — Barra 'Avanço Físico' do topo agora acompanha o toggle 'Global (c/ Indiretas)'",
+    descricao: "Mesmo bug da Rev. 1584 (Portal), mas no módulo Planejamento interno do ERP: a barra 'Avanço Físico' no TOPO da tela continuava mostrando 1,84% / 1,38% (oficial sem indiretas) enquanto o card REFIS abaixo já mostrava 2,28% / 1,88% com o switch 'Global (c/ Indiretas)' ligado. Causa: o estado `refisComIndiretas` vivia DENTRO do componente `Refis()`, então `PlanejamentoDetalheInner` (que renderiza a barra do topo a partir de `avancoAtual`/`avancoPrevistoDia`) não tinha como saber. Correção: `refisComIndiretasGlobal` foi elevado para `PlanejamentoDetalheInner` e os useMemos `avancoAtual`/`avancoPrevistoDia` agora incluem indiretas (com indireta no realizado pela curva prevista linear, igual ao REFIS) quando ligado. Adicionado badge azul '🌐 Global (c/ Indiretas)' ao lado do '💰 Peso Financeiro' para sinalizar o modo. Quando 'Só Diretas' a barra volta automaticamente aos valores oficiais.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 23:30:00",
+  },
 ];
