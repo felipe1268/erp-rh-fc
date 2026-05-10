@@ -10,7 +10,6 @@ scripts/
 .github/
 .vscode/
 .idea/
-dist/
 build/
 node_modules/.cache/
 tmp/

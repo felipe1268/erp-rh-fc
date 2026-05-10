@@ -25,7 +25,7 @@ scripts/
 .idea/
 
 # Builds intermediários e tmp
-dist/
+# (NÃO excluir dist/ — é onde o build de deploy gera index.js!)
 build/
 .pnpm-store/
 node_modules/.cache/
