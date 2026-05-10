@@ -124,6 +124,30 @@ function categoriaFor(c: any): string {
   return ORIGEM_LABELS[c.origemModulo] ?? "Sem categoria";
 }
 
+// Rev. 1625 — Consolidação RH/Benefícios/Recorrentes
+// Retorna { sub, label } para entries agrupáveis (folha, benefícios, PJ, frota, terceiros).
+// Retorna null para entries que devem aparecer como linhas individuais (compras, manuais, jurídico, etc).
+function consolidateSubtype(c: any): { sub: string; label: string } | null {
+  const o = c.origemModulo;
+  if (o === "folha") return { sub: "folha", label: "Folha de Pagamento" };
+  if (o === "beneficios") {
+    const txt = `${c.descricao ?? ""} ${c.origemDescricao ?? ""} ${c.contaNome ?? ""}`
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    if (/alimenta/.test(txt) || /\bva\b/.test(txt)) return { sub: "VA", label: "Vale Alimentação" };
+    if (/refei/.test(txt) || /\bvr\b/.test(txt)) return { sub: "VR", label: "Vale Refeição" };
+    if (/transp|\bvt\b/.test(txt)) return { sub: "VT", label: "Vale Transporte" };
+    if (/saude|odonto|plano/.test(txt)) return { sub: "saude", label: "Saúde/Odonto" };
+    return { sub: "outros", label: "Outros Benefícios" };
+  }
+  if (o === "pj") return { sub: "pj", label: "Pagamentos PJ" };
+  if (o === "frota") return { sub: "frota", label: "Frota (combustível/mensal)" };
+  if (o === "terceiros") return { sub: "med", label: "Medições Terceiros" };
+  return null;
+}
+
+const CONSOLIDATE_MIN = 3; // só agrupa quando há ≥ N entries do mesmo subtipo
+const CONSOLIDATE_MODE_KEY = "fc_ap_consolidateMode_v1";
+
 // Rev. 1619 — Agrupamento por horizonte de vencimento (gestão de caixa Bragg/Brealey)
 function bucketKey(c: any, hojeStr: string): { key: string; order: number; label: string } {
   if (c.status === "pago") return { key: "pago", order: 9, label: "Pagos no mês" };
@@ -169,6 +193,25 @@ export default function FinanceiroContasAPagar() {
   const [bulkFormaPagamento, setBulkFormaPagamento] = useState("pix");
   // Rev. 1621 — modal de detalhes do título
   const [detailEntryId, setDetailEntryId] = useState<number | null>(null);
+  // Rev. 1625 — consolidação visual de RH/Benefícios/PJ/Frota/Terceiros
+  const [consolidateMode, setConsolidateMode] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const v = window.localStorage.getItem(CONSOLIDATE_MODE_KEY);
+    return v === null ? true : v === "1";
+  });
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(CONSOLIDATE_MODE_KEY, consolidateMode ? "1" : "0");
+    }
+  }, [consolidateMode]);
+  const toggleGroupExpand = (key: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
   const detailQuery = (trpc as any).financial.getEntryDetalhe.useQuery(
     { id: detailEntryId ?? 0, companyId },
@@ -628,6 +671,19 @@ export default function FinanceiroContasAPagar() {
             <Button variant="outline" size="sm" onClick={exportCsv} className="h-8 text-xs gap-1" disabled={!filtered.length}>
               <Download className="w-3.5 h-3.5" />Exportar CSV
             </Button>
+            {/* Rev. 1625 — Toggle Consolidar RH/Benefícios/Recorrentes */}
+            <button
+              onClick={() => { setConsolidateMode(v => !v); setExpandedGroups(new Set()); }}
+              className={`h-8 text-xs px-3 rounded-md border inline-flex items-center gap-1.5 transition-colors ${
+                consolidateMode
+                  ? "bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700"
+                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+              }`}
+              title="Agrupa folha, vales, PJ, frota e medições em uma linha por mês"
+            >
+              <Users className="w-3.5 h-3.5" />
+              {consolidateMode ? "Consolidado: ON" : "Consolidado: OFF"}
+            </button>
           </CardContent>
         </Card>
 
@@ -690,7 +746,56 @@ export default function FinanceiroContasAPagar() {
                     </tr>
                   </thead>
                   <tbody>
-                    {grupos.map((g) => (
+                    {grupos.map((g) => {
+                      // Rev. 1625 — Dentro de cada bucket, monta linhas mistas: consolidadas + individuais
+                      type Row =
+                        | { kind: "single"; item: any }
+                        | { kind: "group"; key: string; sub: string; label: string; origem: string; items: any[]; total: number; mesAno: string };
+                      const rows: Row[] = [];
+                      if (consolidateMode) {
+                        const groupMap = new Map<string, { sub: string; label: string; origem: string; items: any[]; mesAno: string }>();
+                        const singles: any[] = [];
+                        for (const c of g.items) {
+                          const sub = consolidateSubtype(c);
+                          const venc = (c.dataVencimento ?? "").slice(0, 7);
+                          if (sub && venc) {
+                            const k = `${c.origemModulo}|${sub.sub}|${venc}`;
+                            if (!groupMap.has(k)) groupMap.set(k, { sub: sub.sub, label: sub.label, origem: c.origemModulo, items: [], mesAno: venc });
+                            groupMap.get(k)!.items.push(c);
+                          } else {
+                            singles.push(c);
+                          }
+                        }
+                        // Promove grupos com < CONSOLIDATE_MIN itens de volta para singles
+                        for (const [k, gp] of groupMap.entries()) {
+                          if (gp.items.length < CONSOLIDATE_MIN) {
+                            singles.push(...gp.items);
+                            groupMap.delete(k);
+                          }
+                        }
+                        // Mistura na ordem original (por bucket já vem ordenado)
+                        // Para manter ordem cronológica, ordena tudo por menor data
+                        const allRows: Row[] = [];
+                        for (const [k, gp] of groupMap.entries()) {
+                          const total = gp.items.reduce((s, x) => s + Number(x.valorPrevisto ?? 0), 0);
+                          allRows.push({ kind: "group", key: k, sub: gp.sub, label: gp.label, origem: gp.origem, items: gp.items, total, mesAno: gp.mesAno });
+                        }
+                        for (const it of singles) allRows.push({ kind: "single", item: it });
+                        allRows.sort((a, b) => {
+                          const da = a.kind === "single"
+                            ? (a.item.dataVencimento || "9999-12-31").slice(0, 10)
+                            : a.items.map(x => (x.dataVencimento || "9999-12-31").slice(0, 10)).sort()[0];
+                          const db = b.kind === "single"
+                            ? (b.item.dataVencimento || "9999-12-31").slice(0, 10)
+                            : b.items.map(x => (x.dataVencimento || "9999-12-31").slice(0, 10)).sort()[0];
+                          return da.localeCompare(db);
+                        });
+                        rows.push(...allRows);
+                      } else {
+                        for (const c of g.items) rows.push({ kind: "single", item: c });
+                      }
+                      const totalRowsCount = rows.reduce((n, r) => n + (r.kind === "group" ? r.items.length : 1), 0);
+                      return (
                       <Fragment key={g.label}>
                         {/* Cabeçalho de grupo */}
                         <tr className="bg-gradient-to-r from-slate-100 to-transparent border-y border-slate-200">
@@ -706,13 +811,188 @@ export default function FinanceiroContasAPagar() {
                                 {g.order === 0 && <AlertTriangle className="w-3 h-3 inline mr-1" />}
                                 {g.order === 1 && <Clock className="w-3 h-3 inline mr-1" />}
                                 {g.order === 9 && <CheckCircle className="w-3 h-3 inline mr-1" />}
-                                {g.label} <span className="text-slate-400 font-normal ml-1">· {g.items.length} {g.items.length === 1 ? "conta" : "contas"}</span>
+                                {g.label} <span className="text-slate-400 font-normal ml-1">· {totalRowsCount} {totalRowsCount === 1 ? "conta" : "contas"}{consolidateMode && rows.length !== totalRowsCount ? ` em ${rows.length} ${rows.length === 1 ? "linha" : "linhas"}` : ""}</span>
                               </span>
                               <span className="text-xs font-bold text-slate-700">{formatBRL(g.total)}</span>
                             </div>
                           </td>
                         </tr>
-                        {g.items.map((c: any) => {
+                        {rows.map((r) => {
+                          // ─── LINHA CONSOLIDADA ───
+                          if (r.kind === "group") {
+                            const gp = r;
+                            const ids = gp.items.map((x: any) => x.id as number);
+                            const pendIds = gp.items.filter((x: any) => x.status !== "pago").map((x: any) => x.id as number);
+                            const allSelected = pendIds.length > 0 && pendIds.every(id => selectedIds.has(id));
+                            const someSelected = pendIds.some(id => selectedIds.has(id));
+                            const isExpanded = expandedGroups.has(gp.key);
+                            const pagosCount = gp.items.filter((x: any) => x.status === "pago").length;
+                            const vencCount = gp.items.filter((x: any) => x.dataVencimento && x.dataVencimento.slice(0,10) < hojeStr && x.status !== "pago").length;
+                            const minVenc = gp.items.map((x: any) => (x.dataVencimento || "").slice(0, 10)).filter(Boolean).sort()[0];
+                            const Icon = ORIGEM_ICONS[gp.origem] ?? FileText;
+                            const colorCls = ORIGEM_COLORS[gp.origem] ?? "bg-gray-50 text-gray-700 border-gray-200";
+                            const mesLabel = gp.mesAno ? `${MESES[Number(gp.mesAno.slice(5,7))-1]}/${gp.mesAno.slice(0,4)}` : "";
+                            const toggleGroupSelect = () => {
+                              setSelectedIds(prev => {
+                                const next = new Set(prev);
+                                if (allSelected) pendIds.forEach(id => next.delete(id));
+                                else pendIds.forEach(id => next.add(id));
+                                return next;
+                              });
+                            };
+                            return (
+                              <Fragment key={gp.key}>
+                                <tr
+                                  onClick={() => toggleGroupExpand(gp.key)}
+                                  className={`border-b border-slate-100 cursor-pointer hover:bg-indigo-50/40 ${someSelected ? "bg-blue-50/40" : "bg-indigo-50/20"}`}
+                                >
+                                  <td className="px-2 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                                    {pendIds.length > 0 && (
+                                      <Checkbox
+                                        checked={allSelected}
+                                        onCheckedChange={toggleGroupSelect}
+                                        aria-label={`Selecionar todos os ${gp.label}`}
+                                      />
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2.5 whitespace-nowrap">
+                                    <div className="flex flex-col leading-tight">
+                                      <span className="text-sm font-semibold tabular-nums text-slate-800">{fmtDateBR(minVenc)}</span>
+                                      <span className="text-[10px] text-slate-500">consolidado · {mesLabel}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-2.5 whitespace-nowrap">
+                                    <span className="text-xs font-mono font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                                      {isExpanded ? <ChevronLeft className="w-3 h-3 rotate-90" /> : <ChevronRight className="w-3 h-3" />}
+                                      {gp.items.length}×
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <p className="text-sm font-bold text-slate-900">{gp.label}</p>
+                                      <span className="text-xs text-slate-500">— {mesLabel}</span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 mt-0.5">
+                                      {gp.items.length} {gp.origem === "folha" || gp.origem === "beneficios" || gp.origem === "pj" ? "funcionário(s)" : gp.origem === "frota" ? "veículo(s)" : "registro(s)"}
+                                      {pagosCount > 0 && <span className="text-green-600"> · {pagosCount} pago(s)</span>}
+                                      {vencCount > 0 && <span className="text-red-600"> · {vencCount} vencido(s)</span>}
+                                    </p>
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border self-start ${colorCls}`}>
+                                      <Icon className="w-2.5 h-2.5" />
+                                      {ORIGEM_LABELS[gp.origem] ?? gp.origem}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                                    <span className="text-sm font-bold tabular-nums text-slate-900">{formatBRL(gp.total)}</span>
+                                  </td>
+                                  <td className="px-3 py-2.5 text-center">
+                                    {pagosCount === gp.items.length ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-100 text-green-700 border border-green-200">
+                                        <CheckCircle className="w-3 h-3" />Pago
+                                      </span>
+                                    ) : pagosCount > 0 ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                                        Parcial {pagosCount}/{gp.items.length}
+                                      </span>
+                                    ) : vencCount > 0 ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700 border border-red-200">
+                                        <AlertTriangle className="w-3 h-3" />Vencido
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 text-orange-700 border border-orange-200">
+                                        <Clock className="w-3 h-3" />A Pagar
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                                    <div className="inline-flex items-center gap-1">
+                                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs"
+                                        onClick={() => toggleGroupExpand(gp.key)}>
+                                        {isExpanded ? "Recolher" : "Expandir"}
+                                      </Button>
+                                      {pendIds.length > 0 && (
+                                        <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-7 px-2.5 text-xs"
+                                          onClick={() => {
+                                            setSelectedIds(new Set(pendIds));
+                                            setShowBulkPay(true);
+                                          }}>
+                                          <CheckCircle className="w-3 h-3 mr-1" />Pagar lote
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                                {/* Filhas expandidas */}
+                                {isExpanded && gp.items.map((c: any) => {
+                                  const vencida = c.dataVencimento && c.dataVencimento.slice(0,10) < hojeStr && c.status !== "pago";
+                                  const isSelected = selectedIds.has(c.id);
+                                  const desc = describeEntry(c);
+                                  return (
+                                    <tr key={c.id}
+                                      onClick={(e) => {
+                                        const isInteractive = (e.target as HTMLElement).closest("button, [role=checkbox], input, a");
+                                        if (isInteractive) return;
+                                        setDetailEntryId(c.id);
+                                      }}
+                                      className={`hover:bg-blue-50/30 cursor-pointer border-b border-slate-100 ${isSelected ? "bg-blue-50/40" : ""}`}>
+                                      <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                        {c.status !== "pago" && (
+                                          <Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(c.id)} />
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 whitespace-nowrap pl-8">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-indigo-300 text-xs">└─</span>
+                                          <span className={`text-xs tabular-nums ${vencida ? "text-red-700" : c.status === "pago" ? "text-green-700" : "text-slate-600"}`}>
+                                            {fmtDateBR(c.dataVencimento)}
+                                          </span>
+                                        </div>
+                                      </td>
+                                      <td className="px-3 py-2 whitespace-nowrap">
+                                        <span className="text-[11px] font-mono text-slate-500">#{c.id}</span>
+                                      </td>
+                                      <td className="px-3 py-2 max-w-md">
+                                        <p className="text-xs text-slate-700 truncate" title={desc}>{desc}</p>
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <span className="text-[11px] text-slate-500">{categoriaFor(c)}</span>
+                                      </td>
+                                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                                        <span className={`text-xs font-semibold tabular-nums ${vencida ? "text-red-700" : c.status === "pago" ? "text-green-700" : "text-slate-700"}`}>
+                                          {formatBRL(Number(c.valorPrevisto ?? 0))}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-2 text-center">
+                                        {c.status === "pago" ? (
+                                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700 border border-green-200">
+                                            <CheckCircle className="w-2.5 h-2.5" />Pago
+                                          </span>
+                                        ) : vencida ? (
+                                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700 border border-red-200">
+                                            Vencido
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-700 border border-orange-200">
+                                            A Pagar
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                                        <Button size="sm" variant="outline" className="h-6 w-6 p-0"
+                                          onClick={() => setDetailEntryId(c.id)}>
+                                          <Eye className="w-3 h-3" />
+                                        </Button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </Fragment>
+                            );
+                          }
+                          // ─── LINHA INDIVIDUAL (caminho original) ───
+                          const c = r.item;
                           const vencida = c.dataVencimento && c.dataVencimento.slice(0,10) < hojeStr && c.status !== "pago";
                           const Icon = ORIGEM_ICONS[c.origemModulo] ?? FileText;
                           const colorCls = ORIGEM_COLORS[c.origemModulo] ?? "bg-gray-50 text-gray-700 border-gray-200";
@@ -831,7 +1111,8 @@ export default function FinanceiroContasAPagar() {
                           );
                         })}
                       </Fragment>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
