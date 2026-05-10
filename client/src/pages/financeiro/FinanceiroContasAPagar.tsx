@@ -111,9 +111,15 @@ function bucketKey(c: any, hojeStr: string): { key: string; order: number; label
   return { key: "depois", order: 5, label: "Após 30 dias" };
 }
 
+// Rev. 1627 — sempre fatiar para "YYYY-MM-DD" antes de parsear:
+// timestamps PG (`"2026-04-22 14:44:06.518812"`) quebram `new Date()` no iOS Safari
+// com a mensagem nativa "The string did not match the expected pattern."
 function getMesFromDate(dateStr: string | null | undefined): number | null {
   if (!dateStr) return null;
-  const d = new Date(dateStr + (dateStr.length === 10 ? "T00:00:00" : ""));
+  const s = String(dateStr).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(s + "T00:00:00");
+  if (isNaN(d.getTime())) return null;
   return d.getMonth() + 1;
 }
 
@@ -1146,7 +1152,14 @@ export default function FinanceiroContasAPagar() {
             {detailQuery.isLoading ? (
               <div className="py-12 text-center text-slate-500 text-sm">Carregando detalhes...</div>
             ) : detailQuery.error ? (
-              <div className="py-8 text-center text-red-600 text-sm">{(detailQuery.error as any).message}</div>
+              <div className="py-6 px-4 space-y-2">
+                <div className="text-red-700 font-semibold text-sm">Erro ao carregar detalhe:</div>
+                <div className="text-red-600 text-sm font-mono break-all">{(detailQuery.error as any)?.name ? `[${(detailQuery.error as any).name}] ` : ""}{(detailQuery.error as any)?.message ?? String(detailQuery.error)}</div>
+                {(detailQuery.error as any)?.data?.code && (
+                  <div className="text-xs text-slate-500">Código: {(detailQuery.error as any).data.code}</div>
+                )}
+                <div className="text-xs text-slate-500 pt-2">ID: {detailEntryId} · Empresa: {companyId}</div>
+              </div>
             ) : detailQuery.data ? (() => {
               const d = detailQuery.data;
               const e = d.entry;

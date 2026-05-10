@@ -403,6 +403,35 @@ export const financialRouter = router({
     );
     const auditoria = rows(audRes) as any[];
 
+    // Rev. 1627 — pg/Neon retorna TIMESTAMP como string PG ("2026-04-22 14:44:06.518812"),
+    // formato que o iOS Safari rejeita em new Date() com "The string did not match the
+    // expected pattern.". Normalizamos para ISO-8601 antes de devolver pro client.
+    const TS_FIELDS = [
+      "createdAt", "updatedAt", "dataConciliacao", "chequeDataBomPara",
+      "aprovadoEm", "dataEntregaPrevista",
+    ];
+    const toIso = (v: any): any => {
+      if (typeof v !== "string") return v;
+      // só tratar timestamps PG ("YYYY-MM-DD HH:MM:SS[.ffffff][+/-tz]")
+      const m = v.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})(\.\d+)?(.*)$/);
+      if (!m) return v;
+      const ms = m[3] ? m[3].slice(0, 4) : ".000"; // truncar microssegundos → ms
+      const tz = m[4]?.trim() ? m[4].trim() : "Z";
+      return `${m[1]}T${m[2]}${ms}${tz}`;
+    };
+    const normTs = <T extends Record<string, any> | null | undefined>(o: T): T => {
+      if (!o || typeof o !== "object") return o;
+      for (const k of TS_FIELDS) if (k in o) (o as any)[k] = toIso((o as any)[k]);
+      return o;
+    };
+    normTs(entry);
+    normTs(ordem);
+    normTs(fornecedor);
+    normTs(bancoEmpresa);
+    (itens ?? []).forEach(normTs);
+    (parcelas ?? []).forEach(normTs);
+    (auditoria ?? []).forEach(normTs);
+
     return { entry, ordem, itens, fornecedor, parcelas, bancoEmpresa, auditoria };
   }),
 
