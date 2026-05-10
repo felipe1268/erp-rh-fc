@@ -547,6 +547,7 @@ export default function Ferias() {
   const companyIds = getCompanyIdsForQuery();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
+  const [filtro2Periodo2026, setFiltro2Periodo2026] = useState(false);
   const [tab, setTab] = useState("lista");
   const [anoCalendario, setAnoCalendario] = useState(new Date().getFullYear());
   const [showDialog, setShowDialog] = useState(false);
@@ -764,9 +765,15 @@ export default function Ferias() {
         const s = removeAccents(search);
         if (!(a.employeeName || "").toLowerCase().includes(s) && !(a.employeeCpf || "").includes(s)) return false;
       }
+      // Rev. 1614 — Filtro especial: 2º período cujo concessivo está/expira em 2026
+      if (filtro2Periodo2026) {
+        if ((a.numeroPeriodo || 1) < 2) return false;
+        const ano = a.periodoConcessivoFim ? parseInt(String(a.periodoConcessivoFim).slice(0, 4), 10) : null;
+        if (ano !== 2026) return false;
+      }
       return true;
     });
-  }, [feriasList, search]);
+  }, [feriasList, search, filtro2Periodo2026]);
 
   // Stats — calculados a partir da lista COMPLETA (sem filtro) para não mudar ao clicar nos cards
   const stats = useMemo(() => {
@@ -904,15 +911,23 @@ export default function Ferias() {
           const pendentesList = (allFeriasList as any[]).filter(a => a.status === "pendente");
           const aVencer1 = pendentesList.filter(v => (v.numeroPeriodo || 1) === 1).length;
           const aVencer2 = pendentesList.filter(v => (v.numeroPeriodo || 1) >= 2).length;
+          // Rev. 1614 — 2º Período cujo concessivo está dentro do ano de 2026
+          // (qualquer status que ainda não foi concluído/cancelado).
+          const segundoPeriodo2026 = (allFeriasList as any[]).filter(v => {
+            if ((v.numeroPeriodo || 1) < 2) return false;
+            if (v.status === "concluida" || v.status === "cancelada") return false;
+            const ano = v.periodoConcessivoFim ? parseInt(String(v.periodoConcessivoFim).slice(0, 4), 10) : null;
+            return ano === 2026;
+          }).length;
           return (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-          <Card className={`cursor-pointer hover:shadow-md transition-shadow ${statusFilter === "todos" && tab === "lista" ? "ring-2 ring-primary shadow-md" : ""}`} onClick={() => { setStatusFilter("todos"); setTab("lista"); }}>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow ${statusFilter === "todos" && tab === "lista" && !filtro2Periodo2026 ? "ring-2 ring-primary shadow-md" : ""}`} onClick={() => { setStatusFilter("todos"); setFiltro2Periodo2026(false); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Total</p>
               <p className="text-2xl font-bold">{fmtNum(stats.total)}</p>
             </CardContent>
           </Card>
-          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-amber-500 ${statusFilter === "pendente" && tab === "lista" ? "ring-2 ring-amber-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("pendente"); setTab("lista"); }}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-amber-500 ${statusFilter === "pendente" && tab === "lista" && !filtro2Periodo2026 ? "ring-2 ring-amber-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("pendente"); setFiltro2Periodo2026(false); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Férias a Vencer</p>
               <p className="text-2xl font-bold text-amber-600">{fmtNum(stats.pendentes)}</p>
@@ -946,22 +961,36 @@ export default function Ferias() {
               <p className="text-[10px] text-orange-600 mt-0.5 font-medium">Risco multa em dobro</p>
             </CardContent>
           </Card>
-          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-blue-500 ${statusFilter === "agendada" && tab === "lista" ? "ring-2 ring-blue-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("agendada"); setTab("lista"); }}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-blue-500 ${statusFilter === "agendada" && tab === "lista" && !filtro2Periodo2026 ? "ring-2 ring-blue-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("agendada"); setFiltro2Periodo2026(false); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Agendadas</p>
               <p className="text-2xl font-bold text-blue-600">{fmtNum(stats.agendadas)}</p>
             </CardContent>
           </Card>
-          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-red-500 ${statusFilter === "vencida" && tab === "lista" ? "ring-2 ring-red-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("vencida"); setTab("lista"); }}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-red-500 ${statusFilter === "vencida" && tab === "lista" && !filtro2Periodo2026 ? "ring-2 ring-red-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("vencida"); setFiltro2Periodo2026(false); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Vencidas</p>
               <p className="text-2xl font-bold text-red-600">{fmtNum(stats.vencidas)}</p>
             </CardContent>
           </Card>
-          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-green-500 ${statusFilter === "em_gozo" && tab === "lista" ? "ring-2 ring-green-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("em_gozo"); setTab("lista"); }}>
+          <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-green-500 ${statusFilter === "em_gozo" && tab === "lista" && !filtro2Periodo2026 ? "ring-2 ring-green-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("em_gozo"); setFiltro2Periodo2026(false); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Em Gozo</p>
               <p className="text-2xl font-bold text-green-600">{fmtNum(stats.emGozo)}</p>
+            </CardContent>
+          </Card>
+          {/* Rev. 1614 — Card especial: 2º Período com concessivo no ano 2026 */}
+          <Card
+            className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-rose-600 ${filtro2Periodo2026 ? "ring-2 ring-rose-400 shadow-md bg-rose-50/70" : (segundoPeriodo2026 > 0 ? "bg-rose-50/40" : "")}`}
+            onClick={() => { setStatusFilter("todos"); setFiltro2Periodo2026(true); setTab("lista"); }}
+            title="Funcionários no 2º período aquisitivo cujo prazo concessivo cai dentro do ano de 2026. Clique para filtrar a lista."
+          >
+            <CardContent className="p-4">
+              <p className="text-[10px] text-rose-800 font-semibold uppercase tracking-wide flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" /> 2º Período · 2026
+              </p>
+              <p className="text-2xl font-bold text-rose-700">{fmtNum(segundoPeriodo2026)}</p>
+              <p className="text-[10px] text-rose-600 mt-0.5 font-medium">Concessivo expira em 2026</p>
             </CardContent>
           </Card>
         </div>
