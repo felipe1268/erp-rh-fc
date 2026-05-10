@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1588,
+    titulo: "Portal do Cliente — Aba Efetivo: KPIs viraram filtros clicáveis",
+    descricao: "Os cards do topo da aba Efetivo agora são botões interativos: 'Próprios FC' filtra só CLT/PJ, 'Total Terceiros' filtra só terceiros e 'Total Geral' limpa o filtro. Os cards de baixo ('Mão de Obra Direta' e 'Mão de Obra Indireta') filtram por categoria. Clicar de novo no card ativo desliga o filtro. Visual: card ativo ganha anel colorido, fundo suave e badge '• filtrando'. Mantém a busca por nome/função/empresa funcionando em paralelo aos filtros.",
+    tipo: 'feature',
+    modulos: 'Portal do Cliente, Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 08:30:00',
+  },
+  {
     version: 1587,
     titulo: "Portal do Cliente — Aba Efetivo: clique no funcionário expande ASO + Treinamentos",
     descricao: "Restaurada a funcionalidade de detalhe documental na aba Efetivo do Portal do Cliente (PortalPlanejamentoCliente). Cada linha de funcionário CLT/PJ agora é clicável (chevron + cursor pointer) e expande um painel inline mostrando: ASO (tipo, resultado, exame, validade) com botão 'Ver PDF' inline, e lista de Treinamentos com norma + descrição da NR + validade (vencidos destacados em vermelho) + botão 'Ver' por certificado. PDFs abrem em visualizador modal sem download (mesmo padrão do módulo RH/Documentos). Adicionadas duas novas colunas na tabela ('ASO' e 'Treinamentos') com badges de status. Terceiros aparecem com '—' nas colunas de RH (não estão no endpoint de documentos). Os dados vêm do mesmo endpoint documentosRhObra do módulo RH/Documentos (zero código novo no servidor).",

@@ -4009,19 +4009,61 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
     );
   }
 
-  const Kpi = ({ label, value, color, icon: Icon }: any) => (
-    <div className={`flex-1 bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3`}>
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-[11px] uppercase font-semibold text-slate-500 tracking-wide">{label}</p>
-          <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
+  // Rev. 1588 — KPIs viraram botões clicáveis: alternam o filtro correspondente
+  // (clicar de novo no card ativo desliga o filtro). Os 3 primeiros cards
+  // (Próprios/Terceiros/Total) operam no grupo "tipo"; os 2 de baixo
+  // (Direta/Indireta) operam no grupo "categoria".
+  const Kpi = ({
+    label, value, color, icon: Icon, group, filterKey,
+  }: {
+    label: string;
+    value: number;
+    color: string;
+    icon: any;
+    group: "tipo" | "cat";
+    filterKey: "todos" | "Proprio" | "Terceiro" | "Direto" | "Indireto";
+  }) => {
+    const ativo = group === "tipo"
+      ? (filtroTipo === filterKey)
+      : (filtroCat === filterKey);
+    const ringClr = color.replace("text-", "ring-").replace("-700", "-400").replace("-600", "-400");
+    const bgSoft = color.replace("text-", "bg-").replace("-700", "-50").replace("-600", "-50");
+    const iconBg = color.replace("text-", "bg-").replace("-700", "-100").replace("-600", "-100");
+    const onClick = () => {
+      if (group === "tipo") {
+        const k = filterKey as "todos" | "Proprio" | "Terceiro";
+        // No grupo "tipo", "Total Geral" (todos) sempre limpa o filtro;
+        // os outros alternam: clicar no ativo volta para "todos".
+        setFiltroTipo((cur) => (k === "todos" ? "todos" : cur === k ? "todos" : k));
+      } else {
+        const k = filterKey as "Direto" | "Indireto";
+        setFiltroCat((cur) => (cur === k ? "todos" : k));
+      }
+    };
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={ativo}
+        title={ativo ? "Clique para remover o filtro" : `Filtrar por ${label}`}
+        className={`flex-1 text-left bg-white rounded-xl border shadow-sm px-4 py-3 transition cursor-pointer w-full
+          ${ativo ? `${bgSoft} border-transparent ring-2 ${ringClr}` : "border-slate-200 hover:border-slate-300 hover:shadow-md"}`}
+      >
+        <div className="flex items-center justify-between">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase font-semibold text-slate-500 tracking-wide truncate">
+              {label}
+              {ativo && <span className="ml-1.5 text-[9px] text-emerald-600 normal-case">• filtrando</span>}
+            </p>
+            <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
+          </div>
+          <div className={`p-2 rounded-lg ${iconBg} shrink-0`}>
+            <Icon className={`h-5 w-5 ${color}`} />
+          </div>
         </div>
-        <div className={`p-2 rounded-lg ${color.replace("text-", "bg-").replace("-700", "-100")}`}>
-          <Icon className={`h-5 w-5 ${color}`} />
-        </div>
-      </div>
-    </div>
-  );
+      </button>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -4047,15 +4089,15 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
       {/* Rev. 1519: KPIs sem distinção de regime CLT/PJ — cliente vê
           apenas Próprios FC vs Terceiros + Total Geral. */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Kpi label="Próprios FC" value={totCLT + totPJ} color="text-blue-700" icon={Users} />
-        <Kpi label="Total Terceiros" value={totTerc} color="text-amber-700" icon={Handshake} />
-        <Kpi label="Total Geral" value={totGeral} color="text-emerald-700" icon={HardHat} />
+        <Kpi label="Próprios FC" value={totCLT + totPJ} color="text-blue-700" icon={Users} group="tipo" filterKey="Proprio" />
+        <Kpi label="Total Terceiros" value={totTerc} color="text-amber-700" icon={Handshake} group="tipo" filterKey="Terceiro" />
+        <Kpi label="Total Geral" value={totGeral} color="text-emerald-700" icon={HardHat} group="tipo" filterKey="todos" />
       </div>
 
       {/* KPIs Direto / Indireto */}
       <div className="grid grid-cols-2 gap-3">
-        <Kpi label="Mão de Obra Direta" value={totDireto} color="text-emerald-700" icon={HardHat} />
-        <Kpi label="Mão de Obra Indireta" value={totIndireto} color="text-slate-700" icon={Users} />
+        <Kpi label="Mão de Obra Direta" value={totDireto} color="text-emerald-700" icon={HardHat} group="cat" filterKey="Direto" />
+        <Kpi label="Mão de Obra Indireta" value={totIndireto} color="text-slate-700" icon={Users} group="cat" filterKey="Indireto" />
       </div>
 
       {/* Filtros: tipo de contrato + categoria */}
