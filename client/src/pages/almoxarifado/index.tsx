@@ -802,13 +802,17 @@ export default function AlmoxarifadoPage() {
           const consCategs = [...new Set(consItens.map((i: any) => i.categoria).filter(Boolean))].sort();
 
           // ── Valor Total por Almoxarifado (todas as categorias) ──
+          // FIX: detecta formato. Strings vindas do Drizzle (numeric) chegam em formato US ("106.33").
+          // Só trata como pt-BR ("1.500,00") quando a string contém vírgula.
           const parseValor = (v: any): number => {
-            if (v === null || v === undefined) return 0;
-            const s = String(v).trim().replace(/\./g, "").replace(",", ".");
+            if (v === null || v === undefined || v === "") return 0;
+            if (typeof v === "number") return isFinite(v) ? v : 0;
+            const raw = String(v).trim();
+            const s = raw.includes(",")
+              ? raw.replace(/\./g, "").replace(",", ".") // pt-BR
+              : raw;                                       // US / numérico puro
             const n2 = parseFloat(s);
-            if (!isNaN(n2)) return n2;
-            const n1 = parseFloat(String(v));
-            return isNaN(n1) ? 0 : n1;
+            return isNaN(n2) ? 0 : n2;
           };
           // Inicializa Central + todas as obras ativas (para sempre listar, mesmo com zero)
           const valorMap = new Map<string, { nome: string; valor: number; itens: number }>();
@@ -1079,13 +1083,17 @@ export default function AlmoxarifadoPage() {
         })()}
 
         {obraContexto !== "todos" && (() => {
+          // FIX 100x: numeric do Drizzle vem em formato US ("106.33"). Só tratar como
+          // pt-BR ("1.500,00") quando a string explicitamente tem vírgula decimal.
           const parseValorI = (v: any): number => {
-            if (v === null || v === undefined) return 0;
-            const s = String(v).trim().replace(/\./g, "").replace(",", ".");
+            if (v === null || v === undefined || v === "") return 0;
+            if (typeof v === "number") return isFinite(v) ? v : 0;
+            const raw = String(v).trim();
+            const s = raw.includes(",")
+              ? raw.replace(/\./g, "").replace(",", ".")
+              : raw;
             const n2 = parseFloat(s);
-            if (!isNaN(n2)) return n2;
-            const n1 = parseFloat(String(v));
-            return isNaN(n1) ? 0 : n1;
+            return isNaN(n2) ? 0 : n2;
           };
           const valorTotalObra = itens.reduce((s, i: any) => s + n(i.quantidadeAtual) * parseValorI(i.valorUnitario), 0);
           const fmtBRLi = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
