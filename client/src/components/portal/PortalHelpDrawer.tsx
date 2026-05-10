@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { HelpCircle, Search, X, ChevronRight, ArrowLeft } from "lucide-react";
 import { PORTAL_CLIENTE_ARTIGOS, type HelpArticle } from "@shared/help/portalClienteHelp";
 
@@ -170,8 +171,9 @@ function PortalHelpDrawer({ onClose }: { onClose: () => void }) {
     );
   }, [busca]);
 
-  return (
-    <div className="fixed inset-0 z-[200]" role="dialog" aria-modal aria-labelledby="portal-help-title">
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[2147483600]" role="dialog" aria-modal aria-labelledby="portal-help-title" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0 }}>
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
@@ -251,6 +253,7 @@ function PortalHelpDrawer({ onClose }: { onClose: () => void }) {
           )}
         </div>
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }

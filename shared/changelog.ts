@@ -11155,4 +11155,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 11:00:00",
   },
+  {
+    version: 1573,
+    titulo: "Portal do Cliente — Drawer da Ajuda agora renderiza em React Portal (corrige posicionamento truncado)",
+    descricao: "Causa raiz definitiva: o drawer da Central de Ajuda era filho direto do componente PortalHubCliente, que possui ancestrais com `transform`/`filter`/`backdrop-blur` (animações do Hub, drop-shadow do robô, header com `backdrop-blur-sm`). Por especificação CSS, qualquer ancestral com transform/filter/will-change cria um novo containing block para `position: fixed`, ou seja: o `fixed inset-0` do drawer passa a ser relativo ao Hub e não à viewport — por isso o drawer aparecia truncado/sobreposto, com o conteúdo do Hub continuando visível embaixo. Solução: o drawer agora é renderizado em `React.createPortal(node, document.body)`, escapando completamente da árvore do Hub e voltando a se posicionar relativo à viewport real. Reforços extras: z-index máximo (2147483600), style inline `position: fixed` redundante para resistir a CSS injetado, e fallback SSR-safe.",
+    tipo: "bugfix",
+    modulos: "Portal Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 12:00:00",
+  },
 ];
