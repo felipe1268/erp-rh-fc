@@ -11146,4 +11146,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 10:00:00",
   },
+  {
+    version: 1572,
+    titulo: "Portal do Cliente — Layout do drawer da Central de Ajuda corrigido (mobile e desktop)",
+    descricao: "O drawer da Central de Ajuda estava com o conteúdo do Hub vazando por baixo (saudação, cards de módulos e título 'Portal FC Engenharia' apareciam atrás do header e da busca da Ajuda) por causa de uma combinação de flexbox + bg-white herdado que não cobria toda a altura no mobile. Refatorado: (1) container raiz agora é position absolute em vez de flex (sem competição entre backdrop e drawer); (2) backdrop ocupa inset-0 com bg-black/50 + blur; (3) drawer usa inset-0 no mobile (full-screen) e sm:inset-y-0 sm:right-0 sm:max-w-md no desktop, com background branco sólido reforçado em style inline (#ffffff) para evitar qualquer cascata de transparência; (4) header, bloco de busca e corpo todos com bg-white explícito; (5) safe-area-inset-top/bottom respeitados (notch/home bar do iPhone); (6) z-index elevado para 200; (7) bloqueio de scroll do body (overflow hidden) enquanto a Ajuda está aberta + tecla ESC fecha o drawer.",
+    tipo: "bugfix",
+    modulos: "Portal Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 11:00:00",
+  },
 ];

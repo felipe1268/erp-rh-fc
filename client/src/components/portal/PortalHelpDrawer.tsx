@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { HelpCircle, Search, X, ChevronRight, ArrowLeft } from "lucide-react";
 import { PORTAL_CLIENTE_ARTIGOS, type HelpArticle } from "@shared/help/portalClienteHelp";
 
@@ -148,6 +148,17 @@ function PortalHelpDrawer({ onClose }: { onClose: () => void }) {
   const [busca, setBusca] = useState("");
   const [aberto, setAberto] = useState<HelpArticle | null>(null);
 
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
     if (!q) return PORTAL_CLIENTE_ARTIGOS;
@@ -160,10 +171,18 @@ function PortalHelpDrawer({ onClose }: { onClose: () => void }) {
   }, [busca]);
 
   return (
-    <div className="fixed inset-0 z-[100] flex" role="dialog" aria-modal>
-      <button className="flex-1 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-label="Fechar Ajuda" />
-      <aside className="w-full max-w-md bg-white shadow-2xl flex flex-col">
-        <header className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-2">
+    <div className="fixed inset-0 z-[200]" role="dialog" aria-modal aria-labelledby="portal-help-title">
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <aside
+        className="absolute inset-0 sm:inset-y-0 sm:right-0 sm:left-auto sm:w-full sm:max-w-md bg-white shadow-2xl flex flex-col"
+        style={{ backgroundColor: "#ffffff" }}
+      >
+        <header className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-2 bg-white shrink-0"
+          style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
           <div className="flex items-center gap-2 min-w-0">
             {aberto && (
               <button
@@ -175,7 +194,7 @@ function PortalHelpDrawer({ onClose }: { onClose: () => void }) {
               </button>
             )}
             <HelpCircle className="w-5 h-5 text-blue-600 shrink-0" />
-            <h2 className="font-bold text-slate-800 text-base truncate">
+            <h2 id="portal-help-title" className="font-bold text-slate-800 text-base truncate">
               {aberto ? `${aberto.emoji} ${aberto.titulo}` : "Central de Ajuda"}
             </h2>
           </div>
@@ -185,7 +204,7 @@ function PortalHelpDrawer({ onClose }: { onClose: () => void }) {
         </header>
 
         {!aberto && (
-          <div className="px-5 pt-4">
+          <div className="px-5 pt-4 bg-white shrink-0">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
@@ -201,7 +220,7 @@ function PortalHelpDrawer({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="flex-1 overflow-y-auto px-5 py-4 bg-white" style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}>
           {!aberto ? (
             <div className="space-y-2">
               {filtrados.map((a) => (
