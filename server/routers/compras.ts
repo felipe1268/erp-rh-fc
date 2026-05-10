@@ -1562,10 +1562,26 @@ export const comprasRouter = router({
     .input(z.object({ companyId: z.number(), busca: z.string().optional() }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
+      // Rev. 1609 — Consistência com listarItens: aplicar filtro de obras permitidas.
+      // Antes, um usuário restrito podia ver o consolidado completo da empresa ao trocar
+      // o seletor para "todos", contornando a restrição da view por obra.
+      const conds: any[] = [
+        eq(almoxarifadoItens.companyId, input.companyId),
+        eq(almoxarifadoItens.ativo, true),
+      ];
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (allowed !== null) {
+        if (allowed.length === 0) {
+          console.log(`[listarItensConsolidado] user=${ctx.user.id}/${ctx.user.role} company=${input.companyId} → SEM obras permitidas, retornando vazio`);
+          return { itens: [], totalGeral: 0 };
+        }
+        // Inclui itens centrais (obraId IS NULL) + obras permitidas.
+        conds.push(or(isNull(almoxarifadoItens.obraId), inArray(almoxarifadoItens.obraId, allowed)));
+      }
       const rows = await db.select().from(almoxarifadoItens)
-        .where(and(eq(almoxarifadoItens.companyId, input.companyId), eq(almoxarifadoItens.ativo, true)))
+        .where(and(...conds))
         .orderBy(asc(almoxarifadoItens.nome));
-      console.log(`[listarItensConsolidado] user=${ctx.user.id}/${ctx.user.role} company=${input.companyId} → ${rows.length} itens`);
+      console.log(`[listarItensConsolidado] user=${ctx.user.id}/${ctx.user.role} company=${input.companyId} allowed=${allowed === null ? 'null(admin)' : '['+allowed.length+']'} → ${rows.length} itens`);
 
       const busca = input.busca?.toLowerCase();
       const filtered = busca

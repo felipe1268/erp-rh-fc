@@ -955,7 +955,17 @@ export default function AlmoxarifadoPage() {
               </div>
             )}
 
-            {valorPorAlmox.length > 0 && (
+            {/* Rev. 1609 — Card "Valor por Almoxarifado":
+                Só renderiza quando consolidado já carregou E há ao menos 1 almoxarifado com valor > 0.
+                Anteriormente o card aparecia sempre (valorMap é pré-populado com todas as obras em zero),
+                exibindo um mar de "R$ 0,00 · 0 itens" durante loading, em empresa sem itens precificados
+                ou se a query falhasse silenciosamente — o que parecia bug. */}
+            {loadingConsolidado ? (
+              <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm px-6 py-8 flex items-center justify-center gap-3 text-emerald-600">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span className="text-sm font-medium">Calculando valor do estoque por almoxarifado…</span>
+              </div>
+            ) : valorTotal > 0 && valorPorAlmox.some(e => e.valor > 0) ? (
               <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm overflow-hidden">
                 <div className="bg-gradient-to-r from-emerald-700 to-teal-500 px-6 py-4 flex items-center justify-between text-white">
                   <div>
@@ -970,7 +980,7 @@ export default function AlmoxarifadoPage() {
                   </div>
                 </div>
                 <div className="divide-y divide-emerald-100">
-                  {valorPorAlmox.map((e, idx) => {
+                  {valorPorAlmox.filter(e => e.valor > 0).map((e, idx) => {
                     const pct = valorTotal > 0 ? (e.valor / valorTotal) * 100 : 0;
                     return (
                       <div key={idx} className="px-6 py-3 flex items-center gap-4">
@@ -989,7 +999,18 @@ export default function AlmoxarifadoPage() {
                   })}
                 </div>
               </div>
-            )}
+            ) : consolidado ? (
+              <div className="bg-white rounded-2xl border border-dashed border-gray-200 px-6 py-8 text-center">
+                <BarChart2 className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-gray-600">Nenhum almoxarifado com valor calculável ainda</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Cadastre <strong>preço unitário</strong> e <strong>quantidade em estoque</strong> nos itens para ver a distribuição por almoxarifado.
+                  {consolidado.itens.filter((i: any) => !i.valorUnitario || parseFloat(i.valorUnitario) === 0).length > 0 && (
+                    <> Você pode usar o botão <strong>"Preencher preços com IA"</strong> acima para estimar valores faltantes.</>
+                  )}
+                </p>
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap gap-3 items-center">
               <div className="relative flex-1 min-w-[220px]">
