@@ -11227,4 +11227,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 19:00:00",
   },
+  {
+    version: 1581,
+    titulo: "Planejamento — REFIS: corrigido bug em que 'Realizado Global (c/ Indiretas)' caía em vez de subir",
+    descricao: "Bug reportado pelo usuário: ao ligar o toggle 'Global (c/ Indiretas)' no REFIS, o Previsto subia (1,84% → 2,28%, correto) mas o Realizado CAÍA (1,38% → 1,19%), o que é inconsistente — em Earned Value (PMI/PMBOK) o denominador (peso total / BAC ponderado) deve ser o MESMO no previsto e no realizado, senão o SPI perde o significado. Causa raiz: as funções `refisRealComInd`, `avancoRealAtual` e `avancoRealAntesComInd` filtravam apenas `!a.isGrupo && !a.disabled` (sem exigir `dataInicio && dataFim`), enquanto suas pares previstas (`refisPrevistoComInd`, `avancoPrevisto`, `avancoPrevAntesComInd`) exigiam datas. Resultado: atividades indiretas sem datas no cronograma entravam no DENOMINADOR (peso total) do realizado mas com numerador zero (porque `prevIndRef` retorna 0 sem datas), inflando artificialmente o divisor do realizado e diluindo o resultado para baixo. Correção: aplicado o mesmo filtro `a.dataInicio && a.dataFim` em todas as quatro funções do realizado (`avancoRealAtual`, `avancoRealAntes`, `refisRealComInd`, `avancoRealAntesComInd`), alinhando o universo de atividades com o do previsto. Agora, ligar 'Global' faz o realizado subir proporcionalmente ao previsto, conforme esperado.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 20:00:00",
+  },
 ];

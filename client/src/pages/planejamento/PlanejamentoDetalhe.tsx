@@ -9982,7 +9982,12 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         (m as any)[`d_${av.atividadeId}`] = av.semana;
       }
     });
-    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
+    // Rev. 1581 — usa o MESMO universo de atividades do `avancoPrevisto`
+    // (folhas com datas). Isso garante que o denominador (peso total / BAC
+    // ponderado) seja o mesmo entre previsto e realizado, conforme exige a
+    // metodologia de Earned Value (PMI / PMBOK). Sem isso, atividades sem
+    // datas entravam no denominador com numerador 0, diluindo o realizado.
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
       const peso = getPeso(a, semPeso);
@@ -9999,7 +10004,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         (m as any)[`d_${av.atividadeId}`] = av.semana;
       }
     });
-    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
+    // Rev. 1581 — mesmo filtro do `avancoPrevAntes` (ver comentário acima).
+    const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
     return Math.min(100, folhas.reduce((s: number, a: any) => {
       const peso = getPeso(a, semPeso);
@@ -10028,7 +10034,13 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         (m as any)[`d_${av.atividadeId}`] = av.semana;
       }
     });
-    const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled);
+    // Rev. 1581 — mesmo universo do `refisPrevistoComInd` (folhas com
+    // datas). Antes faltava o filtro `a.dataInicio && a.dataFim`, e
+    // indiretas sem datas inflavam o denominador com numerador 0,
+    // fazendo o "Realizado (Global)" CAIR ao ligar o switch — mesmo
+    // comportamento das indiretas sendo "previsto = realizado" (i.e.,
+    // 100% no cronograma) elas deveriam SUBIR o realizado, e não baixar.
+    const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim);
     const { pesoTotal, semPeso } = calcPesoTotal(f);
     return Math.min(100, f.reduce((s: number, a: any) => {
       const peso = getPeso(a, semPeso);
@@ -10066,7 +10078,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         (m as any)[`d_${av.atividadeId}`] = av.semana;
       }
     });
-    const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled);
+    // Rev. 1581 — mesmo universo do `avancoPrevAntesComInd` (ver acima).
+    const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim);
     const { pesoTotal, semPeso } = calcPesoTotal(f);
     return Math.min(100, f.reduce((s: number, a: any) => {
       const peso = getPeso(a, semPeso);
