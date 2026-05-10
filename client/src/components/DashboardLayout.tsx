@@ -864,8 +864,19 @@ export default function DashboardLayout({
     );
   }
 
+  // Rev. 1578 — Em telas de até 1279px (telefones, iPad portrait/landscape e
+  // tablets em geral) a barra lateral começa COLLAPSED em modo "ícone"
+  // (`collapsible="icon"` já configurado no <Sidebar/> abaixo). O usuário
+  // expande tocando no botão de menu quando precisar e ela continua aberta
+  // até clicar de novo. Em desktop (>=1280px) a barra continua começando
+  // aberta como antes. SSR-safe: defaultOpen=true se window indisponível.
+  const TABLET_BREAKPOINT = 1280;
+  const sidebarDefaultOpen =
+    typeof window === "undefined" ? true : window.innerWidth >= TABLET_BREAKPOINT;
+
   return (
     <SidebarProvider
+      defaultOpen={sidebarDefaultOpen}
       style={
         {
           "--sidebar-width": `${sidebarWidth}px`,

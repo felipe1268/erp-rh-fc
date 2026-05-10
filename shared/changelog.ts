@@ -11200,4 +11200,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 16:00:00",
   },
+  {
+    version: 1578,
+    titulo: "ERP — Sidebar começa em modo ÍCONE em telefone, iPad e tablet (não mais aberta nem em gaveta)",
+    descricao: "Refinamento do comportamento da Rev. 1576. Antes a sidebar abria por completo em iPad/tablet (texto + ícones). A Rev. 1576 a transformava em gaveta (Sheet) que precisava ser aberta toda vez. O usuário pediu o meio-termo: começar com a barra lateral COLLAPSED em modo ÍCONE (só os ícones aparecem, ocupando ~56px de largura), e expandir sob demanda quando o usuário tocar no botão de menu. Implementação: (a) revertido o bump do breakpoint mobile (`useIsMobile` voltou para 768px) — assim iPad NÃO entra mais em modo gaveta; (b) `SidebarProvider` em `DashboardLayout` agora calcula `defaultOpen` baseado na largura da tela: se `window.innerWidth < 1280px` (telefones, iPad portrait/landscape, tablets Android) começa fechado; em desktop continua começando aberto. Como o `<Sidebar collapsible='icon'>` já estava configurado, fechado significa o modo ícone visto na imagem do usuário (IMG_0283). Comportamento desktop preservado.",
+    tipo: "feature",
+    modulos: "Plataforma",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 17:00:00",
+  },
 ];
