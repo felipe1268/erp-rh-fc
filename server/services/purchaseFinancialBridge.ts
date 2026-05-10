@@ -51,6 +51,7 @@ export interface OCParcelasInput {
   supplierNome?: string | null;
   valorTotal: number;
   tipoPagamento?: string | null;
+  condicaoPagamento?: string | null;
   numeroParcelas?: number;
   dataBase?: string | null;
   formaPagamento?: string | null;
@@ -58,6 +59,24 @@ export interface OCParcelasInput {
   tipo?: string | null;
   freteSufixo?: string;
   vehicleId?: number | null;
+}
+
+// Rev. 1624 — Detecta OS por medição (serviço/pacote pago por medição mensal).
+// Esses contratos NÃO devem virar título a pagar com valor integral em data única;
+// devem entrar como PREVISÃO mensal no fluxo de caixa, e o título a pagar real
+// só nasce quando uma medição é aprovada no módulo Terceiros → Medição.
+function detectarMedicao(input: OCParcelasInput): boolean {
+  const tipoOk = input.tipo === "servico" || input.tipo === "pacote";
+  if (!tipoOk) return false;
+  const norm = (s?: string | null) => (s || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // remove acentos
+  const tp = norm(input.tipoPagamento);
+  const cp = norm(input.condicaoPagamento);
+  // Match estrito por palavra inteira pra evitar falsos positivos
+  // (ex.: "imediato", "midia", "remediar"). Aceita "medicao", "medicoes", "por medicao", "medicao mensal".
+  const re = /\bmedic(ao|oes)\b/;
+  return re.test(tp) || re.test(cp);
 }
 
 export async function criarParcelasFinanceiras(
@@ -73,14 +92,39 @@ export async function criarParcelasFinanceiras(
   const supplier = input.supplierId ? await getSupplierFields(db, input.supplierId) : null;
 
   const dataBase = input.dataBase || new Date().toISOString().split("T")[0];
+  const isMdoMedicao = detectarMedicao(input);
 
-  const parcelas = input.tipoPagamento
-    ? calcularParcelas(input.tipoPagamento, input.valorTotal, dataBase)
-    : [{ numero: 1, valor: input.valorTotal, dataVencimento: dataBase, descricao: "Pagamento único" }];
+  let parcelas: { numero: number; valor: number; dataVencimento: string; descricao: string }[];
+  if (isMdoMedicao) {
+    // Distribui o valor total em N previsões MENSAIS a partir da dataBase da OS,
+    // ignorando o calcularParcelas (que para 'medicao' devolveria 1 parcela cheia +30d).
+    const n = Math.max(1, Number(input.numeroParcelas || 1));
+    const valorParcela = Math.round((input.valorTotal / n) * 100) / 100;
+    const baseDt = new Date(dataBase + "T12:00:00");
+    parcelas = Array.from({ length: n }, (_, i) => {
+      const dt = new Date(baseDt);
+      dt.setMonth(dt.getMonth() + i);
+      const isLast = i === n - 1;
+      const valor = isLast
+        ? Math.round((input.valorTotal - valorParcela * (n - 1)) * 100) / 100
+        : valorParcela;
+      return {
+        numero: i + 1,
+        valor,
+        dataVencimento: dt.toISOString().split("T")[0],
+        descricao: `Medição ${i + 1}/${n}`,
+      };
+    });
+  } else if (input.tipoPagamento) {
+    parcelas = calcularParcelas(input.tipoPagamento, input.valorTotal, dataBase);
+  } else {
+    parcelas = [{ numero: 1, valor: input.valorTotal, dataVencimento: dataBase, descricao: "Pagamento único" }];
+  }
 
   const totalParcelas = parcelas.length;
   const grupoId = totalParcelas > 1 ? crypto.randomUUID() : null;
   const ocLabel = input.numero || String(input.ocId);
+  const tagPrev = isMdoMedicao ? "PREVISÃO MEDIÇÃO " : "";
 
   const entryIds: number[] = [];
   const apIds: number[] = [];
@@ -102,7 +146,7 @@ export async function criarParcelasFinanceiras(
         status: "previsto",
         origemModulo: "compras",
         origemId: input.ocId,
-        origemDescricao: `OC #${ocLabel} — ${input.supplierNome || "Fornecedor"}${frete}${sufixo}`,
+        origemDescricao: `${tagPrev}OC #${ocLabel} — ${input.supplierNome || "Fornecedor"}${frete}${sufixo}`,
         parcelaNumero: parcela.numero,
         parcelaTotal: totalParcelas,
         parcelaGrupoId: grupoId,
@@ -114,6 +158,11 @@ export async function criarParcelasFinanceiras(
 
       const financialEntryId = entryResult?.[0]?.id;
       if (financialEntryId) entryIds.push(financialEntryId);
+
+      // Rev. 1624 — Para OS por medição, NÃO criar accounts_payable.
+      // O título a pagar real será gerado quando a medição for aprovada
+      // no módulo Terceiros → Medição. Aqui fica só a previsão mensal.
+      if (isMdoMedicao) continue;
 
       const apResult = await tx.insert(purchaseAccountsPayable).values({
         companyId: input.companyId,
@@ -172,6 +221,7 @@ export async function onOCEmitida(ocId: number, userId: number, userName: string
     supplierNome: oc.supplierNome,
     valorTotal: parseFloat(String(oc.valorTotal || "0")),
     tipoPagamento: (oc as any).tipoPagamento,
+    condicaoPagamento: (oc as any).condicaoPagamento,
     numeroParcelas: oc.numeroParcelas ?? 1,
     dataBase: oc.prazoEntrega || null,
     formaPagamento: oc.formaPagamento || null,
@@ -484,6 +534,20 @@ export async function onOCCancelada(ocId: number, motivo: string, userId: number
   if (allAPs.length > 0) {
     efeitos.push(`${allAPs.length} accounts_payable cancelados`);
     efeitos.push(`financial_entries cancelados`);
+  }
+
+  // Rev. 1624 — OS por medição não tem AP, mas cria previsões diretas.
+  // Cancela previsões remanescentes (entries vivos) que apontem para esta OC.
+  const previsoesRes = await db.update(financialEntries)
+    .set({ status: "cancelado" } as any)
+    .where(and(
+      eq((financialEntries as any).origemModulo, "compras"),
+      eq((financialEntries as any).origemId, ocId),
+      inArray((financialEntries as any).status, ["previsto", "a_pagar"]),
+    ))
+    .returning({ id: (financialEntries as any).id });
+  if (previsoesRes && previsoesRes.length > 0) {
+    efeitos.push(`${previsoesRes.length} previsões financeiras canceladas (medição/órfãs)`);
   }
 
   if (oc.solicitacaoId) {
