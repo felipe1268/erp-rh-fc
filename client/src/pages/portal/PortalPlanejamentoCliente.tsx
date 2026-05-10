@@ -2831,8 +2831,58 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
     }, 0);
   const avancoPrevisto  = incluirIndiretas ? previstoRecalc  : Number(refisAtual.avancoPrevisto ?? 0);
   const avancoRealAtual = incluirIndiretas ? realizadoRecalc : Number(refisAtual.avancoRealizado ?? 0);
-  const avancoSemPrev   = Number(refisAtual.avancoSemanalPrevisto ?? (refisAnterior ? avancoPrevisto - Number(refisAnterior.avancoPrevisto) : 0));
-  const avancoSemReal   = Number(refisAtual.avancoSemanalRealizado ?? (refisAnterior ? avancoRealAtual - Number(refisAnterior.avancoRealizado) : 0));
+
+  // Rev. 1583 — Quando "Global (c/ Indiretas)" ligado, o semanal TAMBÉM
+  // precisa ser recalculado, senão fica divergente (cabeçalho mostra
+  // acumulado com indiretas mas semanal mostra valor oficial sem indiretas).
+  // Para a primeira semana (sem REFIS anterior), semanal = acumulado.
+  // Para semanas seguintes, recalcula o acumulado da semana anterior pela
+  // mesma fórmula e tira a diferença.
+  const avancoSemPrev = useMemo(() => {
+    if (!incluirIndiretas) {
+      return Number(refisAtual.avancoSemanalPrevisto ?? (refisAnterior ? avancoPrevisto - Number(refisAnterior.avancoPrevisto) : 0));
+    }
+    if (!refisAnterior) return previstoRecalc;
+    const semAntFim = (() => {
+      const d = new Date((refisAnterior.semana as string) + "T12:00:00");
+      d.setDate(d.getDate() + 7);
+      return d.toISOString().split("T")[0];
+    })();
+    const prevAntes = folhasComDatas.reduce((s: number, a: any) => {
+      const peso = semPesoFolhas ? 1 : (Number(a.pesoFinanceiro) || 0);
+      return s + (progPrevistoNa(a, semAntFim) * peso) / denomFolhas;
+    }, 0);
+    return Math.max(0, previstoRecalc - prevAntes);
+  }, [incluirIndiretas, refisAtual, refisAnterior, avancoPrevisto, previstoRecalc, folhasComDatas, semPesoFolhas, denomFolhas]);
+
+  const avancoSemReal = useMemo(() => {
+    if (!incluirIndiretas) {
+      return Number(refisAtual.avancoSemanalRealizado ?? (refisAnterior ? avancoRealAtual - Number(refisAnterior.avancoRealizado) : 0));
+    }
+    if (!refisAnterior) return realizadoRecalc;
+    // Para o realizado anterior recalculado: diretas usam o último apontamento
+    // disponível ATÉ a semana anterior (não temos snapshot histórico, então
+    // aproximamos usando refisAnterior.avancoRealizado como base oficial das
+    // diretas e somamos a contribuição das indiretas pela curva prevista
+    // naquela data). É a mesma lógica de "indireta no realizado = curva
+    // prevista" aplicada no acumulado.
+    const semAntFim = (() => {
+      const d = new Date((refisAnterior.semana as string) + "T12:00:00");
+      d.setDate(d.getDate() + 7);
+      return d.toISOString().split("T")[0];
+    })();
+    // Recalcula o acumulado anterior usando os mesmos apontamentos atuais
+    // (snapshot histórico de percentRealizado não está disponível no Portal —
+    // aceita pequena distorção em caso de apontamento retroativo).
+    const realAntes = folhasComDatas.reduce((s: number, a: any) => {
+      const peso = semPesoFolhas ? 1 : (Number(a.pesoFinanceiro) || 0);
+      const val = a.isIndireta
+        ? progPrevistoNa(a, semAntFim)
+        : (Number(a.percentRealizado) || 0);
+      return s + (val * peso) / denomFolhas;
+    }, 0);
+    return Math.max(0, realizadoRecalc - realAntes);
+  }, [incluirIndiretas, refisAtual, refisAnterior, avancoRealAtual, realizadoRecalc, folhasComDatas, semPesoFolhas, denomFolhas]);
   const desvioFisico    = avancoRealAtual - avancoPrevisto;
   const spi = incluirIndiretas
     ? (avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0)

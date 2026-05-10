@@ -11245,4 +11245,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 21:00:00",
   },
+  {
+    version: 1583,
+    titulo: "Portal do Cliente — REFIS: Avanço Semanal também recalcula com indiretas (sem divergência interna)",
+    descricao: "Continuação da Rev. 1582. Mesmo após corrigir o acumulado, o Portal mostrava cabeçalho 2,28% / 1,88% (Global) mas os cards de Avanço Semanal Previsto/Realizado continuavam fixados em 1,84% / 1,38% (valores oficiais sem indiretas), gerando divergência VISÍVEL dentro da própria tela. Causa: `avancoSemPrev` e `avancoSemReal` sempre liam o campo oficial salvo (`refisAtual.avancoSemanalPrevisto/Realizado`) que foi gravado sem indiretas. Correção: ambas viraram `useMemo` que, quando `incluirIndiretas` está ligado, (a) na primeira semana retornam o próprio acumulado recalculado (parte de zero); (b) em semanas seguintes recalculam o acumulado da semana anterior pela mesma fórmula (indiretas via curva prevista linear) e retornam a diferença. Quando 'Só Diretas' o comportamento permanece idêntico — cai no valor oficial. Agora SPI e Desvio também batem com os cards semanais.",
+    tipo: "bugfix",
+    modulos: "Portal Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 22:00:00",
+  },
 ];
