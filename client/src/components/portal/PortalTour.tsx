@@ -4,16 +4,41 @@ import { PORTAL_CLIENTE_TOUR } from "@shared/help/portalClienteHelp";
 
 const TOUR_STORAGE_KEY = "portal_cliente_tour_v1";
 
-const steps: Step[] = PORTAL_CLIENTE_TOUR.map((s) => ({
-  target: s.target,
-  title: s.title,
-  content: s.content,
-  disableBeacon: true,
-  placement: "auto" as const,
-}));
+function buildSteps(nomeArg?: string | null): Step[] {
+  let nome = (nomeArg || "").trim();
+  if (!nome) {
+    try { nome = (localStorage.getItem("portal_responsavel") || "").trim(); } catch { /* ignore */ }
+  }
+  const primeiroNome = nome ? nome.split(/\s+/)[0] : "";
+  return PORTAL_CLIENTE_TOUR.map((s, idx) => {
+    if (idx === 0 && primeiroNome) {
+      return {
+        target: s.target,
+        title: `Bem-vindo, ${primeiroNome}! 👋`,
+        content: s.content,
+        disableBeacon: true,
+        placement: "auto" as const,
+      };
+    }
+    return {
+      target: s.target,
+      title: s.title,
+      content: s.content,
+      disableBeacon: true,
+      placement: "auto" as const,
+    };
+  });
+}
 
-export function PortalTour({ forceStart = false, onClose }: { forceStart?: boolean; onClose?: () => void }) {
+export function PortalTour({ forceStart = false, onClose, userName }: { forceStart?: boolean; onClose?: () => void; userName?: string | null }) {
   const [run, setRun] = useState(false);
+  const [steps, setSteps] = useState<Step[]>(() => buildSteps(userName));
+
+  // Rev. 1574 — quando o nome chegar do servidor (meuPerfil), reconstrói o
+  // primeiro step para que o tour apareça personalizado mesmo na 1ª carga.
+  useEffect(() => {
+    setSteps(buildSteps(userName));
+  }, [userName]);
 
   useEffect(() => {
     if (forceStart) {

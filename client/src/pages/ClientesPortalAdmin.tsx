@@ -14,7 +14,7 @@ import {
   Loader2, ShieldCheck, CheckCircle2, AlertCircle, Copy, Reply,
   Smile, Frown, Meh, TrendingUp, Users, Plus, Trash2, RefreshCw, UserPlus,
   Lock, UnlockKeyhole, SlidersHorizontal, ExternalLink, Layers,
-  Building2, ThumbsUp, X, CalendarDays,
+  Building2, ThumbsUp, X, CalendarDays, Pencil,
 } from "lucide-react";
 import {
   PORTAL_CLIENTE_ABAS, parseAbasLiberadas, ABA_OBRIGATORIA, type PortalClienteAbaKey,
@@ -123,6 +123,29 @@ export default function ClientesPortalAdmin() {
     onSuccess: () => { toast.success("Acesso removido"); utils.portalExterno.admin.listarAcessosCliente.invalidate(); },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 1574 — edição de nome/e-mail
+  const [editTarget, setEditTarget] = useState<any | null>(null);
+  const [editNome, setEditNome] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const atualizarMut = trpc.portalExterno.admin.atualizarAcessoCliente.useMutation({
+    onSuccess: () => {
+      toast.success("Acesso atualizado");
+      utils.portalExterno.admin.listarAcessosCliente.invalidate();
+      setEditTarget(null);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const abrirEditar = (a: any) => {
+    setEditTarget(a);
+    setEditNome(a.nomeResponsavel || "");
+    setEditEmail(a.emailResponsavel || "");
+  };
+  const submitEditar = () => {
+    if (!editTarget) return;
+    if (editNome.trim().length < 2) { toast.error("Informe o nome completo"); return; }
+    if (!/^\S+@\S+\.\S+$/.test(editEmail.trim())) { toast.error("E-mail inválido"); return; }
+    atualizarMut.mutate({ id: editTarget.id, companyId, nome: editNome.trim(), email: editEmail.trim() });
+  };
   const setAbasMut = trpc.portalExterno.admin.setAbasLiberadasCliente.useMutation({
     onSuccess: () => { toast.success("Abas atualizadas"); utils.portalExterno.admin.listarAcessosCliente.invalidate(); setAbasTarget(null); },
     onError: (e) => toast.error(e.message),
@@ -790,6 +813,12 @@ export default function ClientesPortalAdmin() {
                                         <SlidersHorizontal className="w-4 h-4" />
                                       </Button>
                                     )}
+                                    {ativo && (
+                                      <Button size="icon" variant="ghost" className="h-9 w-9 text-slate-700 hover:bg-slate-100" title="Editar nome / e-mail"
+                                        onClick={() => abrirEditar(a)}>
+                                        <Pencil className="w-4 h-4" />
+                                      </Button>
+                                    )}
                                     {ativo ? (
                                       <>
                                         <Button size="icon" variant="ghost" className="h-9 w-9 text-blue-600 hover:bg-blue-50" title="Reenviar senha provisória"
@@ -1028,6 +1057,50 @@ export default function ClientesPortalAdmin() {
                 </DialogFooter>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 1574 — Editar nome/e-mail de um acesso */}
+        <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null); }}>
+          <DialogContent className="sm:max-w-md bg-white">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="w-4 h-4 text-slate-700" /> Editar acesso
+              </DialogTitle>
+            </DialogHeader>
+            {editTarget && (
+              <div className="space-y-4 py-2">
+                <div>
+                  <Label>Nome completo *</Label>
+                  <Input
+                    value={editNome}
+                    onChange={(e) => setEditNome(e.target.value)}
+                    placeholder="Ex.: Maria Silva"
+                    maxLength={120}
+                    className="mt-1 h-11"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">Esse nome aparece na saudação do Portal do Cliente.</p>
+                </div>
+                <div>
+                  <Label>E-mail *</Label>
+                  <Input
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="usuario@empresa.com"
+                    className="mt-1 h-11"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">Mudar o e-mail não invalida a senha atual nem reenvia comunicado.</p>
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditTarget(null)} disabled={atualizarMut.isPending}>Cancelar</Button>
+              <Button onClick={submitEditar} disabled={atualizarMut.isPending} className="bg-blue-600 hover:bg-blue-700">
+                {atualizarMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Salvar
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

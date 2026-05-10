@@ -438,6 +438,43 @@ export const portalExternoRouter = router({
       return { success: true };
     }),
 
+    // Rev. 1574 — Editar nome/e-mail de um acesso já criado (sem precisar gerar nova senha).
+    atualizarAcessoCliente: protectedProcedure.input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      nome: z.string().trim().min(2, "Nome deve ter ao menos 2 caracteres").max(120),
+      email: z.string().trim().email("E-mail inválido"),
+    })).mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const [existing] = await db.select().from(portalCredentials).where(and(
+        eq(portalCredentials.id, input.id),
+        eq(portalCredentials.companyId, input.companyId),
+        eq(portalCredentials.tipo, "cliente"),
+      ));
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Acesso não encontrado" });
+      const emailNorm = input.email.toLowerCase();
+      // Garante que não estamos colidindo com outro acesso ativo do mesmo cliente.
+      if (emailNorm !== ((existing as any).emailResponsavel || "").toLowerCase()) {
+        const conflitos = await db.select().from(portalCredentials).where(and(
+          eq(portalCredentials.tipo, "cliente"),
+          eq(portalCredentials.companyId, input.companyId),
+          eq(portalCredentials.clienteId, (existing as any).clienteId),
+          eq(portalCredentials.ativo, 1),
+        ));
+        const colide = conflitos.find((c: any) => c.id !== input.id && (c.emailResponsavel || "").toLowerCase() === emailNorm);
+        if (colide) throw new TRPCError({ code: "CONFLICT", message: "Já existe outro acesso ATIVO com este e-mail para este cliente." });
+      }
+      await db.update(portalCredentials).set({
+        nomeResponsavel: input.nome.trim(),
+        emailResponsavel: emailNorm,
+      }).where(and(
+        eq(portalCredentials.id, input.id),
+        eq(portalCredentials.companyId, input.companyId),
+        eq(portalCredentials.tipo, "cliente"),
+      ));
+      return { success: true };
+    }),
+
     // ========== PORTAL DO CLIENTE — Admin ==========
     // Cria (ou atualiza, se já existir um acesso para o mesmo e-mail) uma credencial de acesso
     // ao Portal do Cliente. Cada cliente pode ter múltiplos usuários — cada um com nome e e-mail próprios.
@@ -1011,6 +1048,31 @@ export const portalExternoRouter = router({
 
   // ========== PORTAL DO CLIENTE ==========
   cliente: router({
+    // Rev. 1574 — Perfil do usuário logado (nome/e-mail/empresa).
+    // Usado pelo Hub para exibir o nome ATUAL do banco mesmo quando o
+    // localStorage tem dados antigos (ex.: usuário criado antes do campo
+    // nomeResponsavel existir, e que foi editado pelo admin depois).
+    meuPerfil: publicProcedure.input(z.object({ token: z.string() })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+      const credId = decoded.portalId ?? decoded.credId;
+      const [cred] = await db.select().from(portalCredentials).where(and(
+        eq(portalCredentials.id, credId),
+        eq(portalCredentials.companyId, decoded.companyId),
+      ));
+      if (!cred) throw new TRPCError({ code: "NOT_FOUND" });
+      return {
+        nomeResponsavel: (cred as any).nomeResponsavel ?? null,
+        emailResponsavel: (cred as any).emailResponsavel ?? null,
+        nomeEmpresa: (cred as any).nomeEmpresa ?? null,
+        primeiroAcesso: (cred as any).primeiroAcesso === 1,
+      };
+    }),
+
+
     meusDados: publicProcedure.input(z.object({ token: z.string() })).query(async ({ input }) => {
       const db = (await getDb())!;
       const secret = process.env.JWT_SECRET || "portal-secret";

@@ -11164,4 +11164,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 12:00:00",
   },
+  {
+    version: 1574,
+    titulo: "Portal do Cliente — Editar acesso (nome/e-mail), saudação live com nome do banco e tour personalizado",
+    descricao: "Pacote para que o nome do USUÁRIO logado apareça no portal mesmo para acessos antigos. (1) Admin > Acessos do Portal > Cadastrar/Listar usuários ganhou botão 'Editar' (ícone Pencil) que abre modal para alterar nome completo e e-mail de qualquer usuário ATIVO sem precisar gerar nova senha; backend `portalExterno.admin.atualizarAcessoCliente` valida tenant (companyId), unicidade de e-mail entre acessos ativos do mesmo cliente, normaliza e-mail em lowercase. (2) Novo endpoint público `portalExterno.cliente.meuPerfil` (autenticado por JWT) devolve nomeResponsavel/emailResponsavel/nomeEmpresa do banco — Hub passou a chamar essa query e atualizar o localStorage `portal_responsavel` em tempo real, então quando o admin renomear o acesso o cliente vê o nome correto na próxima carga sem precisar deslogar. (3) Tour guiado de boas-vindas (Joyride) agora personaliza o título do 1º step: se houver nome cadastrado vira 'Bem-vindo, FELIPE! 👋' (primeiro nome em title-case nativo); fallback para o título genérico quando ainda não há nome. Cobertura para usuários antigos: Hub usa fallback nomeEmpresa quando nomeResponsavel ainda não foi preenchido pelo admin.",
+    tipo: "feature",
+    modulos: "Portal Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 13:00:00",
+  },
 ];

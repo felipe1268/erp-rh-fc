@@ -118,7 +118,7 @@ export default function PortalHubCliente() {
   const token = localStorage.getItem("portal_token") || "";
   const tipo = localStorage.getItem("portal_tipo") || "";
   const nomeEmpresa = localStorage.getItem("portal_nome") || "Cliente";
-  const nomeResponsavel = localStorage.getItem("portal_responsavel") || "";
+  const nomeResponsavelLS = localStorage.getItem("portal_responsavel") || "";
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
@@ -139,6 +139,17 @@ export default function PortalHubCliente() {
   const { data: minhasObras = [] } = trpc.portalExterno.cliente.minhasObras.useQuery(
     { token }, { enabled: !!token && tipo === "cliente" }
   );
+
+  // Rev. 1574 — busca o nome ATUAL do usuário no banco (admin pode ter editado).
+  const { data: meuPerfil } = trpc.portalExterno.cliente.meuPerfil.useQuery(
+    { token }, { enabled: !!token && tipo === "cliente" }
+  );
+  useEffect(() => {
+    if (meuPerfil?.nomeResponsavel) {
+      try { localStorage.setItem("portal_responsavel", meuPerfil.nomeResponsavel); } catch { /* ignore */ }
+    }
+  }, [meuPerfil?.nomeResponsavel]);
+  const nomeResponsavel = meuPerfil?.nomeResponsavel || nomeResponsavelLS;
 
   // Rev. 1564 — quais módulos o admin liberou para este usuário.
   const { data: liberacoes } = trpc.portalExterno.cliente.liberacoes.useQuery(
@@ -183,7 +194,7 @@ export default function PortalHubCliente() {
   return (
     <>
       <style>{hubStyles}</style>
-      <PortalTour />
+      <PortalTour userName={nomeResponsavel} />
       <div className="min-h-screen hub-mesh-bg relative overflow-hidden">
         {/* Wave decorations */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
