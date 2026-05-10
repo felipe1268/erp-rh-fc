@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,8 +10,9 @@ import {
   DollarSign, Cloud, Droplets, Wind, Loader2, ClipboardList, ChevronRight,
   ChevronDown, Search, Menu, X, PanelLeftClose, PanelLeftOpen, Users, Handshake, Home,
   AlertOctagon, Printer, CalendarRange, ShieldCheck, MessageSquare, Star, Layers, Check,
-  TrendingDown, Zap,
+  TrendingDown, Zap, FileCheck2, FileX2, GraduationCap, Eye,
 } from "lucide-react";
+import { getNrDescricao } from "@shared/trainingRules";
 import {
   ResponsiveContainer, ComposedChart, LineChart, BarChart, Bar, Cell,
   Line, Area, CartesianGrid, XAxis, YAxis, Tooltip, ReferenceLine, LabelList,
@@ -3944,6 +3945,24 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
     { token, obraId },
     { enabled: !!token && obraId > 0 }
   );
+  // Rev. 1587 — Carrega documentos (ASO + treinamentos) para expandir o detalhe
+  // ao clicar no funcionário, igual ao módulo "RH / Documentos".
+  const { data: rhData } = trpc.portalExterno.cliente.documentosRhObra.useQuery(
+    { token, obraId },
+    { enabled: !!token && obraId > 0 }
+  );
+  const docsByEmpId = useMemo(() => {
+    const m = new Map<number, any>();
+    for (const f of (rhData?.funcionarios ?? []) as any[]) m.set(f.id, f);
+    return m;
+  }, [rhData]);
+  const [exp, setExp] = useState<Record<string, boolean>>({});
+  const [pdfViewer, setPdfViewer] = useState<{ url: string; titulo: string; subtitulo: string } | null>(null);
+  const abrirPdf = (kind: "aso" | "treinamento", id: number, titulo: string, subtitulo: string) => {
+    const url = `/api/portal/cliente/documento/${kind}/${id}?token=${encodeURIComponent(token)}#toolbar=0&navpanes=0&scrollbar=1`;
+    setPdfViewer({ url, titulo, subtitulo });
+  };
+  const hojeStr = new Date().toISOString().slice(0, 10);
   const [busca, setBusca] = useState("");
   // Rev. 1519: cliente não precisa ver regime de contratação (CLT vs PJ).
   // Consolidamos CLT+PJ em "Próprios FC" e mantemos Terceiros separado.
@@ -4087,66 +4106,238 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                 <tr>
+                  <th className="w-8" />
                   <th className="text-left px-3 py-2 text-[11px] font-semibold text-slate-500 uppercase w-12">Foto</th>
                   <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Nome</th>
                   <th className="text-left px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Função</th>
                   <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Categoria</th>
+                  <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">ASO</th>
+                  <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Treinamentos</th>
                   <th className="text-center px-4 py-2 text-[11px] font-semibold text-slate-500 uppercase">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {lista.map((e: any, i: number) => {
+                {lista.map((e: any) => {
                   const isTerc = e.tipo === "Terceiro";
                   const isPJ = e.tipo === "PJ";
-                  const tipoBadge = isTerc
-                    ? "bg-amber-100 text-amber-800 border border-amber-300"
-                    : isPJ
-                      ? "bg-violet-100 text-violet-800 border border-violet-300"
-                      : "bg-blue-100 text-blue-800 border border-blue-300";
-                  const tipoLabel = isTerc ? "Terceiro" : isPJ ? "PJ" : "CLT";
                   const cat = (e.categoria || "Direto") as "Direto" | "Indireto";
                   const catBadge = cat === "Direto"
                     ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
                     : "bg-slate-200 text-slate-700 border border-slate-300";
+                  const docs = isTerc ? null : docsByEmpId.get(e.id as number);
+                  const asoStatus = docs?.asoStatus ?? "sem_aso";
+                  const asoColor = asoStatus === "vigente" ? "bg-emerald-100 text-emerald-800"
+                    : asoStatus === "vencido" ? "bg-rose-100 text-rose-800"
+                    : "bg-slate-100 text-slate-500";
+                  const trVig = docs?.treinamentosVigentes ?? 0;
+                  const trVenc = docs?.treinamentosVencidos ?? 0;
+                  // Rev. 1587 — chave estável por id (próprios = number, terceiros = "T<id>");
+                  // não usar índice da lista, senão filtros/busca reembaralham e
+                  // dropam o estado de expansão.
+                  const rowKey = String(e.id);
+                  const expanded = !!exp[rowKey];
+                  const podeExpandir = !isTerc; // terceiros não estão no endpoint de RH
+                  const toggle = () => { if (podeExpandir) setExp(s => ({ ...s, [rowKey]: !s[rowKey] })); };
+                  const onKeyToggle = (ev: React.KeyboardEvent) => {
+                    if (!podeExpandir) return;
+                    if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(); }
+                  };
                   return (
-                    <tr key={String(e.id) + i} className="hover:bg-blue-50/30">
-                      <td className="px-3 py-2">
-                        {e.fotoUrl ? (
-                          <img
-                            src={e.fotoUrl}
-                            alt={e.nomeCompleto}
-                            className="h-9 w-9 rounded-full object-cover border border-slate-200 bg-slate-100"
-                            onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }}
-                          />
-                        ) : (
-                          <div className={`h-9 w-9 rounded-full border flex items-center justify-center text-[11px] font-bold ${
-                            isTerc ? "bg-amber-50 text-amber-700 border-amber-200" : isPJ ? "bg-violet-50 text-violet-700 border-violet-200" : "bg-blue-50 text-blue-700 border-blue-200"
-                          }`}>
-                            {iniciais(e.nomeCompleto)}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 font-medium text-slate-800 text-[13px]">{e.nomeCompleto}</td>
-                      <td className="px-4 py-2 text-slate-600 text-[13px]">{e.funcao || e.cargo || "—"}</td>
-                      <td className="px-4 py-2 text-center">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${catBadge}`}>
-                          {cat}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-center">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[e.effectiveStatus] || "bg-slate-100 text-slate-600"}`}>
-                          {STATUS_LABELS[e.effectiveStatus] || e.effectiveStatus}
-                        </span>
-                      </td>
-                    </tr>
+                    <Fragment key={rowKey}>
+                      <tr
+                        className={`hover:bg-blue-50/30 ${podeExpandir ? "cursor-pointer" : ""}`}
+                        onClick={toggle}
+                        {...(podeExpandir ? {
+                          role: "button",
+                          tabIndex: 0,
+                          "aria-expanded": expanded,
+                          onKeyDown: onKeyToggle,
+                        } : {})}
+                      >
+                        <td className="px-2 py-2 text-center">
+                          {podeExpandir ? (
+                            expanded ? <ChevronDown className="h-4 w-4 text-slate-400 inline" /> : <ChevronRight className="h-4 w-4 text-slate-400 inline" />
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2">
+                          {e.fotoUrl ? (
+                            <img
+                              src={e.fotoUrl}
+                              alt={e.nomeCompleto}
+                              className="h-9 w-9 rounded-full object-cover border border-slate-200 bg-slate-100"
+                              onError={(ev) => { (ev.currentTarget as HTMLImageElement).style.display = "none"; }}
+                            />
+                          ) : (
+                            <div className={`h-9 w-9 rounded-full border flex items-center justify-center text-[11px] font-bold ${
+                              isTerc ? "bg-amber-50 text-amber-700 border-amber-200" : isPJ ? "bg-violet-50 text-violet-700 border-violet-200" : "bg-blue-50 text-blue-700 border-blue-200"
+                            }`}>
+                              {iniciais(e.nomeCompleto)}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 font-medium text-slate-800 text-[13px]">
+                          <span className={podeExpandir ? "hover:text-blue-700 hover:underline underline-offset-2" : ""}>{e.nomeCompleto}</span>
+                          {isTerc && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">{e.empresaTerceira || "Terceiro"}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-slate-600 text-[13px]">{e.funcao || e.cargo || "—"}</td>
+                        <td className="px-4 py-2 text-center">
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold ${catBadge}`}>
+                            {cat}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          {isTerc ? (
+                            <span className="text-[10px] text-slate-400">—</span>
+                          ) : (
+                            <>
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${asoColor}`}>
+                                {asoStatus === "vigente" ? "Vigente" : asoStatus === "vencido" ? "Vencido" : "Sem ASO"}
+                              </span>
+                              {docs?.aso?.dataValidade && (
+                                <p className="text-[10px] text-slate-400 mt-0.5">até {fmtBR(docs.aso.dataValidade)}</p>
+                              )}
+                            </>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          {isTerc ? (
+                            <span className="text-[10px] text-slate-400">—</span>
+                          ) : (
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-slate-700" title="Treinamentos vigentes">
+                                <GraduationCap className="h-3.5 w-3.5 text-emerald-600" /> {trVig}
+                              </span>
+                              {trVenc > 0 && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded-full" title="Treinamentos vencidos">
+                                  <FileX2 className="h-3 w-3" /> {trVenc}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[e.effectiveStatus] || "bg-slate-100 text-slate-600"}`}>
+                            {STATUS_LABELS[e.effectiveStatus] || e.effectiveStatus}
+                          </span>
+                        </td>
+                      </tr>
+                      {expanded && podeExpandir && (
+                        <tr className="bg-slate-50/60">
+                          <td colSpan={8} className="px-6 py-4">
+                            {!docs ? (
+                              <p className="text-xs text-slate-400">Sem dados de documentos para este funcionário.</p>
+                            ) : (
+                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs">
+                                <div>
+                                  <p className="font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                                    <FileCheck2 className="h-3.5 w-3.5 text-emerald-600" /> ASO
+                                  </p>
+                                  {docs.aso ? (
+                                    <>
+                                      <ul className="space-y-1 text-slate-600">
+                                        <li><b>Tipo:</b> {docs.aso.tipo || "—"}</li>
+                                        <li><b>Resultado:</b> {docs.aso.resultado || "—"}</li>
+                                        <li><b>Exame:</b> {fmtBR(docs.aso.dataExame)}</li>
+                                        <li><b>Validade:</b> {fmtBR(docs.aso.dataValidade)}</li>
+                                      </ul>
+                                      {docs.aso.temPdf && (
+                                        <button
+                                          onClick={(ev) => { ev.stopPropagation(); abrirPdf("aso", docs.aso.id, `ASO — ${e.nomeCompleto}`, `${docs.aso.tipo || "Periódico"} • Validade ${fmtBR(docs.aso.dataValidade)}`); }}
+                                          className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[11px] font-semibold border border-emerald-200 transition"
+                                        >
+                                          <Eye className="h-3 w-3" /> Ver PDF
+                                        </button>
+                                      )}
+                                    </>
+                                  ) : <p className="text-slate-400">Sem ASO registrado.</p>}
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-slate-600 mb-1.5 flex items-center gap-1.5">
+                                    <GraduationCap className="h-3.5 w-3.5 text-emerald-600" /> Treinamentos ({docs.treinamentos?.length ?? 0})
+                                  </p>
+                                  {!docs.treinamentos || docs.treinamentos.length === 0 ? (
+                                    <p className="text-slate-400">Sem treinamentos.</p>
+                                  ) : (
+                                    <ul className="space-y-1.5 text-slate-600 max-h-44 overflow-y-auto">
+                                      {docs.treinamentos.map((t: any, ix: number) => {
+                                        const desc = (t.nome && t.nome.toUpperCase() !== String(t.norma || "").toUpperCase())
+                                          ? t.nome
+                                          : getNrDescricao(t.norma);
+                                        const venceu = t.dataValidade && t.dataValidade < hojeStr;
+                                        return (
+                                          <li key={ix} className="flex items-start justify-between gap-2 py-0.5">
+                                            <div className="min-w-0 flex-1">
+                                              <div className="flex items-baseline gap-1.5 flex-wrap">
+                                                <b className="text-slate-800">{t.norma || t.nome || "—"}</b>
+                                                {desc && <span className="text-slate-500 text-[11px] truncate" title={desc}>{desc}</span>}
+                                              </div>
+                                              <div className={`text-[10.5px] ${venceu ? "text-rose-600 font-semibold" : "text-slate-400"}`}>
+                                                {venceu ? "venceu" : "val."} {fmtBR(t.dataValidade)}
+                                              </div>
+                                            </div>
+                                            {t.temPdf && (
+                                              <button
+                                                onClick={(ev) => { ev.stopPropagation(); abrirPdf("treinamento", t.id, `Certificado — ${t.norma || t.nome}${desc ? " · " + desc : ""}`, `${e.nomeCompleto} • Validade ${fmtBR(t.dataValidade)}`); }}
+                                                className="shrink-0 mt-0.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-[10px] font-semibold border border-emerald-200 transition"
+                                              >
+                                                <Eye className="h-3 w-3" /> Ver
+                                              </button>
+                                            )}
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
                 {lista.length === 0 && (
-                  <tr><td colSpan={5} className="text-center py-10 text-slate-400 text-sm">Nenhum resultado</td></tr>
+                  <tr><td colSpan={8} className="text-center py-10 text-slate-400 text-sm">Nenhum resultado</td></tr>
                 )}
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Visualizador de PDF inline (mesma UX do módulo RH/Documentos) */}
+      {pdfViewer && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm flex flex-col animate-in fade-in duration-150"
+          onContextMenu={(ev) => ev.preventDefault()}
+        >
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-slate-900/90 text-white border-b border-slate-700">
+            <div className="min-w-0">
+              <p className="font-semibold text-sm truncate">{pdfViewer.titulo}</p>
+              <p className="text-[11px] text-slate-300 truncate">{pdfViewer.subtitulo}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-amber-200 bg-amber-900/40 px-2 py-1 rounded-md border border-amber-700/40">
+                Visualização — Download desabilitado
+              </span>
+              <button
+                onClick={() => setPdfViewer(null)}
+                aria-label="Fechar"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition"
+              >
+                <X className="h-4 w-4" /> Fechar
+              </button>
+            </div>
+          </div>
+          <iframe
+            src={pdfViewer.url}
+            title={pdfViewer.titulo}
+            sandbox="allow-scripts allow-same-origin"
+            className="flex-1 w-full bg-white"
+          />
         </div>
       )}
     </div>

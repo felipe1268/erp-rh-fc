@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1587,
+    titulo: "Portal do Cliente — Aba Efetivo: clique no funcionário expande ASO + Treinamentos",
+    descricao: "Restaurada a funcionalidade de detalhe documental na aba Efetivo do Portal do Cliente (PortalPlanejamentoCliente). Cada linha de funcionário CLT/PJ agora é clicável (chevron + cursor pointer) e expande um painel inline mostrando: ASO (tipo, resultado, exame, validade) com botão 'Ver PDF' inline, e lista de Treinamentos com norma + descrição da NR + validade (vencidos destacados em vermelho) + botão 'Ver' por certificado. PDFs abrem em visualizador modal sem download (mesmo padrão do módulo RH/Documentos). Adicionadas duas novas colunas na tabela ('ASO' e 'Treinamentos') com badges de status. Terceiros aparecem com '—' nas colunas de RH (não estão no endpoint de documentos). Os dados vêm do mesmo endpoint documentosRhObra do módulo RH/Documentos (zero código novo no servidor).",
+    tipo: 'feature',
+    modulos: 'Portal do Cliente, Planejamento',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 08:15:00',
+  },
+  {
     version: 1569,
     titulo: "Portal do Cliente — Avaliação NPS configurável (mês/ano), cancelar pelo Master e perguntas de Equipe, Empresa e Gestor",
     descricao: "Pacote de melhorias na pesquisa de satisfação anônima do Portal do Cliente: (1) Admin Master pode cancelar uma avaliação registrada — o cancelamento preserva o registro no banco para auditoria (carimbado com nome do Master e motivo), exclui a avaliação dos cálculos de NPS/médias e libera o usuário-cliente a enviar uma nova avaliação no mesmo período. (2) Periodicidade da avaliação agora é configurável por empresa: mês a mês (padrão) ou ano a ano — afeta o limite anônimo, as mensagens do portal do cliente e o agrupamento. (3) Visão por período no painel admin: cards e tabela mostram NPS/respostas/média por mês ou por ano (toggle). (4) Novas perguntas no formulário do cliente — bloco Equipe FC (nota + texto livre), bloco Gestor responsável (nota + nome opcional + texto livre), bloco Empresa FC (nota + texto livre) e bloco Obra (andamento, prazo, qualidade); a pergunta Recomendaria a FC já existia e agora aparece num card próprio do painel admin (Sim · Talvez · Não). (5) Cards de avaliação no painel admin mostram badges com todas as notas detalhadas e os comentários por bloco, com botão de cancelar visível apenas para Admin Master.",
