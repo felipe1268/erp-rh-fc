@@ -19,6 +19,11 @@ import {
   Eye, ExternalLink, History, Building2, Paperclip, Hash as HashIcon, Info
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// Rev. 1626 — single source of truth para origens financeiras
+import {
+  ORIGEM_LABELS, ORIGEM_ICONS, ORIGEM_COLORS,
+  consolidateSubtype, unitLabelFor,
+} from "@/lib/financialOrigins";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
@@ -42,68 +47,6 @@ function fmtDateBR(dateStr: string | null | undefined): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.split("-").reverse().join("/");
   return s;
 }
-
-const ORIGEM_LABELS: Record<string, string> = {
-  compras: "Compras",
-  compra_oc: "OC Compras",
-  folha: "Folha CLT",
-  folha_rh: "Folha CLT",
-  folha_clt: "Folha CLT",
-  payroll_agregado: "Folha Consolidada",
-  pj: "Contrato PJ",
-  pro_labore: "Pró-labore",
-  medicao_pj: "Medição PJ",
-  terceiros: "Terceiros",
-  terceiro_medicao: "Med. Terceiros",
-  medicao_obra: "Medição Obra",
-  pagamento_parceiro: "Parceiros",
-  frota: "Frota",
-  frota_abastecimento: "Frota — Combustível",
-  frota_manutencao: "Frota — Manutenção",
-  beneficios: "Benefícios",
-  beneficio_va: "Vale Alimentação",
-  beneficio_vr: "Vale Refeição",
-  beneficio_vt: "Vale Transporte",
-  seguro_vida: "Seguro de Vida",
-  tributario: "Tributário",
-  guia_tributaria: "Guia Tributária",
-  juridico: "Jurídico",
-  processo_trabalhista: "Proc. Trabalhista",
-  almoxarifado: "Almoxarifado",
-  almoxarifado_saida: "Saída Almox.",
-  adiantamento: "Adiantamento",
-  fechamento_ponto: "Fechamento Ponto",
-  comissao_comprador: "Comissão",
-  manual: "Manual",
-};
-
-const ORIGEM_ICONS: Record<string, any> = {
-  compras: ShoppingCart, compra_oc: ShoppingCart,
-  folha: Users, folha_rh: Users, folha_clt: Users, payroll_agregado: Users, fechamento_ponto: Users,
-  pj: Briefcase, pro_labore: Briefcase, medicao_pj: Briefcase,
-  terceiros: Users, terceiro_medicao: Users, medicao_obra: Users, pagamento_parceiro: Users,
-  frota: Truck, frota_abastecimento: Truck, frota_manutencao: Truck,
-  beneficios: Receipt, beneficio_va: Receipt, beneficio_vr: Receipt, beneficio_vt: Receipt, seguro_vida: Receipt,
-  tributario: Scale, guia_tributaria: Scale,
-  juridico: Scale, processo_trabalhista: Scale,
-  almoxarifado: Package, almoxarifado_saida: Package,
-  adiantamento: Wallet, comissao_comprador: Wallet,
-  manual: Wallet,
-};
-
-const ORIGEM_COLORS: Record<string, string> = {
-  compras: "bg-blue-50 text-blue-700 border-blue-200", compra_oc: "bg-blue-50 text-blue-700 border-blue-200",
-  folha: "bg-purple-50 text-purple-700 border-purple-200", folha_rh: "bg-purple-50 text-purple-700 border-purple-200", folha_clt: "bg-purple-50 text-purple-700 border-purple-200", payroll_agregado: "bg-purple-50 text-purple-700 border-purple-200", fechamento_ponto: "bg-purple-50 text-purple-700 border-purple-200",
-  pj: "bg-indigo-50 text-indigo-700 border-indigo-200", pro_labore: "bg-indigo-50 text-indigo-700 border-indigo-200", medicao_pj: "bg-indigo-50 text-indigo-700 border-indigo-200",
-  terceiros: "bg-cyan-50 text-cyan-700 border-cyan-200", terceiro_medicao: "bg-cyan-50 text-cyan-700 border-cyan-200", medicao_obra: "bg-cyan-50 text-cyan-700 border-cyan-200", pagamento_parceiro: "bg-cyan-50 text-cyan-700 border-cyan-200",
-  frota: "bg-amber-50 text-amber-700 border-amber-200", frota_abastecimento: "bg-amber-50 text-amber-700 border-amber-200", frota_manutencao: "bg-amber-50 text-amber-700 border-amber-200",
-  beneficios: "bg-pink-50 text-pink-700 border-pink-200", beneficio_va: "bg-pink-50 text-pink-700 border-pink-200", beneficio_vr: "bg-pink-50 text-pink-700 border-pink-200", beneficio_vt: "bg-pink-50 text-pink-700 border-pink-200", seguro_vida: "bg-pink-50 text-pink-700 border-pink-200",
-  tributario: "bg-red-50 text-red-700 border-red-200", guia_tributaria: "bg-red-50 text-red-700 border-red-200",
-  juridico: "bg-rose-50 text-rose-700 border-rose-200", processo_trabalhista: "bg-rose-50 text-rose-700 border-rose-200",
-  almoxarifado: "bg-emerald-50 text-emerald-700 border-emerald-200", almoxarifado_saida: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  adiantamento: "bg-gray-50 text-gray-700 border-gray-200", comissao_comprador: "bg-gray-50 text-gray-700 border-gray-200",
-  manual: "bg-gray-50 text-gray-700 border-gray-200",
-};
 
 // Rev. 1619 — Extrai nº OC/OS/MED/Folha de origem ou descrição
 function extractOcNumero(c: any): string {
@@ -147,44 +90,7 @@ function categoriaFor(c: any): string {
   return ORIGEM_LABELS[c.origemModulo] ?? "Sem categoria";
 }
 
-// Rev. 1625 — Consolidação RH/Benefícios/Recorrentes
-// Retorna { sub, label } para entries agrupáveis (folha, benefícios, PJ, frota, terceiros).
-// Retorna null para entries que devem aparecer como linhas individuais (compras, manuais, jurídico, etc).
-function consolidateSubtype(c: any): { sub: string; label: string; origemBase: string } | null {
-  const o = (c.origemModulo ?? "").toString();
-  // Folha
-  if (o === "folha" || o === "folha_rh" || o === "folha_clt" || o === "payroll_agregado" || o === "fechamento_ponto") {
-    return { sub: "folha", label: "Folha de Pagamento", origemBase: "folha_rh" };
-  }
-  // Benefícios — origens dedicadas (preferencial)
-  if (o === "beneficio_va") return { sub: "VA", label: "Vale Alimentação", origemBase: "beneficio_va" };
-  if (o === "beneficio_vr") return { sub: "VR", label: "Vale Refeição", origemBase: "beneficio_vr" };
-  if (o === "beneficio_vt") return { sub: "VT", label: "Vale Transporte", origemBase: "beneficio_vt" };
-  if (o === "seguro_vida") return { sub: "seguro", label: "Seguro de Vida", origemBase: "seguro_vida" };
-  // Benefícios — fallback genérico (legado)
-  if (o === "beneficios") {
-    const txt = `${c.descricao ?? ""} ${c.origemDescricao ?? ""} ${c.contaNome ?? ""}`
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    // ORDEM IMPORTA: refeição checa antes de alimentação porque "Vale Refeição / Alimentação" matcha ambos.
-    if (/refei/.test(txt) || /\bvr\b/.test(txt)) return { sub: "VR", label: "Vale Refeição", origemBase: "beneficio_vr" };
-    if (/alimenta/.test(txt) || /\bva\b/.test(txt)) return { sub: "VA", label: "Vale Alimentação", origemBase: "beneficio_va" };
-    if (/transp|\bvt\b/.test(txt)) return { sub: "VT", label: "Vale Transporte", origemBase: "beneficio_vt" };
-    if (/saude|odonto|plano/.test(txt)) return { sub: "saude", label: "Saúde/Odonto", origemBase: "beneficios" };
-    return { sub: "outros", label: "Outros Benefícios", origemBase: "beneficios" };
-  }
-  // PJ
-  if (o === "pj" || o === "pro_labore" || o === "medicao_pj") return { sub: "pj", label: "Pagamentos PJ", origemBase: "pj" };
-  // Frota (separa combustível de manutenção, mas agrupa cada um)
-  if (o === "frota" || o === "frota_abastecimento") return { sub: "frota_comb", label: "Frota — Combustível", origemBase: "frota_abastecimento" };
-  if (o === "frota_manutencao") return { sub: "frota_man", label: "Frota — Manutenção", origemBase: "frota_manutencao" };
-  // Terceiros / Parceiros
-  if (o === "terceiros" || o === "terceiro_medicao" || o === "medicao_obra") return { sub: "med", label: "Medições Terceiros", origemBase: "terceiro_medicao" };
-  if (o === "pagamento_parceiro") return { sub: "parc", label: "Pagamentos Parceiros", origemBase: "pagamento_parceiro" };
-  // Tributário
-  if (o === "tributario" || o === "guia_tributaria") return { sub: "trib", label: "Guias Tributárias", origemBase: "guia_tributaria" };
-  return null;
-}
-
+// Rev. 1625/1626 — consolidateSubtype agora vive em @/lib/financialOrigins
 const CONSOLIDATE_MIN = 3; // só agrupa quando há ≥ N entries do mesmo subtipo
 const CONSOLIDATE_MODE_KEY = "fc_ap_consolidateMode_v1";
 
@@ -914,7 +820,7 @@ export default function FinanceiroContasAPagar() {
                                       <span className="text-xs text-slate-500">— {mesLabel}</span>
                                     </div>
                                     <p className="text-[11px] text-slate-500 mt-0.5">
-                                      {gp.items.length} {/^(folha|beneficio_|pj|seguro_vida|pro_labore)/.test(gp.origem) ? "funcionário(s)" : /^frota/.test(gp.origem) ? "veículo(s)" : /^(terceiro|medicao|pagamento_parceiro)/.test(gp.origem) ? "contrato(s)" : "registro(s)"}
+                                      {gp.items.length} {unitLabelFor(gp.origem, gp.items.length)}
                                       {pagosCount > 0 && <span className="text-green-600"> · {pagosCount} pago(s)</span>}
                                       {vencCount > 0 && <span className="text-red-600"> · {vencCount} vencido(s)</span>}
                                     </p>

@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
+// Rev. 1626 — origens com label PT-BR amigável
+import { originLabel } from "@/lib/financialOrigins";
 import {
   Plus, Search, X, CheckCircle, AlertTriangle, TrendingUp, TrendingDown, Filter,
   Repeat, Pause, Play, Edit2, Calendar, Zap, ArrowUpRight, ArrowDownRight,
@@ -20,6 +22,13 @@ import {
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+}
+
+// Rev. 1626 — regra de ouro: dd/MM/aaaa
+function fmtDateBR(s: string | null | undefined): string {
+  if (!s) return "—";
+  const t = String(s).slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t.split("-").reverse().join("/") : t;
 }
 
 function getMesAtual() {
@@ -380,9 +389,9 @@ export default function FinanceiroLancamentos() {
                             )}
                           </div>
                           <p className="text-xs text-gray-400 mt-0.5">
-                            Comp.: {l.dataCompetencia}
-                            {l.dataVencimento && ` • Venc.: ${l.dataVencimento}`}
-                            {l.origemModulo && l.origemModulo !== "recorrente" && ` • Origem: ${l.origemModulo}`}
+                            Comp.: {fmtDateBR(l.dataCompetencia)}
+                            {l.dataVencimento && ` • Venc.: ${fmtDateBR(l.dataVencimento)}`}
+                            {l.origemModulo && l.origemModulo !== "recorrente" && ` • Origem: ${originLabel(l.origemModulo)}`}
                           </p>
                         </div>
                         <div className="flex items-center gap-3 ml-3">
