@@ -127,9 +127,14 @@ export default function PortalPlanejamentoCliente() {
     return set;
   }, [liberacoes]);
 
+  // Rev. 1603 — Ordem das abas vem do servidor (definida pelo Admin Master
+  // na tela "Liberações do Portal — Módulos e Abas"). O cliente ainda pode
+  // arrastar para reordenar localmente (persistido em localStorage).
   const abasVisiveisBase = useMemo(() => {
-    const liber = new Set(abasLiberadas);
-    return PORTAL_CLIENTE_ABAS.filter((a) => liber.has(a.key));
+    const byKey = new Map(PORTAL_CLIENTE_ABAS.map((a) => [a.key, a] as const));
+    return abasLiberadas
+      .map((k) => byKey.get(k as PortalClienteAbaKey))
+      .filter((a): a is typeof PORTAL_CLIENTE_ABAS[number] => !!a);
   }, [abasLiberadas]);
 
   const [aba, setAba] = useState<PortalClienteAbaKey>("visao_geral");
@@ -518,6 +523,21 @@ export default function PortalPlanejamentoCliente() {
             className="w-full pl-8 pr-3 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-[12px] text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40"
           />
         </div>
+        {/* Rev. 1603 — botão para descartar a ordem local e voltar ao padrão
+            definido pelo Admin Master (em "Liberações do Portal — Módulos e Abas"). */}
+        {ordemAbas.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              try { localStorage.removeItem(ordemKey); } catch {/* ignora */}
+              setOrdemAbas([]);
+            }}
+            className="mt-1.5 w-full text-[10px] text-slate-400 hover:text-white px-2 py-1 rounded hover:bg-slate-700/40 transition flex items-center justify-center gap-1"
+            title="Descartar a ordem que você arrastou e voltar à ordem padrão definida pela FC Engenharia."
+          >
+            ↺ Restaurar ordem padrão
+          </button>
+        )}
       </div>
 
       {/* Grupo: Abas do Projeto */}

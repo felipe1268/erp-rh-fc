@@ -169,18 +169,26 @@ export default function PortalHubCliente() {
   const avalProximaJanela = avalStatus?.anoMes
     ? proximaJanelaAvaliacao(avalStatus.anoMes, avalPeriodicidade)
     : "";
+  // Rev. 1603 — A ordem dos cards no Hub respeita a ORDEM definida pelo Admin
+  // Master na tela "Liberações do Portal" (vem em liberacoes.modulos na ordem
+  // gravada no JSON do server).
   const modulosLiberados = useMemo(() => {
-    const keys = new Set<string>(liberacoes?.modulos || PORTAL_CLIENTE_MODULOS.map((m) => m.key));
+    const keys: string[] = liberacoes?.modulos || PORTAL_CLIENTE_MODULOS.map((m) => m.key);
     const idByKey: Record<PortalClienteModuloKey, string> = {
       mod_planejamento: "planejamento",
       mod_rh_documentos: "rh-documentos",
       mod_proj_doc: "proj-doc",
       mod_avaliacao: "avaliacao",
     };
-    const idsLiberados = new Set<string>(
-      Array.from(keys).map((k) => idByKey[k as PortalClienteModuloKey]).filter(Boolean)
-    );
-    return MODULOS.filter((m) => idsLiberados.has(m.id));
+    const modById = new Map(MODULOS.map((m) => [m.id, m] as const));
+    const out: typeof MODULOS = [];
+    const seen = new Set<string>();
+    for (const k of keys) {
+      const id = idByKey[k as PortalClienteModuloKey];
+      const mod = id ? modById.get(id) : undefined;
+      if (mod && !seen.has(mod.id)) { out.push(mod); seen.add(mod.id); }
+    }
+    return out;
   }, [liberacoes]);
 
   const greeting = useMemo(() => getGreeting(), []);

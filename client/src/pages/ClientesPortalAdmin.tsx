@@ -14,7 +14,7 @@ import {
   Loader2, ShieldCheck, CheckCircle2, AlertCircle, Copy, Reply,
   Smile, Frown, Meh, TrendingUp, Users, Plus, Trash2, RefreshCw, UserPlus,
   Lock, UnlockKeyhole, SlidersHorizontal, ExternalLink, Layers,
-  Building2, ThumbsUp, X, CalendarDays, Pencil,
+  Building2, ThumbsUp, X, CalendarDays, Pencil, ChevronUp, ChevronDown, ListOrdered,
 } from "lucide-react";
 import {
   PORTAL_CLIENTE_ABAS, parseAbasLiberadas, ABA_OBRIGATORIA, type PortalClienteAbaKey,
@@ -161,32 +161,45 @@ export default function ClientesPortalAdmin() {
   });
 
   // ===== Modal: liberar módulos + abas do Portal por usuário =====
+  // Rev. 1603 — Admin master pode REORDENAR módulos e abas; a ordem
+  // gravada no servidor é usada como padrão no Portal do Cliente.
+  // Por isso usamos arrays (ordenados) ao invés de Sets.
   const [abasTarget, setAbasTarget] = useState<any | null>(null);
-  const [abasSel, setAbasSel] = useState<Set<PortalClienteAbaKey>>(new Set());
-  const [modSel, setModSel] = useState<Set<PortalClienteModuloKey>>(new Set());
+  const [abasSel, setAbasSel] = useState<PortalClienteAbaKey[]>([]);
+  const [modSel, setModSel] = useState<PortalClienteModuloKey[]>([]);
   const [abasPicker, setAbasPicker] = useState<{ cliente: any; usuarios: any[] } | null>(null);
   const abrirAbas = (a: any) => {
     setAbasTarget(a);
-    setAbasSel(new Set(parseAbasLiberadas(a.abasLiberadas)));
-    setModSel(new Set(parseModulosLiberados(a.abasLiberadas)));
+    setAbasSel(parseAbasLiberadas(a.abasLiberadas));
+    setModSel(parseModulosLiberados(a.abasLiberadas));
   };
   const toggleAba = (k: PortalClienteAbaKey) => {
     if (k === ABA_OBRIGATORIA) return;
-    setAbasSel((prev) => {
-      const next = new Set(prev);
-      if (next.has(k)) next.delete(k); else next.add(k);
-      return next;
-    });
+    setAbasSel((prev) => prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]);
   };
   const toggleModulo = (k: PortalClienteModuloKey) => {
     if (k === MODULO_OBRIGATORIO) return;
-    setModSel((prev) => {
-      const next = new Set(prev);
-      if (next.has(k)) next.delete(k); else next.add(k);
-      return next;
-    });
+    setModSel((prev) => prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]);
   };
-  const planejamentoLiberado = modSel.has("mod_planejamento");
+  const moveItem = <T,>(arr: T[], idx: number, dir: -1 | 1): T[] => {
+    const next = [...arr];
+    const j = idx + dir;
+    if (j < 0 || j >= next.length) return arr;
+    [next[idx], next[j]] = [next[j], next[idx]];
+    return next;
+  };
+  const moverAba = (idx: number, dir: -1 | 1) => setAbasSel((prev) => moveItem(prev, idx, dir));
+  const moverModulo = (idx: number, dir: -1 | 1) => setModSel((prev) => moveItem(prev, idx, dir));
+  const planejamentoLiberado = modSel.includes("mod_planejamento");
+  // Itens não selecionados (mostrados abaixo dos selecionados, sem ordem)
+  const abasNaoSel = useMemo(
+    () => PORTAL_CLIENTE_ABAS.filter((a) => !abasSel.includes(a.key)),
+    [abasSel],
+  );
+  const modulosNaoSel = useMemo(
+    () => PORTAL_CLIENTE_MODULOS.filter((m) => !modSel.includes(m.key)),
+    [modSel],
+  );
 
   // ===== Responder comentário =====
   const [respondendo, setRespondendo] = useState<any | null>(null);
@@ -1026,8 +1039,8 @@ export default function ClientesPortalAdmin() {
                     <div className="text-xs text-slate-500">{abasTarget.emailResponsavel}</div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline" className="text-xs">{modSel.size} de {PORTAL_CLIENTE_MODULOS.length} módulos</Badge>
-                    <Badge variant="outline" className="text-xs">{abasSel.size} de {PORTAL_CLIENTE_ABAS.length} abas</Badge>
+                    <Badge variant="outline" className="text-xs">{modSel.length} de {PORTAL_CLIENTE_MODULOS.length} módulos</Badge>
+                    <Badge variant="outline" className="text-xs">{abasSel.length} de {PORTAL_CLIENTE_ABAS.length} abas</Badge>
                   </div>
                 </div>
 
@@ -1044,29 +1057,65 @@ export default function ClientesPortalAdmin() {
                         </p>
                       </div>
                       <div className="flex gap-1.5 shrink-0">
-                        <Button variant="outline" size="sm" onClick={() => setModSel(new Set(PORTAL_CLIENTE_MODULOS.map((m) => m.key)))}>Todos</Button>
-                        <Button variant="outline" size="sm" onClick={() => setModSel(new Set([MODULO_OBRIGATORIO]))}>Só obrigatório</Button>
+                        <Button variant="outline" size="sm" onClick={() => setModSel(PORTAL_CLIENTE_MODULOS.map((m) => m.key))}>Todos</Button>
+                        <Button variant="outline" size="sm" onClick={() => setModSel([MODULO_OBRIGATORIO])}>Só obrigatório</Button>
                       </div>
                     </div>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                      {PORTAL_CLIENTE_MODULOS.map((mod) => {
-                        const checked = modSel.has(mod.key);
-                        const obrig = mod.key === MODULO_OBRIGATORIO;
-                        return (
-                          <label key={mod.key}
-                            className={`flex items-start gap-2 border-2 rounded-lg p-3 cursor-pointer text-sm transition ${checked ? "bg-indigo-50 border-indigo-300" : "bg-white border-slate-200 hover:bg-slate-50"} ${obrig ? "opacity-90" : ""}`}>
-                            <input type="checkbox" className="mt-0.5" checked={checked} disabled={obrig} onChange={() => toggleModulo(mod.key)} />
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-slate-800 flex items-center gap-1.5 flex-wrap">
-                                {mod.label}
-                                {obrig && <Badge variant="outline" className="text-[9px]">obrigatório</Badge>}
+                    {/* Selecionados (com setas para reordenar — esta é a ORDEM PADRÃO no Hub do cliente) */}
+                    {modSel.length > 0 && (
+                      <>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-1.5 flex items-center gap-1.5">
+                          <ListOrdered className="w-3.5 h-3.5" /> Liberados — ordem padrão do cliente
+                        </div>
+                        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-3">
+                          {modSel.map((key, idx) => {
+                            const mod = PORTAL_CLIENTE_MODULOS.find((m) => m.key === key);
+                            if (!mod) return null;
+                            const obrig = mod.key === MODULO_OBRIGATORIO;
+                            return (
+                              <div key={mod.key} className="flex items-start gap-2 border-2 border-indigo-300 bg-indigo-50 rounded-lg p-3 text-sm">
+                                <div className="flex flex-col gap-0.5 shrink-0">
+                                  <button type="button" onClick={() => moverModulo(idx, -1)} disabled={idx === 0}
+                                    className="p-0.5 rounded hover:bg-indigo-200 disabled:opacity-30 disabled:cursor-not-allowed" title="Mover para cima">
+                                    <ChevronUp className="w-3.5 h-3.5 text-indigo-700" />
+                                  </button>
+                                  <button type="button" onClick={() => moverModulo(idx, 1)} disabled={idx === modSel.length - 1}
+                                    className="p-0.5 rounded hover:bg-indigo-200 disabled:opacity-30 disabled:cursor-not-allowed" title="Mover para baixo">
+                                    <ChevronDown className="w-3.5 h-3.5 text-indigo-700" />
+                                  </button>
+                                </div>
+                                <span className="text-[10px] font-bold text-indigo-700 mt-0.5 w-4 shrink-0 text-right">{idx + 1}</span>
+                                <input type="checkbox" className="mt-0.5" checked disabled={obrig} onChange={() => toggleModulo(mod.key)} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-semibold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                                    {mod.label}
+                                    {obrig && <Badge variant="outline" className="text-[9px]">obrigatório</Badge>}
+                                  </div>
+                                  <div className="text-[11px] text-slate-500 mt-0.5">{mod.descricao}</div>
+                                </div>
                               </div>
-                              <div className="text-[11px] text-slate-500 mt-0.5">{mod.descricao}</div>
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                    {modulosNaoSel.length > 0 && (
+                      <>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Bloqueados</div>
+                        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                          {modulosNaoSel.map((mod) => (
+                            <label key={mod.key}
+                              className="flex items-start gap-2 border-2 rounded-lg p-3 cursor-pointer text-sm bg-white border-slate-200 hover:bg-slate-50 transition">
+                              <input type="checkbox" className="mt-0.5" checked={false} onChange={() => toggleModulo(mod.key)} />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-slate-800">{mod.label}</div>
+                                <div className="text-[11px] text-slate-500 mt-0.5">{mod.descricao}</div>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </section>
 
                   {/* ───── 2) ABAS DO MÓDULO PLANEJAMENTO ───── */}
@@ -1083,32 +1132,70 @@ export default function ClientesPortalAdmin() {
                         </p>
                       </div>
                       <div className="flex gap-1.5 shrink-0">
-                        <Button variant="outline" size="sm" onClick={() => setAbasSel(new Set(PORTAL_CLIENTE_ABAS.map((a) => a.key)))}>Todas</Button>
-                        <Button variant="outline" size="sm" onClick={() => setAbasSel(new Set([ABA_OBRIGATORIA]))}>Só obrigatória</Button>
+                        <Button variant="outline" size="sm" onClick={() => setAbasSel(PORTAL_CLIENTE_ABAS.map((a) => a.key))}>Todas</Button>
+                        <Button variant="outline" size="sm" onClick={() => setAbasSel([ABA_OBRIGATORIA])}>Só obrigatória</Button>
                       </div>
                     </div>
-                    <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-                      {PORTAL_CLIENTE_ABAS.map((aba) => {
-                        const checked = abasSel.has(aba.key);
-                        const obrig = aba.key === ABA_OBRIGATORIA;
-                        return (
-                          <label key={aba.key}
-                            className={`flex items-start gap-2 border rounded-lg p-2.5 cursor-pointer text-sm transition ${checked ? "bg-indigo-50 border-indigo-200" : "bg-white hover:bg-slate-50"} ${obrig ? "opacity-90" : ""}`}>
-                            <input type="checkbox" className="mt-0.5" checked={checked} disabled={obrig} onChange={() => toggleAba(aba.key)} />
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-slate-800 flex items-center gap-1.5 flex-wrap">
-                                {aba.label}
-                                {obrig && <Badge variant="outline" className="text-[9px]">obrigatória</Badge>}
-                                {aba.status === "em_breve" && <Badge className="bg-amber-500 text-[9px]">em breve</Badge>}
+                    {/* Selecionadas (com setas — esta é a ORDEM PADRÃO no Portal do Cliente) */}
+                    {abasSel.length > 0 && (
+                      <>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 mb-1.5 flex items-center gap-1.5">
+                          <ListOrdered className="w-3.5 h-3.5" /> Liberadas — ordem padrão na barra de abas
+                        </div>
+                        <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 mb-3">
+                          {abasSel.map((key, idx) => {
+                            const aba = PORTAL_CLIENTE_ABAS.find((a) => a.key === key);
+                            if (!aba) return null;
+                            const obrig = aba.key === ABA_OBRIGATORIA;
+                            return (
+                              <div key={aba.key} className="flex items-start gap-1.5 border border-indigo-200 bg-indigo-50 rounded-lg p-2.5 text-sm">
+                                <div className="flex flex-col gap-0.5 shrink-0">
+                                  <button type="button" onClick={() => moverAba(idx, -1)} disabled={idx === 0}
+                                    className="p-0.5 rounded hover:bg-indigo-200 disabled:opacity-30 disabled:cursor-not-allowed" title="Mover para cima">
+                                    <ChevronUp className="w-3.5 h-3.5 text-indigo-700" />
+                                  </button>
+                                  <button type="button" onClick={() => moverAba(idx, 1)} disabled={idx === abasSel.length - 1}
+                                    className="p-0.5 rounded hover:bg-indigo-200 disabled:opacity-30 disabled:cursor-not-allowed" title="Mover para baixo">
+                                    <ChevronDown className="w-3.5 h-3.5 text-indigo-700" />
+                                  </button>
+                                </div>
+                                <span className="text-[10px] font-bold text-indigo-700 mt-0.5 w-4 shrink-0 text-right">{idx + 1}</span>
+                                <input type="checkbox" className="mt-0.5" checked disabled={obrig} onChange={() => toggleAba(aba.key)} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-slate-800 flex items-center gap-1.5 flex-wrap">
+                                    {aba.label}
+                                    {obrig && <Badge variant="outline" className="text-[9px]">obrigatória</Badge>}
+                                    {aba.status === "em_breve" && <Badge className="bg-amber-500 text-[9px]">em breve</Badge>}
+                                  </div>
+                                </div>
                               </div>
-                              {aba.status === "em_breve" && (
-                                <div className="text-[10px] text-slate-500 mt-0.5">Aba liberável; conteúdo será disponibilizado em revisões futuras.</div>
-                              )}
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                    {abasNaoSel.length > 0 && (
+                      <>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Bloqueadas</div>
+                        <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                          {abasNaoSel.map((aba) => (
+                            <label key={aba.key}
+                              className="flex items-start gap-2 border rounded-lg p-2.5 cursor-pointer text-sm bg-white hover:bg-slate-50 transition">
+                              <input type="checkbox" className="mt-0.5" checked={false} onChange={() => toggleAba(aba.key)} />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-slate-800 flex items-center gap-1.5 flex-wrap">
+                                  {aba.label}
+                                  {aba.status === "em_breve" && <Badge className="bg-amber-500 text-[9px]">em breve</Badge>}
+                                </div>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    <p className="text-[10px] text-slate-400 mt-2 italic">
+                      Use as setas <ChevronUp className="inline w-3 h-3" /> <ChevronDown className="inline w-3 h-3" /> para reordenar. A ordem definida aqui é o padrão que o cliente verá no Portal — ele ainda pode reordenar localmente arrastando as abas, mas o padrão (visto em qualquer dispositivo novo) é o que está aqui.
+                    </p>
                   </section>
 
                   {/* RH&Docs / Proj./Doc. / Avaliação não têm abas internas configuráveis hoje. */}
