@@ -572,6 +572,50 @@ export default function ClientesPortalAdmin() {
                   </table>
                 </div>
 
+                {/* Rev. 1595 — Perguntas personalizadas (extras) */}
+                {(dashAval as any).perguntasExtras && (dashAval as any).perguntasExtras.length > 0 && (
+                  <div className="bg-white border rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <SlidersHorizontal className="w-4 h-4 text-indigo-600" />
+                      <h3 className="font-semibold text-slate-800">Perguntas personalizadas</h3>
+                      <Badge variant="outline" className="ml-1 text-[10px]">{(dashAval as any).perguntasExtras.length}</Badge>
+                    </div>
+                    <div className="grid md:grid-cols-2 gap-3">
+                      {(dashAval as any).perguntasExtras.map((p: any) => {
+                        const isNumero = p.tipo === "nota_0_10" || p.tipo === "sim_nao_talvez";
+                        return (
+                          <div key={p.id} className="border rounded-lg p-3">
+                            <div className="text-xs text-slate-500 mb-1 flex items-center gap-2">
+                              <span className="font-medium text-slate-700 truncate">{p.label}</span>
+                              {!p.ativa && <Badge variant="outline" className="text-[9px] py-0 px-1 border-slate-300 text-slate-500">inativa</Badge>}
+                            </div>
+                            {isNumero ? (
+                              <div className="flex items-baseline gap-2">
+                                <span className="text-2xl font-bold text-indigo-700">{p.media ?? "—"}</span>
+                                <span className="text-xs text-slate-500">média · {p.totalRespostas} resposta(s)</span>
+                              </div>
+                            ) : (
+                              <>
+                                <p className="text-xs text-slate-500">{p.totalRespostas} resposta(s) de texto</p>
+                                {p.respostasTexto && p.respostasTexto.length > 0 && (
+                                  <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                                    {p.respostasTexto.slice(0, 5).map((t: string, i: number) => (
+                                      <p key={i} className="text-xs text-slate-700 bg-slate-50 rounded px-2 py-1 border">"{t}"</p>
+                                    ))}
+                                    {p.respostasTexto.length > 5 && (
+                                      <p className="text-[11px] text-slate-400">+ {p.respostasTexto.length - 5} resposta(s) adicional(is)</p>
+                                    )}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* Rev. 1569 — Visão por período (mês/ano) */}
                 {dashAval.porPeriodo && dashAval.porPeriodo.length > 0 && (
                   <div className="bg-white border rounded-xl p-4">

@@ -11353,4 +11353,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-12 08:00:00",
   },
+  {
+    version: 1595,
+    titulo: "Portal do Cliente — Editor do Questionário (perguntas personalizadas) com paridade NPS preservada",
+    descricao: "Nova página /clientes/portal/questionario (atalho em Configurações → Portal do Cliente → 'Editor do Questionário'). Permite adicionar, editar, reordenar, ativar/desativar e remover perguntas EXTRAS no questionário do Portal do Cliente em 4 tipos: Nota 0–10, Texto curto, Texto longo, Sim/Talvez/Não. As 8 perguntas CORE (NPS geral, Equipe, Gestor, Empresa, Obra, Prazo, Qualidade, Escritório) ficam fixas e read-only para preservar o cálculo do NPS e a paridade Portal × Planejamento. Tipo de pergunta não pode mudar depois que tem respostas (consistência analítica); só Admin Master pode remover (CASCADE nas respostas). No Portal do Cliente, as perguntas extras são renderizadas dinamicamente após 'Pontos Fracos', agrupadas por seção, validadas se obrigatórias e enviadas em `respostasExtras` junto com a avaliação anônima (mesma sessão, mesmas regras de anonimato). Dashboard de avaliações (em ClientesPortalAdmin e na aba 'Avaliação do Cliente' de PlanejamentoDetalhe) recebe `dash.perguntasExtras[]` com média/distribuição (notas) e amostra de respostas (texto). Schema: novas tabelas cliente_perguntas_extras + cliente_respostas_extras com ColFix idempotente.",
+    tipo: "feature",
+    modulos: "Portal Cliente, Configurações, Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 14:00:00",
+  },
 ];

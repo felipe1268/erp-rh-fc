@@ -8262,6 +8262,40 @@ function AvaliacaoClienteObraTab({ proj }: { proj: any }) {
             </div>
           </div>
 
+          {/* Rev. 1595 — Perguntas personalizadas (extras) por obra */}
+          {(dash as any).perguntasExtras && (dash as any).perguntasExtras.length > 0 && (
+            <div className="bg-white border rounded-xl p-4">
+              <h3 className="font-semibold text-slate-800 mb-3">Perguntas personalizadas</h3>
+              <div className="grid md:grid-cols-2 gap-3">
+                {(dash as any).perguntasExtras.map((p: any) => {
+                  const isNumero = p.tipo === "nota_0_10" || p.tipo === "sim_nao_talvez";
+                  return (
+                    <div key={p.id} className="border rounded-lg p-3">
+                      <p className="text-xs font-medium text-slate-700 mb-1 truncate">{p.label}</p>
+                      {isNumero ? (
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-2xl font-bold text-indigo-700">{p.media ?? "—"}</span>
+                          <span className="text-xs text-slate-500">média · {p.totalRespostas} resposta(s)</span>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-xs text-slate-500">{p.totalRespostas} resposta(s) de texto</p>
+                          {p.respostasTexto && p.respostasTexto.length > 0 && (
+                            <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                              {p.respostasTexto.slice(0, 5).map((t: string, i: number) => (
+                                <p key={i} className="text-xs text-slate-700 bg-slate-50 rounded px-2 py-1 border">"{t}"</p>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {dash.recomendacao && dash.recomendacao.total > 0 && (
             <div className="bg-white border rounded-xl p-4">
               <h3 className="font-semibold text-slate-800 mb-3">Recomendaria a FC para outras empresas?</h3>

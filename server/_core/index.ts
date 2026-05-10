@@ -642,7 +642,33 @@ Regras:
             periodicidade VARCHAR(8) NOT NULL DEFAULT 'mensal',
             updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
           )`);
-          console.log(`[SyncSchema+] Tabelas Portal Cliente (comentarios + avaliacoes + config) garantidas.`);
+          // Rev. 1595 — Editor do Questionário (perguntas extras + respostas)
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS cliente_perguntas_extras (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            ordem INTEGER NOT NULL DEFAULT 0,
+            secao_titulo VARCHAR(80) NOT NULL,
+            tipo VARCHAR(20) NOT NULL,
+            label VARCHAR(240) NOT NULL,
+            ajuda TEXT,
+            placeholder VARCHAR(240),
+            obrigatoria BOOLEAN NOT NULL DEFAULT FALSE,
+            ativa BOOLEAN NOT NULL DEFAULT TRUE,
+            criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+          )`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cpe_company_ordem ON cliente_perguntas_extras (company_id, ordem)`);
+          // Rev. 1595 — Sem FK física p/ companies.id (a tabela companies não declara PK
+          // no schema). Tenant isolation é garantida em todas as queries via filtro por companyId.
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS cliente_respostas_extras (
+            id SERIAL PRIMARY KEY,
+            avaliacao_id INTEGER NOT NULL REFERENCES cliente_avaliacoes(id) ON DELETE CASCADE,
+            pergunta_id INTEGER NOT NULL REFERENCES cliente_perguntas_extras(id) ON DELETE CASCADE,
+            valor_numero INTEGER,
+            valor_texto TEXT
+          )`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cre_aval ON cliente_respostas_extras (avaliacao_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS cre_pergunta ON cliente_respostas_extras (pergunta_id)`);
+          console.log(`[SyncSchema+] Tabelas Portal Cliente (comentarios + avaliacoes + config + perguntas/respostas extras) garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA cliente_comentarios/avaliacoes:`, e?.message || e); }
 
         try {

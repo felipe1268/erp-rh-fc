@@ -136,6 +136,14 @@ export default function PortalDashboardCliente() {
     recomendaria: null,
   });
   const [avaliado, setAvaliado] = useState(false);
+  // Rev. 1595 — Perguntas extras (personalizadas) configuradas pelo admin.
+  const perguntasExtrasQ = trpc.portalExterno.cliente.listarPerguntasExtras.useQuery(
+    { token }, { enabled: !!token && tipo === "cliente" }
+  );
+  const perguntasExtras = (perguntasExtrasQ.data || []) as any[];
+  const [respostasExtras, setRespostasExtras] = useState<Record<number, { valorNumero?: number | null; valorTexto?: string }>>({});
+  const setRespExtra = (perguntaId: number, patch: { valorNumero?: number | null; valorTexto?: string }) =>
+    setRespostasExtras((prev) => ({ ...prev, [perguntaId]: { ...(prev[perguntaId] || {}), ...patch } }));
   // Rev. 1551 — Lembrete mensal anônimo: o backend devolve apenas se a
   // credencial deste mês já tem marcação (ano_mes), sem ligar ao
   // conteúdo da avaliação. Mostramos um modal de boas-vindas que abre
@@ -173,6 +181,30 @@ export default function PortalDashboardCliente() {
   });
   const enviarAvaliacao = () => {
     if (aval.notaGeral === null) { toast.error("Informe pelo menos a nota geral (NPS)"); return; }
+    // Rev. 1595 — valida obrigatórias das perguntas extras
+    for (const p of perguntasExtras) {
+      if (!p.obrigatoria) continue;
+      const r = respostasExtras[p.id];
+      const isNumero = p.tipo === "nota_0_10" || p.tipo === "sim_nao_talvez";
+      const vazio = isNumero
+        ? (r?.valorNumero === null || r?.valorNumero === undefined)
+        : !(r?.valorTexto && r.valorTexto.trim().length > 0);
+      if (vazio) { toast.error(`Responda: ${p.label}`); return; }
+    }
+    const respostasExtrasArr = perguntasExtras
+      .map((p) => {
+        const r = respostasExtras[p.id];
+        if (!r) return null;
+        const isNumero = p.tipo === "nota_0_10" || p.tipo === "sim_nao_talvez";
+        if (isNumero) {
+          if (r.valorNumero === null || r.valorNumero === undefined) return null;
+          return { perguntaId: p.id as number, valorNumero: r.valorNumero };
+        }
+        const t = (r.valorTexto || "").trim();
+        if (!t) return null;
+        return { perguntaId: p.id as number, valorTexto: t };
+      })
+      .filter(Boolean) as any[];
     enviarAvalMut.mutate({
       token,
       obraId: aval.obraId,
@@ -195,6 +227,7 @@ export default function PortalDashboardCliente() {
       comentarioGestor: aval.comentarioGestor || undefined,
       gestorNome: aval.gestorNome || undefined,
       recomendaria: aval.recomendaria ?? undefined,
+      respostasExtras: respostasExtrasArr.length ? respostasExtrasArr : undefined,
     });
   };
   // Rev. 1569 — periodicidade configurável (mensal/anual)
@@ -588,6 +621,90 @@ export default function PortalDashboardCliente() {
                     rows={3} className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
                     placeholder="Sugestões, oportunidades de melhoria, gargalos identificados..." />
                 </div>
+
+                {/* Rev. 1595 — Perguntas extras (personalizadas) configuradas pelo admin */}
+                {perguntasExtras.length > 0 && (() => {
+                  const grupos = perguntasExtras.reduce((acc: Record<string, any[]>, p: any) => {
+                    const sec = p.secaoTitulo || "Outras";
+                    if (!acc[sec]) acc[sec] = [];
+                    acc[sec].push(p);
+                    return acc;
+                  }, {});
+                  return (
+                    <div className="space-y-4">
+                      {Object.entries(grupos).map(([sec, lista]: any) => (
+                        <div key={sec} className="border rounded-xl p-4 space-y-3">
+                          <h3 className="font-semibold text-slate-800 text-sm">{sec}</h3>
+                          {lista.map((p: any) => {
+                            const r = respostasExtras[p.id] || {};
+                            return (
+                              <div key={p.id}>
+                                <Label className="text-sm font-medium">
+                                  {p.label}
+                                  {p.obrigatoria
+                                    ? <span className="text-rose-500 ml-1">*</span>
+                                    : <span className="text-slate-400 text-xs ml-1">(opcional)</span>}
+                                </Label>
+                                {p.ajuda && <p className="text-xs text-slate-500 mt-0.5">{p.ajuda}</p>}
+                                {p.tipo === "nota_0_10" && (
+                                  <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {Array.from({ length: 11 }, (_, i) => i).map((n) => {
+                                      const sel = r.valorNumero === n;
+                                      return (
+                                        <button
+                                          key={n}
+                                          type="button"
+                                          onClick={() => setRespExtra(p.id, { valorNumero: sel ? null : n })}
+                                          className={`w-9 h-9 rounded-md border text-sm font-semibold transition ${sel ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"}`}
+                                        >
+                                          {n}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                {p.tipo === "sim_nao_talvez" && (
+                                  <div className="flex gap-2 mt-2">
+                                    {[
+                                      { v: 2, label: "Sim", icon: Smile, cor: "bg-emerald-500" },
+                                      { v: 1, label: "Talvez", icon: Meh, cor: "bg-amber-500" },
+                                      { v: 0, label: "Não", icon: Frown, cor: "bg-rose-500" },
+                                    ].map((opt) => {
+                                      const Icon = opt.icon as any;
+                                      const sel = r.valorNumero === opt.v;
+                                      return (
+                                        <button
+                                          key={opt.v}
+                                          type="button"
+                                          onClick={() => setRespExtra(p.id, { valorNumero: sel ? null : opt.v })}
+                                          className={`flex-1 flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 transition-all ${sel ? `${opt.cor} text-white border-transparent shadow` : "border-slate-200 text-slate-600 hover:border-slate-300"}`}
+                                        >
+                                          <Icon className="w-5 h-5" />
+                                          <span className="text-xs font-medium">{opt.label}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                {p.tipo === "texto_curto" && (
+                                  <Input value={r.valorTexto || ""} maxLength={240}
+                                    onChange={(e) => setRespExtra(p.id, { valorTexto: e.target.value })}
+                                    placeholder={p.placeholder || ""} className="mt-1" />
+                                )}
+                                {p.tipo === "texto_longo" && (
+                                  <textarea value={r.valorTexto || ""} rows={3}
+                                    onChange={(e) => setRespExtra(p.id, { valorTexto: e.target.value })}
+                                    className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
+                                    placeholder={p.placeholder || ""} />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 <div className="flex justify-end pt-3 border-t">
                   <Button onClick={enviarAvaliacao} disabled={enviarAvalMut.isPending || aval.notaGeral === null}

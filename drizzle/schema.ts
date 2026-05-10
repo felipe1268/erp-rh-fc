@@ -4034,6 +4034,41 @@ export const portalClienteConfig = pgTable("portal_cliente_config", {
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 });
 
+// Rev. 1595 — Editor do Questionário do Portal do Cliente
+// Perguntas EXTRAS (personalizadas) que o admin cria/edita/remove livremente.
+// As 8 perguntas core (notaEquipe, notaGestor, notaEmpresa, notaObra,
+// notaEscritorio, notaFaturamento, comentarioPositivo, comentarioMelhoria)
+// permanecem fixas em cliente_avaliacoes para preservar a analytics histórica
+// do NPS e a paridade Portal × Planejamento.
+export const clientePerguntasExtras = pgTable("cliente_perguntas_extras", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(), // tenant isolation via WHERE companyId; companies não declara PK no schema
+  ordem: integer().notNull().default(0),
+  secaoTitulo: varchar("secao_titulo", { length: 80 }).notNull(), // agrupador visual ("Pós-obra", "Qualidade", etc.)
+  tipo: varchar({ length: 20 }).notNull(), // 'nota_0_10' | 'texto_curto' | 'texto_longo' | 'sim_nao_talvez'
+  label: varchar({ length: 240 }).notNull(),
+  ajuda: text(),
+  placeholder: varchar({ length: 240 }),
+  obrigatoria: boolean().notNull().default(false),
+  ativa: boolean().notNull().default(true),
+  criadoEm: timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("cpe_company_ordem").on(t.companyId, t.ordem),
+]);
+
+// Rev. 1595 — Respostas das perguntas extras (uma linha por pergunta respondida)
+// Mantém anonimato: sem clienteId/credId, herda apenas o vínculo com a avaliação anônima.
+export const clienteRespostasExtras = pgTable("cliente_respostas_extras", {
+  id: serial().primaryKey(),
+  avaliacaoId: integer("avaliacao_id").notNull().references(() => clienteAvaliacoes.id, { onDelete: "cascade" }),
+  perguntaId: integer("pergunta_id").notNull().references(() => clientePerguntasExtras.id, { onDelete: "cascade" }),
+  valorNumero: integer("valor_numero"), // nota 0-10 ou recomendaria 0/1/2
+  valorTexto: text("valor_texto"),       // texto curto/longo
+}, (t) => [
+  index("cre_aval").on(t.avaliacaoId),
+  index("cre_pergunta").on(t.perguntaId),
+]);
+
 
 // ============================================================
 // GRUPOS DE USUÁRIOS - Sistema de permissões por grupo

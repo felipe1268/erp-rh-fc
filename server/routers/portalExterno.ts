@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb, getEquipeObra } from "../db";
-import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalClienteConfig, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos, sstIntegracaoRegistros } from "../../drizzle/schema";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalClienteConfig, clientePerguntasExtras, clienteRespostasExtras, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos, sstIntegracaoRegistros } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -766,6 +766,33 @@ export const portalExternoRouter = router({
         mediaGeral: p.respostas ? Math.round((p.somaGeral / p.respostas) * 10) / 10 : null,
         nps: npsOf(p.notas),
       })).sort((a, b) => b.periodo.localeCompare(a.periodo));
+      // Rev. 1595 — Perguntas extras (personalizadas) com agregações.
+      // Para cada pergunta cadastrada (mesmo se inativa, contanto que tenha
+      // recebido respostas no período), calcula média (tipo nota_0_10 e
+      // sim_nao_talvez), distribuição e amostra de respostas de texto.
+      const avalIds = rows.map(r => r.id);
+      let perguntasExtras: any[] = [];
+      try {
+        const perguntasRows = await db.select().from(clientePerguntasExtras)
+          .where(eq(clientePerguntasExtras.companyId, input.companyId))
+          .orderBy(clientePerguntasExtras.ordem);
+        const respostasRows = avalIds.length === 0 ? [] : await db.select().from(clienteRespostasExtras)
+          .where(inArray(clienteRespostasExtras.avaliacaoId, avalIds));
+        perguntasExtras = perguntasRows.map((p: any) => {
+          const resps = respostasRows.filter((r: any) => r.perguntaId === p.id);
+          if (p.tipo === "nota_0_10" || p.tipo === "sim_nao_talvez") {
+            const nums = resps.map((r: any) => r.valorNumero).filter((n: any) => n !== null && n !== undefined);
+            const media = nums.length ? Math.round((nums.reduce((a: number, b: number) => a + b, 0) / nums.length) * 10) / 10 : null;
+            return { ...p, totalRespostas: resps.length, media, distribuicao: nums };
+          }
+          // texto_curto / texto_longo
+          const respostasTexto = resps.map((r: any) => (r.valorTexto || "").trim()).filter((t: string) => t.length > 0);
+          return { ...p, totalRespostas: respostasTexto.length, respostasTexto: respostasTexto.slice(0, 100) };
+        });
+      } catch (e: any) {
+        console.error("[dashboardAvaliacoesCliente] Falha ao carregar perguntas extras:", e?.message || e);
+      }
+
       return {
         total,
         nps,
@@ -787,7 +814,139 @@ export const portalExternoRouter = router({
         porObra: obrasList,
         porPeriodo: periodos,
         avaliacoes: rows.slice(0, 100),
+        // Rev. 1595 — Perguntas personalizadas
+        perguntasExtras,
       };
+    }),
+
+    // ===== Rev. 1595 — Editor do Questionário (perguntas extras) =====
+    listarPerguntasExtras: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      apenasAtivas: z.boolean().optional(),
+    })).query(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
+      }
+      const db = (await getDb())!;
+      const conds: any[] = [eq(clientePerguntasExtras.companyId, input.companyId)];
+      if (input.apenasAtivas) conds.push(eq(clientePerguntasExtras.ativa, true));
+      const rows = await db.select().from(clientePerguntasExtras)
+        .where(and(...conds))
+        .orderBy(clientePerguntasExtras.ordem, clientePerguntasExtras.id);
+      // Rev. 1595 — devolve totalRespostas para a UI poder bloquear mudança de tipo.
+      const ids = rows.map((r: any) => r.id);
+      let counts: Record<number, number> = {};
+      if (ids.length > 0) {
+        const cntRows = await db.execute(sql`
+          SELECT pergunta_id, COUNT(*)::int AS total
+          FROM cliente_respostas_extras
+          WHERE pergunta_id IN (${sql.join(ids.map(i => sql`${i}`), sql`, `)})
+          GROUP BY pergunta_id
+        `);
+        for (const r of ((cntRows as any).rows ?? cntRows ?? []) as any[]) {
+          counts[Number(r.pergunta_id)] = Number(r.total);
+        }
+      }
+      return rows.map((r: any) => ({ ...r, totalRespostas: counts[r.id] ?? 0 }));
+    }),
+
+    salvarPerguntaExtra: protectedProcedure.input(z.object({
+      id: z.number().optional(),
+      companyId: z.number(),
+      ordem: z.number().int().optional(),
+      secaoTitulo: z.string().min(1).max(80),
+      tipo: z.enum(["nota_0_10", "texto_curto", "texto_longo", "sim_nao_talvez"]),
+      label: z.string().min(1).max(240),
+      ajuda: z.string().max(2000).optional().nullable(),
+      placeholder: z.string().max(240).optional().nullable(),
+      obrigatoria: z.boolean().optional(),
+      ativa: z.boolean().optional(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
+      }
+      const db = (await getDb())!;
+      if (input.id) {
+        const [existing] = await db.select().from(clientePerguntasExtras).where(eq(clientePerguntasExtras.id, input.id));
+        if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Pergunta não encontrada." });
+        if (existing.companyId !== input.companyId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Pergunta não pertence à empresa selecionada." });
+        }
+        // Tipo NÃO pode mudar depois que a pergunta tem respostas (preservar consistência analítica).
+        const [{ count }] = await db.execute(sql`
+          SELECT COUNT(*)::int AS count FROM cliente_respostas_extras WHERE pergunta_id = ${input.id}
+        `).then((r: any) => (r.rows ?? r ?? [])) as any;
+        if ((count ?? 0) > 0 && existing.tipo !== input.tipo) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Não é possível mudar o tipo de uma pergunta que já tem respostas. Crie uma nova pergunta." });
+        }
+        await db.update(clientePerguntasExtras).set({
+          secaoTitulo: input.secaoTitulo.trim(),
+          tipo: input.tipo,
+          label: input.label.trim(),
+          ajuda: input.ajuda?.trim() || null,
+          placeholder: input.placeholder?.trim() || null,
+          obrigatoria: input.obrigatoria ?? false,
+          ativa: input.ativa ?? true,
+          ...(input.ordem !== undefined ? { ordem: input.ordem } : {}),
+        }).where(eq(clientePerguntasExtras.id, input.id));
+        return { success: true, id: input.id };
+      }
+      // CREATE — calcula próxima ordem
+      const [maxRow] = await db.execute(sql`
+        SELECT COALESCE(MAX(ordem), -1) + 1 AS prox
+        FROM cliente_perguntas_extras WHERE company_id = ${input.companyId}
+      `).then((r: any) => (r.rows ?? r ?? [])) as any;
+      const proxOrdem = input.ordem ?? (maxRow?.prox ?? 0);
+      const [created] = await db.insert(clientePerguntasExtras).values({
+        companyId: input.companyId,
+        ordem: proxOrdem,
+        secaoTitulo: input.secaoTitulo.trim(),
+        tipo: input.tipo,
+        label: input.label.trim(),
+        ajuda: input.ajuda?.trim() || null,
+        placeholder: input.placeholder?.trim() || null,
+        obrigatoria: input.obrigatoria ?? false,
+        ativa: input.ativa ?? true,
+      }).returning({ id: clientePerguntasExtras.id });
+      return { success: true, id: created.id };
+    }),
+
+    removerPerguntaExtra: protectedProcedure.input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode remover perguntas (apaga as respostas históricas)." });
+      }
+      const db = (await getDb())!;
+      const [existing] = await db.select().from(clientePerguntasExtras).where(eq(clientePerguntasExtras.id, input.id));
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Pergunta não encontrada." });
+      if (existing.companyId !== input.companyId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Pergunta não pertence à empresa selecionada." });
+      }
+      // CASCADE em cliente_respostas_extras remove as respostas atreladas.
+      await db.delete(clientePerguntasExtras).where(eq(clientePerguntasExtras.id, input.id));
+      return { success: true };
+    }),
+
+    reordenarPerguntasExtras: protectedProcedure.input(z.object({
+      companyId: z.number(),
+      ordemIds: z.array(z.number()), // ids na ordem desejada
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master" && ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a administradores." });
+      }
+      const db = (await getDb())!;
+      // Atualiza em batch — só registros desta empresa.
+      for (let i = 0; i < input.ordemIds.length; i++) {
+        await db.update(clientePerguntasExtras)
+          .set({ ordem: i })
+          .where(and(
+            eq(clientePerguntasExtras.id, input.ordemIds[i]!),
+            eq(clientePerguntasExtras.companyId, input.companyId),
+          ));
+      }
+      return { success: true };
     }),
 
     // Rev. 1569 — Master pode CANCELAR uma avaliação registrada.
@@ -1256,6 +1415,12 @@ export const portalExternoRouter = router({
       comentarioEscritorio: z.string().optional(),
       gestorNome: z.string().optional(),
       recomendaria: z.number().int().min(0).max(2).nullable().optional(),
+      // Rev. 1595 — Respostas das perguntas extras (personalizadas) cadastradas pelo admin.
+      respostasExtras: z.array(z.object({
+        perguntaId: z.number(),
+        valorNumero: z.number().int().nullable().optional(),
+        valorTexto: z.string().optional(),
+      })).optional(),
     })).mutation(async ({ input }) => {
       const db = (await getDb())!;
       const secret = process.env.JWT_SECRET || "portal-secret";
@@ -1291,7 +1456,7 @@ export const portalExternoRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: `Você já enviou a avaliação deste ${labelPer}. Volte no próximo ${labelPer}.` });
         }
       }
-      await db.insert(clienteAvaliacoes).values({
+      const [novaAval] = await db.insert(clienteAvaliacoes).values({
         companyId: decoded.companyId,
         obraId: input.obraId ?? null,
         obraNome,
@@ -1315,7 +1480,48 @@ export const portalExternoRouter = router({
         gestorNome: input.gestorNome || null,
         recomendaria: input.recomendaria ?? null,
         anoPeriodo,
-      });
+      }).returning({ id: clienteAvaliacoes.id });
+
+      // Rev. 1595 — Persiste respostas das perguntas extras vinculadas a esta avaliação.
+      // Valida que cada perguntaId pertence à mesma empresa antes de inserir.
+      const extras = (input.respostasExtras || []).filter(r =>
+        (r.valorNumero !== null && r.valorNumero !== undefined) ||
+        (r.valorTexto && r.valorTexto.trim().length > 0)
+      );
+      if (extras.length > 0 && novaAval?.id) {
+        const perguntasValidas = await db.select({
+          id: clientePerguntasExtras.id,
+          tipo: clientePerguntasExtras.tipo,
+        }).from(clientePerguntasExtras).where(and(
+          eq(clientePerguntasExtras.companyId, decoded.companyId),
+          inArray(clientePerguntasExtras.id, extras.map(e => e.perguntaId)),
+        ));
+        const validMap = new Map(perguntasValidas.map((p: any) => [p.id, p.tipo]));
+        const insertVals = extras
+          .filter(e => validMap.has(e.perguntaId))
+          .map(e => {
+            const tipo = validMap.get(e.perguntaId);
+            const isNumero = tipo === "nota_0_10" || tipo === "sim_nao_talvez";
+            // Rev. 1595 — valida domínio numérico por tipo.
+            // nota_0_10 ∈ [0,10]; sim_nao_talvez ∈ {0,1,2}. Fora disso, descarta.
+            let valorNumero: number | null = null;
+            if (isNumero && e.valorNumero !== null && e.valorNumero !== undefined) {
+              const n = Math.trunc(e.valorNumero);
+              if (tipo === "nota_0_10" && n >= 0 && n <= 10) valorNumero = n;
+              else if (tipo === "sim_nao_talvez" && (n === 0 || n === 1 || n === 2)) valorNumero = n;
+            }
+            return {
+              avaliacaoId: novaAval.id,
+              perguntaId: e.perguntaId,
+              valorNumero,
+              valorTexto: !isNumero ? (e.valorTexto?.trim() || null) : null,
+            };
+          })
+          .filter(v => v.valorNumero !== null || v.valorTexto !== null);
+        if (insertVals.length > 0) {
+          await db.insert(clienteRespostasExtras).values(insertVals);
+        }
+      }
       return { success: true };
     }),
 
@@ -2290,6 +2496,24 @@ export const portalExternoRouter = router({
       )).orderBy(desc(gdRevisoes.criadoEm));
 
       return { revisoes: revs, revisaoAtual: doc.revisaoAtual || "0" };
+    }),
+
+    // Rev. 1595 — Perguntas extras (personalizadas) que o admin configurou
+    // para o questionário desta empresa. Retorna SOMENTE perguntas ativas,
+    // ordenadas pela ordem definida no editor.
+    listarPerguntasExtras: publicProcedure.input(z.object({ token: z.string() })).query(async ({ input }) => {
+      const db = (await getDb())!;
+      const secret = process.env.JWT_SECRET || "portal-secret";
+      let decoded: any;
+      try { decoded = jwt.verify(input.token, secret); } catch { throw new TRPCError({ code: "UNAUTHORIZED" }); }
+      if (decoded.tipo !== "cliente") throw new TRPCError({ code: "FORBIDDEN" });
+      const rows = await db.select().from(clientePerguntasExtras)
+        .where(and(
+          eq(clientePerguntasExtras.companyId, decoded.companyId),
+          eq(clientePerguntasExtras.ativa, true),
+        ))
+        .orderBy(clientePerguntasExtras.ordem, clientePerguntasExtras.id);
+      return rows;
     }),
   }),
 
