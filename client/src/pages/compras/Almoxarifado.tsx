@@ -54,6 +54,10 @@ export default function Almoxarifado() {
   const [busca, setBusca] = useState("");
   const [filtroCateg, setFiltroCateg] = useState("todas");
   const [apenasAbaixo, setApenasAbaixo] = useState(false);
+  // Rev. 1606 — Ordenação: nome (A→Z padrão), valor total estoque (maior/menor),
+  // quantidade em estoque (maior/menor) e valor unitário (maior/menor).
+  type SortKey = "nome_asc" | "nome_desc" | "valor_desc" | "valor_asc" | "qtd_desc" | "qtd_asc" | "unit_desc" | "unit_asc";
+  const [sortBy, setSortBy] = useState<SortKey>("nome_asc");
 
   const { data: itens = [], refetch: refetchItens, isLoading } = trpc.compras.listarItens.useQuery(
     { companyId }, { enabled: !!companyId }
@@ -70,8 +74,24 @@ export default function Almoxarifado() {
     }
     if (filtroCateg !== "todas") r = r.filter(i => i.categoria === filtroCateg);
     if (apenasAbaixo) r = r.filter(i => n(i.quantidadeMinima) > 0 && n(i.quantidadeAtual) < n(i.quantidadeMinima));
-    return r;
-  }, [itens, busca, filtroCateg, apenasAbaixo]);
+    // Rev. 1606 — Ordenação configurável (valor/quantidade/nome).
+    const cmpStr = (a: string, b: string) => a.localeCompare(b, "pt-BR", { sensitivity: "base" });
+    const valorTotal = (i: any) => n((i as any).valorUnitario) * n(i.quantidadeAtual);
+    const valorUnit = (i: any) => n((i as any).valorUnitario);
+    const qtd = (i: any) => n(i.quantidadeAtual);
+    const sorted = [...r];
+    switch (sortBy) {
+      case "nome_asc":   sorted.sort((a, b) => cmpStr(a.nome, b.nome)); break;
+      case "nome_desc":  sorted.sort((a, b) => cmpStr(b.nome, a.nome)); break;
+      case "valor_desc": sorted.sort((a, b) => valorTotal(b) - valorTotal(a) || cmpStr(a.nome, b.nome)); break;
+      case "valor_asc":  sorted.sort((a, b) => valorTotal(a) - valorTotal(b) || cmpStr(a.nome, b.nome)); break;
+      case "qtd_desc":   sorted.sort((a, b) => qtd(b) - qtd(a) || cmpStr(a.nome, b.nome)); break;
+      case "qtd_asc":    sorted.sort((a, b) => qtd(a) - qtd(b) || cmpStr(a.nome, b.nome)); break;
+      case "unit_desc":  sorted.sort((a, b) => valorUnit(b) - valorUnit(a) || cmpStr(a.nome, b.nome)); break;
+      case "unit_asc":   sorted.sort((a, b) => valorUnit(a) - valorUnit(b) || cmpStr(a.nome, b.nome)); break;
+    }
+    return sorted;
+  }, [itens, busca, filtroCateg, apenasAbaixo, sortBy]);
 
   const totalCriticos = useMemo(() =>
     itens.filter(i => n(i.quantidadeMinima) > 0 && n(i.quantidadeAtual) < n(i.quantidadeMinima)).length,
@@ -263,6 +283,30 @@ export default function Almoxarifado() {
           >
             <option value="todas">Todas categorias</option>
             {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {/* Rev. 1606 — Ordenar por valor / quantidade */}
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as SortKey)}
+            className="h-9 text-sm border border-slate-200 rounded-md px-3 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            title="Ordenar a lista"
+          >
+            <optgroup label="Nome">
+              <option value="nome_asc">Nome (A → Z)</option>
+              <option value="nome_desc">Nome (Z → A)</option>
+            </optgroup>
+            <optgroup label="Valor total em estoque">
+              <option value="valor_desc">Maior valor primeiro</option>
+              <option value="valor_asc">Menor valor primeiro</option>
+            </optgroup>
+            <optgroup label="Quantidade em estoque">
+              <option value="qtd_desc">Maior quantidade primeiro</option>
+              <option value="qtd_asc">Menor quantidade primeiro</option>
+            </optgroup>
+            <optgroup label="Valor unitário">
+              <option value="unit_desc">Maior valor unit. primeiro</option>
+              <option value="unit_asc">Menor valor unit. primeiro</option>
+            </optgroup>
           </select>
           <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
             <input type="checkbox" checked={apenasAbaixo} onChange={e => setApenasAbaixo(e.target.checked)} className="rounded" />
