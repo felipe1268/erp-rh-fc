@@ -3248,22 +3248,24 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
         <div className="p-4 space-y-4">
           {/* Barras Previsto/Realizado */}
           <div className="space-y-2">
+            {/* Rev. 1604 — Padronização de cores: amarelo = Previsto, azul =
+                Realizado (mesmo padrão do card "Avanço Físico" no topo). */}
             <div>
               <div className="flex justify-between text-[11px] mb-0.5">
                 <span className="text-slate-500 font-medium">Previsto Acumulado</span>
-                <span className="font-bold text-red-600 tabular-nums">{fPct_(avancoPrevisto)}</span>
+                <span className="font-bold text-amber-700 tabular-nums">{fPct_(avancoPrevisto)}</span>
               </div>
               <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${Math.min(100, avancoPrevisto)}%` }} />
+                <div className="h-full bg-amber-400 rounded-full transition-all" style={{ width: `${Math.min(100, avancoPrevisto)}%` }} />
               </div>
             </div>
             <div>
               <div className="flex justify-between text-[11px] mb-0.5">
                 <span className="text-slate-500 font-medium">Realizado Acumulado</span>
-                <span className="font-bold text-emerald-700 tabular-nums">{fPct_(avancoRealAtual)}</span>
+                <span className="font-bold text-blue-700 tabular-nums">{fPct_(avancoRealAtual)}</span>
               </div>
               <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${Math.min(100, avancoRealAtual)}%` }} />
+                <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${Math.min(100, avancoRealAtual)}%` }} />
               </div>
             </div>
           </div>
