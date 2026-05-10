@@ -11380,4 +11380,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-10 12:30:00",
   },
+  {
+    version: 1598,
+    titulo: "Alocação em Obra — modal 'Funcionário já alocado' ajustado para telas estreitas",
+    descricao: "O modal de confirmação de transferência (em Obra → Alocar Funcionários, quando o funcionário selecionado já está em outra obra) tinha layout quebrado em iPad/tablet: o nome da obra de destino e o botão 'Transferir' eram cortados no lado direito porque o componente DialogContent força largura fixa via inline style (sobrescrevendo as classes max-w-Xl). Agora cada linha de funcionário sempre empilha verticalmente (avatar+nome em cima, seta+badge da nova obra em baixo) com truncate adequado, e o rodapé empilha 'Cancelar/Transferir' em coluna nas larguras pequenas (botões full-width no mobile, lado-a-lado a partir de sm).",
+    tipo: "correcao",
+    modulos: "Operacional",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-10 13:00:00",
+  },
 ];

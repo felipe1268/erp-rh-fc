@@ -1352,22 +1352,22 @@ export default function ObraEfetivo() {
                 {employeesWithAllocation.map((emp: any) => {
                   const novaObraNome = obrasAtivas.find((o: any) => o.id === allocForm.obraId)?.nome || 'Nova obra';
                   return (
-                    <div key={emp.employeeId} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 bg-white rounded-lg px-3 py-2.5 border border-amber-100">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div key={emp.employeeId} className="bg-white rounded-lg px-3 py-2.5 border border-amber-100 min-w-0">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
                           <span className="text-amber-700 text-xs font-bold">{(emp.employeeName || '?')[0]}</span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate" title={emp.employeeName}>{emp.employeeName}</p>
-                          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <div className="flex items-center gap-1 text-[11px] text-muted-foreground min-w-0">
                             <HardHat className="h-3 w-3 shrink-0" />
                             <span className="truncate">Atualmente em: <strong className="text-amber-700">{emp.obraAtualNome}</strong></span>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 sm:shrink-0 pl-11 sm:pl-0">
+                      <div className="flex items-center gap-2 mt-2 pl-11 min-w-0">
                         <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[11px] max-w-[180px] truncate" title={novaObraNome}>
+                        <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[11px] truncate min-w-0 inline-block max-w-full" title={novaObraNome}>
                           {novaObraNome}
                         </Badge>
                       </div>
@@ -1382,14 +1382,14 @@ export default function ObraEfetivo() {
               </p>
             </div>
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => { setTransferConfirmOpen(false); setEmployeesWithAllocation([]); }}>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-2">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => { setTransferConfirmOpen(false); setEmployeesWithAllocation([]); }}>
               Cancelar
             </Button>
             <Button
               onClick={executeAllocation}
               disabled={batchAllocMut.isPending}
-              className="bg-amber-600 hover:bg-amber-700 gap-2"
+              className="bg-amber-600 hover:bg-amber-700 gap-2 w-full sm:w-auto"
             >
               {batchAllocMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightLeft className="h-4 w-4" />}
               Transferir {employeesWithAllocation.length > 1 ? `(${employeesWithAllocation.length})` : ''}
