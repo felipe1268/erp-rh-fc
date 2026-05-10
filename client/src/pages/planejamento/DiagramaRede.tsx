@@ -967,10 +967,25 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
   useEffect(() => {
     const cont = containerRef.current;
     if (!cont) return;
+    // Rev. 1605 — Zoom infinito (limites bem largos: 0.02x–20x). Zoom é
+    // ancorado na posição do mouse para que o ponto sob o cursor permaneça
+    // fixo na tela (UX padrão de mapas/Figma). Funciona tanto com a roda do
+    // mouse quanto com o gesto de pinch do trackpad (que vira ctrlKey+wheel).
     const handler = (e: WheelEvent) => {
       e.preventDefault();
-      const delta = e.deltaY > 0 ? 0.88 : 1.12;
-      setZoom(z => Math.min(Math.max(z * delta, 0.1), 4));
+      const rect = cont.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      // Pinch de trackpad envia eventos com ctrlKey=true e deltaY pequenos;
+      // a roda comum tem deltaY ~100. Normalizamos para um fator suave.
+      const intensity = e.ctrlKey ? 0.01 : 0.0015;
+      const factor = Math.exp(-e.deltaY * intensity);
+      setZoom(z => {
+        const nz = Math.min(Math.max(z * factor, 0.02), 20);
+        const k = nz / z;
+        setPan(p => ({ x: cx - (cx - p.x) * k, y: cy - (cy - p.y) * k }));
+        return nz;
+      });
     };
     cont.addEventListener("wheel", handler, { passive: false });
     return () => cont.removeEventListener("wheel", handler);
@@ -991,11 +1006,12 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
   };
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
-    // Toque com 2+ dedos é tratado pelos handlers de touch abaixo (pinça).
+    // Rev. 1605 — Toque com 2+ dedos é tratado como pinça. Em touch NÃO
+    // chamamos setPointerCapture, pois isso bloqueia o segundo dedo no iOS
+    // e quebra o zoom de pinça.
     if (e.pointerType === "touch") {
       activeTouches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (activeTouches.current.size >= 2) {
-        // Inicializa pinch — captura distância inicial e centro entre dedos
         const [t1, t2] = Array.from(activeTouches.current.values());
         const dx = t2.x - t1.x, dy = t2.y - t1.y;
         pinchStart.current = {
@@ -1010,8 +1026,13 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
         dragStart.current = null;
         return;
       }
+      // 1 dedo → pan (sem capture, pra não interferir com 2º dedo)
+      if (!isBackgroundTarget(e.target)) return;
+      setDragging(true);
+      dragStart.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y };
+      return;
     }
-    // Pan single-pointer (mouse, caneta, ou 1 dedo)
+    // Mouse / caneta — pan com capture
     if (!isBackgroundTarget(e.target)) return;
     setDragging(true);
     dragStart.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y };
@@ -1027,8 +1048,8 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
         const dx = t2.x - t1.x, dy = t2.y - t1.y;
         const dist = Math.hypot(dx, dy) || 1;
         const ratio = dist / pinchStart.current.dist;
-        const newZoom = Math.min(Math.max(pinchStart.current.zoom * ratio, 0.1), 4);
-        // Mantém o centro da pinça fixo na tela
+        // Rev. 1605 — limites bem largos (0.02x–20x) para zoom "infinito"
+        const newZoom = Math.min(Math.max(pinchStart.current.zoom * ratio, 0.02), 20);
         const cont = containerRef.current;
         if (cont) {
           const rect = cont.getBoundingClientRect();
@@ -1044,7 +1065,7 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
         return;
       }
     }
-    // Pan
+    // Pan (sem clamp — deslocamento livre/infinito em qualquer direção)
     if (!dragging || !dragStart.current) return;
     setPan({
       x: dragStart.current.px + e.clientX - dragStart.current.x,
@@ -1241,11 +1262,11 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
           </button>
 
           <div className="ml-auto flex items-center gap-1.5">
-            {/* Zoom controls */}
-            <button onClick={() => setZoom(z => Math.min(z * 1.2, 4))} className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
+            {/* Zoom controls — Rev. 1605: limites largos (0.02x–20x) */}
+            <button onClick={() => setZoom(z => Math.min(z * 1.25, 20))} className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
               <ZoomIn className="h-3.5 w-3.5 text-slate-600" />
             </button>
-            <button onClick={() => setZoom(z => Math.max(z * 0.8, 0.1))} className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
+            <button onClick={() => setZoom(z => Math.max(z * 0.8, 0.02))} className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
               <ZoomOut className="h-3.5 w-3.5 text-slate-600" />
             </button>
             <button onClick={fitToView} className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors" title="Encaixar na tela">
@@ -1450,8 +1471,18 @@ export function DiagramaRede({ atividades, avancosMap }: Props) {
         {/* SVG */}
         <div
           ref={containerRef}
-          className="flex-1 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden relative"
-          style={{ cursor: dragging ? "grabbing" : "grab", touchAction: "none" }}
+          className="flex-1 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden relative select-none"
+          style={{
+            cursor: dragging ? "grabbing" : "grab",
+            // Rev. 1605 — touchAction:none é essencial p/ iPad/celular: sem
+            // isso o navegador rouba o gesto pra rolar a página.
+            touchAction: "none",
+            WebkitUserSelect: "none",
+            userSelect: "none",
+            WebkitTouchCallout: "none",
+            overscrollBehavior: "contain",
+            minHeight: 0,
+          }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
