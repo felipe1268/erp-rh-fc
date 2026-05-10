@@ -179,3 +179,9 @@ id = "9Sk191es5ovTT_D3nSUwT"
 uri = "file://docs/Manual_Portal_Cliente_FC.md"
 type = "text"
 title = "Manual do Portal do Cliente FC — para NotebookLM"
+
+[[outputs]]
+id = "146jfM-88U-GrlRUZyofV"
+uri = "file://docs/Manual_Portal_Cliente_FC.pdf"
+type = "pdf"
+title = "Manual do Portal do Cliente FC — PDF para NotebookLM"
