@@ -168,6 +168,9 @@ export default function ClientesPortalAdmin() {
   const [abasSel, setAbasSel] = useState<PortalClienteAbaKey[]>([]);
   const [modSel, setModSel] = useState<PortalClienteModuloKey[]>([]);
   const [abasPicker, setAbasPicker] = useState<{ cliente: any; usuarios: any[] } | null>(null);
+  // Rev. 1606 — modal de confirmação para "Liberar avaliação" (substitui o
+  // confirm() nativo que mostrava o domínio do Replit feio no topo).
+  const [confirmLiberarAval, setConfirmLiberarAval] = useState<{ credId: number; nome: string; email: string } | null>(null);
   const abrirAbas = (a: any) => {
     setAbasTarget(a);
     setAbasSel(parseAbasLiberadas(a.abasLiberadas));
@@ -939,10 +942,11 @@ export default function ClientesPortalAdmin() {
                                         {isMaster && (
                                           <Button size="icon" variant="ghost" className="h-9 w-9 text-emerald-600 hover:bg-emerald-50" title="Liberar avaliação (Admin Master) — permite ao usuário enviar nova avaliação no período atual"
                                             disabled={liberarAvalCredMut.isPending}
-                                            onClick={() => {
-                                              if (!confirm(`Liberar avaliação para ${a.nomeResponsavel || a.emailResponsavel || "este usuário"}?\n\nIsso permite que ele envie uma nova avaliação NPS no período atual, mesmo que já tenha enviado uma.`)) return;
-                                              liberarAvalCredMut.mutate({ credId: a.id, companyId });
-                                            }}>
+                                            onClick={() => setConfirmLiberarAval({
+                                              credId: a.id,
+                                              nome: a.nomeResponsavel || "Usuário sem nome",
+                                              email: a.emailResponsavel || "",
+                                            })}>
                                             <Star className="w-4 h-4" />
                                           </Button>
                                         )}
@@ -1017,6 +1021,68 @@ export default function ClientesPortalAdmin() {
                   <Button variant="outline" onClick={() => setAbasPicker(null)}>Fechar</Button>
                 </DialogFooter>
               </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Modal: Liberar avaliação NPS — Rev. 1606
+            Substitui o confirm() nativo do navegador (que mostrava o domínio
+            do Replit "...replit.dev diz" no topo) por um diálogo do sistema
+            com cabeçalho âmbar (combina com o ícone Estrela de Avaliação). */}
+        <Dialog open={!!confirmLiberarAval} onOpenChange={(o) => { if (!o) setConfirmLiberarAval(null); }}>
+          <DialogContent className="bg-white max-w-md p-0 gap-0 overflow-hidden">
+            {confirmLiberarAval && (
+              <>
+                <div className="bg-gradient-to-br from-amber-500 to-orange-500 px-5 py-4 flex items-start gap-3">
+                  <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                    <Star className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <DialogTitle className="text-white text-base font-semibold leading-tight">
+                      Liberar nova avaliação?
+                    </DialogTitle>
+                    <p className="text-white/85 text-xs mt-0.5">
+                      Ação reservada ao Admin Master.
+                    </p>
+                  </div>
+                </div>
+                <div className="px-5 py-4 space-y-3">
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                    <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Usuário</p>
+                    <p className="text-sm font-semibold text-slate-800 leading-tight">{confirmLiberarAval.nome}</p>
+                    {confirmLiberarAval.email && (
+                      <p className="text-xs text-slate-500 truncate">{confirmLiberarAval.email}</p>
+                    )}
+                  </div>
+                  <p className="text-sm text-slate-700 leading-relaxed">
+                    Ao confirmar, este usuário poderá enviar uma <b>nova avaliação NPS</b> no
+                    período atual, mesmo que já tenha respondido. Útil quando o cliente
+                    pediu para corrigir uma resposta enviada por engano.
+                  </p>
+                  <p className="text-[11px] text-slate-500 italic">
+                    A avaliação anterior continua registrada no histórico — esta ação apenas
+                    abre uma nova janela de envio.
+                  </p>
+                </div>
+                <DialogFooter className="px-5 py-3 bg-slate-50 border-t border-slate-200 gap-2">
+                  <Button variant="outline" onClick={() => setConfirmLiberarAval(null)} disabled={liberarAvalCredMut.isPending}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    className="bg-amber-600 hover:bg-amber-700 text-white"
+                    disabled={liberarAvalCredMut.isPending}
+                    onClick={() => {
+                      const credId = confirmLiberarAval.credId;
+                      liberarAvalCredMut.mutate({ credId, companyId }, {
+                        onSettled: () => setConfirmLiberarAval(null),
+                      });
+                    }}
+                  >
+                    <Star className="w-4 h-4 mr-1.5" />
+                    {liberarAvalCredMut.isPending ? "Liberando..." : "Liberar avaliação"}
+                  </Button>
+                </DialogFooter>
+              </>
             )}
           </DialogContent>
         </Dialog>
