@@ -134,13 +134,33 @@ export default function RaioXVeiculo() {
     { key: "documentos", label: "Documentos", icon: FileText },
   ];
 
-  const handlePrintPDF = useCallback(() => {
+  const handlePrintPDF = useCallback(async () => {
     if (!v || !raioX) return;
-    const logoUrl = selectedCompany?.logoUrl || "";
-    const companyName = selectedCompany?.name || selectedCompany?.nome || "Empresa";
-    const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    const escHtml = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    // Rev. 1618 — Pré-carrega imagens (logo + foto) como data URI para garantir
+    // que apareçam no PDF mesmo após open new window (sem CORS/cache issues).
+    const toDataUri = async (raw: string): Promise<string> => {
+      if (!raw) return "";
+      try {
+        if (/^data:/i.test(raw)) return raw;
+        const url = /^https?:\/\//i.test(raw) ? raw : (raw.startsWith("/") ? window.location.origin + raw : new URL(raw, window.location.href).toString());
+        const r = await fetch(url, { credentials: "include" });
+        if (!r.ok) return "";
+        const blob = await r.blob();
+        return await new Promise<string>((resolve) => {
+          const fr = new FileReader();
+          fr.onloadend = () => resolve(typeof fr.result === "string" ? fr.result : "");
+          fr.onerror = () => resolve("");
+          fr.readAsDataURL(blob);
+        });
+      } catch { return ""; }
+    };
+    const rawLogo = selectedCompany?.logoUrl || "";
     const rawPhoto = v.foto_url || v.fotoUrl || "";
-    const vehiclePhoto = rawPhoto && /^https?:\/\//i.test(rawPhoto) ? escHtml(rawPhoto) : "";
+    const [logoDataUri, photoDataUri] = await Promise.all([toDataUri(rawLogo), toDataUri(rawPhoto)]);
+    const logoUrl = logoDataUri || rawLogo;
+    const vehiclePhoto = photoDataUri || (rawPhoto && /^https?:\/\//i.test(rawPhoto) ? rawPhoto : "");
+    const companyName = selectedCompany?.name || selectedCompany?.nome || "Empresa";
     const now = new Date();
     const dataEmissao = now.toLocaleDateString("pt-BR") + " " + now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
@@ -206,47 +226,124 @@ export default function RaioXVeiculo() {
         <td class="r">${tcoTotal > 0 ? ((item.value / tcoTotal) * 100).toFixed(1) : 0}%</td>
       </tr>`).join("");
 
+    // Barras horizontais de TCO (organização visual)
+    const tcoMax = tcoPie.reduce((m, it) => Math.max(m, it.value), 0) || 1;
+    const tcoBars = tcoPie.map(item => {
+      const pct = tcoTotal > 0 ? (item.value / tcoTotal) * 100 : 0;
+      const widthPct = (item.value / tcoMax) * 100;
+      return `
+      <div class="bar-row">
+        <div class="bar-label"><span class="dot" style="background:${item.color}"></span>${escHtml(item.label)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${widthPct.toFixed(1)}%;background:${item.color};"></div></div>
+        <div class="bar-val">R$ ${fmt(item.value)}</div>
+        <div class="bar-pct">${pct.toFixed(1)}%</div>
+      </div>`;
+    }).join("");
+
+    const scoreColorPdf = score >= 80 ? "#16a34a" : score >= 50 ? "#d97706" : "#dc2626";
+
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Ficha do Veículo — ${v.placa}</title>
+  <title>Ficha do Veículo — ${escHtml(v.placa || "")}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; font-size: 11px; line-height: 1.4; }
-    @page { size: A4; margin: 15mm 12mm; }
-    @media print { .no-print { display: none !important; } }
-    .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1e3a5f; padding-bottom: 10px; margin-bottom: 15px; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; font-size: 10.5px; line-height: 1.45; background: #fff; }
+    @page { size: A4; margin: 12mm 11mm; }
+    @media print { .no-print { display: none !important; } .group { page-break-inside: avoid; } .page-break { page-break-before: always; } thead { display: table-header-group; } tr { page-break-inside: avoid; } }
+
+    /* Cabeçalho */
+    .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1e3a5f; padding-bottom: 8px; margin-bottom: 12px; }
     .header-left { display: flex; align-items: center; gap: 12px; }
-    .header img { height: 50px; max-width: 160px; object-fit: contain; }
-    .header-company { font-size: 14px; font-weight: 700; color: #1e3a5f; }
+    .header img.logo { height: 44px; max-width: 160px; object-fit: contain; }
+    .header-company { font-size: 13px; font-weight: 800; color: #1e3a5f; letter-spacing: 0.2px; }
+    .header-sub { font-size: 9px; color: #64748b; margin-top: 1px; }
     .header-right { text-align: right; font-size: 9px; color: #64748b; }
-    .title-bar { background: #1e3a5f; color: white; padding: 10px 16px; border-radius: 6px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-    .title-bar h1 { font-size: 16px; font-weight: 700; }
-    .vehicle-photo { width: 70px; height: 70px; border-radius: 8px; object-fit: cover; border: 2px solid rgba(255,255,255,0.3); flex-shrink: 0; }
-    .vehicle-photo-placeholder { width: 70px; height: 70px; border-radius: 8px; background: rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 24px; }
-    .title-bar .score { background: white; color: #1e3a5f; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 16px; }
-    .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
-    .info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; }
-    .info-box label { display: block; font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 2px; }
-    .info-box span { font-size: 12px; font-weight: 700; color: #1e293b; }
-    .section { margin-bottom: 14px; page-break-inside: avoid; }
-    .section-title { font-size: 12px; font-weight: 700; color: #1e3a5f; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; margin-bottom: 8px; }
-    table { width: 100%; border-collapse: collapse; font-size: 10px; }
-    th { background: #f1f5f9; padding: 5px 6px; text-align: left; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; }
-    td { padding: 4px 6px; border-bottom: 1px solid #f1f5f9; }
-    tr:nth-child(even) { background: #fafbfc; }
+    .header-right b { color: #1e293b; font-size: 10px; }
+
+    /* Hero do veículo */
+    .hero { display: flex; gap: 14px; padding: 14px; background: linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%); color: white; border-radius: 10px; margin-bottom: 14px; align-items: stretch; }
+    .hero-photo { width: 110px; height: 110px; border-radius: 10px; object-fit: cover; border: 3px solid rgba(255,255,255,0.25); flex-shrink: 0; background: rgba(255,255,255,0.08); }
+    .hero-photo-placeholder { width: 110px; height: 110px; border-radius: 10px; background: rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; font-size: 44px; flex-shrink: 0; border: 2px dashed rgba(255,255,255,0.25); }
+    .hero-info { flex: 1; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
+    .hero-plate { font-size: 24px; font-weight: 900; letter-spacing: 1.5px; line-height: 1; }
+    .hero-model { font-size: 11px; opacity: 0.85; margin-top: 2px; }
+    .hero-tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .hero-tag { font-size: 9px; padding: 2px 8px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); border-radius: 999px; font-weight: 600; }
+    .hero-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 110px; }
+    .hero-km { text-align: right; }
+    .hero-km .l { font-size: 9px; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.5px; }
+    .hero-km .v { font-size: 18px; font-weight: 800; line-height: 1; }
+    .hero-score { width: 60px; height: 60px; border-radius: 50%; background: white; display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 900; }
+    .hero-score .v { font-size: 22px; line-height: 1; color: ${scoreColorPdf}; }
+    .hero-score .l { font-size: 7px; color: #64748b; margin-top: 1px; letter-spacing: 0.5px; }
+
+    /* Cartões de identidade */
+    .id-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+    .id-box { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 3px solid #1e3a5f; border-radius: 4px; padding: 6px 9px; }
+    .id-box label { display: block; font-size: 8px; color: #64748b; text-transform: uppercase; font-weight: 700; margin-bottom: 1px; letter-spacing: 0.4px; }
+    .id-box span { font-size: 11px; font-weight: 700; color: #1e293b; word-break: break-all; }
+
+    /* KPIs */
+    .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 14px; }
+    .kpi-box { padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; background: #fff; position: relative; overflow: hidden; }
+    .kpi-box::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+    .kpi-box.k-orange::before { background: #ea580c; } .kpi-box.k-orange .val { color: #ea580c; }
+    .kpi-box.k-amber::before { background: #d97706; } .kpi-box.k-amber .val { color: #d97706; }
+    .kpi-box.k-red::before { background: #dc2626; } .kpi-box.k-red .val { color: #dc2626; }
+    .kpi-box.k-green::before { background: #16a34a; } .kpi-box.k-green .val { color: #16a34a; }
+    .kpi-box.k-blue::before { background: #1e3a5f; } .kpi-box.k-blue .val { color: #1e3a5f; }
+    .kpi-box .lab { font-size: 8.5px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 4px; padding-left: 6px; }
+    .kpi-box .val { font-size: 18px; font-weight: 800; padding-left: 6px; line-height: 1; }
+    .kpi-box .sub { font-size: 8.5px; color: #94a3b8; padding-left: 6px; margin-top: 2px; }
+
+    /* Grupos / Seções */
+    .group { margin-bottom: 16px; }
+    .group-title { font-size: 11px; font-weight: 800; color: #fff; background: #1e3a5f; padding: 5px 10px; border-radius: 4px 4px 0 0; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
+    .group-title.green { background: #16a34a; }
+    .group-title.orange { background: #ea580c; }
+    .group-title.red { background: #dc2626; }
+    .group-body { border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 6px 6px; padding: 8px 10px; background: #fff; }
+
+    .section { margin-bottom: 10px; }
+    .section:last-child { margin-bottom: 0; }
+    .section-title { font-size: 10.5px; font-weight: 700; color: #1e3a5f; padding: 4px 0; margin-bottom: 5px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+    .section-title .count { font-size: 9px; color: #64748b; font-weight: 600; }
+
+    /* Tabelas */
+    table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
+    th { background: #f1f5f9; padding: 5px 6px; text-align: left; font-weight: 700; color: #475569; border-bottom: 2px solid #cbd5e1; text-transform: uppercase; font-size: 8.5px; letter-spacing: 0.3px; }
+    td { padding: 4px 6px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+    tr:nth-child(even) td { background: #fafbfc; }
     .r { text-align: right; }
-    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
-    .tco-total { font-size: 18px; font-weight: 900; color: #1e3a5f; text-align: center; margin: 8px 0; }
-    .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 14px; }
-    .kpi-box { text-align: center; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; }
-    .kpi-box .val { font-size: 16px; font-weight: 800; }
-    .kpi-box .lab { font-size: 8px; color: #64748b; text-transform: uppercase; font-weight: 600; }
-    .footer { margin-top: 20px; padding-top: 8px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 9px; color: #94a3b8; }
-    .btn-print { position: fixed; top: 20px; right: 20px; padding: 10px 24px; background: #1e3a5f; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; z-index: 999; }
+    .c { text-align: center; }
+    .empty { color: #94a3b8; text-align: center; padding: 10px; font-style: italic; font-size: 10px; }
+
+    /* TCO bars */
+    .tco-total-box { background: linear-gradient(90deg,#1e3a5f,#2c5282); color: white; padding: 10px 14px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .tco-total-box .l { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.9; font-weight: 600; }
+    .tco-total-box .v { font-size: 22px; font-weight: 900; }
+    .bar-row { display: grid; grid-template-columns: 130px 1fr 90px 50px; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px dashed #e2e8f0; }
+    .bar-row:last-child { border-bottom: none; }
+    .bar-label { font-size: 10px; font-weight: 600; color: #475569; }
+    .bar-track { background: #f1f5f9; height: 12px; border-radius: 6px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 6px; }
+    .bar-val { font-size: 10px; font-weight: 700; color: #1e293b; text-align: right; }
+    .bar-pct { font-size: 9.5px; color: #64748b; text-align: right; font-weight: 600; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+
+    /* Status badges */
+    .badge { font-size: 8.5px; padding: 1px 6px; border-radius: 3px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; display: inline-block; }
+    .b-ok { background: #dcfce7; color: #15803d; }
+    .b-warn { background: #ffedd5; color: #9a3412; }
+    .b-info { background: #dbeafe; color: #1d4ed8; }
+    .b-danger { background: #fee2e2; color: #991b1b; }
+    .b-neutral { background: #f1f5f9; color: #475569; }
+
+    .footer { margin-top: 16px; padding-top: 8px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 8.5px; color: #94a3b8; }
+    .btn-print { position: fixed; top: 20px; right: 20px; padding: 10px 24px; background: #1e3a5f; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; z-index: 999; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
     .btn-print:hover { background: #2c5282; }
-    .empty { color: #94a3b8; text-align: center; padding: 12px; font-style: italic; }
   </style>
 </head>
 <body>
@@ -254,119 +351,127 @@ export default function RaioXVeiculo() {
 
   <div class="header">
     <div class="header-left">
-      ${logoUrl ? `<img src="${logoUrl}" alt="Logo" />` : ""}
+      ${logoUrl ? `<img class="logo" src="${escHtml(logoUrl)}" alt="Logo" />` : ""}
       <div>
-        <div class="header-company">${companyName}</div>
-        <div style="font-size:10px;color:#64748b;">Ficha Completa do Veículo</div>
+        <div class="header-company">${escHtml(companyName)}</div>
+        <div class="header-sub">Ficha Completa do Veículo • Sistema ERP</div>
       </div>
     </div>
     <div class="header-right">
-      Emitido em: ${dataEmissao}<br/>
-      Sistema ERP — Gestão de Frotas
+      <div>Emitido em <b>${escHtml(dataEmissao)}</b></div>
+      <div>Gestão de Frotas</div>
     </div>
   </div>
 
-  <div class="title-bar">
-    ${vehiclePhoto ? `<img src="${vehiclePhoto}" class="vehicle-photo" alt="Foto do veículo" />` : `<div class="vehicle-photo-placeholder">🚗</div>`}
-    <div style="flex:1">
-      <h1>${v.placa}</h1>
-      <div style="font-size:11px;opacity:0.8">${v.marca || ""} ${v.modelo || ""} • ${v.ano_fabricacao || v.anoFabricacao || "—"} • ${v.tipo_veiculo || v.tipoVeiculo || "—"}</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:12px;">
-      <div style="text-align:right;font-size:10px;">
-        <div>KM Atual</div>
-        <div style="font-size:14px;font-weight:700;">${Number(v.km_atual || v.kmAtual || 0).toLocaleString("pt-BR")} km</div>
+  <div class="hero">
+    ${vehiclePhoto ? `<img class="hero-photo" src="${escHtml(vehiclePhoto)}" alt="Foto do veículo" />` : `<div class="hero-photo-placeholder">🚗</div>`}
+    <div class="hero-info">
+      <div>
+        <div class="hero-plate">${escHtml(v.placa || "—")}</div>
+        <div class="hero-model">${escHtml(v.marca || "")} ${escHtml(v.modelo || "")} • ${escHtml(v.ano_fabricacao || v.anoFabricacao || "—")} • ${escHtml(v.tipo_veiculo || v.tipoVeiculo || "—")}</div>
       </div>
-      <div class="score">${score}</div>
+      <div class="hero-tags">
+        <span class="hero-tag">Status: ${escHtml(v.status_veiculo || v.statusVeiculo || "Ativo")}</span>
+        <span class="hero-tag">Combustível: ${escHtml(v.tipo_combustivel || v.tipoCombustivel || "—")}</span>
+        ${v.cor ? `<span class="hero-tag">Cor: ${escHtml(v.cor)}</span>` : ""}
+        ${(v.lotacao || v.obra_nome) ? `<span class="hero-tag">Lotação: ${escHtml(v.lotacao || v.obra_nome)}</span>` : ""}
+      </div>
+    </div>
+    <div class="hero-right">
+      <div class="hero-km"><div class="l">KM Atual</div><div class="v">${Number(v.km_atual || v.kmAtual || 0).toLocaleString("pt-BR")}</div></div>
+      <div class="hero-score"><div class="v">${score}</div><div class="l">SAÚDE</div></div>
     </div>
   </div>
 
-  <div class="info-grid">
-    <div class="info-box"><label>Chassi</label><span>${v.chassi || "—"}</span></div>
-    <div class="info-box"><label>Renavam</label><span>${v.renavam || "—"}</span></div>
-    <div class="info-box"><label>Cor</label><span>${v.cor || "—"}</span></div>
-    <div class="info-box"><label>Combustível</label><span>${v.tipo_combustivel || v.tipoCombustivel || "—"}</span></div>
-    <div class="info-box"><label>Status</label><span>${v.status_veiculo || v.statusVeiculo || "Ativo"}</span></div>
-    <div class="info-box"><label>Lotação</label><span>${v.lotacao || v.obra_nome || "—"}</span></div>
-    <div class="info-box"><label>Proprietário</label><span>${v.proprietario || "Próprio"}</span></div>
-    <div class="info-box"><label>Tag Sem Parar</label><span>${v.tag_sem_parar || v.tagSemParar || "—"}</span></div>
+  <div class="id-grid">
+    <div class="id-box"><label>Chassi</label><span>${escHtml(v.chassi || "—")}</span></div>
+    <div class="id-box"><label>Renavam</label><span>${escHtml(v.renavam || "—")}</span></div>
+    <div class="id-box"><label>Proprietário</label><span>${escHtml(v.proprietario || "Próprio")}</span></div>
+    <div class="id-box"><label>Tag Sem Parar</label><span>${escHtml(v.tag_sem_parar || v.tagSemParar || "—")}</span></div>
   </div>
 
   <div class="kpi-row">
-    <div class="kpi-box" style="background:#fff7ed;border-color:#fdba74;"><div class="val" style="color:#ea580c;">${raioX.manutencoes?.length || 0}</div><div class="lab">Manutenções</div></div>
-    <div class="kpi-box" style="background:#fffbeb;border-color:#fcd34d;"><div class="val" style="color:#d97706;">${raioX.combustivel?.length || 0}</div><div class="lab">Abastecimentos</div></div>
-    <div class="kpi-box" style="background:#fef2f2;border-color:#fca5a5;"><div class="val" style="color:#dc2626;">${raioX.multas?.length || 0}</div><div class="lab">Multas</div></div>
-    <div class="kpi-box" style="background:#f0fdf4;border-color:#86efac;"><div class="val" style="color:#16a34a;">${raioX.checklists?.length || 0}</div><div class="lab">Checklists</div></div>
-    <div class="kpi-box" style="background:#eff6ff;border-color:#93c5fd;"><div class="val" style="color:#1e3a5f;">R$ ${fmt(tcoTotal)}</div><div class="lab">TCO Total</div></div>
+    <div class="kpi-box k-orange"><div class="lab">Manutenções</div><div class="val">${raioX.manutencoes?.length || 0}</div><div class="sub">R$ ${fmt(tco?.manutencao || 0)}</div></div>
+    <div class="kpi-box k-amber"><div class="lab">Abastecimentos</div><div class="val">${raioX.combustivel?.length || 0}</div><div class="sub">R$ ${fmt(tco?.combustivel || 0)}</div></div>
+    <div class="kpi-box k-red"><div class="lab">Multas</div><div class="val">${raioX.multas?.length || 0}</div><div class="sub">R$ ${fmt(tco?.multas || 0)}</div></div>
+    <div class="kpi-box k-green"><div class="lab">Checklists</div><div class="val">${raioX.checklists?.length || 0}</div><div class="sub">Conformidade</div></div>
+    <div class="kpi-box k-blue"><div class="lab">TCO Total</div><div class="val">R$ ${fmt(tcoTotal)}</div><div class="sub">Custo de Propriedade</div></div>
   </div>
 
   ${tcoItems ? `
-  <div class="section">
-    <div class="section-title">💰 Composição do TCO (Custo Total de Propriedade)</div>
-    <div class="tco-total">R$ ${fmt(tcoTotal)}</div>
-    <table>
-      <thead><tr><th>Categoria</th><th class="r">Valor</th><th class="r">%</th></tr></thead>
-      <tbody>${tcoItems}</tbody>
-    </table>
+  <div class="group">
+    <div class="group-title">💰 Composição do TCO (Custo Total de Propriedade)</div>
+    <div class="group-body">
+      <div class="tco-total-box"><div class="l">Total Acumulado</div><div class="v">R$ ${fmt(tcoTotal)}</div></div>
+      ${tcoBars}
+    </div>
   </div>` : ""}
 
-  ${manutRows ? `
-  <div class="section">
-    <div class="section-title">🔧 Histórico de Manutenções (${raioX.manutencoes?.length || 0})</div>
-    <table>
-      <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th class="r">KM</th><th class="r">Custo</th><th>Status</th></tr></thead>
-      <tbody>${manutRows}</tbody>
-    </table>
-  </div>` : `<div class="section"><div class="section-title">🔧 Manutenções</div><div class="empty">Nenhuma manutenção registrada</div></div>`}
+  <div class="group">
+    <div class="group-title orange">🔧 Operação — Manutenções e Combustível</div>
+    <div class="group-body">
+      <div class="section">
+        <div class="section-title">Histórico de Manutenções <span class="count">${raioX.manutencoes?.length || 0} registros · R$ ${fmt(tco?.manutencao || 0)}</span></div>
+        ${manutRows ? `<table>
+          <thead><tr><th style="width:60px">Data</th><th style="width:70px">Tipo</th><th>Descrição</th><th class="r" style="width:60px">KM</th><th class="r" style="width:80px">Custo</th><th style="width:70px">Status</th></tr></thead>
+          <tbody>${manutRows}</tbody>
+        </table>` : `<div class="empty">Nenhuma manutenção registrada</div>`}
+      </div>
 
-  ${combRows ? `
-  <div class="section">
-    <div class="section-title">⛽ Histórico de Abastecimentos (${raioX.combustivel?.length || 0})</div>
-    <table>
-      <thead><tr><th>Data</th><th class="r">Litros</th><th class="r">R$/L</th><th class="r">Total</th><th class="r">KM</th><th>Posto</th></tr></thead>
-      <tbody>${combRows}</tbody>
-    </table>
-  </div>` : `<div class="section"><div class="section-title">⛽ Abastecimentos</div><div class="empty">Nenhum abastecimento registrado</div></div>`}
+      <div class="section">
+        <div class="section-title">Histórico de Abastecimentos <span class="count">${raioX.combustivel?.length || 0} registros · R$ ${fmt(tco?.combustivel || 0)}</span></div>
+        ${combRows ? `<table>
+          <thead><tr><th style="width:60px">Data</th><th class="r" style="width:55px">Litros</th><th class="r" style="width:55px">R$/L</th><th class="r" style="width:80px">Total</th><th class="r" style="width:65px">KM</th><th>Posto</th></tr></thead>
+          <tbody>${combRows}</tbody>
+        </table>` : `<div class="empty">Nenhum abastecimento registrado</div>`}
+      </div>
 
-  ${pedagRows ? `
-  <div class="section">
-    <div class="section-title">🛣️ Pedágios (${raioX.pedagios?.length || 0})</div>
-    <table>
-      <thead><tr><th>Data</th><th>Descrição</th><th>Rodovia</th><th class="r">Valor</th></tr></thead>
-      <tbody>${pedagRows}</tbody>
-    </table>
+      ${pedagRows ? `<div class="section">
+        <div class="section-title">Pedágios <span class="count">${raioX.pedagios?.length || 0} registros · R$ ${fmt(tco?.pedagios || 0)}</span></div>
+        <table>
+          <thead><tr><th style="width:60px">Data</th><th>Descrição</th><th>Rodovia</th><th class="r" style="width:80px">Valor</th></tr></thead>
+          <tbody>${pedagRows}</tbody>
+        </table>
+      </div>` : ""}
+    </div>
+  </div>
+
+  ${seguroRows || multaRows ? `<div class="group">
+    <div class="group-title red">🛡️ Compliance — Seguros e Multas</div>
+    <div class="group-body">
+      ${seguroRows ? `<div class="section">
+        <div class="section-title">Seguros <span class="count">${raioX.seguros?.length || 0} registros · R$ ${fmt(tco?.seguros || 0)}</span></div>
+        <table>
+          <thead><tr><th>Seguradora</th><th>Apólice</th><th>Vigência</th><th class="r" style="width:90px">Prêmio</th><th style="width:80px">Status</th></tr></thead>
+          <tbody>${seguroRows}</tbody>
+        </table>
+      </div>` : ""}
+      ${multaRows ? `<div class="section">
+        <div class="section-title">Multas <span class="count">${raioX.multas?.length || 0} registros · R$ ${fmt(tco?.multas || 0)}</span></div>
+        <table>
+          <thead><tr><th style="width:60px">Data</th><th>Descrição</th><th style="width:70px">Gravidade</th><th class="r" style="width:80px">Valor</th><th style="width:80px">Status</th></tr></thead>
+          <tbody>${multaRows}</tbody>
+        </table>
+      </div>` : ""}
+    </div>
   </div>` : ""}
 
-  ${multaRows ? `
-  <div class="section">
-    <div class="section-title">🚨 Multas (${raioX.multas?.length || 0})</div>
-    <table>
-      <thead><tr><th>Data</th><th>Descrição</th><th>Gravidade</th><th class="r">Valor</th><th>Status</th></tr></thead>
-      <tbody>${multaRows}</tbody>
-    </table>
-  </div>` : ""}
-
-  ${seguroRows ? `
-  <div class="section">
-    <div class="section-title">🛡️ Seguros (${raioX.seguros?.length || 0})</div>
-    <table>
-      <thead><tr><th>Seguradora</th><th>Apólice</th><th>Vigência</th><th class="r">Prêmio</th><th>Status</th></tr></thead>
-      <tbody>${seguroRows}</tbody>
-    </table>
-  </div>` : ""}
-
-  ${checkRows ? `
-  <div class="section">
-    <div class="section-title">✅ Checklists (${raioX.checklists?.length || 0})</div>
-    <table>
-      <thead><tr><th>Data</th><th>Motorista</th><th class="r">Score</th><th>Conformes</th><th>Status</th></tr></thead>
-      <tbody>${checkRows}</tbody>
-    </table>
+  ${checkRows ? `<div class="group">
+    <div class="group-title green">✅ Checklists e Conformidade</div>
+    <div class="group-body">
+      <div class="section">
+        <div class="section-title">Checklists <span class="count">${raioX.checklists?.length || 0} registros</span></div>
+        <table>
+          <thead><tr><th style="width:60px">Data</th><th>Motorista</th><th class="r" style="width:60px">Score</th><th style="width:90px">Conformes</th><th style="width:80px">Status</th></tr></thead>
+          <tbody>${checkRows}</tbody>
+        </table>
+      </div>
+    </div>
   </div>` : ""}
 
   <div class="footer">
-    <span>${companyName} — Gestão de Frotas</span>
-    <span>Veículo: ${v.placa} | Emitido: ${dataEmissao}</span>
+    <span>${escHtml(companyName)} — Gestão de Frotas</span>
+    <span>Veículo: <b>${escHtml(v.placa || "")}</b> · Saúde: <b>${score}</b> · TCO: <b>R$ ${fmt(tcoTotal)}</b> · Emitido: ${escHtml(dataEmissao)}</span>
   </div>
 </body>
 </html>`;
@@ -376,19 +481,41 @@ export default function RaioXVeiculo() {
       printWin.document.write(html);
       printWin.document.close();
     }
-  }, [v, raioX, selectedCompany, score, tcoPie, tcoTotal]);
+  }, [v, raioX, selectedCompany, score, tcoPie, tcoTotal, tco]);
 
   // Rev. 1617 — PDF dedicado: Raio-X completo de manutenções do veículo
-  const handlePrintManutPDF = useCallback(() => {
+  const handlePrintManutPDF = useCallback(async () => {
     if (!v || !raioX) return;
+    // Helper compartilhado: pré-carrega imagens como data URI (Rev. 1618)
+    const toDataUri = async (raw: string): Promise<string> => {
+      if (!raw) return "";
+      try {
+        if (/^data:/i.test(raw)) return raw;
+        const url = /^https?:\/\//i.test(raw) ? raw : (raw.startsWith("/") ? window.location.origin + raw : new URL(raw, window.location.href).toString());
+        const r = await fetch(url, { credentials: "include" });
+        if (!r.ok) return "";
+        const blob = await r.blob();
+        return await new Promise<string>((resolve) => {
+          const fr = new FileReader();
+          fr.onloadend = () => resolve(typeof fr.result === "string" ? fr.result : "");
+          fr.onerror = () => resolve("");
+          fr.readAsDataURL(blob);
+        });
+      } catch { return ""; }
+    };
+    const [logoDataUri, photoDataUri] = await Promise.all([
+      toDataUri(selectedCompany?.logoUrl || ""),
+      toDataUri(v.foto_url || v.fotoUrl || ""),
+    ]);
     const manutAll: any[] = (raioX.manutencoes || []).slice().sort(
       (a: any, b: any) => String(b.data_manutencao || "").localeCompare(String(a.data_manutencao || ""))
     );
-    const logoUrl = selectedCompany?.logoUrl || "";
+    const rawLogo2 = selectedCompany?.logoUrl || "";
+    const rawPhoto = v.foto_url || v.fotoUrl || "";
+    const logoUrl = logoDataUri || rawLogo2;
     const companyName = selectedCompany?.name || selectedCompany?.nome || "Empresa";
     const escHtml = (s: string) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-    const rawPhoto = v.foto_url || v.fotoUrl || "";
-    const vehiclePhoto = rawPhoto && /^https?:\/\//i.test(rawPhoto) ? escHtml(rawPhoto) : "";
+    const vehiclePhoto = photoDataUri || (rawPhoto && /^https?:\/\//i.test(rawPhoto) ? rawPhoto : "");
     const now = new Date();
     const dataEmissao = now.toLocaleDateString("pt-BR") + " " + now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
