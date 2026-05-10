@@ -173,3 +173,9 @@ id = "0O1UaWYfcGyXk71qWkh4C"
 uri = "file://attached_assets/PortalCliente_Manual_Completo.md"
 type = "text"
 title = "Manual Completo - Portal do Cliente FC Engenharia"
+
+[[outputs]]
+id = "9Sk191es5ovTT_D3nSUwT"
+uri = "file://docs/Manual_Portal_Cliente_FC.md"
+type = "text"
+title = "Manual do Portal do Cliente FC — para NotebookLM"
