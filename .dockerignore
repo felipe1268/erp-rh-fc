@@ -1,0 +1,43 @@
+# ───────────────────────────────────────────────────────────────
+# Replit Autoscale deploy: exclui artefatos enormes que NÃO são
+# usados em runtime, para o image size ficar abaixo de 8 GiB.
+# ───────────────────────────────────────────────────────────────
+
+# Uploads históricos do chat (1,3 GB) — não referenciados pelo código
+attached_assets/
+
+# PDFs e prints de manual gerados localmente (não servidos pelo backend)
+docs/
+
+# Scripts auxiliares de dev/migração (não rodam em prod)
+scripts/
+
+# Estados locais do agent
+.local/
+.cache/
+.config/
+.upm/
+
+# Source control / dev tooling
+.git/
+.github/
+.vscode/
+.idea/
+
+# Builds intermediários e tmp
+dist/
+build/
+.pnpm-store/
+node_modules/.cache/
+tmp/
+*.log
+
+# Logs de teste/dev
+/tmp/
+attached_assets_old/
+
+# Imagens grandes de checkpoint/replit
+.replit_checkpoints/
+*.tar
+*.tar.gz
+*.zip
