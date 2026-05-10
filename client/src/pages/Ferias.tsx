@@ -893,7 +893,15 @@ export default function Ferias() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {(() => {
+          // Rev. 1610 — Cards de risco por período (1º e 2º) usando o mesmo
+          // dataset dos alertas (prestesVencer = janela de 60 dias antes do
+          // limite do período concessivo, conforme CLT Art. 134/137).
+          // Clicar leva à aba "Férias Vencidas" que detalha cada caso.
+          const aVencer1 = (alertas?.prestesVencer || []).filter((v: any) => (v.numeroPeriodo || 1) === 1).length;
+          const aVencer2 = (alertas?.prestesVencer || []).filter((v: any) => (v.numeroPeriodo || 1) >= 2).length;
+          return (
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <Card className={`cursor-pointer hover:shadow-md transition-shadow ${statusFilter === "todos" && tab === "lista" ? "ring-2 ring-primary shadow-md" : ""}`} onClick={() => { setStatusFilter("todos"); setTab("lista"); }}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Total</p>
@@ -904,6 +912,34 @@ export default function Ferias() {
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground uppercase">Férias a Vencer</p>
               <p className="text-2xl font-bold text-amber-600">{fmtNum(stats.pendentes)}</p>
+            </CardContent>
+          </Card>
+          {/* Rev. 1610 — Risco 1º período (próximos 60 dias do concessivo) */}
+          <Card
+            className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-amber-400 ${aVencer1 > 0 ? "bg-amber-50/60" : ""}`}
+            onClick={() => { setTab("vencidas"); }}
+            title="Funcionários cujo 1º período concessivo expira nos próximos 60 dias. Conceder antes do limite evita risco de pagamento em dobro (CLT Art. 137)."
+          >
+            <CardContent className="p-4">
+              <p className="text-[10px] text-amber-700 font-semibold uppercase tracking-wide flex items-center gap-1">
+                <Clock className="h-3 w-3" /> A Vencer · 1º Período
+              </p>
+              <p className="text-2xl font-bold text-amber-700">{fmtNum(aVencer1)}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Próximos 60 dias</p>
+            </CardContent>
+          </Card>
+          {/* Rev. 1610 — Risco 2º período (acumulado — risco de multa em dobro) */}
+          <Card
+            className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-orange-600 ${aVencer2 > 0 ? "bg-orange-50/70" : ""}`}
+            onClick={() => { setTab("vencidas"); }}
+            title="Funcionários com 2º período acumulado a vencer nos próximos 60 dias. Risco IMEDIATO de pagamento em dobro caso o concessivo expire (CLT Art. 137)."
+          >
+            <CardContent className="p-4">
+              <p className="text-[10px] text-orange-800 font-semibold uppercase tracking-wide flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" /> A Vencer · 2º Período
+              </p>
+              <p className="text-2xl font-bold text-orange-700">{fmtNum(aVencer2)}</p>
+              <p className="text-[10px] text-orange-600 mt-0.5 font-medium">Risco multa em dobro</p>
             </CardContent>
           </Card>
           <Card className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-blue-500 ${statusFilter === "agendada" && tab === "lista" ? "ring-2 ring-blue-400 shadow-md" : ""}`} onClick={() => { setStatusFilter("agendada"); setTab("lista"); }}>
@@ -925,6 +961,8 @@ export default function Ferias() {
             </CardContent>
           </Card>
         </div>
+          );
+        })()}
 
         {/* Alerts */}
         {alertas && (() => {
