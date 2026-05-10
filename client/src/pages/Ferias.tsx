@@ -1114,7 +1114,7 @@ export default function Ferias() {
                           <tr key={f.id} className={`border-b last:border-0 hover:bg-muted/20 ${isVencida ? "bg-red-50/50" : isPrimeiroVencido ? "bg-amber-50/40" : ""}`}>
                             <td className="p-3">
                               <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(f.employeeId)}>{f.employeeName}</div>
-                              <div className="text-xs text-muted-foreground">{f.employeeCargo}</div>
+                              <div className="text-xs text-muted-foreground">{f.employeeCargo || f.employeeFuncao || "-"}</div>
                             </td>
                             <td className="p-3 text-xs">{formatDate(f.periodoAquisitivoInicio)} a {formatDate(f.periodoAquisitivoFim)}</td>
                             <td className="p-3">

@@ -2195,6 +2195,8 @@ export const avisoPrevioFeriasRouter = router({
           employeeName: employees.nomeCompleto,
           employeeCpf: employees.cpf,
           employeeCargo: employees.cargo,
+          employeeFuncao: employees.funcao,
+          employeeSetor: employees.setor,
           employeeSalario: employees.salarioBase,
         })
         .from(vacationPeriods)
