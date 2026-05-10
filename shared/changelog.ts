@@ -11218,4 +11218,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 18:00:00",
   },
+  {
+    version: 1580,
+    titulo: "Portal do Cliente / Planejamento — Sidebar começa em modo ÍCONE em iPad e tablet",
+    descricao: "Aplicada no Portal do Cliente a mesma regra do ERP (Rev. 1578): a barra lateral do módulo Planejamento agora começa em modo ÍCONE (rail w-16, só ícones) em qualquer tela menor que 1280px (iPad portrait/landscape e tablets em geral). O usuário expande tocando no botão de expandir e ela continua aberta até clicar de novo. Implementação: (a) `sidebarOpen` agora calcula estado inicial com `window.innerWidth >= 1280`; (b) o `<aside>` desktop foi alterado de `hidden lg:flex` para `hidden md:flex` (passa a aparecer já no iPad portrait, 768px+); (c) o overlay mobile e o botão Menu agora usam `md:hidden` (só aparecem abaixo de 768px, ou seja, em telefones). Em desktop (≥1280px) nada muda.",
+    tipo: "feature",
+    modulos: "Portal Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 19:00:00",
+  },
 ];

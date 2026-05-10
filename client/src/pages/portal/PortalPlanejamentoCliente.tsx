@@ -121,7 +121,12 @@ export default function PortalPlanejamentoCliente() {
   }, [abasLiberadas]);
 
   const [aba, setAba] = useState<PortalClienteAbaKey>("visao_geral");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Rev. 1580 — Em telas até 1279px (iPad portrait/landscape e tablets) o
+  // menu lateral começa em modo ÍCONE (rail w-16). Em desktop (>=1280px)
+  // continua começando aberto (w-64). SSR-safe.
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window === "undefined" ? true : window.innerWidth >= 1280
+  );
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [buscaAba, setBuscaAba] = useState("");
   // Rev. 1516 — abre/fecha o seletor de obra+módulo embutido na pílula
@@ -465,7 +470,7 @@ export default function PortalPlanejamentoCliente() {
       {/* ── Sidebar (desktop) ────────────────────────────────────────
            Rev. 1517: ao recolher, a barra NÃO some mais — vira um rail
            estreito (w-16) com apenas os ícones, igual ao padrão do ERP. */}
-      <aside className={`hidden lg:flex flex-col bg-slate-800 border-r border-slate-700 sticky top-0 h-screen shrink-0 shadow-xl transition-[width] duration-200 ${sidebarOpen ? "w-64" : "w-16"}`}>
+      <aside className={`hidden md:flex flex-col bg-slate-800 border-r border-slate-700 sticky top-0 h-screen shrink-0 shadow-xl transition-[width] duration-200 ${sidebarOpen ? "w-64" : "w-16"}`}>
         {sidebarOpen ? sidebarContent : (
           // ── Variante "rail" / só ícones ────────────────────────────
           <>
@@ -543,10 +548,10 @@ export default function PortalPlanejamentoCliente() {
       {mobileSidebarOpen && (
         <>
           <div
-            className="lg:hidden fixed inset-0 bg-black/40 z-40"
+            className="md:hidden fixed inset-0 bg-black/40 z-40"
             onClick={() => setMobileSidebarOpen(false)}
           />
-          <aside className="lg:hidden fixed inset-y-0 left-0 w-72 bg-slate-800 border-r border-slate-700 flex flex-col z-50 shadow-2xl">
+          <aside className="md:hidden fixed inset-y-0 left-0 w-72 bg-slate-800 border-r border-slate-700 flex flex-col z-50 shadow-2xl">
             <div className="flex justify-end px-3 pt-3">
               <button
                 onClick={() => setMobileSidebarOpen(false)}
@@ -614,7 +619,7 @@ export default function PortalPlanejamentoCliente() {
                   então não precisamos mais de botão flutuante no header da página. */}
               <button
                 onClick={() => setMobileSidebarOpen(true)}
-                className="lg:hidden h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100 mt-0.5 flex-shrink-0"
+                className="md:hidden h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100 mt-0.5 flex-shrink-0"
                 title="Abrir menu"
               >
                 <Menu className="h-4 w-4" />
