@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { APP_VERSION } from "../../../../shared/version";
 import { PORTAL_CLIENTE_MODULOS, type PortalClienteModuloKey } from "@shared/portalClienteAbas";
+import { proximaJanelaAvaliacao } from "../../../../shared/portalAvaliacao";
 import { PortalHelpButton } from "@/components/portal/PortalHelpDrawer";
 import { PortalTour, resetPortalTour } from "@/components/portal/PortalTour";
 import { HelpCircle } from "lucide-react";
@@ -156,6 +157,18 @@ export default function PortalHubCliente() {
   const { data: liberacoes } = trpc.portalExterno.cliente.liberacoes.useQuery(
     { token }, { enabled: !!token && tipo === "cliente" }
   );
+
+  // Rev. 1591 — verifica se o cliente já enviou avaliação no período corrente
+  // (mês ou ano, fuso Brasília). Quando jaAvaliou=true, o card "Avaliação"
+  // fica desativado até a próxima janela.
+  const { data: avalStatus } = trpc.portalExterno.cliente.podeAvaliarEsteMes.useQuery(
+    { token }, { enabled: !!token && tipo === "cliente" }
+  );
+  const avalJaFeita = !!avalStatus?.jaAvaliou;
+  const avalPeriodicidade = (avalStatus?.periodicidade as "mensal" | "anual" | undefined) ?? "mensal";
+  const avalProximaJanela = avalStatus?.anoMes
+    ? proximaJanelaAvaliacao(avalStatus.anoMes, avalPeriodicidade)
+    : "";
   const modulosLiberados = useMemo(() => {
     const keys = new Set<string>(liberacoes?.modulos || PORTAL_CLIENTE_MODULOS.map((m) => m.key));
     const idByKey: Record<PortalClienteModuloKey, string> = {
@@ -176,7 +189,19 @@ export default function PortalHubCliente() {
   const firstName = displayName.split(/\s+/).slice(0, 2).join(" ");
 
   const handleClick = (modulo: Modulo) => {
-    if (modulo.id === "avaliacao") { navigate("/portal/cliente/dashboard?tab=avaliacao"); return; }
+    if (modulo.id === "avaliacao") {
+      // Rev. 1591 — módulo desativado até a próxima janela
+      if (avalJaFeita) {
+        toast.info(
+          avalProximaJanela
+            ? `Avaliação deste ${avalPeriodicidade === "anual" ? "ano" : "mês"} já registrada. Disponível novamente em ${avalProximaJanela}.`
+            : `Avaliação deste ${avalPeriodicidade === "anual" ? "ano" : "mês"} já registrada.`
+        );
+        return;
+      }
+      navigate("/portal/cliente/dashboard?tab=avaliacao");
+      return;
+    }
     if (minhasObras.length === 1) {
       const obraId = (minhasObras[0] as any).id;
       if (modulo.id === "planejamento") navigate(`/portal/cliente/obra/${obraId}`);
@@ -325,35 +350,61 @@ export default function PortalHubCliente() {
               <div className="tour-hub-cards flex flex-wrap gap-3 mt-3 relative z-10">
                 {modulosLiberados.map((mod, idx) => {
                   const Icon = mod.icon;
+                  // Rev. 1591 — Avaliação desativada quando já feita no período corrente
+                  const desativado = mod.id === "avaliacao" && avalJaFeita;
+                  const subtitleEfetivo = desativado
+                    ? (avalProximaJanela ? `Disponível em ${avalProximaJanela}` : "Concluída neste período")
+                    : mod.subtitle;
                   return (
                     <div
                       key={mod.id}
                       onClick={() => handleClick(mod)}
-                      className={`group relative flex flex-col items-center justify-center text-center rounded-2xl p-3 cursor-pointer ${mounted ? 'hub-animate-up' : 'opacity-0'} transition-all duration-200 hover:scale-[1.04] select-none`}
+                      title={desativado
+                        ? `Avaliação deste ${avalPeriodicidade === "anual" ? "ano" : "mês"} já registrada${avalProximaJanela ? ` — disponível em ${avalProximaJanela}` : ""}.`
+                        : `${mod.title} — ${mod.subtitle}`}
+                      className={`group relative flex flex-col items-center justify-center text-center rounded-2xl p-3 ${mounted ? 'hub-animate-up' : 'opacity-0'} transition-all duration-200 select-none ${desativado ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-[1.04]'}`}
                       style={{
                         animationDelay: `${0.3 + idx * 0.07}s`,
                         width: '115px',
                         minHeight: '96px',
-                        background: `linear-gradient(145deg, ${mod.accentFrom}16, ${mod.accentTo}0a)`,
-                        border: `1.5px solid ${mod.accentFrom}38`,
-                        boxShadow: `0 4px 20px -6px ${mod.accentGlow || mod.accentFrom + "28"}`,
+                        background: desativado
+                          ? `linear-gradient(145deg, #94A3B812, #64748B08)`
+                          : `linear-gradient(145deg, ${mod.accentFrom}16, ${mod.accentTo}0a)`,
+                        border: desativado
+                          ? `1.5px dashed #CBD5E1`
+                          : `1.5px solid ${mod.accentFrom}38`,
+                        boxShadow: desativado
+                          ? `0 2px 8px -4px rgba(100,116,139,0.15)`
+                          : `0 4px 20px -6px ${mod.accentGlow || mod.accentFrom + "28"}`,
+                        opacity: desativado ? 0.6 : 1,
                       }}
                     >
+                      {!desativado && (
+                        <div
+                          className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                          style={{ background: `radial-gradient(ellipse at 50% 60%, ${mod.accentFrom}20 0%, transparent 70%)` }}
+                        />
+                      )}
+                      {desativado && (
+                        <div className="absolute top-1 right-1 flex items-center gap-0.5 bg-emerald-100 text-emerald-700 text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full border border-emerald-200">
+                          <ShieldCheck className="h-2.5 w-2.5" /> OK
+                        </div>
+                      )}
                       <div
-                        className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                        style={{ background: `radial-gradient(ellipse at 50% 60%, ${mod.accentFrom}20 0%, transparent 70%)` }}
-                      />
-                      <div
-                        className="h-11 w-11 rounded-xl flex items-center justify-center mb-2 transition-transform duration-200 group-hover:scale-110 group-hover:-translate-y-0.5"
+                        className={`h-11 w-11 rounded-xl flex items-center justify-center mb-2 transition-transform duration-200 ${desativado ? 'grayscale' : 'group-hover:scale-110 group-hover:-translate-y-0.5'}`}
                         style={{
-                          background: `linear-gradient(135deg, ${mod.accentFrom}, ${mod.accentTo})`,
-                          boxShadow: `0 4px 12px -3px ${mod.accentGlow || mod.accentFrom + "55"}`,
+                          background: desativado
+                            ? `linear-gradient(135deg, #94A3B8, #64748B)`
+                            : `linear-gradient(135deg, ${mod.accentFrom}, ${mod.accentTo})`,
+                          boxShadow: desativado
+                            ? `0 2px 6px -2px rgba(100,116,139,0.35)`
+                            : `0 4px 12px -3px ${mod.accentGlow || mod.accentFrom + "55"}`,
                         }}
                       >
                         <Icon className="h-5 w-5 text-white" />
                       </div>
-                      <p className="text-[12px] font-extrabold leading-tight text-[#1B2A4A] tracking-tight w-full truncate">{mod.title}</p>
-                      <p className="text-[9.5px] text-gray-400 leading-tight mt-0.5 w-full truncate">{mod.subtitle}</p>
+                      <p className={`text-[12px] font-extrabold leading-tight tracking-tight w-full truncate ${desativado ? 'text-slate-500' : 'text-[#1B2A4A]'}`}>{mod.title}</p>
+                      <p className={`text-[9.5px] leading-tight mt-0.5 w-full truncate ${desativado ? 'text-emerald-600 font-semibold' : 'text-gray-400'}`}>{subtitleEfetivo}</p>
                     </div>
                   );
                 })}

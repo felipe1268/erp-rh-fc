@@ -18,6 +18,7 @@ import {
   Line, Area, CartesianGrid, XAxis, YAxis, Tooltip, ReferenceLine, LabelList,
 } from "recharts";
 import { PORTAL_CLIENTE_ABAS, type PortalClienteAbaKey } from "@shared/portalClienteAbas";
+import { proximaJanelaAvaliacao } from "../../../../shared/portalAvaliacao";
 import { ProgramacaoSemanal } from "@/pages/planejamento/ProgramacaoSemanal";
 import { EfetivoObraView } from "@/pages/planejamento/PlanejamentoDetalhe";
 import { DiagramaRede as DiagramaRedeInterno } from "@/pages/planejamento/DiagramaRede";
@@ -103,6 +104,16 @@ export default function PortalPlanejamentoCliente() {
   const { data: liberacoes } = trpc.portalExterno.cliente.liberacoes.useQuery(
     { token }, { enabled: !!token, staleTime: 60_000 }
   );
+
+  // Rev. 1591 — Avaliação Anônima desativada após envio no período corrente.
+  const { data: avalStatus } = trpc.portalExterno.cliente.podeAvaliarEsteMes.useQuery(
+    { token }, { enabled: !!token, staleTime: 60_000 }
+  );
+  const avalJaFeita = !!avalStatus?.jaAvaliou;
+  const avalPeriodicidade = (avalStatus?.periodicidade as "mensal" | "anual" | undefined) ?? "mensal";
+  const avalProximaJanela = avalStatus?.anoMes
+    ? proximaJanelaAvaliacao(avalStatus.anoMes, avalPeriodicidade)
+    : "";
   const idsModulosLiberados = useMemo(() => {
     const set = new Set<string>();
     const map: Record<string, string> = {
@@ -441,25 +452,36 @@ export default function PortalPlanejamentoCliente() {
             <div className="px-2 pb-2 space-y-1">
               {MODULOS_CLIENTE_NAV.filter((m) => idsModulosLiberados.has(m.id)).map((m) => {
                 const isAtual = m.id === moduloAtualId;
+                // Rev. 1591 — Avaliação desativada quando já feita no período
+                const desativado = m.id === "avaliacao" && avalJaFeita;
                 const Icon = m.icon;
+                const subtitleEfetivo = desativado
+                  ? (avalProximaJanela ? `Disponível em ${avalProximaJanela}` : "Concluída neste período")
+                  : m.subtitle;
                 return (
                   <button
                     key={m.id}
+                    disabled={desativado}
                     onClick={() => {
+                      if (desativado) return;
                       if (isAtual) { setObraSwitcherOpen(false); return; }
                       setObraSwitcherOpen(false);
                       setMobileSidebarOpen(false);
                       navigate(m.route(obraId));
                     }}
                     className={`group w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left transition-colors ${
-                      isAtual
-                        ? "bg-slate-700/60"
-                        : "hover:bg-slate-700/40"
+                      desativado
+                        ? "opacity-50 cursor-not-allowed"
+                        : isAtual
+                          ? "bg-slate-700/60"
+                          : "hover:bg-slate-700/40"
                     }`}
-                    title={`${m.title} — ${m.subtitle}`}
+                    title={desativado
+                      ? `Avaliação deste ${avalPeriodicidade === "anual" ? "ano" : "mês"} já registrada${avalProximaJanela ? ` — disponível em ${avalProximaJanela}` : ""}.`
+                      : `${m.title} — ${m.subtitle}`}
                   >
                     <span
-                      className="h-7 w-7 rounded-md flex items-center justify-center shrink-0"
+                      className={`h-7 w-7 rounded-md flex items-center justify-center shrink-0 ${desativado ? "grayscale" : ""}`}
                       style={{
                         background: `linear-gradient(135deg, ${m.accentFrom}, ${m.accentTo})`,
                       }}
@@ -467,11 +489,14 @@ export default function PortalPlanejamentoCliente() {
                       <Icon className="h-3.5 w-3.5 text-white" />
                     </span>
                     <span className="flex-1 min-w-0">
-                      <span className={`block truncate text-[12px] leading-tight ${isAtual ? "text-white font-semibold" : "text-slate-200"}`}>{m.title}</span>
-                      <span className="block truncate text-[10px] text-slate-500 leading-tight">{m.subtitle}</span>
+                      <span className={`block truncate text-[12px] leading-tight ${desativado ? "text-slate-400" : isAtual ? "text-white font-semibold" : "text-slate-200"}`}>{m.title}</span>
+                      <span className={`block truncate text-[10px] leading-tight ${desativado ? "text-emerald-400" : "text-slate-500"}`}>{subtitleEfetivo}</span>
                     </span>
-                    {isAtual && (
+                    {isAtual && !desativado && (
                       <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={3} style={{ color: m.accentFrom }} />
+                    )}
+                    {desativado && (
+                      <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" strokeWidth={3} />
                     )}
                   </button>
                 );

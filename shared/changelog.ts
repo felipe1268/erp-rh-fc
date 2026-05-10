@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1591,
+    titulo: "Portal do Cliente — Avaliação Anônima desativa automaticamente após envio (1×/período)",
+    descricao: "O módulo de Avaliação Anônima do Portal do Cliente passa a respeitar de forma visível a regra '1 avaliação por período' (mensal ou anual conforme configuração do admin). Assim que o usuário envia a avaliação do período corrente (fuso Brasília), o módulo é DESATIVADO automaticamente em todos os pontos de entrada e só reabre na próxima janela: (1) Hub do Cliente — o card 'Avaliação' fica em estado desativado (cinza, traçado pontilhado, badge 'OK', subtítulo 'Disponível em junho/2026' ou 'Disponível em 2027') e o clique exibe um toast informando a próxima janela. (2) Dashboard — a aba 'Avaliação Anônima' some automaticamente da barra de tabs (a tela de status 'já registrada' continua acessível via link direto ?tab=avaliacao). (3) Menu lateral do Planejamento — o item 'Avaliação' em 'Outros módulos' fica desabilitado, com check verde e texto 'Disponível em <próximo período>'. Novo helper compartilhado shared/portalAvaliacao.ts gera o rótulo do próximo período de forma consistente nos 3 pontos. Backend inalterado (já entregava { jaAvaliou, anoMes, periodicidade } via portalExterno.cliente.podeAvaliarEsteMes).",
+    tipo: 'feature',
+    modulos: 'Portal do Cliente, Avaliação Anônima',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-11 11:30:00',
+  },
+  {
     version: 1590,
     titulo: "Aba Efetivo — Documento de Integração SST + alerta 30 dias (engenheiro) e visualização (cliente)",
     descricao: "Adicionado o documento da Integração de Segurança SST no painel expandido (santuário) do funcionário, tanto no módulo Planejamento quanto no Portal do Cliente. (1) Backend: o endpoint obras.docsSstFuncionarios e portalExterno.documentosRhObra agora trazem o último registro APROVADO de integração (data de realização, validade, certificado) por funcionário. (2) Novo proxy /api/portal/cliente/documento/integracao/:id permite ao cliente visualizar o certificado em PDF inline (mesma segurança dos ASOs/treinamentos). (3) MÓDULO PLANEJAMENTO (engenheiro): no painel expandido aparece um alerta âmbar 'Vence em Xd. Programar reciclagem.' quando faltam ≤30 dias para o vencimento — e alerta vermelho 'VENCIDA há Xd' se já passou. (4) PORTAL DO CLIENTE: mostra apenas as datas de realização e validade da integração + botão 'Ver Certificado' (sem alerta de 30 dias, conforme regra do portal). Grid do painel passou de 2 para 3 colunas (Integração / ASO / Treinamentos).",

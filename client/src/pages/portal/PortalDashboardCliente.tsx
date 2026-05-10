@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { proximaJanelaAvaliacao } from "../../../../shared/portalAvaliacao";
 import {
   Building2, LogOut, MessageSquare, Star, Send, MapPin,
   CheckCircle2, ShieldCheck, Smile, Meh, Frown, Sparkles, Users,
@@ -192,6 +193,10 @@ export default function PortalDashboardCliente() {
   const labelPer = periodicidade === "anual" ? "ano" : "mês";
   const labelPerCap = periodicidade === "anual" ? "Ano" : "Mês";
   const labelUmaPor = periodicidade === "anual" ? "uma avaliação por ano" : "uma avaliação por mês";
+  // Rev. 1591 — rótulo da próxima janela ("junho/2026" ou "2027")
+  const proximaJanelaTxt = podeAvaliarQ.data?.anoMes
+    ? proximaJanelaAvaliacao(podeAvaliarQ.data.anoMes, periodicidade)
+    : "";
 
   const logout = () => { localStorage.clear(); navigate("/portal/login"); };
 
@@ -222,7 +227,10 @@ export default function PortalDashboardCliente() {
               : [
                   { k: "obras", label: "Minhas Obras", icon: Building2 },
                   { k: "comentarios", label: "Comentários", icon: MessageSquare },
-                  { k: "avaliacao", label: "Avaliação Anônima", icon: Star },
+                  // Rev. 1591 — oculta a aba Avaliação se já enviou neste período
+                  ...(jaAvaliouEsteMes
+                    ? []
+                    : [{ k: "avaliacao", label: "Avaliação Anônima", icon: Star }]),
                 ]
             ).map((t) => {
               const Icon = t.icon as any;
@@ -394,7 +402,12 @@ export default function PortalDashboardCliente() {
                 <ShieldCheck className="w-20 h-20 text-emerald-500 mx-auto mb-4" />
                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Avaliação deste {labelPer} já registrada</h2>
                 <p className="text-slate-600 mb-2">Para preservar o anonimato (LGPD), cada usuário envia apenas <b>{labelUmaPor}</b>.</p>
-                <p className="text-slate-500 text-sm">Volte no próximo {labelPer} para registrar uma nova avaliação. Obrigado!</p>
+                {/* Rev. 1591 — módulo desativado até a próxima janela */}
+                {proximaJanelaTxt ? (
+                  <p className="text-slate-500 text-sm">O módulo de Avaliação está desativado até <b>{proximaJanelaTxt}</b>, quando reabre automaticamente.</p>
+                ) : (
+                  <p className="text-slate-500 text-sm">Volte no próximo {labelPer} para registrar uma nova avaliação. Obrigado!</p>
+                )}
                 <p className="text-slate-400 text-xs mt-3">Precisa registrar uma nova agora? Solicite ao Admin Master da FC para cancelar a avaliação deste {labelPer}.</p>
               </div>
             ) : avaliado ? (
