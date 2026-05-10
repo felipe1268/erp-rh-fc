@@ -1198,6 +1198,38 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       }
     }),
 
+    // Rev. 1601 — Admin Master libera um usuário-cliente específico para
+    // avaliar de novo no período corrente (mês ou ano, conforme config).
+    // Idempotente: apenas remove a marcação `(cred_id, ano_mes)` do período
+    // vigente. Não mexe em avaliações já registradas (essas continuam no
+    // dashboard para auditoria — para apagar, use cancelarAvaliacaoCliente).
+    liberarAvaliacaoCredAtual: protectedProcedure.input(z.object({
+      credId: z.number(),
+      companyId: z.number(),
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode liberar avaliações." });
+      }
+      const db = (await getDb())!;
+      const [cred] = await db.select().from(portalCredentials).where(eq(portalCredentials.id, input.credId));
+      if (!cred) throw new TRPCError({ code: "NOT_FOUND", message: "Acesso não encontrado." });
+      if (cred.companyId !== input.companyId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso não pertence à empresa selecionada." });
+      }
+      const [cfg] = await db.select().from(portalClienteConfig).where(eq(portalClienteConfig.companyId, input.companyId));
+      const periodicidade = (cfg?.periodicidade === "anual") ? "anual" : "mensal";
+      const fmt = periodicidade === "anual" ? "YYYY" : "YYYY-MM";
+      const periodoRow = await db.execute(sql`SELECT to_char(now() AT TIME ZONE 'America/Sao_Paulo', ${fmt}) AS periodo`);
+      const anoPeriodo = (((periodoRow as any).rows ?? periodoRow ?? [])[0] as any)?.periodo ?? "";
+      const del = await db.execute(sql`
+        DELETE FROM cliente_avaliacao_marcacoes
+        WHERE cred_id = ${input.credId} AND ano_mes = ${anoPeriodo}
+        RETURNING cred_id
+      `);
+      const removidos = (((del as any).rows ?? del ?? []) as any[]).length;
+      return { success: true, periodicidade, anoPeriodo, jaEstavaLiberado: removidos === 0 };
+    }),
+
     // Rev. 1569 — Master pode CANCELAR uma avaliação registrada.
     // Marca cancelada_em (soft-delete preservando auditoria) e remove
     // marcações de credencial daquele período da empresa, liberando

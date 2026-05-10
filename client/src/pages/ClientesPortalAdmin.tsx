@@ -119,6 +119,15 @@ export default function ClientesPortalAdmin() {
   const reativarMut = trpc.portalExterno.admin.reativarAcessoCliente.useMutation({
     onSuccess: () => { toast.success("Acesso reativado"); utils.portalExterno.admin.listarAcessosCliente.invalidate(); },
   });
+  const liberarAvalCredMut = trpc.portalExterno.admin.liberarAvaliacaoCredAtual.useMutation({
+    onSuccess: (r) => {
+      const periodo = r.periodicidade === "anual" ? "ano" : "mês";
+      toast.success(r.jaEstavaLiberado
+        ? `Este usuário já podia avaliar neste ${periodo}.`
+        : `Avaliação liberada — o usuário pode enviar uma nova neste ${periodo}.`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const removerMut = trpc.portalExterno.admin.removerAcessoCliente.useMutation({
     onSuccess: () => { toast.success("Acesso removido"); utils.portalExterno.admin.listarAcessosCliente.invalidate(); },
     onError: (e) => toast.error(e.message),
@@ -914,6 +923,16 @@ export default function ClientesPortalAdmin() {
                                           }}>
                                           <RefreshCw className="w-4 h-4" />
                                         </Button>
+                                        {isMaster && (
+                                          <Button size="icon" variant="ghost" className="h-9 w-9 text-emerald-600 hover:bg-emerald-50" title="Liberar avaliação (Admin Master) — permite ao usuário enviar nova avaliação no período atual"
+                                            disabled={liberarAvalCredMut.isPending}
+                                            onClick={() => {
+                                              if (!confirm(`Liberar avaliação para ${a.nomeResponsavel || a.emailResponsavel || "este usuário"}?\n\nIsso permite que ele envie uma nova avaliação NPS no período atual, mesmo que já tenha enviado uma.`)) return;
+                                              liberarAvalCredMut.mutate({ credId: a.id, companyId });
+                                            }}>
+                                            <Star className="w-4 h-4" />
+                                          </Button>
+                                        )}
                                         <Button size="icon" variant="ghost" className="h-9 w-9 text-amber-600 hover:bg-amber-50" title="Desativar"
                                           onClick={() => { if (confirm("Desativar este acesso? O usuário não conseguirá mais entrar.")) desativarMut.mutate({ id: a.id }); }}>
                                           <Lock className="w-4 h-4" />
