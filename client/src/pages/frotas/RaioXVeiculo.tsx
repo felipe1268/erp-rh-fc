@@ -378,6 +378,261 @@ export default function RaioXVeiculo() {
     }
   }, [v, raioX, selectedCompany, score, tcoPie, tcoTotal]);
 
+  // Rev. 1617 — PDF dedicado: Raio-X completo de manutenções do veículo
+  const handlePrintManutPDF = useCallback(() => {
+    if (!v || !raioX) return;
+    const manutAll: any[] = (raioX.manutencoes || []).slice().sort(
+      (a: any, b: any) => String(b.data_manutencao || "").localeCompare(String(a.data_manutencao || ""))
+    );
+    const logoUrl = selectedCompany?.logoUrl || "";
+    const companyName = selectedCompany?.name || selectedCompany?.nome || "Empresa";
+    const escHtml = (s: string) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    const rawPhoto = v.foto_url || v.fotoUrl || "";
+    const vehiclePhoto = rawPhoto && /^https?:\/\//i.test(rawPhoto) ? escHtml(rawPhoto) : "";
+    const now = new Date();
+    const dataEmissao = now.toLocaleDateString("pt-BR") + " " + now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+    // KPIs
+    const total = manutAll.length;
+    const preventivas = manutAll.filter(m => m.tipo === "preventiva").length;
+    const corretivas = manutAll.filter(m => m.tipo === "corretiva").length;
+    const realizadas = manutAll.filter(m => m.status === "realizada").length;
+    const agendadas = manutAll.filter(m => m.status === "agendada").length;
+    const emAndamento = manutAll.filter(m => m.status === "em_andamento").length;
+    const custoTotal = manutAll.reduce((s, m) => s + Number(m.custo || 0), 0);
+    const custoPrev = manutAll.filter(m => m.tipo === "preventiva").reduce((s, m) => s + Number(m.custo || 0), 0);
+    const custoCorr = manutAll.filter(m => m.tipo === "corretiva").reduce((s, m) => s + Number(m.custo || 0), 0);
+    const ticketMedio = total > 0 ? custoTotal / total : 0;
+
+    const datas = manutAll.map(m => m.data_manutencao).filter(Boolean).sort();
+    const primeira = datas[0] || "";
+    const ultima = datas[datas.length - 1] || "";
+
+    // Top oficinas/fornecedores
+    const oficinaMap: Record<string, { qtd: number; valor: number }> = {};
+    for (const m of manutAll) {
+      const k = (m.fornecedor || "Não informado").trim() || "Não informado";
+      if (!oficinaMap[k]) oficinaMap[k] = { qtd: 0, valor: 0 };
+      oficinaMap[k].qtd += 1;
+      oficinaMap[k].valor += Number(m.custo || 0);
+    }
+    const topOficinas = Object.entries(oficinaMap)
+      .map(([nome, v]) => ({ nome, ...v }))
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 10);
+
+    // Top peças/serviços (agregados pelo nome)
+    const itensMap: Record<string, { qtd: number; valor: number; categoria: string }> = {};
+    for (const m of manutAll) {
+      for (const it of (m.itens || [])) {
+        const nome = (it.nome || "").trim();
+        if (!nome) continue;
+        const k = nome.toLowerCase();
+        if (!itensMap[k]) itensMap[k] = { qtd: 0, valor: 0, categoria: it.categoria || "-" };
+        itensMap[k].qtd += Number(it.quantidade || 0);
+        itensMap[k].valor += Number(it.valor_total || 0);
+      }
+    }
+    const topItens = Object.entries(itensMap)
+      .map(([nome, v]) => ({ nome, ...v }))
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 15);
+
+    // Linhas detalhadas (uma manutenção + filhos)
+    const manutBlocks = manutAll.map((m, idx) => {
+      const itens = (m.itens || []) as any[];
+      const totalItens = itens.reduce((s, it) => s + Number(it.valor_total || 0), 0);
+      const itensRows = itens.map(it => `
+        <tr>
+          <td><span class="cat ${it.categoria === "peca" ? "cat-peca" : "cat-serv"}">${it.categoria === "peca" ? "Peça" : "Serviço"}</span></td>
+          <td>${escHtml(it.nome || "—")}</td>
+          <td class="r">${Number(it.quantidade || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</td>
+          <td class="r">R$ ${fmt(it.valor_unitario)}</td>
+          <td class="r">R$ ${fmt(it.valor_total)}</td>
+        </tr>`).join("");
+      const statusBadge = m.status === "realizada" ? "ok" : m.status === "agendada" ? "info" : m.status === "em_andamento" ? "warn" : "neutral";
+      const tipoBadge = m.tipo === "preventiva" ? "info" : "warn";
+      return `
+      <div class="manut">
+        <div class="manut-h">
+          <div class="manut-h-l">
+            <span class="num">#${idx + 1}</span>
+            <span class="data">${fmtDate(m.data_manutencao)}</span>
+            <span class="badge ${tipoBadge}">${escHtml(m.tipo || "—")}</span>
+            <span class="badge ${statusBadge}">${escHtml(m.status || "—")}</span>
+          </div>
+          <div class="manut-h-r">R$ ${fmt(m.custo)}</div>
+        </div>
+        <div class="manut-desc">${escHtml(m.descricao || "—")}</div>
+        <div class="manut-meta">
+          <span><b>Oficina/Fornecedor:</b> ${escHtml(m.fornecedor || "—")}</span>
+          <span><b>KM na manutenção:</b> ${m.km_na_manutencao ? Number(m.km_na_manutencao).toLocaleString("pt-BR") + " km" : "—"}</span>
+          <span><b>Próxima:</b> ${m.data_proxima ? fmtDate(m.data_proxima) : "—"}${m.km_proxima ? " / " + Number(m.km_proxima).toLocaleString("pt-BR") + " km" : ""}</span>
+        </div>
+        ${m.observacoes ? `<div class="manut-obs"><b>Obs.:</b> ${escHtml(m.observacoes)}</div>` : ""}
+        ${itens.length > 0 ? `
+          <table class="itens">
+            <thead><tr><th>Categoria</th><th>Item / Peça / Serviço</th><th class="r">Qtd</th><th class="r">Vlr. Unit.</th><th class="r">Total</th></tr></thead>
+            <tbody>${itensRows}</tbody>
+            <tfoot><tr><td colspan="4" class="r"><b>Total dos itens:</b></td><td class="r"><b>R$ ${fmt(totalItens)}</b></td></tr></tfoot>
+          </table>
+        ` : ""}
+      </div>`;
+    }).join("");
+
+    const oficinasRows = topOficinas.map(o => `
+      <tr><td>${escHtml(o.nome)}</td><td class="r">${o.qtd}</td><td class="r">R$ ${fmt(o.valor)}</td><td class="r">${custoTotal > 0 ? ((o.valor / custoTotal) * 100).toFixed(1) : 0}%</td></tr>
+    `).join("");
+    const itensRowsTop = topItens.map(it => `
+      <tr><td>${escHtml(it.nome)}</td><td>${it.categoria === "peca" ? "Peça" : "Serviço"}</td><td class="r">${it.qtd.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</td><td class="r">R$ ${fmt(it.valor)}</td></tr>
+    `).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Raio-X de Manutenções — ${escHtml(v.placa || "")}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; font-size: 11px; line-height: 1.4; }
+    @page { size: A4; margin: 14mm 12mm; }
+    @media print { .no-print { display: none !important; } .manut { page-break-inside: avoid; } }
+    .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #ea580c; padding-bottom: 10px; margin-bottom: 14px; }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header img { height: 50px; max-width: 160px; object-fit: contain; }
+    .header-company { font-size: 14px; font-weight: 700; color: #1e3a5f; }
+    .header-right { text-align: right; font-size: 9px; color: #64748b; }
+    .title-bar { background: linear-gradient(90deg,#ea580c,#f97316); color: white; padding: 10px 16px; border-radius: 6px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .title-bar h1 { font-size: 16px; font-weight: 700; }
+    .vehicle-photo { width: 64px; height: 64px; border-radius: 8px; object-fit: cover; border: 2px solid rgba(255,255,255,0.3); flex-shrink: 0; }
+    .vehicle-photo-placeholder { width: 64px; height: 64px; border-radius: 8px; background: rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; font-size: 28px; flex-shrink: 0; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; }
+    .info-box label { display: block; font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 2px; }
+    .info-box span { font-size: 12px; font-weight: 700; color: #1e293b; }
+    .kpi-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 14px; }
+    .kpi { text-align: center; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0; background: #fff; }
+    .kpi .v { font-size: 14px; font-weight: 800; color: #ea580c; }
+    .kpi .l { font-size: 8px; color: #64748b; text-transform: uppercase; font-weight: 600; }
+    .section { margin-bottom: 14px; }
+    .section-title { font-size: 12px; font-weight: 700; color: #1e3a5f; border-bottom: 2px solid #fdba74; padding-bottom: 4px; margin-bottom: 8px; display: flex; justify-content: space-between; }
+    table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    th { background: #fff7ed; padding: 5px 6px; text-align: left; font-weight: 600; color: #9a3412; border-bottom: 2px solid #fdba74; }
+    td { padding: 4px 6px; border-bottom: 1px solid #f1f5f9; }
+    tr:nth-child(even) { background: #fafbfc; }
+    .r { text-align: right; }
+    .manut { border: 1px solid #fed7aa; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; background: #fffaf5; }
+    .manut-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .manut-h-l { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .manut-h-r { font-size: 14px; font-weight: 800; color: #ea580c; }
+    .num { font-size: 10px; color: #64748b; font-weight: 700; }
+    .data { font-size: 11px; font-weight: 700; color: #1e293b; }
+    .badge { font-size: 9px; padding: 2px 8px; border-radius: 999px; font-weight: 600; text-transform: uppercase; }
+    .badge.ok { background: #dcfce7; color: #15803d; }
+    .badge.info { background: #dbeafe; color: #1d4ed8; }
+    .badge.warn { background: #ffedd5; color: #9a3412; }
+    .badge.neutral { background: #f1f5f9; color: #475569; }
+    .manut-desc { font-size: 11px; color: #1e293b; margin: 4px 0 6px 0; font-weight: 600; }
+    .manut-meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; font-size: 10px; color: #475569; margin-bottom: 4px; }
+    .manut-obs { font-size: 10px; color: #475569; font-style: italic; margin: 4px 0; padding: 4px 6px; background: #fff; border-left: 3px solid #fdba74; border-radius: 3px; }
+    table.itens { margin-top: 6px; background: #fff; }
+    table.itens th { background: #fff7ed; }
+    .cat { display: inline-block; font-size: 8px; padding: 1px 6px; border-radius: 3px; font-weight: 600; }
+    .cat-peca { background: #dbeafe; color: #1d4ed8; }
+    .cat-serv { background: #dcfce7; color: #15803d; }
+    .footer { margin-top: 16px; padding-top: 6px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: 9px; color: #94a3b8; }
+    .btn-print { position: fixed; top: 20px; right: 20px; padding: 10px 24px; background: #ea580c; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; z-index: 999; }
+    .empty { color: #94a3b8; text-align: center; padding: 16px; font-style: italic; }
+  </style>
+</head>
+<body>
+  <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+
+  <div class="header">
+    <div class="header-left">
+      ${logoUrl ? `<img src="${escHtml(logoUrl)}" alt="Logo" />` : ""}
+      <div>
+        <div class="header-company">${escHtml(companyName)}</div>
+        <div style="font-size:10px;color:#64748b;">Raio-X Completo de Manutenções</div>
+      </div>
+    </div>
+    <div class="header-right">
+      Emitido em: ${escHtml(dataEmissao)}<br/>
+      Sistema ERP — Gestão de Frotas
+    </div>
+  </div>
+
+  <div class="title-bar">
+    ${vehiclePhoto ? `<img src="${vehiclePhoto}" class="vehicle-photo" alt="Foto" />` : `<div class="vehicle-photo-placeholder">🔧</div>`}
+    <div style="flex:1">
+      <h1>${escHtml(v.placa || "")}</h1>
+      <div style="font-size:11px;opacity:0.9">${escHtml(v.marca || "")} ${escHtml(v.modelo || "")} • ${escHtml(v.ano_fabricacao || v.anoFabricacao || "—")} • ${escHtml(v.tipo_veiculo || v.tipoVeiculo || "—")}</div>
+    </div>
+    <div style="text-align:right;font-size:10px;">
+      <div>KM Atual</div>
+      <div style="font-size:14px;font-weight:700;">${Number(v.km_atual || v.kmAtual || 0).toLocaleString("pt-BR")} km</div>
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box"><label>Período (1ª manutenção)</label><span>${primeira ? fmtDate(primeira) : "—"}</span></div>
+    <div class="info-box"><label>Última manutenção</label><span>${ultima ? fmtDate(ultima) : "—"}</span></div>
+    <div class="info-box"><label>Chassi</label><span>${escHtml(v.chassi || "—")}</span></div>
+    <div class="info-box"><label>Lotação</label><span>${escHtml(v.lotacao || v.obra_nome || "—")}</span></div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="v">${total}</div><div class="l">Total</div></div>
+    <div class="kpi"><div class="v" style="color:#1d4ed8">${preventivas}</div><div class="l">Preventivas</div></div>
+    <div class="kpi"><div class="v" style="color:#9a3412">${corretivas}</div><div class="l">Corretivas</div></div>
+    <div class="kpi"><div class="v" style="color:#15803d">${realizadas}</div><div class="l">Realizadas</div></div>
+    <div class="kpi"><div class="v" style="color:#1d4ed8">${agendadas + emAndamento}</div><div class="l">Pendentes</div></div>
+    <div class="kpi"><div class="v">R$ ${fmt(custoTotal)}</div><div class="l">Custo Total</div></div>
+  </div>
+
+  <div class="kpi-row" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="kpi" style="background:#fff7ed;border-color:#fdba74;"><div class="v">R$ ${fmt(ticketMedio)}</div><div class="l">Ticket Médio por Manutenção</div></div>
+    <div class="kpi" style="background:#eff6ff;border-color:#93c5fd;"><div class="v" style="color:#1d4ed8">R$ ${fmt(custoPrev)}</div><div class="l">Custo Preventivas</div></div>
+    <div class="kpi" style="background:#fff1f2;border-color:#fda4af;"><div class="v" style="color:#9a3412">R$ ${fmt(custoCorr)}</div><div class="l">Custo Corretivas</div></div>
+  </div>
+
+  ${oficinasRows ? `
+  <div class="section">
+    <div class="section-title"><span>🏭 Top Oficinas / Fornecedores</span><span style="font-size:10px;color:#64748b;font-weight:500;">${topOficinas.length} de ${Object.keys(oficinaMap).length}</span></div>
+    <table>
+      <thead><tr><th>Oficina / Fornecedor</th><th class="r">Qtd</th><th class="r">Valor</th><th class="r">% do Total</th></tr></thead>
+      <tbody>${oficinasRows}</tbody>
+    </table>
+  </div>` : ""}
+
+  ${itensRowsTop ? `
+  <div class="section">
+    <div class="section-title"><span>📦 Top Peças e Serviços</span><span style="font-size:10px;color:#64748b;font-weight:500;">${topItens.length} de ${Object.keys(itensMap).length}</span></div>
+    <table>
+      <thead><tr><th>Item</th><th>Categoria</th><th class="r">Qtd Total</th><th class="r">Valor Acumulado</th></tr></thead>
+      <tbody>${itensRowsTop}</tbody>
+    </table>
+  </div>` : ""}
+
+  <div class="section">
+    <div class="section-title"><span>🔧 Histórico Detalhado de Manutenções</span><span style="font-size:10px;color:#64748b;font-weight:500;">${total} registro(s)</span></div>
+    ${manutAll.length === 0 ? `<div class="empty">Nenhuma manutenção registrada para este veículo.</div>` : manutBlocks}
+  </div>
+
+  <div class="footer">
+    <span>${escHtml(companyName)} — Gestão de Frotas</span>
+    <span>Veículo: ${escHtml(v.placa || "")} | ${total} manutenções | Custo total R$ ${fmt(custoTotal)} | Emitido: ${escHtml(dataEmissao)}</span>
+  </div>
+</body>
+</html>`;
+
+    const printWin = window.open("", "_blank");
+    if (printWin) {
+      printWin.document.write(html);
+      printWin.document.close();
+    }
+  }, [v, raioX, selectedCompany]);
+
   if (!vehicleId) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
@@ -663,7 +918,12 @@ export default function RaioXVeiculo() {
           return (
           <Card className="border-0 shadow-md">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2"><Wrench className="h-4 w-4 text-orange-500" /> Histórico de Manutenções ({filteredManut.length}{filteredManut.length !== allManut.length ? ` de ${allManut.length}` : ""})</CardTitle>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <CardTitle className="text-sm flex items-center gap-2"><Wrench className="h-4 w-4 text-orange-500" /> Histórico de Manutenções ({filteredManut.length}{filteredManut.length !== allManut.length ? ` de ${allManut.length}` : ""})</CardTitle>
+                <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs border-orange-300 text-orange-700 hover:bg-orange-50" onClick={handlePrintManutPDF} disabled={!allManut.length}>
+                  <Printer className="h-3.5 w-3.5" /> PDF de Manutenções
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <YearMonthFilter ano={filterAno} mes={filterMes} onAno={setFilterAno} onMes={setFilterMes} dataField="data_manutencao" items={allManut} />
