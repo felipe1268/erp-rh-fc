@@ -4427,7 +4427,8 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
             src={pdfViewer.url}
             title={pdfViewer.titulo}
             sandbox="allow-scripts allow-same-origin"
-            className="flex-1 w-full bg-white"
+            className="pdf-viewer-frame flex-1 w-full bg-white"
+            allow="fullscreen"
           />
         </div>
       )}

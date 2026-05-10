@@ -580,8 +580,9 @@ export default function PortalProjDocCliente() {
             <iframe
               src={pdfViewer.url}
               title={pdfViewer.titulo}
-              className="absolute inset-0 w-full h-full bg-white"
+              className="pdf-viewer-frame absolute inset-0 w-full h-full bg-white"
               sandbox="allow-same-origin allow-scripts"
+              allow="fullscreen"
             />
             <div className="absolute inset-0 pointer-events-none select-none mix-blend-multiply opacity-[0.07]">
               <div

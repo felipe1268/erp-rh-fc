@@ -405,8 +405,9 @@ export default function PortalRhDocumentosCliente() {
             <iframe
               src={pdfViewer.url}
               title={pdfViewer.titulo}
-              className="absolute inset-0 w-full h-full bg-white"
+              className="pdf-viewer-frame absolute inset-0 w-full h-full bg-white"
               sandbox="allow-same-origin allow-scripts"
+              allow="fullscreen"
             />
             {/* Marca d'água diagonal repetida — identifica o cliente acessando.
                 pointer-events:none pra não atrapalhar a navegação no PDF. */}

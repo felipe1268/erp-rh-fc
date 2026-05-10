@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1600,
+    titulo: "Mobile/Tablet — pinch-zoom liberado e navegação mais fluida (PDF inline + páginas)",
+    descricao: "Liberado oficialmente o gesto de pinça (zoom com dois dedos) em todo o app, com foco principal no visualizador inline de PDF do Portal do Cliente (Proj./Doc. Técnicos, Planejamento e RH/Documentos), onde antes o iOS Safari travava o gesto dentro do iframe. Mudanças: (1) meta viewport agora é 'width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, user-scalable=yes, viewport-fit=cover' — explícito para o WebKit não inferir bloqueio; (2) html/body com touch-action: manipulation (mantém pinch e pan, remove o atraso de 300ms do double-tap); (3) iframes de PDF marcados com classe pdf-viewer-frame + touch-action: pinch-zoom pan-x pan-y + atributo allow='fullscreen' para o iOS deixar o gesto chegar até o renderizador de PDF nativo; (4) scroll-behavior: smooth e -webkit-text-size-adjust: 100% globais. Sem regressões: as restrições touch existentes (drag de tiles no ModuleHub, click-fora em selects) continuam funcionando porque só atuam durante a interação ativa, não bloqueiam pinch.",
+    tipo: 'melhoria',
+    modulos: 'Mobile, Tablet, Portal do Cliente, Visualizador de PDF, UX',
+    criadoPor: 'Sistema',
+    dataPublicacao: '2026-05-10 10:15:00',
+  },
+  {
     version: 1594,
     titulo: "Portal do Cliente (Admin) — Apagar mensagens do mural de Comentários (Admin Master)",
     descricao: "A aba 'Comentários' em Acessos do Portal (ClientesPortalAdmin) ganhou um botão 'Apagar' (vermelho, com ícone de lixeira) ao lado do 'Responder' em cada mensagem. Visível APENAS para usuários com role 'admin_master', com confirmação prévia mostrando uma prévia da mensagem. Backend: novo procedure portalExterno.admin.deletarComentarioCliente (hard-delete em cliente_comentarios) que valida (a) role admin_master e (b) que a mensagem pertence ao companyId selecionado, evitando vazamento entre tenants. O mural é uma caixa de mensagens viva — diferente das avaliações anônimas que ficam soft-deleted via cancelada_em — então a exclusão é definitiva. Após apagar, a lista é invalidada automaticamente.",

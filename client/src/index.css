@@ -145,6 +145,31 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Rev. 1600 — Permitir explicitamente pinch-zoom em todo o app
+   (iPhone/iPad/Android). Sem isso, o iOS Safari às vezes bloqueia o
+   gesto dentro de iframes de PDF e em containers com touch-action
+   herdado. `manipulation` em links/botões evita o atraso de 300ms do
+   double-tap mas mantém pinch e pan funcionando. */
+html, body {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Visualizador de documentos: garantir que pinch-zoom funcione no PDF
+   inline (iframe). O iOS interpreta o iframe de PDF como conteúdo
+   externo e respeita o touch-action do contêiner pai. */
+iframe[src*=".pdf"],
+iframe[title*="HQIU"],
+iframe[type="application/pdf"],
+.pdf-viewer-frame {
+  touch-action: pinch-zoom pan-x pan-y;
+}
+
+/* Rolagem fluida em âncoras / "voltar ao topo" */
+html {
+  scroll-behavior: smooth;
+}
+
 /* Overscroll-contain APENAS em modais/sheets para evitar arrastar o body
    por baixo quando o usuário rola dentro do diálogo */
 [data-slot="dialog-content"],
