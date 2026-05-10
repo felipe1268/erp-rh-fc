@@ -1322,7 +1322,24 @@ export const comprasRouter = router({
       if ('diasAlertaLocacao' in data && data.diasAlertaLocacao != null) updates.diasAlertaLocacao = data.diasAlertaLocacao;
       if ('observacoesLocacao' in data)            updates.observacoesLocacao = data.observacoesLocacao;
       if (data.quantidadeAtual !== undefined && data.quantidadeAtual !== null) updates.quantidadeAtual = String(data.quantidadeAtual);
-      await db.update(almoxarifadoItens).set(updates).where(eq(almoxarifadoItens.id, id));
+      // Sanitização defensiva de datas: garantir formato yyyy-MM-dd. Datas vazias viram null.
+      for (const k of ["dataInicioLocacao", "dataVencimentoLocacao"] as const) {
+        if (k in updates) {
+          const v = updates[k];
+          if (v === "" || v == null) { updates[k] = null; continue; }
+          // Converter dd/MM/yyyy → yyyy-MM-dd (caso venha de legacy)
+          if (typeof v === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(v)) {
+            const [d, m, y] = v.split("/");
+            updates[k] = `${y}-${m}-${d}`;
+          }
+        }
+      }
+      try {
+        await db.update(almoxarifadoItens).set(updates).where(eq(almoxarifadoItens.id, id));
+      } catch (err: any) {
+        console.error("[compras.atualizarItem] erro DB:", err?.message, "updates:", JSON.stringify(updates));
+        throw err;
+      }
       return { success: true };
     }),
 

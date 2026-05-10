@@ -25,6 +25,16 @@ const EMPTY_ITEM = {
   valorLocacaoMensal: "", diasAlertaLocacao: "7", observacoesLocacao: "",
 };
 const parseNum = (v: string) => parseFloat(String(v).replace(",", ".")) || 0;
+// Normaliza data pra <input type="date">: aceita yyyy-MM-dd, converte dd/MM/yyyy, descarta resto.
+function normalizarDataInput(s: any): string {
+  if (!s || typeof s !== "string") return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+    const [d, m, y] = s.split("/");
+    return `${y}-${m}-${d}`;
+  }
+  return "";
+}
 const EMPTY_MOV = {
   tipo: "entrada" as "entrada" | "saida" | "ajuste",
   quantidade: 0, obraId: 0, motivo: "", observacoes: "",
@@ -312,8 +322,9 @@ export default function AlmoxarifadoPage() {
       observacoes: real.observacoes ?? "", fotoUrl: real.fotoUrl ?? "",
       valorUnitario: n(real.valorUnitario) ? String(n(real.valorUnitario)).replace(".", ",") : "",
       origem: (real.origem === "alugado" ? "alugado" : "proprio") as "proprio" | "alugado",
-      fornecedorLocacao: real.fornecedorLocacao ?? "", dataInicioLocacao: real.dataInicioLocacao ?? "",
-      dataVencimentoLocacao: real.dataVencimentoLocacao ?? "",
+      fornecedorLocacao: real.fornecedorLocacao ?? "",
+      dataInicioLocacao: normalizarDataInput(real.dataInicioLocacao),
+      dataVencimentoLocacao: normalizarDataInput(real.dataVencimentoLocacao),
       valorLocacaoMensal: n(real.valorLocacaoMensal) ? String(n(real.valorLocacaoMensal)).replace(".", ",") : "",
       diasAlertaLocacao: String(real.diasAlertaLocacao ?? 7),
       observacoesLocacao: real.observacoesLocacao ?? "",
