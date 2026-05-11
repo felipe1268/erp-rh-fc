@@ -305,7 +305,7 @@ export const planejamentoRouter = router({
         .where(and(...conditions));
       if (!projeto) throw new Error("Projeto não encontrado");
 
-      const [revisoes, orcamento] = await Promise.all([
+      const [revisoes, orcamento, obra] = await Promise.all([
         db.select().from(planejamentoRevisoes)
           .where(eq(planejamentoRevisoes.projetoId, input.id))
           .orderBy(asc(planejamentoRevisoes.numero))
@@ -315,9 +315,19 @@ export const planejamentoRouter = router({
         projeto.orcamentoId
           ? db.select().from(orcamentos).where(eq(orcamentos.id, projeto.orcamentoId)).then(r => r[0])
           : Promise.resolve(null),
+        // Rev. 1662 — Obra vinculada (logos da gerenciadora/cliente + engenheiro responsável)
+        // são lidos do cadastro da obra para alimentar a Visão LOTUS sem duplicar dados.
+        projeto.obraId
+          ? db.select({
+              gerenciadoraNome:    obras.gerenciadoraNome,
+              gerenciadoraLogoUrl: obras.gerenciadoraLogoUrl,
+              clienteLogoUrl:      obras.clienteLogoUrl,
+              engenheiroResponsavel: obras.responsavel,
+            }).from(obras).where(eq(obras.id, projeto.obraId)).then(r => r[0] ?? null)
+          : Promise.resolve(null),
       ]);
 
-      return { ...projeto, revisoes, orcamento };
+      return { ...projeto, revisoes, orcamento, obra };
     }),
 
   // ── Revisões ──────────────────────────────────────────────────────────────
@@ -690,9 +700,43 @@ export const planejamentoRouter = router({
         .orderBy(asc(planejamentoAtividades.ordem), asc(planejamentoAtividades.eapCodigo));
       return rows.map(r => ({
         ...r,
-        dataInicio: r.dataInicio ? toDateStr(r.dataInicio) : null,
-        dataFim:    r.dataFim    ? toDateStr(r.dataFim)    : null,
+        dataInicio:     r.dataInicio     ? toDateStr(r.dataInicio)     : null,
+        dataFim:        r.dataFim        ? toDateStr(r.dataFim)        : null,
+        dataInicioReal: r.dataInicioReal ? toDateStr(r.dataInicioReal) : null,
+        dataFimReal:    r.dataFimReal    ? toDateStr(r.dataFimReal)    : null,
       }));
+    }),
+
+  // Rev. 1662 — Datas reais por atividade (visão LOTUS).
+  // Fonte única: o que o engenheiro digita aqui é o mesmo dado lido pelo
+  // restante do ERP (não cria espelho fantasma).
+  // Rev. 1662.1 — Hardening contra IDOR: exige companyId e valida que a
+  // atividade pertence a um projeto da MESMA empresa antes de gravar.
+  setRealDates: protectedProcedure
+    .input(z.object({
+      atividadeId:    z.number(),
+      companyId:      z.number(),
+      dataInicioReal: z.string().nullable().optional(),
+      dataFimReal:    z.string().nullable().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const patch: any = {};
+      if (input.dataInicioReal !== undefined) patch.dataInicioReal = input.dataInicioReal || null;
+      if (input.dataFimReal    !== undefined) patch.dataFimReal    = input.dataFimReal    || null;
+      if (Object.keys(patch).length === 0) return { ok: true };
+      // Valida ownership: atividade → projeto → companyId
+      const [check] = await db
+        .select({ projetoCompany: planejamentoProjetos.companyId })
+        .from(planejamentoAtividades)
+        .innerJoin(planejamentoProjetos, eq(planejamentoProjetos.id, planejamentoAtividades.projetoId))
+        .where(eq(planejamentoAtividades.id, input.atividadeId));
+      if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "Atividade não encontrada" });
+      if (check.projetoCompany !== input.companyId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Atividade fora da sua empresa" });
+      }
+      await db.update(planejamentoAtividades).set(patch).where(eq(planejamentoAtividades.id, input.atividadeId));
+      return { ok: true };
     }),
 
   salvarAtividades: protectedProcedure

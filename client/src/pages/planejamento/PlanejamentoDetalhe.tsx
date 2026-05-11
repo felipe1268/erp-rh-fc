@@ -1086,6 +1086,10 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             projetoStart={(proj as any)?.dataInicio ?? null}
             projetoFinish={(proj as any)?.dataTerminoContratual ?? null}
             diaCorteSemana={dataCorteInfo?.diaCorteSemana ?? 4}
+            gerenciadoraNome={(proj as any)?.obra?.gerenciadoraNome ?? null}
+            gerenciadoraLogoUrl={(proj as any)?.obra?.gerenciadoraLogoUrl ?? null}
+            clienteLogoUrl={(proj as any)?.obra?.clienteLogoUrl ?? null}
+            engenheiroResponsavel={(proj as any)?.obra?.engenheiroResponsavel ?? (proj as any)?.responsavel ?? null}
           />
         )}
 

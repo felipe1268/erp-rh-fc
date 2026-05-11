@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover as UiPopover, PopoverContent as UiPopoverContent, PopoverTrigger as UiPopoverTrigger } from "@/components/ui/popover";
+import ProgramacaoSemanalLotus from "@/components/planejamento/ProgramacaoSemanalLotus";
 
 const n = (v: any) => parseFloat(v) || 0;
 
@@ -172,6 +173,12 @@ interface Props {
   /** Rev. 1647 — Dia da semana de cutoff (0=Dom..6=Sáb, default qui=4).
    * Define a janela cobrável das semanas. Vem da query `getDataCorte`. */
   diaCorteSemana?: number;
+  /** Rev. 1662 — Dados da gerenciadora/cliente para a Visão LOTUS (toggle no header).
+   * Lidos do cadastro da obra; quando ausentes, a tela ainda funciona com placeholders. */
+  gerenciadoraNome?: string | null;
+  gerenciadoraLogoUrl?: string | null;
+  clienteLogoUrl?: string | null;
+  engenheiroResponsavel?: string | null;
 }
 
 // ── Cores de status ───────────────────────────────────────────────────────────
@@ -363,7 +370,23 @@ export function ProgramacaoSemanal({
   projetoStart = null,
   projetoFinish = null,
   diaCorteSemana = 4,
+  gerenciadoraNome = null,
+  gerenciadoraLogoUrl = null,
+  clienteLogoUrl = null,
+  engenheiroResponsavel = null,
 }: Props) {
+  // Rev. 1662 — Toggle entre "Padrão FC" (visão atual completa com EVM/SPI/etc.)
+  // e "Padrão LOTUS" (modelo da gerenciadora — header com logos, EAP hierárquico,
+  // Gantt diário com 5 cores, exportação Excel/PDF). Persiste por projeto no
+  // localStorage para manter a preferência do usuário entre sessões.
+  const lotusKey = `progSemView:${projetoId}`;
+  const [viewMode, setViewMode] = useState<"fc" | "lotus">(() => {
+    if (typeof window === "undefined") return "fc";
+    return (localStorage.getItem(lotusKey) as "fc" | "lotus") || "fc";
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem(lotusKey, viewMode);
+  }, [viewMode, lotusKey]);
   // Rev. 1534 — Janela atual de Recovery Schedule (default 4 semanas).
   const janelaRecuperacao = Math.max(1, recoveryWindow ?? 4);
   // Rev. 1642 — Calendário MS Project parseado uma vez por render (paridade 100%).
@@ -896,6 +919,46 @@ export function ProgramacaoSemanal({
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
+  // Rev. 1662 — Visão LOTUS (modelo da gerenciadora) — substitui o conteúdo da
+  // tela mantendo o toggle visível no topo. Não afeta cálculos do EVM/SPI.
+  if (viewMode === "lotus") {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <CalendarRange className="h-4 w-4 text-blue-600" />
+            <span className="text-sm font-semibold text-slate-700">Programação Semanal</span>
+            <span className="text-xs text-slate-400">{semanas.length} semanas no cronograma</span>
+          </div>
+          <div className="inline-flex items-center bg-slate-100 rounded-lg p-0.5 print:hidden">
+            <button
+              onClick={() => setViewMode("fc")}
+              className="px-3 py-1 text-xs font-semibold rounded-md text-slate-600 hover:bg-white"
+            >Padrão FC</button>
+            <button
+              className="px-3 py-1 text-xs font-semibold rounded-md bg-white text-blue-700 shadow-sm"
+            >Padrão LOTUS</button>
+          </div>
+        </div>
+        <ProgramacaoSemanalLotus
+          projetoId={projetoId}
+          revisaoId={revisaoId}
+          companyId={companyId}
+          nomeProjeto={nomeProjeto}
+          nomeCliente={nomeCliente}
+          atividades={atividades}
+          semanas={semanas}
+          semanaIdx={idx}
+          onSemanaChange={setIdx}
+          gerenciadoraNome={gerenciadoraNome}
+          gerenciadoraLogoUrl={gerenciadoraLogoUrl}
+          clienteLogoUrl={clienteLogoUrl}
+          engenheiroResponsavel={engenheiroResponsavel}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* ── Cabeçalho e navegação ─────────────────────────────────────────── */}
@@ -904,6 +967,16 @@ export function ProgramacaoSemanal({
           <CalendarRange className="h-4 w-4 text-blue-600" />
           <span className="text-sm font-semibold text-slate-700">Programação Semanal</span>
           <span className="text-xs text-slate-400">{semanas.length} semanas no cronograma</span>
+          {/* Rev. 1662 — Toggle Padrão FC ↔ LOTUS */}
+          <div className="inline-flex items-center bg-slate-100 rounded-lg p-0.5 ml-2">
+            <button
+              className="px-3 py-1 text-xs font-semibold rounded-md bg-white text-blue-700 shadow-sm"
+            >Padrão FC</button>
+            <button
+              onClick={() => setViewMode("lotus")}
+              className="px-3 py-1 text-xs font-semibold rounded-md text-slate-600 hover:bg-white"
+            >Padrão LOTUS</button>
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Seletor de quantidade de semanas (visível em modo relatório) */}

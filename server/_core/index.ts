@@ -1075,6 +1075,9 @@ Regras:
             -- Rev. 1641 — Atividade externa (terceiro fora do escopo)
             ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS is_externa BOOLEAN DEFAULT FALSE;
             ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS externa_responsavel VARCHAR(200);
+            -- Rev. 1662 — Datas reais por atividade (visão LOTUS / Programação Semanal modelo gerenciadora)
+            ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS data_inicio_real DATE;
+            ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS data_fim_real DATE;
             -- Rev. 1642 — Calendário de trabalho do MS Project (paridade 100%)
             ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS calendario_json TEXT;
             ALTER TABLE module_config ADD COLUMN IF NOT EXISTS disabled_pages TEXT;

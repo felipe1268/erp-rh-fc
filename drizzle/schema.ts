@@ -5274,6 +5274,8 @@ export const planejamentoAtividades = pgTable("planejamento_atividades", {
   nivel:                integer().default(1),
   dataInicio:           date("data_inicio"),
   dataFim:              date("data_fim"),
+  dataInicioReal:       date("data_inicio_real"),
+  dataFimReal:          date("data_fim_real"),
   duracaoDias:          integer("duracao_dias").default(0),
   predecessora:         varchar({ length: 100 }),
   pesoFinanceiro:       numeric("peso_financeiro", { precision: 10, scale: 4 }).default("0"),
