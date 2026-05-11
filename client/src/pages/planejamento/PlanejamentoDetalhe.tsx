@@ -10595,6 +10595,10 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
 // ABA: REFIS
 // ═════════════════════════════════════════════════════════════════════════════
 function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, hideFinancial, initialSemana, onInitialSemanaConsumed, onSemanaChange, usarPesoPorDuracao, refisComIndiretas, setRefisComIndiretas }: any) {
+  // Rev. 1656.2 — calMSP no escopo do componente para que `prevIndRef` (L~10731)
+  // use dias úteis do calendário do MSP (paridade com MS Project). Sem esta
+  // declaração, qualquer render que avalie `prevIndRef` lançava ReferenceError.
+  const calMSP = useMemo(() => parseCalendarioJson((proj as any)?.calendarioJson), [proj]);
   const [semana, setSemanaRaw] = useState(() => toMonday(new Date()));
   const setSemana = (s: string) => { setSemanaRaw(s); onSemanaChange?.(s); };
   const [obs, setObs] = useState("");
