@@ -1242,7 +1242,7 @@ export default function FinanceiroContasAPagar() {
 
         {/* Rev. 1621 — Modal de DETALHE do título (drill-down completo p/ validação final) */}
         <Dialog open={!!detailEntryId} onOpenChange={(o) => !o && setDetailEntryId(null)}>
-          <DialogContent className="max-w-7xl w-[98vw] sm:w-[95vw] max-h-[92vh] overflow-y-auto">
+          <DialogContent className="!max-w-none w-screen h-screen sm:w-[98vw] sm:h-[96vh] sm:max-w-[1600px] sm:rounded-lg rounded-none p-3 sm:p-6 overflow-y-auto flex flex-col">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-lg">
                 <Info className="w-5 h-5 text-blue-600" />
@@ -1470,8 +1470,8 @@ export default function FinanceiroContasAPagar() {
                                 <Hash className="w-4 h-4 text-emerald-600" />
                                 Funcionários considerados ({d.origemDetalhes.funcionarios.length})
                               </h4>
-                              <div className="border border-slate-200 rounded-lg overflow-hidden max-h-[420px] overflow-y-auto">
-                                <table className="w-full text-xs">
+                              <div className="border border-slate-200 rounded-lg overflow-auto max-h-[60vh]">
+                                <table className="w-full text-xs min-w-[900px]">
                                   <thead className="bg-slate-100 sticky top-0">
                                     <tr>
                                       <th className="px-2 py-1.5 text-left font-semibold text-slate-600">#</th>
