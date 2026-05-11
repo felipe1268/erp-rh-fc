@@ -155,6 +155,28 @@ function statusLabel(atrasada: boolean, avanco: number) {
   return "Prevista";
 }
 
+/**
+ * Rev. 1637.3 — Regra única de "Atrasada" para a tela Programação Semanal.
+ * Atividade só é considerada atrasada quando há DÍVIDA acumulada de semanas
+ * já FECHADAS (cutoff = domingo 23:59 da semana anterior à `semanaIni`).
+ * Atrasos da semana corrente (ainda em aberto) NÃO contam — refletem
+ * trabalho que ainda nem terminou. Reuso pelo navegador, alertas IA,
+ * tabela e modo report.
+ */
+function calcAtrasada(a: any, av: number, semanaIni: Date | undefined): boolean {
+  if (!semanaIni || !a?.dataInicio || !a?.dataFim || av >= 100) return false;
+  const d = new Date(semanaIni);
+  d.setDate(d.getDate() - 1);
+  d.setHours(23, 59, 59, 999);
+  const ref = d.getTime();
+  const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+  const fim = new Date(a.dataFim    + "T12:00:00").getTime();
+  let prev = 0;
+  if (ref >= fim)      prev = 100;
+  else if (ref > ini)  prev = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
+  return (prev - av) >= 2;
+}
+
 function severidadeCor(sev: string) {
   if (sev === "alta")  return "border-l-red-500 bg-red-50";
   if (sev === "media") return "border-l-amber-500 bg-amber-50";
@@ -461,7 +483,8 @@ export function ProgramacaoSemanal({
         fim:    dateStr(semana.fim),
         atividades: at.map((a: any) => {
           const av = avancosMap[a.id] ?? 0;
-          const atrasada = !!a.dataFim && a.dataFim < today && av < 100;
+          // Rev. 1637.3 — mesma regra do badge: só atrasada com débito de semanas fechadas.
+          const atrasada = calcAtrasada(a, av, semana.ini);
           return {
             eapCodigo:        a.eapCodigo,
             nome:             a.nome,
@@ -602,7 +625,9 @@ export function ProgramacaoSemanal({
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
             {semanas.map((s, i) => {
               const atv = atividadesDaSemana(atividades, s);
-              const temAtrasada = atv.some((a: any) => a.dataFim && a.dataFim < today && (avancosMap[a.id] ?? 0) < 100);
+              // Rev. 1637.3 — chip vermelho do navegador segue a mesma regra:
+              // só pinta vermelho se houver débito acumulado de semanas fechadas.
+              const temAtrasada = atv.some((a: any) => calcAtrasada(a, avancosMap[a.id] ?? 0, s.ini));
               const isCurrent   = dateStr(s.ini) <= today && dateStr(s.fim) >= today;
               const temRefis    = refisSemanas.has(dateStr(s.ini));
               return (
@@ -788,9 +813,20 @@ export function ProgramacaoSemanal({
                     </tr>
                   </thead>
                   <tbody>
+                    {/* Rev. 1637.3 — "Atrasada" só quando há DÍVIDA ACUMULADA
+                        da SEMANA PASSADA (cutoff = domingo da última semana
+                        FECHADA = ini da semana atual − 1 dia). Antes a marca
+                        usava `today` cru e o domingo da semana CORRENTE — o
+                        que cobrava trabalho que ainda nem terminou e pintava
+                        como "Atrasada" tudo que tinha cronograma para esta
+                        semana ainda em aberto. Regra do usuário: "Só é
+                        atrasada o que não foi feito na semana passada e
+                        acumulou aqui". */}
+                    {(() => null)()}
                     {atividadesSemAtual.map((a: any, i: number) => {
                       const av       = avancosMap[a.id] ?? 0;
-                      const atrasada = !!a.dataFim && a.dataFim < today && av < 100;
+                      // Rev. 1637.3 — regra única (helper calcAtrasada).
+                      const atrasada = calcAtrasada(a, av, semanaAtual?.ini);
                       const isMaiorPeso  = pesoSemana.maiorPesoIds.has(a.id);
                       const isCritica    = pesoSemana.criticasIds.has(a.id);
                       const isQuaseCrit  = pesoSemana.quaseCriticasIds.has(a.id);
@@ -830,10 +866,15 @@ export function ProgramacaoSemanal({
                       // Faixa neutra de ±2pp evita "ruído" para microvariações de
                       // arredondamento; > +2pp = adiantada (azul); < −2pp = atrasada
                       // (vermelho); semana futura = cinza neutro.
+                      // Rev. 1637.3 — Pill segue a MESMA regra do badge
+                      // Status: só vira "Atrasada" se houver débito acumulado
+                      // de semanas FECHADAS (>=2pp). O desvio negativo apenas
+                      // da semana corrente (ainda aberta) vira "Em curso".
                       const aderencia = semanaFutura
                         ? { label: "—", icon: "·",  cls: "bg-slate-100 text-slate-500 ring-slate-200" }
+                        : atrasada    ? { label: "Atrasada",  icon: "▼", cls: "bg-red-50 text-red-700 ring-red-200" }
                         : desvio >  2 ? { label: "Adiantada", icon: "▲", cls: "bg-blue-50 text-blue-700 ring-blue-200" }
-                        : desvio < -2 ? { label: "Atrasada",  icon: "▼", cls: "bg-red-50 text-red-700 ring-red-200" }
+                        : desvio < -2 ? { label: "Em curso",  icon: "•", cls: "bg-amber-50 text-amber-700 ring-amber-200" }
                         :               { label: "No prazo",  icon: "●", cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" };
                       const desvioCor = semanaFutura
                         ? "text-slate-400"
@@ -1430,7 +1471,8 @@ function RelatorioTresSemanas({
               else pessoasEap.push(i);
             });
             const matEap   = insEap.filter((i: any) => parseFloat(i.alocacaoMat ?? "0") > 0 && parseFloat(i.alocacaoMdo ?? "0") === 0);
-            const atrasadas = at.filter((a: any) => a.dataFim && a.dataFim < today && (avancosMap[a.id] ?? 0) < 100).length;
+            // Rev. 1637.3 — contador do report card usa a mesma regra debt-based.
+            const atrasadas = at.filter((a: any) => calcAtrasada(a, avancosMap[a.id] ?? 0, semana.ini)).length;
 
             return (
               <div key={semana.numero} className="flex flex-col">
@@ -1457,7 +1499,8 @@ function RelatorioTresSemanas({
                   )}
                   {at.map((a: any, i: number) => {
                     const av       = avancosMap[a.id] ?? 0;
-                    const atrasada = !!a.dataFim && a.dataFim < today && av < 100;
+                    // Rev. 1637.3 — cada atividade no report card.
+                    const atrasada = calcAtrasada(a, av, semana.ini);
                     return (
                       <div key={a.id ?? i}
                         className={`rounded p-1.5 border text-[11px] ${atrasada ? "bg-red-50 border-red-200" : av >= 100 ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-100"}`}>
