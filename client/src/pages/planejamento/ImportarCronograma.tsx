@@ -151,21 +151,32 @@ export function parseMSProjectStatusDate(doc: Document): string | null {
   const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
   return m ? m[1] : null;
 }
+/** Rev. 1643 — devolve o StatusDate **com hora** (ISO completo). MSP usa
+ *  ex. "2026-05-08T08:00:00" (início do expediente da sexta) e a hora
+ *  altera o % PREVISTO em ~5pp por atividade. */
+export function parseMSProjectStatusDateIso(doc: Document): string | null {
+  const raw = doc.querySelector("Project > StatusDate")?.textContent?.trim();
+  if (!raw) return null;
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/);
+  return m ? m[1] : null;
+}
 
 /** Versão completa: tarefas + metadados (calendário + StatusDate). */
 export function parseMSProjectFull(text: string): {
   tarefas:        TarefaImportada[];
   statusDate:     string | null;
+  statusDateIso:  string | null;
   calendarioJson: string | null;
 } {
   const doc  = new DOMParser().parseFromString(text, "text/xml");
   const err  = doc.querySelector("parsererror");
   if (err) throw new Error("XML inválido");
-  const tarefas    = parseMSProjectTasksFromDoc(doc);
-  const statusDate = parseMSProjectStatusDate(doc);
-  const cal        = parseMSProjectCalendar(doc);
+  const tarefas       = parseMSProjectTasksFromDoc(doc);
+  const statusDate    = parseMSProjectStatusDate(doc);
+  const statusDateIso = parseMSProjectStatusDateIso(doc);
+  const cal           = parseMSProjectCalendar(doc);
   const calendarioJson = cal ? JSON.stringify(cal) : null;
-  return { tarefas, statusDate, calendarioJson };
+  return { tarefas, statusDate, statusDateIso, calendarioJson };
 }
 
 // ── Parser MS Project XML (compat — só tarefas) ──────────────────────────────
@@ -420,7 +431,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   const importarAvancosMutation = trpc.planejamento.importarAvancosDoArquivo.useMutation();
   // Rev. 1642 — grava StatusDate + calendário do MS Project (paridade 100%).
   const salvarMetadadosMSPMutation = trpc.planejamento.salvarMetadadosMSProject.useMutation();
-  const [metadadosMSP, setMetadadosMSP] = useState<{ statusDate: string | null; calendarioJson: string | null } | null>(null);
+  const [metadadosMSP, setMetadadosMSP] = useState<{ statusDate: string | null; statusDateIso: string | null; calendarioJson: string | null } | null>(null);
 
   const importarComModoMutation = trpc.planejamento.importarComModo.useMutation({
     onSuccess: async (res: any) => {
@@ -477,11 +488,12 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   // import bem-sucedido (substituir/mesclar/apenas_predecessora).
   async function gravarMetadadosMSP() {
     if (!metadadosMSP) return;
-    if (!metadadosMSP.statusDate && !metadadosMSP.calendarioJson) return;
+    if (!metadadosMSP.statusDate && !metadadosMSP.calendarioJson && !metadadosMSP.statusDateIso) return;
     try {
       await salvarMetadadosMSPMutation.mutateAsync({
         projetoId,
         statusDate:     metadadosMSP.statusDate,
+        statusDateIso:  metadadosMSP.statusDateIso,
         calendarioJson: metadadosMSP.calendarioJson,
       });
       utils.planejamento.getProjetoById.invalidate();
@@ -516,7 +528,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
         // Rev. 1642 — captura também StatusDate + Calendars pra paridade MS Project.
         const full = parseMSProjectFull(text);
         parsed = full.tarefas;
-        setMetadadosMSP({ statusDate: full.statusDate, calendarioJson: full.calendarioJson });
+        setMetadadosMSP({ statusDate: full.statusDate, statusDateIso: full.statusDateIso, calendarioJson: full.calendarioJson });
       } else if (ext === "xlsx" || ext === "xls" || ext === "xlsm") {
         const buf = await file.arrayBuffer();
         parsed = await parseMSProjectXLSX(buf);

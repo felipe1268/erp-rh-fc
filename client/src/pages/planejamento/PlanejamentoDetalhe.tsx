@@ -956,6 +956,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             }}
             dataTerminoContratual={proj?.dataTerminoContratual ?? null}
             calendarioJson={(proj as any)?.calendarioJson ?? null}
+            cutoffIso={(proj as any)?.dataCorteIso ?? null}
           />
         )}
 

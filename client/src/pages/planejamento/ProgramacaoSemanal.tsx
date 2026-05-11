@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from "react";
 import { trpc } from "@/lib/trpc";
-import { parseCalendarioJson, fracaoDecorridaMs as fracaoDecorridaMsCal } from "../../../../shared/diasUteis";
+import { parseCalendarioJson, fracaoDecorridaMs as fracaoDecorridaMsCal, fracaoDecorridaComHora } from "../../../../shared/diasUteis";
 import {
   ChevronLeft, ChevronRight, Calendar, Printer, Loader2,
   Brain, AlertTriangle, Wrench, Users, Package, Clock,
@@ -141,6 +141,10 @@ interface Props {
   /** Rev. 1642 — calendário do MS Project (JSON serializado) para usar dias
    * úteis nas interpolações de Previsto%. NULL → fallback linear (legado). */
   calendarioJson?: string | null;
+  /** Rev. 1643 — StatusDate completo (com hora) gravado do MS Project.
+   *  Quando definido, o per-row de "Previsto%" usa esse cutoff exato (em
+   *  vez de "domingo 23:59 da semana"), garantindo paridade com MSP. */
+  cutoffIso?: string | null;
   /** Rev. 1638.4 — Prazo contratual do projeto (YYYY-MM-DD). Quando definido,
    * o seletor de janela de recuperação BLOQUEIA valores que empurrariam a data
    * de convergência (semFim + N×7 dias) além do prazo contratual. */
@@ -332,6 +336,7 @@ export function ProgramacaoSemanal({
   recoveryWindow = null, onChangeRecoveryWindow,
   dataTerminoContratual = null,
   calendarioJson = null,
+  cutoffIso = null,
 }: Props) {
   // Rev. 1534 — Janela atual de Recovery Schedule (default 4 semanas).
   const janelaRecuperacao = Math.max(1, recoveryWindow ?? 4);
@@ -1198,15 +1203,21 @@ export function ProgramacaoSemanal({
                       // Agora as duas visões usam a MESMA janela calendário.
                       let prevInd = 0;
                       if (a.dataInicio && a.dataFim && semanaAtual?.fim) {
-                        const ini = new Date(a.dataInicio + "T12:00:00").getTime();
-                        const fim = new Date(a.dataFim    + "T12:00:00").getTime();
-                        // Domingo = sexta + 2 dias; usamos 23:59:59 para fechar a semana.
-                        const domingo = new Date(semanaAtual.fim);
-                        domingo.setDate(domingo.getDate() + 2);
-                        domingo.setHours(23, 59, 59, 999);
-                        const ref = domingo.getTime();
-                        // Rev. 1642 — paridade 100% MS Project: usa dias úteis se houver calendário.
-                        prevInd = fracaoDecorridaMsCal(ini, ref, fim, calMSPParsed) * 100;
+                        // Rev. 1643 — paridade EXATA com MS Project:
+                        // se houver StatusDate ISO (com hora), usa esse cutoff
+                        // e fração horária do dia útil (08-12-13-17 = 8h).
+                        // Senão cai no comportamento anterior (domingo 23:59).
+                        if (cutoffIso) {
+                          prevInd = fracaoDecorridaComHora(a.dataInicio, cutoffIso, a.dataFim, calMSPParsed) * 100;
+                        } else {
+                          const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+                          const fim = new Date(a.dataFim    + "T12:00:00").getTime();
+                          const domingo = new Date(semanaAtual.fim);
+                          domingo.setDate(domingo.getDate() + 2);
+                          domingo.setHours(23, 59, 59, 999);
+                          const ref = domingo.getTime();
+                          prevInd = fracaoDecorridaMsCal(ini, ref, fim, calMSPParsed) * 100;
+                        }
                       }
                       // Rev. 1511: Desvio = Real − Previsto. Positivo = adiantada (verde).
                       // Negativo = atrasada (vermelho).

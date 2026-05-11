@@ -1491,6 +1491,8 @@ export const planejamentoRouter = router({
     .input(z.object({
       projetoId:      z.number(),
       statusDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+      // Rev. 1643 — ISO completo do StatusDate (com hora) para precisão MSP.
+      statusDateIso:  z.string().nullish(),
       calendarioJson: z.string().nullish(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -1508,12 +1510,15 @@ export const planejamentoRouter = router({
         patch.dataCorteAtualizadaEm  = new Date();
         patch.dataCorteAtualizadaPor = `${quem} (MS Project import)`;
       }
+      if (input.statusDateIso) {
+        patch.dataCorteIso = input.statusDateIso;
+      }
       if (input.calendarioJson !== undefined && input.calendarioJson !== null) {
         patch.calendarioJson = input.calendarioJson;
       }
       await db.update(planejamentoProjetos).set(patch)
         .where(eq(planejamentoProjetos.id, input.projetoId));
-      return { success: true, gravou: { statusDate: input.statusDate, calendar: !!input.calendarioJson } };
+      return { success: true, gravou: { statusDate: input.statusDate, statusDateIso: input.statusDateIso, calendar: !!input.calendarioJson } };
     }),
 
   consolidarRefis: protectedProcedure

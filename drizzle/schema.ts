@@ -5225,6 +5225,10 @@ export const planejamentoProjetos = pgTable("planejamento_projetos", {
   // JSON {weekDays:[bool×7 dom..sab], exceptions:[{from,to,working}]} usado
   // pelo helper `diasUteis()` para garantir paridade 100% Project × ERP.
   calendarioJson:           text("calendario_json"),
+  // Rev. 1643 — StatusDate completo (ISO com hora) do MS Project. MSP grava
+  // ex.: "2026-05-08T08:00:00" e essa hora muda o cálculo de % PREVISTO em
+  // ~5pp por atividade. `dataCorteAtual` mantém só a data para compat.
+  dataCorteIso:             text("data_corte_iso"),
   criadoEm:               timestamp("criado_em").defaultNow(),
   atualizadoEm:           timestamp("atualizado_em").defaultNow(),
 });
