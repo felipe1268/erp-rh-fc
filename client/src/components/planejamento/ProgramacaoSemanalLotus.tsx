@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, FileSpreadsheet, Printer, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { parseCalendarioJson, ehDiaUtil, type CalendarioMSProject } from "@shared/diasUteis";
 
 interface Atividade {
   id: number;
@@ -32,6 +33,7 @@ interface Props {
   gerenciadoraLogoUrl?: string | null;
   clienteLogoUrl?: string | null;
   engenheiroResponsavel?: string | null;
+  calendarioJson?: string | null;
 }
 
 // Programação LOTUS exibe os 7 dias da semana (seg→dom). Sáb/dom ficam
@@ -87,15 +89,20 @@ function corCelula(
   realIni: string | null | undefined,
   realFim: string | null | undefined,
   hoje: Date,
+  cal: CalendarioMSProject | null,
 ): { previsto: boolean; cor: string | null } {
   const ds = dateStr(dia);
-  const inPrev = !!(prevIni && prevFim && ds >= prevIni && ds <= prevFim);
+  // PREVISTO só conta se o dia for útil no calendário do projeto (MS Project).
+  // Sem calendarioJson, assume seg→sex como dias úteis (fallback).
+  const ehUtil = cal ? ehDiaUtil(ds, cal) : (dia.getDay() !== 0 && dia.getDay() !== 6);
+  const inPrev = ehUtil && !!(prevIni && prevFim && ds >= prevIni && ds <= prevFim);
+  // REALIZADO sempre conta — se o engenheiro digitou que executou no domingo, mostra.
   const inReal = !!(realIni && realFim && ds >= realIni && ds <= realFim);
   const passou = dia.getTime() <= hoje.getTime();
 
   // 🟧 Antecipado — realizado ANTES do previsto começar
   if (inReal && prevIni && ds < prevIni) return { previsto: false, cor: "bg-orange-400" };
-  // 🟨 Não programado — realizado fora da janela prevista (ou sem previsto)
+  // 🟨 Não programado — realizado fora da janela prevista (ou em dia não-útil, ou sem previsto)
   if (inReal && !inPrev) return { previsto: false, cor: "bg-yellow-400" };
   // 🟩 Realizado conforme previsto
   if (inReal && inPrev) return { previsto: true, cor: "bg-green-500" };
@@ -109,8 +116,9 @@ function corCelula(
 export default function ProgramacaoSemanalLotus(props: Props) {
   const {
     projetoId, revisaoId, companyId, nomeProjeto, nomeCliente, atividades, semanas, semanaIdx, onSemanaChange,
-    gerenciadoraNome, gerenciadoraLogoUrl, clienteLogoUrl, engenheiroResponsavel,
+    gerenciadoraNome, gerenciadoraLogoUrl, clienteLogoUrl, engenheiroResponsavel, calendarioJson,
   } = props;
+  const calMSP = useMemo(() => parseCalendarioJson(calendarioJson), [calendarioJson]);
 
   const utils = trpc.useUtils();
   const { toast } = useToast();
@@ -239,7 +247,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
             a.dataFimReal ? "Realizado" : (a.dataInicio && a.dataInicio <= dateStr(hoje) && !a.dataInicioReal ? "Atrasado" : "Previsto"),
           ];
           dias.forEach((d, idx) => {
-            const cor = corCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje);
+            const cor = corCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP);
             if (cor.cor) {
               const cell = ws.getCell(r, 8 + idx);
               cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: corHex[cor.cor] || "FF999999" } };
@@ -429,7 +437,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                       {engenheiroResponsavel || "—"}
                     </td>
                     {dias.map((d, idx) => {
-                      const c = corCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje);
+                      const c = corCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP);
                       return (
                         <td key={idx} className="border border-slate-300 p-0 h-6 align-middle">
                           {c.cor && <div className={`${c.cor} h-3 mx-0.5 my-1.5 rounded-sm`} />}

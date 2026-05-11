@@ -954,6 +954,7 @@ export function ProgramacaoSemanal({
           gerenciadoraLogoUrl={gerenciadoraLogoUrl}
           clienteLogoUrl={clienteLogoUrl}
           engenheiroResponsavel={engenheiroResponsavel}
+          calendarioJson={calendarioJson}
         />
       </div>
     );
