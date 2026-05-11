@@ -2026,6 +2026,8 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         isGrupo: a.isGrupo,
         isMarco: a.isMarco,
         isIndireta: a.isIndireta,
+        isExterna: a.isExterna,
+        externaResponsavel: a.externaResponsavel,
         // Campo necessário para a aba "Diagrama de Rede" do portal
         // (AbaDiagramaRede em PortalPlanejamentoCliente filtra por a.predecessora).
         // Sem isso, todas as atividades caem no else "Nenhuma atividade com

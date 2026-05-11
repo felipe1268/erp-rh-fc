@@ -2752,7 +2752,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     setLinhas(l => [...l, {
       id: undefined, eapCodigo: "", nome: "", nivel: 1,
       dataInicio: "", dataFim: "", duracaoDias: 0,
-      predecessora: "", pesoFinanceiro: 0, recursoPrincipal: "", isGrupo: false, isIndireta: false, disabled: false, ordem: l.length,
+      predecessora: "", pesoFinanceiro: 0, recursoPrincipal: "", isGrupo: false, isIndireta: false, isExterna: false, externaResponsavel: "", disabled: false, ordem: l.length,
     }]);
   }
 
@@ -3300,7 +3300,9 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                         : idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"
                     : atrasada
                       ? "bg-red-50"
-                      : a.isMarco
+                      : a.isExterna
+                        ? "bg-amber-50 border-l-4 border-l-amber-400"
+                        : a.isMarco
                         ? "bg-purple-50/40 border-l-4 border-l-purple-400"
                         : a.isIndireta
                           ? "bg-gray-100 border-l-4 border-l-gray-400"
@@ -3357,6 +3359,16 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                               <UiTooltipContent side="top" className="text-xs">Marcar como indireta (não conta no avanço efetivo)</UiTooltipContent>
                             </UiTooltip>
                           </UiTooltipProvider>
+                          {/* Rev. 1641 — Atividade externa (terceiro fora do escopo). */}
+                          <UiTooltipProvider delayDuration={300}>
+                            <UiTooltip>
+                              <UiTooltipTrigger asChild>
+                                <input type="checkbox" checked={!!a.isExterna} onChange={e => updateLinha(idx, "isExterna", e.target.checked)}
+                                  className="h-3.5 w-3.5 shrink-0 cursor-pointer" style={{accentColor:"#f59e0b"}} />
+                              </UiTooltipTrigger>
+                              <UiTooltipContent side="top" className="text-xs">Atividade externa — executada por terceiro fora do escopo da FC. Conta no cronograma mas não entra no PPC/aderência.</UiTooltipContent>
+                            </UiTooltip>
+                          </UiTooltipProvider>
                           <UiTooltipProvider delayDuration={300}>
                             <UiTooltip>
                               <UiTooltipTrigger asChild>
@@ -3370,6 +3382,15 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                             className={`h-7 text-xs w-full ${a.isGrupo ? "font-semibold bg-yellow-50" : ""} ${a.disabled ? "line-through text-slate-400" : ""}`}
                             placeholder="Nome da atividade" />
                         </div>
+                        {/* Rev. 1641 — Quando externa, mostra input livre pra digitar o responsável (concessionária, prefeitura, etc.) */}
+                        {a.isExterna && (
+                          <Input
+                            value={a.externaResponsavel ?? ""}
+                            onChange={e => updateLinha(idx, "externaResponsavel", e.target.value)}
+                            className="h-6 text-[11px] w-full mt-1 bg-amber-50 border-amber-200 placeholder:text-amber-400"
+                            placeholder="Responsável externo (ex.: Concessionária CPFL)"
+                          />
+                        )}
                       </td>
                       <td className="py-1 px-1">
                         <Input type="date" value={a.dataInicio ?? ""} onChange={e => updateLinha(idx, "dataInicio", e.target.value)}
@@ -3435,6 +3456,21 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                             <span className="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px] font-semibold shrink-0">
                               Indireta
                             </span>
+                          )}
+                          {a.isExterna && (
+                            <UiTooltipProvider delayDuration={200}>
+                              <UiTooltip>
+                                <UiTooltipTrigger asChild>
+                                  <span className="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-semibold shrink-0 cursor-help border border-amber-300">
+                                    <AlertTriangle className="h-2.5 w-2.5" /> EXTERNA
+                                  </span>
+                                </UiTooltipTrigger>
+                                <UiTooltipContent side="top" className="text-xs max-w-xs">
+                                  <strong>Atividade externa</strong> — executada por terceiro fora do escopo da FC.{a.externaResponsavel ? <><br/>Responsável: <strong>{a.externaResponsavel}</strong></> : null}
+                                  <br/><span className="text-slate-300">Conta no cronograma/SPI mas não entra no PPC.</span>
+                                </UiTooltipContent>
+                              </UiTooltip>
+                            </UiTooltipProvider>
                           )}
                           {!editando && !isConsolidado && a.id && (
                             <UiTooltipProvider delayDuration={300}>
@@ -3796,6 +3832,7 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
         {visibleAtiv.map((a: any) => {
           const isGrupo   = !!a.isGrupo;
           const isMarco   = !!a.isMarco;
+          const isExterna = !!a.isExterna;
           const nivel      = a.nivel ?? 1;
           const avanc      = isGrupo ? (groupAvMap[a.id] ?? 0) : (avMap[a.id] ?? 0);
           const isCollapsed = collapsed.has(a.eapCodigo ?? "");
@@ -3814,8 +3851,8 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
           const fillW   = barW * (avanc / 100);
 
           const isDone    = avanc >= 100;
-          const barColor  = isDone ? "#059669" : isGrupo ? "#1e293b" : isMarco ? "#7c3aed" : "#1A3461";
-          const fillColor = isDone ? "#10b981" : isMarco ? "#a855f7" : "#3b82f6";
+          const barColor  = isDone ? "#059669" : isGrupo ? "#1e293b" : isExterna ? "#b45309" : isMarco ? "#7c3aed" : "#1A3461";
+          const fillColor = isDone ? "#10b981" : isExterna ? "#f59e0b" : isMarco ? "#a855f7" : "#3b82f6";
           const barH      = isGrupo ? 10 : isMarco ? 12 : 14;
           const barTop    = (ROW_H - barH) / 2;
 

@@ -356,6 +356,8 @@ export const planejamentoRouter = router({
                 isGrupo:             a.isGrupo,
                 isIndireta:          a.isIndireta ?? false,
                 isMarco:             a.isMarco ?? false,
+                isExterna:           a.isExterna ?? false,
+                externaResponsavel:  a.externaResponsavel ?? null,
                 disabled:            a.disabled ?? false,
               }))
             );
@@ -687,6 +689,8 @@ export const planejamentoRouter = router({
         isGrupo:             z.boolean().optional(),
         isMarco:             z.boolean().optional(),
         isIndireta:          z.boolean().optional(),
+        isExterna:           z.boolean().optional(),
+        externaResponsavel:  z.string().nullish(),
         disabled:            z.boolean().optional(),
         percentConcluido:    z.preprocess(v => v == null ? 0 : Number(v), z.number().min(0).max(100)).optional(),
       })),
@@ -717,6 +721,8 @@ export const planejamentoRouter = router({
           isGrupo:             a.isGrupo ?? false,
           isMarco:             a.isMarco ?? false,
           isIndireta:          a.isIndireta ?? false,
+          isExterna:           a.isExterna ?? false,
+          externaResponsavel:  a.externaResponsavel ?? null,
           disabled:            isDisabled,
         };
       });
@@ -813,6 +819,8 @@ export const planejamentoRouter = router({
                 ${cases("is_grupo", r => escBool(r.isGrupo))},
                 ${cases("is_marco", r => escBool(r.isMarco))},
                 ${cases("is_indireta", r => escBool(r.isIndireta))},
+                ${cases("is_externa", r => escBool(r.isExterna))},
+                ${cases("externa_responsavel", r => esc(r.externaResponsavel))},
                 ${cases("disabled", r => escBool(r.disabled))}
               WHERE id IN (${batchIds.join(",")})
                 AND revisao_id = ${input.revisaoId}

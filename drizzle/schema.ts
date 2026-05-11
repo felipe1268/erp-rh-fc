@@ -5266,6 +5266,11 @@ export const planejamentoAtividades = pgTable("planejamento_atividades", {
   isGrupo:              boolean("is_grupo").default(false),
   isMarco:              boolean("is_marco").default(false),
   isIndireta:           boolean("is_indireta").default(false),
+  // Rev. 1641 — Atividade externa (executada por terceiro fora do escopo da FC).
+  // Conta normalmente no cronograma/Curva S/SPI, mas é destacada visualmente
+  // como alerta e excluída dos KPIs de PPC/aderência (Last Planner).
+  isExterna:            boolean("is_externa").default(false),
+  externaResponsavel:   varchar("externa_responsavel", { length: 200 }),
   disabled:             boolean("disabled").default(false),
   criadoEm:             timestamp("criado_em").defaultNow(),
 });
