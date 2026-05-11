@@ -1017,6 +1017,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             usarPesoPorDuracao={usarPesoPorDuracao}
             refisComIndiretas={refisComIndiretasGlobal}
             setRefisComIndiretas={setRefisComIndiretasGlobal}
+            dataCorteInfo={dataCorteInfo}
           />
         )}
         {canViewTab(aba) && aba === "cronograma-financeiro" && (
@@ -10594,7 +10595,7 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: REFIS
 // ═════════════════════════════════════════════════════════════════════════════
-function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, hideFinancial, initialSemana, onInitialSemanaConsumed, onSemanaChange, usarPesoPorDuracao, refisComIndiretas, setRefisComIndiretas }: any) {
+function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, hideFinancial, initialSemana, onInitialSemanaConsumed, onSemanaChange, usarPesoPorDuracao, refisComIndiretas, setRefisComIndiretas, dataCorteInfo }: any) {
   // Rev. 1656.2 — calMSP no escopo do componente para que `prevIndRef` (L~10731)
   // use dias úteis do calendário do MSP (paridade com MS Project). Sem esta
   // declaração, qualquer render que avalie `prevIndRef` lançava ReferenceError.
@@ -10762,11 +10763,21 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // divergência entre o REFIS e a tela de Avanço Semanal.
   const semanaFimRefis = useMemo(() => {
     const idx = semanas.indexOf(semana);
-    if (idx >= 0 && idx + 1 < semanas.length) return semanas[idx + 1];
-    const d = new Date(semana + "T12:00:00");
-    d.setDate(d.getDate() + 7);
-    return d.toISOString().split("T")[0];
-  }, [semana, semanas]);
+    let semFim: string;
+    if (idx >= 0 && idx + 1 < semanas.length) semFim = semanas[idx + 1];
+    else {
+      const d = new Date(semana + "T12:00:00");
+      d.setDate(d.getDate() + 7);
+      semFim = d.toISOString().split("T")[0];
+    }
+    // Rev. 1656.3 — Paridade com top bar (Rev. 1656.1): se a semana CORRENTE
+    // contém o cutoff oficial, clipa em refStr=cutoff (PV exigível PMBOK 7ª).
+    // Garante que o card "Previsto Acumulado" do REFIS (BLOCO 2) não diverja
+    // do top bar e do card "PREVISTO (SEMANA)" do Avanço Semanal.
+    const cutoff = dataCorteInfo?.dataCorteOficial ?? null;
+    if (cutoff && cutoff >= semana && cutoff < semFim) return cutoff;
+    return semFim;
+  }, [semana, semanas, dataCorteInfo?.dataCorteOficial]);
 
   // Calcula avanço previsto ponderado para a semana a partir do cronograma.
   // Usa o FIM da semana (domingo) como referência — igual ao AvancoSemanal.
