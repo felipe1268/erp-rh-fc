@@ -484,18 +484,19 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     // linear até o FIM da semana visualizada (mesma convenção do REFIS).
     // Rev. 1637 — `refDateStr` muda conforme o modo (Live/Oficial); no modo
     // OFICIAL o cálculo congela na última quinta fechada (espelha o Portal).
-    // Rev. 1656 — A barra superior ACOMPANHA a semana selecionada na aba
-    // Avanço Semanal (igual Rev. 1649): quando `semanaVisualizacao` está
-    // setada, `refStr = semVis + 7d` (fim exclusivo da semana = mesma janela
-    // do card "PREVISTO (SEMANA)") tanto pro EV quanto pro PV — top card e
-    // card grande convergem no MESMO valor (5,56% no exemplo da Semana 3).
-    // Sem semana selecionada, mantém o lock no cutoff oficial (Opção A do
-    // Rev. 1655). EV usa avancosMapSemana (filtrado por <= semVis) p/ refletir
-    // só o que foi medido até a semana visualizada.
+    // Rev. 1656.1 — Barra superior ACOMPANHA a semana selecionada na aba
+    // Avanço Semanal MAS aplica a MESMA regra de clipping do card grande
+    // "PREVISTO (SEMANA)": para semana CORRENTE (que contém o cutoff), clipa
+    // refStr no cutoff (PV exigível PMBOK 7ª — não cobra dias que ainda não
+    // ocorreram). Para semanas passadas/futuras, usa semFim (fim exclusivo).
+    // Garante paridade absoluta: top bar = card PREVISTO (SEMANA) em TODOS os
+    // cenários (Sem 1 com cutoff Qui = 1,41%; Sem 3 futura = 5,56%).
+    // Sem semana selecionada, mantém lock no cutoff oficial (Rev. 1655).
     const cutoffOficialAt = dataCorteInfo?.dataCorteOficial ?? null;
     let refStr: string;
     if (semanaVisualizacao) {
-      refStr = new Date(new Date(semanaVisualizacao + "T12:00:00").getTime() + 7 * 86400000).toISOString().slice(0, 10);
+      const semFim = new Date(new Date(semanaVisualizacao + "T12:00:00").getTime() + 7 * 86400000).toISOString().slice(0, 10);
+      refStr = (cutoffOficialAt && cutoffOficialAt >= semanaVisualizacao && cutoffOficialAt < semFim) ? cutoffOficialAt : semFim;
     } else {
       refStr = cutoffOficialAt ?? refDateStr;
       if (cutoffOficialAt && refDateStr < cutoffOficialAt) refStr = refDateStr;
@@ -534,18 +535,17 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim && (refisComIndiretasGlobal || !a.isIndireta)
     );
     if (!folhas.length) return null;
-    // Rev. 1656 — Top card PV acompanha a semana selecionada na aba Avanço
-    // Semanal. Quando `semanaVisualizacao` está setada, `refStr = semVis + 7d`
-    // (mesma janela do card "PREVISTO (SEMANA)") — top bar e card grande
-    // convergem (ex.: Semana 3 = 5,56% nos dois). Sem semana selecionada,
-    // trava no cutoff oficial (Opção A do Rev. 1655) — `dataCorteInfo` é
-    // refetchada pelas mutations setDiaCorte/consolidarCutoff/fecharSemana,
-    // garantindo que mudar a premissa do cutoff atualize o top card no mesmo
-    // render (sem precisar de outra edição que invalide `proj`).
+    // Rev. 1656.1 — Top card PV acompanha a semana selecionada na aba Avanço
+    // Semanal E aplica a MESMA regra de clipping do card "PREVISTO (SEMANA)":
+    // semana CORRENTE (que contém o cutoff) clipa em refStr=cutoff (PV
+    // exigível PMBOK 7ª); semanas passadas/futuras usam semFim. Paridade
+    // absoluta: top bar = card grande nos 3 cenários (passada/corrente/futura).
+    // Sem semana selecionada, trava no cutoff oficial (Opção A do Rev. 1655).
     const cutoffOficial = dataCorteInfo?.dataCorteOficial ?? null;
     let refStr: string;
     if (semanaVisualizacao) {
-      refStr = new Date(new Date(semanaVisualizacao + "T12:00:00").getTime() + 7 * 86400000).toISOString().slice(0, 10);
+      const semFim = new Date(new Date(semanaVisualizacao + "T12:00:00").getTime() + 7 * 86400000).toISOString().slice(0, 10);
+      refStr = (cutoffOficial && cutoffOficial >= semanaVisualizacao && cutoffOficial < semFim) ? cutoffOficial : semFim;
     } else {
       refStr = cutoffOficial ?? refDateStr;
       if (cutoffOficial && refDateStr < cutoffOficial) refStr = refDateStr;
