@@ -11461,4 +11461,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 17:00:00",
   },
+  {
+    version: 1653,
+    titulo: "Programação Semanal — preserva a navegação do usuário entre re-renders",
+    descricao: "Antes, qualquer mudança no array `semanas` (cutoff trocado, atividades atualizadas, query reanimada) jogava o usuário de volta para a Semana Atual — quebrava o fluxo de quem estava simulando uma semana futura ou inspecionando uma passada. Agora a navegação é preservada: (1) F5/montagem da página → default na Semana Atual; (2) Clique numa semana → memoriza a data de início no ref `userSelectedIniRef`; (3) `semanas` muda → tenta encontrar essa mesma semana no novo array; se sumiu (ex.: cronograma encurtado), cai pro currentWeekIdx (comportamento antigo).",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 17:30:00",
+  },
 ];

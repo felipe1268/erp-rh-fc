@@ -383,21 +383,36 @@ export function ProgramacaoSemanal({
     });
     return s;
   }, [refisLista]);
-  const [idx, setIdx] = useState<number>(() => currentWeekIdx(semanas));
-  // Rev. 1647 — Quando o conjunto de semanas muda (ex.: `diaCorteSemana`
-  // chega async do `getDataCorte`, ou o usuário troca o dia do cutoff e
-  // o `setDiaCorte` reanima a query), o índice antigo pode apontar para
-  // uma semana fora do array, ou para a semana errada. Re-sincroniza
-  // sempre que `semanas` muda — exceto se o usuário já navegou para um
-  // índice válido manualmente (heurística: mantém o índice se ele cair
-  // numa semana cuja janela contém o `today` original).
+  const [idx, setIdxRaw] = useState<number>(() => currentWeekIdx(semanas));
+  // Rev. 1653 — Preserva a navegação do usuário entre re-renders. Antes, qualquer
+  // mudança em `semanas` (cutoff, atividades, query reanimada) jogava o usuário de
+  // volta para a semana atual — quebrava o fluxo de quem estava simulando uma
+  // semana futura ou inspecionando uma passada. Agora:
+  //   1) F5/montagem → currentWeekIdx (default)
+  //   2) Clique numa semana → memoriza o ini ISO no ref
+  //   3) `semanas` muda → tenta achar essa semana no novo array; se sumiu,
+  //      cai pro currentWeekIdx (comportamento antigo).
+  const userSelectedIniRef = useRef<string | null>(null);
+  const setIdx = (next: number | ((prev: number) => number)) => {
+    setIdxRaw((prev) => {
+      const resolved = typeof next === "function" ? (next as (p: number) => number)(prev) : next;
+      const sem = semanas[resolved];
+      userSelectedIniRef.current = sem ? dateStr(sem.ini) : null;
+      return resolved;
+    });
+  };
   const semanasKey = useMemo(() => semanas.length ? `${dateStr(semanas[0].ini)}|${dateStr(semanas[semanas.length-1].fim)}|${semanas.length}` : "", [semanas]);
   const lastKeyRef = useRef<string>("");
   useEffect(() => {
     if (semanasKey === lastKeyRef.current) return;
     lastKeyRef.current = semanasKey;
     if (!semanas.length) return;
-    setIdx(currentWeekIdx(semanas));
+    const wanted = userSelectedIniRef.current;
+    if (wanted) {
+      const found = semanas.findIndex((s: any) => dateStr(s.ini) === wanted);
+      if (found >= 0) { setIdxRaw(found); return; }
+    }
+    setIdxRaw(currentWeekIdx(semanas));
   }, [semanasKey, semanas]);
   const [modoRelatorio, setModoRelatorio] = useState(false);
   const [qtdSemanas, setQtdSemanas] = useState(3);
