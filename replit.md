@@ -45,6 +45,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ## Recent changes
 
+- **Rev. 1632**: Bugfix crítico no `payrollProjectionBridge.ts` — o `dbExecute` interno substituía os placeholders `$N` pela ORDEM TEXTUAL (não pelo número), invertendo parâmetros em queries com `$2 ... $1` (ex.: `companyId` virava `220`). Resultado: Folha CLT, Encargos, VR, VA e 13º **não eram projetados** (apenas PJ). Agora o regex `/\$(\d+)/g` honra o número do placeholder. Também corrigido o parser SQL de valores BR ("9.999,99") via `brMoneySql()` usando `REGEXP_REPLACE` para remover pontos antes de trocar vírgula por ponto. Descrições limpas: "Folha CLT — 105 funcionário(s) — ref. Mai/2026" no lugar de "PJ (Projeção) 2026-04 — Prestador PJ". Após fix: 107 lançamentos projetados / 12 meses / R$ 5,7 milhões em FC Engenharia.
+- **Rev. 1631**: Nova página dedicada **Análise CFO** (`/financeiro/analise-cfo`) com 6 KPIs Hackett/IFRS9/AFP — DPO/DSO/CCC com benchmarks setor, Variance Orçado×Realizado×Forecast, Cash 13 semanas com 3 cenários, PDD IFRS 9 por aging, Pareto 80/20 fornecedores e clientes, KPIs Processo AP. Endpoint único `getAnaliticosCFO`.
 - **Rev. 1630**: Projeção de Folha (CLT) + Encargos 33,8% + VR/VA + 13º + PJ para os próximos 12 meses, persistida em `financial_entries` (status `previsto`, origens `*_projetado`). Reflete nos cards Próx 7d/15d/30d/60d/90d e no novo card "Calendário Folha & Benefícios — 12 meses" no Contas a Pagar, com alerta de 13º (Lei 4.090/62). Job idempotente diário via `payrollProjectionBridge.ts`.
 
 ## Architecture decisions

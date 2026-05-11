@@ -42,20 +42,59 @@ const PROJ_ORIGENS = [
 
 // ─────────── Helpers ─────────────────────────────────────────
 async function dbExecute(db: any, query: string, params: unknown[]): Promise<{ rows: any[] }> {
-  const parts = query.split(/\$\d+/g);
-  let built: any = sql.raw(parts[0] ?? "");
-  for (let i = 1; i < parts.length; i++) {
-    const paramVal = params[i - 1];
-    const tail = parts[i] ?? "";
-    built = tail ? sql`${built}${paramVal}${sql.raw(tail)}` : sql`${built}${paramVal}`;
+  // Rev. 1632 — BUGFIX CRÍTICO: o split por /\$\d+/g substituía os placeholders pela
+  // ORDEM TEXTUAL, ignorando o número. Ex.: query com "$2 ... $1" recebia params[0]
+  // no $2 e params[1] no $1, invertendo os valores. Isso fez getQuadroCLT/getBeneficios
+  // retornarem 0 silenciosamente (companyId virava o valor de HORAS_MES_HORISTA),
+  // bloqueando TODA a projeção de Folha/Encargos/VR/VA/13º. Agora respeitamos o N.
+  const re = /\$(\d+)/g;
+  const segments: Array<{ text: string; idx: number | null }> = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(query)) !== null) {
+    segments.push({ text: query.slice(last, m.index), idx: parseInt(m[1]!, 10) - 1 });
+    last = m.index + m[0].length;
+  }
+  segments.push({ text: query.slice(last), idx: null });
+
+  let built: any = sql.raw(segments[0]!.text);
+  for (let i = 0; i < segments.length - 1; i++) {
+    const paramIdx = segments[i]!.idx!;
+    const paramVal = params[paramIdx];
+    const next = segments[i + 1]!.text;
+    built = next ? sql`${built}${paramVal}${sql.raw(next)}` : sql`${built}${paramVal}`;
+  }
+  if (process.env.PAYROLL_DEBUG === "1") {
+    console.log("[dbExecute] query=", query.replace(/\s+/g, " ").slice(0, 400), "params=", params);
   }
   const res = await db.execute(built);
   const rows: any[] = (res as any)?.rows ?? (Array.isArray(res) ? res : []);
+  if (process.env.PAYROLL_DEBUG === "1") {
+    console.log("[dbExecute] rows=", JSON.stringify(rows).slice(0, 300));
+  }
   return { rows };
 }
 
 function fmtMes(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// Rev. 1632 — Padrão BR para descrições (regra de ouro: nada de YYYY-MM cru no UI).
+// "2026-04" → "Abr/2026"
+const MESES_BR_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+function fmtMesBR(mes: string): string {
+  const [y, m] = mes.split("-");
+  const idx = parseInt(m ?? "0", 10) - 1;
+  if (idx < 0 || idx > 11) return mes;
+  return `${MESES_BR_ABREV[idx]}/${y}`;
+}
+
+// Rev. 1632 — Parser BR robusto em SQL.
+// Banco guarda valores como "9.999,99" (ponto = milhar, vírgula = decimal).
+// REPLACE só da vírgula gera "9.999.99" → falha no cast ::numeric.
+// Solução portátil (sem lookahead): remover TODOS os pontos primeiro, depois trocar vírgula.
+function brMoneySql(col: string): string {
+  return `NULLIF(REPLACE(REGEXP_REPLACE(${col}, '\\.', '', 'g'), ',', '.'), '')::numeric`;
 }
 
 function lastBusinessDayOrEarlier(year: number, month: number, day: number): string {
@@ -128,17 +167,18 @@ async function getQuadroCLT(db: any, companyId: number): Promise<{
   // status considerado "ativo para folha": Ativo, Ferias, Afastado, Licenca
   // Salário bruto: mensalista usa salarioBase; horista usa valorHora * 220h.
   // Inclui complemento fixo se recebeComplemento=1.
+  // Rev. 1632 — usa brMoneySql para parsear "9.999,99" corretamente (era "2.500,00" → "2.500.00" → falha)
   const { rows } = await dbExecute(db,
     `SELECT
        COUNT(*) AS qtd,
        COALESCE(SUM(
          CASE
            WHEN LOWER(COALESCE("tipoRemuneracao",'horista')) = 'mensalista'
-             THEN COALESCE(NULLIF(REPLACE("salarioBase", ',', '.'), '')::numeric, 0)
-           ELSE COALESCE(NULLIF(REPLACE("valorHora", ',', '.'), '')::numeric, 0) * $2
+             THEN COALESCE(${brMoneySql('"salarioBase"')}, 0)
+           ELSE COALESCE(${brMoneySql('"valorHora"')}, 0) * $2
          END
          + CASE WHEN "recebeComplemento" = 1
-             THEN COALESCE(NULLIF(REPLACE("valorComplemento", ',', '.'), '')::numeric, 0)
+             THEN COALESCE(${brMoneySql('"valorComplemento"')}, 0)
              ELSE 0 END
        ), 0) AS bruto
      FROM employees
@@ -159,12 +199,13 @@ async function getBeneficiosMedios(db: any, companyId: number): Promise<{
   vrPorFuncMes: number; // café+lanche+janta * dias úteis
   vaPorFuncMes: number; // valor mensal do cartão
 }> {
+  // Rev. 1632 — usa brMoneySql para evitar falha com formato "9.999,99"
   const { rows } = await dbExecute(db,
     `SELECT
-       COALESCE(AVG(NULLIF(REPLACE("cafeManhaDia", ',', '.'), '')::numeric), 0) AS cafe,
-       COALESCE(AVG(NULLIF(REPLACE("lancheTardeDia", ',', '.'), '')::numeric), 0) AS lanche,
-       COALESCE(AVG(NULLIF(REPLACE("jantaDia", ',', '.'), '')::numeric), 0) AS janta,
-       COALESCE(AVG(NULLIF(REPLACE("valeAlimentacaoMes", ',', '.'), '')::numeric), 0) AS va,
+       COALESCE(AVG(${brMoneySql('"cafeManhaDia"')}), 0) AS cafe,
+       COALESCE(AVG(${brMoneySql('"lancheTardeDia"')}), 0) AS lanche,
+       COALESCE(AVG(${brMoneySql('"jantaDia"')}), 0) AS janta,
+       COALESCE(AVG(${brMoneySql('"valeAlimentacaoMes"')}), 0) AS va,
        COALESCE(AVG("diasUteisRef"), $2) AS dias
      FROM meal_benefit_configs
      WHERE "companyId" = $1 AND COALESCE("ativo", 1) = 1`,
@@ -187,16 +228,19 @@ async function getPJsAtivosNoMes(db: any, companyId: number, primeiroDia: string
   diaFechamento: number;
 }>> {
   const { rows } = await dbExecute(db,
+    // Rev. 1632 — usa brMoneySql para parsing BR robusto
     `SELECT id,
-            COALESCE("razaoSocialPrestador", 'Prestador PJ') AS razao,
-            COALESCE(NULLIF(REPLACE("valorMensal", ',', '.'), '')::numeric, 0) AS valor,
+            COALESCE(NULLIF(TRIM("razaoSocialPrestador"), ''),
+                     NULLIF(TRIM("cnpjPrestador"), ''),
+                     'Prestador PJ #' || id) AS razao,
+            COALESCE(${brMoneySql('"valorMensal"')}, 0) AS valor,
             COALESCE("diaFechamento", 5) AS dia
      FROM pj_contracts
      WHERE "companyId" = $1
        AND "status" IN ('ativo','vigente','assinado')
        AND "dataInicio" <= $2
        AND "dataFim"    >= $3
-       AND COALESCE(NULLIF(REPLACE("valorMensal", ',', '.'), '')::numeric, 0) > 0`,
+       AND COALESCE(${brMoneySql('"valorMensal"')}, 0) > 0`,
     [companyId, primeiroDia, primeiroDia]
   );
   return rows.map(r => ({
@@ -287,7 +331,7 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
           origemModulo: "folha_projetada",
           origemId: syntheticId(mes, 1),
           origemDescricao: `Folha CLT projetada — ${quadro.count} funcionário(s) ativos`,
-          descricao: `Folha CLT (Projeção) ${mes} — ${quadro.count} func.`,
+          descricao: `Folha CLT — ${quadro.count} funcionário(s) — ref. ${fmtMesBR(mes)}`,
         });
         inseridos++;
 
@@ -304,7 +348,7 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
             origemModulo: "encargos_projetado",
             origemId: syntheticId(mes, 2),
             origemDescricao: `FGTS 8% + INSS pat. 20% + RAT/Terc. ~5,8% sobre folha`,
-            descricao: `Encargos Folha (Projeção) ${mes} — ${(ENCARGOS_FOLHA_PERCENT * 100).toFixed(1)}%`,
+            descricao: `Encargos Folha (${(ENCARGOS_FOLHA_PERCENT * 100).toFixed(1)}%) — ref. ${fmtMesBR(mes)}`,
           });
           inseridos++;
         }
@@ -323,7 +367,7 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
           origemModulo: "beneficio_vr_projetado",
           origemId: syntheticId(mes, 3),
           origemDescricao: `VR projetado — ${quadro.count} func. × R$ ${beneficios.vrPorFuncMes.toFixed(2)}/mês`,
-          descricao: `Vale Refeição (Projeção) ${mes}`,
+          descricao: `Vale Refeição — ${quadro.count} funcionário(s) — ref. ${fmtMesBR(mes)}`,
         });
         inseridos++;
       }
@@ -341,7 +385,7 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
           origemModulo: "beneficio_va_projetado",
           origemId: syntheticId(mes, 4),
           origemDescricao: `VA projetado — ${quadro.count} func. × R$ ${beneficios.vaPorFuncMes.toFixed(2)}/mês`,
-          descricao: `Vale Alimentação (Projeção) ${mes}`,
+          descricao: `Vale Alimentação — ${quadro.count} funcionário(s) — ref. ${fmtMesBR(mes)}`,
         });
         inseridos++;
       }
@@ -362,7 +406,7 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
             origemModulo: "decimo_terceiro_projetado",
             origemId: syntheticId(mes, 5),
             origemDescricao: `13º 1ª parcela — Lei 4.090/62 — pagar até 30/11`,
-            descricao: `13º Salário 1ª Parcela ${ano} (Projeção)`,
+            descricao: `13º Salário — 1ª Parcela ${ano}`,
           });
           inseridos++;
         }
@@ -379,7 +423,7 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
             origemModulo: "decimo_terceiro_projetado",
             origemId: syntheticId(mes, 6),
             origemDescricao: `13º 2ª parcela — Lei 4.090/62 — pagar até 20/12 (líquido INSS)`,
-            descricao: `13º Salário 2ª Parcela ${ano} (Projeção)`,
+            descricao: `13º Salário — 2ª Parcela ${ano} (líq. INSS)`,
           });
           inseridos++;
 
@@ -394,7 +438,7 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
             origemModulo: "encargos_projetado",
             origemId: syntheticId(mes, 7),
             origemDescricao: `Encargos sobre 13º — FGTS + INSS pat. + RAT/Terc.`,
-            descricao: `Encargos 13º ${ano} (Projeção)`,
+            descricao: `Encargos sobre 13º Salário ${ano}`,
           });
           inseridos++;
         }
@@ -415,7 +459,7 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
           origemModulo: "pj_projetado",
           origemId: oid,
           origemDescricao: `Contrato PJ #${pj.id} — ${pj.razao}`,
-          descricao: `PJ (Projeção) ${mes} — ${pj.razao}`,
+          descricao: `${pj.razao} — ref. ${fmtMesBR(mes)}`,
         });
         inseridos++;
       }
