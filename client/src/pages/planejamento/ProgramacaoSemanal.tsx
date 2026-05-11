@@ -137,6 +137,10 @@ interface Props {
   /** Quando definido (modo interno), exibe seletor que persiste no banco via
    * tRPC. Quando undefined (Portal do Cliente), só lê o valor congelado. */
   onChangeRecoveryWindow?: (semanas: number) => void;
+  /** Rev. 1638.4 — Prazo contratual do projeto (YYYY-MM-DD). Quando definido,
+   * o seletor de janela de recuperação BLOQUEIA valores que empurrariam a data
+   * de convergência (semFim + N×7 dias) além do prazo contratual. */
+  dataTerminoContratual?: string | null;
 }
 
 // ── Cores de status ───────────────────────────────────────────────────────────
@@ -213,6 +217,108 @@ function tipoIcon(tipo: string) {
   return <RefreshCcw className="h-3.5 w-3.5 text-slate-500" />;
 }
 
+// ── Rev. 1638.4 — Seletor de janela de recuperação ────────────────────────────
+// Pills (1/2/4/6/8/12) + input livre. Bloqueia valores acima de `maxSemanas`,
+// que é o limite calculado para não comprometer prazo contratual / caminho
+// crítico / início de próxima atividade.
+function RecoveryPicker({ janelaAtual, maxSemanas, limiteData, limiteMotivo, onChange }: {
+  janelaAtual: number;
+  maxSemanas: number;
+  limiteData: string | null;
+  limiteMotivo: string | null;
+  onChange: (semanas: number) => void;
+}) {
+  const [draft, setDraft] = useState<string>(String(janelaAtual));
+  const [erro, setErro]   = useState<string | null>(null);
+  // Sincroniza o input quando o valor externo muda (ex.: clicou numa pill).
+  React.useEffect(() => { setDraft(String(janelaAtual)); setErro(null); }, [janelaAtual]);
+
+  function commit(valorBruto: string) {
+    const num = parseInt(valorBruto, 10);
+    if (!isFinite(num) || num < 1 || num > 52) {
+      setErro(`Digite um número entre 1 e 52 semanas.`);
+      setDraft(String(janelaAtual));
+      return;
+    }
+    if (num > maxSemanas) {
+      setErro(`Máximo permitido: ${maxSemanas} sem (limite: ${limiteData} — ${limiteMotivo}).`);
+      setDraft(String(janelaAtual));
+      return;
+    }
+    setErro(null);
+    setDraft(String(num));
+    if (num !== janelaAtual) onChange(num);
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[11px] text-slate-600">Recuperar em</span>
+        <div className="inline-flex items-center gap-0.5 bg-slate-100 rounded p-0.5" role="radiogroup" aria-label="Janela de recuperação">
+          {[1, 2, 4, 6, 8, 12].map(nSem => {
+            const ativo    = janelaAtual === nSem;
+            const proibido = nSem > maxSemanas;
+            return (
+              <button
+                key={nSem}
+                type="button"
+                role="radio"
+                aria-checked={ativo}
+                aria-disabled={proibido}
+                onClick={() => proibido
+                  ? setErro(`${nSem} sem comprometeria o prazo (limite: ${maxSemanas} sem — ${limiteData}).`)
+                  : commit(String(nSem))
+                }
+                className={`text-[11px] font-semibold px-2 py-0.5 rounded transition-colors tabular-nums ${
+                  ativo
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : proibido
+                      ? "text-slate-300 line-through cursor-not-allowed"
+                      : "text-blue-700 hover:bg-white"
+                }`}
+                title={proibido
+                  ? `Bloqueado — ${nSem} sem ultrapassa ${limiteMotivo} em ${limiteData}.`
+                  : `Diluir o débito acumulado em ${nSem} semana${nSem === 1 ? "" : "s"}. PV (baseline) permanece intacto.`}
+              >
+                {nSem}
+              </button>
+            );
+          })}
+        </div>
+        <span className="text-[10px] text-slate-500">sem</span>
+        <span className="text-slate-300">·</span>
+        <span className="text-[11px] text-slate-600">ou digite</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={Math.min(52, maxSemanas)}
+          value={draft}
+          onChange={(e) => { setDraft(e.target.value); setErro(null); }}
+          onBlur={() => commit(draft)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }}
+          className={`w-14 text-[11px] font-semibold tabular-nums border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 ${
+            erro
+              ? "border-red-400 text-red-700 bg-red-50 focus:ring-red-300"
+              : "border-blue-300 text-blue-700 bg-white focus:ring-blue-400"
+          }`}
+          title={`Digite a janela em semanas (1 a ${Math.min(52, maxSemanas)}). Pressione Enter ou clique fora para confirmar.`}
+        />
+        {limiteData && (
+          <span className="text-[10px] text-slate-500" title={`Limite calculado a partir do ${limiteMotivo}.`}>
+            (máx. <strong className="text-slate-700">{maxSemanas} sem</strong> — não passa de {limiteData})
+          </span>
+        )}
+      </div>
+      {erro && (
+        <div className="text-[10px] text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1 max-w-md">
+          ⚠️ {erro}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export function ProgramacaoSemanal({
@@ -220,6 +326,7 @@ export function ProgramacaoSemanal({
   nomeProjeto, nomeCliente, atividades: atividadesProp, avancosMap,
   refisLista = [], portalMode = false, curvaData = null,
   recoveryWindow = null, onChangeRecoveryWindow,
+  dataTerminoContratual = null,
 }: Props) {
   // Rev. 1534 — Janela atual de Recovery Schedule (default 4 semanas).
   const janelaRecuperacao = Math.max(1, recoveryWindow ?? 4);
@@ -443,6 +550,76 @@ export function ProgramacaoSemanal({
       indiretasCount: indiretas.length,
     };
   }, [atividadesSemAtual, atividadesSemAtualTodas, folhasTodas, semanaAtual]);
+
+  // ── Rev. 1638.4 — Limite máximo da janela de recuperação ─────────────────
+  // Calcula maxN tal que a data de convergência (semFim + N×7 dias) NÃO
+  // ultrapasse:
+  //   • dataTerminoContratual (prazo contratual do projeto)
+  //   • menor dataFim de atividade do CAMINHO CRÍTICO ainda não concluída
+  //   • menor dataInicio de atividade futura ainda não iniciada (qualquer
+  //     atraso na recuperação adia o início dela)
+  // Retorna { maxSemanas, limiteData, limiteMotivo } ou null se não há limite.
+  const limiteRecuperacao = useMemo(() => {
+    if (!semanaAtual) return null;
+    const semFim = new Date(semanaAtual.fim);
+    semFim.setDate(semFim.getDate() + 2); // sábado + 2 = segunda da próxima
+    semFim.setHours(23, 59, 59, 999);
+    const semFimMs = semFim.getTime();
+
+    const candidatos: { dataMs: number; motivo: string; eap?: string; nome?: string }[] = [];
+
+    // (1) Prazo contratual do projeto.
+    if (dataTerminoContratual) {
+      const ms = new Date(dataTerminoContratual + "T23:59:59").getTime();
+      if (ms > semFimMs) candidatos.push({ dataMs: ms, motivo: "prazo contratual do projeto" });
+    }
+
+    // (2) Caminho crítico — calcula float para TODAS as folhas com data.
+    const projectEndStr = folhasTodas.map((a: any) => a.dataFim).filter(Boolean).sort().pop();
+    const projectEndMs = projectEndStr ? new Date(projectEndStr + "T12:00:00").getTime() : 0;
+    if (projectEndMs) {
+      let menorCritica: { dataMs: number; eap: string; nome: string } | null = null;
+      let menorFutura: { dataMs: number; eap: string; nome: string } | null = null;
+      for (const a of folhasTodas) {
+        const av = avancosMap[a.id] ?? 0;
+        if (av >= 100) continue;
+        // (2a) crítica não concluída
+        if (a.dataFim) {
+          const fimMs = new Date(a.dataFim + "T12:00:00").getTime();
+          const float = Math.round((projectEndMs - fimMs) / 86400000);
+          if (float <= 0 && fimMs > semFimMs && (!menorCritica || fimMs < menorCritica.dataMs)) {
+            menorCritica = { dataMs: fimMs, eap: a.eapCodigo ?? "", nome: a.nome ?? "" };
+          }
+        }
+        // (2b) futura ainda não iniciada (av==0 e dataInicio > semFim)
+        if (av === 0 && a.dataInicio) {
+          const iniMs = new Date(a.dataInicio + "T12:00:00").getTime();
+          if (iniMs > semFimMs && (!menorFutura || iniMs < menorFutura.dataMs)) {
+            menorFutura = { dataMs: iniMs, eap: a.eapCodigo ?? "", nome: a.nome ?? "" };
+          }
+        }
+      }
+      if (menorCritica) candidatos.push({
+        dataMs: menorCritica.dataMs,
+        motivo: `término da atividade crítica ${menorCritica.eap} — ${menorCritica.nome}`,
+        eap: menorCritica.eap, nome: menorCritica.nome,
+      });
+      if (menorFutura) candidatos.push({
+        dataMs: menorFutura.dataMs,
+        motivo: `início da próxima atividade ${menorFutura.eap} — ${menorFutura.nome}`,
+        eap: menorFutura.eap, nome: menorFutura.nome,
+      });
+    }
+
+    if (candidatos.length === 0) return null;
+    // Pega o MENOR limite (mais restritivo)
+    candidatos.sort((a, b) => a.dataMs - b.dataMs);
+    const limite = candidatos[0];
+    const diasDisponiveis = Math.floor((limite.dataMs - semFimMs) / 86400000);
+    const maxSemanas = Math.max(1, Math.floor(diasDisponiveis / 7));
+    const limiteFmt = new Date(limite.dataMs).toLocaleDateString("pt-BR");
+    return { maxSemanas, limiteData: limiteFmt, limiteMotivo: limite.motivo };
+  }, [semanaAtual, folhasTodas, avancosMap, dataTerminoContratual]);
 
   // EAP codes for the current week (for resource lookup)
   const eapsDaSemana = useMemo(
@@ -817,39 +994,19 @@ export function ProgramacaoSemanal({
                     ({evmSemana.previstoCurvaS.toFixed(2)}% baseline + {(evmSemana.debitoAcumulado / janelaRecuperacao).toFixed(2)}%/sem)
                   </span>
                 </div>
-                {/* Rev. 1638.2 — Pills clicáveis no lugar de <select> nativo.
-                    No iOS Safari (iPad), o picker tela cheia do <select> só
-                    commitava ao tocar "Concluído" — se o usuário tocasse fora,
-                    o valor era cancelado silenciosamente e voltava ao último
-                    persistido (sintoma "fixa sempre em 12"). Pills commitam no
-                    onClick, instantâneo em qualquer plataforma. */}
+                {/* Rev. 1638.4 — Pills + input livre, com limite por prazo.
+                    Pills > maxSemanas ficam desabilitadas (não comprometem
+                    prazo contratual nem caminho crítico nem início de
+                    próxima atividade). Input livre aceita qualquer 1-52,
+                    mas valida contra maxSemanas no commit (Enter ou blur). */}
                 {!portalMode && onChangeRecoveryWindow && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[11px] text-slate-600">Recuperar em</span>
-                    <div className="inline-flex items-center gap-0.5 bg-slate-100 rounded p-0.5" role="radiogroup" aria-label="Janela de recuperação">
-                      {[1, 2, 4, 6, 8, 12].map(nSem => {
-                        const ativo = janelaRecuperacao === nSem;
-                        return (
-                          <button
-                            key={nSem}
-                            type="button"
-                            role="radio"
-                            aria-checked={ativo}
-                            onClick={() => onChangeRecoveryWindow(nSem)}
-                            className={`text-[11px] font-semibold px-2 py-0.5 rounded transition-colors tabular-nums ${
-                              ativo
-                                ? "bg-blue-600 text-white shadow-sm"
-                                : "text-blue-700 hover:bg-white"
-                            }`}
-                            title={`Diluir o débito acumulado em ${nSem} semana${nSem === 1 ? "" : "s"}. PV (baseline) permanece intacto.`}
-                          >
-                            {nSem}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <span className="text-[10px] text-slate-500">sem</span>
-                  </div>
+                  <RecoveryPicker
+                    janelaAtual={janelaRecuperacao}
+                    maxSemanas={limiteRecuperacao?.maxSemanas ?? 52}
+                    limiteData={limiteRecuperacao?.limiteData ?? null}
+                    limiteMotivo={limiteRecuperacao?.limiteMotivo ?? null}
+                    onChange={onChangeRecoveryWindow}
+                  />
                 )}
                 {!portalMode && evmSemana.janelaMinima != null && (
                   <span

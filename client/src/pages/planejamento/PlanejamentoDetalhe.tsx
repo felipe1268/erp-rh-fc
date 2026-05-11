@@ -952,6 +952,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
               setRecoveryOverride(semanas); // UI instantânea
               if (revisaoAtiva?.id) setRecoveryWindowMut.mutate({ revisaoId: revisaoAtiva.id, semanas });
             }}
+            dataTerminoContratual={proj?.dataTerminoContratual ?? null}
           />
         )}
 
