@@ -25,6 +25,8 @@ export type FinancialOrigin =
   | "folha_projetada" | "encargos_projetado"
   | "beneficio_vr_projetado" | "beneficio_va_projetado"
   | "decimo_terceiro_projetado" | "pj_projetado"
+  // Rev. 1636 — Projeções de Férias (CLT 145) e Rescisão de Aviso (CLT 477 §6º)
+  | "ferias_projetada" | "rescisao_projetada"
   | "manual" | "recorrente";
 
 export const ORIGEM_LABELS: Record<string, string> = {
@@ -63,6 +65,8 @@ export const ORIGEM_LABELS: Record<string, string> = {
   beneficio_va_projetado: "VA (Projeção)",
   decimo_terceiro_projetado: "13º (Projeção)",
   pj_projetado: "PJ (Projeção)",
+  ferias_projetada: "Férias (Projeção)",
+  rescisao_projetada: "Rescisão (Projeção)",
   // Genéricos
   manual: "Manual", recorrente: "Recorrente",
 };
@@ -83,6 +87,7 @@ export const ORIGEM_ICONS: Record<string, LucideIcon> = {
   folha_projetada: Users, encargos_projetado: Receipt,
   beneficio_vr_projetado: Receipt, beneficio_va_projetado: Receipt,
   decimo_terceiro_projetado: Calendar, pj_projetado: Briefcase,
+  ferias_projetada: Calendar, rescisao_projetada: FileText,
   manual: Wallet, recorrente: Wallet,
 };
 
@@ -130,6 +135,8 @@ export const ORIGEM_COLORS: Record<string, string> = {
   beneficio_va_projetado: "bg-violet-50 text-violet-700 border-violet-200",
   decimo_terceiro_projetado: "bg-violet-50 text-violet-700 border-violet-200",
   pj_projetado: "bg-violet-50 text-violet-700 border-violet-200",
+  ferias_projetada: "bg-violet-50 text-violet-700 border-violet-200",
+  rescisao_projetada: "bg-violet-50 text-violet-700 border-violet-200",
   manual: "bg-gray-50 text-gray-700 border-gray-200",
   recorrente: "bg-violet-50 text-violet-700 border-violet-200",
 };

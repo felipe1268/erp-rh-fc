@@ -603,10 +603,10 @@ export const financialRouter = router({
           // a constante 220h é inlinada no SQL e usamos apenas $1 (companyId).
           const ENCARGOS_PCT = 0.338;
 
-          // Rev. 1635 — Mesmo filtro do bridge: apenas Ativo/Ferias/Aviso são custo da
-          // empresa (Lei 8.213/91 art. 60 §3º — afastamento >15d INSS paga). Exclui
-          // soft-deleted e registros de teste sem matrícula. Retorna codigoInterno
-          // para exibir como "Código" (substitui matrícula eSocial COL...).
+          // Rev. 1636 — Folha mensal regular agora é só Ativo (Férias e Aviso saíram
+          // para rubricas próprias `ferias_projetada` / `rescisao_projetada`). Mantém
+          // exclusão de soft-deleted e registros de teste sem matrícula. Retorna
+          // codigoInterno para exibir como "Código" (substitui matrícula eSocial COL...).
           const funcRes = await dbExecute(db,
             `SELECT id, "nomeCompleto" AS nome,
                     "codigoInterno" AS codigo,
@@ -625,7 +625,7 @@ export const financialRouter = router({
              FROM employees
              WHERE "companyId" = $1
                AND "deletedAt" IS NULL
-               AND "status" IN ('Ativo','Ferias','Aviso')
+               AND "status" = 'Ativo'
                AND ("tipoContrato" IS NULL OR "tipoContrato" <> 'PJ')
                AND COALESCE(NULLIF(TRIM("matricula"), ''), NULLIF(TRIM("codigoInterno"), '')) IS NOT NULL
                AND UPPER("nomeCompleto") NOT LIKE '%TESTE%'
@@ -749,6 +749,136 @@ export const financialRouter = router({
             ],
             pjs,
           };
+        } else if (om === "ferias_projetada") {
+          // Rev. 1636 — Memorial de Férias projetadas (CLT 145).
+          const vpId = Number(entry.origemId ?? 0);
+          const r = await dbExecute(db,
+            `SELECT vp.id, vp."employeeId" AS emp_id,
+                    vp."dataInicio" AS d_ini, vp."dataFim" AS d_fim,
+                    vp."dataPagamento" AS d_pgto,
+                    COALESCE(vp."diasGozo", 30) AS dias_gozo,
+                    vp.status, vp."abonoPecuniario",
+                    vp."valorFerias", vp."valorTercoConstitucional",
+                    vp."valorAbono", vp."valorTotal",
+                    vp."periodoAquisitivoInicio" AS p_aq_ini,
+                    vp."periodoAquisitivoFim" AS p_aq_fim,
+                    vp."periodoConcessivoFim" AS p_conc_fim,
+                    e."nomeCompleto" AS func_nome,
+                    COALESCE(NULLIF(TRIM(e."codigoInterno"),''), NULLIF(TRIM(e.matricula),''), '—') AS func_codigo,
+                    COALESCE(NULLIF(TRIM(e.cargo),''), '—') AS cargo,
+                    e."dataAdmissao" AS d_adm, e.status AS func_status
+               FROM vacation_periods vp
+               LEFT JOIN employees e ON e.id = vp."employeeId"
+              WHERE vp.id = $1 AND vp."companyId" = $2`,
+            [vpId, input.companyId]);
+          const f = (rows(r) as any[])[0];
+          if (f) {
+            const fmtBR = (s: any) => s ? String(s).slice(0, 10).split("-").reverse().join("/") : "—";
+            const fmtMoney = (v: any) => `R$ ${Number(v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+            const valorEntry = Number(entry.valorPrevisto ?? 0);
+            // Rev. 1636 — quando vp."dataPagamento" é NULL, o bridge usa
+            // entry.dataVencimento (= início − 2 dias corridos, CLT 145).
+            // Memorial deve refletir a MESMA data exibida no Contas a Pagar.
+            const pgtoEfetivo: string | null = f.d_pgto
+              ? String(f.d_pgto).slice(0, 10)
+              : (entry.dataVencimento ? String(entry.dataVencimento).slice(0, 10) : null);
+            const pgtoEstimado = !f.d_pgto;
+            origemDetalhes = {
+              tipo: "ferias_projetada",
+              titulo: `Férias — ${f.func_nome ?? "Funcionário"} (${f.func_codigo})`,
+              subtitulo: `🏖️ ${f.dias_gozo}d de gozo · Pagamento ${fmtBR(pgtoEfetivo)}${pgtoEstimado ? " (estimado — início −2d)" : ""} (CLT 145 — até 2 dias antes do início)`,
+              formula: `Valor das férias = (Salário bruto × ${f.dias_gozo}/30) × (1 + 1/3 constitucional). Vencimento até 2 dias corridos antes do início do gozo (CLT 145). Cargo: ${f.cargo}.`,
+              campos: [
+                { label: "Funcionário", value: f.func_nome ?? "—" },
+                { label: "Código", value: f.func_codigo },
+                { label: "Cargo", value: f.cargo },
+                { label: "Status atual", value: f.func_status ?? "—" },
+                { label: "Período aquisitivo", value: `${fmtBR(f.p_aq_ini)} a ${fmtBR(f.p_aq_fim)}` },
+                { label: "Limite concessivo", value: fmtBR(f.p_conc_fim) },
+                { label: "Início do gozo", value: fmtBR(f.d_ini) },
+                { label: "Término do gozo", value: fmtBR(f.d_fim) },
+                { label: "Dias de gozo", value: `${f.dias_gozo}d` },
+                { label: "Abono pecuniário", value: f.abonoPecuniario === 1 ? "Sim (1/3)" : "Não" },
+                { label: "Status do agendamento", value: f.status ?? "—" },
+                { label: "Data de pagamento", value: pgtoEstimado ? `${fmtBR(pgtoEfetivo)} (estimada)` : fmtBR(pgtoEfetivo) },
+                { label: "Valor das férias", value: fmtMoney(f.valorFerias) },
+                { label: "1/3 constitucional", value: fmtMoney(f.valorTercoConstitucional) },
+                { label: "Abono", value: fmtMoney(f.valorAbono) },
+                { label: "Valor deste lançamento", value: fmtMoney(valorEntry) },
+              ],
+            };
+          }
+        } else if (om === "rescisao_projetada") {
+          // Rev. 1636 — Memorial de Rescisão de Aviso (CLT 477 §6º Lei 13.467/17).
+          const empId = Number(entry.origemId ?? 0);
+          const r = await dbExecute(db,
+            `SELECT id, "nomeCompleto" AS nome,
+                    COALESCE(NULLIF(TRIM("codigoInterno"),''), NULLIF(TRIM(matricula),''), '—') AS codigo,
+                    COALESCE(NULLIF(TRIM(cargo),''), '—') AS cargo,
+                    "dataAdmissao" AS d_adm,
+                    "dataDesligamentoEfetiva" AS d_desl,
+                    "motivoDesligamento" AS motivo,
+                    "categoriaDesligamento" AS categoria,
+                    status,
+                    CASE
+                      WHEN LOWER(COALESCE("tipoRemuneracao",'horista')) = 'mensalista'
+                        THEN COALESCE(REGEXP_REPLACE(REPLACE(REPLACE(COALESCE("salarioBase"::text,'0'),'.',''),',','.'),'[^0-9.\\-]','','g')::numeric, 0)
+                      ELSE COALESCE(REGEXP_REPLACE(REPLACE(REPLACE(COALESCE("valorHora"::text,'0'),'.',''),',','.'),'[^0-9.\\-]','','g')::numeric, 0) * 220
+                    END
+                    + CASE WHEN "recebeComplemento" = 1
+                        THEN COALESCE(REGEXP_REPLACE(REPLACE(REPLACE(COALESCE("valorComplemento"::text,'0'),'.',''),',','.'),'[^0-9.\\-]','','g')::numeric, 0)
+                        ELSE 0 END AS bruto_calc
+               FROM employees
+              WHERE id = $1 AND "companyId" = $2`,
+            [empId, input.companyId]);
+          const emp = (rows(r) as any[])[0];
+          if (emp) {
+            const fmtBR = (s: any) => s ? String(s).slice(0, 10).split("-").reverse().join("/") : "—";
+            const fmtMoney = (v: any) => `R$ ${Number(v ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+            const bruto = Number(emp.bruto_calc ?? 0);
+            const saldo = bruto;
+            const feriasProp = (bruto * 6 / 12) * (1 + 1 / 3);
+            const treze = bruto * 6 / 12;
+            const multaFgts = bruto * 0.08 * 12 * 0.40;
+            const total = saldo + feriasProp + treze + multaFgts;
+            const venc = entry.dataVencimento ? String(entry.dataVencimento).slice(0, 10) : null;
+            const hasReal = !!emp.d_desl;
+            // Rev. 1636 — quando dataDesligamentoEfetiva é NULL, o bridge
+            // estima desligamento = vencimento − 10 dias (CLT 477 §6º).
+            // Memorial deve mostrar essa mesma data estimada (com badge),
+            // não "—".
+            let dDeslShow: string | null = null;
+            if (emp.d_desl) {
+              dDeslShow = String(emp.d_desl).slice(0, 10);
+            } else if (venc) {
+              const v = new Date(venc + "T00:00:00Z");
+              v.setUTCDate(v.getUTCDate() - 10);
+              dDeslShow = v.toISOString().slice(0, 10);
+            }
+            origemDetalhes = {
+              tipo: "rescisao_projetada",
+              titulo: `Rescisão — ${emp.nome} (${emp.codigo})`,
+              subtitulo: `📤 Aviso prévio · Desligamento ${fmtBR(dDeslShow)}${hasReal ? "" : " (estimado)"} · Pagamento até ${fmtBR(venc)} (CLT 477 §6º — 10 dias após término)`,
+              formula: `Verbas estimadas = Saldo de salário (1 mês) + Férias proporcionais 6/12 × (1 + 1/3) + 13º proporcional 6/12 + Multa FGTS 40% sobre depósitos estimados (8% × 12 × salário). Valores pró-rata reais serão apurados na rescisão.`,
+              campos: [
+                { label: "Funcionário", value: emp.nome },
+                { label: "Código", value: emp.codigo },
+                { label: "Cargo", value: emp.cargo },
+                { label: "Status atual", value: emp.status ?? "—" },
+                { label: "Data de admissão", value: fmtBR(emp.d_adm) },
+                { label: "Data de desligamento", value: hasReal ? fmtBR(dDeslShow) : `${fmtBR(dDeslShow)} (estimada — fim do aviso)` },
+                { label: "Motivo", value: emp.motivo ?? "—" },
+                { label: "Categoria", value: emp.categoria ?? "—" },
+                { label: "Salário bruto base", value: fmtMoney(bruto) },
+                { label: "Saldo de salário", value: fmtMoney(saldo) },
+                { label: "Férias proporcionais (6/12 + 1/3)", value: fmtMoney(feriasProp) },
+                { label: "13º proporcional (6/12)", value: fmtMoney(treze) },
+                { label: "Multa FGTS 40%", value: fmtMoney(multaFgts) },
+                { label: "Total estimado", value: fmtMoney(total) },
+                { label: "Vencimento (CLT 477 §6º)", value: fmtBR(venc) },
+              ],
+            };
+          }
         } else if (om === "seguro_vida") {
           const r = await dbExecute(db,
             `SELECT competencia, total_segurados AS "totalSegurados", total_ativos AS "totalAtivos",

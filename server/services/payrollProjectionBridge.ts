@@ -38,6 +38,9 @@ const PROJ_ORIGENS = [
   "beneficio_vr_projetado",
   "decimo_terceiro_projetado",
   "pj_projetado",
+  // Rev. 1636 — Férias e Rescisão de Aviso projetadas
+  "ferias_projetada",
+  "rescisao_projetada",
 ] as const;
 
 // ─────────── Helpers ─────────────────────────────────────────
@@ -164,11 +167,12 @@ async function getQuadroCLT(db: any, companyId: number): Promise<{
   count: number;
   totalSalarioBruto: number;
 }> {
-  // Rev. 1635 — Critério de "custo de folha pela empresa" (Lei 8.213/91 art. 60 §3º,
-  // Lei 4.090/62, CLT art. 471/473): apenas Ativo, Ferias e Aviso prévio são custo
-  // direto da empresa. Afastado >15d, Licenca, Recluso e Desligado NÃO entram (INSS/
-  // benefício previdenciário paga). Também exclui registros sem matrícula (testes/dummy)
-  // e soft-deleted.
+  // Rev. 1636 — Folha mensal regular (regime de caixa): inclui APENAS quem está
+  // Ativo no mês inteiro. Funcionários em Férias têm o salário pago em rubrica
+  // separada "Férias a Pagar" (CLT 145, até 2 dias antes do gozo) gerada por
+  // `getFeriasProjetadas`. Funcionários em Aviso têm a Rescisão paga em rubrica
+  // própria (CLT 477 §6º, até 10 dias após término) gerada por
+  // `getRescisoesProjetadas`. Afastado/Licenca/Recluso = INSS paga (Lei 8.213/91).
   const { rows } = await dbExecute(db,
     `SELECT
        COUNT(*) AS qtd,
@@ -185,7 +189,7 @@ async function getQuadroCLT(db: any, companyId: number): Promise<{
      FROM employees
      WHERE "companyId" = $1
        AND "deletedAt" IS NULL
-       AND "status" IN ('Ativo','Ferias','Aviso')
+       AND "status" = 'Ativo'
        AND ("tipoContrato" IS NULL OR "tipoContrato" <> 'PJ')
        AND COALESCE(NULLIF(TRIM("matricula"), ''), NULLIF(TRIM("codigoInterno"), '')) IS NOT NULL
        AND UPPER("nomeCompleto") NOT LIKE '%TESTE%'`,
@@ -256,6 +260,192 @@ async function getPJsAtivosNoMes(db: any, companyId: number, primeiroDia: string
     valorMensal: num(r.valor),
     diaFechamento: parseInt(r.dia ?? "5", 10),
   }));
+}
+
+// ─────────── 3.b) Férias projetadas (CLT 145) ────────────────
+// Lê vacation_periods agendadas/em_gozo nos próximos meses.
+// Para cada uma: lança em "Férias a Pagar" com vencimento até 2 dias antes
+// do início do gozo (CLT 145). Valor = valorTotal se gravado; senão calcula
+// pelo salário bruto + 1/3 constitucional, pró-rata por diasGozo/30.
+async function getFeriasProjetadas(db: any, companyId: number, dataIni: string, dataFim: string): Promise<Array<{
+  id: number;
+  employeeId: number;
+  funcionarioNome: string;
+  funcionarioCodigo: string;
+  cargo: string;
+  dataInicio: string;
+  dataFim: string;
+  diasGozo: number;
+  valorTotal: number;
+  dataPagamento: string;
+  status: string;
+}>> {
+  const { rows } = await dbExecute(db,
+    `SELECT vp.id, vp."employeeId" AS emp_id,
+            COALESCE(NULLIF(TRIM(e."nomeCompleto"),''), 'Funcionário #' || vp."employeeId") AS func_nome,
+            COALESCE(NULLIF(TRIM(e."codigoInterno"),''), NULLIF(TRIM(e.matricula),''), '—') AS func_codigo,
+            COALESCE(NULLIF(TRIM(e.cargo),''), '—') AS cargo,
+            vp."dataInicio" AS d_ini, vp."dataFim" AS d_fim,
+            COALESCE(vp."diasGozo", 30) AS dias_gozo,
+            COALESCE(NULLIF(TRIM(vp."valorTotal"), ''), '0')::numeric AS val_total,
+            vp."dataPagamento" AS d_pgto,
+            vp.status
+       FROM vacation_periods vp
+       LEFT JOIN employees e ON e.id = vp."employeeId"
+      WHERE vp."companyId" = $1
+        AND vp.status IN ('agendada','em_gozo','pendente')
+        AND vp."dataInicio" IS NOT NULL
+        AND vp."dataInicio" >= $2
+        AND vp."dataInicio" <= $3
+        AND e."deletedAt" IS NULL
+      ORDER BY vp."dataInicio" ASC`,
+    [companyId, dataIni, dataFim]
+  );
+
+  // Para férias sem valorTotal, calcula salário bruto + 1/3 pró-rata
+  const empIdsSemValor = rows.filter(r => num(r.val_total) <= 0).map(r => parseInt(r.emp_id, 10));
+  let salarioMap: Map<number, number> = new Map();
+  if (empIdsSemValor.length > 0) {
+    const idsStr = empIdsSemValor.join(",");
+    const { rows: salRows } = await dbExecute(db,
+      `SELECT id,
+              CASE
+                WHEN LOWER(COALESCE("tipoRemuneracao",'horista')) = 'mensalista'
+                  THEN COALESCE(${brMoneySql('"salarioBase"')}, 0)
+                ELSE COALESCE(${brMoneySql('"valorHora"')}, 0) * $2
+              END
+              + CASE WHEN "recebeComplemento" = 1
+                  THEN COALESCE(${brMoneySql('"valorComplemento"')}, 0)
+                  ELSE 0 END AS bruto
+         FROM employees
+        WHERE id IN (${idsStr || "0"}) AND "companyId" = $1`,
+      [companyId, HORAS_MES_HORISTA]
+    );
+    salRows.forEach(r => salarioMap.set(parseInt(r.id, 10), num(r.bruto)));
+  }
+
+  return rows.map(r => {
+    const empId = parseInt(r.emp_id, 10);
+    const dias = parseInt(r.dias_gozo ?? "30", 10) || 30;
+    let valorTotal = num(r.val_total);
+    if (valorTotal <= 0) {
+      const bruto = salarioMap.get(empId) ?? 0;
+      // (Salário pró-rata aos dias de férias) + 1/3 constitucional
+      valorTotal = (bruto * dias / 30) * (1 + 1 / 3);
+    }
+    // dataPagamento: se gravada, usa; senão CLT 145 → 2 dias corridos antes do início
+    let dPgto = r.d_pgto ? String(r.d_pgto).slice(0, 10) : null;
+    if (!dPgto) {
+      const di = new Date(String(r.d_ini).slice(0, 10) + "T00:00:00Z");
+      di.setUTCDate(di.getUTCDate() - 2);
+      dPgto = di.toISOString().slice(0, 10);
+    }
+    return {
+      id: parseInt(r.id, 10),
+      employeeId: empId,
+      funcionarioNome: r.func_nome,
+      funcionarioCodigo: r.func_codigo,
+      cargo: r.cargo,
+      dataInicio: String(r.d_ini).slice(0, 10),
+      dataFim: String(r.d_fim).slice(0, 10),
+      diasGozo: dias,
+      valorTotal,
+      dataPagamento: dPgto,
+      status: r.status,
+    };
+  });
+}
+
+// ─────────── 3.c) Rescisões de Aviso projetadas (CLT 477 §6º) ─
+// Para cada funcionário em status='Aviso', estima a rescisão (verbas
+// rescisórias = saldo + férias prop + 13º prop + multa FGTS 40%) e
+// lança em "Rescisões a Pagar" com vencimento até 10 dias após o
+// término do contrato (data desligamento efetiva, ou +30d se não há).
+async function getRescisoesProjetadas(db: any, companyId: number): Promise<Array<{
+  id: number;
+  employeeId: number;
+  funcionarioNome: string;
+  funcionarioCodigo: string;
+  cargo: string;
+  dataDesligamento: string;
+  dataPagamento: string;
+  saldoSalario: number;
+  feriasProporcionais: number;
+  decimoTerceiroProp: number;
+  multaFgts: number;
+  valorTotal: number;
+  hasDataReal: boolean;
+}>> {
+  const { rows } = await dbExecute(db,
+    `SELECT id, "nomeCompleto" AS func_nome,
+            COALESCE(NULLIF(TRIM("codigoInterno"),''), NULLIF(TRIM(matricula),''), '—') AS func_codigo,
+            COALESCE(NULLIF(TRIM(cargo),''), '—') AS cargo,
+            "dataDesligamentoEfetiva" AS d_desl,
+            "dataAdmissao" AS d_adm,
+            CASE
+              WHEN LOWER(COALESCE("tipoRemuneracao",'horista')) = 'mensalista'
+                THEN COALESCE(${brMoneySql('"salarioBase"')}, 0)
+              ELSE COALESCE(${brMoneySql('"valorHora"')}, 0) * $2
+            END
+            + CASE WHEN "recebeComplemento" = 1
+                THEN COALESCE(${brMoneySql('"valorComplemento"')}, 0)
+                ELSE 0 END AS bruto
+       FROM employees
+      WHERE "companyId" = $1
+        AND "deletedAt" IS NULL
+        AND "status" = 'Aviso'
+        AND ("tipoContrato" IS NULL OR "tipoContrato" <> 'PJ')
+        AND COALESCE(NULLIF(TRIM("matricula"),''), NULLIF(TRIM("codigoInterno"),'')) IS NOT NULL
+        AND UPPER("nomeCompleto") NOT LIKE '%TESTE%'
+      ORDER BY "nomeCompleto" ASC`,
+    [companyId, HORAS_MES_HORISTA]
+  );
+
+  const hoje = new Date();
+  return rows.map(r => {
+    const bruto = num(r.bruto);
+    // Data de desligamento: se não cadastrada, presume fim do mês corrente + 30 dias (aviso 30d).
+    let dDesl: Date;
+    let hasReal = false;
+    if (r.d_desl) {
+      dDesl = new Date(String(r.d_desl).slice(0, 10) + "T00:00:00Z");
+      hasReal = true;
+    } else {
+      dDesl = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() + 1, 0));
+      dDesl.setUTCDate(dDesl.getUTCDate() + 30);
+    }
+    // Pagamento: até 10 dias corridos após término (CLT 477 §6º Lei 13.467/17)
+    const dPgto = new Date(dDesl.getTime());
+    dPgto.setUTCDate(dPgto.getUTCDate() + 10);
+
+    // Cálculo simplificado das verbas rescisórias:
+    //  - Saldo salário: 1 mês cheio (assume que o aviso será trabalhado integralmente)
+    //  - Férias proporcionais (avos pendentes não medidos sem dataAdmissao real):
+    //    estima média de 6/12 = 50% do salário + 1/3
+    //  - 13º proporcional: estima 6/12 = 50% do salário
+    //  - Multa FGTS: 40% sobre depósitos estimados (8% × 12 meses × salário) ≈ 38,4% do bruto
+    const saldo = bruto;
+    const feriasProp = (bruto * 6 / 12) * (1 + 1 / 3);
+    const treze = bruto * 6 / 12;
+    const multaFgts = bruto * 0.08 * 12 * 0.40;
+    const total = saldo + feriasProp + treze + multaFgts;
+
+    return {
+      id: parseInt(r.id, 10),
+      employeeId: parseInt(r.id, 10),
+      funcionarioNome: r.func_nome,
+      funcionarioCodigo: r.func_codigo,
+      cargo: r.cargo,
+      dataDesligamento: dDesl.toISOString().slice(0, 10),
+      dataPagamento: dPgto.toISOString().slice(0, 10),
+      saldoSalario: saldo,
+      feriasProporcionais: feriasProp,
+      decimoTerceiroProp: treze,
+      multaFgts,
+      valorTotal: total,
+      hasDataReal: hasReal,
+    };
+  });
 }
 
 // ─────────── 4) Quais meses já têm folha REAL consolidada? ───
@@ -451,7 +641,12 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
         }
       }
 
-      // ── 6.6 PJs ativos no mês
+      // ── 6.6 Férias projetadas: lança UMA VEZ no mês corrente para todas
+      // as férias com início no horizonte (não dentro do loop mensal). Saímos
+      // do loop apenas no primeiro mês para evitar duplicação.
+      // (Consolidamos abaixo, fora do for.)
+
+      // ── 6.7 PJs ativos no mês
       const pjs = await getPJsAtivosNoMes(db, companyId, competencia);
       for (const pj of pjs) {
         const venc = lastBusinessDayOrEarlier(ano, mNum, pj.diaFechamento || 5);
@@ -470,6 +665,47 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
         });
         inseridos++;
       }
+    }
+
+    // ── 6.8 Férias projetadas (CLT 145) — fora do loop mensal,
+    // pois cada vacation_period gera 1 lançamento próprio na sua dataPagamento.
+    const dataIniHorizonte = `${ano0}-${String(mes0 + 1).padStart(2, "0")}-01`;
+    const refFim = new Date(Date.UTC(ano0, mes0 + horizonte, 0));
+    const dataFimHorizonte = refFim.toISOString().slice(0, 10);
+    const ferias = await getFeriasProjetadas(db, companyId, dataIniHorizonte, dataFimHorizonte);
+    for (const f of ferias) {
+      const compMes = f.dataInicio.slice(0, 7);
+      const venc = f.dataPagamento;
+      await insertProjEntry(db, {
+        companyId,
+        contaNome: "Férias a Pagar (Projeção)",
+        valor: f.valorTotal,
+        competencia: competenciaPrimeiroDia(compMes),
+        vencimento: venc,
+        origemModulo: "ferias_projetada",
+        origemId: f.id,
+        origemDescricao: `Férias ${f.funcionarioNome} — ${f.diasGozo}d (${f.dataInicio.split("-").reverse().join("/")} a ${f.dataFim.split("-").reverse().join("/")}) — CLT 145`,
+        descricao: `Férias — ${f.funcionarioNome} (${f.funcionarioCodigo}) — gozo ${f.dataInicio.split("-").reverse().join("/")}`,
+      });
+      inseridos++;
+    }
+
+    // ── 6.9 Rescisões projetadas (CLT 477 §6º Lei 13.467/17 — pgto até 10d)
+    const rescisoes = await getRescisoesProjetadas(db, companyId);
+    for (const r of rescisoes) {
+      const compMes = r.dataDesligamento.slice(0, 7);
+      await insertProjEntry(db, {
+        companyId,
+        contaNome: "Rescisões a Pagar (Projeção)",
+        valor: r.valorTotal,
+        competencia: competenciaPrimeiroDia(compMes),
+        vencimento: r.dataPagamento,
+        origemModulo: "rescisao_projetada",
+        origemId: r.employeeId,
+        origemDescricao: `Rescisão ${r.funcionarioNome} — Aviso prévio (CLT 477 §6º) — ${r.hasDataReal ? "data efetiva" : "estimada"} ${r.dataDesligamento.split("-").reverse().join("/")}`,
+        descricao: `Rescisão — ${r.funcionarioNome} (${r.funcionarioCodigo}) — desligamento ${r.dataDesligamento.split("-").reverse().join("/")}`,
+      });
+      inseridos++;
     }
   } catch (e: any) {
     console.error(`[PayrollProjection] company=${companyId} erro:`, e?.message ?? e);

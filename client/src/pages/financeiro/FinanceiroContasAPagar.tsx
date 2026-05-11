@@ -79,10 +79,11 @@ function extractOcNumero(c: any): string {
 const PROJECAO_ORIGENS = new Set([
   // Forecast de obra (Planejamento)
   "cronograma_atividade", "planejamento_compra",
-  // Forecast de RH/Folha (Rev. 1630)
+  // Forecast de RH/Folha (Rev. 1630/1636)
   "folha_projetada", "encargos_projetado",
   "beneficio_vr_projetado", "beneficio_va_projetado",
   "decimo_terceiro_projetado", "pj_projetado",
+  "ferias_projetada", "rescisao_projetada",
 ]);
 function isProjecao(c: any): boolean {
   return PROJECAO_ORIGENS.has(c?.origemModulo);
