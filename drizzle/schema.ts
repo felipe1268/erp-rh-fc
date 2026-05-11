@@ -5276,6 +5276,9 @@ export const planejamentoAtividades = pgTable("planejamento_atividades", {
   dataFim:              date("data_fim"),
   dataInicioReal:       date("data_inicio_real"),
   dataFimReal:          date("data_fim_real"),
+  // Rev. 1662 — Responsável editável (visão LOTUS). Default = engenheiro da obra,
+  // mas pode ser sobrescrito por atividade (ex.: "Empresa Terceira X").
+  responsavelLotus:     varchar("responsavel_lotus", { length: 200 }),
   duracaoDias:          integer("duracao_dias").default(0),
   predecessora:         varchar({ length: 100 }),
   pesoFinanceiro:       numeric("peso_financeiro", { precision: 10, scale: 4 }).default("0"),

@@ -702,8 +702,9 @@ export const planejamentoRouter = router({
         ...r,
         dataInicio:     r.dataInicio     ? toDateStr(r.dataInicio)     : null,
         dataFim:        r.dataFim        ? toDateStr(r.dataFim)        : null,
-        dataInicioReal: r.dataInicioReal ? toDateStr(r.dataInicioReal) : null,
-        dataFimReal:    r.dataFimReal    ? toDateStr(r.dataFimReal)    : null,
+        dataInicioReal:   r.dataInicioReal ? toDateStr(r.dataInicioReal) : null,
+        dataFimReal:      r.dataFimReal    ? toDateStr(r.dataFimReal)    : null,
+        responsavelLotus: (r as any).responsavelLotus ?? null,
       }));
     }),
 
@@ -714,16 +715,18 @@ export const planejamentoRouter = router({
   // atividade pertence a um projeto da MESMA empresa antes de gravar.
   setRealDates: protectedProcedure
     .input(z.object({
-      atividadeId:    z.number(),
-      companyId:      z.number(),
-      dataInicioReal: z.string().nullable().optional(),
-      dataFimReal:    z.string().nullable().optional(),
+      atividadeId:      z.number(),
+      companyId:        z.number(),
+      dataInicioReal:   z.string().nullable().optional(),
+      dataFimReal:      z.string().nullable().optional(),
+      responsavelLotus: z.string().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       const patch: any = {};
-      if (input.dataInicioReal !== undefined) patch.dataInicioReal = input.dataInicioReal || null;
-      if (input.dataFimReal    !== undefined) patch.dataFimReal    = input.dataFimReal    || null;
+      if (input.dataInicioReal   !== undefined) patch.dataInicioReal   = input.dataInicioReal   || null;
+      if (input.dataFimReal      !== undefined) patch.dataFimReal      = input.dataFimReal      || null;
+      if (input.responsavelLotus !== undefined) patch.responsavelLotus = (input.responsavelLotus ?? "").trim() || null;
       if (Object.keys(patch).length === 0) return { ok: true };
       // Valida ownership: atividade → projeto → companyId
       const [check] = await db

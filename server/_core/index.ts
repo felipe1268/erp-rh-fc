@@ -494,7 +494,8 @@ Regras:
         try {
           await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS data_inicio_real DATE`);
           await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS data_fim_real DATE`);
-          console.log(`[SyncSchema+] Colunas data_*_real garantidas em planejamento_atividades.`);
+          await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS responsavel_lotus VARCHAR(200)`);
+          console.log(`[SyncSchema+] Colunas data_*_real + responsavel_lotus garantidas em planejamento_atividades.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_atividades datas reais:`, e?.message || e); }
 
         try {

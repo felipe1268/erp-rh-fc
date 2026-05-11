@@ -17,6 +17,7 @@ interface Atividade {
   dataInicioReal?: string | null;
   dataFimReal?: string | null;
   pesoFinanceiro?: string | number | null;
+  responsavelLotus?: string | null;
 }
 
 interface Props {
@@ -262,7 +263,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
             a.eapCodigo, a.nome,
             fmtBR(a.dataInicio), fmtBR(a.dataFim),
             fmtBR(a.dataInicioReal), fmtBR(a.dataFimReal),
-            engenheiroResponsavel || "—",
+            (a.responsavelLotus ?? engenheiroResponsavel) || "—",
             ...dias.map(() => ""),
             a.dataFimReal ? "Realizado" : (a.dataInicio && a.dataInicio <= dateStr(hoje) && !a.dataInicioReal ? "Atrasado" : "Previsto"),
           ];
@@ -481,7 +482,27 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                       <span className="hidden print:inline text-slate-700">{fmtBR(a.dataFimReal).slice(0, 5)}</span>
                     </td>
                     <td className="border border-slate-300 px-1 py-1 text-center text-slate-700 text-[10px] uppercase">
-                      {engenheiroResponsavel || "—"}
+                      <input
+                        type="text"
+                        defaultValue={a.responsavelLotus ?? engenheiroResponsavel ?? ""}
+                        placeholder={engenheiroResponsavel || "—"}
+                        onBlur={(e) => {
+                          const novo = e.target.value.trim();
+                          const padrao = (engenheiroResponsavel || "").trim();
+                          const atual = (a.responsavelLotus || "").trim();
+                          // Se igual ao atual (após trim), não envia.
+                          if (novo === atual) return;
+                          // Se novo == padrão, persiste null pra "voltar ao default".
+                          const valor = novo === padrao || novo === "" ? null : novo;
+                          setRealDates.mutate({
+                            atividadeId: a.id,
+                            companyId,
+                            responsavelLotus: valor,
+                          });
+                        }}
+                        className="w-full bg-transparent text-center text-[10px] uppercase outline-none focus:bg-yellow-50 focus:ring-1 focus:ring-blue-300 rounded px-1 print:bg-transparent print:ring-0"
+                        disabled={setRealDates.isPending}
+                      />
                     </td>
                     {dias.map((d, idx) => {
                       const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP);
