@@ -34,6 +34,10 @@ interface Props {
   clienteLogoUrl?: string | null;
   engenheiroResponsavel?: string | null;
   calendarioJson?: string | null;
+  /** Data de início efetiva do projeto (YYYY-MM-DD). A primeira semana
+   *  começa nessa data ao invés de seguir o cutoff, evitando mostrar
+   *  dias anteriores ao início real do projeto. */
+  projetoStart?: string | null;
 }
 
 // Programação LOTUS exibe os 7 dias da semana (seg→dom). Sáb/dom ficam
@@ -120,7 +124,7 @@ function faixasCelula(
 export default function ProgramacaoSemanalLotus(props: Props) {
   const {
     projetoId, revisaoId, companyId, nomeProjeto, nomeCliente, atividades, semanas, semanaIdx, onSemanaChange,
-    gerenciadoraNome, gerenciadoraLogoUrl, clienteLogoUrl, engenheiroResponsavel, calendarioJson,
+    gerenciadoraNome, gerenciadoraLogoUrl, clienteLogoUrl, engenheiroResponsavel, calendarioJson, projetoStart,
   } = props;
   const calMSP = useMemo(() => parseCalendarioJson(calendarioJson), [calendarioJson]);
 
@@ -134,7 +138,19 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   });
 
   const semana = semanas[semanaIdx];
-  const dias = useMemo(() => semana ? diasDaSemana(semana.ini, semana.fim) : [], [semana]);
+  const dias = useMemo(() => {
+    if (!semana) return [];
+    // Clip da PRIMEIRA semana visível à data de início real do projeto:
+    // não faz sentido mostrar dias anteriores ao começo do cronograma.
+    let ini = semana.ini;
+    if (projetoStart) {
+      const ps = parseDate(projetoStart.slice(0, 10));
+      if (ps.getTime() > ini.getTime() && ps.getTime() <= semana.fim.getTime()) {
+        ini = ps;
+      }
+    }
+    return diasDaSemana(ini, semana.fim);
+  }, [semana, projetoStart]);
   const periodoStr = useMemo(() => {
     if (dias.length === 0) return "";
     const ini = dias[0];

@@ -953,6 +953,7 @@ export function ProgramacaoSemanal({
           clienteLogoUrl={clienteLogoUrl}
           engenheiroResponsavel={engenheiroResponsavel}
           calendarioJson={calendarioJson}
+          projetoStart={projetoStart}
         />
       </div>
     );
