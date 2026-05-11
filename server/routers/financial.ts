@@ -603,8 +603,14 @@ export const financialRouter = router({
           // a constante 220h é inlinada no SQL e usamos apenas $1 (companyId).
           const ENCARGOS_PCT = 0.338;
 
+          // Rev. 1635 — Mesmo filtro do bridge: apenas Ativo/Ferias/Aviso são custo da
+          // empresa (Lei 8.213/91 art. 60 §3º — afastamento >15d INSS paga). Exclui
+          // soft-deleted e registros de teste sem matrícula. Retorna codigoInterno
+          // para exibir como "Código" (substitui matrícula eSocial COL...).
           const funcRes = await dbExecute(db,
-            `SELECT id, "nomeCompleto" AS nome, matricula, cargo, "tipoContrato",
+            `SELECT id, "nomeCompleto" AS nome,
+                    "codigoInterno" AS codigo,
+                    matricula, cargo, "tipoContrato",
                     "tipoRemuneracao", "salarioBase", "valorHora",
                     "recebeComplemento", "valorComplemento", "status",
                     "dataAdmissao",
@@ -618,8 +624,11 @@ export const financialRouter = router({
                         ELSE 0 END AS bruto_calc
              FROM employees
              WHERE "companyId" = $1
-               AND "status" IN ('Ativo','Ferias','Afastado','Licenca')
+               AND "deletedAt" IS NULL
+               AND "status" IN ('Ativo','Ferias','Aviso')
                AND ("tipoContrato" IS NULL OR "tipoContrato" <> 'PJ')
+               AND COALESCE(NULLIF(TRIM("matricula"), ''), NULLIF(TRIM("codigoInterno"), '')) IS NOT NULL
+               AND UPPER("nomeCompleto") NOT LIKE '%TESTE%'
              ORDER BY "nomeCompleto" ASC`,
             [input.companyId]
           );
@@ -637,6 +646,7 @@ export const financialRouter = router({
             return {
               id: emp.id,
               nome: emp.nome,
+              codigo: emp.codigo || emp.matricula || "—",
               matricula: emp.matricula ?? "—",
               cargo: emp.cargo ?? "—",
               tipoRemuneracao: emp.tipoRemuneracao ?? "horista",

@@ -1474,46 +1474,55 @@ export default function FinanceiroContasAPagar() {
                                 Funcionários considerados ({d.origemDetalhes.funcionarios.length})
                               </h4>
                               <div className="border border-slate-200 rounded-lg overflow-auto max-h-[60vh]">
-                                <table className="w-full text-xs min-w-[900px]">
+                                <table className="w-full text-xs min-w-[820px]">
                                   <thead className="bg-slate-100 sticky top-0">
                                     <tr>
                                       <th className="px-2 py-1.5 text-left font-semibold text-slate-600">#</th>
-                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Matr.</th>
-                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Nome</th>
-                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Cargo</th>
+                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Código</th>
+                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Funcionário / Função</th>
                                       <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Obra</th>
                                       <th className="px-2 py-1.5 text-center font-semibold text-slate-600">Tipo</th>
-                                      <th className="px-2 py-1.5 text-center font-semibold text-slate-600">Status</th>
+                                      <th className="px-2 py-1.5 text-center font-semibold text-slate-600">Situação</th>
                                       <th className="px-2 py-1.5 text-right font-semibold text-slate-600">Sal. Bruto</th>
                                       <th className="px-2 py-1.5 text-right font-semibold text-slate-600">% Folha</th>
                                       <th className="px-2 py-1.5 text-right font-semibold text-slate-600">Parcela</th>
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {d.origemDetalhes.funcionarios.map((f: any, i: number) => (
-                                      <tr key={f.id} className="border-t border-slate-100 hover:bg-slate-50">
-                                        <td className="px-2 py-1 text-slate-400 tabular-nums">{i + 1}</td>
-                                        <td className="px-2 py-1 font-mono text-[10px]">{f.matricula}</td>
-                                        <td className="px-2 py-1 font-medium text-slate-800">{f.nome}</td>
-                                        <td className="px-2 py-1 text-slate-600">{f.cargo}</td>
-                                        <td className="px-2 py-1 text-slate-600 text-[10px]">{f.obraAtual}</td>
-                                        <td className="px-2 py-1 text-center text-[10px] uppercase text-slate-500">{f.tipoRemuneracao}</td>
-                                        <td className="px-2 py-1 text-center">
-                                          <span className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                                            f.status === "Ativo" ? "bg-green-100 text-green-700" :
-                                            f.status === "Ferias" ? "bg-blue-100 text-blue-700" :
-                                            "bg-amber-100 text-amber-700"
-                                          }`}>{f.status}</span>
-                                        </td>
-                                        <td className="px-2 py-1 text-right tabular-nums">{formatBRL(Number(f.salarioBruto))}</td>
-                                        <td className="px-2 py-1 text-right tabular-nums text-slate-500">{Number(f.percentual).toFixed(2)}%</td>
-                                        <td className="px-2 py-1 text-right tabular-nums font-semibold text-emerald-700">{formatBRL(Number(f.parcelaLancamento))}</td>
-                                      </tr>
-                                    ))}
+                                    {d.origemDetalhes.funcionarios.map((f: any, i: number) => {
+                                      const st = String(f.status || "").trim();
+                                      const stMap: Record<string, { cls: string; label: string }> = {
+                                        Ativo:    { cls: "bg-green-100 text-green-700",   label: "Ativo" },
+                                        Ferias:   { cls: "bg-blue-100 text-blue-700",     label: "Férias (custo da empresa)" },
+                                        Aviso:    { cls: "bg-amber-100 text-amber-700",   label: "Aviso prévio" },
+                                        Afastado: { cls: "bg-rose-100 text-rose-700",     label: "Afastado >15d (INSS)" },
+                                        Licenca:  { cls: "bg-rose-100 text-rose-700",     label: "Licença (INSS)" },
+                                        Recluso:  { cls: "bg-zinc-200 text-zinc-700",     label: "Recluso (auxílio-reclusão)" },
+                                      };
+                                      const sd = stMap[st] || { cls: "bg-slate-100 text-slate-600", label: st || "—" };
+                                      return (
+                                        <tr key={f.id} className="border-t border-slate-100 hover:bg-slate-50 align-top">
+                                          <td className="px-2 py-1 text-slate-400 tabular-nums">{i + 1}</td>
+                                          <td className="px-2 py-1 font-mono text-[10px] text-slate-700">{f.codigo || f.matricula || "—"}</td>
+                                          <td className="px-2 py-1">
+                                            <div className="font-medium text-slate-800 leading-tight">{f.nome}</div>
+                                            <div className="text-[10px] text-slate-500 leading-tight">{f.cargo && f.cargo !== "—" ? f.cargo : "Função não cadastrada"}</div>
+                                          </td>
+                                          <td className="px-2 py-1 text-slate-600 text-[10px]">{f.obraAtual}</td>
+                                          <td className="px-2 py-1 text-center text-[10px] uppercase text-slate-500">{f.tipoRemuneracao}</td>
+                                          <td className="px-2 py-1 text-center">
+                                            <span className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap ${sd.cls}`}>{sd.label}</span>
+                                          </td>
+                                          <td className="px-2 py-1 text-right tabular-nums">{formatBRL(Number(f.salarioBruto))}</td>
+                                          <td className="px-2 py-1 text-right tabular-nums text-slate-500">{Number(f.percentual).toFixed(2)}%</td>
+                                          <td className="px-2 py-1 text-right tabular-nums font-semibold text-emerald-700">{formatBRL(Number(f.parcelaLancamento))}</td>
+                                        </tr>
+                                      );
+                                    })}
                                   </tbody>
                                   <tfoot className="bg-slate-100 sticky bottom-0">
                                     <tr className="font-bold text-slate-700">
-                                      <td colSpan={7} className="px-2 py-1.5 text-right">TOTAL</td>
+                                      <td colSpan={6} className="px-2 py-1.5 text-right">TOTAL</td>
                                       <td className="px-2 py-1.5 text-right tabular-nums">{formatBRL(d.origemDetalhes.funcionarios.reduce((s: number, f: any) => s + Number(f.salarioBruto), 0))}</td>
                                       <td className="px-2 py-1.5 text-right tabular-nums">100%</td>
                                       <td className="px-2 py-1.5 text-right tabular-nums text-emerald-700">{formatBRL(d.origemDetalhes.funcionarios.reduce((s: number, f: any) => s + Number(f.parcelaLancamento), 0))}</td>

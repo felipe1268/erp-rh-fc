@@ -164,10 +164,11 @@ async function getQuadroCLT(db: any, companyId: number): Promise<{
   count: number;
   totalSalarioBruto: number;
 }> {
-  // status considerado "ativo para folha": Ativo, Ferias, Afastado, Licenca
-  // Salário bruto: mensalista usa salarioBase; horista usa valorHora * 220h.
-  // Inclui complemento fixo se recebeComplemento=1.
-  // Rev. 1632 — usa brMoneySql para parsear "9.999,99" corretamente (era "2.500,00" → "2.500.00" → falha)
+  // Rev. 1635 — Critério de "custo de folha pela empresa" (Lei 8.213/91 art. 60 §3º,
+  // Lei 4.090/62, CLT art. 471/473): apenas Ativo, Ferias e Aviso prévio são custo
+  // direto da empresa. Afastado >15d, Licenca, Recluso e Desligado NÃO entram (INSS/
+  // benefício previdenciário paga). Também exclui registros sem matrícula (testes/dummy)
+  // e soft-deleted.
   const { rows } = await dbExecute(db,
     `SELECT
        COUNT(*) AS qtd,
@@ -183,8 +184,11 @@ async function getQuadroCLT(db: any, companyId: number): Promise<{
        ), 0) AS bruto
      FROM employees
      WHERE "companyId" = $1
-       AND "status" IN ('Ativo','Ferias','Afastado','Licenca')
-       AND ("tipoContrato" IS NULL OR "tipoContrato" <> 'PJ')`,
+       AND "deletedAt" IS NULL
+       AND "status" IN ('Ativo','Ferias','Aviso')
+       AND ("tipoContrato" IS NULL OR "tipoContrato" <> 'PJ')
+       AND COALESCE(NULLIF(TRIM("matricula"), ''), NULLIF(TRIM("codigoInterno"), '')) IS NOT NULL
+       AND UPPER("nomeCompleto") NOT LIKE '%TESTE%'`,
     [companyId, HORAS_MES_HORISTA]
   );
   const r = rows[0] ?? {};
