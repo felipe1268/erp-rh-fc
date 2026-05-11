@@ -1365,6 +1365,83 @@ export const planejamentoRouter = router({
       return { success: true };
     }),
 
+  // ── Data de Corte (Status Date PMBOK / EVM) ──────────────────────────────
+  // Rev. 1637 — Resolve a data de corte oficial do projeto. Default = última
+  // quinta-feira ≤ today. Portal do Cliente e relatórios externos SEMPRE
+  // calculam KPIs em relação a esta data; o ERP interno usa "Live (today)"
+  // para o gestor mas exibe a data oficial como referência.
+  getDataCorte: protectedProcedure
+    .input(z.object({ projetoId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [proj] = await db.select({
+        companyId: planejamentoProjetos.companyId,
+        dataCorteAtual: planejamentoProjetos.dataCorteAtual,
+        dataCorteAtualizadaEm: planejamentoProjetos.dataCorteAtualizadaEm,
+        dataCorteAtualizadaPor: planejamentoProjetos.dataCorteAtualizadaPor,
+      }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
+      if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
+      // Tenant isolation (replit.md: "All data operations consistently filter by companyId")
+      if (String(proj.companyId) !== String(ctx.user.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+      }
+      const { ultimaQuintaAte, proximaQuinta, cutoffEfetivo, todayBR } = await import("../../shared/dataCorte");
+      const hoje = todayBR();
+      // toDateStr serializa `null` como "null" — passamos null direto pra cutoffEfetivo,
+      // que trata defensivamente null/undefined/""/"null".
+      const stored = proj.dataCorteAtual ? toDateStr(proj.dataCorteAtual) : null;
+      const oficial = cutoffEfetivo(stored, hoje);
+      return {
+        dataCorteOficial: oficial,
+        dataCorteAtualizadaEm: proj.dataCorteAtualizadaEm,
+        dataCorteAtualizadaPor: proj.dataCorteAtualizadaPor,
+        proximaAtualizacao: proximaQuinta(oficial),
+        sugeridoSemFechamento: ultimaQuintaAte(hoje),
+        hoje,
+        nuncaFechado: !proj.dataCorteAtual,
+      };
+    }),
+
+  fecharSemana: protectedProcedure
+    .input(z.object({
+      projetoId: z.number(),
+      dataCorte: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // default = última quinta ≤ today
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      // Tenant isolation: garante que o projeto pertence à company do usuário.
+      const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+        .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
+      if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
+      if (String(proj.companyId) !== String(ctx.user.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+      }
+      const { ultimaQuintaAte, ehQuinta, todayBR } = await import("../../shared/dataCorte");
+      const hojeBR = todayBR();
+      const novoCorte = input.dataCorte || ultimaQuintaAte(hojeBR);
+      // Validações: tem de ser quinta-feira e não pode ser futuro (Status Date PMBOK).
+      if (novoCorte > hojeBR) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Data de corte não pode ser no futuro." });
+      }
+      if (!ehQuinta(novoCorte)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Data de corte deve ser uma quinta-feira (procedimento FC)." });
+      }
+      const quem = ctx.user.name || ctx.user.email || "—";
+      await db.update(planejamentoProjetos).set({
+        dataCorteAtual: novoCorte as any,
+        dataCorteAtualizadaEm: new Date(),
+        dataCorteAtualizadaPor: quem,
+        atualizadoEm: new Date(),
+      }).where(eq(planejamentoProjetos.id, input.projetoId));
+      // Auditoria: logamos falha mas não quebramos o fechamento.
+      try {
+        await createAuditLog({ ctx, entity: "planejamento_projetos", entityId: input.projetoId, action: "FECHAR_SEMANA", changes: { dataCorteAtual: novoCorte } });
+      } catch (e: any) {
+        console.error(`[fecharSemana] Falha ao gravar audit log (projetoId=${input.projetoId}):`, e?.message || e);
+      }
+      return { success: true, dataCorte: novoCorte, atualizadoPor: quem };
+    }),
+
   consolidarRefis: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {

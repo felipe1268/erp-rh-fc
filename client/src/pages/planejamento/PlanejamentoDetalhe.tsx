@@ -361,6 +361,26 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     { projetoId }, { enabled: !!projetoId }
   );
 
+  // ── Rev. 1637 — Data de Corte (Status Date PMBOK/EVM) ─────────────────
+  // Carrega o cutoff oficial gravado pelo engenheiro (última quinta em que
+  // o cronograma foi formalmente atualizado). O ERP interno mostra dois
+  // modos: LIVE (today) para o gestor agir e OFICIAL (cutoff) — espelho do
+  // que o cliente vê no Portal. Default = LIVE. Botão "Fechar semana" no
+  // header avança o cutoff para a última quinta ≤ hoje.
+  const { data: dataCorteInfo, refetch: refetchDataCorte } = trpc.planejamento.getDataCorte.useQuery(
+    { projetoId }, { enabled: !!projetoId }
+  );
+  const [modoVisao, setModoVisao] = useState<"live" | "oficial">("live");
+  const fecharSemanaMutation = trpc.planejamento.fecharSemana.useMutation({
+    onSuccess: (r) => { toast.success(`Semana fechada — cutoff oficial: ${(r.dataCorte || "").split("-").reverse().join("/")}`); refetchDataCorte(); },
+    onError: (e) => toast.error(e.message || "Falha ao fechar semana"),
+  });
+  // Data de referência efetiva: cutoff oficial OU today, conforme o modo.
+  const refDateStr = useMemo(() => {
+    if (modoVisao === "oficial" && dataCorteInfo?.dataCorteOficial) return dataCorteInfo.dataCorteOficial;
+    return new Date().toISOString().slice(0, 10);
+  }, [modoVisao, dataCorteInfo?.dataCorteOficial]);
+
   const { data: heCustosData, isLoading: heCustosLoading } = trpc.planejamento.getHECustosByProjeto.useQuery(
     { projetoId }, { enabled: !!projetoId && aba === "custo-rh" }
   );
@@ -426,7 +446,9 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     const pesoTotal = semPeso ? folhasFiltradas.length || 1 : pesoBruto;
     // Quando "Global" ligado, indiretas no realizado seguem a curva prevista
     // linear até o FIM da semana visualizada (mesma convenção do REFIS).
-    const semIni = semanaVisualizacao ?? toMonday(new Date());
+    // Rev. 1637 — `refDateStr` muda conforme o modo (Live/Oficial); no modo
+    // OFICIAL o cálculo congela na última quinta fechada (espelha o Portal).
+    const semIni = semanaVisualizacao ?? toMonday(new Date(refDateStr + "T12:00:00"));
     const dRef = new Date(semIni + "T12:00:00");
     dRef.setDate(dRef.getDate() + 7);
     const refStr = dRef.toISOString().split("T")[0];
@@ -445,7 +467,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       return s + val * (peso / pesoTotal);
     }, 0);
     return Math.min(100, ponderado);
-  }, [atividades, avancosMapSemana, usarPesoPorDuracao, refisComIndiretasGlobal, semanaVisualizacao]);
+  }, [atividades, avancosMapSemana, usarPesoPorDuracao, refisComIndiretasGlobal, semanaVisualizacao, refDateStr]);
 
   const avancoPrevistoDia = useMemo(() => {
     // Rev. 1584 — quando "Global (c/ Indiretas)" ligado, inclui indiretas
@@ -454,7 +476,8 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim && (refisComIndiretasGlobal || !a.isIndireta)
     );
     if (!folhas.length) return null;
-    const semIni = semanaVisualizacao ?? toMonday(new Date());
+    // Rev. 1637 — Mesmo princípio: PV congela junto com EV no modo Oficial.
+    const semIni = semanaVisualizacao ?? toMonday(new Date(refDateStr + "T12:00:00"));
     const d = new Date(semIni + "T12:00:00");
     d.setDate(d.getDate() + 7);
     const refStr = d.toISOString().split("T")[0];
@@ -475,7 +498,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       soma += (exp * peso) / denom;
     });
     return +soma.toFixed(2);
-  }, [atividades, semanaVisualizacao, usarPesoPorDuracao, refisComIndiretasGlobal]);
+  }, [atividades, semanaVisualizacao, usarPesoPorDuracao, refisComIndiretasGlobal, refDateStr]);
 
   // ── Cabeçalho de impressão (idêntico ao Portal do Cliente) ──────────
   // ATENÇÃO: este useMemo precisa ficar ANTES dos early returns abaixo,
@@ -558,6 +581,23 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
               onClick={() => setShowImportarMoModal(true)}>
               <Users className="h-3.5 w-3.5" /> Importar Custos MO
             </Button>
+            {/* Rev. 1637 — Fechar semana (Status Date PMBOK/EVM). Avança o cutoff
+                oficial para a última quinta ≤ hoje, replicando para o Portal. */}
+            <Button size="sm" variant="outline"
+              className="gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+              disabled={fecharSemanaMutation.isPending}
+              onClick={() => {
+                const sugerido = dataCorteInfo?.sugeridoSemFechamento;
+                const atual = dataCorteInfo?.dataCorteOficial;
+                const msg = atual && sugerido && atual === sugerido
+                  ? `O cutoff oficial já é ${sugerido.split("-").reverse().join("/")}. Refechar mesmo assim?`
+                  : `Fechar semana e avançar o cutoff oficial para ${(sugerido || "—").split("-").reverse().join("/")}?\n\nO Portal do Cliente passará a usar essa data como referência de TODOS os indicadores (Previsto/Realizado/Desvio/SPI/Atrasadas).`;
+                if (!confirm(msg)) return;
+                fecharSemanaMutation.mutate({ projetoId });
+              }}>
+              <CalendarCheck className="h-3.5 w-3.5" />
+              {fecharSemanaMutation.isPending ? "Fechando…" : "Fechar semana"}
+            </Button>
             <Badge variant="outline" className="text-xs">
               {proj.status}
             </Badge>
@@ -574,9 +614,29 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
           const desvioNegativo = desvio !== null && desvio < 0;
           return (
             <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 mb-4">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <span className="text-xs font-semibold text-slate-600">Avanço Físico</span>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Rev. 1637 — Toggle Live ↔ Oficial (Status Date PMBOK/EVM).
+                      Default LIVE para o gestor (vê o número se acumulando em
+                      tempo real). OFICIAL = espelho do Portal do Cliente:
+                      KPIs congelados na última quinta fechada. */}
+                  {dataCorteInfo && (
+                    <div className="inline-flex items-center rounded-lg border border-slate-200 overflow-hidden text-[10px] font-semibold">
+                      <button type="button"
+                        onClick={() => setModoVisao("live")}
+                        title="Live: cálculo em tempo real (today). Útil para o gestor agir entre fechamentos semanais."
+                        className={`px-2 py-1 ${modoVisao === "live" ? "bg-amber-100 text-amber-800" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                        🔴 Live ({fmtBR(dataCorteInfo.hoje)})
+                      </button>
+                      <button type="button"
+                        onClick={() => setModoVisao("oficial")}
+                        title="Oficial: cálculo congelado na última quinta fechada — IDÊNTICO ao que o cliente vê no Portal (Status Date PMBOK/EVM)."
+                        className={`px-2 py-1 border-l border-slate-200 ${modoVisao === "oficial" ? "bg-emerald-100 text-emerald-800" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                        📌 Oficial ({fmtBR(dataCorteInfo.dataCorteOficial)})
+                      </button>
+                    </div>
+                  )}
                   {revisaoAtiva && (
                     <span className="text-[10px] text-slate-400">Rev. {String(revisaoAtiva.numero).padStart(2, "0")}</span>
                   )}

@@ -49,16 +49,27 @@ const ABA_ICONS: Record<string, any> = {
   bim_3d: BarChart3,
 };
 
-function statusBadge(realizado: number, dataFim: string | null, dataInicio?: string | null) {
-  const today = new Date().toISOString().slice(0, 10);
+// Rev. 1637 — Recebe o cutoff oficial (Status Date PMBOK/EVM). Quando o
+// portal não conseguir resolver o cutoff (raro), cai em today() para não
+// quebrar a interface — mas o caso normal é SEMPRE usar o cutoff vindo do
+// backend, idêntico ao denominador de PV/EV. Assim o cliente nunca vê
+// "Atrasada" entre uma quinta e a próxima atualização do cronograma.
+function statusBadge(realizado: number, dataFim: string | null, dataInicio?: string | null, cutoff?: string) {
+  const ref = cutoff || new Date().toISOString().slice(0, 10);
   if (realizado >= 100) return { label: "Concluída", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" };
   // Marcos (duração zero) não entram como Atrasada — são pontos de referência
   // do cronograma (ex.: "Início", "Fim do projeto"), não atividades executáveis.
   const isMarco = dataInicio && dataFim && dataInicio === dataFim;
-  if (!isMarco && dataFim && dataFim < today && realizado < 100) return { label: "Atrasada", cls: "bg-red-100 text-red-700 border-red-200" };
-  if (isMarco && dataFim && dataFim < today) return { label: "Marco", cls: "bg-slate-100 text-slate-600 border-slate-200" };
+  if (!isMarco && dataFim && dataFim < ref && realizado < 100) return { label: "Atrasada", cls: "bg-red-100 text-red-700 border-red-200" };
+  if (isMarco && dataFim && dataFim < ref) return { label: "Marco", cls: "bg-slate-100 text-slate-600 border-slate-200" };
   if (realizado > 0) return { label: "Em execução", cls: "bg-blue-100 text-blue-700 border-blue-200" };
   return { label: "Prevista", cls: "bg-slate-100 text-slate-600 border-slate-200" };
+}
+
+function fmtBRDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso);
 }
 
 export default function PortalPlanejamentoCliente() {
@@ -99,6 +110,19 @@ export default function PortalPlanejamentoCliente() {
   const efetivoMensal = ((data as any)?.efetivoMensal || []) as any[];
   const revisoes = ((data as any)?.revisoes || []) as any[];
   const abasLiberadas = ((data as any)?.abasLiberadas || ["visao_geral"]) as PortalClienteAbaKey[];
+  // Rev. 1637 — Data de Corte (Status Date PMBOK/EVM) vinda do backend.
+  // Portal SEMPRE usa este cutoff como referência — entre uma quinta e a
+  // próxima atualização do cronograma os indicadores ficam congelados,
+  // evitando o "atraso fantasma" típico de denominador rolando sozinho.
+  const dataCorteInfo = ((data as any)?.dataCorte || null) as null | {
+    oficial: string;
+    atualizadoEm: string | null;
+    atualizadoPor: string | null;
+    proximaAtualizacao: string;
+    nuncaFechado: boolean;
+    hoje: string;
+  };
+  const cutoffOficial = dataCorteInfo?.oficial;
 
   // Rev. 1564 — módulos liberados pelo admin (filtra a lista lateral "Outros módulos").
   const { data: liberacoes } = trpc.portalExterno.cliente.liberacoes.useQuery(
@@ -903,13 +927,32 @@ export default function PortalPlanejamentoCliente() {
                   </span>
                 </div>
               </div>
-              {/* Rev. 1539 — Avanço Físico do topo agora é SEMPRE ao vivo
-                  (igual ao módulo interno e ao card REALIZADO ACUM. abaixo).
-                  Mostramos só uma referência ao último REFIS emitido. */}
+              {/* Rev. 1637 — Banner de Status Date (PMBOK/EVM). Cliente agora
+                  vê EXPLICITAMENTE qual é a data de corte oficial e quando é
+                  a próxima atualização. Indicadores acima (PV/EV/Desvio/SPI)
+                  são calculados em relação a essa data — entre uma quinta e a
+                  próxima eles ficam congelados, evitando o "atraso fantasma"
+                  típico de denominador rolando sozinho. */}
+              {dataCorteInfo && (
+                <div className="mt-3 flex items-center gap-2 flex-wrap text-[11px]">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 ring-1 ring-blue-200 font-semibold">
+                    <CalendarCheck className="w-3 h-3" />
+                    Status oficial — atualizado em {fmtBRDate(dataCorteInfo.oficial)}
+                  </span>
+                  <span className="text-slate-500">
+                    Próxima atualização: <strong className="text-slate-700">{fmtBRDate(dataCorteInfo.proximaAtualizacao)}</strong> (quinta-feira)
+                  </span>
+                  {dataCorteInfo.nuncaFechado && (
+                    <span className="text-[10px] text-amber-700 bg-amber-50 ring-1 ring-amber-200 px-2 py-0.5 rounded-full">
+                      Cutoff estimado (sem fechamento manual)
+                    </span>
+                  )}
+                </div>
+              )}
               {refisNumero != null && (
-                <div className="mt-3 text-[10px] text-slate-500 flex items-center gap-1.5">
+                <div className="mt-1.5 text-[10px] text-slate-500 flex items-center gap-1.5">
                   <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  Cálculo ao vivo · último REFIS oficial: Nº {String(refisNumero).padStart(3, "0")}
+                  Último REFIS oficial: Nº {String(refisNumero).padStart(3, "0")}
                   {refisSemana ? ` · semana ${refisSemana.split("-").reverse().join("/")}` : ""}
                 </div>
               )}
@@ -4800,7 +4843,7 @@ function SecaoAtividades({ titulo, vazio, itens, cor }: { titulo: string; vazio:
             <tbody>
               {itens.map((a: any) => {
                 const real = a.percentRealizado ?? 0;
-                const st = statusBadge(real, a.dataFim, a.dataInicio);
+                const st = statusBadge(real, a.dataFim, a.dataInicio, cutoffOficial);
                 return (
                   <tr key={a.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
                     <td className="px-3 py-2 text-slate-500 whitespace-nowrap">{a.eapCodigo || "—"}</td>

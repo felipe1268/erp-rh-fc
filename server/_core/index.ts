@@ -470,6 +470,15 @@ Regras:
         // Rev. 1592: bloco Escritório Central na avaliação anônima do Portal do Cliente.
         // Garantido aqui (e não só em ColFix) porque o version guard do ColFix pode
         // pular as migrations quando a versão já estiver aplicada.
+        // Rev. 1637 — Data de Corte (Status Date PMBOK/EVM) por projeto.
+        // Garantida fora do ColFix porque o version guard pode pular as migrations.
+        try {
+          await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS data_corte_atual DATE`);
+          await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS data_corte_atualizada_em TIMESTAMP`);
+          await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS data_corte_atualizada_por VARCHAR(200)`);
+          console.log(`[SyncSchema+] Colunas data_corte_* garantidas em planejamento_projetos.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_projetos data_corte:`, e?.message || e); }
+
         try {
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_escritorio INTEGER`);
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_faturamento INTEGER`);

@@ -2055,7 +2055,15 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       // semana com `<=` (igual ao `getCurvaS` interno).
       // Filtro de folhas: !isGrupo && !isIndireta && datas válidas
       // (disabled já foi excluído pela query). ────────────────────────────
-      const todayStr = new Date().toISOString().slice(0, 10);
+      // ── Rev. 1637 — Data de Corte (Status Date PMBOK/EVM) ─────────────
+      // Portal SEMPRE usa o último cutoff fechado pelo engenheiro (quinta).
+      // Entre uma atualização e a próxima o cliente NÃO vê desvio fantasma:
+      // o denominador (PV) congela junto com o numerador (EV) na mesma data.
+      // Default quando o projeto nunca foi fechado: última quinta ≤ today.
+      const { cutoffEfetivo, proximaQuinta, todayBR } = await import("../../shared/dataCorte");
+      const todayRealStr = todayBR();
+      const cutoffStr = cutoffEfetivo(_toDateStr((projeto as any).dataCorteAtual), todayRealStr);
+      const todayStr = cutoffStr; // Portal externo: cutoff oficial substitui today
       const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
 
       // ALINHAMENTO COM TELA INTERNA (PlanejamentoDetalhe.tsx calcPesoTotal):
@@ -2067,12 +2075,13 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       const pesoTotal = usarIgual ? (folhas.length || 1) : pesoBruto;
       const pesoDe = (a: any) => usarIgual ? 1 : _n(a.pesoFinanceiro);
 
-      // Semana atual (segunda → domingo, igual ao interno)
-      const today = new Date();
-      const dow = today.getDay();
+      // Semana atual (segunda → domingo) — referenciada à DATA DE CORTE,
+      // não ao `today()` real, para evitar atraso fantasma entre quintas.
+      const cutoffDate = new Date(cutoffStr + "T12:00:00Z");
+      const dow = cutoffDate.getUTCDay();
       const diffToMon = dow === 0 ? -6 : 1 - dow;
-      const monday = new Date(today); monday.setDate(today.getDate() + diffToMon);
-      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+      const monday = new Date(cutoffDate); monday.setUTCDate(cutoffDate.getUTCDate() + diffToMon);
+      const sunday = new Date(monday); sunday.setUTCDate(monday.getUTCDate() + 6);
       const monStr = monday.toISOString().slice(0, 10);
       const sunStr = sunday.toISOString().slice(0, 10);
       // % Previsto — referenciado ao FIM da semana atual (próxima segunda 12:00),
@@ -2434,6 +2443,19 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         caminhoCritico,
         efetivoMensal,
         atividadesTodas: atividades.map((a: any) => ({ ...a, percentRealizado: ultimoAvancoPorAtiv[a.id] ?? 0 })),
+        // Rev. 1637 — Data de Corte oficial (Status Date PMBOK/EVM). Portal usa
+        // esta data como denominador de TODOS os indicadores (PV/EV/atrasadas/
+        // semana atual). Frontend exibe banner com "Atualizado em DD/MM" e
+        // "Próxima atualização: DD/MM (quinta)" para o cliente entender que
+        // os números congelam entre uma quinta e a próxima.
+        dataCorte: {
+          oficial: cutoffStr,
+          atualizadoEm: (projeto as any).dataCorteAtualizadaEm ?? null,
+          atualizadoPor: (projeto as any).dataCorteAtualizadaPor ?? null,
+          proximaAtualizacao: proximaQuinta(cutoffStr),
+          nuncaFechado: !(projeto as any).dataCorteAtual,
+          hoje: todayRealStr,
+        },
         revisoes: revisoesHist.map((r: any) => ({
           id: r.id,
           numero: r.numero,

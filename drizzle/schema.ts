@@ -5205,6 +5205,14 @@ export const planejamentoProjetos = pgTable("planejamento_projetos", {
   ultimaAnaliseJulinho:   text("ultima_analise_julinho"),
   analiseJulinhoData:     timestamp("analise_julinho_data"),
   analiseJulinhoSemana:   varchar("analise_julinho_semana", { length: 20 }),
+  // ── Rev. 1637 — Data de Corte (Status Date / EVM) ──────────────────────
+  // Última quinta-feira em que o cronograma foi formalmente atualizado pelo
+  // engenheiro (procedimento interno semanal). Portal do Cliente e relatórios
+  // externos SEMPRE usam essa data como denominador (PV/EV/SPI/atrasadas).
+  // NULL = nunca fechado → cai automaticamente na última quinta ≤ today.
+  dataCorteAtual:           date("data_corte_atual"),
+  dataCorteAtualizadaEm:    timestamp("data_corte_atualizada_em"),
+  dataCorteAtualizadaPor:   varchar("data_corte_atualizada_por", { length: 200 }),
   criadoEm:               timestamp("criado_em").defaultNow(),
   atualizadoEm:           timestamp("atualizado_em").defaultNow(),
 });
