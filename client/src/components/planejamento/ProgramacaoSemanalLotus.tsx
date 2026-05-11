@@ -342,6 +342,30 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         </div>
       </div>
 
+      {/* Linha de navegação rápida — mesmo padrão do FC */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin print:hidden">
+        {semanas.map((s, i) => {
+          const hojeStr = dateStr(hoje);
+          const isCurrent = dateStr(s.ini) <= hojeStr && dateStr(s.fim) >= hojeStr;
+          return (
+            <button
+              key={s.numero}
+              onClick={() => onSemanaChange(i)}
+              title={`Sem. ${s.numero} — ${String(s.ini.getDate()).padStart(2,"0")}/${String(s.ini.getMonth()+1).padStart(2,"0")}/${s.ini.getFullYear()} a ${String(s.fim.getDate()).padStart(2,"0")}/${String(s.fim.getMonth()+1).padStart(2,"0")}/${s.fim.getFullYear()}`}
+              className={`h-6 min-w-[36px] px-1.5 text-[10px] font-bold rounded border shrink-0 transition-colors flex items-center justify-center
+                ${i === semanaIdx
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : isCurrent
+                    ? "bg-red-500 text-white border-red-600"
+                    : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                }`}
+            >
+              {s.numero}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Folha imprimível (modelo LOTUS) */}
       <div id="lotus-print-area" className="bg-white border border-slate-300 rounded-md overflow-hidden print:border-0 print:rounded-none">
         {/* Cabeçalho com logos (altura fixa pra evitar que imagens grandes estiquem o container) */}
