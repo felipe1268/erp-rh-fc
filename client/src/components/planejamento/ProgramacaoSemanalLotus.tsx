@@ -34,8 +34,10 @@ interface Props {
   engenheiroResponsavel?: string | null;
 }
 
-const DIAS_SEMANA = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"];
-const DIAS_ABREV = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
+// Programação LOTUS exibe apenas dias úteis (seg→sex). Sábado e domingo
+// são ocultados porque o canteiro não tem atividade prevista nesses dias.
+const DIAS_SEMANA = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
+const DIAS_ABREV = ["seg", "ter", "qua", "qui", "sex"];
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 function fmtBR(s?: string | null) {
@@ -60,7 +62,8 @@ function diasDaSemana(ini: Date): Date[] {
   const diaSemana = segunda.getDay(); // 0=dom..6=sáb
   const diff = diaSemana === 0 ? -6 : 1 - diaSemana;
   segunda.setDate(segunda.getDate() + diff);
-  for (let i = 0; i < 7; i++) {
+  // Apenas dias úteis (5 dias: seg→sex). Sáb/dom omitidos do Gantt.
+  for (let i = 0; i < 5; i++) {
     const d = new Date(segunda);
     d.setDate(segunda.getDate() + i);
     arr.push(d);
@@ -120,14 +123,14 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   const periodoStr = useMemo(() => {
     if (dias.length === 0) return "";
     const ini = dias[0];
-    const fim = dias[6];
+    const fim = dias[dias.length - 1];
     return `${String(ini.getDate()).padStart(2, "0")}/${String(ini.getMonth() + 1).padStart(2, "0")}/${ini.getFullYear()} a ${String(fim.getDate()).padStart(2, "0")}/${String(fim.getMonth() + 1).padStart(2, "0")}/${fim.getFullYear()}`;
   }, [dias]);
   const hoje = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
 
   // Filtra atividades que tocam a semana (previsto OU real dentro do range)
   const semIniStr = dias.length ? dateStr(dias[0]) : "";
-  const semFimStr = dias.length ? dateStr(dias[6]) : "";
+  const semFimStr = dias.length ? dateStr(dias[dias.length - 1]) : "";
   const atividadesDaSemana = useMemo(() => {
     if (!semIniStr) return [];
     return atividades.filter((a) => {
