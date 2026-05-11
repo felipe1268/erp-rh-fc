@@ -11425,4 +11425,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 15:00:00",
   },
+  {
+    version: 1649,
+    titulo: "Barra superior 'Avanço Físico' acompanha a simulação de semana (Avanço Semanal)",
+    descricao: "A barra de progresso 'Avanço Físico' no topo de Planejamento → Detalhe agora segue a semana selecionada na aba 'Avanço Semanal' tanto no modo Live quanto no modo Oficial. Antes (Rev. 1637.2), o modo Oficial ignorava `semanaVisualizacao` e a barra ficava congelada no cutoff — usuário simulava avanço numa semana futura (10,76%) e a barra continuava em 1,41%, gerando confusão. Agora, quando o usuário navega para outra semana, tanto Previsto quanto Realizado da barra superior simulam junto: ref = fim da semana visualizada (semIni + 7d). Sem semana selecionada, comportamento anterior preservado (cutoff oficial / today no Live). Snapshot oficial MSP (Texto11) continua sendo usado quando refStr === statusDateSnapshot e o envelope não foi editado.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 15:30:00",
+  },
 ];

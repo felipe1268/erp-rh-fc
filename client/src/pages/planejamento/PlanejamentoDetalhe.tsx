@@ -478,12 +478,14 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     // linear até o FIM da semana visualizada (mesma convenção do REFIS).
     // Rev. 1637 — `refDateStr` muda conforme o modo (Live/Oficial); no modo
     // OFICIAL o cálculo congela na última quinta fechada (espelha o Portal).
-    // Rev. 1637.2 — Em modo OFICIAL ignoramos `semanaVisualizacao` da aba
-    // "Avanço Semanal": a barra do topo é o NÚMERO OFICIAL do projeto e não
-    // pode mudar conforme o usuário navega entre semanas no calendário.
-    const semIni = (modoVisao === "oficial")
-      ? toMonday(new Date(refDateStr + "T12:00:00"))
-      : (semanaVisualizacao ?? toMonday(new Date(refDateStr + "T12:00:00")));
+    // Rev. 1648 — A barra do topo "Avanço Físico" agora ACOMPANHA a semana
+    // selecionada na aba "Avanço Semanal" em AMBOS os modos (Live e Oficial).
+    // Antes (Rev. 1637.2) o modo Oficial ignorava `semanaVisualizacao` e a
+    // barra ficava congelada no cutoff — usuário simulava avanço numa semana
+    // futura (10,76%) e a barra continuava em 1,41%, gerando confusão. Agora
+    // a barra simula junto. Quando NENHUMA semana está selecionada, mantém o
+    // comportamento anterior (cutoff oficial / today no Live).
+    const semIni = semanaVisualizacao ?? toMonday(new Date(refDateStr + "T12:00:00"));
     const dRef = new Date(semIni + "T12:00:00");
     dRef.setDate(dRef.getDate() + 7);
     const refStr = dRef.toISOString().split("T")[0];
@@ -521,7 +523,16 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     // hoje no modo Live). MSP exibe o "%PREVISTO" da linha-resumo congelado
     // exatamente no Status Date — não extrapola para o fim da semana corrente.
     // Validado no XML REVTE-CIVIL: StatusDate=07/05 → 4/284 dias úteis = 1,41%.
-    const refStr = refDateStr;
+    // Rev. 1648 — Quando o usuário navega para uma semana DIFERENTE na aba
+    // "Avanço Semanal" (simulação), a barra superior passa a refletir o
+    // `%PREVISTO` no FIM dessa semana (semIni + 7 dias). Sem semana selecionada,
+    // mantém o cutoff oficial. Espelha a mudança feita em `avancoAtual`.
+    let refStr = refDateStr;
+    if (semanaVisualizacao) {
+      const dRef = new Date(semanaVisualizacao + "T12:00:00");
+      dRef.setDate(dRef.getDate() + 7);
+      refStr = dRef.toISOString().split("T")[0];
+    }
     const ref = new Date(refStr + "T12:00:00").getTime();
     // Rev. 1646.2 — prioridade ABSOLUTA: usa as datas oficiais da raiz do MSP
     // (gravadas em proj.dataInicio + proj.dataTerminoContratual no momento do
