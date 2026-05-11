@@ -77,12 +77,15 @@ function diasDaSemana(ini: Date): Date[] {
 }
 
 /**
- * Classifica a cor de cada célula do Gantt diário por atividade × dia.
- * Cores conforme legenda LOTUS:
- *  🟦 Previsto  · 🟩 Realizado  · 🟨 Não programado executado
- *  🟧 Antecipado  · 🟥 Atrasado/Não executado
+ * Calcula DUAS faixas empilhadas (modelo LOTUS): a faixa superior representa
+ * o PREVISTO e a inferior o REALIZADO. Quando os dois ocorrem no mesmo dia,
+ * ambas ficam visíveis (azul em cima + verde embaixo).
+ *
+ * Cores:
+ *  Top (previsto):     🟦 azul = previsto · 🟥 vermelho = previsto que passou sem real
+ *  Bottom (realizado): 🟩 verde = real conforme previsto · 🟧 laranja = antecipado · 🟨 amarelo = não programado
  */
-function corCelula(
+function faixasCelula(
   dia: Date,
   prevIni: string | null | undefined,
   prevFim: string | null | undefined,
@@ -90,27 +93,28 @@ function corCelula(
   realFim: string | null | undefined,
   hoje: Date,
   cal: CalendarioMSProject | null,
-): { previsto: boolean; cor: string | null } {
+): { top: string | null; bottom: string | null } {
   const ds = dateStr(dia);
-  // PREVISTO só conta se o dia for útil no calendário do projeto (MS Project).
-  // Sem calendarioJson, assume seg→sex como dias úteis (fallback).
   const ehUtil = cal ? ehDiaUtil(ds, cal) : (dia.getDay() !== 0 && dia.getDay() !== 6);
   const inPrev = ehUtil && !!(prevIni && prevFim && ds >= prevIni && ds <= prevFim);
-  // REALIZADO sempre conta — se o engenheiro digitou que executou no domingo, mostra.
   const inReal = !!(realIni && realFim && ds >= realIni && ds <= realFim);
   const passou = dia.getTime() <= hoje.getTime();
 
-  // 🟧 Antecipado — realizado ANTES do previsto começar
-  if (inReal && prevIni && ds < prevIni) return { previsto: false, cor: "bg-orange-400" };
-  // 🟨 Não programado — realizado fora da janela prevista (ou em dia não-útil, ou sem previsto)
-  if (inReal && !inPrev) return { previsto: false, cor: "bg-yellow-400" };
-  // 🟩 Realizado conforme previsto
-  if (inReal && inPrev) return { previsto: true, cor: "bg-green-500" };
-  // 🟥 Atrasado — dia previsto que já passou e não houve realização
-  if (inPrev && passou && !realFim) return { previsto: true, cor: "bg-red-500" };
-  // 🟦 Previsto futuro
-  if (inPrev) return { previsto: true, cor: "bg-blue-500" };
-  return { previsto: false, cor: null };
+  // Faixa superior (PREVISTO)
+  let top: string | null = null;
+  if (inPrev) {
+    top = (passou && !inReal && !realFim) ? "bg-red-500" : "bg-blue-500";
+  }
+
+  // Faixa inferior (REALIZADO)
+  let bottom: string | null = null;
+  if (inReal) {
+    if (prevIni && ds < prevIni) bottom = "bg-orange-400";   // antecipado
+    else if (!inPrev)            bottom = "bg-yellow-400";   // fora da janela prevista
+    else                         bottom = "bg-green-500";    // conforme previsto
+  }
+
+  return { top, bottom };
 }
 
 export default function ProgramacaoSemanalLotus(props: Props) {
@@ -247,10 +251,13 @@ export default function ProgramacaoSemanalLotus(props: Props) {
             a.dataFimReal ? "Realizado" : (a.dataInicio && a.dataInicio <= dateStr(hoje) && !a.dataInicioReal ? "Atrasado" : "Previsto"),
           ];
           dias.forEach((d, idx) => {
-            const cor = corCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP);
-            if (cor.cor) {
+            const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP);
+            // Excel não suporta faixas internas — usa a cor da faixa de cima
+            // (previsto) e, se só houver realizado, usa a cor de baixo.
+            const cor = f.top || f.bottom;
+            if (cor) {
               const cell = ws.getCell(r, 8 + idx);
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: corHex[cor.cor] || "FF999999" } };
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: corHex[cor] || "FF999999" } };
             }
           });
         }
@@ -437,10 +444,13 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                       {engenheiroResponsavel || "—"}
                     </td>
                     {dias.map((d, idx) => {
-                      const c = corCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP);
+                      const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP);
                       return (
                         <td key={idx} className="border border-slate-300 p-0 h-6 align-middle">
-                          {c.cor && <div className={`${c.cor} h-3 mx-0.5 my-1.5 rounded-sm`} />}
+                          <div className="flex flex-col gap-[2px] mx-0.5 my-1">
+                            <div className={`h-[6px] rounded-sm ${f.top ?? "bg-transparent"}`} />
+                            <div className={`h-[6px] rounded-sm ${f.bottom ?? "bg-transparent"}`} />
+                          </div>
                         </td>
                       );
                     })}
