@@ -71,6 +71,16 @@ function extractOcNumero(c: any): string {
   return "—";
 }
 
+// Rev. 1629 — Classificação Efetivo × Projeção
+// Projeção = forecast vindo de Planejamento (sem fato gerador). Tudo o mais é Efetivo.
+// Origens forecast (sem fato gerador): cronograma e PCP de compras vindo do Planejamento.
+// Nota: planejamento_medicao é gravada como tipo='receita' pelo bridge, então não chega aqui;
+// excluída para evitar falsa expectativa de filtro.
+const PROJECAO_ORIGENS = new Set(["cronograma_atividade", "planejamento_compra"]);
+function isProjecao(c: any): boolean {
+  return PROJECAO_ORIGENS.has(c?.origemModulo);
+}
+
 // Rev. 1619 — Descrição com fallback inteligente
 function describeEntry(c: any): string {
   const desc = (c.descricao ?? "").trim();
@@ -135,6 +145,10 @@ export default function FinanceiroContasAPagar() {
   const [search, setSearch] = useState("");
   const [origemFilter, setOrigemFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("pendentes");
+  // Rev. 1629 — Separação Efetivo × Projeção (APQC PCF 8.7 / PMBOK / Brealey-Myers cap. 30):
+  // dívida incorrida (Compras, Folha, PJ, Benefícios, Frota, Parceiros, Almox, Medição, Seguro)
+  // não pode dividir tela com forecast de cronograma. Default = Efetivo.
+  const [naturezaFilter, setNaturezaFilter] = useState<"efetivo" | "projecao" | "todos">("efetivo");
   const [showPay, setShowPay] = useState<any | null>(null);
   const [dataPagamento, setDataPagamento] = useState(hoje.toISOString().split("T")[0]);
   const [formaPagamento, setFormaPagamento] = useState("pix");
@@ -222,6 +236,8 @@ export default function FinanceiroContasAPagar() {
     let list = mesData;
     if (statusFilter === "pendentes") list = list.filter((c: any) => c.status !== "pago");
     if (statusFilter === "pagos") list = list.filter((c: any) => c.status === "pago");
+    if (naturezaFilter === "efetivo") list = list.filter((c: any) => !isProjecao(c));
+    else if (naturezaFilter === "projecao") list = list.filter((c: any) => isProjecao(c));
     if (origemFilter !== "all") list = list.filter((c: any) => c.origemModulo === origemFilter);
     if (search) {
       const q = search.toLowerCase();
@@ -243,7 +259,7 @@ export default function FinanceiroContasAPagar() {
       if (da !== db) return da.localeCompare(db);
       return Number(b.valorPrevisto ?? 0) - Number(a.valorPrevisto ?? 0);
     });
-  }, [mesData, statusFilter, origemFilter, search, hojeStr]);
+  }, [mesData, statusFilter, naturezaFilter, origemFilter, search, hojeStr]);
 
   // Rev. 1619 — agrupamento por horizonte de vencimento (cabeçalhos sticky)
   const grupos = useMemo(() => {
@@ -258,14 +274,22 @@ export default function FinanceiroContasAPagar() {
     return Array.from(map.values()).sort((a, b) => a.order - b.order);
   }, [filtered, hojeStr]);
 
-  const pendentes = mesData.filter((c: any) => c.status !== "pago");
-  const pagos = mesData.filter((c: any) => c.status === "pago");
+  // Rev. 1629 — KPIs respeitam o escopo (Efetivo/Projeção/Todos) selecionado para evitar
+  // que a tela mostre números de "dívida total" enquanto a lista oculta projeções.
+  const escopoMes = useMemo(() => {
+    if (naturezaFilter === "efetivo") return mesData.filter((c: any) => !isProjecao(c));
+    if (naturezaFilter === "projecao") return mesData.filter(isProjecao);
+    return mesData;
+  }, [mesData, naturezaFilter]);
+  const pendentes = escopoMes.filter((c: any) => c.status !== "pago");
+  const pagos = escopoMes.filter((c: any) => c.status === "pago");
   const vencidos = pendentes.filter((c: any) => c.dataVencimento && c.dataVencimento < hojeStr);
 
-  const totalMes = mesData.reduce((s: number, c: any) => s + Number(c.valorPrevisto ?? 0), 0);
+  const totalMes = escopoMes.reduce((s: number, c: any) => s + Number(c.valorPrevisto ?? 0), 0);
   const totalPago = pagos.reduce((s: number, c: any) => s + Number(c.valorRealizado ?? c.valorPrevisto ?? 0), 0);
   const totalPendente = pendentes.reduce((s: number, c: any) => s + Number(c.valorPrevisto ?? 0), 0);
   const totalVencido = vencidos.reduce((s: number, c: any) => s + Number(c.valorPrevisto ?? 0), 0);
+  const projecoesOcultas = naturezaFilter === "efetivo" ? mesData.filter(isProjecao).length : 0;
 
   const origensDisponiveis = useMemo(() => {
     if (!mesData.length) return [];
@@ -360,7 +384,7 @@ export default function FinanceiroContasAPagar() {
 
   // Seleção em lote
   const selectableIds = useMemo(
-    () => filtered.filter((c: any) => c.status !== "pago").map((c: any) => c.id as number),
+    () => filtered.filter((c: any) => c.status !== "pago" && !isProjecao(c)).map((c: any) => c.id as number),
     [filtered]
   );
   const allVisibleSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
@@ -603,6 +627,20 @@ export default function FinanceiroContasAPagar() {
                 </button>
               ))}
             </div>
+            {/* Rev. 1629 — Efetivo × Projeção (separação fundamental APQC/PMBOK/Brealey-Myers) */}
+            <div className="flex rounded-lg border border-violet-200 overflow-hidden" title="Efetivo = dívida real (OC, Folha, PJ, etc.). Projeção = forecast do cronograma.">
+              {[
+                ["efetivo","Efetivo","💰"],
+                ["projecao","Projeção","📊"],
+                ["todos","Todos","∑"],
+              ].map(([v,l,ico]) => (
+                <button key={v}
+                  onClick={() => setNaturezaFilter(v as any)}
+                  className={`px-3 py-1.5 text-xs font-medium transition-colors inline-flex items-center gap-1 ${naturezaFilter === v ? "bg-violet-600 text-white" : "bg-white text-violet-700 hover:bg-violet-50"}`}>
+                  <span>{ico}</span>{l}
+                </button>
+              ))}
+            </div>
             {origensDisponiveis.length > 0 && (
               <Select value={origemFilter} onValueChange={setOrigemFilter}>
                 <SelectTrigger className="w-40 h-8 text-xs">
@@ -660,12 +698,35 @@ export default function FinanceiroContasAPagar() {
           </div>
         )}
 
+        {/* Rev. 1629 — Banner explicativo do modo Projeção */}
+        {naturezaFilter === "projecao" && (
+          <div className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-2.5 text-xs text-violet-800 flex items-start gap-2">
+            <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-violet-600" />
+            <div>
+              <strong>Projeção de caixa</strong> — lançamentos gerados automaticamente pelo cronograma e PCP do Planejamento (sem fato gerador ainda).
+              São <em>previsões</em> usadas para fluxo de caixa futuro, não dívidas pagáveis (não selecionáveis para baixa). À medida que viram OC/Contrato/NF, migram para <em>Efetivo</em>.
+            </div>
+          </div>
+        )}
+        {/* Rev. 1629 — Aviso persistente: há projeções ocultas no modo Efetivo */}
+        {projecoesOcultas > 0 && filtered.length > 0 && (
+          <div className="rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-2 text-[11px] text-violet-700 flex items-center justify-between gap-3">
+            <span>📊 {projecoesOcultas} lançamento(s) de Projeção ocultos neste mês.</span>
+            <button onClick={() => setNaturezaFilter("projecao")} className="font-medium underline hover:text-violet-900">Ver Projeção</button>
+          </div>
+        )}
+
         {/* Tabela */}
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-2 px-5 pt-4">
             <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <CreditCard className="w-4 h-4 text-orange-500" />
               {MESES[mesSel-1]} {ano} — {filtered.length} conta(s)
+              {naturezaFilter !== "todos" && (
+                <span className={`ml-2 text-[11px] font-medium px-2 py-0.5 rounded-full ${naturezaFilter === "efetivo" ? "bg-emerald-100 text-emerald-700" : "bg-violet-100 text-violet-700"}`}>
+                  {naturezaFilter === "efetivo" ? "💰 Efetivo" : "📊 Projeção"}
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -675,9 +736,15 @@ export default function FinanceiroContasAPagar() {
               <div className="p-10 text-center">
                 <Calendar className="w-10 h-10 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500 font-medium">Nenhuma conta em {MESES[mesSel-1]} {ano}</p>
-                {(search || origemFilter !== "all" || statusFilter !== "all") && (
-                  <button onClick={() => { setSearch(""); setOrigemFilter("all"); setStatusFilter("all"); }}
+                {(search || origemFilter !== "all" || statusFilter !== "all" || naturezaFilter !== "efetivo") && (
+                  <button onClick={() => { setSearch(""); setOrigemFilter("all"); setStatusFilter("pendentes"); setNaturezaFilter("efetivo"); }}
                     className="mt-2 text-xs text-blue-600 hover:underline">Limpar filtros</button>
+                )}
+                {projecoesOcultas > 0 && (
+                  <p className="mt-2 text-[11px] text-violet-600">
+                    Há {projecoesOcultas} lançamento(s) de Projeção ocultos.
+                    <button onClick={() => setNaturezaFilter("projecao")} className="ml-1 underline hover:text-violet-800">Ver Projeção</button>
+                  </p>
                 )}
               </div>
             ) : (
@@ -891,7 +958,7 @@ export default function FinanceiroContasAPagar() {
                                       }}
                                       className={`hover:bg-blue-50/30 cursor-pointer border-b border-slate-100 ${isSelected ? "bg-blue-50/40" : ""}`}>
                                       <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-                                        {c.status !== "pago" && (
+                                        {c.status !== "pago" && !isProjecao(c) && (
                                           <Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(c.id)} />
                                         )}
                                       </td>
@@ -954,6 +1021,7 @@ export default function FinanceiroContasAPagar() {
                           const cat = categoriaFor(c);
                           const isDup = duplicateKeys.has(dupKeyOf(c));
                           const isSelected = selectedIds.has(c.id);
+                          const proj = isProjecao(c);
                           return (
                             <tr key={c.id}
                               onClick={(e) => {
@@ -963,10 +1031,10 @@ export default function FinanceiroContasAPagar() {
                                 if (isInteractive || tag === "input") return;
                                 setDetailEntryId(c.id);
                               }}
-                              className={`hover:bg-blue-50/30 cursor-pointer border-b border-slate-100 ${isSelected ? "bg-blue-50/40" : vencida ? "bg-red-50/30" : ""}`}>
+                              className={`hover:bg-blue-50/30 cursor-pointer border-b border-slate-100 ${isSelected ? "bg-blue-50/40" : vencida ? "bg-red-50/30" : proj ? "bg-violet-50/20 border-l-2 border-l-violet-300" : ""}`}>
                               {/* Checkbox */}
                               <td className="px-2 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
-                                {c.status !== "pago" && (
+                                {c.status !== "pago" && !proj && (
                                   <Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(c.id)} aria-label={`Selecionar ${oc}`} />
                                 )}
                               </td>
