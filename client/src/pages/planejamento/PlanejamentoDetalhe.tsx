@@ -370,7 +370,11 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   const { data: dataCorteInfo, refetch: refetchDataCorte } = trpc.planejamento.getDataCorte.useQuery(
     { projetoId }, { enabled: !!projetoId }
   );
-  const [modoVisao, setModoVisao] = useState<"live" | "oficial">("live");
+  // Rev. 1637.1 — Default OFICIAL (era Live). Live induzia o gestor a ver
+  // "atraso fantasma" entre quintas (EV congelado vs PV rolando com today)
+  // — exatamente o problema que a Rev. 1637 nasceu para resolver. Mantemos
+  // o toggle para quem precisar ver tempo real entre fechamentos.
+  const [modoVisao, setModoVisao] = useState<"live" | "oficial">("oficial");
   const fecharSemanaMutation = trpc.planejamento.fecharSemana.useMutation({
     onSuccess: (r) => { toast.success(`Semana fechada — cutoff oficial: ${(r.dataCorte || "").split("-").reverse().join("/")}`); refetchDataCorte(); },
     onError: (e) => toast.error(e.message || "Falha ao fechar semana"),
