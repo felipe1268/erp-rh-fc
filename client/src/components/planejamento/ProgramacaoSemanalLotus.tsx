@@ -60,18 +60,16 @@ function parseDate(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
-function diasDaSemana(ini: Date): Date[] {
+function diasDaSemana(ini: Date, fim: Date): Date[] {
+  // Respeita exatamente a janela definida pelo cutoff do projeto (Padrão FC).
+  // Se o cutoff for Qui, a semana vai de Sex→Qui. Se for outro dia, ajusta sozinho.
   const arr: Date[] = [];
-  const segunda = new Date(ini);
-  // Recua até segunda-feira
-  const diaSemana = segunda.getDay(); // 0=dom..6=sáb
-  const diff = diaSemana === 0 ? -6 : 1 - diaSemana;
-  segunda.setDate(segunda.getDate() + diff);
-  // 7 dias (seg→dom). Sáb/dom ficam vazios se o cronograma não previu nada.
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(segunda);
-    d.setDate(segunda.getDate() + i);
-    arr.push(d);
+  const start = new Date(ini); start.setHours(0, 0, 0, 0);
+  const end = new Date(fim); end.setHours(0, 0, 0, 0);
+  const cur = new Date(start);
+  while (cur.getTime() <= end.getTime()) {
+    arr.push(new Date(cur));
+    cur.setDate(cur.getDate() + 1);
   }
   return arr;
 }
@@ -134,7 +132,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   });
 
   const semana = semanas[semanaIdx];
-  const dias = useMemo(() => semana ? diasDaSemana(semana.ini) : [], [semana]);
+  const dias = useMemo(() => semana ? diasDaSemana(semana.ini, semana.fim) : [], [semana]);
   const periodoStr = useMemo(() => {
     if (dias.length === 0) return "";
     const ini = dias[0];
