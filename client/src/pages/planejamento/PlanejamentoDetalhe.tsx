@@ -380,9 +380,20 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     onError: (e) => toast.error(e.message || "Falha ao fechar semana"),
   });
   // Data de referência efetiva: cutoff oficial OU today, conforme o modo.
+  // Fallback client-side: se a query ainda não respondeu, computa a última
+  // quinta-feira local, para o modo Oficial nunca cair em today por engano.
   const refDateStr = useMemo(() => {
-    if (modoVisao === "oficial" && dataCorteInfo?.dataCorteOficial) return dataCorteInfo.dataCorteOficial;
-    return new Date().toISOString().slice(0, 10);
+    const hojeBR = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+    if (modoVisao === "oficial") {
+      if (dataCorteInfo?.dataCorteOficial) return dataCorteInfo.dataCorteOficial;
+      // Última quinta ≤ hoje (em UTC sobre meio-dia para evitar fuso).
+      const d = new Date(hojeBR + "T12:00:00Z");
+      const dow = d.getUTCDay();          // 0=dom..4=qui..6=sáb
+      const back = (dow - 4 + 7) % 7;
+      d.setUTCDate(d.getUTCDate() - back);
+      return d.toISOString().slice(0, 10);
+    }
+    return hojeBR;
   }, [modoVisao, dataCorteInfo?.dataCorteOficial]);
 
   const { data: heCustosData, isLoading: heCustosLoading } = trpc.planejamento.getHECustosByProjeto.useQuery(
@@ -452,7 +463,12 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     // linear até o FIM da semana visualizada (mesma convenção do REFIS).
     // Rev. 1637 — `refDateStr` muda conforme o modo (Live/Oficial); no modo
     // OFICIAL o cálculo congela na última quinta fechada (espelha o Portal).
-    const semIni = semanaVisualizacao ?? toMonday(new Date(refDateStr + "T12:00:00"));
+    // Rev. 1637.2 — Em modo OFICIAL ignoramos `semanaVisualizacao` da aba
+    // "Avanço Semanal": a barra do topo é o NÚMERO OFICIAL do projeto e não
+    // pode mudar conforme o usuário navega entre semanas no calendário.
+    const semIni = (modoVisao === "oficial")
+      ? toMonday(new Date(refDateStr + "T12:00:00"))
+      : (semanaVisualizacao ?? toMonday(new Date(refDateStr + "T12:00:00")));
     const dRef = new Date(semIni + "T12:00:00");
     dRef.setDate(dRef.getDate() + 7);
     const refStr = dRef.toISOString().split("T")[0];
@@ -471,7 +487,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       return s + val * (peso / pesoTotal);
     }, 0);
     return Math.min(100, ponderado);
-  }, [atividades, avancosMapSemana, usarPesoPorDuracao, refisComIndiretasGlobal, semanaVisualizacao, refDateStr]);
+  }, [atividades, avancosMapSemana, usarPesoPorDuracao, refisComIndiretasGlobal, semanaVisualizacao, refDateStr, modoVisao]);
 
   const avancoPrevistoDia = useMemo(() => {
     // Rev. 1584 — quando "Global (c/ Indiretas)" ligado, inclui indiretas
@@ -481,7 +497,10 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     );
     if (!folhas.length) return null;
     // Rev. 1637 — Mesmo princípio: PV congela junto com EV no modo Oficial.
-    const semIni = semanaVisualizacao ?? toMonday(new Date(refDateStr + "T12:00:00"));
+    // Rev. 1637.2 — Top card ignora `semanaVisualizacao` quando em Oficial.
+    const semIni = (modoVisao === "oficial")
+      ? toMonday(new Date(refDateStr + "T12:00:00"))
+      : (semanaVisualizacao ?? toMonday(new Date(refDateStr + "T12:00:00")));
     const d = new Date(semIni + "T12:00:00");
     d.setDate(d.getDate() + 7);
     const refStr = d.toISOString().split("T")[0];
@@ -502,7 +521,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       soma += (exp * peso) / denom;
     });
     return +soma.toFixed(2);
-  }, [atividades, semanaVisualizacao, usarPesoPorDuracao, refisComIndiretasGlobal, refDateStr]);
+  }, [atividades, semanaVisualizacao, usarPesoPorDuracao, refisComIndiretasGlobal, refDateStr, modoVisao]);
 
   // ── Cabeçalho de impressão (idêntico ao Portal do Cliente) ──────────
   // ATENÇÃO: este useMemo precisa ficar ANTES dos early returns abaixo,
