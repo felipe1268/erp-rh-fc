@@ -17,7 +17,6 @@ import {
   Users, Truck, Briefcase, Scale, Package, Receipt, Wallet,
   Download, Copy, TrendingDown, TrendingUp, Zap, Activity, X,
   Eye, ExternalLink, History, Building2, Paperclip, Hash as HashIcon, Info,
-  RefreshCw, Gift
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 // Rev. 1626 — single source of truth para origens financeiras
@@ -216,21 +215,6 @@ export default function FinanceiroContasAPagar() {
     { companyId, ano },
     { enabled: !!companyId }
   );
-
-  // Rev. 1630 — Calendário Folha & Benefícios — 12 meses
-  const { data: calendario12m, refetch: refetchCalendario } = (trpc as any).financial.getCalendarioFolha12m.useQuery(
-    { companyId },
-    { enabled: !!companyId, staleTime: 60_000 }
-  );
-
-  const rerunProjMut = (trpc as any).financial.rerunPayrollProjection.useMutation({
-    onSuccess: (r: any) => {
-      toast({ title: `Projeção atualizada: ${r.inseridos ?? 0} lançamento(s)` });
-      refetch();
-      refetchCalendario();
-    },
-    onError: (e: any) => toast({ title: "Erro ao atualizar projeção", description: e.message, variant: "destructive" }),
-  });
 
   const payMut = (trpc as any).financial.updateEntryStatus.useMutation({
     onSuccess: () => { toast({ title: "Pagamento registrado!" }); setShowPay(null); refetch(); },
@@ -603,118 +587,6 @@ export default function FinanceiroContasAPagar() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Rev. 1630 — Alerta 13º Salário (quando há projeção pendente nos próximos 60 dias) */}
-        {(() => {
-          if (!calendario12m || !Array.isArray(calendario12m)) return null;
-          const hoje = new Date();
-          const limite = new Date(hoje); limite.setDate(limite.getDate() + 60);
-          const rowsTreze = (calendario12m as any[]).filter(r => Number(r.decimoTerceiro ?? 0) > 0
-            && r.mes >= hoje.toISOString().slice(0, 7)
-            && r.mes <= limite.toISOString().slice(0, 7));
-          if (rowsTreze.length === 0) return null;
-          const total13 = rowsTreze.reduce((s, r) => s + Number(r.decimoTerceiro ?? 0), 0);
-          return (
-            <div className="rounded-lg border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-yellow-50 px-4 py-3 flex items-center gap-3 shadow-sm">
-              <Gift className="w-5 h-5 text-amber-600 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-amber-900">Alerta 13º Salário — provisão nos próximos 60 dias</div>
-                <div className="text-xs text-amber-800 mt-0.5">
-                  Total projetado a desembolsar: <strong className="tabular-nums">{formatBRL(total13)}</strong>
-                  {" · "}1ª parcela até 30/11 · 2ª parcela até 20/12 (Lei 4.090/62)
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Rev. 1630 — Calendário Folha & Benefícios — 12 meses (forecast) */}
-        {calendario12m && Array.isArray(calendario12m) && calendario12m.length > 0 && (
-          <Card className="border-0 shadow-sm">
-            <CardHeader className="pb-2 px-5 pt-4 flex-row items-center justify-between">
-              <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-violet-500" />
-                Calendário Folha &amp; Benefícios — 12 meses
-                <span className="text-xs font-normal text-gray-400 ml-1">
-                  (folha + encargos 33,8% + VR/VA + 13º + PJ — projeção)
-                </span>
-              </CardTitle>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={rerunProjMut.isLoading}
-                onClick={() => rerunProjMut.mutate({ companyId })}
-                className="h-7 text-xs gap-1"
-                title="Recalcular projeção a partir do quadro CLT/PJ atual"
-              >
-                <RefreshCw className={`w-3 h-3 ${rerunProjMut.isLoading ? "animate-spin" : ""}`} />
-                Recalcular
-              </Button>
-            </CardHeader>
-            <CardContent className="px-5 pb-4">
-              <div className="overflow-x-auto -mx-1 px-1">
-                <table className="w-full min-w-[920px] text-xs tabular-nums">
-                  <thead>
-                    <tr className="text-[10px] uppercase tracking-wide text-slate-500 border-b border-slate-200">
-                      <th className="text-left py-2 pr-3 font-semibold">Mês</th>
-                      <th className="text-right py-2 px-2 font-semibold">Folha CLT</th>
-                      <th className="text-right py-2 px-2 font-semibold">Encargos</th>
-                      <th className="text-right py-2 px-2 font-semibold">VR</th>
-                      <th className="text-right py-2 px-2 font-semibold">VA</th>
-                      <th className="text-right py-2 px-2 font-semibold">13º</th>
-                      <th className="text-right py-2 px-2 font-semibold">PJ</th>
-                      <th className="text-right py-2 pl-2 font-bold border-l border-slate-200">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(calendario12m as any[]).map((r: any) => {
-                      const real = Number(r.folhaRealCount ?? 0) > 0;
-                      const labelMes = (() => {
-                        const [y, m] = (r.mes as string).split("-");
-                        return `${MESES[parseInt(m, 10) - 1]}/${y.slice(2)}`;
-                      })();
-                      return (
-                        <tr key={r.mes} className="border-b border-slate-100 hover:bg-slate-50/60">
-                          <td className="py-1.5 pr-3 text-slate-700 font-medium whitespace-nowrap">
-                            {labelMes}
-                            {real
-                              ? <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">REAL</span>
-                              : <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold">PROJ</span>}
-                          </td>
-                          <td className="py-1.5 px-2 text-right text-slate-700">{Number(r.folha ?? 0) > 0 ? formatBRL(Number(r.folha)) : "—"}</td>
-                          <td className="py-1.5 px-2 text-right text-slate-700">{Number(r.encargos ?? 0) > 0 ? formatBRL(Number(r.encargos)) : "—"}</td>
-                          <td className="py-1.5 px-2 text-right text-slate-700">{Number(r.vr ?? 0) > 0 ? formatBRL(Number(r.vr)) : "—"}</td>
-                          <td className="py-1.5 px-2 text-right text-slate-700">{Number(r.va ?? 0) > 0 ? formatBRL(Number(r.va)) : "—"}</td>
-                          <td className={`py-1.5 px-2 text-right ${Number(r.decimoTerceiro ?? 0) > 0 ? "text-amber-700 font-semibold" : "text-slate-700"}`}>
-                            {Number(r.decimoTerceiro ?? 0) > 0 ? formatBRL(Number(r.decimoTerceiro)) : "—"}
-                          </td>
-                          <td className="py-1.5 px-2 text-right text-slate-700">{Number(r.pj ?? 0) > 0 ? formatBRL(Number(r.pj)) : "—"}</td>
-                          <td className="py-1.5 pl-2 text-right font-bold text-slate-900 border-l border-slate-100">{formatBRL(Number(r.total ?? 0))}</td>
-                        </tr>
-                      );
-                    })}
-                    <tr className="bg-slate-50 font-bold text-slate-800">
-                      <td className="py-2 pr-3">Total 12m</td>
-                      {(["folha","encargos","vr","va","decimoTerceiro","pj","total"] as const).map(k => {
-                        const sum = (calendario12m as any[]).reduce((s, r) => s + Number(r[k] ?? 0), 0);
-                        return (
-                          <td key={k} className={`py-2 px-2 text-right ${k === "total" ? "border-l border-slate-200 text-slate-900" : "text-slate-700"}`}>
-                            {sum > 0 ? formatBRL(sum) : "—"}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
-                Projeção baseada no quadro CLT ativo + meal_benefit_configs + pj_contracts vigentes.
-                Encargos = FGTS 8% + INSS pat. 20% + RAT/Terceiros ~5,8% (=33,8%). 13º conforme Lei 4.090/62.
-                Quando o mês tem folha real consolidada (badge <span className="text-emerald-700 font-semibold">REAL</span>), a projeção daquele mês é ignorada.
-              </p>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Rev. 1620 — Onda 3: Aging Hackett + KPIs */}
         {(vencidos.length > 0 || kpisHackett.totalPagos > 0) && (
