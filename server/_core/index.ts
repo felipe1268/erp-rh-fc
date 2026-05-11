@@ -478,6 +478,12 @@ Regras:
           await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS data_corte_atualizada_por VARCHAR(200)`);
           // Rev. 1643 — StatusDate ISO completo (com hora) para precisão MSP.
           await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS data_corte_iso TEXT`);
+          // Rev. 1647 — Dia da semana de cutoff (0=Dom..6=Sáb, default qui=4)
+          // + flag de consolidação (one-way lock após acordo da equipe).
+          await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS dia_corte_semana INTEGER DEFAULT 4`);
+          await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS cutoff_consolidado BOOLEAN DEFAULT FALSE`);
+          await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS cutoff_consolidado_em TIMESTAMP`);
+          await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS cutoff_consolidado_por VARCHAR(200)`);
           console.log(`[SyncSchema+] Colunas data_corte_* garantidas em planejamento_projetos.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_projetos data_corte:`, e?.message || e); }
 

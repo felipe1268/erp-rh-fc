@@ -2062,10 +2062,14 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       // Entre uma atualização e a próxima o cliente NÃO vê desvio fantasma:
       // o denominador (PV) congela junto com o numerador (EV) na mesma data.
       // Default quando o projeto nunca foi fechado: última quinta ≤ today.
-      const { cutoffEfetivo, proximaQuinta, todayBR } = await import("../../shared/dataCorte");
+      const { cutoffEfetivo, proximoDiaSemana, todayBR, DIA_CORTE_DEFAULT } = await import("../../shared/dataCorte");
       const { parseCalendarioJson, fracaoDecorridaMs } = await import("../../shared/diasUteis");
       const todayRealStr = todayBR();
-      const cutoffStr = cutoffEfetivo(_toDateStr((projeto as any).dataCorteAtual), todayRealStr);
+      // Rev. 1647 — respeita o dia da semana do cutoff configurado por
+      // projeto (default qui=4). Garante paridade Portal × Planejamento
+      // mesmo para projetos com cutoff em dia diferente de quinta.
+      const dowProj = ((projeto as any).diaCorteSemana ?? DIA_CORTE_DEFAULT) as number;
+      const cutoffStr = cutoffEfetivo(_toDateStr((projeto as any).dataCorteAtual), todayRealStr, dowProj);
       const todayStr = cutoffStr; // Portal externo: cutoff oficial substitui today
       // Rev. 1642 — calendário MS Project (paridade 100% Project × ERP).
       // Quando NULL, fracaoDecorridaMs cai para interpolação linear (legado).
@@ -2485,7 +2489,7 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
           oficial: cutoffStr,
           atualizadoEm: (projeto as any).dataCorteAtualizadaEm ?? null,
           atualizadoPor: (projeto as any).dataCorteAtualizadaPor ?? null,
-          proximaAtualizacao: proximaQuinta(cutoffStr),
+          proximaAtualizacao: proximoDiaSemana(cutoffStr, dowProj),
           nuncaFechado: !(projeto as any).dataCorteAtual,
           hoje: todayRealStr,
         },

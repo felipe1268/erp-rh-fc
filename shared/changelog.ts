@@ -11407,4 +11407,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-10 14:00:00",
   },
+  {
+    version: 1647,
+    titulo: "Cutoff configurável por projeto + janela cobrável da Programação Semanal alinhada (Opção A+B com lock de consolidação)",
+    descricao: "Resolve o 'atraso fantasma' entre o cutoff (toda quinta) e a semana cobrável (seg→sex deixava sexta sempre fora). Agora o dia da semana do cutoff é configurável por projeto (default qui), e a Programação Semanal redistribui as semanas para começar no dia seguinte ao cutoff anterior e terminar no próximo cutoff (ex.: cutoff=qui → semana = sex→qui). Adicionada PREMISSA com botão 'Consolidar' (one-way lock) — antes de consolidado, o gestor pode trocar o dia; depois fica imutável e protege contra alterações acidentais que rebagunçariam a Programação Semanal. Schema: planejamento_projetos ganha 4 colunas (dia_corte_semana smallint default 4, cutoff_consolidado bool, cutoff_consolidado_em/_por). Helper shared/dataCorte.ts generalizado: ultimoDiaSemanaAte/proximoDiaSemana/ehDiaSemana/semanaDoCutoff/nomeDiaSemana — aliases ultimaQuintaAte/proximaQuinta/ehQuinta mantidos para retrocompat. Backend: getDataCorte retorna diaCorteSemana+cutoffConsolidado; novas mutations setDiaCorte (bloqueia se consolidado) e consolidarCutoff (one-way); fecharSemana valida via ehDiaSemana(novoCorte, projeto.diaCorteSemana). UI: novo seletor de dia + badge 'Consolidado/Consolidar' no header de Planejamento → Detalhe. ProgramacaoSemanal.tsx: computeWeeks(atividades, diaCorteSemana) gera weeks alinhadas; substituídos 5 call sites que somavam +2/+3 dias para chegar em domingo (semanas Mon-Sun lógicas) — agora fim É o cutoff, end-of-day exclusivo = fim+1d. ColFix idempotente em server/_core/index.ts garante as colunas no startup.",
+    tipo: "feature",
+    modulos: "Planejamento, Portal Cliente",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 14:45:00",
+  },
 ];

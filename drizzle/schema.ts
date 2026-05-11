@@ -5229,6 +5229,16 @@ export const planejamentoProjetos = pgTable("planejamento_projetos", {
   // ex.: "2026-05-08T08:00:00" e essa hora muda o cálculo de % PREVISTO em
   // ~5pp por atividade. `dataCorteAtual` mantém só a data para compat.
   dataCorteIso:             text("data_corte_iso"),
+  // ── Rev. 1647 — Dia da semana de cutoff (Status Date PMBOK/EVM) ────────
+  // 0=Dom..6=Sáb. Define a janela COBRÁVEL da Programação Semanal: vai do
+  // dia seguinte ao último cutoff até o próximo cutoff (ex.: dow=4/qui →
+  // semana = sex→qui). Garante que PV e EV cobrem a mesma janela.
+  // Default = 4 (quinta), padrão histórico FC. Quando `cutoffConsolidado`
+  // é true, este valor é IMUTÁVEL (premissa congelada do projeto).
+  diaCorteSemana:           integer("dia_corte_semana").default(4),
+  cutoffConsolidado:        boolean("cutoff_consolidado").default(false),
+  cutoffConsolidadoEm:      timestamp("cutoff_consolidado_em"),
+  cutoffConsolidadoPor:     varchar("cutoff_consolidado_por", { length: 200 }),
   criadoEm:               timestamp("criado_em").defaultNow(),
   atualizadoEm:           timestamp("atualizado_em").defaultNow(),
 });

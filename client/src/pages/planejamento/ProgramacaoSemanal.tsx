@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { parseCalendarioJson, fracaoDecorridaMs as fracaoDecorridaMsCal, fracaoDecorridaComHora, diasUteisEntre as diasUteisEntreCal } from "../../../../shared/diasUteis";
 import {
@@ -65,7 +65,16 @@ interface Week {
   fim: Date;
 }
 
-function computeWeeks(atividades: any[]): Week[] {
+/**
+ * Rev. 1647 — Janela COBRÁVEL alinhada ao cutoff (Status Date PMBOK/EVM).
+ * Cada semana vai do DIA SEGUINTE AO CUTOFF ANTERIOR até o PRÓXIMO CUTOFF
+ * (ex.: diaCorteSemana=4/qui → semana = sex→qui). Garante que PV (previsto)
+ * e EV (realizado) cobrem exatamente a mesma janela — elimina o "atraso
+ * fantasma" da semana seg→sex em que a sexta sempre ficava fora do cutoff.
+ *
+ * Default = 4 (quinta), padrão histórico FC.
+ */
+function computeWeeks(atividades: any[], diaCorteSemana: number = 4): Week[] {
   const folhas = atividades.filter((a: any) => !a.isGrupo && a.dataInicio && a.dataFim);
   if (!folhas.length) return [];
 
@@ -74,18 +83,23 @@ function computeWeeks(atividades: any[]): Week[] {
   const minDate = new Date(allIni[0] + "T00:00:00");
   const maxDate = new Date(allFim[allFim.length - 1] + "T00:00:00");
 
-  // Recuar até a segunda-feira da primeira semana
-  const firstMon = new Date(minDate);
-  const dow = firstMon.getDay();
-  firstMon.setDate(firstMon.getDate() - (dow === 0 ? 6 : dow - 1));
+  // Recuar até o PRIMEIRO dia da janela cobrável que contém minDate.
+  // ini = (último cutoff < minDate) + 1d   (i.e., dia seguinte ao cutoff anterior).
+  const firstIni = new Date(minDate);
+  const dow0 = firstIni.getDay();
+  // dias para recuar até o cutoff ANTERIOR a minDate. Se minDate cai no
+  // próprio cutoff, recua 7 (essa data fecha a semana ANTERIOR; a próxima
+  // janela começa no dia seguinte).
+  const back = ((dow0 - diaCorteSemana + 7) % 7) || 7;
+  firstIni.setDate(firstIni.getDate() - back + 1);
 
   const weeks: Week[] = [];
-  let cur = new Date(firstMon);
+  let cur = new Date(firstIni);
   let num = 1;
   while (cur <= maxDate) {
     const ini = new Date(cur);
     const fim = new Date(cur);
-    fim.setDate(fim.getDate() + 4);
+    fim.setDate(fim.getDate() + 6); // 7 dias inclusivos: ini..ini+6 = cutoff
     weeks.push({ numero: num, ini, fim });
     cur.setDate(cur.getDate() + 7);
     num++;
@@ -155,6 +169,9 @@ interface Props {
    * Garante que na semana corrente o número bate com o snapshot MSP do top. */
   projetoStart?:  string | null;
   projetoFinish?: string | null;
+  /** Rev. 1647 — Dia da semana de cutoff (0=Dom..6=Sáb, default qui=4).
+   * Define a janela cobrável das semanas. Vem da query `getDataCorte`. */
+  diaCorteSemana?: number;
 }
 
 // ── Cores de status ───────────────────────────────────────────────────────────
@@ -345,6 +362,7 @@ export function ProgramacaoSemanal({
   cutoffIso = null,
   projetoStart = null,
   projetoFinish = null,
+  diaCorteSemana = 4,
 }: Props) {
   // Rev. 1534 — Janela atual de Recovery Schedule (default 4 semanas).
   const janelaRecuperacao = Math.max(1, recoveryWindow ?? 4);
@@ -357,7 +375,7 @@ export function ProgramacaoSemanal({
     () => (atividadesProp || []).filter((a: any) => !a.disabled),
     [atividadesProp]
   );
-  const semanas  = useMemo(() => computeWeeks(atividades), [atividades]);
+  const semanas  = useMemo(() => computeWeeks(atividades, diaCorteSemana ?? 4), [atividades, diaCorteSemana]);
   const refisSemanas = useMemo(() => {
     const s = new Set<string>();
     refisLista.forEach((r: any) => {
@@ -366,6 +384,21 @@ export function ProgramacaoSemanal({
     return s;
   }, [refisLista]);
   const [idx, setIdx] = useState<number>(() => currentWeekIdx(semanas));
+  // Rev. 1647 — Quando o conjunto de semanas muda (ex.: `diaCorteSemana`
+  // chega async do `getDataCorte`, ou o usuário troca o dia do cutoff e
+  // o `setDiaCorte` reanima a query), o índice antigo pode apontar para
+  // uma semana fora do array, ou para a semana errada. Re-sincroniza
+  // sempre que `semanas` muda — exceto se o usuário já navegou para um
+  // índice válido manualmente (heurística: mantém o índice se ele cair
+  // numa semana cuja janela contém o `today` original).
+  const semanasKey = useMemo(() => semanas.length ? `${dateStr(semanas[0].ini)}|${dateStr(semanas[semanas.length-1].fim)}|${semanas.length}` : "", [semanas]);
+  const lastKeyRef = useRef<string>("");
+  useEffect(() => {
+    if (semanasKey === lastKeyRef.current) return;
+    lastKeyRef.current = semanasKey;
+    if (!semanas.length) return;
+    setIdx(currentWeekIdx(semanas));
+  }, [semanasKey, semanas]);
   const [modoRelatorio, setModoRelatorio] = useState(false);
   const [qtdSemanas, setQtdSemanas] = useState(3);
   const [alertas, setAlertas]  = useState<any>(null);
@@ -427,7 +460,9 @@ export function ProgramacaoSemanal({
   const previstoSemanaDelta = useMemo(() => {
     if (!semanaAtual) return 0;
     const semIniMs = semanaAtual.ini.getTime();
-    const semFimMs = semanaAtual.fim.getTime() + 3 * 86400000 + 86400000; // Sex+3d=Dom; +1d exclusivo
+    // Rev. 1647 — Janela cobrável termina no próprio dia do cutoff (semanaAtual.fim).
+    // Exclusivo = fim + 1d. Antes (Mon-Sun lógico) somava +3d para chegar em domingo.
+    const semFimMs = semanaAtual.fim.getTime() + 86400000;
 
     // ── Modo MSP (paridade com top card) ──────────────────────────────
     if (calMSPParsed && projetoStart && projetoFinish) {
@@ -559,11 +594,11 @@ export function ProgramacaoSemanal({
       .pop();
     const projectEndMs = projectEndStr ? new Date(projectEndStr + "T12:00:00").getTime() : 0;
 
-    // Janela calendário Mon-Dom (mesma do per-row e do cabeçalho)
+    // Rev. 1647 — Janela cobrável alinhada ao cutoff: ini..fim (cutoff inclusive).
     const semIniMs = semanaAtual ? semanaAtual.ini.getTime() : 0;
-    const domingo = semanaAtual ? new Date(semanaAtual.fim) : null;
-    if (domingo) { domingo.setDate(domingo.getDate() + 2); domingo.setHours(23, 59, 59, 999); }
-    const semFimMs = domingo ? domingo.getTime() : 0;
+    const semFimEod = semanaAtual ? new Date(semanaAtual.fim) : null;
+    if (semFimEod) semFimEod.setHours(23, 59, 59, 999);
+    const semFimMs = semFimEod ? semFimEod.getTime() : 0;
 
     // Calcula contribuição em pp e float por atividade
     const enriched = atividadesSemAtual.map((a: any) => {
@@ -618,8 +653,8 @@ export function ProgramacaoSemanal({
   // Retorna { maxSemanas, limiteData, limiteMotivo } ou null se não há limite.
   const limiteRecuperacao = useMemo(() => {
     if (!semanaAtual) return null;
+    // Rev. 1647 — Fim da janela cobrável = próprio dia do cutoff, end-of-day.
     const semFim = new Date(semanaAtual.fim);
-    semFim.setDate(semFim.getDate() + 2); // sábado + 2 = segunda da próxima
     semFim.setHours(23, 59, 59, 999);
     const semFimMs = semFim.getTime();
 
@@ -700,10 +735,8 @@ export function ProgramacaoSemanal({
   const frentesForaPlano = useMemo(() => {
     if (!semanaAtual) return { antecipadas: [], arrastadas: [], totalAntPp: 0, totalArrPp: 0 };
     const semIniStr = dateStr(semanaAtual.ini);
-    // Domingo = sex + 2d (semanas Mon-Sun lógicas).
-    const domDate = new Date(semanaAtual.fim);
-    domDate.setDate(domDate.getDate() + 2);
-    const semFimStr = dateStr(domDate);
+    // Rev. 1647 — fim da janela cobrável = próprio dia do cutoff.
+    const semFimStr = dateStr(semanaAtual.fim);
     const dentro = new Set<number>(atividadesSemAtual.map((a: any) => a.id));
     const antecipadas: any[] = [];
     const arrastadas: any[]  = [];
@@ -1250,10 +1283,10 @@ export function ProgramacaoSemanal({
                         } else {
                           const ini = new Date(a.dataInicio + "T12:00:00").getTime();
                           const fim = new Date(a.dataFim    + "T12:00:00").getTime();
-                          const domingo = new Date(semanaAtual.fim);
-                          domingo.setDate(domingo.getDate() + 2);
-                          domingo.setHours(23, 59, 59, 999);
-                          const ref = domingo.getTime();
+                          // Rev. 1647 — cutoff = próprio fim da semana (dia configurado).
+                          const cutoffEod = new Date(semanaAtual.fim);
+                          cutoffEod.setHours(23, 59, 59, 999);
+                          const ref = cutoffEod.getTime();
                           prevInd = fracaoDecorridaMsCal(ini, ref, fim, calMSPParsed) * 100;
                         }
                       }

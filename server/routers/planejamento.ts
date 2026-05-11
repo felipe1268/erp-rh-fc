@@ -1418,6 +1418,10 @@ export const planejamentoRouter = router({
         dataCorteAtual: planejamentoProjetos.dataCorteAtual,
         dataCorteAtualizadaEm: planejamentoProjetos.dataCorteAtualizadaEm,
         dataCorteAtualizadaPor: planejamentoProjetos.dataCorteAtualizadaPor,
+        diaCorteSemana: planejamentoProjetos.diaCorteSemana,
+        cutoffConsolidado: planejamentoProjetos.cutoffConsolidado,
+        cutoffConsolidadoEm: planejamentoProjetos.cutoffConsolidadoEm,
+        cutoffConsolidadoPor: planejamentoProjetos.cutoffConsolidadoPor,
       }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
       if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
       // Tenant isolation: admin/admin_master bypass (consolidação multi-empresa).
@@ -1427,48 +1431,117 @@ export const planejamentoRouter = router({
         console.warn(`[getDataCorte] FORBIDDEN projetoId=${input.projetoId} projCompany=${proj.companyId} userCompany=${ctx.user.companyId} role=${ctx.user.role}`);
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
       }
-      const { ultimaQuintaAte, proximaQuinta, cutoffEfetivo, todayBR } = await import("../../shared/dataCorte");
+      const { ultimoDiaSemanaAte, proximoDiaSemana, cutoffEfetivo, todayBR, nomeDiaSemana, DIA_CORTE_DEFAULT } = await import("../../shared/dataCorte");
       const hoje = todayBR();
+      const dow = (proj.diaCorteSemana ?? DIA_CORTE_DEFAULT) as number;
       // toDateStr serializa `null` como "null" — passamos null direto pra cutoffEfetivo,
       // que trata defensivamente null/undefined/""/"null".
       const stored = proj.dataCorteAtual ? toDateStr(proj.dataCorteAtual) : null;
-      const oficial = cutoffEfetivo(stored, hoje);
+      const oficial = cutoffEfetivo(stored, hoje, dow);
       return {
         dataCorteOficial: oficial,
         dataCorteAtualizadaEm: proj.dataCorteAtualizadaEm,
         dataCorteAtualizadaPor: proj.dataCorteAtualizadaPor,
-        proximaAtualizacao: proximaQuinta(oficial),
-        sugeridoSemFechamento: ultimaQuintaAte(hoje),
+        proximaAtualizacao: proximoDiaSemana(oficial, dow),
+        sugeridoSemFechamento: ultimoDiaSemanaAte(hoje, dow),
         hoje,
         nuncaFechado: !proj.dataCorteAtual,
+        diaCorteSemana: dow,
+        diaCorteNome: nomeDiaSemana(dow),
+        cutoffConsolidado: !!proj.cutoffConsolidado,
+        cutoffConsolidadoEm: proj.cutoffConsolidadoEm,
+        cutoffConsolidadoPor: proj.cutoffConsolidadoPor,
       };
+    }),
+
+  // Rev. 1647 — Define o dia da semana do cutoff (0=Dom..6=Sáb). Bloqueado
+  // se a premissa já foi consolidada (one-way lock).
+  setDiaCorte: protectedProcedure
+    .input(z.object({ projetoId: z.number(), diaCorteSemana: z.number().int().min(0).max(6) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [proj] = await db.select({
+        companyId: planejamentoProjetos.companyId,
+        cutoffConsolidado: planejamentoProjetos.cutoffConsolidado,
+      }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
+      if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
+      const isAdminSet = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdminSet && String(proj.companyId) !== String(ctx.user.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+      }
+      if (proj.cutoffConsolidado) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "A premissa de cutoff já foi consolidada e não pode ser alterada." });
+      }
+      await db.update(planejamentoProjetos).set({
+        diaCorteSemana: input.diaCorteSemana,
+        atualizadoEm: new Date(),
+      }).where(eq(planejamentoProjetos.id, input.projetoId));
+      try {
+        await createAuditLog({ ctx, entity: "planejamento_projetos", entityId: input.projetoId, action: "SET_DIA_CORTE", changes: { diaCorteSemana: input.diaCorteSemana } });
+      } catch (e: any) { console.error(`[setDiaCorte] audit log falhou:`, e?.message || e); }
+      return { success: true, diaCorteSemana: input.diaCorteSemana };
+    }),
+
+  // Rev. 1647 — Consolida a premissa do cutoff (one-way lock). A partir
+  // daqui o `diaCorteSemana` não pode mais ser alterado por engano.
+  consolidarCutoff: protectedProcedure
+    .input(z.object({ projetoId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [proj] = await db.select({
+        companyId: planejamentoProjetos.companyId,
+        cutoffConsolidado: planejamentoProjetos.cutoffConsolidado,
+        diaCorteSemana: planejamentoProjetos.diaCorteSemana,
+      }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
+      if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
+      const isAdminCon = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdminCon && String(proj.companyId) !== String(ctx.user.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+      }
+      if (proj.cutoffConsolidado) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cutoff já consolidado." });
+      }
+      const quem = ctx.user.name || ctx.user.email || "—";
+      await db.update(planejamentoProjetos).set({
+        cutoffConsolidado: true,
+        cutoffConsolidadoEm: new Date(),
+        cutoffConsolidadoPor: quem,
+        atualizadoEm: new Date(),
+      }).where(eq(planejamentoProjetos.id, input.projetoId));
+      try {
+        await createAuditLog({ ctx, entity: "planejamento_projetos", entityId: input.projetoId, action: "CONSOLIDAR_CUTOFF", changes: { diaCorteSemana: proj.diaCorteSemana } });
+      } catch (e: any) { console.error(`[consolidarCutoff] audit log falhou:`, e?.message || e); }
+      return { success: true };
     }),
 
   fecharSemana: protectedProcedure
     .input(z.object({
       projetoId: z.number(),
-      dataCorte: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // default = última quinta ≤ today
+      dataCorte: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // default = último cutoff ≤ today
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       // Tenant isolation: garante que o projeto pertence à company do usuário.
-      const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
-        .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
+      const [proj] = await db.select({
+        companyId: planejamentoProjetos.companyId,
+        diaCorteSemana: planejamentoProjetos.diaCorteSemana,
+      }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
       if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
       const isAdminFech = ctx.user.role === "admin" || ctx.user.role === "admin_master";
       if (!isAdminFech && String(proj.companyId) !== String(ctx.user.companyId)) {
         console.warn(`[fecharSemana] FORBIDDEN projetoId=${input.projetoId} projCompany=${proj.companyId} userCompany=${ctx.user.companyId} role=${ctx.user.role}`);
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
       }
-      const { ultimaQuintaAte, ehQuinta, todayBR } = await import("../../shared/dataCorte");
+      const { ultimoDiaSemanaAte, ehDiaSemana, todayBR, nomeDiaSemana, DIA_CORTE_DEFAULT } = await import("../../shared/dataCorte");
       const hojeBR = todayBR();
-      const novoCorte = input.dataCorte || ultimaQuintaAte(hojeBR);
-      // Validações: tem de ser quinta-feira e não pode ser futuro (Status Date PMBOK).
+      const dow = (proj.diaCorteSemana ?? DIA_CORTE_DEFAULT) as number;
+      const novoCorte = input.dataCorte || ultimoDiaSemanaAte(hojeBR, dow);
+      // Validações: tem de ser o dia certo da semana e não pode ser futuro (Status Date PMBOK).
       if (novoCorte > hojeBR) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Data de corte não pode ser no futuro." });
       }
-      if (!ehQuinta(novoCorte)) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Data de corte deve ser uma quinta-feira (procedimento FC)." });
+      if (!ehDiaSemana(novoCorte, dow)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Data de corte deve cair em ${nomeDiaSemana(dow)} (premissa do projeto).` });
       }
       const quem = ctx.user.name || ctx.user.email || "—";
       await db.update(planejamentoProjetos).set({

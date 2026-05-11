@@ -32,7 +32,7 @@ import {
   MapPin, Package, Filter, Trash2, Pencil, X, RefreshCw, Search,
   Settings, AlertCircle, Lock, LockOpen,
   Bot, Brain, Sparkles, MessageSquare, Send, Zap,
-  CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
+  Calendar, CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
   ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye, EyeOff, Printer, CheckSquare,
   TrendingDown, ArrowUpRight, ArrowDownRight, CalendarClock, Network,
   Users, HardHat, CheckCircle, Calculator, Info, Box,
@@ -387,15 +387,29 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     const hojeBR = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
     if (modoVisao === "oficial") {
       if (dataCorteInfo?.dataCorteOficial) return dataCorteInfo.dataCorteOficial;
-      // Última quinta ≤ hoje (em UTC sobre meio-dia para evitar fuso).
+      // Rev. 1647 — Fallback client-side respeita o dia de cutoff do projeto
+      // (default qui=4). Antes assumia sempre quinta — quebraria projetos
+      // configurados para outro dia da semana.
+      const dowAlvo = dataCorteInfo?.diaCorteSemana ?? 4;
       const d = new Date(hojeBR + "T12:00:00Z");
-      const dow = d.getUTCDay();          // 0=dom..4=qui..6=sáb
-      const back = (dow - 4 + 7) % 7;
+      const cur = d.getUTCDay();
+      const back = (cur - dowAlvo + 7) % 7;
       d.setUTCDate(d.getUTCDate() - back);
       return d.toISOString().slice(0, 10);
     }
     return hojeBR;
-  }, [modoVisao, dataCorteInfo?.dataCorteOficial]);
+  }, [modoVisao, dataCorteInfo?.dataCorteOficial, dataCorteInfo?.diaCorteSemana]);
+
+  // Rev. 1647 — Mutations para configurar o dia do cutoff e consolidar a
+  // premissa (one-way lock). UI mora no header logo abaixo de "Fechar semana".
+  const setDiaCorteMut = trpc.planejamento.setDiaCorte.useMutation({
+    onSuccess: (r: any) => { toast.success(`Cutoff configurado para ${["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"][r.diaCorteSemana]}.`); refetchDataCorte(); },
+    onError: (e: any) => toast.error(e.message || "Falha ao configurar dia do cutoff."),
+  });
+  const consolidarCutoffMut = trpc.planejamento.consolidarCutoff.useMutation({
+    onSuccess: () => { toast.success("Premissa de cutoff consolidada — agora está protegida contra alteração."); refetchDataCorte(); },
+    onError: (e: any) => toast.error(e.message || "Falha ao consolidar premissa."),
+  });
 
   const { data: heCustosData, isLoading: heCustosLoading } = trpc.planejamento.getHECustosByProjeto.useQuery(
     { projetoId }, { enabled: !!projetoId && aba === "custo-rh" }
@@ -628,17 +642,63 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
               onClick={() => setShowImportarMoModal(true)}>
               <Users className="h-3.5 w-3.5" /> Importar Custos MO
             </Button>
+            {/* Rev. 1647 — Configuração da premissa do cutoff (dia da semana)
+                + botão de CONSOLIDAÇÃO (one-way lock). Antes da consolidação,
+                o gestor pode trocar o dia. Depois, fica imutável (evita
+                trocas acidentais que rebagunçariam a Programação Semanal). */}
+            {dataCorteInfo && (
+              <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1">
+                <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                <span className="text-[10px] font-semibold text-slate-500 uppercase">Cutoff:</span>
+                <select
+                  className="text-[11px] font-semibold bg-transparent text-slate-700 focus:outline-none disabled:text-slate-400 disabled:cursor-not-allowed"
+                  value={dataCorteInfo.diaCorteSemana ?? 4}
+                  disabled={dataCorteInfo.cutoffConsolidado || setDiaCorteMut.isPending}
+                  title={dataCorteInfo.cutoffConsolidado
+                    ? `Premissa consolidada em ${dataCorteInfo.cutoffConsolidadoEm ? new Date(dataCorteInfo.cutoffConsolidadoEm).toLocaleDateString("pt-BR") : "—"} por ${dataCorteInfo.cutoffConsolidadoPor || "—"}.`
+                    : "Dia da semana do cutoff. Define a janela cobrável da Programação Semanal (dia seguinte ao cutoff anterior → próximo cutoff)."}
+                  onChange={(e) => {
+                    const novoDow = parseInt(e.target.value, 10);
+                    if (!confirm(`Mudar o dia do cutoff para ${["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"][novoDow]}?\n\nA Programação Semanal será REDISTRIBUÍDA — cada semana passará a ir do dia seguinte ao cutoff anterior até o próximo cutoff.`)) return;
+                    setDiaCorteMut.mutate({ projetoId, diaCorteSemana: novoDow });
+                  }}>
+                  {["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"].map((nome, i) => (
+                    <option key={i} value={i}>{nome}</option>
+                  ))}
+                </select>
+                {dataCorteInfo.cutoffConsolidado ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5"
+                    title={`Premissa consolidada por ${dataCorteInfo.cutoffConsolidadoPor || "—"}.`}>
+                    🔒 Consolidado
+                  </span>
+                ) : (
+                  <button type="button"
+                    disabled={consolidarCutoffMut.isPending}
+                    title="Trava a premissa do dia de cutoff. Após consolidar, o dia não pode mais ser alterado por engano."
+                    onClick={() => {
+                      const dow = dataCorteInfo.diaCorteSemana ?? 4;
+                      const nome = ["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"][dow];
+                      if (!confirm(`Consolidar a premissa de cutoff em "${nome}"?\n\nDepois de consolidado, o dia da semana NÃO poderá mais ser alterado neste projeto. A Programação Semanal manterá esta janela permanentemente.`)) return;
+                      consolidarCutoffMut.mutate({ projetoId });
+                    }}
+                    className="text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5">
+                    🔓 Consolidar
+                  </button>
+                )}
+              </div>
+            )}
             {/* Rev. 1637 — Fechar semana (Status Date PMBOK/EVM). Avança o cutoff
-                oficial para a última quinta ≤ hoje, replicando para o Portal. */}
+                oficial para o último dia-de-cutoff ≤ hoje, replicando para o Portal. */}
             <Button size="sm" variant="outline"
               className="gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
               disabled={fecharSemanaMutation.isPending}
               onClick={() => {
                 const sugerido = dataCorteInfo?.sugeridoSemFechamento;
                 const atual = dataCorteInfo?.dataCorteOficial;
+                const diaNome = (dataCorteInfo as any)?.diaCorteNome || "Quinta-feira";
                 const msg = atual && sugerido && atual === sugerido
                   ? `O cutoff oficial já é ${sugerido.split("-").reverse().join("/")}. Refechar mesmo assim?`
-                  : `Fechar semana e avançar o cutoff oficial para ${(sugerido || "—").split("-").reverse().join("/")}?\n\nO Portal do Cliente passará a usar essa data como referência de TODOS os indicadores (Previsto/Realizado/Desvio/SPI/Atrasadas).`;
+                  : `Fechar semana e avançar o cutoff oficial (${diaNome}) para ${(sugerido || "—").split("-").reverse().join("/")}?\n\nO Portal do Cliente passará a usar essa data como referência de TODOS os indicadores (Previsto/Realizado/Desvio/SPI/Atrasadas).`;
                 if (!confirm(msg)) return;
                 fecharSemanaMutation.mutate({ projetoId });
               }}>
@@ -982,6 +1042,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             cutoffIso={(proj as any)?.dataCorteIso ?? ((proj as any)?.dataCorteAtual ? `${String((proj as any).dataCorteAtual).slice(0,10)}T17:00:00` : null)}
             projetoStart={(proj as any)?.dataInicio ?? null}
             projetoFinish={(proj as any)?.dataTerminoContratual ?? null}
+            diaCorteSemana={dataCorteInfo?.diaCorteSemana ?? 4}
           />
         )}
 
