@@ -232,8 +232,13 @@ export function parseMSProjectFull(text: string): {
   // (ex.: alguma folha terminando depois do root oficial → 292 ≠ 284 dias úteis).
   let projetoStart: string | null = null;
   let projetoFinish: string | null = null;
-  // Rev. 1646.4 — captura também o "%PREVISTO" calculado pelo MSP (Texto11,
-  // FieldID 188743997) na tarefa raiz. Valor BR formato "1,41" → 1.41.
+  // Rev. 1646.7 — captura o "%PREVISTO" calculado pelo MSP na tarefa raiz.
+  // O campo OFICIAL é **Texto10 / FieldID 188743750** (alias "%PREVISTO (Texto10)"
+  // no XML — valor BR "2,07" → 2.07). Tentamos primeiro Texto10; se não houver,
+  // caímos para Texto11 (188743997 — usado em alguns templates) e por fim Texto6
+  // (188743746 — versão truncada " 2%" como último fallback).
+  // BUG anterior (1646.4): líamos só 188743997, que NÃO EXISTE neste template
+  // REVTE-CIVIL — resultado: snapshot stale, divergência permanente após reimport.
   let previstoMspRaiz: number | null = null;
   const taskEls = Array.from(doc.querySelectorAll("Task"));
   for (const t of taskEls) {
@@ -242,15 +247,22 @@ export function parseMSProjectFull(text: string): {
       projetoStart  = t.querySelector("Start")?.textContent?.trim()?.slice(0, 10) || null;
       projetoFinish = t.querySelector("Finish")?.textContent?.trim()?.slice(0, 10) || null;
       const eaList = Array.from(t.querySelectorAll("ExtendedAttribute"));
+      const valorPorFid: Record<string, number> = {};
       for (const ea of eaList) {
-        const fid = ea.querySelector("FieldID")?.textContent?.trim();
-        if (fid === "188743997") {
-          const raw = ea.querySelector("Value")?.textContent?.trim() || "";
-          const num = parseFloat(raw.replace(",", "."));
-          if (Number.isFinite(num)) previstoMspRaiz = num;
-          break;
-        }
+        const fid = ea.querySelector("FieldID")?.textContent?.trim() || "";
+        const raw = ea.querySelector("Value")?.textContent?.trim() || "";
+        if (!fid || !raw) continue;
+        // Limpa "%" e espaços do Texto6 ("  2%") e converte vírgula decimal BR.
+        const limpo = raw.replace(/%/g, "").replace(",", ".").trim();
+        const num = parseFloat(limpo);
+        if (Number.isFinite(num)) valorPorFid[fid] = num;
       }
+      // Ordem de prioridade: Texto10 (oficial) → Texto11 (templates antigos) → Texto6.
+      previstoMspRaiz =
+        valorPorFid["188743750"] ??  // Texto10 — %PREVISTO (Round 4 casas)
+        valorPorFid["188743997"] ??  // Texto11 — alguns templates customizados
+        valorPorFid["188743746"] ??  // Texto6 — versão truncada Int(...) + "%"
+        null;
       break;
     }
   }
