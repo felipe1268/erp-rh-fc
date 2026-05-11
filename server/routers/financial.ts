@@ -383,7 +383,7 @@ export const financialRouter = router({
                     pp.valor_contrato AS "valorContrato"
              FROM planejamento_atividades pa
              LEFT JOIN planejamento_projetos pp ON pp.id = pa.projeto_id
-             WHERE pa.id = $1 AND pa.company_id = $2`, [entry.origemId, input.companyId]);
+             WHERE pa.id = $1 AND pp.company_id = $2`, [entry.origemId, input.companyId]);
           const a = (rows(r) as any[])[0];
           if (a) {
             origemDetalhes = {
