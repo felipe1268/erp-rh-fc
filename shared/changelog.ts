@@ -11443,4 +11443,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 16:00:00",
   },
+  {
+    version: 1651,
+    titulo: "Programação Semanal — paridade EXATA com top card via snapshot Texto11 do MSP",
+    descricao: "Após a Rev. 1650, o card 'Previsto da semana' passou a usar a fórmula EVM correta mas mostrava 1,39% enquanto o top card mostrava 1,41% — divergência residual de ~0,02pp causada pela aritmética em MINUTOS internos do MSP (com horas parciais e compensações de feriado em fim-de-semana) que não replicamos exatamente em JS. Solução: quando a semana representa EXATAMENTE o PV total do projeto até o cutoff (aIni == projIniStr, fimEfetivo == statusDateSnapshot, envelope intacto), `previstoSemanaDelta` retorna o snapshot oficial Texto11 (`calMSPParsed.previstoMspSnapshot`) — exatamente como o top card já fazia (Rev. 1646.4). Validação REVTE-CIVIL Semana 1: top card = card Programação Semanal = 1,41%.",
+    tipo: "correcao",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 16:30:00",
+  },
 ];

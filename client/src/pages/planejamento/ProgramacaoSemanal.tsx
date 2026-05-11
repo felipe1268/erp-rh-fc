@@ -478,6 +478,21 @@ export function ProgramacaoSemanal({
       // Se cutoff está dentro da semana, encurta o fim ao cutoff (PV exigível).
       const fimEfetivo = (cutoffStr && cutoffStr >= aIni && cutoffStr <= aFim) ? cutoffStr : aFim;
       if (aIni > fimEfetivo) return 0;
+      // Rev. 1651 — Snapshot oficial MSP (Texto11) com paridade EXATA ao top card.
+      // Quando esta semana representa EXATAMENTE o PV total do projeto até o cutoff
+      // (i.e. aIni == projIniStr, fimEfetivo == statusDateSnapshot, envelope intacto),
+      // retorna o snapshot — evita divergência residual de ~0.02pp (1.39% vs 1.41%)
+      // que vem da aritmética de minutos do MSP que não replicamos no JS.
+      const snap = (calMSPParsed as any).previstoMspSnapshot;
+      const snapDate = (calMSPParsed as any).statusDateSnapshot;
+      const envIni = (calMSPParsed as any).envelopeStartSnapshot;
+      const envFim = (calMSPParsed as any).envelopeFinishSnapshot;
+      const envOk = (!envIni || !envFim) || (envIni === projIniStr && envFim === projFimStr);
+      if (snap != null && snapDate && envOk
+          && aIni === projIniStr
+          && fimEfetivo === snapDate) {
+        return +Number(snap).toFixed(2);
+      }
       const totalEnv = diasUteisEntreCal(projIniStr, projFimStr, calMSPParsed);
       if (totalEnv <= 0) return 0;
       const duSemana = diasUteisEntreCal(aIni, fimEfetivo, calMSPParsed);
