@@ -2064,6 +2064,11 @@ Regras:
       import("../routers/rescisaoNotification").then(m => m.startRescisaoCheckJob()).catch(e => console.error("[RescisaoCheck] Falha ao iniciar:", e))
     );
 
+    // t=20s — FeriasAutoConclude (conclui férias cujo gozo terminou)
+    delay(20_000).then(() =>
+      import("../routers/avisoPrevioFerias").then(m => m.startFeriasAutoConcludeJob()).catch(e => console.error("[FeriasAutoConclude] Falha ao iniciar:", e))
+    );
+
     // t=30s — Backup (só agenda cron para 03h)
     delay(30_000).then(() =>
       import("../services/backupService").then(m => m.startBackupJob()).catch(e => console.error("[Backup] Falha ao iniciar job:", e))

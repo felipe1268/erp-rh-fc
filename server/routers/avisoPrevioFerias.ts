@@ -3593,3 +3593,95 @@ export const avisoPrevioFeriasRouter = router({
       }),
   }),
 });
+
+// ========================================================================
+// JOB: Conclusão automática de férias quando o gozo termina
+// ------------------------------------------------------------------------
+// Para cada vacationPeriods com status='em_gozo' e dataFim < hoje, marca
+// como 'concluida' e devolve o status do colaborador para 'Ativo' (apenas
+// se não houver outra férias 'em_gozo'). Roda a cada 6h, com primeira
+// execução 90s após o startup.
+// ========================================================================
+
+let feriasAutoConcludeInterval: NodeJS.Timeout | null = null;
+
+export async function autoConcluirFeriasVencidas() {
+  try {
+    const db = (await getDb())!;
+    const hojeStr = new Date().toISOString().slice(0, 10);
+
+    const vencidas = await db
+      .select({
+        id: vacationPeriods.id,
+        companyId: vacationPeriods.companyId,
+        employeeId: vacationPeriods.employeeId,
+        dataFim: vacationPeriods.dataFim,
+      })
+      .from(vacationPeriods)
+      .where(and(
+        eq(vacationPeriods.status, 'em_gozo'),
+        sql`${vacationPeriods.dataFim} < ${hojeStr}`,
+        isNull(vacationPeriods.deletedAt),
+      ));
+
+    if (vencidas.length === 0) {
+      console.log("[FeriasAutoConclude] Nenhuma férias em gozo vencida — OK");
+      return;
+    }
+
+    let concluidas = 0;
+    let erros = 0;
+    for (const v of vencidas) {
+      try {
+        await db.update(vacationPeriods)
+          .set({ status: 'concluida' } as any)
+          .where(eq(vacationPeriods.id, v.id));
+        concluidas++;
+
+        // Devolve status do funcionário para Ativo apenas se NÃO há outra
+        // férias em gozo do mesmo colaborador.
+        const outras = await db.select({ id: vacationPeriods.id })
+          .from(vacationPeriods)
+          .where(and(
+            eq(vacationPeriods.employeeId, v.employeeId),
+            eq(vacationPeriods.status, 'em_gozo'),
+            isNull(vacationPeriods.deletedAt),
+          ));
+        if (outras.length === 0) {
+          const [emp] = await db.select({ status: employees.status, nomeCompleto: employees.nomeCompleto })
+            .from(employees).where(eq(employees.id, v.employeeId));
+          if (emp && emp.status === 'Ferias') {
+            await db.update(employees).set({ status: 'Ativo' } as any)
+              .where(and(eq(employees.id, v.employeeId), eq(employees.status, 'Ferias')));
+            await logStatusChange({
+              db, companyId: v.companyId, employeeId: v.employeeId,
+              nomeCompleto: emp.nomeCompleto, statusAnterior: 'Ferias',
+              statusNovo: 'Ativo', alteradoPor: 'Sistema (auto)',
+              alteradoPorUserId: undefined,
+              motivo: `Férias concluídas automaticamente (término do gozo em ${v.dataFim})`,
+              origemModulo: 'ferias.autoConclude',
+            });
+          }
+        }
+        // Corrige ponto pós-conclusão.
+        corrigirPontoFuncionario(v.companyId, v.employeeId).catch(() => {});
+      } catch (e) {
+        erros++;
+        console.error(`[FeriasAutoConclude] Erro ao concluir férias id=${v.id}:`, e);
+      }
+    }
+
+    console.log(`[FeriasAutoConclude] ${concluidas}/${vencidas.length} férias concluídas automaticamente${erros > 0 ? ` (${erros} erro(s))` : ''}.`);
+  } catch (e) {
+    console.error("[FeriasAutoConclude] Erro no job:", e);
+  }
+}
+
+export function startFeriasAutoConcludeJob() {
+  if (feriasAutoConcludeInterval) clearInterval(feriasAutoConcludeInterval);
+  // Verificar a cada 6 horas.
+  feriasAutoConcludeInterval = setInterval(autoConcluirFeriasVencidas, 6 * 60 * 60 * 1000);
+  console.log("[FeriasAutoConclude] Job de conclusão automática de férias iniciado (verifica a cada 6h)");
+  // Primeira execução com delay de 90s para não competir com o startup.
+  setTimeout(autoConcluirFeriasVencidas, 90_000);
+}
