@@ -103,7 +103,7 @@ function faixasCelula(
   // Faixa superior (PREVISTO)
   let top: string | null = null;
   if (inPrev) {
-    top = (passou && !inReal && !realFim) ? "bg-red-500" : "bg-blue-500";
+    top = (passou && !inReal && !realFim) ? "bg-red-500" : "bg-blue-800";
   }
 
   // Faixa inferior (REALIZADO)
@@ -280,11 +280,11 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       ws.getCell(`A${r}`).value = "LEGENDA:";
       ws.getCell(`A${r}`).font = { bold: true };
       const legenda = [
-        ["Previsto", "FF3B82F6"],
-        ["Realizado", "FF22C55E"],
-        ["Serviço Não Programado Executado", "FFFACC15"],
-        ["Serviço Executado Antecipadamente", "FFFB923C"],
-        ["Atrasado / Não Executado", "FFEF4444"],
+        ["PREVISTO", "FF1E40AF"],
+        ["REALIZADO", "FF22C55E"],
+        ["SERVIÇO NÃO PROGRAMADO EXECUTADO", "FFFACC15"],
+        ["SERVIÇO EXECUTADO ANTECIPADAMENTE", "FFFB923C"],
+        ["ATRASADO / NÃO EXECUTADO", "FFEF4444"],
       ];
       legenda.forEach(([txt, hex], i) => {
         const row = r + 1 + i;
@@ -465,11 +465,11 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         <div className="border-t border-slate-300 px-3 py-2 bg-white">
           <div className="text-[10px] font-bold text-slate-700 mb-1.5">LEGENDA:</div>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[10px] text-slate-700">
-            <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-blue-500 rounded-sm" />Previsto</div>
-            <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-green-500 rounded-sm" />Realizado</div>
-            <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-yellow-400 rounded-sm" />Serviço não programado executado</div>
-            <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-orange-400 rounded-sm" />Serviço executado antecipadamente</div>
-            <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-red-500 rounded-sm" />Atrasado / não executado</div>
+            <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-blue-800 rounded-sm border border-slate-400" />PREVISTO</div>
+            <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-green-500 rounded-sm border border-slate-400" />REALIZADO</div>
+            <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-yellow-400 rounded-sm border border-slate-400" />SERVIÇO NÃO PROGRAMADO EXECUTADO</div>
+            <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-orange-400 rounded-sm border border-slate-400" />SERVIÇO EXECUTADO ANTECIPADAMENTE</div>
+            <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-red-500 rounded-sm border border-slate-400" />ATRASADO / NÃO EXECUTADO</div>
           </div>
           {engenheiroResponsavel && (
             <div className="text-[10px] text-slate-500 mt-2">
