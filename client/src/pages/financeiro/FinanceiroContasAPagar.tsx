@@ -1242,7 +1242,10 @@ export default function FinanceiroContasAPagar() {
 
         {/* Rev. 1621 — Modal de DETALHE do título (drill-down completo p/ validação final) */}
         <Dialog open={!!detailEntryId} onOpenChange={(o) => !o && setDetailEntryId(null)}>
-          <DialogContent className="!max-w-none w-screen h-screen sm:w-[98vw] sm:h-[96vh] sm:max-w-[1600px] sm:rounded-lg rounded-none p-3 sm:p-6 overflow-y-auto flex flex-col">
+          <DialogContent
+            resizable={false}
+            className="!max-w-none w-[100vw] h-[100dvh] lg:w-[96vw] lg:h-[94vh] lg:max-w-[1600px] lg:rounded-lg rounded-none p-3 sm:p-5 overflow-y-auto flex flex-col"
+          >
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-lg">
                 <Info className="w-5 h-5 text-blue-600" />
