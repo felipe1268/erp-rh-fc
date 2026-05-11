@@ -2063,9 +2063,13 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       // o denominador (PV) congela junto com o numerador (EV) na mesma data.
       // Default quando o projeto nunca foi fechado: última quinta ≤ today.
       const { cutoffEfetivo, proximaQuinta, todayBR } = await import("../../shared/dataCorte");
+      const { parseCalendarioJson, fracaoDecorridaMs } = await import("../../shared/diasUteis");
       const todayRealStr = todayBR();
       const cutoffStr = cutoffEfetivo(_toDateStr((projeto as any).dataCorteAtual), todayRealStr);
       const todayStr = cutoffStr; // Portal externo: cutoff oficial substitui today
+      // Rev. 1642 — calendário MS Project (paridade 100% Project × ERP).
+      // Quando NULL, fracaoDecorridaMs cai para interpolação linear (legado).
+      const calMSP = parseCalendarioJson((projeto as any).calendarioJson);
       const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && a.dataInicio && a.dataFim);
 
       // ALINHAMENTO COM TELA INTERNA (PlanejamentoDetalhe.tsx calcPesoTotal):
@@ -2095,9 +2099,8 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       for (const a of folhas) {
         const ini = new Date(a.dataInicio + "T12:00:00Z").getTime();
         const fim = new Date(a.dataFim + "T12:00:00Z").getTime();
-        let exp = 0;
-        if (refMs >= fim) exp = 100;
-        else if (refMs > ini) exp = Math.min(100, ((refMs - ini) / (fim - ini)) * 100);
+        // Rev. 1642 — usa dias úteis do calendário MS Project quando disponível.
+        const exp = fracaoDecorridaMs(ini, refMs, fim, calMSP) * 100;
         const peso = pesoDe(a);
         somaPrevisto += (exp * peso) / pesoTotal;
         somaRealizado += (ultimoAvancoPorAtiv[a.id] ?? 0) * (peso / pesoTotal);
@@ -2316,10 +2319,8 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
           const fim = new Date(a.dataFim + "T12:00:00Z").getTime();
           const tod = new Date(todayStr + "T12:00:00Z").getTime();
           const duracaoDias = Math.max(1, Math.round((fim - ini) / 86400000));
-          // Previsto linear até hoje
-          let pctPrev = 0;
-          if (tod >= fim) pctPrev = 100;
-          else if (tod > ini) pctPrev = ((tod - ini) / (fim - ini)) * 100;
+          // Rev. 1642 — Previsto até cutoff usando calendário MS Project (paridade 100%).
+          const pctPrev = fracaoDecorridaMs(ini, tod, fim, calMSP) * 100;
           const desvio = real - pctPrev;
           const isAtrasada = a.dataFim < todayStr && real < 100;
           const isCritica = isAtrasada || (desvio < -10 && real < 100);

@@ -5221,6 +5221,10 @@ export const planejamentoProjetos = pgTable("planejamento_projetos", {
   dataCorteAtual:           date("data_corte_atual"),
   dataCorteAtualizadaEm:    timestamp("data_corte_atualizada_em"),
   dataCorteAtualizadaPor:   varchar("data_corte_atualizada_por", { length: 200 }),
+  // ── Rev. 1642 — Calendário de trabalho importado do MS Project ─────────
+  // JSON {weekDays:[bool×7 dom..sab], exceptions:[{from,to,working}]} usado
+  // pelo helper `diasUteis()` para garantir paridade 100% Project × ERP.
+  calendarioJson:           text("calendario_json"),
   criadoEm:               timestamp("criado_em").defaultNow(),
   atualizadoEm:           timestamp("atualizado_em").defaultNow(),
 });

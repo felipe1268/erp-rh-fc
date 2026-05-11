@@ -1481,6 +1481,41 @@ export const planejamentoRouter = router({
       return { success: true, dataCorte: novoCorte, atualizadoPor: quem };
     }),
 
+  // ── Rev. 1642 — Salva StatusDate + calendário do MS Project ───────────
+  // Garante paridade 100% entre ERP e MS Project no cálculo de % PREVISTO:
+  //   - statusDate vira `dataCorteAtual` (cutoff oficial PMBOK/EVM).
+  //   - calendarioJson permite que o helper `fracaoDecorrida()` use dias
+  //     úteis (ProjDateDiff) em vez de interpolação linear, eliminando o
+  //     erro residual em atividades que cruzam fim-de-semana / feriados.
+  salvarMetadadosMSProject: protectedProcedure
+    .input(z.object({
+      projetoId:      z.number(),
+      statusDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+      calendarioJson: z.string().nullish(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+        .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
+      if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
+      if (String(proj.companyId) !== String(ctx.user.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+      }
+      const quem = ctx.user.name || ctx.user.email || "—";
+      const patch: any = { atualizadoEm: new Date() };
+      if (input.statusDate) {
+        patch.dataCorteAtual         = input.statusDate as any;
+        patch.dataCorteAtualizadaEm  = new Date();
+        patch.dataCorteAtualizadaPor = `${quem} (MS Project import)`;
+      }
+      if (input.calendarioJson !== undefined && input.calendarioJson !== null) {
+        patch.calendarioJson = input.calendarioJson;
+      }
+      await db.update(planejamentoProjetos).set(patch)
+        .where(eq(planejamentoProjetos.id, input.projetoId));
+      return { success: true, gravou: { statusDate: input.statusDate, calendar: !!input.calendarioJson } };
+    }),
+
   consolidarRefis: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {

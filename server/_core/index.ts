@@ -942,7 +942,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1641-2026-05-11-atividade-externa";
+    const COLFIX_VERSION = "v1642-2026-05-11-msproject-calendario";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -1067,6 +1067,8 @@ Regras:
             -- Rev. 1641 — Atividade externa (terceiro fora do escopo)
             ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS is_externa BOOLEAN DEFAULT FALSE;
             ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS externa_responsavel VARCHAR(200);
+            -- Rev. 1642 — Calendário de trabalho do MS Project (paridade 100%)
+            ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS calendario_json TEXT;
             ALTER TABLE module_config ADD COLUMN IF NOT EXISTS disabled_pages TEXT;
             ALTER TABLE portal_credentials ADD COLUMN IF NOT EXISTS abas_liberadas TEXT;
             ALTER TABLE epis ADD COLUMN IF NOT EXISTS "fotoUrl" TEXT;
