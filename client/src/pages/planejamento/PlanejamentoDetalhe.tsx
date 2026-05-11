@@ -4967,7 +4967,9 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     const semAntStr = new Date(semIniDate - 7 * 86400000).toISOString().slice(0, 10);
 
     // Realizado da semana — Δ acumulado por atividade (sempre, independe do método de Previsto).
+    // Realizado ACUMULADO até o fim da semana — usado pelo SPI/Aderência alinhado ao top bar.
     let real = 0;
+    let realAcum = 0;
     folhas.forEach((a: any) => {
       const peso = n(a.pesoFinanceiro);
       const avs = (avancos as any[]).filter((av: any) => av.atividadeId === a.id);
@@ -4976,6 +4978,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       const acumAtual = avsAteAtual.length ? n(avsAteAtual[0].percentualAcumulado) : 0;
       const acumAntes = avsAteAntes.length ? n(avsAteAntes[0].percentualAcumulado) : 0;
       real += peso * Math.max(0, acumAtual - acumAntes) / 100;
+      realAcum += peso * acumAtual / 100;
     });
 
     // ── Previsto da semana — EVM clássico via pvMacro ──────────────────────────
@@ -4984,7 +4987,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     // Rev. 1646.7 — sem atividades, tudo zero (PV, débito, meta).
     let prev = 0;
     if (folhas.length === 0) {
-      return { previsto: 0, realizado: 0, aderencia: null, debitoAcumulado: 0, metaRecuperacao: 0, semIniDate, semFimDate };
+      return { previsto: 0, previstoAcumulado: 0, realizado: 0, realizadoAcumulado: 0, aderencia: null, debitoAcumulado: 0, metaRecuperacao: 0, semIniDate, semFimDate };
     }
     if (pvMacro) {
       // Para semana corrente (que contém o cutoff oficial), encurta o fim ao
@@ -5009,7 +5012,35 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         prev += peso * Math.max(0, interp(semFimDate) - interp(semIniDate)) / 100;
       });
     }
-    const aderencia = prev > 0 ? (real / prev) * 100 : null;
+    // ── Previsto ACUMULADO até a janela cobrável da semana ──────────────────
+    // Mesma fonte/fórmula do top bar (Rev. 1656.1) e do card "PREVISTO (SEMANA)":
+    // semana CORRENTE → refStr = cutoff; passada/futura → refStr = semFim.
+    const cutoffStrAcum = dataCorteInfo?.dataCorteOficial ?? null;
+    const refFimAcum = (cutoffStrAcum && cutoffStrAcum >= semanaAtual && cutoffStrAcum < semanaFim) ? cutoffStrAcum : semanaFim;
+    let previstoAcumulado = 0;
+    if (folhas.length > 0 && pvMacro) {
+      previstoAcumulado = pvMacro(refFimAcum);
+    } else if (folhas.length > 0) {
+      const refMs = new Date(refFimAcum + "T12:00:00").getTime();
+      folhas.forEach((a: any) => {
+        const peso = n(a.pesoFinanceiro);
+        if (!a.dataInicio || !a.dataFim) return;
+        const aIni = new Date(a.dataInicio + "T12:00:00").getTime();
+        const aFim = new Date(a.dataFim    + "T12:00:00").getTime();
+        let exp = 0;
+        if (refMs >= aFim)      exp = 100;
+        else if (refMs > aIni)  exp = Math.min(100, ((refMs - aIni) / (aFim - aIni)) * 100);
+        previstoAcumulado += peso * exp / 100;
+      });
+    }
+
+    // Rev. 1656.4 — Aderência alinhada ao top bar/card grande (SPI EVM clássico):
+    // numerador = realizado ACUMULADO até o fim da semana (`realAcum`),
+    // denominador = previsto ACUMULADO até a janela cobrável (`previstoAcumulado`).
+    // Antes usava DELTA semanal (real/prev = PMBOK SV) — gerava contradição com
+    // o card Variação (ex.: Var -0,16% atrasado vs Aderência 118% adiantado
+    // pro MESMO projeto). Agora coerência absoluta: Var < 0 ⇔ Aderência < 100%.
+    const aderencia = previstoAcumulado > 0 ? (realAcum / previstoAcumulado) * 100 : null;
 
     // ── Débito acumulado (Schedule Variance até semana anterior) ────────────
     // PMBOK 7ª/AACE 23R-02: PV é imutável (baseline); débito = PV − EV.
@@ -5046,35 +5077,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     });
     const debitoAcumulado = Math.max(0, pvAcum - evAcum);
     const metaRecuperacao = prev + debitoAcumulado;
-    // Rev. 1655 — Opção A: além do DELTA semanal (`prev`, usado pra Aderência/PPC
-    // e débito EVM), expõe o ACUMULADO PV no fim da janela cobrável da semana
-    // (`previstoAcumulado`). Esse é o valor exibido na sub-linha "Semana N —
-    // Previsto:" — bate exatamente com o card grande "PREVISTO (SEMANA)" e com
-    // a barra superior travada no cutoff. Aderência/débito continuam usando o
-    // delta (definição PMBOK 7ª de SV semanal).
-    // FONTE do cutoff: dataCorteInfo (refetched por mutations) — não proj.
-    const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
-    const refFimAcum = (cutoffStr && cutoffStr >= semanaAtual && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
-    let previstoAcumulado = 0;
-    if (folhas.length > 0 && pvMacro) {
-      previstoAcumulado = pvMacro(refFimAcum);
-    } else if (folhas.length > 0) {
-      // Fallback (sem MSP): mesma fórmula linear de `prev` mas até refFimAcum
-      // (clipado no cutoff quando a semana o contém) — paridade com o top card
-      // que também usa cutoff direto.
-      const refMs = new Date(refFimAcum + "T12:00:00").getTime();
-      folhas.forEach((a: any) => {
-        const peso = n(a.pesoFinanceiro);
-        if (!a.dataInicio || !a.dataFim) return;
-        const aIni = new Date(a.dataInicio + "T12:00:00").getTime();
-        const aFim = new Date(a.dataFim    + "T12:00:00").getTime();
-        let exp = 0;
-        if (refMs >= aFim)      exp = 100;
-        else if (refMs > aIni)  exp = Math.min(100, ((refMs - aIni) / (aFim - aIni)) * 100);
-        previstoAcumulado += peso * exp / 100;
-      });
-    }
-    return { previsto: prev, previstoAcumulado, realizado: real, aderencia, debitoAcumulado, metaRecuperacao, semIniDate, semFimDate };
+    return { previsto: prev, previstoAcumulado, realizado: real, realizadoAcumulado: realAcum, aderencia, debitoAcumulado, metaRecuperacao, semIniDate, semFimDate };
   }, [folhas, avancos, semanaAtual, semanaFim, pvMacro, dataCorteInfo?.dataCorteOficial]);
 
   // Rev. 1534 — Janela de Recovery Schedule (AACE 23R-02). Lê do mesmo
@@ -5799,7 +5802,9 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
             <span className="text-slate-300">|</span>
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-slate-600">Realizado:</span>
-              <span className="text-sm font-bold text-emerald-600 tabular-nums">{previstoRealizadoSemana.realizado.toFixed(2)}%</span>
+              {/* Rev. 1656.4 — usa realizadoAcumulado (não DELTA) p/ paridade
+                   semântica com Previsto Acumulado e Aderência (SPI EVM). */}
+              <span className="text-sm font-bold text-emerald-600 tabular-nums">{previstoRealizadoSemana.realizadoAcumulado.toFixed(2)}%</span>
             </div>
             <span className="text-slate-300">|</span>
             <div className="flex items-center gap-2">
