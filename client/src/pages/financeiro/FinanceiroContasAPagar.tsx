@@ -81,11 +81,31 @@ function isProjecao(c: any): boolean {
   return PROJECAO_ORIGENS.has(c?.origemModulo);
 }
 
+// Rev. 1629c — Remove prefixos redundantes de OC/OS/MED/etc da descrição,
+// já que o nº aparece em coluna dedicada. Ex.:
+//   "OC OC-2026-0010 — Fornecedor X"   →  "Fornecedor X"
+//   "OC #OC-2026-0002 - Propel"        →  "Propel"
+//   "MED-2026-012 — Empreiteira Y"     →  "Empreiteira Y"
+function stripOcPrefix(text: string): string {
+  if (!text) return text;
+  // Match: opcional "OC "/"OS "/etc + opcional "#" + código (OC-2026-0010|MED-123|...) + separador
+  // Só remove se houver TEXTO após o separador (preserva descrições que são só o nº)
+  const re = /^\s*(?:(?:OC|OS|MED|SC|NF|PO|RC|RPS|FOLHA|PJ|FROTA|TRIB|BEN|ALM)\s+)?#?\s*[A-Z]{2,5}[\s-]+\d{2,4}[\s/-]+\d+\s*[—–\-:]\s+(?=\S)/i;
+  let s = text.trim();
+  for (let i = 0; i < 2; i++) {
+    const next = s.replace(re, "").trim();
+    if (next === s || !next) break;
+    s = next;
+  }
+  return s || text.trim();
+}
+
 // Rev. 1619 — Descrição com fallback inteligente
 function describeEntry(c: any): string {
-  const desc = (c.descricao ?? "").trim();
+  const raw = (c.descricao ?? "").trim();
+  const desc = stripOcPrefix(raw);
   if (desc && desc !== "—") return desc;
-  const orig = (c.origemDescricao ?? "").trim();
+  const orig = stripOcPrefix((c.origemDescricao ?? "").trim());
   if (orig) return orig;
   if (c.contaNome && c.obraNome) return `${c.contaNome} — ${c.obraNome}`;
   if (c.contaNome) return c.contaNome;
