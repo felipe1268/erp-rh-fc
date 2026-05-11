@@ -4681,6 +4681,39 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled), [atividades]);
   const folhasComInd = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.disabled), [atividades]);
 
+  // ── Rev. 1646.6 — pvMacro: FONTE ÚNICA do "Previsto%" (EVM clássico) ────────
+  // Replica EXATAMENTE a fórmula da raiz do MS Project (Texto10/Texto11):
+  //    PV(t) = du(início_projeto → t) / du(envelope) × 100
+  // Literatura: PMBOK 7ª (Performance Domain Measurement), AACE 23R-02
+  // (Earned Schedule), ANSI/EIA-748-D, Fleming "Earned Value PM".
+  // Quando refStr === StatusDate gravado no XML, retorna o snapshot exato
+  // do MSP (Texto11) — paridade absoluta. Para QUALQUER outra semana
+  // (passada/atual/futura), calcula com a mesma fórmula. Resultado: o usuário
+  // navega livremente entre semanas e o ERP responde como o próprio Project
+  // responderia se você mudasse o Status Date e exportasse de novo.
+  // Eliminado: 4 fórmulas paralelas brigando (peso financeiro × overlap →
+  // 2,24%; interp linear por datas → 1,98%; peso por duracaoDias → diverge
+  // por paralelismo). Tudo passa a derivar daqui.
+  const projIniIso = (proj as any)?.dataInicio as string | null | undefined;
+  const projFimIso = (proj as any)?.dataTerminoContratual as string | null | undefined;
+  const pvMacro = useMemo(() => {
+    if (!projIniIso || !projFimIso || !calMSP) return null as null | ((refStr: string) => number);
+    const projIniMs = new Date(projIniIso + "T12:00:00").getTime();
+    const projFimMs = new Date(projFimIso + "T12:00:00").getTime();
+    if (projFimMs <= projIniMs) return null;
+    const envOk = !calMSP.envelopeStartSnapshot || !calMSP.envelopeFinishSnapshot
+      || (projIniIso === calMSP.envelopeStartSnapshot && projFimIso === calMSP.envelopeFinishSnapshot);
+    return (refStr: string): number => {
+      // Snapshot exato (Texto11 do MSP) quando ref bate com StatusDate gravado.
+      if (calMSP.previstoMspSnapshot != null && calMSP.statusDateSnapshot
+          && refStr === calMSP.statusDateSnapshot && envOk) {
+        return Number(calMSP.previstoMspSnapshot);
+      }
+      const ref = new Date(refStr + "T12:00:00").getTime();
+      return Math.min(100, Math.max(0, fracaoDecorridaMs(projIniMs, ref, projFimMs, calMSP) * 100));
+    };
+  }, [projIniIso, projFimIso, calMSP]);
+
   // Filtra atividades ativas na semana selecionada (Seg-Sex) — base para todos os modos
   const folhasNaSemana = useMemo(() => {
     if (filtroAtivo === "todas") return folhas;
@@ -4813,35 +4846,11 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     const semIniDate = new Date(semanaAtual + "T00:00:00").getTime();
     const semFimDate = new Date(semanaFim + "T00:00:00").getTime(); // exclusivo (próx Seg)
     const semAntStr = new Date(semIniDate - 7 * 86400000).toISOString().slice(0, 10);
-    let prev = 0;
+
+    // Realizado da semana — Δ acumulado por atividade (sempre, independe do método de Previsto).
     let real = 0;
     folhas.forEach((a: any) => {
       const peso = n(a.pesoFinanceiro);
-      // Rev. 1540 — Previsto da semana via Δ de interpolação linear por DATAS
-      // (mesma fórmula que a tabela "Atividades da Semana" usa por linha:
-      // prevInd = ((ref − ini) / (fim − ini)) × 100). Antes usávamos
-      // `peso × overlapDias_calendário / duracaoDias`, mas quando
-      // `duracaoDias` vinha em dias ÚTEIS (cronograma com calendário de obra
-      // ou importação MS Project) e o overlap em dias CORRIDOS, a divisão
-      // ficava inflada e o cabeçalho mostrava 1,98% Previsto enquanto a
-      // tabela linha-a-linha — toda em dia — só somava 1,38%. Agora as duas
-      // visões usam a MESMA interpolação por datas e batem entre si.
-      if (a.dataInicio && a.dataFim) {
-        const aIni = new Date(a.dataInicio + "T12:00:00").getTime();
-        const aFim = new Date(a.dataFim    + "T12:00:00").getTime();
-        const refIni = semIniDate;          // fim da semana anterior = início desta
-        const refFim = semFimDate;          // fim desta semana
-        const interp = (t: number) => {
-          if (aFim <= aIni) return t >= aFim ? 100 : 0;
-          if (t >= aFim) return 100;
-          if (t <= aIni) return 0;
-          return Math.min(100, ((t - aIni) / (aFim - aIni)) * 100);
-        };
-        const expFim = interp(refFim);
-        const expIni = interp(refIni);
-        prev += peso * Math.max(0, expFim - expIni) / 100;
-      }
-      // Realizado via Δ acumulado
       const avs = (avancos as any[]).filter((av: any) => av.atividadeId === a.id);
       const avsAteAtual = avs.filter((av: any) => av.semana <= semanaAtual).sort((x: any, y: any) => y.semana.localeCompare(x.semana));
       const avsAteAntes = avs.filter((av: any) => av.semana <= semAntStr).sort((x: any, y: any) => y.semana.localeCompare(x.semana));
@@ -4849,23 +4858,61 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       const acumAntes = avsAteAntes.length ? n(avsAteAntes[0].percentualAcumulado) : 0;
       real += peso * Math.max(0, acumAtual - acumAntes) / 100;
     });
+
+    // ── Previsto da semana — EVM clássico via pvMacro ──────────────────────────
+    // Rev. 1646.6 — delta = pvMacro(semFim) − pvMacro(semIni). Mesma fonte do
+    // top card; converge automaticamente em qualquer semana selecionada.
+    let prev = 0;
+    if (pvMacro) {
+      // Para semana corrente (que contém o cutoff oficial), encurta o fim ao
+      // cutoff (PV exigível) — bate com o top card no modo Oficial.
+      const cutoffStr = (proj as any)?.dataCorteAtual ? String((proj as any).dataCorteAtual).slice(0, 10) : null;
+      const refFim = (cutoffStr && cutoffStr >= semanaAtual && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
+      prev = Math.max(0, pvMacro(refFim) - pvMacro(semanaAtual));
+    } else {
+      // Fallback (sem MSP): interp linear por datas + pesoFinanceiro (Rev. 1540).
+      folhas.forEach((a: any) => {
+        const peso = n(a.pesoFinanceiro);
+        if (!a.dataInicio || !a.dataFim) return;
+        const aIni = new Date(a.dataInicio + "T12:00:00").getTime();
+        const aFim = new Date(a.dataFim    + "T12:00:00").getTime();
+        const interp = (t: number) => {
+          if (aFim <= aIni) return t >= aFim ? 100 : 0;
+          if (t >= aFim) return 100;
+          if (t <= aIni) return 0;
+          return Math.min(100, ((t - aIni) / (aFim - aIni)) * 100);
+        };
+        prev += peso * Math.max(0, interp(semFimDate) - interp(semIniDate)) / 100;
+      });
+    }
     const aderencia = prev > 0 ? (real / prev) * 100 : null;
-    // Rev. 1533 — Débito acumulado (Schedule Variance negativo) ATÉ O FIM DA SEMANA ANTERIOR.
-    // PMBOK 7ª/AACE 23R-02: PV é imutável (baseline); débito é métrica gerencial paralela.
-    // Meta de Recuperação = Previsto da semana atual + Débito acumulado das semanas passadas.
-    const semAntFimMs = semIniDate; // start da semana atual = end exclusive da anterior
+
+    // ── Débito acumulado (Schedule Variance até semana anterior) ────────────
+    // PMBOK 7ª/AACE 23R-02: PV é imutável (baseline); débito = PV − EV.
     let pvAcum = 0;
-    let evAcum = 0;
-    folhas.forEach((a: any) => {
-      const peso = n(a.pesoFinanceiro);
-      if (a.dataInicio && a.dataFim) {
+    if (pvMacro) {
+      // PV oficial até o INÍCIO desta semana (= fim da anterior). Para semanas
+      // futuras (semIni > cutoff), capa no cutoff — não cobra débito de algo
+      // que ainda não era exigível.
+      const cutoffStr = (proj as any)?.dataCorteAtual ? String((proj as any).dataCorteAtual).slice(0, 10) : null;
+      const refSemAnt = (cutoffStr && cutoffStr < semanaAtual) ? cutoffStr : semanaAtual;
+      pvAcum = pvMacro(refSemAnt);
+    } else {
+      const semAntFimMs = semIniDate;
+      folhas.forEach((a: any) => {
+        const peso = n(a.pesoFinanceiro);
+        if (!a.dataInicio || !a.dataFim) return;
         const aIni = new Date(a.dataInicio + "T12:00:00").getTime();
         const aFim = new Date(a.dataFim + "T12:00:00").getTime();
         let exp = 0;
         if (semAntFimMs >= aFim)      exp = 100;
         else if (semAntFimMs > aIni)  exp = Math.min(100, ((semAntFimMs - aIni) / (aFim - aIni)) * 100);
         pvAcum += peso * exp / 100;
-      }
+      });
+    }
+    let evAcum = 0;
+    folhas.forEach((a: any) => {
+      const peso = n(a.pesoFinanceiro);
       const avs = (avancos as any[])
         .filter((av: any) => av.atividadeId === a.id && av.semana < semanaAtual)
         .sort((x: any, y: any) => y.semana.localeCompare(x.semana));
@@ -4875,7 +4922,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     const debitoAcumulado = Math.max(0, pvAcum - evAcum);
     const metaRecuperacao = prev + debitoAcumulado;
     return { previsto: prev, realizado: real, aderencia, debitoAcumulado, metaRecuperacao, semIniDate, semFimDate };
-  }, [folhas, avancos, semanaAtual, semanaFim]);
+  }, [folhas, avancos, semanaAtual, semanaFim, pvMacro, (proj as any)?.dataCorteAtual]);
 
   // Rev. 1534 — Janela de Recovery Schedule (AACE 23R-02). Lê do mesmo
   // revisaoAtiva.recoveryWindowSemanas que ProgramacaoSemanal usa, para que
@@ -4903,6 +4950,16 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   // Quando usarPesoPorDuracao=true pondera por duracaoDias (igual à barra superior
   // e ao MS Project); caso contrário usa pesoFinanceiro com fallback para peso igual.
   const previsto = useMemo(() => {
+    // Rev. 1646.6 — Modo MSP (paridade absoluta com top card): pvMacro do
+    // envelope. Quando a semana selecionada CONTÉM o cutoff oficial, encurta
+    // o ref ao cutoff (PV exigível). Caso contrário, usa o fim da semana
+    // (acumulado projetado para aquela semana — funciona p/ semanas futuras).
+    if (pvMacro) {
+      const cutoffStr = (proj as any)?.dataCorteAtual ? String((proj as any).dataCorteAtual).slice(0, 10) : null;
+      const ref = (cutoffStr && cutoffStr >= semanaAtual && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
+      return pvMacro(ref);
+    }
+    // Fallback (sem calMSP/envelope): rolagem ponderada legado (Rev. 1538).
     const folhasComDatas = folhas.filter((a: any) => a.dataInicio && a.dataFim);
     const pesoBruto = usarPesoPorDuracao
       ? folhas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
@@ -4910,8 +4967,6 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     const semPeso = pesoBruto === 0;
     const denom   = semPeso ? (folhasComDatas.length || 1) : pesoBruto;
     let soma = 0;
-    // Rev. 1642 — calendário MS Project (paridade 100%).
-    const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
     folhasComDatas.forEach((a: any) => {
       const ini  = new Date(a.dataInicio + "T12:00:00").getTime();
       const fim  = new Date(a.dataFim    + "T12:00:00").getTime();
@@ -4920,10 +4975,8 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       soma += (exp * peso) / denom;
     });
-    // Rev. 1538 — NÃO arredonda intermediário (causa divergência com a barra
-    // superior). O display final cuida do toFixed(2).
     return soma;
-  }, [folhas, semanaFim, usarPesoPorDuracao, (proj as any)?.calendarioJson]);
+  }, [folhas, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, pvMacro, (proj as any)?.dataCorteAtual]);
 
   // ── Realizado acumulado ponderado (semana atual) ───────────────────────────
   // Prioriza avancoLocal > avancoExistente (semana exata) > avancoMaisRecente (semana mais recente ≤ atual)
@@ -4951,6 +5004,15 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   const delta = +(realizadoAcum - previsto).toFixed(2);
 
   const previstoComInd = useMemo(() => {
+    // Rev. 1646.6 — pvMacro: mesma fonte de "previsto" (envelope macro do MSP),
+    // indiretas não fazem distinção em macro. Converge com o top card e o card
+    // "PREVISTO (SEMANA)" sem indiretas.
+    if (pvMacro) {
+      const cutoffStr = (proj as any)?.dataCorteAtual ? String((proj as any).dataCorteAtual).slice(0, 10) : null;
+      const ref = (cutoffStr && cutoffStr >= semanaAtual && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
+      return pvMacro(ref);
+    }
+    // Fallback (sem MSP): rolagem ponderada legado.
     const folhasComDatas = folhasComInd.filter((a: any) => a.dataInicio && a.dataFim);
     const pesoBruto = usarPesoPorDuracao
       ? folhasComInd.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
@@ -4958,8 +5020,6 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     const semPeso = pesoBruto === 0;
     const denom   = semPeso ? (folhasComDatas.length || 1) : pesoBruto;
     let soma = 0;
-    // Rev. 1642 — calendário MS Project (paridade 100%).
-    const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
     folhasComDatas.forEach((a: any) => {
       const ini  = new Date(a.dataInicio + "T12:00:00").getTime();
       const fim  = new Date(a.dataFim    + "T12:00:00").getTime();
@@ -4968,9 +5028,8 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       soma += (exp * peso) / denom;
     });
-    // Rev. 1538 — sem arredondamento intermediário (consistência com a barra superior).
     return soma;
-  }, [folhasComInd, semanaFim, usarPesoPorDuracao, (proj as any)?.calendarioJson]);
+  }, [folhasComInd, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, pvMacro, (proj as any)?.dataCorteAtual]);
 
   const realizadoComInd = useMemo(() => {
     const pesoBruto = usarPesoPorDuracao
