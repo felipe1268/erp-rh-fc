@@ -589,6 +589,138 @@ export const financialRouter = router({
               ],
             };
           }
+        } else if (
+          om === "folha_projetada" ||
+          om === "encargos_projetado" ||
+          om === "beneficio_vr_projetado" ||
+          om === "beneficio_va_projetado" ||
+          om === "decimo_terceiro_projetado"
+        ) {
+          // Rev. 1634 — Memorial de cálculo das projeções de Folha/Benefícios/13º
+          // Mostra lista COMPLETA de funcionários CLT ativos com salário base e
+          // a parcela individual deste lançamento (rateio proporcional).
+          // OBS: dbExecute renumera placeholders pela ordem de aparição, então
+          // a constante 220h é inlinada no SQL e usamos apenas $1 (companyId).
+          const ENCARGOS_PCT = 0.338;
+
+          const funcRes = await dbExecute(db,
+            `SELECT id, "nomeCompleto" AS nome, matricula, cargo, "tipoContrato",
+                    "tipoRemuneracao", "salarioBase", "valorHora",
+                    "recebeComplemento", "valorComplemento", "status",
+                    "dataAdmissao",
+                    CASE
+                      WHEN LOWER(COALESCE("tipoRemuneracao",'horista')) = 'mensalista'
+                        THEN COALESCE(REGEXP_REPLACE(REPLACE(REPLACE(COALESCE("salarioBase"::text,'0'),'.',''),',','.'),'[^0-9.\\-]','','g')::numeric, 0)
+                      ELSE COALESCE(REGEXP_REPLACE(REPLACE(REPLACE(COALESCE("valorHora"::text,'0'),'.',''),',','.'),'[^0-9.\\-]','','g')::numeric, 0) * 220
+                    END
+                    + CASE WHEN "recebeComplemento" = 1
+                        THEN COALESCE(REGEXP_REPLACE(REPLACE(REPLACE(COALESCE("valorComplemento"::text,'0'),'.',''),',','.'),'[^0-9.\\-]','','g')::numeric, 0)
+                        ELSE 0 END AS bruto_calc
+             FROM employees
+             WHERE "companyId" = $1
+               AND "status" IN ('Ativo','Ferias','Afastado','Licenca')
+               AND ("tipoContrato" IS NULL OR "tipoContrato" <> 'PJ')
+             ORDER BY "nomeCompleto" ASC`,
+            [input.companyId]
+          );
+          const employees = (rows(funcRes) as any[]).map(r => ({
+            ...r,
+            bruto: Number(r.bruto_calc ?? 0),
+          }));
+          const totalBruto = employees.reduce((s, e) => s + e.bruto, 0);
+          const valorEntry = Number(entry.valorPrevisto || 0);
+
+          // Calcula parcela individual de cada funcionário neste lançamento
+          const funcionarios = employees.map(emp => {
+            const share = totalBruto > 0 ? emp.bruto / totalBruto : 0;
+            const parcela = valorEntry * share;
+            return {
+              id: emp.id,
+              nome: emp.nome,
+              matricula: emp.matricula ?? "—",
+              cargo: emp.cargo ?? "—",
+              tipoRemuneracao: emp.tipoRemuneracao ?? "horista",
+              status: emp.status,
+              obraAtual: "—",
+              dataAdmissao: emp.dataAdmissao,
+              salarioBruto: emp.bruto,
+              parcelaLancamento: parcela,
+              percentual: share * 100,
+            };
+          });
+
+          let titulo = "Memorial de Cálculo da Projeção";
+          let formula = "";
+          if (om === "folha_projetada") {
+            titulo = `Folha CLT — ${employees.length} funcionário(s)`;
+            formula = `Soma dos salários brutos dos ${employees.length} CLT ativos (mensalista = salário base, horista = valor/h × 220h, + complemento se houver).`;
+          } else if (om === "encargos_projetado") {
+            titulo = `Encargos sobre Folha — ${employees.length} funcionário(s)`;
+            formula = `Folha bruta R$ ${totalBruto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} × ${(ENCARGOS_PCT * 100).toFixed(1)}% (FGTS 8% + INSS pat. 20% + RAT/Terc. ~5,8%) = R$ ${(totalBruto * ENCARGOS_PCT).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`;
+          } else if (om === "beneficio_vr_projetado") {
+            titulo = `Vale Refeição — ${employees.length} funcionário(s)`;
+            formula = `${employees.length} funcionário(s) × valor médio diário (café+lanche+janta) × dias úteis configurados em meal_benefit_configs.`;
+          } else if (om === "beneficio_va_projetado") {
+            titulo = `Vale Alimentação — ${employees.length} funcionário(s)`;
+            formula = `${employees.length} funcionário(s) × valor mensal médio do cartão VA configurado em meal_benefit_configs.`;
+          } else if (om === "decimo_terceiro_projetado") {
+            titulo = `13º Salário — ${employees.length} funcionário(s)`;
+            formula = `${entry.descricao?.includes("1ª") ? "1ª parcela: 50% do salário bruto (Lei 4.090/62 — pagar até 30/11)" : entry.descricao?.includes("2ª") ? "2ª parcela: 50% do bruto líquido de INSS (~8%, pagar até 20/12)" : "Encargos sobre 13º (FGTS + INSS pat. + RAT/Terc. sobre o bruto integral)"}.`;
+          }
+
+          origemDetalhes = {
+            tipo: om,
+            titulo,
+            subtitulo: `📅 Competência ${entry.dataCompetencia ? String(entry.dataCompetencia).slice(0,10).split("-").reverse().join("/") : "—"} · Vencimento ${entry.dataVencimento ? String(entry.dataVencimento).slice(0,10).split("-").reverse().join("/") : "—"}`,
+            formula,
+            campos: [
+              { label: "Funcionários considerados", value: employees.length },
+              { label: "Folha bruta total", value: `R$ ${totalBruto.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` },
+              { label: "Valor deste lançamento", value: `R$ ${valorEntry.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` },
+              { label: "Origem", value: entry.origemDescricao ?? "—" },
+            ],
+            funcionarios,
+          };
+        } else if (om === "pj_projetado") {
+          // Rev. 1634 — Memorial PJ: contrato ativo + lista comparativa de PJs ativos
+          const contractId = entry.origemId ? Math.floor(Number(entry.origemId) / 1000) : null;
+          let pjAtual: any = null;
+          if (contractId && contractId > 0) {
+            const r = await dbExecute(db,
+              `SELECT id, "razaoSocialPrestador" AS razao, "cnpjPrestador" AS cnpj,
+                      "valorMensal", "diaFechamento", "dataInicio", "dataFim", status
+               FROM pj_contracts WHERE id=$1 AND "companyId"=$2`,
+              [contractId, input.companyId]);
+            pjAtual = (rows(r) as any[])[0] ?? null;
+          }
+          const allRes = await dbExecute(db,
+            `SELECT id, "razaoSocialPrestador" AS nome, "cnpjPrestador" AS cnpj,
+                    COALESCE(REGEXP_REPLACE(REPLACE(REPLACE(COALESCE("valorMensal"::text,'0'),'.',''),',','.'),'[^0-9.\\-]','','g')::numeric, 0) AS valor,
+                    status, "dataInicio", "dataFim"
+             FROM pj_contracts
+             WHERE "companyId"=$1 AND status IN ('ativo','vigente','assinado')
+             ORDER BY "razaoSocialPrestador" ASC`,
+            [input.companyId]);
+          const pjs = (rows(allRes) as any[]).map(r => ({
+            id: r.id, nome: r.nome ?? `PJ #${r.id}`, cnpj: r.cnpj ?? "—",
+            valor: Number(r.valor ?? 0), status: r.status,
+            destacado: pjAtual && r.id === pjAtual.id,
+          }));
+          origemDetalhes = {
+            tipo: om,
+            titulo: pjAtual ? `Contrato PJ — ${pjAtual.razao ?? `#${pjAtual.id}`}` : `Pagamento PJ Projetado`,
+            subtitulo: pjAtual?.cnpj ? `CNPJ ${pjAtual.cnpj} · Vigência ${pjAtual.dataInicio ? String(pjAtual.dataInicio).slice(0,10).split("-").reverse().join("/") : "—"} a ${pjAtual.dataFim ? String(pjAtual.dataFim).slice(0,10).split("-").reverse().join("/") : "—"}` : null,
+            formula: `Valor mensal contratado para o prestador, projetado para o vencimento configurado (dia ${pjAtual?.diaFechamento ?? 5} de cada mês, recuando para dia útil anterior).`,
+            campos: pjAtual ? [
+              { label: "Razão Social", value: pjAtual.razao ?? "—" },
+              { label: "Valor Mensal", value: `R$ ${Number(pjAtual.valorMensal ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` },
+              { label: "Dia Fechamento", value: pjAtual.diaFechamento ?? 5 },
+              { label: "Status Contrato", value: pjAtual.status ?? "—" },
+            ] : [
+              { label: "Origem", value: entry.origemDescricao ?? "—" },
+            ],
+            pjs,
+          };
         } else if (om === "seguro_vida") {
           const r = await dbExecute(db,
             `SELECT competencia, total_segurados AS "totalSegurados", total_ativos AS "totalAtivos",

@@ -1242,7 +1242,7 @@ export default function FinanceiroContasAPagar() {
 
         {/* Rev. 1621 — Modal de DETALHE do título (drill-down completo p/ validação final) */}
         <Dialog open={!!detailEntryId} onOpenChange={(o) => !o && setDetailEntryId(null)}>
-          <DialogContent className="max-w-6xl w-[95vw] max-h-[88vh] overflow-y-auto">
+          <DialogContent className="max-w-7xl w-[98vw] sm:w-[95vw] max-h-[92vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-lg">
                 <Info className="w-5 h-5 text-blue-600" />
@@ -1305,15 +1305,21 @@ export default function FinanceiroContasAPagar() {
                   </div>
 
                   <Tabs defaultValue="geral" className="w-full">
-                    <TabsList className="grid w-full grid-cols-4">
-                      <TabsTrigger value="geral" className="text-xs"><Info className="w-3 h-3 mr-1" />Geral</TabsTrigger>
-                      <TabsTrigger value="origem" className="text-xs" disabled={!d.ordem && !d.fornecedor && !d.origemDetalhes}>
-                        <Building2 className="w-3 h-3 mr-1" />Origem {d.ordem ? "(OC)" : d.fornecedor ? "(Forn.)" : d.origemDetalhes ? `(${ORIGEM_LABELS[e.origemModulo] ?? e.origemModulo ?? ""})` : ""}
+                    <TabsList className="grid w-full grid-cols-4 h-auto">
+                      <TabsTrigger value="geral" className="text-[11px] sm:text-xs px-1 sm:px-3 py-1.5 truncate">
+                        <Info className="w-3 h-3 mr-1 flex-shrink-0" /><span className="truncate">Geral</span>
                       </TabsTrigger>
-                      <TabsTrigger value="parcelas" className="text-xs">
-                        <Hash className="w-3 h-3 mr-1" />Parcelas {d.parcelas?.length > 1 ? `(${d.parcelas.length})` : "(1)"}
+                      <TabsTrigger value="origem" className="text-[11px] sm:text-xs px-1 sm:px-3 py-1.5 truncate" disabled={!d.ordem && !d.fornecedor && !d.origemDetalhes}>
+                        <Building2 className="w-3 h-3 mr-1 flex-shrink-0" />
+                        <span className="truncate">{(d.origemDetalhes?.funcionarios || d.origemDetalhes?.pjs) ? "Memorial" : "Origem"}</span>
                       </TabsTrigger>
-                      <TabsTrigger value="historico" className="text-xs"><History className="w-3 h-3 mr-1" />Histórico</TabsTrigger>
+                      <TabsTrigger value="parcelas" className="text-[11px] sm:text-xs px-1 sm:px-3 py-1.5 truncate">
+                        <Hash className="w-3 h-3 mr-1 flex-shrink-0" />
+                        <span className="truncate">Parcelas{d.parcelas?.length > 1 ? ` (${d.parcelas.length})` : ""}</span>
+                      </TabsTrigger>
+                      <TabsTrigger value="historico" className="text-[11px] sm:text-xs px-1 sm:px-3 py-1.5 truncate">
+                        <History className="w-3 h-3 mr-1 flex-shrink-0" /><span className="truncate">Histórico</span>
+                      </TabsTrigger>
                     </TabsList>
 
                     {/* GERAL */}
@@ -1441,6 +1447,12 @@ export default function FinanceiroContasAPagar() {
                           {d.origemDetalhes.subtitulo && (
                             <p className="text-xs text-slate-600 mb-3">{d.origemDetalhes.subtitulo}</p>
                           )}
+                          {d.origemDetalhes.formula && (
+                            <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 mb-3">
+                              <p className="text-[11px] font-semibold text-violet-700 uppercase tracking-wide mb-1">Fórmula de cálculo</p>
+                              <p className="text-xs text-violet-900">{d.origemDetalhes.formula}</p>
+                            </div>
+                          )}
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             {d.origemDetalhes.campos.map((c: any, i: number) => (
                               <KV key={i} label={c.label}>
@@ -1450,6 +1462,96 @@ export default function FinanceiroContasAPagar() {
                               </KV>
                             ))}
                           </div>
+
+                          {/* Rev. 1634 — Memorial Funcionários (Folha CLT / Encargos / VR / VA / 13º) */}
+                          {Array.isArray(d.origemDetalhes.funcionarios) && d.origemDetalhes.funcionarios.length > 0 && (
+                            <div className="mt-4">
+                              <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                                <Hash className="w-4 h-4 text-emerald-600" />
+                                Funcionários considerados ({d.origemDetalhes.funcionarios.length})
+                              </h4>
+                              <div className="border border-slate-200 rounded-lg overflow-hidden max-h-[420px] overflow-y-auto">
+                                <table className="w-full text-xs">
+                                  <thead className="bg-slate-100 sticky top-0">
+                                    <tr>
+                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-600">#</th>
+                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Matr.</th>
+                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Nome</th>
+                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Cargo</th>
+                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Obra</th>
+                                      <th className="px-2 py-1.5 text-center font-semibold text-slate-600">Tipo</th>
+                                      <th className="px-2 py-1.5 text-center font-semibold text-slate-600">Status</th>
+                                      <th className="px-2 py-1.5 text-right font-semibold text-slate-600">Sal. Bruto</th>
+                                      <th className="px-2 py-1.5 text-right font-semibold text-slate-600">% Folha</th>
+                                      <th className="px-2 py-1.5 text-right font-semibold text-slate-600">Parcela</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {d.origemDetalhes.funcionarios.map((f: any, i: number) => (
+                                      <tr key={f.id} className="border-t border-slate-100 hover:bg-slate-50">
+                                        <td className="px-2 py-1 text-slate-400 tabular-nums">{i + 1}</td>
+                                        <td className="px-2 py-1 font-mono text-[10px]">{f.matricula}</td>
+                                        <td className="px-2 py-1 font-medium text-slate-800">{f.nome}</td>
+                                        <td className="px-2 py-1 text-slate-600">{f.cargo}</td>
+                                        <td className="px-2 py-1 text-slate-600 text-[10px]">{f.obraAtual}</td>
+                                        <td className="px-2 py-1 text-center text-[10px] uppercase text-slate-500">{f.tipoRemuneracao}</td>
+                                        <td className="px-2 py-1 text-center">
+                                          <span className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                                            f.status === "Ativo" ? "bg-green-100 text-green-700" :
+                                            f.status === "Ferias" ? "bg-blue-100 text-blue-700" :
+                                            "bg-amber-100 text-amber-700"
+                                          }`}>{f.status}</span>
+                                        </td>
+                                        <td className="px-2 py-1 text-right tabular-nums">{formatBRL(Number(f.salarioBruto))}</td>
+                                        <td className="px-2 py-1 text-right tabular-nums text-slate-500">{Number(f.percentual).toFixed(2)}%</td>
+                                        <td className="px-2 py-1 text-right tabular-nums font-semibold text-emerald-700">{formatBRL(Number(f.parcelaLancamento))}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                  <tfoot className="bg-slate-100 sticky bottom-0">
+                                    <tr className="font-bold text-slate-700">
+                                      <td colSpan={7} className="px-2 py-1.5 text-right">TOTAL</td>
+                                      <td className="px-2 py-1.5 text-right tabular-nums">{formatBRL(d.origemDetalhes.funcionarios.reduce((s: number, f: any) => s + Number(f.salarioBruto), 0))}</td>
+                                      <td className="px-2 py-1.5 text-right tabular-nums">100%</td>
+                                      <td className="px-2 py-1.5 text-right tabular-nums text-emerald-700">{formatBRL(d.origemDetalhes.funcionarios.reduce((s: number, f: any) => s + Number(f.parcelaLancamento), 0))}</td>
+                                    </tr>
+                                  </tfoot>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Rev. 1634 — Memorial PJ (lista de prestadores ativos com destaque) */}
+                          {Array.isArray(d.origemDetalhes.pjs) && d.origemDetalhes.pjs.length > 0 && (
+                            <div className="mt-4">
+                              <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                                <Building2 className="w-4 h-4 text-indigo-600" />
+                                Prestadores PJ ativos ({d.origemDetalhes.pjs.length})
+                              </h4>
+                              <div className="border border-slate-200 rounded-lg overflow-hidden max-h-72 overflow-y-auto">
+                                <table className="w-full text-xs">
+                                  <thead className="bg-slate-100 sticky top-0">
+                                    <tr>
+                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-600">Razão Social</th>
+                                      <th className="px-2 py-1.5 text-left font-semibold text-slate-600">CNPJ</th>
+                                      <th className="px-2 py-1.5 text-center font-semibold text-slate-600">Status</th>
+                                      <th className="px-2 py-1.5 text-right font-semibold text-slate-600">Valor Mensal</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {d.origemDetalhes.pjs.map((p: any) => (
+                                      <tr key={p.id} className={`border-t border-slate-100 ${p.destacado ? "bg-indigo-50 font-semibold" : ""}`}>
+                                        <td className="px-2 py-1">{p.nome} {p.destacado && <span className="text-indigo-600 ml-1">←</span>}</td>
+                                        <td className="px-2 py-1 font-mono text-[10px]">{p.cnpj}</td>
+                                        <td className="px-2 py-1 text-center text-[10px] uppercase text-slate-500">{p.status}</td>
+                                        <td className="px-2 py-1 text-right tabular-nums">{formatBRL(Number(p.valor))}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
