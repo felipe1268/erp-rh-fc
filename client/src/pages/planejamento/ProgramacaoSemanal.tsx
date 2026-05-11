@@ -156,14 +156,27 @@ function statusLabel(atrasada: boolean, avanco: number) {
 }
 
 /**
- * Rev. 1637.3 — Regra única de "Atrasada" para a tela Programação Semanal.
- * Atividade só é considerada atrasada quando há DÍVIDA acumulada de semanas
- * já FECHADAS (cutoff = domingo 23:59 da semana anterior à `semanaIni`).
- * Atrasos da semana corrente (ainda em aberto) NÃO contam — refletem
- * trabalho que ainda nem terminou. Reuso pelo navegador, alertas IA,
- * tabela e modo report.
+ * Rev. 1638.1 — Regra única de "Atrasada" para a tela Programação Semanal,
+ * agora com tolerância PROPORCIONAL ao peso (recomendação D + C light).
+ *
+ * Condição-base: cutoff = domingo 23:59 da semana anterior à `semanaIni`
+ * (semanas já FECHADAS). Atrasos da semana corrente (ainda em aberto) NÃO
+ * contam — refletem trabalho que ainda nem terminou.
+ *
+ * Atividade vira "Atrasada" SE diff (prev − real) ≥ 2pp E pelo menos UMA:
+ *   (a) Vencida pelo cutoff: `fim ≤ ref` e av < 100 (cronograma diz que
+ *       devia ter terminado e não terminou — sempre flaga, sem exceção).
+ *   (b) Dívida material no projeto: peso% × diff / 100 ≥ 0,05pp (= 5
+ *       centésimos do avanço total). Filtra atividades com peso minúsculo
+ *       (ex.: 0,17%) cuja "atrasada" gera dívida desprezível (<0,01pp) e
+ *       só polui visualmente o gerente.
+ *   (c) Lag grotesco: diff ≥ 30pp. Mesmo que peso seja insignificante,
+ *       uma atividade tão atrás do linear merece destaque (rede de
+ *       segurança contra o filtro de dívida).
+ *
+ * Reuso por navegador, alertas IA, tabela e modo report (4 pontos).
  */
-function calcAtrasada(a: any, av: number, semanaIni: Date | undefined): boolean {
+function calcAtrasada(a: any, av: number, semanaIni: Date | undefined, peso?: number): boolean {
   if (!semanaIni || !a?.dataInicio || !a?.dataFim || av >= 100) return false;
   const d = new Date(semanaIni);
   d.setDate(d.getDate() - 1);
@@ -174,7 +187,17 @@ function calcAtrasada(a: any, av: number, semanaIni: Date | undefined): boolean 
   let prev = 0;
   if (ref >= fim)      prev = 100;
   else if (ref > ini)  prev = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
-  return (prev - av) >= 2;
+  const diff = prev - av;
+  if (diff < 2) return false;
+  // (a) Vencida pelo cutoff — sempre atrasada.
+  if (ref >= fim) return true;
+  // (b) Dívida material no projeto.
+  const pesoNum = typeof peso === "number" && isFinite(peso) ? peso : n(a?.pesoFinanceiro);
+  const dividaPp = pesoNum * diff / 100;
+  if (dividaPp >= 0.05) return true;
+  // (c) Lag grotesco mesmo com peso minúsculo.
+  if (diff >= 30) return true;
+  return false;
 }
 
 function severidadeCor(sev: string) {
@@ -530,7 +553,7 @@ export function ProgramacaoSemanal({
         atividades: at.map((a: any) => {
           const av = avancosMap[a.id] ?? 0;
           // Rev. 1637.3 — mesma regra do badge: só atrasada com débito de semanas fechadas.
-          const atrasada = calcAtrasada(a, av, semana.ini);
+          const atrasada = calcAtrasada(a, av, semana.ini, n(a.pesoFinanceiro));
           return {
             eapCodigo:        a.eapCodigo,
             nome:             a.nome,
@@ -673,7 +696,7 @@ export function ProgramacaoSemanal({
               const atv = atividadesDaSemana(atividades, s);
               // Rev. 1637.3 — chip vermelho do navegador segue a mesma regra:
               // só pinta vermelho se houver débito acumulado de semanas fechadas.
-              const temAtrasada = atv.some((a: any) => calcAtrasada(a, avancosMap[a.id] ?? 0, s.ini));
+              const temAtrasada = atv.some((a: any) => calcAtrasada(a, avancosMap[a.id] ?? 0, s.ini, n(a.pesoFinanceiro)));
               const isCurrent   = dateStr(s.ini) <= today && dateStr(s.fim) >= today;
               const temRefis    = refisSemanas.has(dateStr(s.ini));
               return (
@@ -896,8 +919,8 @@ export function ProgramacaoSemanal({
                     {(() => null)()}
                     {atividadesSemAtual.map((a: any, i: number) => {
                       const av       = avancosMap[a.id] ?? 0;
-                      // Rev. 1637.3 — regra única (helper calcAtrasada).
-                      const atrasada = calcAtrasada(a, av, semanaAtual?.ini);
+                      // Rev. 1638.1 — regra única com tolerância proporcional ao peso.
+                      const atrasada = calcAtrasada(a, av, semanaAtual?.ini, n(a.pesoFinanceiro));
                       const isMaiorPeso  = pesoSemana.maiorPesoIds.has(a.id);
                       const isCritica    = pesoSemana.criticasIds.has(a.id);
                       const isQuaseCrit  = pesoSemana.quaseCriticasIds.has(a.id);
@@ -1713,7 +1736,7 @@ function RelatorioTresSemanas({
             });
             const matEap   = insEap.filter((i: any) => parseFloat(i.alocacaoMat ?? "0") > 0 && parseFloat(i.alocacaoMdo ?? "0") === 0);
             // Rev. 1637.3 — contador do report card usa a mesma regra debt-based.
-            const atrasadas = at.filter((a: any) => calcAtrasada(a, avancosMap[a.id] ?? 0, semana.ini)).length;
+            const atrasadas = at.filter((a: any) => calcAtrasada(a, avancosMap[a.id] ?? 0, semana.ini, n(a.pesoFinanceiro))).length;
 
             return (
               <div key={semana.numero} className="flex flex-col">
@@ -1741,7 +1764,7 @@ function RelatorioTresSemanas({
                   {at.map((a: any, i: number) => {
                     const av       = avancosMap[a.id] ?? 0;
                     // Rev. 1637.3 — cada atividade no report card.
-                    const atrasada = calcAtrasada(a, av, semana.ini);
+                    const atrasada = calcAtrasada(a, av, semana.ini, n(a.pesoFinanceiro));
                     return (
                       <div key={a.id ?? i}
                         className={`rounded p-1.5 border text-[11px] ${atrasada ? "bg-red-50 border-red-200" : av >= 100 ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-100"}`}>
