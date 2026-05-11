@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip as UiTooltip, TooltipContent as UiTooltipContent, TooltipProvider as UiTooltipProvider, TooltipTrigger as UiTooltipTrigger } from "@/components/ui/tooltip";
 import { Popover as UiPopover, PopoverContent as UiPopoverContent, PopoverTrigger as UiPopoverTrigger } from "@/components/ui/popover";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -376,6 +377,11 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   // — exatamente o problema que a Rev. 1637 nasceu para resolver. Mantemos
   // o toggle para quem precisar ver tempo real entre fechamentos.
   const [modoVisao, setModoVisao] = useState<"live" | "oficial">("oficial");
+  // Rev. 1652 — Modal de confirmação interno (substitui `window.confirm`,
+  // que renderizava o domínio gigante "xxx.replit.dev diz" no topo do popup
+  // do navegador). Uso: `askConfirm({ title, description, onConfirm })`.
+  const [confirmCfg, setConfirmCfg] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null);
+  const askConfirm = (cfg: { title: string; description: string; onConfirm: () => void }) => setConfirmCfg(cfg);
   const fecharSemanaMutation = trpc.planejamento.fecharSemana.useMutation({
     onSuccess: (r) => { toast.success(`Semana fechada — cutoff oficial: ${(r.dataCorte || "").split("-").reverse().join("/")}`); refetchDataCorte(); },
     onError: (e) => toast.error(e.message || "Falha ao fechar semana"),
@@ -670,8 +676,12 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                     : "Dia da semana do cutoff. Define a janela cobrável da Programação Semanal (dia seguinte ao cutoff anterior → próximo cutoff)."}
                   onChange={(e) => {
                     const novoDow = parseInt(e.target.value, 10);
-                    if (!confirm(`Mudar o dia do cutoff para ${["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"][novoDow]}?\n\nA Programação Semanal será REDISTRIBUÍDA — cada semana passará a ir do dia seguinte ao cutoff anterior até o próximo cutoff.`)) return;
-                    setDiaCorteMut.mutate({ projetoId, diaCorteSemana: novoDow });
+                    const nomeDia = ["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"][novoDow];
+                    askConfirm({
+                      title: `Mudar o dia do cutoff para ${nomeDia}?`,
+                      description: "A Programação Semanal será REDISTRIBUÍDA — cada semana passará a ir do dia seguinte ao cutoff anterior até o próximo cutoff.",
+                      onConfirm: () => setDiaCorteMut.mutate({ projetoId, diaCorteSemana: novoDow }),
+                    });
                   }}>
                   {["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"].map((nome, i) => (
                     <option key={i} value={i}>{nome}</option>
@@ -689,8 +699,11 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                     onClick={() => {
                       const dow = dataCorteInfo.diaCorteSemana ?? 4;
                       const nome = ["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"][dow];
-                      if (!confirm(`Consolidar a premissa de cutoff em "${nome}"?\n\nDepois de consolidado, o dia da semana NÃO poderá mais ser alterado neste projeto. A Programação Semanal manterá esta janela permanentemente.`)) return;
-                      consolidarCutoffMut.mutate({ projetoId });
+                      askConfirm({
+                        title: `Consolidar a premissa de cutoff em "${nome}"?`,
+                        description: "Depois de consolidado, o dia da semana NÃO poderá mais ser alterado neste projeto. A Programação Semanal manterá esta janela permanentemente.",
+                        onConfirm: () => consolidarCutoffMut.mutate({ projetoId }),
+                      });
                     }}
                     className="text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded px-1.5 py-0.5">
                     🔓 Consolidar
@@ -707,11 +720,17 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                 const sugerido = dataCorteInfo?.sugeridoSemFechamento;
                 const atual = dataCorteInfo?.dataCorteOficial;
                 const diaNome = (dataCorteInfo as any)?.diaCorteNome || "Quinta-feira";
-                const msg = atual && sugerido && atual === sugerido
-                  ? `O cutoff oficial já é ${sugerido.split("-").reverse().join("/")}. Refechar mesmo assim?`
-                  : `Fechar semana e avançar o cutoff oficial (${diaNome}) para ${(sugerido || "—").split("-").reverse().join("/")}?\n\nO Portal do Cliente passará a usar essa data como referência de TODOS os indicadores (Previsto/Realizado/Desvio/SPI/Atrasadas).`;
-                if (!confirm(msg)) return;
-                fecharSemanaMutation.mutate({ projetoId });
+                const sugeridoBR = (sugerido || "—").split("-").reverse().join("/");
+                const jaIgual = atual && sugerido && atual === sugerido;
+                askConfirm({
+                  title: jaIgual
+                    ? `O cutoff oficial já é ${sugeridoBR}. Refechar mesmo assim?`
+                    : `Fechar semana e avançar o cutoff oficial (${diaNome}) para ${sugeridoBR}?`,
+                  description: jaIgual
+                    ? "Esta ação reaplica o fechamento da semana atual."
+                    : "O Portal do Cliente passará a usar essa data como referência de TODOS os indicadores (Previsto/Realizado/Desvio/SPI/Atrasadas).",
+                  onConfirm: () => fecharSemanaMutation.mutate({ projetoId }),
+                });
               }}>
               <CalendarCheck className="h-3.5 w-3.5" />
               {fecharSemanaMutation.isPending ? "Fechando…" : "Fechar semana"}
@@ -1415,6 +1434,21 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Rev. 1652 — Modal de confirmação interno (sem o domínio gigante do
+          window.confirm). Compartilhado entre cutoff/consolidar/fechar semana. */}
+      <AlertDialog open={!!confirmCfg} onOpenChange={(open) => { if (!open) setConfirmCfg(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmCfg?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmCfg?.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { confirmCfg?.onConfirm(); setConfirmCfg(null); }}>Confirmar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </DashboardLayout>
   );

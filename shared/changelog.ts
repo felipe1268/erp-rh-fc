@@ -11452,4 +11452,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 16:30:00",
   },
+  {
+    version: 1652,
+    titulo: "Confirmações do cutoff usam modal interno (sem o domínio gigante do navegador)",
+    descricao: "Os 3 popups de confirmação no header do Planejamento (Mudar dia do cutoff, Consolidar premissa, Fechar semana) usavam `window.confirm`, que renderizava o domínio do site no topo do popup nativo (ex.: 'xxx.replit.dev diz') — visualmente poluído e quebrava a leitura da pergunta. Substituídos por `AlertDialog` do shadcn/ui via helper `askConfirm({ title, description, onConfirm })` — popup limpo, com título grande e descrição em parágrafo separado. Demais `confirm()` do arquivo (recalcular pesos, desconsolidar, IA, criar revisão) preservados.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 17:00:00",
+  },
 ];
