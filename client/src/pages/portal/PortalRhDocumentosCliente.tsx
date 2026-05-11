@@ -402,13 +402,19 @@ export default function PortalRhDocumentosCliente() {
           </div>
           {/* Body — iframe ocupando o resto, com marca d'água sutil cobrindo */}
           <div className="relative flex-1 min-h-0 bg-slate-800">
-            <iframe
-              src={pdfViewer.url}
-              title={pdfViewer.titulo}
+            {/* Rev. 1641 — Chrome bloqueia render de PDF dentro de <iframe sandbox>;
+                <object type="application/pdf"> é o padrão compatível, com fallback. */}
+            <object
+              data={pdfViewer.url}
+              type="application/pdf"
               className="pdf-viewer-frame absolute inset-0 w-full h-full bg-white"
-              sandbox="allow-same-origin allow-scripts"
-              allow="fullscreen"
-            />
+              aria-label={pdfViewer.titulo}
+            >
+              <div className="flex flex-col items-center justify-center h-full bg-slate-100 text-slate-700 p-6 text-center gap-3">
+                <p className="text-sm">Não foi possível exibir o documento neste navegador.</p>
+                <a href={pdfViewer.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition">Abrir em nova aba</a>
+              </div>
+            </object>
             {/* Marca d'água diagonal repetida — identifica o cliente acessando.
                 pointer-events:none pra não atrapalhar a navegação no PDF. */}
             <div

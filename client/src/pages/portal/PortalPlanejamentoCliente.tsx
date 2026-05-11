@@ -4523,13 +4523,27 @@ function AbaEfetivo({ token, obraId }: { token: string; obraId: number }) {
               </button>
             </div>
           </div>
-          <iframe
-            src={pdfViewer.url}
-            title={pdfViewer.titulo}
-            sandbox="allow-scripts allow-same-origin"
+          {/* Rev. 1641 — Chrome trata o visualizador interno de PDF como plugin
+              e o atributo `sandbox` no <iframe> bloqueia o render (tela cinza).
+              Usamos <object>, que é o padrão compatível com Chrome/Edge/Firefox
+              para PDF embutido, com fallback de "abrir em nova aba" caso o
+              navegador não consiga renderizar (ex.: arquivo corrompido). */}
+          <object
+            data={pdfViewer.url}
+            type="application/pdf"
             className="pdf-viewer-frame flex-1 w-full bg-white"
-            allow="fullscreen"
-          />
+            aria-label={pdfViewer.titulo}
+          >
+            <div className="flex flex-col items-center justify-center h-full bg-slate-100 text-slate-700 p-6 text-center gap-3">
+              <p className="text-sm">Não foi possível exibir o documento neste navegador.</p>
+              <a
+                href={pdfViewer.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition"
+              >Abrir em nova aba</a>
+            </div>
+          </object>
         </div>
       )}
     </div>
