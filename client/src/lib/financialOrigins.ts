@@ -21,6 +21,10 @@ export type FinancialOrigin =
   | "adiantamento" | "comissao_comprador"
   | "planejamento_medicao" | "planejamento_compra"
   | "cronograma_atividade" | "revenue"
+  // Rev. 1630 — Projeção de Folha/Benefícios/13º/PJ (forecast antes do fato gerador)
+  | "folha_projetada" | "encargos_projetado"
+  | "beneficio_vr_projetado" | "beneficio_va_projetado"
+  | "decimo_terceiro_projetado" | "pj_projetado"
   | "manual" | "recorrente";
 
 export const ORIGEM_LABELS: Record<string, string> = {
@@ -52,6 +56,13 @@ export const ORIGEM_LABELS: Record<string, string> = {
   adiantamento: "Adiantamento", comissao_comprador: "Comissão",
   // Receitas
   cronograma_atividade: "Cronograma", revenue: "Receita Manual",
+  // Projeções de Folha (Rev. 1630)
+  folha_projetada: "Folha (Projeção)",
+  encargos_projetado: "Encargos (Projeção)",
+  beneficio_vr_projetado: "VR (Projeção)",
+  beneficio_va_projetado: "VA (Projeção)",
+  decimo_terceiro_projetado: "13º (Projeção)",
+  pj_projetado: "PJ (Projeção)",
   // Genéricos
   manual: "Manual", recorrente: "Recorrente",
 };
@@ -69,6 +80,9 @@ export const ORIGEM_ICONS: Record<string, LucideIcon> = {
   almoxarifado: Package, almoxarifado_saida: Package,
   adiantamento: Wallet, comissao_comprador: Wallet,
   cronograma_atividade: Calendar, revenue: Banknote,
+  folha_projetada: Users, encargos_projetado: Receipt,
+  beneficio_vr_projetado: Receipt, beneficio_va_projetado: Receipt,
+  decimo_terceiro_projetado: Calendar, pj_projetado: Briefcase,
   manual: Wallet, recorrente: Wallet,
 };
 
@@ -109,6 +123,13 @@ export const ORIGEM_COLORS: Record<string, string> = {
   comissao_comprador: "bg-gray-50 text-gray-700 border-gray-200",
   cronograma_atividade: "bg-green-50 text-green-700 border-green-200",
   revenue: "bg-green-50 text-green-700 border-green-200",
+  // Projeções RH/Folha (Rev. 1630) — paleta violet pra reforçar "forecast"
+  folha_projetada: "bg-violet-50 text-violet-700 border-violet-200",
+  encargos_projetado: "bg-violet-50 text-violet-700 border-violet-200",
+  beneficio_vr_projetado: "bg-violet-50 text-violet-700 border-violet-200",
+  beneficio_va_projetado: "bg-violet-50 text-violet-700 border-violet-200",
+  decimo_terceiro_projetado: "bg-violet-50 text-violet-700 border-violet-200",
+  pj_projetado: "bg-violet-50 text-violet-700 border-violet-200",
   manual: "bg-gray-50 text-gray-700 border-gray-200",
   recorrente: "bg-violet-50 text-violet-700 border-violet-200",
 };

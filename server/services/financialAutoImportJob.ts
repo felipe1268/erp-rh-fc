@@ -98,8 +98,15 @@ async function runJob(): Promise<void> {
       // FASE 3 — Fontes de receita
       const receitas = await runAllReceitasImport(companyId, mes).catch(() => 0);
 
-      const total = folha + pj + parceiros + despesas + receitas;
-      console.log(`[FinancialJob] company=${companyId} mes=${mes} | folha=${folha} pj=${pj} parceiros=${parceiros} despesas=${despesas} receitas=${receitas} TOTAL=${total}`);
+      // Rev. 1630 — Projeção de Folha/Encargos/Benefícios/13º/PJ — 12 meses (idempotente)
+      const { importFolhaProjecao } = await import("./payrollProjectionBridge");
+      const projecao = await importFolhaProjecao(companyId).catch((e: any) => {
+        console.error(`[FinancialJob] payrollProjection company=${companyId} erro:`, e?.message);
+        return 0;
+      });
+
+      const total = folha + pj + parceiros + despesas + receitas + projecao;
+      console.log(`[FinancialJob] company=${companyId} mes=${mes} | folha=${folha} pj=${pj} parceiros=${parceiros} despesas=${despesas} receitas=${receitas} projecao12m=${projecao} TOTAL=${total}`);
     } catch (e: any) {
       console.error(`[FinancialJob] Erro para company ${companyId}: ${e?.message}`);
     }

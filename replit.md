@@ -43,6 +43,10 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **API Contracts**: Defined by tRPC routers in `server/routers/`
 - **Theme/UI**: `client/src/index.css`, `tailwind.config.ts`, `shadcn/ui` components
 
+## Recent changes
+
+- **Rev. 1630**: Projeção de Folha (CLT) + Encargos 33,8% + VR/VA + 13º + PJ para os próximos 12 meses, persistida em `financial_entries` (status `previsto`, origens `*_projetado`). Reflete nos cards Próx 7d/15d/30d/60d/90d e no novo card "Calendário Folha & Benefícios — 12 meses" no Contas a Pagar, com alerta de 13º (Lei 4.090/62). Job idempotente diário via `payrollProjectionBridge.ts`.
+
 ## Architecture decisions
 
 - **Consolidated Payroll Model**: Parent company (`input.companyId`) owns payroll periods and records. Read queries use `allCompanyIds` IN clauses for subsidiary data, while write queries use `input.companyId` for consolidation.

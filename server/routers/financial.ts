@@ -2466,6 +2466,79 @@ export const financialRouter = router({
     return rows(res);
   }),
 
+  // ─────────── Rev. 1630 — Calendário Folha & Benefícios — 12 meses ───────────
+  // Agrupa folha (real + projetada), encargos, VR/VA, 13º e PJ por mês de vencimento,
+  // a partir do 1º dia do mês corrente até +12 meses. Usado pelo card "Calendário
+  // Folha & Benefícios — 12 meses" no Contas a Pagar.
+  // Tenant isolation: filtra company_id IN (...)
+  getCalendarioFolha12m: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    const ORIGENS_FOLHA = [
+      "folha_rh", "folha_clt", "folha", "payroll_agregado", "fechamento_ponto",
+      "folha_projetada",
+    ];
+    const ORIGENS_ENC = ["encargos_projetado", "guia_tributaria"];
+    const ORIGENS_VR  = ["beneficio_vr", "beneficio_vr_projetado"];
+    const ORIGENS_VA  = ["beneficio_va", "beneficio_va_projetado"];
+    const ORIGENS_13  = ["decimo_terceiro_projetado"];
+    const ORIGENS_PJ  = ["pj", "pagamento_pj", "pro_labore", "medicao_pj", "pj_projetado"];
+
+    const arrSql = (xs: string[]) => `ARRAY[${xs.map(s => `'${s}'`).join(",")}]::text[]`;
+
+    const res = await dbExecute(db,
+      `SELECT
+         TO_CHAR(date_trunc('month', COALESCE(data_vencimento, data_competencia)), 'YYYY-MM') AS mes,
+         SUM(CASE WHEN origem_modulo = ANY(${arrSql(ORIGENS_FOLHA)}) THEN valor_previsto::numeric ELSE 0 END) AS folha,
+         SUM(CASE WHEN origem_modulo = ANY(${arrSql(ORIGENS_ENC)})   THEN valor_previsto::numeric ELSE 0 END) AS encargos,
+         SUM(CASE WHEN origem_modulo = ANY(${arrSql(ORIGENS_VR)})    THEN valor_previsto::numeric ELSE 0 END) AS vr,
+         SUM(CASE WHEN origem_modulo = ANY(${arrSql(ORIGENS_VA)})    THEN valor_previsto::numeric ELSE 0 END) AS va,
+         SUM(CASE WHEN origem_modulo = ANY(${arrSql(ORIGENS_13)})    THEN valor_previsto::numeric ELSE 0 END) AS decimo,
+         SUM(CASE WHEN origem_modulo = ANY(${arrSql(ORIGENS_PJ)})    THEN valor_previsto::numeric ELSE 0 END) AS pj,
+         SUM(CASE WHEN origem_modulo IN ('folha_rh','folha_clt','folha','payroll_agregado','fechamento_ponto') THEN 1 ELSE 0 END) AS folha_real_count,
+         SUM(CASE WHEN origem_modulo IN ('folha_projetada') THEN 1 ELSE 0 END) AS folha_proj_count
+       FROM financial_entries
+       WHERE company_id IN (${inlineIds(ids)})
+         AND tipo = 'despesa'
+         AND status != 'cancelado'
+         AND COALESCE(data_vencimento, data_competencia) >= date_trunc('month', CURRENT_DATE)
+         AND COALESCE(data_vencimento, data_competencia) <  date_trunc('month', CURRENT_DATE) + INTERVAL '12 months'
+         AND origem_modulo = ANY(${arrSql([...ORIGENS_FOLHA, ...ORIGENS_ENC, ...ORIGENS_VR, ...ORIGENS_VA, ...ORIGENS_13, ...ORIGENS_PJ])})
+       GROUP BY 1
+       ORDER BY 1 ASC`,
+      []
+    );
+    const buckets = rows(res).map((r: any) => ({
+      mes: r.mes as string,
+      folha: parseFloat(r.folha ?? "0"),
+      encargos: parseFloat(r.encargos ?? "0"),
+      vr: parseFloat(r.vr ?? "0"),
+      va: parseFloat(r.va ?? "0"),
+      decimoTerceiro: parseFloat(r.decimo ?? "0"),
+      pj: parseFloat(r.pj ?? "0"),
+      folhaRealCount: parseInt(r.folha_real_count ?? "0", 10),
+      folhaProjCount: parseInt(r.folha_proj_count ?? "0", 10),
+      total:
+        parseFloat(r.folha ?? "0") + parseFloat(r.encargos ?? "0") +
+        parseFloat(r.vr ?? "0")    + parseFloat(r.va ?? "0") +
+        parseFloat(r.decimo ?? "0")+ parseFloat(r.pj ?? "0"),
+    }));
+    return buckets;
+  }),
+
+  // Disparo manual da projeção (botão admin / cron externo)
+  rerunPayrollProjection: protectedProcedure.input(z.object({
+    companyId: z.number(),
+  })).mutation(async ({ input }) => {
+    const { importFolhaProjecao } = await import("../services/payrollProjectionBridge");
+    const inseridos = await importFolhaProjecao(input.companyId);
+    return { ok: true, inseridos };
+  }),
+
   // ─────────────────── FASE 5: KPIs FINANCEIROS ───────────────────
 
   getKpis: protectedProcedure.input(z.object({
