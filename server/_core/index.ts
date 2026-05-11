@@ -942,7 +942,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1639-2026-05-11-baixa-rescisao-complementar";
+    const COLFIX_VERSION = "v1640-2026-05-11-atender-pelo-estoque";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -961,6 +961,11 @@ Regras:
             ADD COLUMN IF NOT EXISTS data_vencimento varchar(10),
             ADD COLUMN IF NOT EXISTS evidencia       text,
             ADD COLUMN IF NOT EXISTS registrado_por  integer;
+        
+          -- Rev. 1640 — Atender pelo Estoque (Almoxarifado) como fornecedor virtual no Mapa de Cotação
+          ALTER TABLE IF EXISTS compras_cotacao_fornecedores
+            ADD COLUMN IF NOT EXISTS is_estoque             boolean DEFAULT false,
+            ADD COLUMN IF NOT EXISTS almoxarifado_origem_id integer;
         `);
         await db.execute(sql`
           DO $$ BEGIN

@@ -934,6 +934,14 @@ export default function Cotacoes() {
     onSuccess: () => { toast.success("Fornecedor removido!"); mapaQ.refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  const adicionarEstoque = trpc.compras.adicionarEstoqueAoMapa.useMutation({
+    onSuccess: (data: any) => {
+      if (data?.jaExistia) toast.info("Estoque já está no mapa.");
+      else toast.success(`Estoque adicionado ao mapa (R$ ${(data?.totalEstoque ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}).`);
+      mapaQ.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const [salvarProgress, setSalvarProgress] = useState<number | null>(null);
   const salvarProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const salvarRespostas = trpc.compras.salvarRespostasLote.useMutation({
@@ -2512,9 +2520,9 @@ export default function Cotacoes() {
                   {detalheFullscreen.status === "pendente" && (detalheFullscreen as any).tipo !== "servico" && (
                     <>
                       <Button onClick={() => handleAprovarGerarOC(detalheFullscreen.id)} disabled={gerarOC.isPending}
-                        className={`${temItensSemVerba && !semVerbaAutorizado ? "bg-red-600 hover:bg-red-700" : isMedicaoVencedor ? "bg-blue-600 hover:bg-blue-500" : "bg-emerald-600 hover:bg-emerald-500"} text-white gap-2`}>
+                        className={`${(() => { const venc = (mapa?.participantes ?? []).find((p:any)=>p.selecionado) ?? null; const est = !!venc?.isEstoque; return temItensSemVerba && !semVerbaAutorizado ? "bg-red-600 hover:bg-red-700" : est ? "bg-violet-600 hover:bg-violet-500" : isMedicaoVencedor ? "bg-blue-600 hover:bg-blue-500" : "bg-emerald-600 hover:bg-emerald-500"; })()} text-white gap-2`}>
                         {gerarOC.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : temItensSemVerba && !semVerbaAutorizado ? <ShieldAlert className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
-                        {temItensSemVerba && !semVerbaAutorizado ? "Aprovar (Requer Autorização)" : semVerbaAutorizado ? "Aprovar e Gerar OC (Autorizado)" : isMedicaoVencedor ? "Aprovar e Gerar Contrato" : "Aprovar e Gerar OC"}
+                        {(() => { const venc = (mapa?.participantes ?? []).find((p:any)=>p.selecionado) ?? null; const est = !!venc?.isEstoque; return temItensSemVerba && !semVerbaAutorizado ? "Aprovar (Requer Autorização)" : semVerbaAutorizado ? "Aprovar e Gerar OC (Autorizado)" : est ? "Atender pelo Estoque" : isMedicaoVencedor ? "Aprovar e Gerar Contrato" : "Aprovar e Gerar OC"; })()}
                       </Button>
                       {(mapa?.participantes ?? []).length >= 2 && !isMedicaoVencedor && (
                         <Button variant="outline" onClick={() => handleAbrirCotacaoParcial(detalheFullscreen.id)} disabled={gerarOC.isPending || gerarOCsParciais.isPending}
@@ -2825,9 +2833,9 @@ export default function Cotacoes() {
                     {detalheFullscreen.status === "pendente" && (detalheFullscreen as any).tipo !== "servico" && (
                       <>
                         <Button onClick={() => handleAprovarGerarOC(detalheFullscreen.id)} disabled={gerarOC.isPending}
-                          className={`${temItensSemVerba && !semVerbaAutorizado ? "bg-red-600 hover:bg-red-700" : isMedicaoVencedor ? "bg-blue-600 hover:bg-blue-500" : "bg-emerald-600 hover:bg-emerald-500"} text-white gap-2`}>
+                          className={`${(() => { const venc = (mapa?.participantes ?? []).find((p:any)=>p.selecionado) ?? null; const est = !!venc?.isEstoque; return temItensSemVerba && !semVerbaAutorizado ? "bg-red-600 hover:bg-red-700" : est ? "bg-violet-600 hover:bg-violet-500" : isMedicaoVencedor ? "bg-blue-600 hover:bg-blue-500" : "bg-emerald-600 hover:bg-emerald-500"; })()} text-white gap-2`}>
                           {gerarOC.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : temItensSemVerba && !semVerbaAutorizado ? <ShieldAlert className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
-                          {temItensSemVerba && !semVerbaAutorizado ? "Aprovar (Requer Autorização)" : semVerbaAutorizado ? "Aprovar e Gerar OC (Autorizado)" : isMedicaoVencedor ? "Aprovar e Gerar Contrato" : "Aprovar e Gerar OC"}
+                          {(() => { const venc = (mapa?.participantes ?? []).find((p:any)=>p.selecionado) ?? null; const est = !!venc?.isEstoque; return temItensSemVerba && !semVerbaAutorizado ? "Aprovar (Requer Autorização)" : semVerbaAutorizado ? "Aprovar e Gerar OC (Autorizado)" : est ? "Atender pelo Estoque" : isMedicaoVencedor ? "Aprovar e Gerar Contrato" : "Aprovar e Gerar OC"; })()}
                         </Button>
                         {(mapa?.participantes ?? []).length >= 2 && !isMedicaoVencedor && (
                           <Button variant="outline" onClick={() => handleAbrirCotacaoParcial(detalheFullscreen.id)} disabled={gerarOC.isPending || gerarOCsParciais.isPending}
@@ -2930,6 +2938,18 @@ export default function Cotacoes() {
                         className="bg-blue-600 hover:bg-blue-500 text-white gap-2">
                         <UserPlus className="h-4 w-4" /> Adicionar
                       </Button>
+                      {showDetalhe && !(mapa?.participantes ?? []).some((p: any) => p.isEstoque) && (
+                        <Button
+                          type="button"
+                          onClick={() => adicionarEstoque.mutate({ cotacaoId: showDetalhe, companyId, obraId: (detalheFullscreen as any)?.obraId ?? undefined })}
+                          disabled={adicionarEstoque.isPending}
+                          className="bg-violet-600 hover:bg-violet-500 text-white gap-2"
+                          title="Atender esta SC com saldo do almoxarifado, sem fornecedor externo"
+                        >
+                          {adicionarEstoque.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
+                          Atender pelo Estoque
+                        </Button>
+                      )}
                     </div>
 
                     {sugestoesFiltradas.length > 0 && detalheFullscreen?.status === "pendente" && (
@@ -2979,12 +2999,15 @@ export default function Cotacoes() {
                           const scoreVal = sc?.score ?? 0;
                           const isRecomendado = scoreVal >= 4.0 && sc && sc.totalOCs >= 1;
                           const isAtencao = scoreVal > 0 && scoreVal < 2.5 && sc && sc.totalOCs >= 1;
+                          const isEstoqueChip = !!p.isEstoque;
+                          const nomeChip = isEstoqueChip ? "Estoque (Almoxarifado)" : nome;
                           return (
-                            <div key={p.fornecedorId} className="flex items-center gap-1">
-                              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium ${isMelhor ? "bg-emerald-50 border-emerald-300 text-emerald-700" : p.selecionado ? "bg-blue-50 border-blue-300 text-blue-700" : "bg-gray-100 border-gray-300 text-gray-700"}`}>
-                                {isMelhor && <Trophy className="h-3 w-3" />}
-                                {nome}
-                                <FornecedorContatoPopover fornecedor={p.fornecedor} />
+                            <div key={`${p.fornecedorId}-${isEstoqueChip ? "est" : "f"}`} className="flex items-center gap-1">
+                              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium ${isEstoqueChip ? "bg-violet-50 border-violet-300 text-violet-700" : isMelhor ? "bg-emerald-50 border-emerald-300 text-emerald-700" : p.selecionado ? "bg-blue-50 border-blue-300 text-blue-700" : "bg-gray-100 border-gray-300 text-gray-700"}`}>
+                                {isEstoqueChip ? <Package className="h-3 w-3" /> : (isMelhor && <Trophy className="h-3 w-3" />)}
+                                {nomeChip}
+                                {isEstoqueChip && <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded-full border border-violet-200 font-semibold">ESTOQUE</span>}
+                                {!isEstoqueChip && <FornecedorContatoPopover fornecedor={p.fornecedor} />}
                                 {sc && scoreVal > 0 && (
                                   <span className="flex items-center gap-0.5 text-[10px] font-semibold" title={`Score: ${scoreVal}/5`}>
                                     <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
@@ -3004,14 +3027,14 @@ export default function Cotacoes() {
                                 {parseFloat(p.totalOrcado ?? "0") > 0 && <span className="font-normal text-xs opacity-70">· {parseFloat(p.totalOrcado).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>}
                                 <button type="button" onClick={() => removerForn.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId })} className="ml-1 hover:text-red-500 transition-colors"><X className="h-3 w-3" /></button>
                               </div>
-                              <button
+                              {!isEstoqueChip && (<button
                                 type="button"
                                 onPointerDown={(e) => { e.stopPropagation(); openEditForn(p.fornecedorId); }}
                                 className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 text-gray-400 transition-colors shadow-sm cursor-pointer"
                                 title="Editar cadastro do fornecedor"
                               >
                                 <Pencil className="h-3.5 w-3.5" />
-                              </button>
+                              </button>)}
                             </div>
                           );
                         })}

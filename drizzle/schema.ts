@@ -5815,6 +5815,8 @@ export const comprasCotacaoFornecedores = pgTable("compras_cotacao_fornecedores"
   valorFrete:       numeric("valor_frete", { precision: 14, scale: 2 }).default("0"),
   transportadora:   varchar("transportadora", { length: 255 }),
   moduloMedicao:    varchar("modulo_medicao", { length: 30 }),
+  isEstoque:        boolean("is_estoque").default(false),
+  almoxarifadoOrigemId: integer("almoxarifado_origem_id"),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
 

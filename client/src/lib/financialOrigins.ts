@@ -27,6 +27,7 @@ export type FinancialOrigin =
   | "decimo_terceiro_projetado" | "pj_projetado"
   // Rev. 1636 — Projeções de Férias (CLT 145) e Rescisão de Aviso (CLT 477 §6º)
   | "ferias_projetada" | "rescisao_projetada"
+  | "transferencia_estoque"
   | "manual" | "recorrente";
 
 export const ORIGEM_LABELS: Record<string, string> = {
@@ -67,6 +68,7 @@ export const ORIGEM_LABELS: Record<string, string> = {
   pj_projetado: "PJ (Projeção)",
   ferias_projetada: "Férias (Projeção)",
   rescisao_projetada: "Rescisão (Projeção)",
+  transferencia_estoque: "Transferência Estoque",
   // Genéricos
   manual: "Manual", recorrente: "Recorrente",
 };
@@ -88,6 +90,7 @@ export const ORIGEM_ICONS: Record<string, LucideIcon> = {
   beneficio_vr_projetado: Receipt, beneficio_va_projetado: Receipt,
   decimo_terceiro_projetado: Calendar, pj_projetado: Briefcase,
   ferias_projetada: Calendar, rescisao_projetada: FileText,
+  transferencia_estoque: Package,
   manual: Wallet, recorrente: Wallet,
 };
 
@@ -124,6 +127,7 @@ export const ORIGEM_COLORS: Record<string, string> = {
   processo_trabalhista: "bg-rose-50 text-rose-700 border-rose-200",
   almoxarifado: "bg-emerald-50 text-emerald-700 border-emerald-200",
   almoxarifado_saida: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  transferencia_estoque: "bg-violet-50 text-violet-700 border-violet-200",
   adiantamento: "bg-gray-50 text-gray-700 border-gray-200",
   comissao_comprador: "bg-gray-50 text-gray-700 border-gray-200",
   cronograma_atividade: "bg-green-50 text-green-700 border-green-200",

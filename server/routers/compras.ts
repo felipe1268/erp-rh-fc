@@ -3770,6 +3770,91 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       return { ok: true };
     }),
 
+  // Rev. 1640 — Atender pelo Estoque (Almoxarifado) como fornecedor virtual.
+  // Insere uma "linha de fornecedor" sentinel (fornecedorId=0, isEstoque=true) e
+  // pré-preenche as respostas com o preço médio do almoxarifado para cada item,
+  // limitando a quantidade ao saldo disponível. Se o item não existir no almox
+  // (sem match por nome/codigoInterno), insere com preço=0 e qty=0 — o usuário
+  // verá esse item como "sem cobertura no estoque" no mapa.
+  adicionarEstoqueAoMapa: protectedProcedure
+    .input(z.object({ cotacaoId: z.number(), companyId: z.number(), obraId: z.number().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [cot] = await db.select().from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      if (!cot) throw new TRPCError({ code: "NOT_FOUND", message: "Cotação não encontrada" });
+      const obraId = input.obraId ?? cot.obraId ?? null;
+
+      // Já existe linha de Estoque?
+      const existente = await db.select().from(comprasCotacaoFornecedores)
+        .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), sql`COALESCE(${comprasCotacaoFornecedores.isEstoque}, false) = true`)).limit(1);
+      if (existente.length > 0) return { ok: true, jaExistia: true };
+
+      await db.insert(comprasCotacaoFornecedores).values({
+        cotacaoId: input.cotacaoId,
+        fornecedorId: 0,
+        isEstoque: true,
+        condicaoPagamento: "À vista (transferência interna)",
+        formaPagamento: "transferencia_estoque",
+        prazoEntregaDias: 0,
+        numeroParcelas: 1,
+        freteTipo: "cif",
+        valorFrete: "0",
+      } as any);
+
+      // Pré-popula respostas com preço médio
+      const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
+      const scIds = itens.map(it => it.solicitacaoItemId).filter(Boolean) as number[];
+      const scItens = scIds.length > 0
+        ? await db.select().from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scIds))
+        : [];
+      // Carrega itens do almoxarifado da empresa (filtra por obra quando aplicável)
+      const almoxConds = [eq(almoxarifadoItens.companyId, input.companyId), eq(almoxarifadoItens.ativo, true)];
+      if (obraId) almoxConds.push(or(isNull(almoxarifadoItens.obraId), eq(almoxarifadoItens.obraId, obraId))!);
+      const almox = await db.select().from(almoxarifadoItens).where(and(...almoxConds));
+      const norm = (x: string|null|undefined) => (x ?? "").toLowerCase().trim().replace(/\s+/g," ");
+      const byCodigo = new Map<string, typeof almox[0]>();
+      const byNome = new Map<string, typeof almox[0]>();
+      for (const a of almox) {
+        if (a.codigoInterno) byCodigo.set(norm(a.codigoInterno), a);
+        if (a.nome) byNome.set(norm(a.nome), a);
+      }
+
+      let totalEstoque = 0;
+      for (const it of itens) {
+        const sc = scItens.find(s => s.id === it.solicitacaoItemId);
+        const candCodigo = (sc?.insumoCodigo ?? "").toString();
+        let match = (candCodigo && byCodigo.get(norm(candCodigo))) || byNome.get(norm(it.descricao)) || null;
+        if (!match) {
+          // tenta match parcial por contém (apenas se descrição >= 4 chars)
+          const d = norm(it.descricao);
+          if (d.length >= 4) match = almox.find(a => norm(a.nome).includes(d) || d.includes(norm(a.nome))) ?? null;
+        }
+        const qtdPedida = n(it.quantidade);
+        const saldo = match ? n(match.quantidadeAtual) : 0;
+        const qty = Math.min(qtdPedida, saldo);
+        const preco = match ? n(match.valorUnitario) : 0;
+        const total = qty * preco;
+        totalEstoque += total;
+        await db.insert(comprasCotacaoRespostas).values({
+          cotacaoId: input.cotacaoId,
+          fornecedorId: 0,
+          itemId: it.id,
+          quantidade: String(qty),
+          precoUnitario: String(preco),
+          descontoPct: "0",
+          total: String(total.toFixed(2)),
+        } as any).onConflictDoUpdate({
+          target: [comprasCotacaoRespostas.cotacaoId, comprasCotacaoRespostas.fornecedorId, comprasCotacaoRespostas.itemId],
+          set: { quantidade: String(qty), precoUnitario: String(preco), descontoPct: "0", total: String(total.toFixed(2)) },
+        });
+      }
+
+      await db.update(comprasCotacaoFornecedores).set({ totalOrcado: String(totalEstoque.toFixed(2)) } as any)
+        .where(and(eq(comprasCotacaoFornecedores.cotacaoId, input.cotacaoId), eq(comprasCotacaoFornecedores.fornecedorId, 0)));
+
+      return { ok: true, totalEstoque, itens: itens.length };
+    }),
+
   salvarRespostasLote: protectedProcedure
     .input(z.object({
       cotacaoId: z.number(),
@@ -5526,8 +5611,12 @@ Retorne APENAS um JSON válido neste formato:
       const prazoEntrega = fornInfoCheck.prazoEntregaDias;
       const tipoPagCheck = fornInfoCheck.tipoPagamento ?? "";
       const isMdoMedicao = ((cot as any).tipo === "servico" || (cot as any).tipo === "pacote") && (tipoPagCheck === "medicao" || (condPag ?? "").toLowerCase().includes("medição"));
-      if (!condPag && !formaPag) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina a Condição de Pagamento antes de gerar a OC. No Mapa de Cotação, edite o card do fornecedor vencedor e preencha a Forma de Pagamento." });
-      if (!isMdoMedicao && (!prazoEntrega || Number(prazoEntrega) <= 0)) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina o Prazo de Entrega antes de gerar a OC. No Mapa de Cotação, edite o card do fornecedor vencedor e preencha o Prazo de Entrega." });
+      // Rev. 1640 — Atendimento pelo Estoque dispensa condição/prazo (transferência interna imediata)
+      const isEstoqueWinner = (fornInfoCheck as any).isEstoque === true;
+      if (!isEstoqueWinner) {
+        if (!condPag && !formaPag) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina a Condição de Pagamento antes de gerar a OC. No Mapa de Cotação, edite o card do fornecedor vencedor e preencha a Forma de Pagamento." });
+        if (!isMdoMedicao && (!prazoEntrega || Number(prazoEntrega) <= 0)) throw new TRPCError({ code: "BAD_REQUEST", message: "Defina o Prazo de Entrega antes de gerar a OC. No Mapa de Cotação, edite o card do fornecedor vencedor e preencha o Prazo de Entrega." });
+      }
 
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.cotacaoId));
 
@@ -5696,11 +5785,13 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         cotacaoId: input.cotacaoId,
         solicitacaoId: cot.solicitacaoId ?? null,
         obraId: cot.obraId ?? null,
-        fornecedorId: vencedorFornecedorId ?? null,
-        fornecedorNome: vencedorFornecedorId ? (await db.select({ nome: fornecedores.nomeFantasia, razao: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, vencedorFornecedorId))).map(f => f.nome || f.razao || null)[0] ?? null : null,
+        fornecedorId: isEstoqueWinner ? null : (vencedorFornecedorId ?? null),
+        fornecedorNome: isEstoqueWinner
+          ? "Estoque (Almoxarifado)"
+          : (vencedorFornecedorId ? (await db.select({ nome: fornecedores.nomeFantasia, razao: fornecedores.razaoSocial }).from(fornecedores).where(eq(fornecedores.id, vencedorFornecedorId))).map(f => f.nome || f.razao || null)[0] ?? null : null),
         criadoPorId: input.userId ?? null,
         criadoPorNome: input.userName ?? null,
-        tipo: ordemTipo,
+        tipo: isEstoqueWinner ? "estoque" : ordemTipo,
         status: input.comoRascunho ? "rascunho" : (extraAprovacaoRequerida ? "aguardando_aprovacao_extra" : "aprovada"),
         aprovacaoStatus: input.comoRascunho ? "aguardando" : (extraAprovacaoRequerida ? "aguardando_admin" : "aprovado"),
         aprovacaoExtraRequerida: extraAprovacaoRequerida,
@@ -5773,7 +5864,124 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           })
         );
       }
-      if (cot.fornecedorId && !extraAprovacaoRequerida) {
+      // Rev. 1640 — Atendimento pelo Estoque: faz baixa do almoxarifado + lançamento financeiro
+      // já PAGO (transferência interna), pulando parcelas tradicionais.
+      // Pre-check (fail-fast) e decremento ATÔMICO (CAS) para evitar race + ghost OC.
+      if (isEstoqueWinner && !extraAprovacaoRequerida) {
+        const obraNomeRow = oc.obraId
+          ? (await db.execute(sql`SELECT nome FROM obras WHERE id = ${oc.obraId} LIMIT 1`) as any).rows?.[0]?.nome
+          : null;
+        const scIdsForLink = itens.map(it => it.solicitacaoItemId).filter(Boolean) as number[];
+        const scItensLink = scIdsForLink.length > 0
+          ? await db.select().from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scIdsForLink))
+          : [];
+        const almoxConds: any[] = [eq(almoxarifadoItens.companyId, input.companyId), eq(almoxarifadoItens.ativo, true)];
+        if (oc.obraId) almoxConds.push(or(isNull(almoxarifadoItens.obraId), eq(almoxarifadoItens.obraId, oc.obraId))!);
+        const almoxList = await db.select().from(almoxarifadoItens).where(and(...almoxConds));
+        const norm = (x: string|null|undefined) => (x ?? "").toLowerCase().trim().replace(/\s+/g," ");
+        const findAlmox = (descricao: string, scItemId: number|null) => {
+          const sc = scItemId ? scItensLink.find(s => s.id === scItemId) : null;
+          const candCodigo = norm(sc?.insumoCodigo);
+          if (candCodigo) {
+            const m = almoxList.find(a => norm(a.codigoInterno) === candCodigo);
+            if (m) return m;
+          }
+          const d = norm(descricao);
+          let m = almoxList.find(a => norm(a.nome) === d);
+          if (m) return m;
+          if (d.length >= 4) m = almoxList.find(a => norm(a.nome).includes(d) || d.includes(norm(a.nome))) ?? null;
+          return m ?? null;
+        };
+
+        // Resolve match + saldo de TODOS antes de qualquer escrita (fail-fast).
+        type Plano = { it: typeof itens[0]; almoxIt: typeof almoxList[0]; qty: number; preco: number; tot: number };
+        const plano: Plano[] = [];
+        const erros: string[] = [];
+        for (const it of itens) {
+          const resp = precoMap.get(it.id);
+          const qty = resp ? n(resp.quantidade) : n(it.quantidade);
+          if (qty <= 0) continue;
+          const almoxIt = findAlmox(it.descricao, it.solicitacaoItemId ?? null);
+          if (!almoxIt) { erros.push(`"${it.descricao}" sem correspondência no almoxarifado`); continue; }
+          const saldoAtual = n(almoxIt.quantidadeAtual);
+          if (saldoAtual + 1e-6 < qty) { erros.push(`"${it.descricao}": saldo ${saldoAtual} < pedido ${qty}`); continue; }
+          const preco = n(almoxIt.valorUnitario);
+          plano.push({ it, almoxIt, qty, preco, tot: preco * qty });
+        }
+        if (erros.length > 0) {
+          // Reverte a OC criada (ghost) e aborta com mensagem clara.
+          await db.delete(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
+          await db.delete(comprasOrdens).where(eq(comprasOrdens.id, oc.id));
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Não foi possível atender pelo estoque:\n• ${erros.join("\n• ")}` });
+        }
+
+        let totalAtendido = 0;
+        const decrementados: Array<{ itemId: number; qty: number }> = [];
+        try {
+          for (const linha of plano) {
+            // Decremento ATÔMICO (CAS): só decrementa se ainda houver saldo. Detecta race entre o pre-check e o write.
+            const upd = await db.execute(sql`UPDATE almoxarifado_itens SET quantidade_atual = COALESCE(quantidade_atual,0) - ${linha.qty}, atualizado_em = NOW() WHERE id = ${linha.almoxIt.id} AND COALESCE(quantidade_atual,0) >= ${linha.qty} RETURNING id`);
+            const rows = ((upd as any).rows ?? upd) as any[];
+            if (!rows || rows.length === 0) {
+              throw new TRPCError({ code: "CONFLICT", message: `Saldo do item "${linha.it.descricao}" foi consumido por outra operação. Tente novamente.` });
+            }
+            decrementados.push({ itemId: linha.almoxIt.id, qty: linha.qty });
+            await db.insert(almoxarifadoMovimentacoes).values({
+              companyId: input.companyId,
+              itemId: linha.almoxIt.id,
+              tipo: "saida",
+              quantidade: String(linha.qty),
+              obraId: oc.obraId ?? null,
+              obraNome: obraNomeRow ?? null,
+              motivo: `OC #${numeroOc} (Atendimento pelo Estoque) — Cot. #${input.cotacaoId}`,
+              usuarioId: input.userId ?? null,
+              usuarioNome: input.userName ?? "Sistema",
+            } as any);
+            if (linha.it.solicitacaoItemId) {
+              await db.execute(sql`UPDATE compras_solicitacoes_itens SET quantidade_atendida = COALESCE(quantidade_atendida,0) + ${linha.qty}, status_item = CASE WHEN COALESCE(quantidade_atendida,0) + ${linha.qty} >= quantidade THEN 'atendido' ELSE 'parcial' END WHERE id = ${linha.it.solicitacaoItemId}`);
+            }
+            totalAtendido += linha.tot;
+          }
+        } catch (e) {
+          // Compensação: devolve o saldo dos itens já decrementados e remove a OC ghost.
+          for (const d of decrementados) {
+            try { await db.execute(sql`UPDATE almoxarifado_itens SET quantidade_atual = COALESCE(quantidade_atual,0) + ${d.qty} WHERE id = ${d.itemId}`); } catch (_) {}
+            try { await db.delete(almoxarifadoMovimentacoes).where(and(eq(almoxarifadoMovimentacoes.itemId, d.itemId), eq(almoxarifadoMovimentacoes.companyId, input.companyId), sql`motivo LIKE ${`OC #${numeroOc}%`}`)); } catch (_) {}
+          }
+          await db.delete(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
+          await db.delete(comprasOrdens).where(eq(comprasOrdens.id, oc.id));
+          throw e;
+        }
+
+        // Lançamento financeiro: já PAGO (transferência interna do estoque para a obra)
+        if (totalAtendido > 0) {
+          const hoje = new Date().toISOString().slice(0,10);
+          const [fe] = await db.insert(financialEntries).values({
+            companyId: input.companyId,
+            obraId: oc.obraId ?? null,
+            obraNome: obraNomeRow ?? null,
+            tipo: "despesa",
+            natureza: "operacional",
+            valorPrevisto: String(totalAtendido.toFixed(2)),
+            valorRealizado: String(totalAtendido.toFixed(2)),
+            dataCompetencia: hoje,
+            dataVencimento: hoje,
+            dataPagamento: hoje,
+            status: "pago",
+            origemModulo: "transferencia_estoque",
+            origemId: oc.id,
+            origemDescricao: `Atendimento via Estoque — OC ${numeroOc} (Cot. #${input.cotacaoId})`,
+            descricao: `Transferência de estoque para ${obraNomeRow ?? `obra #${oc.obraId ?? "—"}`} — OC ${numeroOc}`,
+            criadoPorId: input.userId ?? null,
+            criadoPorNome: input.userName ?? "Sistema",
+          } as any).returning();
+          if (fe?.id) {
+            await db.update(comprasOrdens).set({ financialEntryId: fe.id, status: "concluida", dataEntregaReal: hoje } as any).where(eq(comprasOrdens.id, oc.id));
+          }
+        } else {
+          await db.update(comprasOrdens).set({ status: "concluida", dataEntregaReal: new Date().toISOString().slice(0,10) } as any).where(eq(comprasOrdens.id, oc.id));
+        }
+      } else if (cot.fornecedorId && !extraAprovacaoRequerida) {
         const forn = await db.select().from(fornecedores).where(eq(fornecedores.id, cot.fornecedorId));
         let ocVehicleId = (oc as any).vehicle_id ?? (oc as any).vehicleId ?? null;
         if (!ocVehicleId && cot.solicitacaoId) {
@@ -5821,7 +6029,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
       const moduloMedicaoForn = (fornInfoCheck as any)?.moduloMedicao ?? null;
       const isMedicaoPagamento = ["medicao_mensal", "medicao_avanco", "medicao_etapa", "empreitada"].includes(moduloMedicaoForn ?? "");
-      const deveCriarContrato = (isServico || isMedicaoPagamento) && !extraAprovacaoRequerida && cot.fornecedorId;
+      const deveCriarContrato = (isServico || isMedicaoPagamento) && !extraAprovacaoRequerida && cot.fornecedorId && !isEstoqueWinner;
 
       if (deveCriarContrato) {
         const ocItensForContract = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, oc.id));
