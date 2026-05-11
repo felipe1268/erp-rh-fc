@@ -34,10 +34,13 @@ interface Props {
   engenheiroResponsavel?: string | null;
 }
 
-// Programação LOTUS exibe apenas dias úteis (seg→sex). Sábado e domingo
-// são ocultados porque o canteiro não tem atividade prevista nesses dias.
-const DIAS_SEMANA = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira"];
-const DIAS_ABREV = ["seg", "ter", "qua", "qui", "sex"];
+// Programação LOTUS exibe os 7 dias da semana (seg→dom). Sáb/dom ficam
+// VAZIOS automaticamente quando o cronograma não tem atividade prevista
+// nesses dias — o preenchimento é dirigido pelas datas previstas/reais
+// de cada atividade (corCelula). Se o cronograma for atualizado e passar
+// a ter atividade em fim de semana, a célula passa a pintar sozinha.
+const DIAS_SEMANA = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"];
+const DIAS_ABREV = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 function fmtBR(s?: string | null) {
@@ -62,8 +65,8 @@ function diasDaSemana(ini: Date): Date[] {
   const diaSemana = segunda.getDay(); // 0=dom..6=sáb
   const diff = diaSemana === 0 ? -6 : 1 - diaSemana;
   segunda.setDate(segunda.getDate() + diff);
-  // Apenas dias úteis (5 dias: seg→sex). Sáb/dom omitidos do Gantt.
-  for (let i = 0; i < 5; i++) {
+  // 7 dias (seg→dom). Sáb/dom ficam vazios se o cronograma não previu nada.
+  for (let i = 0; i < 7; i++) {
     const d = new Date(segunda);
     d.setDate(segunda.getDate() + i);
     arr.push(d);
