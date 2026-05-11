@@ -2091,24 +2091,27 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       const monStr = monday.toISOString().slice(0, 10);
       const sunStr = sunday.toISOString().slice(0, 10);
       // % Previsto — referenciado ao FIM da semana atual (próxima segunda 12:00),
-      // exatamente como `avancoPrevistoDia` interno (PlanejamentoDetalhe.tsx ~395).
+      // exatamente como `avancoPrevistoDia` interno (PlanejamentoDetalhe.tsx).
       const refDate = new Date(monStr + "T12:00:00Z"); refDate.setUTCDate(refDate.getUTCDate() + 7);
       const refMs = refDate.getTime();
-      let somaPrevisto = 0;
+      // Rev. 1646 — Paridade 100% MS Project: % Previsto agora replica a fórmula
+      // da coluna "%PREVISTO (Texto10)" do MS Project (`fracao_dias_uteis(início,
+      // ref) / total_dias_uteis`), aplicada no nível-resumo do projeto. NÃO mais
+      // média ponderada por `pesoFinanceiro`. Validado no XML REVTE-CIVIL: raiz
+      // 284 dias úteis, 4 decorridos em 07/05/2026 → 4/284 = 1,41%.
+      let projIni = Infinity, projFim = -Infinity;
       let somaRealizado = 0;
       for (const a of folhas) {
         const ini = new Date(a.dataInicio + "T12:00:00Z").getTime();
         const fim = new Date(a.dataFim + "T12:00:00Z").getTime();
-        // Rev. 1642 — usa dias úteis do calendário MS Project quando disponível.
-        const exp = fracaoDecorridaMs(ini, refMs, fim, calMSP) * 100;
+        if (ini < projIni) projIni = ini;
+        if (fim > projFim) projFim = fim;
         const peso = pesoDe(a);
-        somaPrevisto += (exp * peso) / pesoTotal;
         somaRealizado += (ultimoAvancoPorAtiv[a.id] ?? 0) * (peso / pesoTotal);
       }
-      // ALINHAMENTO COM TELA INTERNA (PlanejamentoDetalhe.tsx Rev. 1470+):
-      // - avancoPrevistoDia agora usa toFixed(2) para bater exatamente com REFIS.
-      // - Portal deve refletir o MESMO número visto no módulo Planejamento interno.
-      const pctTotalPrevisto = +Math.min(100, somaPrevisto).toFixed(2);
+      const pctTotalPrevisto = (isFinite(projIni) && isFinite(projFim) && projFim > projIni)
+        ? +Math.min(100, fracaoDecorridaMs(projIni, refMs, projFim, calMSP) * 100).toFixed(2)
+        : 0;
       const pctTotalRealizado = +Math.min(100, somaRealizado).toFixed(2);
       const desvio = +(pctTotalRealizado - pctTotalPrevisto).toFixed(2);
 

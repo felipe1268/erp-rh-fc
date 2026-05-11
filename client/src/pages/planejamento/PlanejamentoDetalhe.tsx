@@ -491,8 +491,14 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   }, [atividades, avancosMapSemana, usarPesoPorDuracao, refisComIndiretasGlobal, semanaVisualizacao, refDateStr, modoVisao]);
 
   const avancoPrevistoDia = useMemo(() => {
-    // Rev. 1584 — quando "Global (c/ Indiretas)" ligado, inclui indiretas
-    // pela mesma fórmula linear (idêntico ao card REFIS).
+    // Rev. 1646 — Paridade 100% MS Project: o "Avanço Previsto" no card do
+    // projeto agora replica EXATAMENTE a fórmula da coluna "%PREVISTO (Texto10)"
+    // do MS Project: `fracao_dias_uteis(inicio_projeto → ref) / total_dias_uteis_projeto`,
+    // aplicada no nível-resumo (raiz). NÃO mais média ponderada por
+    // `pesoFinanceiro` das folhas — essa rolagem produzia números diferentes
+    // do MSP (ex.: ERP 2,24% vs MSP 1,41% para REVTE-CIVIL em 07/05/2026,
+    // pois leaves caras com início futuro inflavam o denominador).
+    // Validado no XML: raiz 284 dias úteis, 4 decorridos → 4/284 = 1,41%.
     const folhas = atividades.filter((a: any) =>
       !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim && (refisComIndiretasGlobal || !a.isIndireta)
     );
@@ -506,23 +512,19 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     d.setDate(d.getDate() + 7);
     const refStr = d.toISOString().split("T")[0];
     const ref = new Date(refStr + "T12:00:00").getTime();
-    const pesoBruto = usarPesoPorDuracao
-      ? folhas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
-      : folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
-    const semPeso = pesoBruto === 0;
-    const denom = semPeso ? (folhas.length || 1) : pesoBruto;
-    let soma = 0;
-    // Rev. 1642 — dias úteis do MS Project (paridade 100%).
-    const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
+    // Datas-resumo: menor início e maior fim entre as folhas (= linha-resumo MSP).
+    let projIni = Infinity, projFim = -Infinity;
     folhas.forEach((a: any) => {
       const ini = new Date(a.dataInicio + "T12:00:00").getTime();
       const fim = new Date(a.dataFim    + "T12:00:00").getTime();
-      const exp = fracaoDecorridaMs(ini, ref, fim, calMSP) * 100;
-      const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
-      soma += (exp * peso) / denom;
+      if (ini < projIni) projIni = ini;
+      if (fim > projFim) projFim = fim;
     });
-    return +soma.toFixed(2);
-  }, [atividades, semanaVisualizacao, usarPesoPorDuracao, refisComIndiretasGlobal, refDateStr, modoVisao, (proj as any)?.calendarioJson]);
+    if (!isFinite(projIni) || !isFinite(projFim) || projFim <= projIni) return 0;
+    const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
+    const pct = fracaoDecorridaMs(projIni, ref, projFim, calMSP) * 100;
+    return +Math.min(100, pct).toFixed(2);
+  }, [atividades, semanaVisualizacao, refisComIndiretasGlobal, refDateStr, modoVisao, (proj as any)?.calendarioJson]);
 
   // ── Cabeçalho de impressão (idêntico ao Portal do Cliente) ──────────
   // ATENÇÃO: este useMemo precisa ficar ANTES dos early returns abaixo,
