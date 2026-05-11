@@ -2652,10 +2652,14 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
   }
 
   const limparMutation = trpc.planejamento.limparCronograma.useMutation({
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       utils.planejamento.listarAtividades.invalidate();
       utils.planejamento.listarAvancos.invalidate();
       setConfirmExcluir(false);
+      toast.success(`Cronograma excluído (${res?.atividades ?? 0} atividade(s), ${res?.avancos ?? 0} avanço(s)).`);
+    },
+    onError: (err: any) => {
+      toast.error(`Não foi possível excluir o cronograma: ${err?.message ?? "erro desconhecido"}`);
     },
   });
 

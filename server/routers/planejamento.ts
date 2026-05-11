@@ -268,12 +268,30 @@ export const planejamentoRouter = router({
     .input(z.object({ projetoId: z.number(), revisaoId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      // Apaga apenas os avanços da REVISÃO atual — nunca de outras revisões
-      await db.delete(planejamentoAvancos)
-        .where(eq(planejamentoAvancos.revisaoId, input.revisaoId));
-      await db.delete(planejamentoAtividades)
-        .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
-      return { success: true };
+      try {
+        // Limpa rastros em tabelas-filhas (sem FK no banco; SQL bruto pra evitar
+        // erros caso alguma tabela ainda não exista neste ambiente).
+        const cleanup = async (sqlText: string) => {
+          try { await db.execute(sql.raw(sqlText)); } catch { /* tabela ausente: ignora */ }
+        };
+        await cleanup(`DELETE FROM ia_cronograma_alertas WHERE atividade_id IN (SELECT id FROM planejamento_atividades WHERE revisao_id = ${input.revisaoId})`);
+        await cleanup(`DELETE FROM planejamento_custos_mo WHERE atividade_id IN (SELECT id FROM planejamento_atividades WHERE revisao_id = ${input.revisaoId})`);
+        await cleanup(`DELETE FROM medicao_boletim_itens   WHERE atividade_id IN (SELECT id FROM planejamento_atividades WHERE revisao_id = ${input.revisaoId})`);
+
+        // Apaga apenas os avanços da REVISÃO atual — nunca de outras revisões
+        const delAv = await db.delete(planejamentoAvancos)
+          .where(eq(planejamentoAvancos.revisaoId, input.revisaoId));
+        const delAt = await db.delete(planejamentoAtividades)
+          .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
+        return {
+          success: true,
+          atividades: (delAt as any)?.rowCount ?? 0,
+          avancos:    (delAv as any)?.rowCount ?? 0,
+        };
+      } catch (e: any) {
+        console.error("[limparCronograma] Falha:", e);
+        throw new Error(e?.message ?? "Falha ao excluir cronograma");
+      }
     }),
 
   // ── Detalhe completo do projeto ───────────────────────────────────────────
