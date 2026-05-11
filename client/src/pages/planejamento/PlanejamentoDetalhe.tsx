@@ -4586,6 +4586,9 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
 // ABA: AVANÇO SEMANAL
 // ═════════════════════════════════════════════════════════════════════════════
 function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, utils, onSemanaChange, onLocalAvancoChange, usarPesoPorDuracao }: any) {
+  // Rev. 1645 — calMSP no escopo do componente para que `prevIndRef` use
+  // dias úteis do calendário do MSP (paridade com MS Project).
+  const calMSP = useMemo(() => parseCalendarioJson((proj as any)?.calendarioJson), [proj]);
   const [semanaAtual, setSemanaAtualRaw] = useState(() => toMonday(new Date()));
   const setSemanaAtual = (s: string) => { setSemanaAtualRaw(s); onSemanaChange?.(s); };
   const [avancoLocal, setAvancoLocal] = useState<Record<number, number>>({});
@@ -10473,7 +10476,14 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     },
   });
 
-  // Calcula percentual previsto de uma atividade para uma data de referência
+  // Calcula percentual previsto de uma atividade para uma data de referência.
+  // Rev. 1645 — Call site esquecido pela Rev. 1642: trocada interpolação
+  // linear por dias corridos por `fracaoDecorridaMs` (dias úteis do calendário
+  // do MSP). Esta função alimenta TODOS os cálculos de avanço previsto da
+  // aba "Avanço Semanal" (avancoPrevisto, avancoPrevAntes, refisPrevisto e
+  // refisPrevistoComInd). Sem este fix, o card "Avanço Físico" da Programação
+  // Semanal divergia do MS Project porque contava sábado, domingo e feriados
+  // como dias úteis. Regra de ouro: leitura plena do MSP.
   function prevIndRef(a: any, ref: string): number {
     if (!a.dataInicio || !a.dataFim) return 0;
     const ini = new Date(a.dataInicio + "T12:00:00").getTime();
@@ -10481,7 +10491,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     const r   = new Date(ref         + "T12:00:00").getTime();
     if (r >= fim) return 100;
     if (r <= ini) return 0;
-    return ((r - ini) / (fim - ini)) * 100;
+    return fracaoDecorridaMs(ini, r, fim, calMSP) * 100;
   }
 
   // Helper: denominator e peso por atividade.
