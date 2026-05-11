@@ -2090,10 +2090,11 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       const sunday = new Date(monday); sunday.setUTCDate(monday.getUTCDate() + 6);
       const monStr = monday.toISOString().slice(0, 10);
       const sunStr = sunday.toISOString().slice(0, 10);
-      // % Previsto — referenciado ao FIM da semana atual (próxima segunda 12:00),
-      // exatamente como `avancoPrevistoDia` interno (PlanejamentoDetalhe.tsx).
-      const refDate = new Date(monStr + "T12:00:00Z"); refDate.setUTCDate(refDate.getUTCDate() + 7);
-      const refMs = refDate.getTime();
+      // % Previsto — referenciado ao PRÓPRIO cutoff (Status Date), espelhando
+      // o Texto10 da linha-resumo do MS Project (Rev. 1646.1). Não extrapola
+      // para o fim da semana corrente — isso inflava o número (ex.: 07/05 →
+      // ref vira 11/05 → 6 dias úteis em vez de 4 = 2,11% em vez de 1,41%).
+      const refMs = new Date(cutoffStr + "T12:00:00Z").getTime();
       // Rev. 1646 — Paridade 100% MS Project: % Previsto agora replica a fórmula
       // da coluna "%PREVISTO (Texto10)" do MS Project (`fracao_dias_uteis(início,
       // ref) / total_dias_uteis`), aplicada no nível-resumo do projeto. NÃO mais

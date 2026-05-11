@@ -503,14 +503,11 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim && (refisComIndiretasGlobal || !a.isIndireta)
     );
     if (!folhas.length) return null;
-    // Rev. 1637 — Mesmo princípio: PV congela junto com EV no modo Oficial.
-    // Rev. 1637.2 — Top card ignora `semanaVisualizacao` quando em Oficial.
-    const semIni = (modoVisao === "oficial")
-      ? toMonday(new Date(refDateStr + "T12:00:00"))
-      : (semanaVisualizacao ?? toMonday(new Date(refDateStr + "T12:00:00")));
-    const d = new Date(semIni + "T12:00:00");
-    d.setDate(d.getDate() + 7);
-    const refStr = d.toISOString().split("T")[0];
+    // Rev. 1646.1 — A referência é o PRÓPRIO cutoff (Status Date no modo Oficial,
+    // hoje no modo Live). MSP exibe o "%PREVISTO" da linha-resumo congelado
+    // exatamente no Status Date — não extrapola para o fim da semana corrente.
+    // Validado no XML REVTE-CIVIL: StatusDate=07/05 → 4/284 dias úteis = 1,41%.
+    const refStr = refDateStr;
     const ref = new Date(refStr + "T12:00:00").getTime();
     // Datas-resumo: menor início e maior fim entre as folhas (= linha-resumo MSP).
     let projIni = Infinity, projFim = -Infinity;
