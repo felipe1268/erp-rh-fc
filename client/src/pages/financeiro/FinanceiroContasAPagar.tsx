@@ -333,16 +333,22 @@ export default function FinanceiroContasAPagar() {
   }, [vencidos]);
 
   // Projeção de caixa (Brealey/Myers — short-term cash forecast)
+  // Rev. 1629 — respeita filtro Efetivo × Projeção × Todos para coerência com KPIs/lista.
   const cashProjection = useMemo(() => {
     const horizons = [7, 15, 30, 60, 90];
     const result: { dias: number; total: number; count: number }[] = [];
     if (!allContas) return horizons.map(d => ({ dias: d, total: 0, count: 0 }));
+    const escopo = (allContas as any[]).filter(c => {
+      if (naturezaFilter === "efetivo") return !isProjecao(c);
+      if (naturezaFilter === "projecao") return isProjecao(c);
+      return true;
+    });
     const today = new Date(hojeStr);
     for (const dias of horizons) {
       const limite = new Date(today);
       limite.setDate(limite.getDate() + dias);
       const limiteStr = limite.toISOString().slice(0, 10);
-      const items = (allContas as any[]).filter(c =>
+      const items = escopo.filter(c =>
         c.status !== "pago" && c.dataVencimento &&
         c.dataVencimento.slice(0, 10) >= hojeStr &&
         c.dataVencimento.slice(0, 10) <= limiteStr
@@ -354,7 +360,7 @@ export default function FinanceiroContasAPagar() {
       });
     }
     return result;
-  }, [allContas, hojeStr]);
+  }, [allContas, hojeStr, naturezaFilter]);
 
   // KPIs Hackett: DPO (Days Payable Outstanding), % on-time, % eletrônico
   const kpisHackett = useMemo(() => {
@@ -533,6 +539,11 @@ export default function FinanceiroContasAPagar() {
               <TrendingDown className="w-4 h-4 text-blue-500" />
               Projeção de Saídas — próximos dias
               <span className="text-xs font-normal text-gray-400 ml-1">(a partir de hoje, {fmtDateBR(hojeStr)})</span>
+              {naturezaFilter !== "todos" && (
+                <span className={`ml-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${naturezaFilter === "efetivo" ? "bg-emerald-100 text-emerald-700" : "bg-violet-100 text-violet-700"}`}>
+                  {naturezaFilter === "efetivo" ? "💰 Efetivo" : "📊 Projeção"}
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-4">
