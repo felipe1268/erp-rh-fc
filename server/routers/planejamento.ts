@@ -730,7 +730,12 @@ export const planejamentoRouter = router({
       if (Object.keys(patch).length === 0) return { ok: true };
       // Valida ownership: atividade → projeto → companyId
       const [check] = await db
-        .select({ projetoCompany: planejamentoProjetos.companyId })
+        .select({
+          projetoCompany:  planejamentoProjetos.companyId,
+          projetoId:       planejamentoAtividades.projetoId,
+          revisaoId:       planejamentoAtividades.revisaoId,
+          diaCorteSemana:  planejamentoProjetos.diaCorteSemana,
+        })
         .from(planejamentoAtividades)
         .innerJoin(planejamentoProjetos, eq(planejamentoProjetos.id, planejamentoAtividades.projetoId))
         .where(eq(planejamentoAtividades.id, input.atividadeId));
@@ -739,6 +744,57 @@ export const planejamentoRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Atividade fora da sua empresa" });
       }
       await db.update(planejamentoAtividades).set(patch).where(eq(planejamentoAtividades.id, input.atividadeId));
+
+      // Rev. 1662 — Auto-avanço LOTUS:
+      // Quando o engenheiro digita a data de FIM real, a atividade está
+      // concluída → cria/atualiza o avanço a 100% no cutoff da semana que
+      // contém o dataFimReal. Mesmo registro lido pelo Padrão FC (Avanço
+      // Semanal/Curva S/SPI) — fonte única, sem espelhos.
+      if (input.dataFimReal) {
+        try {
+          const { proximoDiaSemana, ehDiaSemana, DIA_CORTE_DEFAULT } = await import("../../shared/dataCorte");
+          const dow = (check.diaCorteSemana ?? DIA_CORTE_DEFAULT) as number;
+          const fimIso = String(input.dataFimReal).slice(0, 10);
+          // Se o fim já cai no próprio cutoff, usa o próprio dia; senão, próximo cutoff.
+          const semanaIso = ehDiaSemana(fimIso, dow) ? fimIso : proximoDiaSemana(fimIso, dow);
+
+          const [ultimo] = await db.select({ percentualAcumulado: planejamentoAvancos.percentualAcumulado })
+            .from(planejamentoAvancos)
+            .where(and(
+              eq(planejamentoAvancos.atividadeId, input.atividadeId),
+              sql`semana < ${semanaIso}`,
+            ))
+            .orderBy(desc(planejamentoAvancos.semana))
+            .limit(1);
+          const ultimoPct = parseFloat(String(ultimo?.percentualAcumulado ?? "0")) || 0;
+          const semanal = Math.max(0, 100 - ultimoPct);
+
+          const [existente] = await db.select({ id: planejamentoAvancos.id })
+            .from(planejamentoAvancos)
+            .where(and(
+              eq(planejamentoAvancos.atividadeId, input.atividadeId),
+              eq(planejamentoAvancos.semana, semanaIso),
+            )).limit(1);
+          if (existente) {
+            await db.update(planejamentoAvancos)
+              .set({ percentualAcumulado: "100.0000", percentualSemanal: String(semanal.toFixed(4)), observacao: "Concluído via LOTUS (data fim real)" })
+              .where(eq(planejamentoAvancos.id, existente.id));
+          } else {
+            await db.insert(planejamentoAvancos).values({
+              projetoId:           check.projetoId,
+              revisaoId:           check.revisaoId,
+              atividadeId:         input.atividadeId,
+              semana:              semanaIso,
+              percentualAcumulado: "100.0000",
+              percentualSemanal:   String(semanal.toFixed(4)),
+              observacao:          "Concluído via LOTUS (data fim real)",
+              criadoPor:           "LOTUS",
+            });
+          }
+        } catch (e: any) {
+          console.error("[setRealDates auto-avanço]", e?.message || e);
+        }
+      }
       return { ok: true };
     }),
 
