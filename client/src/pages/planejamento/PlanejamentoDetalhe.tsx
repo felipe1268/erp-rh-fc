@@ -484,17 +484,22 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     // linear até o FIM da semana visualizada (mesma convenção do REFIS).
     // Rev. 1637 — `refDateStr` muda conforme o modo (Live/Oficial); no modo
     // OFICIAL o cálculo congela na última quinta fechada (espelha o Portal).
-    // Rev. 1655 — Reverte Rev. 1648/1649 no top card e ANCORA refStr no cutoff
-    // oficial (mesma regra do `avancoPrevistoDia`). Antes a Rev. 1648 fazia o
-    // Realizado simular semana futura (ex.: 10,76%), enquanto o Previsto travado
-    // no cutoff ficava em 1,41% — o badge "Avanço/Atraso" comparava horizontes
-    // diferentes (EV simulado vs PV oficial). Agora EV e PV usam o MESMO refStr
-    // (= cutoff oficial em casos normais; min(refDateStr, cutoff) protege modo
-    // Live com cutoff projetado pro futuro). Simulação de semana continua
-    // disponível dentro da aba Avanço Semanal (cards previstoRealizadoSemana).
+    // Rev. 1656 — A barra superior ACOMPANHA a semana selecionada na aba
+    // Avanço Semanal (igual Rev. 1649): quando `semanaVisualizacao` está
+    // setada, `refStr = semVis + 7d` (fim exclusivo da semana = mesma janela
+    // do card "PREVISTO (SEMANA)") tanto pro EV quanto pro PV — top card e
+    // card grande convergem no MESMO valor (5,56% no exemplo da Semana 3).
+    // Sem semana selecionada, mantém o lock no cutoff oficial (Opção A do
+    // Rev. 1655). EV usa avancosMapSemana (filtrado por <= semVis) p/ refletir
+    // só o que foi medido até a semana visualizada.
     const cutoffOficialAt = dataCorteInfo?.dataCorteOficial ?? null;
-    let refStr = cutoffOficialAt ?? refDateStr;
-    if (cutoffOficialAt && refDateStr < cutoffOficialAt) refStr = refDateStr;
+    let refStr: string;
+    if (semanaVisualizacao) {
+      refStr = new Date(new Date(semanaVisualizacao + "T12:00:00").getTime() + 7 * 86400000).toISOString().slice(0, 10);
+    } else {
+      refStr = cutoffOficialAt ?? refDateStr;
+      if (cutoffOficialAt && refDateStr < cutoffOficialAt) refStr = refDateStr;
+    }
     // Rev. 1642 — paridade 100% MS Project: usa dias úteis quando disponível.
     const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
     const prevLinear = (a: any): number => {
@@ -506,16 +511,15 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     };
     const ponderado = folhasFiltradas.reduce((s: number, a: any) => {
       const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
-      // Rev. 1655 — usa `avancosMap` (último avanço por atividade — todas
-      // as semanas) em vez de `avancosMapSemana` (filtrado por semanaVisualizacao).
-      // Garante que o top card EV não muda quando o usuário simula uma semana
-      // futura/passada na aba Avanço Semanal — paridade com o Previsto que já
-      // está travado no cutoff oficial.
-      const val = (refisComIndiretasGlobal && a.isIndireta) ? prevLinear(a) : (avancosMap[a.id] ?? 0);
+      // Rev. 1656 — Reverte Rev. 1655 (volta a usar avancosMapSemana) — o EV
+      // do top card precisa acompanhar a semana selecionada (filtrado por
+      // av.semana <= semanaVisualizacao). Sem semana selecionada,
+      // avancosMapSemana cai automaticamente em avancosMap (último avanço).
+      const val = (refisComIndiretasGlobal && a.isIndireta) ? prevLinear(a) : (avancosMapSemana[a.id] ?? 0);
       return s + val * (peso / pesoTotal);
     }, 0);
     return Math.min(100, ponderado);
-  }, [atividades, avancosMap, usarPesoPorDuracao, refisComIndiretasGlobal, refDateStr, modoVisao, dataCorteInfo?.dataCorteOficial]);
+  }, [atividades, avancosMapSemana, usarPesoPorDuracao, refisComIndiretasGlobal, refDateStr, modoVisao, dataCorteInfo?.dataCorteOficial, semanaVisualizacao]);
 
   const avancoPrevistoDia = useMemo(() => {
     // Rev. 1646 — Paridade 100% MS Project: o "Avanço Previsto" no card do
@@ -530,24 +534,22 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim && (refisComIndiretasGlobal || !a.isIndireta)
     );
     if (!folhas.length) return null;
-    // Rev. 1655 — Opção A "PV anchorado ao cutoff oficial". O top card "Previsto"
-    // agora SEMPRE reflete o cutoff oficial — independente do modo (Live/Oficial)
-    // e da semana selecionada na aba Avanço Semanal. Antes, no modo Live + Semana
-    // 1 selecionada, a barra extrapolava pra `semVis + 7d` e mostrava 2,08% (du
-    // até 11/05) enquanto o card "PREVISTO (SEMANA)" mostrava 1,41% (cutoff Qui
-    // 07/05) — divergência confusa pro usuário. Agora os 3 displays (top card,
-    // card grande, sub-linha Semana N) convergem em 1,41% quando o cutoff é Qui.
-    // Reverte Rev. 1648/1649 (Realizado também voltou ao refDateStr, ver
-    // `avancoAtual`). FONTE: `dataCorteInfo.dataCorteOficial` (não `proj.
-    // dataCorteAtual`) — a query getDataCorte é refetchada por todas as
-    // mutations de cutoff (setDiaCorte/consolidarCutoff/fecharSemana), enquanto
-    // `proj` só é invalidado por outras edições. Garante que mudar a premissa
-    // do cutoff atualize o top card no mesmo render.
+    // Rev. 1656 — Top card PV acompanha a semana selecionada na aba Avanço
+    // Semanal. Quando `semanaVisualizacao` está setada, `refStr = semVis + 7d`
+    // (mesma janela do card "PREVISTO (SEMANA)") — top bar e card grande
+    // convergem (ex.: Semana 3 = 5,56% nos dois). Sem semana selecionada,
+    // trava no cutoff oficial (Opção A do Rev. 1655) — `dataCorteInfo` é
+    // refetchada pelas mutations setDiaCorte/consolidarCutoff/fecharSemana,
+    // garantindo que mudar a premissa do cutoff atualize o top card no mesmo
+    // render (sem precisar de outra edição que invalide `proj`).
     const cutoffOficial = dataCorteInfo?.dataCorteOficial ?? null;
-    let refStr = cutoffOficial ?? refDateStr;
-    // Em modo Live, se today < cutoff (raro — só se "Fechar semana" projetou
-    // o cutoff pro futuro), respeita o min — não extrapola além do hoje real.
-    if (cutoffOficial && refDateStr < cutoffOficial) refStr = refDateStr;
+    let refStr: string;
+    if (semanaVisualizacao) {
+      refStr = new Date(new Date(semanaVisualizacao + "T12:00:00").getTime() + 7 * 86400000).toISOString().slice(0, 10);
+    } else {
+      refStr = cutoffOficial ?? refDateStr;
+      if (cutoffOficial && refDateStr < cutoffOficial) refStr = refDateStr;
+    }
     const ref = new Date(refStr + "T12:00:00").getTime();
     // Rev. 1646.2 — prioridade ABSOLUTA: usa as datas oficiais da raiz do MSP
     // (gravadas em proj.dataInicio + proj.dataTerminoContratual no momento do
@@ -585,7 +587,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     }
     const pct = fracaoDecorridaMs(projIni, ref, projFim, calMSP) * 100;
     return +Math.min(100, pct).toFixed(2);
-  }, [atividades, refisComIndiretasGlobal, refDateStr, modoVisao, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual, dataCorteInfo?.dataCorteOficial]);
+  }, [atividades, refisComIndiretasGlobal, refDateStr, modoVisao, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual, dataCorteInfo?.dataCorteOficial, semanaVisualizacao]);
 
   // ── Cabeçalho de impressão (idêntico ao Portal do Cliente) ──────────
   // ATENÇÃO: este useMemo precisa ficar ANTES dos early returns abaixo,
