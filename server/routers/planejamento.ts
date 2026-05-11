@@ -1562,15 +1562,22 @@ export const planejamentoRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: `Data de corte deve cair em ${nomeDiaSemana(dow)} (premissa do projeto).` });
       }
       const quem = ctx.user.name || ctx.user.email || "—";
+      // Rev. 1655 — Persiste também `dataCorteIso` (T17:00:00) — fonte do
+      // `cutoffIso` consumido pela Programação Semanal (clipping + bypass do
+      // snapshot Texto11). Sem isso, fechar a semana atualizava `dataCorteAtual`
+      // mas a Programação Semanal continuava ancorada no StatusDate antigo do
+      // MSP até reimport. Mesma convenção da `setDiaCorte` (Rev. 1654).
+      const novaDataCorteIso = `${novoCorte}T17:00:00`;
       await db.update(planejamentoProjetos).set({
         dataCorteAtual: novoCorte as any,
+        dataCorteIso: novaDataCorteIso,
         dataCorteAtualizadaEm: new Date(),
         dataCorteAtualizadaPor: quem,
         atualizadoEm: new Date(),
       }).where(eq(planejamentoProjetos.id, input.projetoId));
       // Auditoria: logamos falha mas não quebramos o fechamento.
       try {
-        await createAuditLog({ ctx, entity: "planejamento_projetos", entityId: input.projetoId, action: "FECHAR_SEMANA", changes: { dataCorteAtual: novoCorte } });
+        await createAuditLog({ ctx, entity: "planejamento_projetos", entityId: input.projetoId, action: "FECHAR_SEMANA", changes: { dataCorteAtual: novoCorte, dataCorteIso: novaDataCorteIso } });
       } catch (e: any) {
         console.error(`[fecharSemana] Falha ao gravar audit log (projetoId=${input.projetoId}):`, e?.message || e);
       }

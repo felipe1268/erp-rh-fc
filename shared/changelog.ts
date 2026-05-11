@@ -11479,4 +11479,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 18:30:00",
   },
+  {
+    version: 1655,
+    titulo: "Avanço Físico — 3 displays do %Previsto convergem no cutoff oficial (Opção A)",
+    descricao: "Antes, na tela Planejamento → Detalhe, o usuário via 3 valores DIFERENTES de Previsto% para o mesmo projeto: top card 2,08% (modo Live + extrapolação Rev. 1649 pra fim da Semana 1), card 'PREVISTO (SEMANA)' 1,41% (cutoff Qui), sub-linha 'Semana N — Previsto: 1,06%' (DELTA pvMacro). Confuso e gerava dúvida sobre qual era o número certo. Opção A: padroniza tudo no ACUMULADO ao cutoff oficial. (1) `avancoPrevistoDia` e `avancoAtual` no top card travam `refStr = min(refDateStr, dataCorteInfo.dataCorteOficial)` — EV e PV usam o MESMO refStr (badge Avanço/Atraso volta a comparar mesmo horizonte). Reverte Rev. 1648/1649 no top card; simulação de semana segue funcionando dentro da aba Avanço Semanal. `avancoAtual` agora usa `avancosMap` (último avanço por atividade) em vez de `avancosMapSemana` — independe de `semanaVisualizacao`. (2) `previstoRealizadoSemana` expõe novo campo `previstoAcumulado` (pvMacro ou fallback linear, ambos clipados no cutoff), usado na sub-linha 'Semana N — Previsto:'. Aderência/débito continuam usando o DELTA semanal (PMBOK 7ª SV). (3) Fonte do cutoff em TODOS os cálculos migrada de `proj.dataCorteAtual` (só atualiza com refresh do projeto) para `dataCorteInfo.dataCorteOficial` (refetched pelas mutations setDiaCorte/consolidarCutoff/fecharSemana) — garante responsividade imediata na troca de premissa (preserva Rev. 1654). (4) Mutations setDiaCorte/consolidarCutoff/fecharSemana agora invalidam getProjetoById além de refetchDataCorte (mantém props derivadas de `proj` em sincronia, ex.: `cutoffIso` da Programação Semanal). (5) Backend `fecharSemana` (`server/routers/planejamento.ts` ~L1567-1583) persiste também `dataCorteIso = ${novoCorte}T17:00:00` — sem isso, fechar a semana atualizava `dataCorteAtual` mas a Programação Semanal ficava ancorada no StatusDate antigo do MSP. Resultado: top card = card grande = sub-linha = 1,41% quando cutoff Qui (07/05); todas as telas respondem juntas a mudança de premissa.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 19:00:00",
+  },
 ];
