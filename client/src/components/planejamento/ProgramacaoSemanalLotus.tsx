@@ -325,9 +325,9 @@ export default function ProgramacaoSemanalLotus(props: Props) {
 
       {/* Folha imprimível (modelo LOTUS) */}
       <div id="lotus-print-area" className="bg-white border border-slate-300 rounded-md overflow-hidden print:border-0 print:rounded-none">
-        {/* Cabeçalho com logos */}
-        <div className="flex items-stretch border-b-2 border-slate-800">
-          <div className="flex-1 flex items-center justify-center px-4 py-3">
+        {/* Cabeçalho com logos (altura fixa pra evitar que imagens grandes estiquem o container) */}
+        <div className="flex items-center border-b-2 border-slate-800 h-[72px]">
+          <div className="flex-1 flex items-center justify-center px-4 h-full">
             <div className="text-center">
               <div className="text-[15px] font-bold tracking-tight text-slate-900 uppercase">
                 Programação Semanal — {nomeProjeto}
@@ -336,13 +336,13 @@ export default function ProgramacaoSemanalLotus(props: Props) {
               {nomeCliente && <div className="text-[11px] text-slate-500 mt-0.5">Cliente: {nomeCliente}</div>}
             </div>
           </div>
-          <div className="flex items-center gap-3 px-4 border-l border-slate-300 bg-slate-50">
+          <div className="flex items-center gap-4 px-4 h-full border-l border-slate-300 bg-slate-50">
             {gerenciadoraLogoUrl ? (
-              <img src={gerenciadoraLogoUrl} alt={gerenciadoraNome || "Gerenciadora"} className="h-12 w-auto object-contain" />
+              <img src={gerenciadoraLogoUrl} alt={gerenciadoraNome || "Gerenciadora"} className="max-h-10 max-w-[110px] w-auto h-auto object-contain" />
             ) : gerenciadoraNome ? (
               <div className="text-[10px] font-semibold text-slate-600 px-2 py-1 border border-dashed border-slate-300 rounded">{gerenciadoraNome}</div>
             ) : null}
-            {clienteLogoUrl && <img src={clienteLogoUrl} alt={nomeCliente} className="h-12 w-auto object-contain" />}
+            {clienteLogoUrl && <img src={clienteLogoUrl} alt={nomeCliente} className="max-h-10 max-w-[110px] w-auto h-auto object-contain" />}
           </div>
         </div>
 
