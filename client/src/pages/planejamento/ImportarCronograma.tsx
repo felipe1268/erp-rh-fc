@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState, useMemo } from "react";
+import React, { useCallback, useRef, useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -518,6 +518,16 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   );
   const orcItens: any[] = (orcData as any)?.itens ?? [];
 
+  // Rev. 1648 — Detecta se já existe cronograma na revisão. Quando NÃO há
+  // (primeira importação), o seletor de modo é ocultado e o import roda
+  // direto como "substituir" (equivalente a inserção limpa, sem nada para
+  // mesclar). O seletor só aparece em ATUALIZAÇÕES de cronograma já existente.
+  const { data: atividadesExistentes } = trpc.planejamento.listarAtividades.useQuery(
+    { revisaoId: revisaoAtiva?.id ?? 0 },
+    { enabled: !!revisaoAtiva?.id && open },
+  );
+  const jaTemCronograma = ((atividadesExistentes as any[]) ?? []).length > 0;
+
   const eapMap = useMemo(() => {
     const map: Record<string, any> = {};
     (orcItens as any[]).forEach((it: any) => {
@@ -531,6 +541,14 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   [orcItens]);
 
   const [modoImport, setModoImport] = useState<"substituir" | "apenas_predecessora" | "mesclar">("mesclar");
+  // Rev. 1648 — Quando NÃO existe cronograma ainda (primeira importação),
+  // força o modo "substituir" (equivalente a inserção limpa) e oculta o
+  // seletor — não faz sentido perguntar "mesclar com o quê?".
+  useEffect(() => {
+    if (open && atividadesExistentes !== undefined) {
+      if (!jaTemCronograma && modoImport !== "substituir") setModoImport("substituir");
+    }
+  }, [open, jaTemCronograma, atividadesExistentes]);
   const [resultadoImport, setResultadoImport] = useState<{ atualizados: number; inseridos: number; naoEncontrados: number } | null>(null);
 
   const salvarMutation = trpc.planejamento.salvarAtividades.useMutation({
@@ -1044,7 +1062,18 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                 </span>
               </div>
 
-              {/* Seletor de modo de importação */}
+              {/* Seletor de modo de importação — só aparece em ATUALIZAÇÕES
+                  (quando já existe cronograma). Em uma primeira importação,
+                  sempre traz tudo (substituir = inserção limpa). */}
+              {!jaTemCronograma ? (
+                <div className="border border-emerald-200 rounded-lg p-3 bg-emerald-50 text-[11px] text-emerald-800 flex items-start gap-2">
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  <span>
+                    <b>Primeira importação</b> — todas as <b>{tarefas.length}</b> atividades do arquivo serão importadas.
+                    O seletor de modo (mesclar/substituir/apenas predecessora) só aparece em <b>atualizações</b> de um cronograma já cadastrado.
+                  </span>
+                </div>
+              ) : (
               <div className="border border-slate-200 rounded-lg p-3 bg-slate-50 space-y-2">
                 <div className="text-[11px] font-semibold text-slate-700 uppercase tracking-wide">
                   Modo de importação
@@ -1096,6 +1125,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                   </label>
                 </div>
               </div>
+              )}
 
               {/* Resumo pós-import */}
               {resultadoImport && (
@@ -1117,7 +1147,9 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                   {(salvarMutation.isPending || importarComModoMutation.isPending)
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     : <CheckCircle2 className="h-3.5 w-3.5" />}
-                  {modoImport === "substituir"
+                  {!jaTemCronograma
+                    ? `Importar ${tarefas.length} atividades`
+                    : modoImport === "substituir"
                     ? `Substituir por ${tarefas.length} atividades`
                     : modoImport === "apenas_predecessora"
                     ? `Atualizar predecessoras (${tarefas.length})`

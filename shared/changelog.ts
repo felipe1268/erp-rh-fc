@@ -11416,4 +11416,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 14:45:00",
   },
+  {
+    version: 1648,
+    titulo: "Importar Cronograma — primeira importação traz 100% sem perguntar modo",
+    descricao: "Quando o projeto ainda NÃO tem cronograma cadastrado, o seletor 'Mesclar / Apenas Predecessora / Substituir tudo' fica oculto e o import roda direto trazendo todas as atividades do arquivo (equivalente a substituir, mas sem nada para apagar). O seletor de modo só aparece nas ATUALIZAÇÕES de um cronograma já existente — onde realmente faz sentido escolher como tratar marcos, indiretas e ajustes manuais. Detecção via listarAtividades(revisaoId): se vazia, mostra um cartão verde 'Primeira importação — todas as N atividades serão importadas' e o botão de confirmar passa a se chamar 'Importar N atividades'. Comportamento das atualizações permanece idêntico ao anterior (default mesclar).",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 15:00:00",
+  },
 ];
