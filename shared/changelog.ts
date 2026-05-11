@@ -11434,4 +11434,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 15:30:00",
   },
+  {
+    version: 1650,
+    titulo: "Programação Semanal — 'Previsto da semana' usa fórmula MSP (paridade com top card)",
+    descricao: "O card da Programação Semanal mostrava 'Previsto: 0,00%' na Semana 1 mesmo quando o top card mostrava 1,41% (cutoff dentro da semana). Causa: o card preferia `evmSemana.previstoCurvaS` (delta da curva-S keyed por segunda-feira), que após Rev. 1647 (semanas cobráveis sex→qui) desalinhou com as chaves Monday — `acumAt(planejada, semIniStr=Friday)` retornava o cumulativo de uma semana inteira ANTES do início da semana exibida. Correção: quando o projeto tem `calendarioJson` MSP + datas raiz do envelope, o card passa a usar `previstoSemanaDelta` (mesma fórmula EVM do top card e da aba Avanço Semanal: `du(semana ∩ envelope até cutoff) / du(envelope)`). Sem MSP, mantém o fallback histórico via curva-S.",
+    tipo: "correcao",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 16:00:00",
+  },
 ];

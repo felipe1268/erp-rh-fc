@@ -1005,7 +1005,13 @@ export function ProgramacaoSemanal({
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] text-slate-600 font-medium">Previsto:</span>
                 <span className="text-sm font-bold text-orange-600 tabular-nums">
-                  {(evmSemana?.previstoCurvaS ?? previstoSemanaDelta).toFixed(2)}%
+                  {/* Rev. 1650 — Quando o projeto tem calendário MSP + envelope (datas raiz),
+                      usa `previstoSemanaDelta` (mesma fórmula EVM do top card e da aba
+                      Avanço Semanal — du(semana∩envelope até cutoff) / du(envelope)).
+                      Antes, o card preferia `evmSemana.previstoCurvaS` (curva-S keyed por
+                      segunda-feira), que ficava em 0% nas semanas cobráveis pós-Rev. 1647
+                      (sex→qui), pois `acumAt` lookup desalinhava com as chaves Mon. */}
+                  {((calMSPParsed && projetoStart && projetoFinish) ? previstoSemanaDelta : (evmSemana?.previstoCurvaS ?? previstoSemanaDelta)).toFixed(2)}%
                 </span>
               </div>
               {evmSemana && (
