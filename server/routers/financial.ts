@@ -687,32 +687,50 @@ export const financialRouter = router({
           let pjAtual: any = null;
           if (contractId && contractId > 0) {
             const r = await dbExecute(db,
-              `SELECT id, "razaoSocialPrestador" AS razao, "cnpjPrestador" AS cnpj,
-                      "valorMensal", "diaFechamento", "dataInicio", "dataFim", status
-               FROM pj_contracts WHERE id=$1 AND "companyId"=$2`,
+              `SELECT pc.id, pc."razaoSocialPrestador" AS razao, pc."cnpjPrestador" AS cnpj,
+                      pc."valorMensal", pc."diaFechamento", pc."dataInicio", pc."dataFim", pc.status,
+                      e."nomeCompleto" AS funcionario_nome, e.matricula AS funcionario_matricula,
+                      e.cargo AS funcionario_cargo
+               FROM pj_contracts pc
+               LEFT JOIN employees e ON e.id = pc."employeeId"
+               WHERE pc.id=$1 AND pc."companyId"=$2`,
               [contractId, input.companyId]);
             pjAtual = (rows(r) as any[])[0] ?? null;
           }
           const allRes = await dbExecute(db,
-            `SELECT id, "razaoSocialPrestador" AS nome, "cnpjPrestador" AS cnpj,
-                    COALESCE(REGEXP_REPLACE(REPLACE(REPLACE(COALESCE("valorMensal"::text,'0'),'.',''),',','.'),'[^0-9.\\-]','','g')::numeric, 0) AS valor,
-                    status, "dataInicio", "dataFim"
-             FROM pj_contracts
-             WHERE "companyId"=$1 AND status IN ('ativo','vigente','assinado')
-             ORDER BY "razaoSocialPrestador" ASC`,
+            `SELECT pc.id,
+                    COALESCE(NULLIF(TRIM(e."nomeCompleto"), ''),
+                             NULLIF(TRIM(pc."razaoSocialPrestador"), ''),
+                             'Prestador PJ #' || pc.id) AS nome,
+                    COALESCE(NULLIF(TRIM(pc."cnpjPrestador"), ''), '—') AS cnpj,
+                    COALESCE(REGEXP_REPLACE(REPLACE(REPLACE(COALESCE(pc."valorMensal"::text,'0'),'.',''),',','.'),'[^0-9.\\-]','','g')::numeric, 0) AS valor,
+                    pc.status, pc."dataInicio", pc."dataFim"
+             FROM pj_contracts pc
+             LEFT JOIN employees e ON e.id = pc."employeeId"
+             WHERE pc."companyId"=$1 AND pc.status IN ('ativo','vigente','assinado')
+             ORDER BY 2 ASC`,
             [input.companyId]);
           const pjs = (rows(allRes) as any[]).map(r => ({
-            id: r.id, nome: r.nome ?? `PJ #${r.id}`, cnpj: r.cnpj ?? "—",
+            id: r.id, nome: r.nome, cnpj: r.cnpj,
             valor: Number(r.valor ?? 0), status: r.status,
             destacado: pjAtual && r.id === pjAtual.id,
           }));
+          const nomePJ = pjAtual?.funcionario_nome || pjAtual?.razao || (pjAtual ? `Prestador PJ #${pjAtual.id}` : "Pagamento PJ Projetado");
           origemDetalhes = {
             tipo: om,
-            titulo: pjAtual ? `Contrato PJ — ${pjAtual.razao ?? `#${pjAtual.id}`}` : `Pagamento PJ Projetado`,
-            subtitulo: pjAtual?.cnpj ? `CNPJ ${pjAtual.cnpj} · Vigência ${pjAtual.dataInicio ? String(pjAtual.dataInicio).slice(0,10).split("-").reverse().join("/") : "—"} a ${pjAtual.dataFim ? String(pjAtual.dataFim).slice(0,10).split("-").reverse().join("/") : "—"}` : null,
+            titulo: pjAtual ? `Contrato PJ — ${nomePJ}` : `Pagamento PJ Projetado`,
+            subtitulo: pjAtual ? [
+              pjAtual.cnpj ? `CNPJ ${pjAtual.cnpj}` : null,
+              pjAtual.funcionario_matricula ? `Matr. ${pjAtual.funcionario_matricula}` : null,
+              pjAtual.dataInicio && pjAtual.dataFim ? `Vigência ${String(pjAtual.dataInicio).slice(0,10).split("-").reverse().join("/")} a ${String(pjAtual.dataFim).slice(0,10).split("-").reverse().join("/")}` : null,
+            ].filter(Boolean).join(" · ") : null,
             formula: `Valor mensal contratado para o prestador, projetado para o vencimento configurado (dia ${pjAtual?.diaFechamento ?? 5} de cada mês, recuando para dia útil anterior).`,
             campos: pjAtual ? [
-              { label: "Razão Social", value: pjAtual.razao ?? "—" },
+              { label: "Funcionário Vinculado", value: pjAtual.funcionario_nome ?? "—" },
+              { label: "Matrícula", value: pjAtual.funcionario_matricula ?? "—" },
+              { label: "Cargo", value: pjAtual.funcionario_cargo ?? "—" },
+              { label: "Razão Social", value: pjAtual.razao || "—" },
+              { label: "CNPJ", value: pjAtual.cnpj || "—" },
               { label: "Valor Mensal", value: `R$ ${Number(pjAtual.valorMensal ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` },
               { label: "Dia Fechamento", value: pjAtual.diaFechamento ?? 5 },
               { label: "Status Contrato", value: pjAtual.status ?? "—" },

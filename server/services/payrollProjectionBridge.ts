@@ -228,19 +228,22 @@ async function getPJsAtivosNoMes(db: any, companyId: number, primeiroDia: string
   diaFechamento: number;
 }>> {
   const { rows } = await dbExecute(db,
-    // Rev. 1632 — usa brMoneySql para parsing BR robusto
-    `SELECT id,
-            COALESCE(NULLIF(TRIM("razaoSocialPrestador"), ''),
-                     NULLIF(TRIM("cnpjPrestador"), ''),
-                     'Prestador PJ #' || id) AS razao,
-            COALESCE(${brMoneySql('"valorMensal"')}, 0) AS valor,
-            COALESCE("diaFechamento", 5) AS dia
-     FROM pj_contracts
-     WHERE "companyId" = $1
-       AND "status" IN ('ativo','vigente','assinado')
-       AND "dataInicio" <= $2
-       AND "dataFim"    >= $3
-       AND COALESCE(${brMoneySql('"valorMensal"')}, 0) > 0`,
+    // Rev. 1634 — descrição agora prioriza o nome do FUNCIONÁRIO vinculado
+    // (employees.nomeCompleto), depois razão social, CNPJ e por fim "PJ #id"
+    `SELECT pc.id,
+            COALESCE(NULLIF(TRIM(e."nomeCompleto"), ''),
+                     NULLIF(TRIM(pc."razaoSocialPrestador"), ''),
+                     NULLIF(TRIM(pc."cnpjPrestador"), ''),
+                     'Prestador PJ #' || pc.id) AS razao,
+            COALESCE(${brMoneySql('pc."valorMensal"')}, 0) AS valor,
+            COALESCE(pc."diaFechamento", 5) AS dia
+     FROM pj_contracts pc
+     LEFT JOIN employees e ON e.id = pc."employeeId"
+     WHERE pc."companyId" = $1
+       AND pc."status" IN ('ativo','vigente','assinado')
+       AND pc."dataInicio" <= $2
+       AND pc."dataFim"    >= $3
+       AND COALESCE(${brMoneySql('pc."valorMensal"')}, 0) > 0`,
     [companyId, primeiroDia, primeiroDia]
   );
   return rows.map(r => ({
