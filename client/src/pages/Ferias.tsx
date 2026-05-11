@@ -750,8 +750,8 @@ export default function Ferias() {
     onError: (e: any) => toast.error(e.message),
   });
   const definirDataFerias = trpc.avisoPrevio.ferias.definirDataFerias.useMutation({
-    onSuccess: (data: any) => {
-      refetch();
+    onSuccess: async (data: any) => {
+      await utils.avisoPrevio.ferias.invalidate();
       utils.obras.efetivoPorObra.invalidate();
       setShowDefinirDialog(false);
       setDefinirItem(null);
