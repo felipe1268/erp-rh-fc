@@ -11470,4 +11470,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 17:30:00",
   },
+  {
+    version: 1654,
+    titulo: "Premissa de cutoff redefine a leitura oficial agora (Opção A com lock)",
+    descricao: "Antes, trocar o dia do cutoff (Qui ↔ Sex ↔ Qua) só mudava o 'molde' das semanas — a `dataCorteAtual` (PV oficial) continuava travada e o % previsto não respondia visualmente à mudança. Agora, ao trocar a premissa enquanto NÃO consolidado, a `dataCorteAtual` E o `dataCorteIso` são recalculados para `ultimoDiaSemanaAte(today, novoDia)` + 17:00. Resultado: Qua = 3 du = PV ~1,06%; Qui = 4 du = 1,41%; Sex = 5 du = ~1,76%. Após clicar em **Consolidar**, a premissa fica imutável (lock one-way preserva auditoria — semana fechada não muda mais). Mutation `setDiaCorte` atualiza 5 colunas (`diaCorteSemana`, `dataCorteAtual`, `dataCorteIso`, `dataCorteAtualizadaEm`, `dataCorteAtualizadaPor`) — `dataCorteIso` é a fonte do `cutoffIso` consumido pela Programação Semanal (clip de `fimEfetivo` + bypass do snapshot Texto11), sem ele a troca de premissa atualizaria o top card mas deixaria a Programação Semanal ancorada no StatusDate antigo do MSP. Audit log inclui as 3 mudanças relevantes. `server/routers/planejamento.ts` ~L1478-1503.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-11 18:30:00",
+  },
 ];

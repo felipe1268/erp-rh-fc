@@ -1472,14 +1472,32 @@ export const planejamentoRouter = router({
       if (proj.cutoffConsolidado) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "A premissa de cutoff já foi consolidada e não pode ser alterada." });
       }
+      // Rev. 1654 — Opção A "Premissa redefine a leitura agora": ao trocar o
+      // dia do cutoff (enquanto NÃO consolidado), recalcula a `dataCorteAtual`
+      // pro último dia-de-cutoff novo até hoje. Assim o PV oficial responde
+      // imediatamente à troca de molde — Qua = menos du = PV menor; Sex =
+      // mais du = PV maior. Após "Consolidar", o lock one-way preserva a
+      // auditoria (semana fechada não muda mais).
+      const { ultimoDiaSemanaAte, todayBR } = await import("../../shared/dataCorte");
+      const novaDataCorte = ultimoDiaSemanaAte(todayBR(), input.diaCorteSemana);
+      // `dataCorteIso` é a fonte de verdade do `cutoffIso` consumido por
+      // ProgramacaoSemanal (clip de fimEfetivo + bypass de snapshot Texto11).
+      // Sem isso, a troca de premissa atualiza o top card mas deixa a Programação
+      // Semanal ancorada no StatusDate antigo do MSP — quebra paridade Rev. 1651.
+      const novaDataCorteIso = `${novaDataCorte}T17:00:00`;
+      const quem = ctx.user.email || ctx.user.id || "—";
       await db.update(planejamentoProjetos).set({
         diaCorteSemana: input.diaCorteSemana,
+        dataCorteAtual: novaDataCorte as any,
+        dataCorteIso: novaDataCorteIso,
+        dataCorteAtualizadaEm: new Date(),
+        dataCorteAtualizadaPor: `${quem} (premissa: dia=${input.diaCorteSemana})`,
         atualizadoEm: new Date(),
       }).where(eq(planejamentoProjetos.id, input.projetoId));
       try {
-        await createAuditLog({ ctx, entity: "planejamento_projetos", entityId: input.projetoId, action: "SET_DIA_CORTE", changes: { diaCorteSemana: input.diaCorteSemana } });
+        await createAuditLog({ ctx, entity: "planejamento_projetos", entityId: input.projetoId, action: "SET_DIA_CORTE", changes: { diaCorteSemana: input.diaCorteSemana, dataCorteAtual: novaDataCorte, dataCorteIso: novaDataCorteIso } });
       } catch (e: any) { console.error(`[setDiaCorte] audit log falhou:`, e?.message || e); }
-      return { success: true, diaCorteSemana: input.diaCorteSemana };
+      return { success: true, diaCorteSemana: input.diaCorteSemana, dataCorteAtual: novaDataCorte };
     }),
 
   // Rev. 1647 — Consolida a premissa do cutoff (one-way lock). A partir
