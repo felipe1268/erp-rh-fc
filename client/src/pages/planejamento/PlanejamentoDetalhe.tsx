@@ -4862,7 +4862,11 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     // ── Previsto da semana — EVM clássico via pvMacro ──────────────────────────
     // Rev. 1646.6 — delta = pvMacro(semFim) − pvMacro(semIni). Mesma fonte do
     // top card; converge automaticamente em qualquer semana selecionada.
+    // Rev. 1646.7 — sem atividades, tudo zero (PV, débito, meta).
     let prev = 0;
+    if (folhas.length === 0) {
+      return { previsto: 0, realizado: 0, aderencia: null, debitoAcumulado: 0, metaRecuperacao: 0, semIniDate, semFimDate };
+    }
     if (pvMacro) {
       // Para semana corrente (que contém o cutoff oficial), encurta o fim ao
       // cutoff (PV exigível) — bate com o top card no modo Oficial.
@@ -4950,6 +4954,10 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   // Quando usarPesoPorDuracao=true pondera por duracaoDias (igual à barra superior
   // e ao MS Project); caso contrário usa pesoFinanceiro com fallback para peso igual.
   const previsto = useMemo(() => {
+    // Rev. 1646.7 — sem atividades cadastradas, Previsto = 0 (não há trabalho
+    // planejado). pvMacro só usa o envelope contratual do projeto e ignora
+    // se o cronograma foi limpo, então precisa de guarda explícita aqui.
+    if (folhas.length === 0) return 0;
     // Rev. 1646.6 — Modo MSP (paridade absoluta com top card): pvMacro do
     // envelope. Quando a semana selecionada CONTÉM o cutoff oficial, encurta
     // o ref ao cutoff (PV exigível). Caso contrário, usa o fim da semana
@@ -5004,6 +5012,8 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   const delta = +(realizadoAcum - previsto).toFixed(2);
 
   const previstoComInd = useMemo(() => {
+    // Rev. 1646.7 — sem atividades, Previsto = 0.
+    if (folhasComInd.length === 0) return 0;
     // Rev. 1646.6 — pvMacro: mesma fonte de "previsto" (envelope macro do MSP),
     // indiretas não fazem distinção em macro. Converge com o top card e o card
     // "PREVISTO (SEMANA)" sem indiretas.
