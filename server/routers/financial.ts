@@ -25,6 +25,12 @@ import {
   gerarEFDReinf,
 } from "../services/financialKpiService";
 import { runFinancialJobNow } from "../services/financialAutoImportJob";
+import {
+  computeThreeWayMatch, blockPaymentByThreeWay, releasePaymentByThreeWay,
+  parseOFX, parseCNAB, suggestReconciliation, applyReconciliation,
+  computeDynamicDiscounting, computeDREDual,
+  generateFinancialAlerts, getAlertsForCompany, markAlertRead,
+} from "../services/cfoPhase2";
 
 // ============================================================
 // MÓDULO FINANCEIRO — Router tRPC
@@ -4537,5 +4543,134 @@ export const financialRouter = router({
       paretoClientes: { rows: paretoClientes, total: cliTotal, top80: top80Cli },
       kpisProcesso,
     };
+  }),
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FASE 2 — CFO SUITE
+  // ═══════════════════════════════════════════════════════════════════════════
+  getThreeWayMatch: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    return await computeThreeWayMatch(db, ids);
+  }),
+
+  blockPaymentByThreeWay: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    financialEntryId: z.number(),
+    motivo: z.string().min(3),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await blockPaymentByThreeWay(db, input.companyId, input.financialEntryId, input.motivo);
+    await createAuditLog({ action: "BLOCK_3WM", userId: ctx.user?.id, companyId: input.companyId, details: `Entry ${input.financialEntryId}: ${input.motivo}` });
+    return { success: true };
+  }),
+
+  releasePaymentByThreeWay: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    financialEntryId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await releasePaymentByThreeWay(db, input.companyId, input.financialEntryId);
+    await createAuditLog({ action: "RELEASE_3WM", userId: ctx.user?.id, companyId: input.companyId, details: `Entry ${input.financialEntryId} liberado` });
+    return { success: true };
+  }),
+
+  reconcileBankFile: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    contaBancariaId: z.number().nullable().optional(),
+    formato: z.enum(["ofx", "cnab"]),
+    conteudo: z.string().min(20),
+    useAI: z.boolean().optional(),
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    const lines = input.formato === "ofx" ? parseOFX(input.conteudo) : parseCNAB(input.conteudo);
+    if (!lines.length) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma movimentação detectada no arquivo." });
+    }
+    const sugestoes = await suggestReconciliation(db, ids, input.contaBancariaId ?? null, lines, input.useAI ?? true);
+    return { totalLinhas: lines.length, sugestoes };
+  }),
+
+  applyReconciliationMatches: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    matches: z.array(z.object({
+      ofxLine: z.object({
+        data: z.string(),
+        valor: z.number(),
+        descricao: z.string(),
+        tipo: z.enum(["credito", "debito"]),
+        fitId: z.string(),
+      }),
+      entryId: z.number(),
+    })),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const out = await applyReconciliation(db, input.companyId, input.contaBancariaId, input.matches);
+    await createAuditLog({ action: "RECONCILE", userId: ctx.user?.id, companyId: input.companyId, details: `${out.aplicados} matches aplicados` });
+    return out;
+  }),
+
+  getDynamicDiscountOffers: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    taxaWaccAA: z.number().min(0).max(100).optional(),
+    janelaDias: z.number().min(7).max(365).optional(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    return await computeDynamicDiscounting(db, ids, input.taxaWaccAA ?? 18, input.janelaDias ?? 60);
+  }),
+
+  getDREDual: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    ano: z.number().int().min(2020).max(2100),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    return await computeDREDual(db, ids, input.ano);
+  }),
+
+  getFinancialAlerts: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    apenasNaoLidas: z.boolean().optional(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    return await getAlertsForCompany(db, ids, input.apenasNaoLidas ?? false);
+  }),
+
+  regenerateFinancialAlerts: protectedProcedure.input(z.object({
+    companyId: z.number(),
+  })).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const inseridos = await generateFinancialAlerts(db, input.companyId);
+    return { inseridos };
+  }),
+
+  markAlertRead: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    alertId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await markAlertRead(db, input.companyId, input.alertId ?? 0, String(ctx.user?.id ?? ""));
+    return { success: true };
   }),
 });

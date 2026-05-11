@@ -860,6 +860,23 @@ Regras:
           `);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS crl_reserva ON compras_reservas_log (reserva_id);`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS crl_acao ON compras_reservas_log (acao);`);
+          // Rev. 1633 — Alertas push financeiros (FASE 2 CFO Suite)
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS financial_alerts (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              tipo VARCHAR(40) NOT NULL,
+              severidade VARCHAR(20) NOT NULL DEFAULT 'info',
+              titulo VARCHAR(200) NOT NULL,
+              mensagem TEXT,
+              dados JSONB,
+              lida SMALLINT NOT NULL DEFAULT 0,
+              lida_em TIMESTAMP WITHOUT TIME ZONE,
+              lida_por VARCHAR(64),
+              criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+            );
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS fa_company_lida ON financial_alerts (company_id, lida, criado_em DESC);`);
           await db.execute(sql`
             CREATE TABLE IF NOT EXISTS pj_conformidade_alertas (
               id SERIAL PRIMARY KEY,

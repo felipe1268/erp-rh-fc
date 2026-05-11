@@ -2377,6 +2377,7 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
     { section: "Painel", label: "Dashboard", path: "/financeiro" },
     { section: "Movimentações", label: "Lançamentos", path: "/financeiro/lancamentos" },
     { section: "Análise", label: "Análise CFO (Hackett/IFRS/AFP)", path: "/financeiro/analise-cfo" },
+    { section: "Análise", label: "CFO Suite (3WM/Reconcil/DD/DRE Dual)", path: "/financeiro/cfo-suite" },
     { section: "Movimentações", label: "Contas a Receber", path: "/financeiro/contas-a-receber" },
     { section: "Movimentações", label: "Contas a Pagar", path: "/financeiro/contas-a-pagar" },
     { section: "Movimentações", label: "Contas a Receber", path: "/financeiro/contas-a-receber" },
