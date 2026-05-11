@@ -851,6 +851,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
         {canViewTab(aba) && aba === "avanco" && (
           <AvancoSemanal
             projetoId={projetoId}
+            proj={proj}
             revisaoAtiva={revisaoAtiva}
             atividades={atividades}
             avancos={avancos}
@@ -4583,7 +4584,7 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: AVANÇO SEMANAL
 // ═════════════════════════════════════════════════════════════════════════════
-function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, onSemanaChange, onLocalAvancoChange, usarPesoPorDuracao }: any) {
+function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, utils, onSemanaChange, onLocalAvancoChange, usarPesoPorDuracao }: any) {
   const [semanaAtual, setSemanaAtualRaw] = useState(() => toMonday(new Date()));
   const setSemanaAtual = (s: string) => { setSemanaAtualRaw(s); onSemanaChange?.(s); };
   const [avancoLocal, setAvancoLocal] = useState<Record<number, number>>({});
