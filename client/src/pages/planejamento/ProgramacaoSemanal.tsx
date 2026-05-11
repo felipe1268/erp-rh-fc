@@ -871,14 +871,84 @@ export function ProgramacaoSemanal({
                 )}
               </div>
             )}
+            {/* Rev. 1638.3 — Legenda explícita por indicador. Fechado por
+                padrão pra não poluir; o engenheiro abre quando quiser
+                consultar a definição de cada KPI da semana. */}
+            <details className="group text-[10px] text-slate-500 select-none">
+              <summary className="cursor-pointer list-none flex items-center gap-1.5 hover:text-slate-700 transition-colors">
+                <Info className="h-3 w-3" />
+                <span className="font-semibold">O que significa cada indicador?</span>
+                <span className="text-slate-400 group-open:hidden">(toque para abrir)</span>
+                <span className="text-slate-400 hidden group-open:inline">(toque para fechar)</span>
+              </summary>
+              <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 bg-white/70 border border-slate-200 rounded-lg px-3 py-2.5">
+                <div>
+                  <div className="text-[11px] font-semibold text-orange-700 flex items-center gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-orange-500" /> Previsto
+                  </div>
+                  <p className="text-[10px] text-slate-600 leading-snug mt-0.5">
+                    Quanto a obra <strong>deveria</strong> avançar de seg a dom segundo o cronograma baseline (Curva S). Atividades que cruzam várias semanas entram <strong>proporcionalmente</strong> (overlap dias × peso ÷ duração).
+                  </p>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-emerald-700 flex items-center gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" /> Realizado
+                  </div>
+                  <p className="text-[10px] text-slate-600 leading-snug mt-0.5">
+                    Quanto a obra <strong>de fato</strong> avançou na mesma janela seg→dom, calculado pelo delta de avanço físico (real fim − real início da semana) ponderado pelo peso de cada frente.
+                  </p>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-slate-500" /> Aderência (SPI sem.)
+                  </div>
+                  <p className="text-[10px] text-slate-600 leading-snug mt-0.5">
+                    <strong>Realizado ÷ Previsto</strong> da semana, em %. ≥ 95 % = no plano (verde); abaixo = vermelho. PMBOK chama de <em>SPI semanal</em> — mede a previsibilidade do plano (Last Planner / PPC).
+                  </p>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-red-700 flex items-center gap-1">
+                    <TrendingDown className="h-3 w-3" /> Atraso a recuperar
+                  </div>
+                  <p className="text-[10px] text-slate-600 leading-snug mt-0.5">
+                    Soma do <strong>débito acumulado</strong> de semanas anteriores fechadas (PV − EV até a semana passada). É métrica gerencial; <strong>não desconta do baseline</strong>.
+                  </p>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-blue-700 flex items-center gap-1">
+                    <Zap className="h-3 w-3" /> Meta diluída ({janelaRecuperacao} sem)
+                  </div>
+                  <p className="text-[10px] text-slate-600 leading-snug mt-0.5">
+                    Quanto a obra <strong>precisa avançar por semana</strong> para zerar o débito na janela escolhida = <em>Previsto baseline + (Atraso ÷ N semanas)</em>. Janela maior = meta mais factível.
+                  </p>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-blue-700 flex items-center gap-1">
+                    <span className="inline-flex items-center justify-center w-3 h-3 rounded bg-blue-600 text-white text-[8px] font-bold">N</span> Recuperar em N sem
+                  </div>
+                  <p className="text-[10px] text-slate-600 leading-snug mt-0.5">
+                    <strong>Janela de recuperação (Recovery Schedule, AACE 23R-02)</strong>. Define em quantas semanas o débito será diluído. Só o engenheiro edita; o cliente vê congelado no Portal.
+                  </p>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-amber-700">💡 Sugerido: X sem</div>
+                  <p className="text-[10px] text-slate-600 leading-snug mt-0.5">
+                    Janela <strong>mínima viável</strong> calculada pelo histórico: <em>débito ÷ folga de pico</em>, onde folga = maior avanço semanal já realizado − média do baseline das últimas 6 semanas. Janela menor que isso provavelmente não é factível.
+                  </p>
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-700">📅 Atraso zerado em DD/MM/AAAA</div>
+                  <p className="text-[10px] text-slate-600 leading-snug mt-0.5">
+                    Data prevista de <strong>convergência</strong> = fim da semana atual + N × 7 dias. Se a obra entregar a Meta diluída todo sábado, o débito zera nesta data.
+                  </p>
+                </div>
+                <div className="md:col-span-2 text-[10px] text-slate-500 italic border-t border-slate-200 pt-1.5">
+                  <strong className="text-slate-700">Importante:</strong> o <strong>baseline (PV) é imutável</strong> — débito e meta diluída são métricas gerenciais, não alteram o cronograma original.
+                </div>
+              </div>
+            </details>
             <div className="text-[10px] text-slate-400">
-              <strong>Como ler:</strong>{" "}
-              {evmSemana
-                ? <>&quot;Previsto&quot; e &quot;Realizado&quot; são o <strong>delta da Curva S nesta semana</strong> (o quanto a obra deve / efetivamente avançou de seg a dom). Atividades multi-semana contribuem proporcionalmente.</>
-                : <>&quot;Previsto&quot; é estimado pelo <strong>overlap dias × peso ÷ duração</strong> (atividades multi-semana contribuem proporcionalmente). Realizado e Aderência indisponíveis sem histórico de avanços.</>
-              }
-              {evmSemana && evmSemana.debitoAcumulado > 0.01 && <> O <strong>baseline (PV) é imutável</strong>; o débito é métrica gerencial diluída em {janelaRecuperacao} semanas — não substitui o cronograma original.</>}
-              {" "}Peso bruto das atividades ativas: <strong className="tabular-nums">{pesoSemana.somaSemana.toFixed(2)}%</strong>
+              Peso bruto das atividades ativas: <strong className="tabular-nums">{pesoSemana.somaSemana.toFixed(2)}%</strong>
               {pesoSemana.maiorContribVal > 0 && <> · maior contribuição na semana: <strong>{pesoSemana.maiorContribVal.toFixed(2)}pp</strong></>}
               {pesoSemana.criticasIds.size > 0 && <> · <strong className="text-red-600">{pesoSemana.criticasIds.size} crítica{pesoSemana.criticasIds.size !== 1 ? "s" : ""}</strong> (caminho crítico)</>}
               {pesoSemana.quaseCriticasIds.size > 0 && <> · <strong className="text-amber-600">{pesoSemana.quaseCriticasIds.size} quase crítica{pesoSemana.quaseCriticasIds.size !== 1 ? "s" : ""}</strong> (folga ≤ 14 d)</>}
