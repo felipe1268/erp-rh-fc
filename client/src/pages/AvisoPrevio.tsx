@@ -83,7 +83,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   // Modal "Dar Baixa"
   const [darBaixaModal, setDarBaixaModal] = useState<{ open: boolean; avisoId: number | null; funcionarioNome: string; avisoData: any }>({ open: false, avisoId: null, funcionarioNome: '', avisoData: null });
   const [darBaixaForm, setDarBaixaForm] = useState({
-    tipo: 'rescisao' as 'rescisao' | 'fgts',
+    tipo: 'rescisao' as 'rescisao' | 'fgts' | 'complementar',
     valor: '',
     observacoes: '',
     desligarFuncionario: false,
@@ -195,7 +195,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
         toast.success(msg);
         setDarBaixaModal({ open: false, avisoId: null, funcionarioNome: '', avisoData: null });
       } else {
-        toast.success(`Baixa da ${darBaixaForm.tipo === 'rescisao' ? 'rescisão' : 'multa FGTS'} registrada! Aguardando baixa complementar.`);
+        toast.success(`Baixa da ${darBaixaForm.tipo === 'rescisao' ? 'rescisão' : darBaixaForm.tipo === 'fgts' ? 'multa FGTS' : 'rescisão complementar'} registrada! Aguardando demais baixas.`);
         setDarBaixaModal({ open: false, avisoId: null, funcionarioNome: '', avisoData: null });
       }
       setDarBaixaForm({ tipo: 'rescisao', valor: '', observacoes: '', desligarFuncionario: false, categoriaDesligamento: '', motivoDesligamento: '', incluirListaNegra: false, motivoListaNegra: '' });
@@ -452,8 +452,16 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   const handleDarBaixa = (id: number, funcionarioNome: string, avisoData?: any) => {
     const rescisaoJaFeita = !!(avisoData?.baixaRescisaoData);
     const fgtsJaFeita = !!(avisoData?.baixaFgtsData);
-    const defaultTipo = rescisaoJaFeita ? 'fgts' : 'rescisao';
-    setDarBaixaForm({ tipo: defaultTipo as any, valor: '', observacoes: '', desligarFuncionario: false, categoriaDesligamento: '', motivoDesligamento: '', incluirListaNegra: false, motivoListaNegra: '' });
+    const complementarJaFeita = !!(avisoData?.baixaComplementarData);
+    // Default: primeira pendência na ordem rescisão → FGTS → complementar.
+    const defaultTipo: 'rescisao' | 'fgts' | 'complementar' = !rescisaoJaFeita
+      ? 'rescisao'
+      : !fgtsJaFeita
+        ? 'fgts'
+        : !complementarJaFeita
+          ? 'complementar'
+          : 'rescisao';
+    setDarBaixaForm({ tipo: defaultTipo, valor: '', observacoes: '', desligarFuncionario: false, categoriaDesligamento: '', motivoDesligamento: '', incluirListaNegra: false, motivoListaNegra: '' });
     setDarBaixaModal({ open: true, avisoId: id, funcionarioNome, avisoData: avisoData || null });
   };
 
@@ -2621,16 +2629,23 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
               const ad = darBaixaModal.avisoData;
               const rescisaoJaFeita = !!(ad?.baixaRescisaoData);
               const fgtsJaFeita = !!(ad?.baixaFgtsData);
+              const complementarJaFeita = !!(ad?.baixaComplementarData);
               const isPedidoDemissaoModal = ad?.tipo === 'empregado_trabalhado' || ad?.tipo === 'empregado_indenizado';
               const fgtsNaoAplica = isPedidoDemissaoModal;
               let prev: any = null;
               try { prev = ad?.previsaoRescisao ? JSON.parse(ad.previsaoRescisao) : null; } catch {}
+              // Rev. 1639 — Complementar (uso interno, "por fora").
+              let prevComplementar: any = null;
+              try { prevComplementar = ad?.previsaoRescisaoComplementar ? JSON.parse(ad.previsaoRescisaoComplementar) : null; } catch {}
+              const totalComplementar = parseFloat(String(prevComplementar?.total ?? '0'));
+              const temComplementar = totalComplementar > 0;
               const valorRescisaoSugerido = prev ? (prev.totalLiquido || prev.total || '0') : (ad?.valorEstimadoTotal || '0');
               const valorFgtsSugerido = prev ? (prev.multaFGTS || '0') : '0';
+              const valorComplementarSugerido = temComplementar ? String(totalComplementar.toFixed(2)) : '0';
 
               return (
                 <>
-                  {(rescisaoJaFeita || fgtsJaFeita) && (
+                  {(rescisaoJaFeita || fgtsJaFeita || complementarJaFeita) && (
                     <div className="rounded-lg border border-green-200 bg-green-50 p-3 space-y-1">
                       <p className="text-xs font-semibold text-green-700 uppercase">Baixas já registradas:</p>
                       {rescisaoJaFeita && (
@@ -2645,13 +2660,20 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                           <span>Multa FGTS: <strong>{formatMoeda(ad.baixaFgtsValor)}</strong> em {formatDate(ad.baixaFgtsData)} por {ad.baixaFgtsPor}</span>
                         </div>
                       )}
+                      {complementarJaFeita && (
+                        <div className="flex items-center gap-2 text-xs text-green-700">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>Rescisão Complementar: <strong>{formatMoeda(ad.baixaComplementarValor)}</strong> em {formatDate(ad.baixaComplementarData)} por {ad.baixaComplementarPor}</span>
+                        </div>
+                      )}
                     </div>
                   )}
 
                   <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-3">
                     <p className="text-xs font-semibold text-blue-700 uppercase">Tipo da Baixa</p>
                     {!fgtsNaoAplica ? (
-                      <div className="grid grid-cols-2 gap-2">
+                      // Rev. 1639 — 3 cards quando há complementar (>0), senão 2.
+                      <div className={`grid gap-2 ${temComplementar ? 'grid-cols-3' : 'grid-cols-2'}`}>
                         <button
                           type="button"
                           disabled={rescisaoJaFeita}
@@ -2686,19 +2708,72 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                           {prev && <div className="text-xs text-amber-700 font-semibold mt-1">Estimado: {formatMoeda(valorFgtsSugerido)}</div>}
                           {fgtsJaFeita && <div className="text-[10px] text-green-600 mt-1 font-semibold">Já registrada</div>}
                         </button>
+                        {temComplementar && (
+                          <button
+                            type="button"
+                            disabled={complementarJaFeita}
+                            className={`p-3 rounded-lg border-2 text-left transition-all ${
+                              darBaixaForm.tipo === 'complementar' && !complementarJaFeita
+                                ? 'border-violet-500 bg-violet-50 shadow-sm'
+                                : complementarJaFeita
+                                  ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                                  : 'border-gray-200 hover:border-blue-300 cursor-pointer'
+                            }`}
+                            onClick={() => { if (!complementarJaFeita) setDarBaixaForm(f => ({ ...f, tipo: 'complementar', valor: '' })); }}
+                          >
+                            <div className="text-sm font-semibold text-slate-800">Rescisão Complementar</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">Uso interno — pago "por fora"</div>
+                            <div className="text-xs text-violet-700 font-semibold mt-1">Estimado: {formatMoeda(valorComplementarSugerido)}</div>
+                            {complementarJaFeita && <div className="text-[10px] text-green-600 mt-1 font-semibold">Já registrada</div>}
+                          </button>
+                        )}
                       </div>
                     ) : (
-                      <div className="p-2 bg-white rounded border">
-                        <div className="text-sm font-semibold text-slate-800">Rescisão (pago ao colaborador)</div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">Pedido de demissão — multa FGTS não se aplica</div>
-                        {prev && <div className="text-xs text-green-700 font-semibold mt-1">Estimado: {formatMoeda(valorRescisaoSugerido)}</div>}
+                      // Pedido de demissão: rescisão + (opcional) complementar.
+                      <div className={`grid gap-2 ${temComplementar ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                        <button
+                          type="button"
+                          disabled={rescisaoJaFeita}
+                          className={`p-3 rounded-lg border-2 text-left transition-all ${
+                            darBaixaForm.tipo === 'rescisao' && !rescisaoJaFeita
+                              ? 'border-green-500 bg-green-50 shadow-sm'
+                              : rescisaoJaFeita
+                                ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                                : 'border-gray-200 hover:border-blue-300 cursor-pointer'
+                          }`}
+                          onClick={() => { if (!rescisaoJaFeita) setDarBaixaForm(f => ({ ...f, tipo: 'rescisao', valor: '' })); }}
+                        >
+                          <div className="text-sm font-semibold text-slate-800">Rescisão (pago ao colaborador)</div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">Pedido de demissão — multa FGTS não se aplica</div>
+                          {prev && <div className="text-xs text-green-700 font-semibold mt-1">Estimado: {formatMoeda(valorRescisaoSugerido)}</div>}
+                          {rescisaoJaFeita && <div className="text-[10px] text-green-600 mt-1 font-semibold">Já registrada</div>}
+                        </button>
+                        {temComplementar && (
+                          <button
+                            type="button"
+                            disabled={complementarJaFeita}
+                            className={`p-3 rounded-lg border-2 text-left transition-all ${
+                              darBaixaForm.tipo === 'complementar' && !complementarJaFeita
+                                ? 'border-violet-500 bg-violet-50 shadow-sm'
+                                : complementarJaFeita
+                                  ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                                  : 'border-gray-200 hover:border-blue-300 cursor-pointer'
+                            }`}
+                            onClick={() => { if (!complementarJaFeita) setDarBaixaForm(f => ({ ...f, tipo: 'complementar', valor: '' })); }}
+                          >
+                            <div className="text-sm font-semibold text-slate-800">Rescisão Complementar</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">Uso interno — pago "por fora"</div>
+                            <div className="text-xs text-violet-700 font-semibold mt-1">Estimado: {formatMoeda(valorComplementarSugerido)}</div>
+                            {complementarJaFeita && <div className="text-[10px] text-green-600 mt-1 font-semibold">Já registrada</div>}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
 
                   <div>
                     <label className="text-xs font-medium text-slate-700">
-                      Valor efetivo da {darBaixaForm.tipo === 'rescisao' ? 'rescisão' : 'multa FGTS'} *
+                      Valor efetivo da {darBaixaForm.tipo === 'rescisao' ? 'rescisão' : darBaixaForm.tipo === 'fgts' ? 'multa FGTS' : 'rescisão complementar'} *
                     </label>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-sm font-semibold text-slate-500">R$</span>
@@ -2717,7 +2792,11 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                         size="sm"
                         className="h-9 text-xs whitespace-nowrap"
                         onClick={() => {
-                          const sugerido = darBaixaForm.tipo === 'rescisao' ? valorRescisaoSugerido : valorFgtsSugerido;
+                          const sugerido = darBaixaForm.tipo === 'rescisao'
+                            ? valorRescisaoSugerido
+                            : darBaixaForm.tipo === 'fgts'
+                              ? valorFgtsSugerido
+                              : valorComplementarSugerido;
                           setDarBaixaForm(f => ({ ...f, valor: parseFloat(String(sugerido || '0')).toFixed(2) }));
                         }}
                       >
@@ -2727,7 +2806,9 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                     <p className="text-[10px] text-slate-400 mt-1">
                       {darBaixaForm.tipo === 'rescisao'
                         ? 'Valor final pago ao colaborador (pode diferir do estimado por faltas, descontos de farmácia, etc.)'
-                        : 'Valor da multa 40% FGTS depositado na Caixa Econômica Federal'}
+                        : darBaixaForm.tipo === 'fgts'
+                          ? 'Valor da multa 40% FGTS depositado na Caixa Econômica Federal'
+                          : 'Valor pago "por fora" calculado sobre o complemento salarial — não substitui o TRCT oficial.'}
                     </p>
                   </div>
                 </>
@@ -2834,7 +2915,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
               onClick={handleConfirmarBaixa}
               disabled={darBaixa.isPending}
             >
-              {darBaixa.isPending ? "Processando..." : `Confirmar Baixa ${darBaixaForm.tipo === 'rescisao' ? 'Rescisão' : 'Multa FGTS'}`}
+              {darBaixa.isPending ? "Processando..." : `Confirmar Baixa ${darBaixaForm.tipo === 'rescisao' ? 'Rescisão' : darBaixaForm.tipo === 'fgts' ? 'Multa FGTS' : 'Rescisão Complementar'}`}
             </Button>
           </DialogFooter>
         </DialogContent>

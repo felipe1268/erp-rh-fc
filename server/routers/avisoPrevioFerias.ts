@@ -348,6 +348,10 @@ export const avisoPrevioFeriasRouter = router({
           baixaFgtsData: terminationNotices.baixaFgtsData,
           baixaFgtsPor: terminationNotices.baixaFgtsPor,
           baixaFgtsObs: terminationNotices.baixaFgtsObs,
+          baixaComplementarValor: terminationNotices.baixaComplementarValor,
+          baixaComplementarData: terminationNotices.baixaComplementarData,
+          baixaComplementarPor: terminationNotices.baixaComplementarPor,
+          baixaComplementarObs: terminationNotices.baixaComplementarObs,
           motivoCancelamento: terminationNotices.motivoCancelamento,
           canceladoPorNome: sql<string>`"termination_notices"."canceladoPorNome"`.as("canceladoPorNome"),
           canceladoPorId: sql<number>`"termination_notices"."canceladoPorId"`.as("canceladoPorId"),
@@ -1504,7 +1508,8 @@ export const avisoPrevioFeriasRouter = router({
     darBaixa: protectedProcedure
       .input(z.object({
         id: z.number(),
-        tipo: z.enum(['rescisao', 'fgts']),
+        // Rev. 1639 — 'complementar' = baixa da rescisão complementar (uso interno).
+        tipo: z.enum(['rescisao', 'fgts', 'complementar']),
         valor: z.string(),
         observacoes: z.string().optional(),
         desligarFuncionario: z.boolean().optional(),
@@ -1524,11 +1529,24 @@ export const avisoPrevioFeriasRouter = router({
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'A baixa da rescisão já foi registrada.' });
         if (input.tipo === 'fgts' && (aviso as any).baixaFgtsData)
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'A baixa do FGTS já foi registrada.' });
+        if (input.tipo === 'complementar' && (aviso as any).baixaComplementarData)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'A baixa da rescisão complementar já foi registrada.' });
 
         const isPedidoDemissao = aviso.tipo === 'empregado_trabalhado' || aviso.tipo === 'empregado_indenizado';
         const fgtsNaoAplica = isPedidoDemissao;
         if (input.tipo === 'fgts' && fgtsNaoAplica)
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Multa FGTS não se aplica a pedido de demissão.' });
+
+        // Rev. 1639 — Complementar só pode ser dado se houver previsão > 0.
+        let temComplementar = false;
+        try {
+          const pc = (aviso as any).previsaoRescisaoComplementar
+            ? JSON.parse((aviso as any).previsaoRescisaoComplementar)
+            : null;
+          temComplementar = pc && parseFloat(String(pc.total ?? '0')) > 0;
+        } catch { temComplementar = false; }
+        if (input.tipo === 'complementar' && !temComplementar)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Este funcionário não possui rescisão complementar prevista.' });
 
         const valorNum = parseFloat(input.valor);
         if (isNaN(valorNum) || valorNum < 0)
@@ -1541,10 +1559,13 @@ export const avisoPrevioFeriasRouter = router({
             throw new TRPCError({ code: 'BAD_REQUEST', message: 'O motivo da inclusão na blacklist é obrigatório.' });
         }
 
-        const outraBaixaJaFeita = input.tipo === 'rescisao'
-          ? !!(aviso as any).baixaFgtsData
-          : !!(aviso as any).baixaRescisaoData;
-        const deveConcluir = outraBaixaJaFeita || fgtsNaoAplica;
+        // Rev. 1639 — Conclusão do processo agora considera as 3 baixas
+        // (rescisão oficial, multa FGTS quando aplicável, e complementar
+        // quando aplicável). A baixa atual é considerada como já feita.
+        const rescisaoOk = input.tipo === 'rescisao' || !!(aviso as any).baixaRescisaoData;
+        const fgtsOk     = fgtsNaoAplica || input.tipo === 'fgts' || !!(aviso as any).baixaFgtsData;
+        const complOk    = !temComplementar || input.tipo === 'complementar' || !!(aviso as any).baixaComplementarData;
+        const deveConcluir = rescisaoOk && fgtsOk && complOk;
 
         if (deveConcluir && input.desligarFuncionario && aviso.employeeId) {
           const checklistItems = await db.select().from(employeeTerminationChecklist)
@@ -1558,7 +1579,11 @@ export const avisoPrevioFeriasRouter = router({
         }
 
         const hoje = new Date().toISOString().split('T')[0];
-        const tipoLabel = input.tipo === 'rescisao' ? 'Rescisão' : 'Multa FGTS';
+        const tipoLabel = input.tipo === 'rescisao'
+          ? 'Rescisão'
+          : input.tipo === 'fgts'
+            ? 'Multa FGTS'
+            : 'Rescisão Complementar';
         const obsAppend = input.observacoes
           ? `\n[Baixa ${tipoLabel} em ${hoje} por ${ctx.user.name}]: ${input.observacoes}`
           : '';
@@ -1570,11 +1595,16 @@ export const avisoPrevioFeriasRouter = router({
           updateData.baixaRescisaoData = hoje;
           updateData.baixaRescisaoPor = ctx.user.name ?? 'Sistema';
           updateData.baixaRescisaoObs = input.observacoes || null;
-        } else {
+        } else if (input.tipo === 'fgts') {
           updateData.baixaFgtsValor = input.valor;
           updateData.baixaFgtsData = hoje;
           updateData.baixaFgtsPor = ctx.user.name ?? 'Sistema';
           updateData.baixaFgtsObs = input.observacoes || null;
+        } else {
+          updateData.baixaComplementarValor = input.valor;
+          updateData.baixaComplementarData = hoje;
+          updateData.baixaComplementarPor = ctx.user.name ?? 'Sistema';
+          updateData.baixaComplementarObs = input.observacoes || null;
         }
 
         if (deveConcluir) {
@@ -1661,7 +1691,8 @@ export const avisoPrevioFeriasRouter = router({
     editarBaixa: protectedProcedure
       .input(z.object({
         id: z.number(),
-        tipo: z.enum(['rescisao', 'fgts']),
+        // Rev. 1639 — inclui 'complementar'.
+        tipo: z.enum(['rescisao', 'fgts', 'complementar']),
         valor: z.string(),
         observacoes: z.string().optional(),
       }))
@@ -1678,17 +1709,30 @@ export const avisoPrevioFeriasRouter = router({
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Não há baixa de rescisão registrada para editar.' });
         if (input.tipo === 'fgts' && !(aviso as any).baixaFgtsData)
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Não há baixa de FGTS registrada para editar.' });
+        if (input.tipo === 'complementar' && !(aviso as any).baixaComplementarData)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Não há baixa da rescisão complementar registrada para editar.' });
 
         const hoje = new Date().toISOString().split('T')[0];
-        const tipoLabel = input.tipo === 'rescisao' ? 'Rescisão' : 'Multa FGTS';
+        const tipoLabel = input.tipo === 'rescisao'
+          ? 'Rescisão'
+          : input.tipo === 'fgts'
+            ? 'Multa FGTS'
+            : 'Rescisão Complementar';
         const updateData: any = { updatedAt: sql`NOW()` };
-        const valorAnterior = input.tipo === 'rescisao' ? (aviso as any).baixaRescisaoValor : (aviso as any).baixaFgtsValor;
+        const valorAnterior = input.tipo === 'rescisao'
+          ? (aviso as any).baixaRescisaoValor
+          : input.tipo === 'fgts'
+            ? (aviso as any).baixaFgtsValor
+            : (aviso as any).baixaComplementarValor;
         if (input.tipo === 'rescisao') {
           updateData.baixaRescisaoValor = input.valor;
           updateData.baixaRescisaoObs = input.observacoes || (aviso as any).baixaRescisaoObs;
-        } else {
+        } else if (input.tipo === 'fgts') {
           updateData.baixaFgtsValor = input.valor;
           updateData.baixaFgtsObs = input.observacoes || (aviso as any).baixaFgtsObs;
+        } else {
+          updateData.baixaComplementarValor = input.valor;
+          updateData.baixaComplementarObs = input.observacoes || (aviso as any).baixaComplementarObs;
         }
         const obsAppend = `\n[EDIÇÃO ${tipoLabel}] por ${ctx.user.name} em ${hoje}: R$ ${valorAnterior} → R$ ${input.valor}${input.observacoes ? '. Motivo: ' + input.observacoes : ''}`;
         updateData.observacoes = (aviso.observacoes || '') + obsAppend;
@@ -1709,7 +1753,8 @@ export const avisoPrevioFeriasRouter = router({
     estornarBaixa: protectedProcedure
       .input(z.object({
         id: z.number(),
-        tipo: z.enum(['rescisao', 'fgts']),
+        // Rev. 1639 — inclui 'complementar'.
+        tipo: z.enum(['rescisao', 'fgts', 'complementar']),
         motivo: z.string().min(1, 'Motivo é obrigatório'),
       }))
       .mutation(async ({ input, ctx }) => {
@@ -1722,10 +1767,20 @@ export const avisoPrevioFeriasRouter = router({
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Não há baixa de rescisão para estornar.' });
         if (input.tipo === 'fgts' && !(aviso as any).baixaFgtsData)
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Não há baixa de FGTS para estornar.' });
+        if (input.tipo === 'complementar' && !(aviso as any).baixaComplementarData)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Não há baixa da rescisão complementar para estornar.' });
 
         const hoje = new Date().toISOString().split('T')[0];
-        const tipoLabel = input.tipo === 'rescisao' ? 'Rescisão' : 'Multa FGTS';
-        const valorEstornado = input.tipo === 'rescisao' ? (aviso as any).baixaRescisaoValor : (aviso as any).baixaFgtsValor;
+        const tipoLabel = input.tipo === 'rescisao'
+          ? 'Rescisão'
+          : input.tipo === 'fgts'
+            ? 'Multa FGTS'
+            : 'Rescisão Complementar';
+        const valorEstornado = input.tipo === 'rescisao'
+          ? (aviso as any).baixaRescisaoValor
+          : input.tipo === 'fgts'
+            ? (aviso as any).baixaFgtsValor
+            : (aviso as any).baixaComplementarValor;
 
         const updateData: any = { updatedAt: sql`NOW()` };
         if (input.tipo === 'rescisao') {
@@ -1733,11 +1788,16 @@ export const avisoPrevioFeriasRouter = router({
           updateData.baixaRescisaoData = null;
           updateData.baixaRescisaoPor = null;
           updateData.baixaRescisaoObs = null;
-        } else {
+        } else if (input.tipo === 'fgts') {
           updateData.baixaFgtsValor = null;
           updateData.baixaFgtsData = null;
           updateData.baixaFgtsPor = null;
           updateData.baixaFgtsObs = null;
+        } else {
+          updateData.baixaComplementarValor = null;
+          updateData.baixaComplementarData = null;
+          updateData.baixaComplementarPor = null;
+          updateData.baixaComplementarObs = null;
         }
 
         if (aviso.status === 'concluido') {
@@ -1785,6 +1845,10 @@ export const avisoPrevioFeriasRouter = router({
           baixaFgtsData: null,
           baixaFgtsPor: null,
           baixaFgtsObs: null,
+          baixaComplementarValor: null,
+          baixaComplementarData: null,
+          baixaComplementarPor: null,
+          baixaComplementarObs: null,
           updatedAt: sql`NOW()`,
         } as any).where(eq(terminationNotices.id, input.id));
         
@@ -1818,6 +1882,10 @@ export const avisoPrevioFeriasRouter = router({
           baixaFgtsData: null,
           baixaFgtsPor: null,
           baixaFgtsObs: null,
+          baixaComplementarValor: null,
+          baixaComplementarData: null,
+          baixaComplementarPor: null,
+          baixaComplementarObs: null,
           updatedAt: sql`NOW()`,
         } as any).where(and(
           eq(terminationNotices.companyId, input.companyId),

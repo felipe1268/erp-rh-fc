@@ -2862,6 +2862,14 @@ export const terminationNotices = pgTable("termination_notices", {
         baixaFgtsData: date("baixa_fgts_data", { mode: 'string' }),
         baixaFgtsPor: varchar("baixa_fgts_por", { length: 255 }),
         baixaFgtsObs: text("baixa_fgts_obs"),
+        // Rev. 1639 — Baixa da Rescisão Complementar (uso interno, "por fora").
+        // Aparece apenas para funcionários com previsaoRescisaoComplementar.total > 0
+        // (ex.: complemento salarial fora da CTPS). Não substitui a baixa oficial,
+        // mas é exigida p/ conclusão quando aplicável.
+        baixaComplementarValor: varchar("baixa_complementar_valor", { length: 20 }),
+        baixaComplementarData: date("baixa_complementar_data", { mode: 'string' }),
+        baixaComplementarPor: varchar("baixa_complementar_por", { length: 255 }),
+        baixaComplementarObs: text("baixa_complementar_obs"),
 },
 (table) => [
         index("tn_company").on(table.companyId),

@@ -942,7 +942,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1510-2026-05-09-acesso-todas-obras";
+    const COLFIX_VERSION = "v1639-2026-05-11-baixa-rescisao-complementar";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -1143,6 +1143,11 @@ Regras:
             ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "canceladoPorNome" VARCHAR(255);
             ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "canceladoPorId" INTEGER;
             ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS "dataCancelamento" TIMESTAMP WITHOUT TIME ZONE;
+            -- Rev. 1639 — Baixa da rescisão complementar (uso interno) ─────────────
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS baixa_complementar_valor VARCHAR(20);
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS baixa_complementar_data DATE;
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS baixa_complementar_por VARCHAR(255);
+            ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS baixa_complementar_obs TEXT;
             ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS "revisao" VARCHAR(10) DEFAULT '01';
             ALTER TABLE pj_contracts ADD COLUMN IF NOT EXISTS "revisaoMotivo" TEXT;
             ALTER TABLE accidents ADD COLUMN IF NOT EXISTS obra_id INTEGER;
