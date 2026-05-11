@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from "react";
 import { trpc } from "@/lib/trpc";
-import { parseCalendarioJson, fracaoDecorridaMs as fracaoDecorridaMsCal, fracaoDecorridaComHora } from "../../../../shared/diasUteis";
+import { parseCalendarioJson, fracaoDecorridaMs as fracaoDecorridaMsCal, fracaoDecorridaComHora, diasUteisEntre as diasUteisEntreCal } from "../../../../shared/diasUteis";
 import {
   ChevronLeft, ChevronRight, Calendar, Printer, Loader2,
   Brain, AlertTriangle, Wrench, Users, Package, Clock,
@@ -149,6 +149,12 @@ interface Props {
    * o seletor de janela de recuperação BLOQUEIA valores que empurrariam a data
    * de convergência (semFim + N×7 dias) além do prazo contratual. */
   dataTerminoContratual?: string | null;
+  /** Rev. 1646.5 — Datas oficiais da raiz do MSP (UID=0). Quando combinadas
+   * com `calendarioJson`, o "Previsto da semana" no banner usa a MESMA
+   * fórmula do top card (du do envelope) em vez de peso financeiro × overlap.
+   * Garante que na semana corrente o número bate com o snapshot MSP do top. */
+  projetoStart?:  string | null;
+  projetoFinish?: string | null;
 }
 
 // ── Cores de status ───────────────────────────────────────────────────────────
@@ -337,6 +343,8 @@ export function ProgramacaoSemanal({
   dataTerminoContratual = null,
   calendarioJson = null,
   cutoffIso = null,
+  projetoStart = null,
+  projetoFinish = null,
 }: Props) {
   // Rev. 1534 — Janela atual de Recovery Schedule (default 4 semanas).
   const janelaRecuperacao = Math.max(1, recoveryWindow ?? 4);
@@ -406,12 +414,42 @@ export function ProgramacaoSemanal({
   // `proximas3`), que mede previsibilidade do plano da FC.
   const folhasTodas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.isIndireta), [atividades]);
 
-  // Rev. 1531 — Previsto na semana via OVERLAP (espelha fix Portal Rev. 1528).
-  // Atividades multi-semana contribuem proporcionalmente em vez de pelo peso integral.
+  // Rev. 1646.5 — "Previsto da semana" agora usa A MESMA FÓRMULA do top card
+  // (dias úteis sobre envelope MSP) quando o projeto tem calendário gravado +
+  // datas raiz do MSP. Garante paridade visual: na semana que contém o cutoff
+  // oficial, "Previsto" = "Previsto" do top card (ex. 1,41% no REVTE-CIVIL).
+  // Lógica EVM:
+  //   - Semanas ANTES do cutoff: delta normal (du(semana) / du(envelope))
+  //   - Semana CORRENTE (contém cutoff): du(semIni → cutoff) / du(envelope)
+  //   - Semanas FUTURAS: delta normal (du(semana) / du(envelope), informativo)
+  // Fallback (sem calMSP/envelope): mantém o cálculo histórico por peso
+  // financeiro × overlap (Rev. 1531) para retrocompatibilidade total.
   const previstoSemanaDelta = useMemo(() => {
     if (!semanaAtual) return 0;
     const semIniMs = semanaAtual.ini.getTime();
     const semFimMs = semanaAtual.fim.getTime() + 3 * 86400000 + 86400000; // Sex+3d=Dom; +1d exclusivo
+
+    // ── Modo MSP (paridade com top card) ──────────────────────────────
+    if (calMSPParsed && projetoStart && projetoFinish) {
+      const cutoffStr = (cutoffIso ? cutoffIso.slice(0, 10) : null);
+      const projIniStr = projetoStart.slice(0, 10);
+      const projFimStr = projetoFinish.slice(0, 10);
+      const semIniStr  = dateStr(semanaAtual.ini);
+      // Sex (semanaAtual.fim) é o último dia útil padrão da semana FC.
+      const semFimStr  = dateStr(semanaAtual.fim);
+      // Limita semana ao envelope do projeto.
+      const aIni = semIniStr < projIniStr ? projIniStr : semIniStr;
+      const aFim = semFimStr > projFimStr ? projFimStr : semFimStr;
+      // Se cutoff está dentro da semana, encurta o fim ao cutoff (PV exigível).
+      const fimEfetivo = (cutoffStr && cutoffStr >= aIni && cutoffStr <= aFim) ? cutoffStr : aFim;
+      if (aIni > fimEfetivo) return 0;
+      const totalEnv = diasUteisEntreCal(projIniStr, projFimStr, calMSPParsed);
+      if (totalEnv <= 0) return 0;
+      const duSemana = diasUteisEntreCal(aIni, fimEfetivo, calMSPParsed);
+      return (duSemana / totalEnv) * 100;
+    }
+
+    // ── Fallback histórico (peso financeiro × overlap) ────────────────
     let prev = 0;
     folhasTodas.forEach((a: any) => {
       if (!a.dataInicio || !a.dataFim) return;
@@ -423,7 +461,7 @@ export function ProgramacaoSemanal({
       prev += n(a.pesoFinanceiro) * (overlapDays / dur);
     });
     return prev;
-  }, [folhasTodas, semanaAtual]);
+  }, [folhasTodas, semanaAtual, calMSPParsed, projetoStart, projetoFinish, cutoffIso]);
 
   // Rev. 1532 — Realizado + Aderência da semana via delta da Curva S Realizada,
   // em paridade com a aba Avanço Semanal (mesmas fórmulas, mesmo número).
