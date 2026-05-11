@@ -111,6 +111,11 @@ export default function FinanceiroDashboard() {
                 ))}
               </SelectContent>
             </Select>
+            <Link href="/financeiro/analise-cfo">
+              <Button variant="outline" size="sm" className="h-9 border-indigo-300 text-indigo-700 hover:bg-indigo-50">
+                <Activity className="w-3.5 h-3.5 mr-1.5" />Análise CFO
+              </Button>
+            </Link>
             <Button variant="outline" size="sm" className="h-9" onClick={() => refetch()}>
               <RefreshCw className="w-3.5 h-3.5 mr-1.5" />Atualizar
             </Button>

@@ -2376,6 +2376,7 @@ const MODULE_PAGES: Record<string, ModPageItem[]> = {
   financeiro: [
     { section: "Painel", label: "Dashboard", path: "/financeiro" },
     { section: "Movimentações", label: "Lançamentos", path: "/financeiro/lancamentos" },
+    { section: "Análise", label: "Análise CFO (Hackett/IFRS/AFP)", path: "/financeiro/analise-cfo" },
     { section: "Movimentações", label: "Contas a Receber", path: "/financeiro/contas-a-receber" },
     { section: "Movimentações", label: "Contas a Pagar", path: "/financeiro/contas-a-pagar" },
     { section: "Movimentações", label: "Contas a Receber", path: "/financeiro/contas-a-receber" },

@@ -4247,4 +4247,295 @@ export const financialRouter = router({
       },
     };
   }),
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Rev. 1631 — ANÁLISE CFO (6 KPIs Hackett/APQC/IFRS/AFP em 1 endpoint)
+  //   1) Hackett: DPO + DSO + CCC + on-time + eletrônico (com benchmark setor)
+  //   2) Variance Orçado × Realizado × Forecast por categoria (semáforo)
+  //   3) Cash Forecast 13 semanas — 3 cenários (AFP Treasury Guidelines)
+  //   4) PDD IFRS 9 / CPC 48 (estágios 1-30/31-60/61-90/+90 com %s 0,5/2/10/50)
+  //   5) Pareto 80/20 fornecedores (top concentração de gasto)
+  //   6) Pareto 80/20 clientes (top concentração de receita)
+  //   7) KPIs de processo AP (% NF no prazo, % manual, custo estimado/fatura)
+  // ═══════════════════════════════════════════════════════════════════════════
+  getAnaliticosCFO: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+  })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const ids = resolveCompanyIds(input);
+    const idsSql = inlineIds(ids);
+    const today = new Date().toISOString().slice(0, 10);
+
+    // ─── 1) HACKETT: DPO, DSO, CCC, on-time, eletrônico ──────────────────────
+    const [dpoRes, dsoRes, agingRecRes, onTimeRes, eletronicoRes] = await Promise.all([
+      // DPO: média (data_pagamento - data_competencia) em despesas pagas últimos 90d
+      dbExecute(db,
+        `SELECT
+           AVG(EXTRACT(EPOCH FROM (data_pagamento::timestamp - data_competencia::timestamp))/86400) AS dpo,
+           COUNT(*) AS qtd
+         FROM financial_entries
+         WHERE company_id IN (${idsSql})
+           AND tipo='despesa' AND status='pago'
+           AND data_pagamento IS NOT NULL AND data_competencia IS NOT NULL
+           AND data_pagamento >= (CURRENT_DATE - INTERVAL '90 days')`, []
+      ),
+      // DSO: média (data_recebimento - nf_emitida_em) em receitas recebidas últimos 90d
+      dbExecute(db,
+        `SELECT
+           AVG(EXTRACT(EPOCH FROM (data_recebimento::timestamp -
+             COALESCE(nf_emitida_em::timestamp, data_vencimento::timestamp - INTERVAL '30 days')))/86400) AS dso,
+           COUNT(*) AS qtd
+         FROM financial_revenue
+         WHERE company_id IN (${idsSql})
+           AND data_recebimento IS NOT NULL
+           AND status IN ('recebido_total','recebido_parcial')
+           AND data_recebimento >= (CURRENT_DATE - INTERVAL '90 days')`, []
+      ),
+      // Aging A Receber (para PDD)
+      dbExecute(db,
+        `SELECT
+           CASE
+             WHEN (CURRENT_DATE - data_vencimento) BETWEEN 1 AND 30 THEN '1_30'
+             WHEN (CURRENT_DATE - data_vencimento) BETWEEN 31 AND 60 THEN '31_60'
+             WHEN (CURRENT_DATE - data_vencimento) BETWEEN 61 AND 90 THEN '61_90'
+             WHEN (CURRENT_DATE - data_vencimento) > 90 THEN 'mais_90'
+             ELSE 'em_dia'
+           END AS faixa,
+           COALESCE(SUM(valor_previsto - COALESCE(valor_recebido,0)),0) AS total,
+           COUNT(*) AS qtd
+         FROM financial_revenue
+         WHERE company_id IN (${idsSql})
+           AND status NOT IN ('recebido_total','cancelado')
+           AND data_vencimento IS NOT NULL
+         GROUP BY faixa`, []
+      ),
+      // % on-time pay (despesas pagas no prazo)
+      dbExecute(db,
+        `SELECT
+           SUM(CASE WHEN data_pagamento <= data_vencimento THEN 1 ELSE 0 END)::float / NULLIF(COUNT(*),0) * 100 AS pct,
+           COUNT(*) AS total
+         FROM financial_entries
+         WHERE company_id IN (${idsSql})
+           AND tipo='despesa' AND status='pago'
+           AND data_pagamento IS NOT NULL AND data_vencimento IS NOT NULL
+           AND data_pagamento >= (CURRENT_DATE - INTERVAL '180 days')`, []
+      ),
+      // % pagamento eletrônico (PIX/TED/débito automático)
+      dbExecute(db,
+        `SELECT
+           SUM(CASE WHEN LOWER(forma_pagamento) IN ('pix','ted','debito_automatico') THEN 1 ELSE 0 END)::float
+             / NULLIF(COUNT(*),0) * 100 AS pct,
+           COUNT(*) AS total
+         FROM financial_entries
+         WHERE company_id IN (${idsSql})
+           AND tipo='despesa' AND status='pago' AND forma_pagamento IS NOT NULL
+           AND data_pagamento >= (CURRENT_DATE - INTERVAL '180 days')`, []
+      ),
+    ]);
+
+    const dpo = Math.round(Number(rows(dpoRes)[0]?.dpo ?? 0));
+    const dso = Math.round(Number(rows(dsoRes)[0]?.dso ?? 0));
+    const dio = 0; // Construção: WIP rotacional não medido aqui
+    const ccc = dso + dio - dpo;
+    const onTimePct = Math.round(Number(rows(onTimeRes)[0]?.pct ?? 0));
+    const eletronicoPct = Math.round(Number(rows(eletronicoRes)[0]?.pct ?? 0));
+
+    // ─── 2) VARIANCE: Orçado × Realizado × Forecast (mês corrente, por categoria)
+    const mesAtual = today.slice(0, 7);
+    const varianceRes = await dbExecute(db,
+      `SELECT
+         COALESCE(conta_nome, 'Sem categoria') AS categoria,
+         SUM(CASE WHEN status='previsto' AND data_competencia::date >= CURRENT_DATE
+                  THEN valor_previsto ELSE 0 END) AS forecast,
+         SUM(CASE WHEN status='pago' AND TO_CHAR(data_competencia,'YYYY-MM')=$1
+                  THEN COALESCE(valor_realizado, valor_previsto) ELSE 0 END) AS realizado,
+         SUM(CASE WHEN TO_CHAR(data_competencia,'YYYY-MM')=$1
+                  THEN valor_previsto ELSE 0 END) AS orcado_mes
+       FROM financial_entries
+       WHERE company_id IN (${idsSql}) AND tipo='despesa'
+         AND data_competencia >= (CURRENT_DATE - INTERVAL '60 days')
+       GROUP BY conta_nome
+       HAVING SUM(valor_previsto) > 1000
+       ORDER BY orcado_mes DESC NULLS LAST
+       LIMIT 12`,
+      [mesAtual]
+    );
+    const variance = rows(varianceRes).map((r: any) => {
+      const orcado = Number(r.orcado_mes ?? 0);
+      const realizado = Number(r.realizado ?? 0);
+      const forecast = Number(r.forecast ?? 0);
+      const varAbs = realizado - orcado;
+      const varPct = orcado > 0 ? (varAbs / orcado) * 100 : 0;
+      const semaforo = Math.abs(varPct) <= 5 ? "verde" : Math.abs(varPct) <= 10 ? "amarelo" : "vermelho";
+      return { categoria: r.categoria, orcado, realizado, forecast, varAbs, varPct, semaforo };
+    });
+
+    // ─── 3) CASH FORECAST 13 SEMANAS (AFP) — 3 cenários ──────────────────────
+    // Saldo bancário consolidado de partida
+    const [saldoIniRes, semanaisInRes, semanaisOutRes] = await Promise.all([
+      dbExecute(db,
+        `SELECT COALESCE(SUM(valor),0) AS total FROM financial_opening_balances
+         WHERE company_id IN (${idsSql})`, []
+      ),
+      // Receitas previstas/a receber por semana (próximas 13 semanas)
+      dbExecute(db,
+        `SELECT FLOOR((data_vencimento::date - CURRENT_DATE) / 7)::int AS semana,
+                COALESCE(SUM(valor_previsto - COALESCE(valor_recebido,0)),0) AS total
+         FROM financial_revenue
+         WHERE company_id IN (${idsSql})
+           AND status NOT IN ('recebido_total','cancelado')
+           AND data_vencimento::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '91 days')
+         GROUP BY semana`, []
+      ),
+      // Despesas a pagar por semana (próximas 13 semanas)
+      dbExecute(db,
+        `SELECT FLOOR((data_vencimento::date - CURRENT_DATE) / 7)::int AS semana,
+                COALESCE(SUM(valor_previsto),0) AS total
+         FROM financial_entries
+         WHERE company_id IN (${idsSql})
+           AND tipo='despesa' AND status IN ('a_pagar','previsto')
+           AND data_vencimento IS NOT NULL
+           AND data_vencimento::date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '91 days')
+         GROUP BY semana`, []
+      ),
+    ]);
+    const saldoInicial = Number(rows(saldoIniRes)[0]?.total ?? 0);
+    const inMap = new Map(rows(semanaisInRes).map((r: any) => [Number(r.semana), Number(r.total)]));
+    const outMap = new Map(rows(semanaisOutRes).map((r: any) => [Number(r.semana), Number(r.total)]));
+    const cenarios: Record<string, { fIn: number; fOut: number }> = {
+      base:       { fIn: 1.00, fOut: 1.00 },
+      otimista:   { fIn: 1.10, fOut: 0.95 },
+      pessimista: { fIn: 0.85, fOut: 1.05 },
+    };
+    const cash13w: Record<string, any[]> = { base: [], otimista: [], pessimista: [] };
+    for (const cen of Object.keys(cenarios)) {
+      const { fIn, fOut } = cenarios[cen];
+      let saldo = saldoInicial;
+      for (let s = 0; s < 13; s++) {
+        const entrada = (inMap.get(s) ?? 0) * fIn;
+        const saida = (outMap.get(s) ?? 0) * fOut;
+        saldo += entrada - saida;
+        const dataIni = new Date();
+        dataIni.setDate(dataIni.getDate() + s * 7);
+        cash13w[cen].push({
+          semana: s + 1,
+          dataIni: dataIni.toISOString().slice(0, 10),
+          entradas: entrada, saidas: saida, saldo,
+        });
+      }
+    }
+
+    // ─── 4) PDD IFRS 9 — provisão por estágio ────────────────────────────────
+    const aging = rows(agingRecRes);
+    const get = (f: string) => Number(aging.find((r: any) => r.faixa === f)?.total ?? 0);
+    const stages = [
+      { faixa: "1_30",    label: "1-30 dias",  perc: 0.5,  total: get("1_30") },
+      { faixa: "31_60",   label: "31-60 dias", perc: 2,    total: get("31_60") },
+      { faixa: "61_90",   label: "61-90 dias", perc: 10,   total: get("61_90") },
+      { faixa: "mais_90", label: "+90 dias",   perc: 50,   total: get("mais_90") },
+    ];
+    const pddIfrs9 = stages.map(s => ({
+      ...s,
+      provisao: s.total * (s.perc / 100),
+    }));
+    const pddTotal = pddIfrs9.reduce((acc, s) => acc + s.provisao, 0);
+
+    // ─── 5) PARETO FORNECEDORES (top concentração de gasto últimos 12m) ──────
+    const paretoFornRes = await dbExecute(db,
+      `SELECT
+         COALESCE(NULLIF(TRIM(origem_descricao), ''),
+                  NULLIF(TRIM(descricao), ''),
+                  conta_nome, 'Sem identificação') AS nome,
+         COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)),0) AS total,
+         COUNT(*) AS qtd
+       FROM financial_entries
+       WHERE company_id IN (${idsSql}) AND tipo='despesa'
+         AND status IN ('pago','a_pagar')
+         AND data_competencia >= (CURRENT_DATE - INTERVAL '12 months')
+       GROUP BY nome
+       HAVING SUM(COALESCE(valor_realizado, valor_previsto)) > 0
+       ORDER BY total DESC
+       LIMIT 30`, []
+    );
+    const fornRows = rows(paretoFornRes);
+    const fornTotal = fornRows.reduce((s: number, r: any) => s + Number(r.total), 0);
+    let acumF = 0;
+    const paretoFornecedores = fornRows.map((r: any) => {
+      const valor = Number(r.total);
+      acumF += valor;
+      return {
+        nome: r.nome,
+        total: valor,
+        qtd: Number(r.qtd),
+        pct: fornTotal > 0 ? (valor / fornTotal) * 100 : 0,
+        pctAcum: fornTotal > 0 ? (acumF / fornTotal) * 100 : 0,
+      };
+    });
+    const top80Forn = paretoFornecedores.findIndex(f => f.pctAcum >= 80) + 1;
+
+    // ─── 6) PARETO CLIENTES (top concentração de receita últimos 12m) ────────
+    const paretoCliRes = await dbExecute(db,
+      `SELECT
+         COALESCE(NULLIF(TRIM(cliente_nome), ''), 'Sem identificação') AS nome,
+         COALESCE(SUM(COALESCE(valor_recebido, valor_medicao)),0) AS total,
+         COUNT(*) AS qtd
+       FROM financial_revenue
+       WHERE company_id IN (${idsSql})
+         AND status NOT IN ('cancelado')
+         AND COALESCE(data_recebimento, data_vencimento, created_at::date) >= (CURRENT_DATE - INTERVAL '12 months')
+       GROUP BY nome
+       HAVING SUM(COALESCE(valor_recebido, valor_medicao)) > 0
+       ORDER BY total DESC
+       LIMIT 30`, []
+    );
+    const cliRows = rows(paretoCliRes);
+    const cliTotal = cliRows.reduce((s: number, r: any) => s + Number(r.total), 0);
+    let acumC = 0;
+    const paretoClientes = cliRows.map((r: any) => {
+      const valor = Number(r.total);
+      acumC += valor;
+      return {
+        nome: r.nome,
+        total: valor,
+        qtd: Number(r.qtd),
+        pct: cliTotal > 0 ? (valor / cliTotal) * 100 : 0,
+        pctAcum: cliTotal > 0 ? (acumC / cliTotal) * 100 : 0,
+      };
+    });
+    const top80Cli = paretoClientes.findIndex(c => c.pctAcum >= 80) + 1;
+
+    // ─── 7) KPIs DE PROCESSO AP (Hackett) ────────────────────────────────────
+    const totalPagos = Number(rows(onTimeRes)[0]?.total ?? 0);
+    const custoBenchmarkPorFatura = 30; // R$/fatura (benchmark Hackett ~US$5-7)
+    const kpisProcesso = {
+      pctNfNoPrazo: onTimePct,
+      pctPagamentoEletronico: eletronicoPct,
+      pctPagamentoManual: 100 - eletronicoPct,
+      faturasUltimos180d: totalPagos,
+      custoEstimadoAP: totalPagos * custoBenchmarkPorFatura,
+      custoBenchmarkPorFatura,
+    };
+
+    return {
+      hackett: {
+        dpo, dso, dio, ccc, onTimePct, eletronicoPct,
+        // Benchmarks setor construção civil (Hackett 2024 + APQC PCF)
+        benchmark: {
+          dpoTopQuartile: 45, dpoMediano: 30,
+          dsoTopQuartile: 60, dsoMediano: 90,
+          cccTopQuartile: 25, cccMediano: 60,
+          onTimeTopQuartile: 95,
+        },
+      },
+      variance,
+      cash13w,
+      cash13wMeta: { saldoInicial },
+      pddIfrs9: { stages: pddIfrs9, total: pddTotal },
+      paretoFornecedores: { rows: paretoFornecedores, total: fornTotal, top80: top80Forn },
+      paretoClientes: { rows: paretoClientes, total: cliTotal, top80: top80Cli },
+      kpisProcesso,
+    };
+  }),
 });
