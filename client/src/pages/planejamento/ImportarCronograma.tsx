@@ -117,7 +117,12 @@ export function parseMSProjectCalendar(doc: Document): CalendarioImportado | nul
   if (!cals.length) return null;
   // Heurística: prefere o calendário do projeto (CalendarUID na raiz);
   // senão o que tem IsBaseCalendar=1; senão o primeiro.
-  const projCalUid = doc.querySelector("Project > CalendarUID")?.textContent?.trim();
+  // Rev. 1646.3 — usa querySelector simples (sem combinator `Project >`),
+  // que falhava com o namespace default do XML do MSP. O primeiro
+  // <CalendarUID> em ordem de documento é o da raiz <Project>. Caso
+  // REVTE-CIVIL: CalendarUID=6 ("Padrão Guaratinguetá") em vez do fallback
+  // UID=1 ("Padrão") — feriados diferentes, denominador correto.
+  const projCalUid = doc.querySelector("CalendarUID")?.textContent?.trim();
   const cal =
     cals.find(c => c.querySelector(":scope > UID")?.textContent?.trim() === projCalUid) ||
     cals.find(c => c.querySelector(":scope > IsBaseCalendar")?.textContent?.trim() === "1") ||
