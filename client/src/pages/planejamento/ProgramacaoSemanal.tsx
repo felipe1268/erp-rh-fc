@@ -817,20 +817,38 @@ export function ProgramacaoSemanal({
                     ({evmSemana.previstoCurvaS.toFixed(2)}% baseline + {(evmSemana.debitoAcumulado / janelaRecuperacao).toFixed(2)}%/sem)
                   </span>
                 </div>
-                {/* Seletor: só engenheiro mexe; cliente vê congelado */}
+                {/* Rev. 1638.2 — Pills clicáveis no lugar de <select> nativo.
+                    No iOS Safari (iPad), o picker tela cheia do <select> só
+                    commitava ao tocar "Concluído" — se o usuário tocasse fora,
+                    o valor era cancelado silenciosamente e voltava ao último
+                    persistido (sintoma "fixa sempre em 12"). Pills commitam no
+                    onClick, instantâneo em qualquer plataforma. */}
                 {!portalMode && onChangeRecoveryWindow && (
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[11px] text-slate-600">Recuperar em</span>
-                    <select
-                      value={janelaRecuperacao}
-                      onChange={(e) => onChangeRecoveryWindow(parseInt(e.target.value))}
-                      className="text-[11px] font-semibold border border-blue-300 bg-white rounded px-1.5 py-0.5 text-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                      title="Janela de Recovery Schedule. Quanto MAIOR a janela, mais factível a meta semanal. PV (baseline) permanece intacto."
-                    >
-                      {[1, 2, 4, 6, 8, 12].map(n => (
-                        <option key={n} value={n}>{n} sem</option>
-                      ))}
-                    </select>
+                    <div className="inline-flex items-center gap-0.5 bg-slate-100 rounded p-0.5" role="radiogroup" aria-label="Janela de recuperação">
+                      {[1, 2, 4, 6, 8, 12].map(nSem => {
+                        const ativo = janelaRecuperacao === nSem;
+                        return (
+                          <button
+                            key={nSem}
+                            type="button"
+                            role="radio"
+                            aria-checked={ativo}
+                            onClick={() => onChangeRecoveryWindow(nSem)}
+                            className={`text-[11px] font-semibold px-2 py-0.5 rounded transition-colors tabular-nums ${
+                              ativo
+                                ? "bg-blue-600 text-white shadow-sm"
+                                : "text-blue-700 hover:bg-white"
+                            }`}
+                            title={`Diluir o débito acumulado em ${nSem} semana${nSem === 1 ? "" : "s"}. PV (baseline) permanece intacto.`}
+                          >
+                            {nSem}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="text-[10px] text-slate-500">sem</span>
                   </div>
                 )}
                 {!portalMode && evmSemana.janelaMinima != null && (
