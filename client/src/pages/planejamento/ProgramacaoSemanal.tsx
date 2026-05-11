@@ -924,13 +924,11 @@ export function ProgramacaoSemanal({
   if (viewMode === "lotus") {
     return (
       <div className="space-y-3">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <CalendarRange className="h-4 w-4 text-blue-600" />
-            <span className="text-sm font-semibold text-slate-700">Programação Semanal</span>
-            <span className="text-xs text-slate-400">{semanas.length} semanas no cronograma</span>
-          </div>
-          <div className="inline-flex items-center bg-slate-100 rounded-lg p-0.5 print:hidden">
+        <div className="flex items-center gap-2 flex-wrap">
+          <CalendarRange className="h-4 w-4 text-blue-600" />
+          <span className="text-sm font-semibold text-slate-700">Programação Semanal</span>
+          <span className="text-xs text-slate-400">{semanas.length} semanas no cronograma</span>
+          <div className="inline-flex items-center bg-slate-100 rounded-lg p-0.5 ml-2 print:hidden">
             <button
               onClick={() => setViewMode("fc")}
               className="px-3 py-1 text-xs font-semibold rounded-md text-slate-600 hover:bg-white"
