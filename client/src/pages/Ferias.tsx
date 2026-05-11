@@ -603,6 +603,10 @@ export default function Ferias() {
   const [reverterItem, setReverterItem] = useState<any>(null);
   const [reverterMotivo, setReverterMotivo] = useState("");
 
+  // Auto-prompt: confirmar início do gozo quando a data agendada chega.
+  const [gozoPromptItem, setGozoPromptItem] = useState<any>(null);
+  const [gozoPromptStage, setGozoPromptStage] = useState<"confirm" | "naoOptions">("confirm");
+
   // Queries
   // Query SEPARADA para stats (sem filtro) — garante que os cards nunca mudem ao clicar filtros
   const { data: allFeriasList = [] } = trpc.avisoPrevio.ferias.list.useQuery(
@@ -631,6 +635,50 @@ export default function Ferias() {
   );
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
+
+  // ============ AUTO-PROMPT: férias agendada cuja dataInicio chegou ============
+  // Para cada férias com status='agendada' e dataInicio <= hoje, abre um modal
+  // perguntando se o RH confirma o início do gozo. Itens "adiados" pelo usuário
+  // ficam no sessionStorage e não voltam a perguntar nessa sessão.
+  const skipKey = `feriasGozoSkip:${companyId}`;
+  const getSkipped = (): Set<string> => {
+    try {
+      const raw = sessionStorage.getItem(skipKey);
+      return new Set<string>(raw ? JSON.parse(raw) : []);
+    } catch { return new Set<string>(); }
+  };
+  const addSkipped = (key: string) => {
+    try {
+      const s = getSkipped(); s.add(key);
+      sessionStorage.setItem(skipKey, JSON.stringify(Array.from(s)));
+    } catch { /* noop */ }
+  };
+  useEffect(() => {
+    if (gozoPromptItem) return; // já tem um aberto
+    const hojeStr = new Date().toISOString().slice(0, 10);
+    const skipped = getSkipped();
+    const candidato = (allFeriasList as any[]).find((f: any) => {
+      if (!f) return false;
+      if (f.status !== "agendada") return false;
+      if (!f.dataInicio) return false;
+      // dataInicio em formato ISO YYYY-MM-DD; comparação lexical funciona
+      if (String(f.dataInicio).slice(0, 10) > hojeStr) return false;
+      // chave por id+dataInicio (se reagendar p/ outra data, volta a perguntar)
+      const k = `${f.id}:${String(f.dataInicio).slice(0, 10)}`;
+      return !skipped.has(k);
+    });
+    if (candidato) {
+      setGozoPromptItem(candidato);
+      setGozoPromptStage("confirm");
+    }
+  }, [allFeriasList, gozoPromptItem, companyId]);
+  const fecharGozoPrompt = (markSkipped: boolean) => {
+    if (markSkipped && gozoPromptItem) {
+      addSkipped(`${gozoPromptItem.id}:${String(gozoPromptItem.dataInicio).slice(0, 10)}`);
+    }
+    setGozoPromptItem(null);
+    setGozoPromptStage("confirm");
+  };
 
   // Média de HE + DSR do período aquisitivo para cálculo de férias (Art. 142 CLT)
   const { data: mediaHEData, isLoading: mediaHELoading } = trpc.avisoPrevio.ferias.mediaHEFerias.useQuery(
@@ -2886,6 +2934,101 @@ export default function Ferias() {
               Confirmar Cancelamento
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== AUTO-PROMPT: confirmar início do gozo ===== */}
+      <Dialog open={!!gozoPromptItem} onOpenChange={(open) => { if (!open) fecharGozoPrompt(true); }}>
+        <DialogContent className="max-w-md">
+          {gozoPromptStage === "confirm" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Palmtree className="h-5 w-5 text-blue-600" />
+                  Início de Férias
+                </DialogTitle>
+              </DialogHeader>
+              <div className="py-2 space-y-3">
+                <p className="text-sm">
+                  Colaborador <span className="font-semibold text-blue-700">{gozoPromptItem?.employeeName}</span> está com férias agendada para hoje, confirma o início do gozo de férias?
+                </p>
+                <div className="bg-muted/40 rounded-md p-3 text-xs space-y-1">
+                  <div><span className="text-muted-foreground">Período:</span> <span className="font-medium">{formatDate(gozoPromptItem?.dataInicio)} a {formatDate(gozoPromptItem?.dataFim)}</span></div>
+                  <div><span className="text-muted-foreground">Dias:</span> <span className="font-medium">{gozoPromptItem?.diasGozo || 30}</span></div>
+                  {gozoPromptItem?.employeeCargo && (
+                    <div><span className="text-muted-foreground">Cargo:</span> <span className="font-medium">{gozoPromptItem.employeeCargo}</span></div>
+                  )}
+                </div>
+              </div>
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setGozoPromptStage("naoOptions")}
+                  disabled={updateFerias.isPending}
+                >
+                  Não
+                </Button>
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  disabled={updateFerias.isPending}
+                  onClick={() => {
+                    if (!gozoPromptItem) return;
+                    const item = gozoPromptItem;
+                    updateFerias.mutate(
+                      { id: item.id, status: "em_gozo" },
+                      { onSuccess: () => { fecharGozoPrompt(false); } }
+                    );
+                  }}
+                >
+                  {updateFerias.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
+                  Sim, iniciar gozo
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>O que deseja fazer?</DialogTitle>
+              </DialogHeader>
+              <div className="py-2">
+                <p className="text-sm">
+                  Deseja <span className="font-semibold">reagendar a data</span> ou <span className="font-semibold">cancelar o agendamento</span> das férias de <span className="text-blue-700 font-medium">{gozoPromptItem?.employeeName}</span>?
+                </p>
+              </div>
+              <DialogFooter className="gap-2 flex-wrap">
+                <Button variant="ghost" onClick={() => fecharGozoPrompt(true)}>Agora não</Button>
+                <Button
+                  variant="destructive"
+                  className="bg-red-600 hover:bg-red-700"
+                  disabled={updateFerias.isPending}
+                  onClick={() => {
+                    if (!gozoPromptItem) return;
+                    if (!confirm(`Cancelar o agendamento de férias de ${gozoPromptItem.employeeName}?`)) return;
+                    const item = gozoPromptItem;
+                    updateFerias.mutate(
+                      { id: item.id, status: "cancelada" },
+                      { onSuccess: () => { fecharGozoPrompt(false); } }
+                    );
+                  }}
+                >
+                  {updateFerias.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Undo2 className="h-4 w-4 mr-2" />}
+                  Cancelar agendamento
+                </Button>
+                <Button
+                  className="bg-blue-600 hover:bg-blue-700"
+                  onClick={() => {
+                    if (!gozoPromptItem) return;
+                    const item = gozoPromptItem;
+                    fecharGozoPrompt(true);
+                    handleDefinirData(item);
+                  }}
+                >
+                  <PenLine className="h-4 w-4 mr-2" />
+                  Reagendar data
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

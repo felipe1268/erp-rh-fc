@@ -2673,7 +2673,7 @@ export const avisoPrevioFeriasRouter = router({
         arredondamentoProvento: z.string().optional(),
         dataPagamento: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = (await getDb())!;
         const { id, ...rest } = input;
         const updateData: any = {};
