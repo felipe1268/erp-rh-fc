@@ -145,6 +145,41 @@ export function parseMSProjectCalendar(doc: Document): CalendarioImportado | nul
       if (from) exceptions.push({ from, to: to || from, working });
     }
   }
+  // Rev. 1646.4 — também lê <Exceptions><Exception> (formato moderno do MSP),
+  // que armazena feriados RECORRENTES com Type=2 (anual) + Month (0-indexed)
+  // + MonthDay. As entradas legacy <DayType>0</DayType> só cobrem 2025-2026
+  // explicitamente; as recorrentes precisam ser EXPANDIDAS para todos os anos
+  // do escopo do projeto. Sem isso, o denominador de dias úteis vem inflado
+  // (caso REVTE-CIVIL: 291 em vez de 284 → 1,37% em vez de 1,41% do MSP).
+  const exs = Array.from(cal.querySelectorAll(":scope > Exceptions > Exception"));
+  for (const ex of exs) {
+    const exWorking = ex.querySelector(":scope > DayWorking")?.textContent?.trim() === "1";
+    const type = parseInt(ex.querySelector(":scope > Type")?.textContent ?? "0");
+    const tp = ex.querySelector(":scope > TimePeriod");
+    const fromIso = tp?.querySelector(":scope > FromDate")?.textContent?.slice(0, 10) ?? "";
+    const toIso   = tp?.querySelector(":scope > ToDate")?.textContent?.slice(0, 10) ?? fromIso;
+    if (!fromIso) continue;
+    if (type === 2) {
+      // Anual: expande de 2020 a 2050 usando Month (0-indexed) + MonthDay.
+      const monthRaw = ex.querySelector(":scope > Month")?.textContent;
+      const monthDay = parseInt(ex.querySelector(":scope > MonthDay")?.textContent ?? "0");
+      if (monthRaw !== null && monthDay >= 1 && monthDay <= 31) {
+        const month0 = parseInt(monthRaw); // 0-indexed
+        for (let y = 2020; y <= 2050; y++) {
+          const m = String(month0 + 1).padStart(2, "0");
+          const d = String(monthDay).padStart(2, "0");
+          const iso = `${y}-${m}-${d}`;
+          exceptions.push({ from: iso, to: iso, working: exWorking });
+        }
+      } else {
+        // Sem Month/MonthDay legíveis — usa só a janela explícita.
+        exceptions.push({ from: fromIso, to: toIso || fromIso, working: exWorking });
+      }
+    } else {
+      // Tipo 1 (única ocorrência) ou desconhecido — usa janela explícita.
+      exceptions.push({ from: fromIso, to: toIso || fromIso, working: exWorking });
+    }
+  }
   // Sanidade: se nada veio marcado como working, devolve null (calendário inválido).
   if (!weekDays.some(Boolean)) return null;
   return { weekDays, exceptions };
@@ -169,14 +204,19 @@ export function parseMSProjectStatusDateIso(doc: Document): string | null {
 /** Versão completa: tarefas + metadados (calendário + StatusDate).
  *  Rev. 1644 — incluímos no calendarioJson os parâmetros raiz do XML do MSP
  *  (`DefaultStartTime`, `DefaultFinishTime`, `MinutesPerDay`) usados pela
- *  fórmula `ProjDateDiff` — regra de ouro: leitura plena do MS Project. */
+ *  fórmula `ProjDateDiff` — regra de ouro: leitura plena do MS Project.
+ *  Rev. 1646.4 — incluímos também o snapshot do "%PREVISTO" calculado pelo
+ *  próprio MSP (Texto11 / FieldID 188743997) na tarefa raiz. Quando o ERP
+ *  exibe esse projeto no cutoff oficial (= StatusDate do XML), usa esse
+ *  número diretamente — paridade exata, sem replicar `ProjDateDiff` interno. */
 export function parseMSProjectFull(text: string): {
-  tarefas:        TarefaImportada[];
-  statusDate:     string | null;
-  statusDateIso:  string | null;
-  calendarioJson: string | null;
-  projetoStart:   string | null;
-  projetoFinish:  string | null;
+  tarefas:            TarefaImportada[];
+  statusDate:         string | null;
+  statusDateIso:      string | null;
+  calendarioJson:     string | null;
+  projetoStart:       string | null;
+  projetoFinish:      string | null;
+  previstoMspRaiz:    number | null;
 } {
   const doc  = new DOMParser().parseFromString(text, "text/xml");
   const err  = doc.querySelector("parsererror");
@@ -192,12 +232,25 @@ export function parseMSProjectFull(text: string): {
   // (ex.: alguma folha terminando depois do root oficial → 292 ≠ 284 dias úteis).
   let projetoStart: string | null = null;
   let projetoFinish: string | null = null;
+  // Rev. 1646.4 — captura também o "%PREVISTO" calculado pelo MSP (Texto11,
+  // FieldID 188743997) na tarefa raiz. Valor BR formato "1,41" → 1.41.
+  let previstoMspRaiz: number | null = null;
   const taskEls = Array.from(doc.querySelectorAll("Task"));
   for (const t of taskEls) {
     const uid = t.querySelector("UID")?.textContent?.trim();
     if (uid === "0") {
       projetoStart  = t.querySelector("Start")?.textContent?.trim()?.slice(0, 10) || null;
       projetoFinish = t.querySelector("Finish")?.textContent?.trim()?.slice(0, 10) || null;
+      const eaList = Array.from(t.querySelectorAll("ExtendedAttribute"));
+      for (const ea of eaList) {
+        const fid = ea.querySelector("FieldID")?.textContent?.trim();
+        if (fid === "188743997") {
+          const raw = ea.querySelector("Value")?.textContent?.trim() || "";
+          const num = parseFloat(raw.replace(",", "."));
+          if (Number.isFinite(num)) previstoMspRaiz = num;
+          break;
+        }
+      }
       break;
     }
   }
@@ -215,9 +268,18 @@ export function parseMSProjectFull(text: string): {
     defaultStartTime:  defaultStartTime  || "08:00:00",
     defaultFinishTime: defaultFinishTime || "17:00:00",
     minutesPerDay:     (Number.isFinite(minutesPerDay as number) && (minutesPerDay as number) > 0) ? minutesPerDay : 480,
+    // Rev. 1646.4 — snapshot oficial do %PREVISTO calculado pelo MSP, válido
+    // só no StatusDate do XML. Quando o ERP mostra esse projeto no cutoff
+    // oficial (= statusDate) E o envelope do projeto continua intacto, usa
+    // esse número direto — paridade exata. Senão cai no cálculo dinâmico
+    // (proteção contra snapshot stale após edição manual de datas no ERP).
+    previstoMspSnapshot:    previstoMspRaiz,
+    statusDateSnapshot:     statusDate,
+    envelopeStartSnapshot:  projetoStart,
+    envelopeFinishSnapshot: projetoFinish,
   } : null;
   const calendarioJson = calComConfig ? JSON.stringify(calComConfig) : null;
-  return { tarefas, statusDate, statusDateIso, calendarioJson, projetoStart, projetoFinish };
+  return { tarefas, statusDate, statusDateIso, calendarioJson, projetoStart, projetoFinish, previstoMspRaiz };
 }
 
 // ── Parser MS Project XML (compat — só tarefas) ──────────────────────────────

@@ -2121,9 +2121,24 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         projIniEff = new Date(projIniIsoOfic + "T12:00:00Z").getTime();
         projFimEff = new Date(projFimIsoOfic + "T12:00:00Z").getTime();
       }
-      const pctTotalPrevisto = (isFinite(projIniEff) && isFinite(projFimEff) && projFimEff > projIniEff)
-        ? +Math.min(100, fracaoDecorridaMs(projIniEff, refMs, projFimEff, calMSP) * 100).toFixed(2)
-        : 0;
+      // Rev. 1646.4 — paridade EXATA com MSP: quando o cutoff bate com o
+      // StatusDate gravado no XML, usa o snapshot do %PREVISTO calculado
+      // pelo próprio MSP (Texto11 da raiz). Sem isso, a aritmética interna
+      // de `ProjDateDiff` (minutos com horas parciais) gera divergência.
+      // Validação de stale: snapshot só é confiável se cutoff = StatusDate E
+      // o envelope do projeto não foi editado depois do import.
+      const envSnapOk = !calMSP?.envelopeStartSnapshot || !calMSP?.envelopeFinishSnapshot
+        || ((projeto as any)?.dataInicio === calMSP.envelopeStartSnapshot
+            && (projeto as any)?.dataTerminoContratual === calMSP.envelopeFinishSnapshot);
+      const usaSnapshot = calMSP?.previstoMspSnapshot != null
+        && calMSP?.statusDateSnapshot
+        && cutoffStr === calMSP.statusDateSnapshot
+        && envSnapOk;
+      const pctTotalPrevisto = usaSnapshot
+        ? +Number(calMSP!.previstoMspSnapshot).toFixed(2)
+        : (isFinite(projIniEff) && isFinite(projFimEff) && projFimEff > projIniEff)
+          ? +Math.min(100, fracaoDecorridaMs(projIniEff, refMs, projFimEff, calMSP) * 100).toFixed(2)
+          : 0;
       const pctTotalRealizado = +Math.min(100, somaRealizado).toFixed(2);
       const desvio = +(pctTotalRealizado - pctTotalPrevisto).toFixed(2);
 

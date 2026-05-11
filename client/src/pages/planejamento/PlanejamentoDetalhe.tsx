@@ -530,6 +530,19 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     }
     if (!isFinite(projIni) || !isFinite(projFim) || projFim <= projIni) return 0;
     const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
+    // Rev. 1646.4 — paridade EXATA com MSP: quando o cutoff bate com o
+    // StatusDate gravado no XML, usamos o snapshot do %PREVISTO calculado
+    // pelo próprio MSP (Texto11 da raiz). Sem isso, replicar a aritmética
+    // interna de `ProjDateDiff` (minutos com horas parciais e
+    // compensações de feriado em fim-de-semana) gera divergência residual
+    // (ex.: REVTE-CIVIL 1,39% vs MSP 1,41%).
+    // Validação de stale: snapshot só é confiável se cutoff = StatusDate E
+    // o envelope do projeto não foi editado depois do import.
+    const envOk = !calMSP?.envelopeStartSnapshot || !calMSP?.envelopeFinishSnapshot
+      || (projIniIso === calMSP.envelopeStartSnapshot && projFimIso === calMSP.envelopeFinishSnapshot);
+    if (calMSP?.previstoMspSnapshot != null && calMSP?.statusDateSnapshot && refStr === calMSP.statusDateSnapshot && envOk) {
+      return +Number(calMSP.previstoMspSnapshot).toFixed(2);
+    }
     const pct = fracaoDecorridaMs(projIni, ref, projFim, calMSP) * 100;
     return +Math.min(100, pct).toFixed(2);
   }, [atividades, semanaVisualizacao, refisComIndiretasGlobal, refDateStr, modoVisao, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual]);

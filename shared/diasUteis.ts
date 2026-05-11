@@ -22,6 +22,14 @@ export interface CalendarioMSProject {
   defaultStartTime?:  string;                 // "07:00:00"
   defaultFinishTime?: string;                 // "17:00:00"
   minutesPerDay?:     number;                 // 540 = 9h (não confundir com janela bruta)
+  // Rev. 1646.4 — snapshot oficial do %PREVISTO calculado pelo MSP na raiz,
+  // válido SÓ no StatusDate do XML. Quando o ERP mostra o projeto no cutoff
+  // oficial (= statusDateSnapshot), usa previstoMspSnapshot direto — paridade
+  // exata com MSP, sem replicar a aritmética interna `ProjDateDiff` (minutos).
+  previstoMspSnapshot?:    number;            // ex.: 1.41
+  statusDateSnapshot?:     string;            // "YYYY-MM-DD"
+  envelopeStartSnapshot?:  string;            // "YYYY-MM-DD" — invalida snapshot se mudou
+  envelopeFinishSnapshot?: string;            // "YYYY-MM-DD"
 }
 
 export function parseCalendarioJson(raw: unknown): CalendarioMSProject | null {
@@ -30,11 +38,15 @@ export function parseCalendarioJson(raw: unknown): CalendarioMSProject | null {
     const obj = typeof raw === "string" ? JSON.parse(raw) : raw;
     if (!obj || !Array.isArray(obj.weekDays) || obj.weekDays.length !== 7) return null;
     return {
-      weekDays:          obj.weekDays.map((v: any) => !!v),
-      exceptions:        Array.isArray(obj.exceptions) ? obj.exceptions : [],
-      defaultStartTime:  typeof obj.defaultStartTime  === "string" ? obj.defaultStartTime  : undefined,
-      defaultFinishTime: typeof obj.defaultFinishTime === "string" ? obj.defaultFinishTime : undefined,
-      minutesPerDay:     typeof obj.minutesPerDay     === "number" ? obj.minutesPerDay     : undefined,
+      weekDays:           obj.weekDays.map((v: any) => !!v),
+      exceptions:         Array.isArray(obj.exceptions) ? obj.exceptions : [],
+      defaultStartTime:   typeof obj.defaultStartTime  === "string" ? obj.defaultStartTime  : undefined,
+      defaultFinishTime:  typeof obj.defaultFinishTime === "string" ? obj.defaultFinishTime : undefined,
+      minutesPerDay:      typeof obj.minutesPerDay     === "number" ? obj.minutesPerDay     : undefined,
+      previstoMspSnapshot:    typeof obj.previstoMspSnapshot    === "number" ? obj.previstoMspSnapshot    : undefined,
+      statusDateSnapshot:     typeof obj.statusDateSnapshot     === "string" ? obj.statusDateSnapshot     : undefined,
+      envelopeStartSnapshot:  typeof obj.envelopeStartSnapshot  === "string" ? obj.envelopeStartSnapshot  : undefined,
+      envelopeFinishSnapshot: typeof obj.envelopeFinishSnapshot === "string" ? obj.envelopeFinishSnapshot : undefined,
     };
   } catch { return null; }
 }
