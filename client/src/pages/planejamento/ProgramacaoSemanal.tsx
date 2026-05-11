@@ -427,6 +427,52 @@ export function ProgramacaoSemanal({
     [atividadesSemAtual]
   );
 
+  // ── Rev. 1638 — Frentes FORA do plano (Last Planner System) ──────────────
+  // ANTECIPADAS: cronograma futuro (dataInicio > semFim), mas o engenheiro de
+  // campo já abriu a frente e há avanço > 0. Lean Construction trata como
+  // "make-ready / make-do" — não conta no PV/PPC da semana, mas é trabalho
+  // genuíno e soma no EV global. Exibir SEPARADAMENTE preserva a aderência
+  // (PPC) e ainda dá visibilidade do esforço extra.
+  // ARRASTADAS: cronograma já expirado (dataFim < semIni), mas atividade
+  // ainda não está 100%. Recuperação de dívida — também não está no plano da
+  // semana corrente.
+  // OBS: como esse componente só recebe o snapshot ATUAL de avancosMap (sem
+  // delta por semana), a flag indica "frente fora do plano em execução
+  // acumulada", não "executado nesta semana". O engenheiro entende — é a
+  // info que ele precisa pra agir.
+  const frentesForaPlano = useMemo(() => {
+    if (!semanaAtual) return { antecipadas: [], arrastadas: [], totalAntPp: 0, totalArrPp: 0 };
+    const semIniStr = dateStr(semanaAtual.ini);
+    // Domingo = sex + 2d (semanas Mon-Sun lógicas).
+    const domDate = new Date(semanaAtual.fim);
+    domDate.setDate(domDate.getDate() + 2);
+    const semFimStr = dateStr(domDate);
+    const dentro = new Set<number>(atividadesSemAtual.map((a: any) => a.id));
+    const antecipadas: any[] = [];
+    const arrastadas: any[]  = [];
+    folhasTodas.forEach((a: any) => {
+      if (dentro.has(a.id)) return;
+      if (a.disabled) return;
+      if (!a.dataInicio || !a.dataFim) return;
+      const av = avancosMap[a.id] ?? 0;
+      if (av <= 0) return;                       // sem execução, não interessa
+      if (a.dataInicio > semFimStr) {            // programada para FUTURO
+        antecipadas.push(a);
+      } else if (a.dataFim < semIniStr && av < 100) { // PASSADA não concluída
+        arrastadas.push(a);
+      }
+    });
+    // Contribuição informativa (pp do projeto): peso × av/100. Mostra quanto
+    // de EV global vem dessas frentes hoje. NÃO entra em PV nem em SPI da semana.
+    const totalAntPp = antecipadas.reduce((s, a) => s + (n(a.pesoFinanceiro) * (avancosMap[a.id] ?? 0) / 100), 0);
+    const totalArrPp = arrastadas.reduce((s, a)  => s + (n(a.pesoFinanceiro) * (avancosMap[a.id] ?? 0) / 100), 0);
+    // Ordenar pelo "peso × avanço" desc (mais relevante no topo).
+    const ord = (arr: any[]) => arr.sort((x, y) =>
+      (n(y.pesoFinanceiro) * (avancosMap[y.id] ?? 0)) - (n(x.pesoFinanceiro) * (avancosMap[x.id] ?? 0))
+    );
+    return { antecipadas: ord(antecipadas), arrastadas: ord(arrastadas), totalAntPp, totalArrPp };
+  }, [folhasTodas, atividadesSemAtual, avancosMap, semanaAtual]);
+
   // ── Próximas N semanas para o relatório ──────────────────────────────────
   const proximas3 = useMemo(() => {
     const result = [];
@@ -688,6 +734,31 @@ export function ProgramacaoSemanal({
                       {evmSemana.aderencia == null ? "—" : `${evmSemana.aderencia.toFixed(0)}%`}
                     </span>
                   </div>
+                </>
+              )}
+              {/* Rev. 1638 — Sub-linha informativa de frentes FORA do plano.
+                  PPC/SPI seguem só com programadas (regra Last Planner). */}
+              {(frentesForaPlano.antecipadas.length > 0 || frentesForaPlano.arrastadas.length > 0) && (
+                <>
+                  <span className="text-slate-300">|</span>
+                  {frentesForaPlano.antecipadas.length > 0 && (
+                    <div
+                      className="flex items-center gap-1 text-[10px] text-blue-700 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5"
+                      title={`${frentesForaPlano.antecipadas.length} atividade(s) programada(s) para semanas FUTURAS já em execução. Soma ${frentesForaPlano.totalAntPp.toFixed(2)}pp de EV adicional ao acumulado do projeto. NÃO entra no PV/SPI desta semana — é bônus informativo.`}
+                    >
+                      🚀 <strong>+{frentesForaPlano.totalAntPp.toFixed(2)}pp antecipado</strong>
+                      <span className="text-blue-500">({frentesForaPlano.antecipadas.length} ativ.)</span>
+                    </div>
+                  )}
+                  {frentesForaPlano.arrastadas.length > 0 && (
+                    <div
+                      className="flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5"
+                      title={`${frentesForaPlano.arrastadas.length} atividade(s) com cronograma já expirado, ainda em execução (recuperação de dívida). EV acumulado dessas frentes: ${frentesForaPlano.totalArrPp.toFixed(2)}pp.`}
+                    >
+                      ⏪ <strong>+{frentesForaPlano.totalArrPp.toFixed(2)}pp recuperando</strong>
+                      <span className="text-amber-500">({frentesForaPlano.arrastadas.length} ativ.)</span>
+                    </div>
+                  )}
                 </>
               )}
               <span className="text-slate-300">|</span>
@@ -996,6 +1067,176 @@ export function ProgramacaoSemanal({
               </div>
             )}
           </div>
+
+          {/* Rev. 1638 — Bloco B: Frentes Antecipadas (Last Planner System).
+              Cronograma futuro, mas frente já aberta. Não entra no PPC/SPI
+              da semana, mas indica esforço extra do time de campo. */}
+          {frentesForaPlano.antecipadas.length > 0 && (
+            <div className="bg-blue-50/40 rounded-xl border border-blue-200 shadow-sm overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-blue-200 bg-blue-100/60 flex items-center gap-2">
+                <span className="text-base leading-none">🚀</span>
+                <span className="text-xs font-semibold text-blue-800">
+                  Frentes Antecipadas — fora do plano da semana
+                </span>
+                <span className="text-[10px] text-blue-600 ml-1">
+                  {frentesForaPlano.antecipadas.length} atividade{frentesForaPlano.antecipadas.length !== 1 ? "s" : ""} · +{frentesForaPlano.totalAntPp.toFixed(2)}pp informativo
+                </span>
+                <span
+                  className="ml-auto text-[10px] text-blue-500 cursor-help"
+                  title="Atividades com cronograma para SEMANAS FUTURAS, mas que o engenheiro de campo já iniciou. NÃO contam no PV nem no PPC desta semana (preserva a métrica de aderência ao plano). Somam normalmente no EV global do projeto."
+                >
+                  ℹ️ Não conta no PPC/SPI desta semana
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-blue-100 bg-blue-50/40 text-left text-[11px] font-semibold text-blue-700">
+                      <th className="py-2 px-3 w-16">EAP</th>
+                      <th className="py-2 px-3">Atividade</th>
+                      <th className="py-2 px-3 w-32" title="Quando esta atividade deveria começar pelo cronograma">Programada para</th>
+                      <th className="py-2 px-3 w-24 text-right" title="Peso da atividade no projeto">Peso projeto</th>
+                      <th className="py-2 px-3 w-20 text-right">Real %</th>
+                      <th className="py-2 px-3 w-32 text-right" title="Contribuição em pp ao avanço acumulado do projeto = peso × real / 100">EV gerado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {frentesForaPlano.antecipadas.map((a: any, i: number) => {
+                      const av  = avancosMap[a.id] ?? 0;
+                      const pp  = n(a.pesoFinanceiro) * av / 100;
+                      const semProgramada = semanas.find((s) => dateStr(s.ini) <= a.dataInicio && dateStr(s.fim) >= a.dataInicio);
+                      return (
+                        <tr key={a.id ?? i} className={`border-b border-blue-50 ${i % 2 === 0 ? "bg-white" : "bg-blue-50/30"}`}>
+                          <td className="py-2 px-3 font-mono text-blue-600">{a.eapCodigo ?? "—"}</td>
+                          <td className="py-2 px-3 text-slate-800">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-medium">{a.nome}</span>
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[9px] font-bold ring-1 ring-blue-200"
+                                title="Antecipação de frente: trabalho executado antes do programado."
+                              >
+                                🚀 ANTECIPADA
+                              </span>
+                            </div>
+                            {(() => {
+                              const h = hierarquiaOf(a.eapCodigo);
+                              return h.length > 0 ? (
+                                <div className="text-[9px] text-slate-400 mt-0.5 italic leading-tight truncate">
+                                  {h.map((seg, si) => (
+                                    <span key={si}>
+                                      {si > 0 && <span className="mx-0.5">›</span>}
+                                      <span className="text-slate-500 font-medium not-italic">{seg}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null;
+                            })()}
+                          </td>
+                          <td className="py-2 px-3 text-slate-600">
+                            {fmtBR(a.dataInicio)}
+                            {semProgramada && (
+                              <div className="text-[9px] text-slate-400 leading-tight">Sem. {semProgramada.numero}</div>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-right text-slate-600 tabular-nums">{n(a.pesoFinanceiro).toFixed(2)}%</td>
+                          <td className="py-2 px-3 text-right font-semibold text-blue-700 tabular-nums">{av.toFixed(1)}%</td>
+                          <td className="py-2 px-3 text-right font-bold text-blue-700 tabular-nums">+{pp.toFixed(3)}pp</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-blue-100/50 border-t-2 border-blue-300 font-bold text-blue-800">
+                      <td colSpan={5} className="py-2 px-3 text-right text-[11px]">Total antecipado (informativo) →</td>
+                      <td className="py-2 px-3 text-right tabular-nums">+{frentesForaPlano.totalAntPp.toFixed(2)}pp</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Rev. 1638 — Bloco C: Recuperação de Atrasos (atividades expiradas).
+              Cronograma já passou, mas frente continua em execução. Indica
+              que o time está pagando dívida — informativo, não muda PV. */}
+          {frentesForaPlano.arrastadas.length > 0 && (
+            <div className="bg-amber-50/40 rounded-xl border border-amber-200 shadow-sm overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-amber-200 bg-amber-100/60 flex items-center gap-2">
+                <span className="text-base leading-none">⏪</span>
+                <span className="text-xs font-semibold text-amber-800">
+                  Recuperação de Atrasos — frentes expiradas em execução
+                </span>
+                <span className="text-[10px] text-amber-600 ml-1">
+                  {frentesForaPlano.arrastadas.length} atividade{frentesForaPlano.arrastadas.length !== 1 ? "s" : ""} · +{frentesForaPlano.totalArrPp.toFixed(2)}pp acumulado
+                </span>
+                <span
+                  className="ml-auto text-[10px] text-amber-600 cursor-help"
+                  title="Atividades cujo cronograma JÁ EXPIROU mas continuam em execução (não atingiram 100%). Recuperação de dívida: contam no EV global, mas não estão no plano da semana corrente."
+                >
+                  ℹ️ Fora do plano da semana
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-amber-100 bg-amber-50/40 text-left text-[11px] font-semibold text-amber-700">
+                      <th className="py-2 px-3 w-16">EAP</th>
+                      <th className="py-2 px-3">Atividade</th>
+                      <th className="py-2 px-3 w-32" title="Data de fim original do cronograma">Devia terminar em</th>
+                      <th className="py-2 px-3 w-24 text-right">Peso projeto</th>
+                      <th className="py-2 px-3 w-20 text-right">Real %</th>
+                      <th className="py-2 px-3 w-32 text-right" title="Quanto ainda falta para a atividade fechar = peso × (100 − real) / 100">Falta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {frentesForaPlano.arrastadas.map((a: any, i: number) => {
+                      const av     = avancosMap[a.id] ?? 0;
+                      const falta  = n(a.pesoFinanceiro) * (100 - av) / 100;
+                      return (
+                        <tr key={a.id ?? i} className={`border-b border-amber-50 ${i % 2 === 0 ? "bg-white" : "bg-amber-50/30"}`}>
+                          <td className="py-2 px-3 font-mono text-amber-700">{a.eapCodigo ?? "—"}</td>
+                          <td className="py-2 px-3 text-slate-800">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-medium">{a.nome}</span>
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[9px] font-bold ring-1 ring-amber-200"
+                                title="Atividade com cronograma expirado, ainda em execução."
+                              >
+                                ⏪ ARRASTADA
+                              </span>
+                            </div>
+                            {(() => {
+                              const h = hierarquiaOf(a.eapCodigo);
+                              return h.length > 0 ? (
+                                <div className="text-[9px] text-slate-400 mt-0.5 italic leading-tight truncate">
+                                  {h.map((seg, si) => (
+                                    <span key={si}>
+                                      {si > 0 && <span className="mx-0.5">›</span>}
+                                      <span className="text-slate-500 font-medium not-italic">{seg}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null;
+                            })()}
+                          </td>
+                          <td className="py-2 px-3 text-slate-600">{fmtBR(a.dataFim)}</td>
+                          <td className="py-2 px-3 text-right text-slate-600 tabular-nums">{n(a.pesoFinanceiro).toFixed(2)}%</td>
+                          <td className="py-2 px-3 text-right font-semibold text-amber-700 tabular-nums">{av.toFixed(1)}%</td>
+                          <td className="py-2 px-3 text-right font-bold text-amber-700 tabular-nums">−{falta.toFixed(3)}pp</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-amber-100/50 border-t-2 border-amber-300 font-bold text-amber-800">
+                      <td colSpan={5} className="py-2 px-3 text-right text-[11px]">EV acumulado nessas frentes →</td>
+                      <td className="py-2 px-3 text-right tabular-nums">+{frentesForaPlano.totalArrPp.toFixed(2)}pp</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Recursos do orçamento para a semana */}
           {!portalMode && orcamentoId && eapsDaSemana.length > 0 && (
