@@ -1024,7 +1024,7 @@ export default function PortalPlanejamentoCliente() {
           }
           if (aba === "visao_geral") return <AbaVisaoGeral kpis={kpis} projeto={projeto} obra={obra} semanaAtual={semanaAtual} atrasadas={atrasadas} proximas={proximas} atividadesTodas={atividadesTodas} refisLista={refisLista} />;
           if (aba === "cronograma") return <AbaCronograma atividades={atividadesTodas} />;
-          if (aba === "avanco_semanal") return <AbaAvancoSemanal kpis={kpis} semanaAtual={semanaAtual} atrasadas={atrasadas} curvaData={curvaData} recoveryWindow={projeto?.recoveryWindowSemanas ?? 4} />;
+          if (aba === "avanco_semanal") return <AbaAvancoSemanal kpis={kpis} semanaAtual={semanaAtual} atrasadas={atrasadas} curvaData={curvaData} recoveryWindow={projeto?.recoveryWindowSemanas ?? 4} cutoffOficial={cutoffOficial} />;
           if (aba === "prog_semanal") return (
             <AbaProgSemanal
               atividadesTodas={atividadesTodas}
@@ -1883,7 +1883,7 @@ function AbaCronograma({ atividades }: { atividades: any[] }) {
   );
 }
 
-function AbaAvancoSemanal({ kpis, semanaAtual, atrasadas, curvaData, recoveryWindow }: any) {
+function AbaAvancoSemanal({ kpis, semanaAtual, atrasadas, curvaData, recoveryWindow, cutoffOficial }: any) {
   // Rev. 1534 — Janela de Recovery Schedule (AACE 23R-02). CONGELADA pro cliente:
   // exibe só a meta diluída + data de convergência que o engenheiro definiu.
   const janelaRecuperacao = Math.max(1, recoveryWindow ?? 4);
@@ -1965,8 +1965,8 @@ function AbaAvancoSemanal({ kpis, semanaAtual, atrasadas, curvaData, recoveryWin
         {debitoAcumulado > 0.01 && <> O <strong>baseline (PV) é imutável</strong>; o compromisso semanal acima é o <strong>plano de recuperação</strong> diluído em {janelaRecuperacao} semanas.</>}
         {" "}Peso bruto das atividades ativas: <strong>{pesoAtivas.toFixed(2).replace(".", ",")}%</strong> (informativo).
       </p>
-      <SecaoAtividades titulo={`Semana ${fmtBR(kpis.semanaInicio)} a ${fmtBR(kpis.semanaFim)}`} vazio="Nenhuma atividade nesta semana." itens={semanaAtual} cor="border-blue-200" />
-      {atrasadas.length > 0 && <SecaoAtividades titulo={`Atrasadas (${atrasadas.length})`} vazio="" itens={atrasadas} cor="border-red-200" />}
+      <SecaoAtividades titulo={`Semana ${fmtBR(kpis.semanaInicio)} a ${fmtBR(kpis.semanaFim)}`} vazio="Nenhuma atividade nesta semana." itens={semanaAtual} cor="border-blue-200" cutoffOficial={cutoffOficial} />
+      {atrasadas.length > 0 && <SecaoAtividades titulo={`Atrasadas (${atrasadas.length})`} vazio="" itens={atrasadas} cor="border-red-200" cutoffOficial={cutoffOficial} />}
     </div>
   );
 }
@@ -4819,7 +4819,7 @@ function AbaBim3D({ obra }: { obra: any }) {
   );
 }
 
-function SecaoAtividades({ titulo, vazio, itens, cor }: { titulo: string; vazio: string; itens: any[]; cor: string }) {
+function SecaoAtividades({ titulo, vazio, itens, cor, cutoffOficial }: { titulo: string; vazio: string; itens: any[]; cor: string; cutoffOficial?: string }) {
   return (
     <div className={`bg-white border-2 ${cor} rounded-xl p-4`}>
       <h3 className="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-2">
