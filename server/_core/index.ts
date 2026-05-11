@@ -487,6 +487,16 @@ Regras:
           console.log(`[SyncSchema+] Colunas data_corte_* garantidas em planejamento_projetos.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_projetos data_corte:`, e?.message || e); }
 
+        // Rev. 1662 — Datas reais por atividade (visão LOTUS).
+        // FORA do ColFix com version guard porque, em DBs onde a versão já estava
+        // aplicada, o guard pula o bloco e as colunas novas nunca são criadas —
+        // quebra `listarAtividades` com "column data_inicio_real does not exist".
+        try {
+          await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS data_inicio_real DATE`);
+          await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS data_fim_real DATE`);
+          console.log(`[SyncSchema+] Colunas data_*_real garantidas em planejamento_atividades.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_atividades datas reais:`, e?.message || e); }
+
         try {
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_escritorio INTEGER`);
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_faturamento INTEGER`);
