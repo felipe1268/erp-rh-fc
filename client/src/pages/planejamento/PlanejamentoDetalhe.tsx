@@ -10,6 +10,7 @@ import PrintHeader from "@/components/PrintHeader";
 import PlanejamentoPrintHeader from "@/components/PlanejamentoPrintHeader";
 import PrintActions from "@/components/PrintActions";
 import ImportarCronograma, { parseMSProjectXML, parseMSProjectXLSX, TarefaImportada } from "./ImportarCronograma";
+import { parseCalendarioJson, fracaoDecorridaMs } from "../../../../shared/diasUteis";
 import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
 import { DiagramaRede } from "./DiagramaRede";
 const BimViewer = React.lazy(() => import("./BimViewer"));
@@ -472,14 +473,14 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     const dRef = new Date(semIni + "T12:00:00");
     dRef.setDate(dRef.getDate() + 7);
     const refStr = dRef.toISOString().split("T")[0];
+    // Rev. 1642 — paridade 100% MS Project: usa dias úteis quando disponível.
+    const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
     const prevLinear = (a: any): number => {
       if (!a.dataInicio || !a.dataFim) return 0;
       const ini = new Date(a.dataInicio + "T12:00:00").getTime();
       const fim = new Date(a.dataFim    + "T12:00:00").getTime();
       const r   = new Date(refStr       + "T12:00:00").getTime();
-      if (r >= fim) return 100;
-      if (r <= ini) return 0;
-      return ((r - ini) / (fim - ini)) * 100;
+      return fracaoDecorridaMs(ini, r, fim, calMSP) * 100;
     };
     const ponderado = folhasFiltradas.reduce((s: number, a: any) => {
       const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
@@ -511,17 +512,17 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     const semPeso = pesoBruto === 0;
     const denom = semPeso ? (folhas.length || 1) : pesoBruto;
     let soma = 0;
+    // Rev. 1642 — dias úteis do MS Project (paridade 100%).
+    const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
     folhas.forEach((a: any) => {
       const ini = new Date(a.dataInicio + "T12:00:00").getTime();
       const fim = new Date(a.dataFim    + "T12:00:00").getTime();
-      let exp = 0;
-      if (ref >= fim) exp = 100;
-      else if (ref > ini) exp = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
+      const exp = fracaoDecorridaMs(ini, ref, fim, calMSP) * 100;
       const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       soma += (exp * peso) / denom;
     });
     return +soma.toFixed(2);
-  }, [atividades, semanaVisualizacao, usarPesoPorDuracao, refisComIndiretasGlobal, refDateStr, modoVisao]);
+  }, [atividades, semanaVisualizacao, usarPesoPorDuracao, refisComIndiretasGlobal, refDateStr, modoVisao, (proj as any)?.calendarioJson]);
 
   // ── Cabeçalho de impressão (idêntico ao Portal do Cliente) ──────────
   // ATENÇÃO: este useMemo precisa ficar ANTES dos early returns abaixo,
@@ -953,6 +954,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
               if (revisaoAtiva?.id) setRecoveryWindowMut.mutate({ revisaoId: revisaoAtiva.id, semanas });
             }}
             dataTerminoContratual={proj?.dataTerminoContratual ?? null}
+            calendarioJson={(proj as any)?.calendarioJson ?? null}
           />
         )}
 
@@ -4725,12 +4727,12 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
       const ini = new Date(a.dataInicio).getTime();
       const fim = new Date(a.dataFim).getTime();
       const ref = new Date(semanaAtual).getTime();
-      let prevInd = 0;
-      if (ref >= fim) prevInd = 100;
-      else if (ref > ini) prevInd = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
+      // Rev. 1642 — usa calendário MS Project quando disponível.
+      const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
+      const prevInd = fracaoDecorridaMs(ini, ref, fim, calMSP) * 100;
       return prevInd > 0;
     });
-  }, [folhasNaSemana, avancoLocal, avancoExistente, semanaAtual]);
+  }, [folhasNaSemana, avancoLocal, avancoExistente, semanaAtual, (proj as any)?.calendarioJson]);
 
   // Lista final exibida na tabela (muda conforme filtroAtivo)
   const folhasExibidas = filtroAtivo === "pendentes" ? folhasPendentes : folhasNaSemana;
@@ -4878,20 +4880,20 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     const semPeso = pesoBruto === 0;
     const denom   = semPeso ? (folhasComDatas.length || 1) : pesoBruto;
     let soma = 0;
+    // Rev. 1642 — calendário MS Project (paridade 100%).
+    const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
     folhasComDatas.forEach((a: any) => {
       const ini  = new Date(a.dataInicio + "T12:00:00").getTime();
       const fim  = new Date(a.dataFim    + "T12:00:00").getTime();
       const ref  = new Date(semanaFim    + "T12:00:00").getTime();
-      let exp = 0;
-      if (ref >= fim) exp = 100;
-      else if (ref > ini) exp = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
+      const exp = fracaoDecorridaMs(ini, ref, fim, calMSP) * 100;
       const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       soma += (exp * peso) / denom;
     });
     // Rev. 1538 — NÃO arredonda intermediário (causa divergência com a barra
     // superior). O display final cuida do toFixed(2).
     return soma;
-  }, [folhas, semanaFim, usarPesoPorDuracao]);
+  }, [folhas, semanaFim, usarPesoPorDuracao, (proj as any)?.calendarioJson]);
 
   // ── Realizado acumulado ponderado (semana atual) ───────────────────────────
   // Prioriza avancoLocal > avancoExistente (semana exata) > avancoMaisRecente (semana mais recente ≤ atual)
@@ -4926,19 +4928,19 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     const semPeso = pesoBruto === 0;
     const denom   = semPeso ? (folhasComDatas.length || 1) : pesoBruto;
     let soma = 0;
+    // Rev. 1642 — calendário MS Project (paridade 100%).
+    const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
     folhasComDatas.forEach((a: any) => {
       const ini  = new Date(a.dataInicio + "T12:00:00").getTime();
       const fim  = new Date(a.dataFim    + "T12:00:00").getTime();
       const ref  = new Date(semanaFim    + "T12:00:00").getTime();
-      let exp = 0;
-      if (ref >= fim) exp = 100;
-      else if (ref > ini) exp = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
+      const exp = fracaoDecorridaMs(ini, ref, fim, calMSP) * 100;
       const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
       soma += (exp * peso) / denom;
     });
     // Rev. 1538 — sem arredondamento intermediário (consistência com a barra superior).
     return soma;
-  }, [folhasComInd, semanaFim, usarPesoPorDuracao]);
+  }, [folhasComInd, semanaFim, usarPesoPorDuracao, (proj as any)?.calendarioJson]);
 
   const realizadoComInd = useMemo(() => {
     const pesoBruto = usarPesoPorDuracao
@@ -4947,6 +4949,8 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     const semPeso = pesoBruto === 0;
     const denom   = semPeso ? (folhasComInd.length || 1) : pesoBruto;
     let soma = 0;
+    // Rev. 1642 — calendário MS Project para indiretas (paridade 100%).
+    const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
     folhasComInd.forEach((a: any) => {
       let val: number;
       if (a.isIndireta) {
@@ -4955,7 +4959,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
           const ini = new Date(a.dataInicio + "T12:00:00").getTime();
           const fim = new Date(a.dataFim    + "T12:00:00").getTime();
           const ref = new Date(semanaFim    + "T12:00:00").getTime();
-          val = ref >= fim ? 100 : ref <= ini ? 0 : ((ref - ini) / (fim - ini)) * 100;
+          val = fracaoDecorridaMs(ini, ref, fim, calMSP) * 100;
         }
       } else {
         val = avancoLocal[a.id] !== undefined
@@ -4967,7 +4971,7 @@ function AvancoSemanal({ projetoId, revisaoAtiva, atividades, avancos, utils, on
     });
     // Rev. 1538 — sem arredondamento intermediário (consistência com a barra superior).
     return soma;
-  }, [folhasComInd, avancoExistente, avancoMaisRecente, avancoLocal, semanaFim, usarPesoPorDuracao]);
+  }, [folhasComInd, avancoExistente, avancoMaisRecente, avancoLocal, semanaFim, usarPesoPorDuracao, (proj as any)?.calendarioJson]);
 
   const distorcaoPrev = +(previstoComInd - previsto).toFixed(2);
   const distorcaoReal = +(realizadoComInd - realizadoAcum).toFixed(2);

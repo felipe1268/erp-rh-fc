@@ -1033,6 +1033,7 @@ export default function PortalPlanejamentoCliente() {
               nomeCliente={obra?.cliente ?? ""}
               curvaData={curvaData}
               recoveryWindow={projeto?.recoveryWindowSemanas ?? 4}
+              calendarioJson={(data as any)?.calendarioJson ?? null}
             />
           );
           if (aba === "curva_s") return <AbaCurvaS curvaData={curvaData} kpis={kpis} projeto={projeto} curvaMedicoes={curvaMedicoes} />;
@@ -1981,6 +1982,7 @@ function AbaAvancoSemanal({ kpis, semanaAtual, atrasadas, curvaData, recoveryWin
 
 function AbaProgSemanal({
   atividadesTodas, refisLista, nomeProjeto, nomeCliente, curvaData, recoveryWindow,
+  calendarioJson: calendarioJsonPortal = null,
 }: {
   atividadesTodas: any[];
   refisLista: any[];
@@ -1988,6 +1990,7 @@ function AbaProgSemanal({
   nomeCliente: string;
   curvaData?: any;
   recoveryWindow?: number;
+  calendarioJson?: string | null;
 }) {
   const avancosMap = useMemo(() => {
     const m: Record<number, number> = {};
@@ -2011,6 +2014,7 @@ function AbaProgSemanal({
       refisLista={refisLista}
       curvaData={curvaData}
       recoveryWindow={recoveryWindow ?? 4}
+      calendarioJson={calendarioJsonPortal}
     />
   );
 }

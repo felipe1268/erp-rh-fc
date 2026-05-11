@@ -102,12 +102,81 @@ function fmtBRLocal(iso: string): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
 
-// ── Parser MS Project XML ─────────────────────────────────────────────────────
+// ── Parser MS Project XML — calendário + StatusDate (Rev. 1642) ──────────────
+// O MS Project armazena, na raiz do <Project>:
+//   - <StatusDate>YYYY-MM-DDTHH:mm:ss</StatusDate>  → cutoff oficial (PMBOK/EVM)
+//   - <Calendars>...</Calendars>                    → dias úteis + feriados
+// Capturamos os dois pra que o ERP reproduza % PREVISTO **exatamente** como
+// o MS Project (paridade 100% — regra de ouro Portal × Planejamento).
+export interface CalendarioImportado {
+  weekDays: boolean[];                                          // dom..sab → working?
+  exceptions: Array<{ from: string; to: string; working: boolean }>;
+}
+export function parseMSProjectCalendar(doc: Document): CalendarioImportado | null {
+  const cals = Array.from(doc.querySelectorAll("Calendars > Calendar"));
+  if (!cals.length) return null;
+  // Heurística: prefere o calendário do projeto (CalendarUID na raiz);
+  // senão o que tem IsBaseCalendar=1; senão o primeiro.
+  const projCalUid = doc.querySelector("Project > CalendarUID")?.textContent?.trim();
+  const cal =
+    cals.find(c => c.querySelector(":scope > UID")?.textContent?.trim() === projCalUid) ||
+    cals.find(c => c.querySelector(":scope > IsBaseCalendar")?.textContent?.trim() === "1") ||
+    cals[0];
+
+  // MS Project usa DayType: 1=Domingo, 2=Segunda, ..., 7=Sábado; 0=Exceção (com TimePeriod).
+  const weekDays = [false, false, false, false, false, false, false]; // dom..sab
+  const exceptions: Array<{ from: string; to: string; working: boolean }> = [];
+  const wds = Array.from(cal.querySelectorAll(":scope > WeekDays > WeekDay"));
+  for (const wd of wds) {
+    const dayType = parseInt(wd.querySelector(":scope > DayType")?.textContent ?? "0");
+    const working = wd.querySelector(":scope > DayWorking")?.textContent?.trim() === "1";
+    if (dayType >= 1 && dayType <= 7) {
+      // 1=Dom → idx 0, 7=Sab → idx 6
+      weekDays[dayType - 1] = working;
+    } else if (dayType === 0) {
+      const tp = wd.querySelector(":scope > TimePeriod");
+      const from = tp?.querySelector(":scope > FromDate")?.textContent?.slice(0, 10) ?? "";
+      const to   = tp?.querySelector(":scope > ToDate")?.textContent?.slice(0, 10) ?? from;
+      if (from) exceptions.push({ from, to: to || from, working });
+    }
+  }
+  // Sanidade: se nada veio marcado como working, devolve null (calendário inválido).
+  if (!weekDays.some(Boolean)) return null;
+  return { weekDays, exceptions };
+}
+export function parseMSProjectStatusDate(doc: Document): string | null {
+  const raw = doc.querySelector("Project > StatusDate")?.textContent?.trim();
+  if (!raw) return null;
+  // Formato MSP: "2026-05-07T17:00:00" — pegamos só YYYY-MM-DD.
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+}
+
+/** Versão completa: tarefas + metadados (calendário + StatusDate). */
+export function parseMSProjectFull(text: string): {
+  tarefas:        TarefaImportada[];
+  statusDate:     string | null;
+  calendarioJson: string | null;
+} {
+  const doc  = new DOMParser().parseFromString(text, "text/xml");
+  const err  = doc.querySelector("parsererror");
+  if (err) throw new Error("XML inválido");
+  const tarefas    = parseMSProjectTasksFromDoc(doc);
+  const statusDate = parseMSProjectStatusDate(doc);
+  const cal        = parseMSProjectCalendar(doc);
+  const calendarioJson = cal ? JSON.stringify(cal) : null;
+  return { tarefas, statusDate, calendarioJson };
+}
+
+// ── Parser MS Project XML (compat — só tarefas) ──────────────────────────────
 export function parseMSProjectXML(text: string): TarefaImportada[] {
   const doc  = new DOMParser().parseFromString(text, "text/xml");
   const err  = doc.querySelector("parsererror");
   if (err) throw new Error("XML inválido");
+  return parseMSProjectTasksFromDoc(doc);
+}
 
+function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
   const taskEls = Array.from(doc.querySelectorAll("Task"));
 
   // First pass: build UID → WBS map so we can resolve predecessor UIDs to WBS codes.
@@ -339,8 +408,9 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   const [resultadoImport, setResultadoImport] = useState<{ atualizados: number; inseridos: number; naoEncontrados: number } | null>(null);
 
   const salvarMutation = trpc.planejamento.salvarAtividades.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       utils.planejamento.listarAtividades.invalidate();
+      await gravarMetadadosMSP();          // Rev. 1642
       setOpen(false);
       resetState();
       onImportado?.();
@@ -348,6 +418,9 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   });
 
   const importarAvancosMutation = trpc.planejamento.importarAvancosDoArquivo.useMutation();
+  // Rev. 1642 — grava StatusDate + calendário do MS Project (paridade 100%).
+  const salvarMetadadosMSPMutation = trpc.planejamento.salvarMetadadosMSProject.useMutation();
+  const [metadadosMSP, setMetadadosMSP] = useState<{ statusDate: string | null; calendarioJson: string | null } | null>(null);
 
   const importarComModoMutation = trpc.planejamento.importarComModo.useMutation({
     onSuccess: async (res: any) => {
@@ -373,6 +446,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
           }
         }
       }
+      await gravarMetadadosMSP();          // Rev. 1642 — StatusDate + calendário
       setResultadoImport({
         atualizados:    res?.atualizados ?? 0,
         inseridos:      res?.inseridos ?? 0,
@@ -396,6 +470,23 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
     setPagina(1);
     setModoImport("mesclar");
     setResultadoImport(null);
+    setMetadadosMSP(null);
+  }
+
+  // Rev. 1642 — fire-and-forget: grava StatusDate + calendário após qualquer
+  // import bem-sucedido (substituir/mesclar/apenas_predecessora).
+  async function gravarMetadadosMSP() {
+    if (!metadadosMSP) return;
+    if (!metadadosMSP.statusDate && !metadadosMSP.calendarioJson) return;
+    try {
+      await salvarMetadadosMSPMutation.mutateAsync({
+        projetoId,
+        statusDate:     metadadosMSP.statusDate,
+        calendarioJson: metadadosMSP.calendarioJson,
+      });
+      utils.planejamento.getProjetoById.invalidate();
+      utils.planejamento.getDataCorte.invalidate();
+    } catch (e) { console.error("[MSP metadata] Falha ao gravar:", e); }
   }
 
   // ── Vinculação automática com EAP do orçamento ────────────────────────────
@@ -422,7 +513,10 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
 
       if (ext === "xml") {
         const text = await file.text();
-        parsed = parseMSProjectXML(text);
+        // Rev. 1642 — captura também StatusDate + Calendars pra paridade MS Project.
+        const full = parseMSProjectFull(text);
+        parsed = full.tarefas;
+        setMetadadosMSP({ statusDate: full.statusDate, calendarioJson: full.calendarioJson });
       } else if (ext === "xlsx" || ext === "xls" || ext === "xlsm") {
         const buf = await file.arrayBuffer();
         parsed = await parseMSProjectXLSX(buf);

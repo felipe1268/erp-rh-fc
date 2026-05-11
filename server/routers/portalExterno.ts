@@ -2459,6 +2459,9 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
           nuncaFechado: !(projeto as any).dataCorteAtual,
           hoje: todayRealStr,
         },
+        // Rev. 1642 — calendário do MS Project para o Portal interpolar
+        // Previsto% por dias úteis (paridade 100% com ERP/MS Project).
+        calendarioJson: (projeto as any).calendarioJson ?? null,
         revisoes: revisoesHist.map((r: any) => ({
           id: r.id,
           numero: r.numero,

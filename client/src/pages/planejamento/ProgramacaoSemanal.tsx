@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from "react";
 import { trpc } from "@/lib/trpc";
+import { parseCalendarioJson, fracaoDecorridaMs as fracaoDecorridaMsCal } from "../../../../shared/diasUteis";
 import {
   ChevronLeft, ChevronRight, Calendar, Printer, Loader2,
   Brain, AlertTriangle, Wrench, Users, Package, Clock,
@@ -137,6 +138,9 @@ interface Props {
   /** Quando definido (modo interno), exibe seletor que persiste no banco via
    * tRPC. Quando undefined (Portal do Cliente), só lê o valor congelado. */
   onChangeRecoveryWindow?: (semanas: number) => void;
+  /** Rev. 1642 — calendário do MS Project (JSON serializado) para usar dias
+   * úteis nas interpolações de Previsto%. NULL → fallback linear (legado). */
+  calendarioJson?: string | null;
   /** Rev. 1638.4 — Prazo contratual do projeto (YYYY-MM-DD). Quando definido,
    * o seletor de janela de recuperação BLOQUEIA valores que empurrariam a data
    * de convergência (semFim + N×7 dias) além do prazo contratual. */
@@ -327,9 +331,12 @@ export function ProgramacaoSemanal({
   refisLista = [], portalMode = false, curvaData = null,
   recoveryWindow = null, onChangeRecoveryWindow,
   dataTerminoContratual = null,
+  calendarioJson = null,
 }: Props) {
   // Rev. 1534 — Janela atual de Recovery Schedule (default 4 semanas).
   const janelaRecuperacao = Math.max(1, recoveryWindow ?? 4);
+  // Rev. 1642 — Calendário MS Project parseado uma vez por render (paridade 100%).
+  const calMSPParsed = useMemo(() => parseCalendarioJson(calendarioJson), [calendarioJson]);
   // Atividades desativadas (a.disabled === true) NÃO devem aparecer em nenhuma
   // parte da Programação Semanal — nem em totais, nem em listagens, nem nos
   // alertas de IA. Filtramos uma única vez aqui para garantir consistência.
@@ -1198,8 +1205,8 @@ export function ProgramacaoSemanal({
                         domingo.setDate(domingo.getDate() + 2);
                         domingo.setHours(23, 59, 59, 999);
                         const ref = domingo.getTime();
-                        if (ref >= fim)       prevInd = 100;
-                        else if (ref > ini)   prevInd = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
+                        // Rev. 1642 — paridade 100% MS Project: usa dias úteis se houver calendário.
+                        prevInd = fracaoDecorridaMsCal(ini, ref, fim, calMSPParsed) * 100;
                       }
                       // Rev. 1511: Desvio = Real − Previsto. Positivo = adiantada (verde).
                       // Negativo = atrasada (vermelho).
