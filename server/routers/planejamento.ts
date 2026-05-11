@@ -572,25 +572,32 @@ export const planejamentoRouter = router({
           .where(eq(planejamentoRevisoes.id, input.novaRevisaoId));
       }
 
-      // ── Transferência de flags (isIndireta, isMarco, disabled) ───────────
+      // ── Transferência de flags (isIndireta, isMarco, isExterna, disabled) ───
+      // Rev. 1641 — isExterna + externaResponsavel também são preservados na
+      // próxima revisão (não faz sentido perder a marcação de "concessionária").
       if (atvsAnterior.length > 0) {
-        const mapAntFlags = new Map<string, { isIndireta: boolean; isMarco: boolean; disabled: boolean }>();
+        type FlagSet = { isIndireta: boolean; isMarco: boolean; isExterna: boolean; externaResponsavel: string | null; disabled: boolean };
+        const mapAntFlags = new Map<string, FlagSet>();
         for (const a of atvsAnterior) {
-          if (a.eapCodigo && (a.isIndireta || a.isMarco || a.disabled)) {
+          if (a.eapCodigo && (a.isIndireta || a.isMarco || a.isExterna || a.disabled || a.externaResponsavel)) {
             mapAntFlags.set(a.eapCodigo, {
-              isIndireta: !!a.isIndireta,
-              isMarco:    !!a.isMarco,
-              disabled:   !!a.disabled,
+              isIndireta:         !!a.isIndireta,
+              isMarco:            !!a.isMarco,
+              isExterna:          !!a.isExterna,
+              externaResponsavel: a.externaResponsavel ?? null,
+              disabled:           !!a.disabled,
             });
           }
         }
         if (mapAntFlags.size > 0) {
-          const updates: { id: number; flags: { isIndireta?: boolean; isMarco?: boolean; disabled?: boolean } }[] = [];
+          const updates: { id: number; flags: Partial<FlagSet> }[] = [];
           for (const nova of atvsNova) {
             if (nova.eapCodigo && mapAntFlags.has(nova.eapCodigo)) {
               const flags = mapAntFlags.get(nova.eapCodigo)!;
               const needsUpdate = (flags.isIndireta && !nova.isIndireta) ||
                                   (flags.isMarco && !nova.isMarco) ||
+                                  (flags.isExterna && !nova.isExterna) ||
+                                  (flags.externaResponsavel && !nova.externaResponsavel) ||
                                   (flags.disabled && !nova.disabled);
               if (needsUpdate) {
                 updates.push({ id: nova.id, flags });
@@ -598,10 +605,12 @@ export const planejamentoRouter = router({
             }
           }
           for (const upd of updates) {
-            const setObj: Record<string, boolean> = {};
-            if (upd.flags.isIndireta) setObj.isIndireta = true;
-            if (upd.flags.isMarco)    setObj.isMarco = true;
-            if (upd.flags.disabled)   setObj.disabled = true;
+            const setObj: Record<string, any> = {};
+            if (upd.flags.isIndireta)         setObj.isIndireta = true;
+            if (upd.flags.isMarco)            setObj.isMarco = true;
+            if (upd.flags.isExterna)          setObj.isExterna = true;
+            if (upd.flags.externaResponsavel) setObj.externaResponsavel = upd.flags.externaResponsavel;
+            if (upd.flags.disabled)           setObj.disabled = true;
             await db.update(planejamentoAtividades)
               .set(setObj as any)
               .where(eq(planejamentoAtividades.id, upd.id));
@@ -1027,6 +1036,8 @@ export const planejamentoRouter = router({
                 pesoFinanceiro: String(a.pesoFinanceiro ?? 0),
                 ordem:          a.ordem ?? i,
                 isGrupo:        a.isGrupo ?? false,
+                // Rev. 1641 — isExterna/externaResponsavel também são preservados (não
+                // mexemos via mesclar XML; só campos do XML são atualizados acima).
               }).where(eq(planejamentoAtividades.id, id));
               atualizados++;
             } else {
@@ -1049,6 +1060,8 @@ export const planejamentoRouter = router({
                 isGrupo:        a.isGrupo ?? false,
                 isMarco:        a.isMarco ?? false,
                 isIndireta:     false,
+                isExterna:      false,
+                externaResponsavel: null,
                 disabled:       false,
               });
               inseridos++;
@@ -3174,6 +3187,12 @@ Retorne APENAS um JSON válido com a lista de IDs em ordem de execução. Cada a
           unidade:             a.unidade,
           ordem:               a.ordem ?? i,
           isGrupo:             a.isGrupo,
+          // Rev. 1641 — preserva flags na cópia para nova revisão.
+          isMarco:             (a as any).isMarco ?? false,
+          isIndireta:          (a as any).isIndireta ?? false,
+          isExterna:           (a as any).isExterna ?? false,
+          externaResponsavel:  (a as any).externaResponsavel ?? null,
+          disabled:            (a as any).disabled ?? false,
         };
       });
 
@@ -3656,6 +3675,9 @@ Retorne SOMENTE este JSON (sem markdown, sem comentários, sem texto extra):
           unidade:        a.unidade || null,
           ordem:          i,
           isGrupo:        a.isGrupo,
+          // Rev. 1641 — IA não marca externas; default false explícito para clareza.
+          isExterna:      false,
+          externaResponsavel: null,
         };
       });
 

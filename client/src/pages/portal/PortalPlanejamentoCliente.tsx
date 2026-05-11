@@ -1779,6 +1779,14 @@ function AbaCronograma({ atividades }: { atividades: any[] }) {
                           Indireta
                         </span>
                       )}
+                      {a.isExterna && (
+                        <span
+                          title={`Atividade externa — executada por terceiro fora do escopo da FC.${a.externaResponsavel ? ` Responsável: ${a.externaResponsavel}` : ""}`}
+                          className="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-semibold shrink-0 border border-amber-300 cursor-help"
+                        >
+                          <AlertTriangle className="h-2.5 w-2.5" /> EXTERNA
+                        </span>
+                      )}
                       {concluida && (
                         <CheckCircle2 className="h-3 w-3 text-emerald-600 ml-1 shrink-0" />
                       )}
@@ -2746,6 +2754,7 @@ function AbaGantt({ atividades }: { atividades: any[] }) {
         {visibleAtiv.map((a: any) => {
           const isGrupo = !!a.isGrupo;
           const isMarco = !!a.isMarco;
+          const isExterna = !!a.isExterna;
           const nivel = a.nivel ?? 1;
           const avanc = isGrupo ? (groupAvMap[a.id] ?? 0) : (avMap[a.id] ?? 0);
           const isCollapsed = collapsed.has(a.eapCodigo ?? "");
@@ -2763,8 +2772,8 @@ function AbaGantt({ atividades }: { atividades: any[] }) {
           const fillW = barW * (avanc / 100);
 
           const isDone = avanc >= 100;
-          const barColor = isDone ? "#059669" : isGrupo ? "#1e293b" : isMarco ? "#7c3aed" : "#1A3461";
-          const fillColor = isDone ? "#10b981" : isMarco ? "#a855f7" : "#3b82f6";
+          const barColor = isDone ? "#059669" : isGrupo ? "#1e293b" : isExterna ? "#b45309" : isMarco ? "#7c3aed" : "#1A3461";
+          const fillColor = isDone ? "#10b981" : isExterna ? "#f59e0b" : isMarco ? "#a855f7" : "#3b82f6";
           const barH = isGrupo ? 10 : isMarco ? 12 : 14;
           const barTop = (ROW_H - barH) / 2;
 
@@ -2787,9 +2796,11 @@ function AbaGantt({ atividades }: { atividades: any[] }) {
                 <span className={`text-[8px] font-mono shrink-0 px-1 rounded leading-4 ${isDone ? "bg-emerald-100 text-emerald-700" : isGrupo ? "bg-slate-200 text-slate-600" : isMarco ? "bg-purple-100 text-purple-700" : "bg-blue-50 text-blue-600"}`}>
                   {a.eapCodigo ?? "—"}
                 </span>
-                <span className={`text-[11px] truncate flex-1 ${isDone ? (isGrupo ? "font-semibold text-emerald-800" : "text-emerald-800 font-medium") : isGrupo ? "font-semibold text-slate-700" : isMarco ? "text-purple-800 font-medium" : "text-slate-600"}`}
-                  title={a.nome}>
-                  {isMarco && <span className="mr-0.5 text-purple-500">◆</span>}{a.nome}
+                <span className={`text-[11px] truncate flex-1 ${isDone ? (isGrupo ? "font-semibold text-emerald-800" : "text-emerald-800 font-medium") : isGrupo ? "font-semibold text-slate-700" : isExterna ? "text-amber-800 font-medium" : isMarco ? "text-purple-800 font-medium" : "text-slate-600"}`}
+                  title={isExterna ? `${a.nome} — EXTERNA${a.externaResponsavel ? ` (${a.externaResponsavel})` : ""}` : a.nome}>
+                  {isMarco && <span className="mr-0.5 text-purple-500">◆</span>}
+                  {isExterna && <AlertTriangle className="inline h-3 w-3 text-amber-600 mr-0.5 shrink-0" />}
+                  {a.nome}
                 </span>
                 {avanc > 0 && (
                   <span className={`text-[9px] font-bold shrink-0 ${avanc >= 100 ? "text-emerald-600" : isGrupo ? "text-slate-500" : isMarco ? "text-purple-600" : "text-blue-600"}`}>

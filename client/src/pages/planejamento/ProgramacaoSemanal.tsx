@@ -360,8 +360,11 @@ export function ProgramacaoSemanal({
     [atividades, semanaAtual]
   );
 
+  // Rev. 1641 — Last Planner: PPC/aderência mede previsibilidade do plano da
+  // FC. Atividades externas (terceiros) ficam de fora porque não temos governança
+  // sobre a entrega — entram só no SPI/Curva S/EV.
   const atividadesSemAtual = useMemo(
-    () => atividadesSemAtualTodas.filter((a: any) => !a.isIndireta),
+    () => atividadesSemAtualTodas.filter((a: any) => !a.isIndireta && !a.isExterna),
     [atividadesSemAtualTodas]
   );
 
@@ -385,6 +388,10 @@ export function ProgramacaoSemanal({
     return chain;
   };
 
+  // Rev. 1641 — folhasTodas é o UNIVERSO do cronograma (peso/criticidade/recovery
+  // window/SPI/EV) — externas ENTRAM aqui pra não criar buraco no PV. A exclusão
+  // do PPC/aderência é feita só no plano da semana (`atividadesSemAtual`,
+  // `proximas3`), que mede previsibilidade do plano da FC.
   const folhasTodas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.isIndireta), [atividades]);
 
   // Rev. 1531 — Previsto na semana via OVERLAP (espelha fix Portal Rev. 1528).
@@ -677,7 +684,7 @@ export function ProgramacaoSemanal({
   const proximas3 = useMemo(() => {
     const result = [];
     for (let i = idx; i < Math.min(idx + qtdSemanas, semanas.length); i++) {
-      result.push({ semana: semanas[i], atividades: atividadesDaSemana(atividades, semanas[i]).filter((a: any) => !a.isIndireta) });
+      result.push({ semana: semanas[i], atividades: atividadesDaSemana(atividades, semanas[i]).filter((a: any) => !a.isIndireta && !a.isExterna) });
     }
     return result;
   }, [idx, semanas, atividades, qtdSemanas]);
