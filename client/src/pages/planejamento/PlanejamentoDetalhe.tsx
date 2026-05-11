@@ -509,19 +509,30 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     // Validado no XML REVTE-CIVIL: StatusDate=07/05 → 4/284 dias úteis = 1,41%.
     const refStr = refDateStr;
     const ref = new Date(refStr + "T12:00:00").getTime();
-    // Datas-resumo: menor início e maior fim entre as folhas (= linha-resumo MSP).
-    let projIni = Infinity, projFim = -Infinity;
-    folhas.forEach((a: any) => {
-      const ini = new Date(a.dataInicio + "T12:00:00").getTime();
-      const fim = new Date(a.dataFim    + "T12:00:00").getTime();
-      if (ini < projIni) projIni = ini;
-      if (fim > projFim) projFim = fim;
-    });
+    // Rev. 1646.2 — prioridade ABSOLUTA: usa as datas oficiais da raiz do MSP
+    // (gravadas em proj.dataInicio + proj.dataTerminoContratual no momento do
+    // import). Fallback para min(folhas)/max(folhas) só se não foram importadas.
+    let projIni: number, projFim: number;
+    const projIniIso = (proj as any)?.dataInicio  as string | null | undefined;
+    const projFimIso = (proj as any)?.dataTerminoContratual as string | null | undefined;
+    if (projIniIso && projFimIso) {
+      projIni = new Date(projIniIso + "T12:00:00").getTime();
+      projFim = new Date(projFimIso + "T12:00:00").getTime();
+    } else {
+      let _ini = Infinity, _fim = -Infinity;
+      folhas.forEach((a: any) => {
+        const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+        const fim = new Date(a.dataFim    + "T12:00:00").getTime();
+        if (ini < _ini) _ini = ini;
+        if (fim > _fim) _fim = fim;
+      });
+      projIni = _ini; projFim = _fim;
+    }
     if (!isFinite(projIni) || !isFinite(projFim) || projFim <= projIni) return 0;
     const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
     const pct = fracaoDecorridaMs(projIni, ref, projFim, calMSP) * 100;
     return +Math.min(100, pct).toFixed(2);
-  }, [atividades, semanaVisualizacao, refisComIndiretasGlobal, refDateStr, modoVisao, (proj as any)?.calendarioJson]);
+  }, [atividades, semanaVisualizacao, refisComIndiretasGlobal, refDateStr, modoVisao, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual]);
 
   // ── Cabeçalho de impressão (idêntico ao Portal do Cliente) ──────────
   // ATENÇÃO: este useMemo precisa ficar ANTES dos early returns abaixo,

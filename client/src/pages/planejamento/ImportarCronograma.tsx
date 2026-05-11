@@ -170,6 +170,8 @@ export function parseMSProjectFull(text: string): {
   statusDate:     string | null;
   statusDateIso:  string | null;
   calendarioJson: string | null;
+  projetoStart:   string | null;
+  projetoFinish:  string | null;
 } {
   const doc  = new DOMParser().parseFromString(text, "text/xml");
   const err  = doc.querySelector("parsererror");
@@ -178,6 +180,22 @@ export function parseMSProjectFull(text: string): {
   const statusDate    = parseMSProjectStatusDate(doc);
   const statusDateIso = parseMSProjectStatusDateIso(doc);
   const cal           = parseMSProjectCalendar(doc);
+  // Rev. 1646.2 — extrai Start/Finish da linha-resumo raiz (UID=0, OutlineLevel=0)
+  // do MSP. Esses valores são a fonte oficial do "envelope" do projeto, e devem
+  // ser usados como base do "%PREVISTO" da raiz no ERP/Portal (paridade Texto10).
+  // Sem isso, min(folhas.dataInicio)/max(folhas.dataFim) podem inflar o total
+  // (ex.: alguma folha terminando depois do root oficial → 292 ≠ 284 dias úteis).
+  let projetoStart: string | null = null;
+  let projetoFinish: string | null = null;
+  const taskEls = Array.from(doc.querySelectorAll("Task"));
+  for (const t of taskEls) {
+    const uid = t.querySelector("UID")?.textContent?.trim();
+    if (uid === "0") {
+      projetoStart  = t.querySelector("Start")?.textContent?.trim()?.slice(0, 10) || null;
+      projetoFinish = t.querySelector("Finish")?.textContent?.trim()?.slice(0, 10) || null;
+      break;
+    }
+  }
   // Usa querySelector simples (igual ao restante do parser que já lê StatusDate,
   // Calendars, etc. com sucesso). O combinator `Project >` falhava com namespace
   // default do MSP. querySelector retorna a primeira ocorrência em ordem de
@@ -194,7 +212,7 @@ export function parseMSProjectFull(text: string): {
     minutesPerDay:     (Number.isFinite(minutesPerDay as number) && (minutesPerDay as number) > 0) ? minutesPerDay : 480,
   } : null;
   const calendarioJson = calComConfig ? JSON.stringify(calComConfig) : null;
-  return { tarefas, statusDate, statusDateIso, calendarioJson };
+  return { tarefas, statusDate, statusDateIso, calendarioJson, projetoStart, projetoFinish };
 }
 
 // ── Parser MS Project XML (compat — só tarefas) ──────────────────────────────
@@ -449,7 +467,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   const importarAvancosMutation = trpc.planejamento.importarAvancosDoArquivo.useMutation();
   // Rev. 1642 — grava StatusDate + calendário do MS Project (paridade 100%).
   const salvarMetadadosMSPMutation = trpc.planejamento.salvarMetadadosMSProject.useMutation();
-  const [metadadosMSP, setMetadadosMSP] = useState<{ statusDate: string | null; statusDateIso: string | null; calendarioJson: string | null } | null>(null);
+  const [metadadosMSP, setMetadadosMSP] = useState<{ statusDate: string | null; statusDateIso: string | null; calendarioJson: string | null; projetoStart: string | null; projetoFinish: string | null } | null>(null);
 
   const importarComModoMutation = trpc.planejamento.importarComModo.useMutation({
     onSuccess: async (res: any) => {
@@ -506,13 +524,15 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   // import bem-sucedido (substituir/mesclar/apenas_predecessora).
   async function gravarMetadadosMSP() {
     if (!metadadosMSP) return;
-    if (!metadadosMSP.statusDate && !metadadosMSP.calendarioJson && !metadadosMSP.statusDateIso) return;
+    if (!metadadosMSP.statusDate && !metadadosMSP.calendarioJson && !metadadosMSP.statusDateIso && !metadadosMSP.projetoStart && !metadadosMSP.projetoFinish) return;
     try {
       await salvarMetadadosMSPMutation.mutateAsync({
         projetoId,
         statusDate:     metadadosMSP.statusDate,
         statusDateIso:  metadadosMSP.statusDateIso,
         calendarioJson: metadadosMSP.calendarioJson,
+        projetoStart:   metadadosMSP.projetoStart,
+        projetoFinish:  metadadosMSP.projetoFinish,
       });
       utils.planejamento.getProjetoById.invalidate();
       utils.planejamento.getDataCorte.invalidate();
@@ -546,7 +566,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
         // Rev. 1642 — captura também StatusDate + Calendars pra paridade MS Project.
         const full = parseMSProjectFull(text);
         parsed = full.tarefas;
-        setMetadadosMSP({ statusDate: full.statusDate, statusDateIso: full.statusDateIso, calendarioJson: full.calendarioJson });
+        setMetadadosMSP({ statusDate: full.statusDate, statusDateIso: full.statusDateIso, calendarioJson: full.calendarioJson, projetoStart: full.projetoStart, projetoFinish: full.projetoFinish });
       } else if (ext === "xlsx" || ext === "xls" || ext === "xlsm") {
         const buf = await file.arrayBuffer();
         parsed = await parseMSProjectXLSX(buf);

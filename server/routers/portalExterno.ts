@@ -2110,8 +2110,19 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         const peso = pesoDe(a);
         somaRealizado += (ultimoAvancoPorAtiv[a.id] ?? 0) * (peso / pesoTotal);
       }
-      const pctTotalPrevisto = (isFinite(projIni) && isFinite(projFim) && projFim > projIni)
-        ? +Math.min(100, fracaoDecorridaMs(projIni, refMs, projFim, calMSP) * 100).toFixed(2)
+      // Rev. 1646.2 — prioridade ABSOLUTA: usa as datas oficiais da raiz do MSP
+      // (gravadas em projeto.dataInicio + projeto.dataTerminoContratual no import).
+      // Fallback para min/max das folhas só se não foram importadas. Garante
+      // paridade Texto10 do MSP (envelope = root oficial, não envelope de folhas).
+      const projIniIsoOfic = (projeto as any)?.dataInicio as string | null | undefined;
+      const projFimIsoOfic = (projeto as any)?.dataTerminoContratual as string | null | undefined;
+      let projIniEff = projIni, projFimEff = projFim;
+      if (projIniIsoOfic && projFimIsoOfic) {
+        projIniEff = new Date(projIniIsoOfic + "T12:00:00Z").getTime();
+        projFimEff = new Date(projFimIsoOfic + "T12:00:00Z").getTime();
+      }
+      const pctTotalPrevisto = (isFinite(projIniEff) && isFinite(projFimEff) && projFimEff > projIniEff)
+        ? +Math.min(100, fracaoDecorridaMs(projIniEff, refMs, projFimEff, calMSP) * 100).toFixed(2)
         : 0;
       const pctTotalRealizado = +Math.min(100, somaRealizado).toFixed(2);
       const desvio = +(pctTotalRealizado - pctTotalPrevisto).toFixed(2);

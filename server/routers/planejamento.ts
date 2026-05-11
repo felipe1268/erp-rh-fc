@@ -1499,6 +1499,11 @@ export const planejamentoRouter = router({
       // Rev. 1643 — ISO completo do StatusDate (com hora) para precisão MSP.
       statusDateIso:  z.string().nullish(),
       calendarioJson: z.string().nullish(),
+      // Rev. 1646.2 — Start/Finish da linha-resumo raiz (UID=0) do MSP.
+      // Usados como base do "envelope" do projeto no cálculo de %PREVISTO
+      // (paridade Texto10), em vez de min/max das folhas que pode inflar o total.
+      projetoStart:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+      projetoFinish:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -1523,9 +1528,13 @@ export const planejamentoRouter = router({
       if (input.calendarioJson !== undefined && input.calendarioJson !== null) {
         patch.calendarioJson = input.calendarioJson;
       }
+      // Rev. 1646.2 — sobrescreve dataInicio + dataTerminoContratual com os
+      // valores da linha-resumo raiz do MSP. Cópia plena (sem inventar).
+      if (input.projetoStart)  patch.dataInicio            = input.projetoStart  as any;
+      if (input.projetoFinish) patch.dataTerminoContratual = input.projetoFinish as any;
       await db.update(planejamentoProjetos).set(patch)
         .where(eq(planejamentoProjetos.id, input.projetoId));
-      return { success: true, gravou: { statusDate: input.statusDate, statusDateIso: input.statusDateIso, calendar: !!input.calendarioJson } };
+      return { success: true, gravou: { statusDate: input.statusDate, statusDateIso: input.statusDateIso, calendar: !!input.calendarioJson, projetoStart: input.projetoStart, projetoFinish: input.projetoFinish } };
     }),
 
   consolidarRefis: protectedProcedure
