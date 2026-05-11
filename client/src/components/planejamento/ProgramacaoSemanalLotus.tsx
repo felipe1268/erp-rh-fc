@@ -42,7 +42,9 @@ interface Props {
 // de cada atividade (corCelula). Se o cronograma for atualizado e passar
 // a ter atividade em fim de semana, a célula passa a pintar sozinha.
 const DIAS_SEMANA = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"];
-const DIAS_ABREV = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
+// Indexado por Date.getDay() (0=dom, 1=seg, ..., 6=sáb).
+const DIAS_ABREV = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+function abrevDia(d: Date): string { return DIAS_ABREV[d.getDay()]; }
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 function fmtBR(s?: string | null) {
@@ -213,7 +215,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         "Previsto Início", "Previsto Fim",
         "Real Início", "Real Fim",
         "RESPONSÁVEL",
-        ...dias.map((d, i) => `${DIAS_ABREV[i]} ${fmtDiaMes(d)}`),
+        ...dias.map((d) => `${abrevDia(d)} ${fmtDiaMes(d)}`),
         "Status",
       ];
       const hr = ws.getRow(headerRow);
@@ -408,7 +410,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                 <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-16">Fim</th>
                 {dias.map((d, i) => (
                   <th key={i} className="border border-slate-300 px-0.5 py-1 text-center font-semibold w-[60px]">
-                    <div className="text-[9px]">{DIAS_ABREV[i]}</div>
+                    <div className="text-[9px]">{abrevDia(d)}</div>
                     <div className="text-[9px] text-slate-500">{fmtDiaMes(d)}</div>
                   </th>
                 ))}
