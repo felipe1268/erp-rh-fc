@@ -59,6 +59,7 @@ function formatDate(d: string | null | undefined) {
 // ============ PAINEL DE INTEGRAÇÕES (Componente) ============
 function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; onClickEmployee: (id: number) => void }) {
   const [clienteFiltro, setClienteFiltro] = useState("todos");
+  const [funcaoFiltro, setFuncaoFiltro] = useState("todos");
   const [tipoFiltro, setTipoFiltro] = useState("todos");
   const [statusFiltro, setStatusFiltro] = useState("todos");
   const [searchVal, setSearchVal] = useState("");
@@ -110,16 +111,28 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
     onError: (e) => toast.error(e.message || "Erro ao atualizar"),
   });
 
+  // Lista de funções únicas presentes nas integrações (para popular o filtro).
+  const funcoesDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    (integracoes as any[]).forEach((i: any) => { if (i.funcao) set.add(i.funcao); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [integracoes]);
+
   const filtrados = useMemo(() => {
     let list = integracoes as any[];
     if (tipoFiltro !== "todos") list = list.filter(i => i.tipo === tipoFiltro);
     if (statusFiltro !== "todos") list = list.filter(i => i.statusCalc === statusFiltro);
+    if (funcaoFiltro !== "todos") list = list.filter(i => (i.funcao || "") === funcaoFiltro);
     if (searchVal) {
       const s = searchVal.toLowerCase();
-      list = list.filter(i => (i.nomeCompleto || "").toLowerCase().includes(s) || (i.clienteNome || "").toLowerCase().includes(s));
+      list = list.filter(i =>
+        (i.nomeCompleto || "").toLowerCase().includes(s) ||
+        (i.clienteNome || "").toLowerCase().includes(s) ||
+        (i.funcao || "").toLowerCase().includes(s)
+      );
     }
     return list;
-  }, [integracoes, tipoFiltro, statusFiltro, searchVal]);
+  }, [integracoes, tipoFiltro, statusFiltro, funcaoFiltro, searchVal]);
 
   const kpiCards = [
     { label: "Total", value: kpis?.total ?? 0, color: "slate" },
@@ -156,6 +169,13 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
           <SelectContent>
             <SelectItem value="todos">Todos os clientes</SelectItem>
             {(clientesComInt as any[]).map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.razaoSocial}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={funcaoFiltro} onValueChange={setFuncaoFiltro}>
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Todas as funções" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas as funções</SelectItem>
+            {funcoesDisponiveis.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={tipoFiltro} onValueChange={setTipoFiltro}>
@@ -217,9 +237,16 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
                     return (
                       <tr key={i.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                         <td className="p-3">
-                          <button onClick={() => onClickEmployee(i.employeeId)} className="font-medium text-left hover:text-indigo-600 hover:underline text-sm">
-                            {i.nomeCompleto || "-"}
-                          </button>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button onClick={() => onClickEmployee(i.employeeId)} className="font-medium text-left hover:text-indigo-600 hover:underline text-sm">
+                              {i.nomeCompleto || "-"}
+                            </button>
+                            {i.funcao && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                {i.funcao}
+                              </span>
+                            )}
+                          </div>
                           {i.matricula && <p className="text-[10px] text-muted-foreground">{i.matricula}</p>}
                         </td>
                         <td className="p-3">
