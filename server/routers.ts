@@ -1883,25 +1883,45 @@ export const appRouter = router({
       const { users } = await import("../drizzle/schema");
       const { eq, or, sql } = await import("drizzle-orm");
       const loginInput = input.username.trim();
-      // Buscar por username OU email (case-insensitive)
+      // Rev. 1661 — Busca case-insensitive E accent-insensitive (Myriélle = myrielle)
+      // Normaliza acentos no input em JS e no banco via translate() (evita exigir extensão unaccent)
+      const ACENTOS_FROM = 'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇñÑ';
+      const ACENTOS_TO   = 'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUCnN';
+      const stripAccents = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const loginNorm = stripAccents(loginInput).toLowerCase();
+      // Buscar por username OU email (case-insensitive + accent-insensitive)
       const results = await db.select().from(users).where(
         or(
-          sql`LOWER(${users.username}) = LOWER(${loginInput})`,
-          sql`LOWER(${users.email}) = LOWER(${loginInput})`
+          sql`LOWER(translate(COALESCE(${users.username},''), ${ACENTOS_FROM}, ${ACENTOS_TO})) = ${loginNorm}`,
+          sql`LOWER(translate(COALESCE(${users.email},''),    ${ACENTOS_FROM}, ${ACENTOS_TO})) = ${loginNorm}`
         )
       );
-      // Filtrar usuários deletados
+      // Filtrar usuários deletados e sem senha
       const activeResults = results.filter(u => !u.deletedAt);
-      // Priorizar usuário com loginMethod = 'local' e senha definida
-      let user = activeResults.find(u => u.loginMethod === 'local' && u.password) || activeResults.find(u => u.password) || activeResults[0];
-      if (!user || !user.password) {
-        console.error(`[Login] Falha: '${loginInput}' - encontrados: ${results.length}, ativos: ${activeResults.length}, com senha: ${activeResults.filter(u => u.password).length}`);
+      const candidatos = activeResults.filter(u => !!u.password);
+      if (candidatos.length === 0) {
+        console.error(`[Login] Falha: '${loginInput}' - encontrados: ${results.length}, ativos: ${activeResults.length}, com senha: 0`);
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário ou senha inválidos" });
       }
-      const valid = bcrypt.compareSync(input.password, user.password);
-      if (!valid) {
-        console.error(`[Login] Senha inválida para: '${loginInput}' (userId: ${user.id})`);
+      // Rev. 1661 — Mitigação de colisão por normalização de acentos:
+      // 1) Prioriza match EXATO (case+acento idêntico) em username ou email
+      // 2) Senão, prioriza loginMethod='local'
+      // 3) Senão, valida a senha contra TODOS os candidatos — autentica APENAS quem bater
+      //    (impede login no usuário errado quando há colisão myrielle/myriélle)
+      const exato = candidatos.find(u => u.username === loginInput || u.email === loginInput);
+      const ordenados = exato
+        ? [exato, ...candidatos.filter(u => u.id !== exato.id)]
+        : [...candidatos.filter(u => u.loginMethod === 'local'), ...candidatos.filter(u => u.loginMethod !== 'local')];
+      let user: typeof candidatos[number] | undefined;
+      for (const cand of ordenados) {
+        if (bcrypt.compareSync(input.password, cand.password!)) { user = cand; break; }
+      }
+      if (!user) {
+        console.error(`[Login] Senha inválida para: '${loginInput}' (candidatos: ${candidatos.length}, ids: ${candidatos.map(c => c.id).join(',')})`);
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário ou senha inválidos" });
+      }
+      if (candidatos.length > 1) {
+        console.warn(`[Login] Colisão de identificador normalizado: '${loginInput}' bateu em ${candidatos.length} contas — autenticado userId=${user.id} via senha exata`);
       }
       // Usar o SDK para gerar o token no formato correto (openId, appId, name)
       const { sdk } = await import("./_core/sdk");
