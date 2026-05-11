@@ -18,6 +18,10 @@
 export interface CalendarioMSProject {
   weekDays: boolean[];                        // 7 elementos, índice = getDay() (0=dom)
   exceptions?: Array<{ from: string; to: string; working: boolean }>;
+  // Rev. 1644 — parâmetros raiz do XML MSP (regra de ouro: leitura plena).
+  defaultStartTime?:  string;                 // "07:00:00"
+  defaultFinishTime?: string;                 // "17:00:00"
+  minutesPerDay?:     number;                 // 540 = 9h (não confundir com janela bruta)
 }
 
 export function parseCalendarioJson(raw: unknown): CalendarioMSProject | null {
@@ -26,10 +30,21 @@ export function parseCalendarioJson(raw: unknown): CalendarioMSProject | null {
     const obj = typeof raw === "string" ? JSON.parse(raw) : raw;
     if (!obj || !Array.isArray(obj.weekDays) || obj.weekDays.length !== 7) return null;
     return {
-      weekDays:   obj.weekDays.map((v: any) => !!v),
-      exceptions: Array.isArray(obj.exceptions) ? obj.exceptions : [],
+      weekDays:          obj.weekDays.map((v: any) => !!v),
+      exceptions:        Array.isArray(obj.exceptions) ? obj.exceptions : [],
+      defaultStartTime:  typeof obj.defaultStartTime  === "string" ? obj.defaultStartTime  : undefined,
+      defaultFinishTime: typeof obj.defaultFinishTime === "string" ? obj.defaultFinishTime : undefined,
+      minutesPerDay:     typeof obj.minutesPerDay     === "number" ? obj.minutesPerDay     : undefined,
     };
   } catch { return null; }
+}
+
+/** Hora "HH:mm[:ss]" → decimal (ex.: "07:30:00" → 7.5). */
+function horaParaDecimal(s: string | undefined, fallback: number): number {
+  if (!s) return fallback;
+  const m = s.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return fallback;
+  return parseInt(m[1], 10) + parseInt(m[2], 10) / 60;
 }
 
 const D = (s: string) => new Date(s + "T12:00:00Z");
@@ -119,20 +134,17 @@ export function fracaoDecorrida(
  * (mantém compat). Quando o cutoff é só data (sem hora), trata como fim
  * do dia (23:59) — comportamento equivalente ao `fracaoDecorrida`.
  */
-const DIA_INI_H = 8;            // 08:00 início expediente padrão MSP
-const DIA_FIM_H = 17;           // 17:00 fim expediente padrão MSP
-const ALMOCO_INI = 12;          // 12:00-13:00 hora de almoço
-const ALMOCO_FIM = 13;
-const HORAS_DIA  = 8;           // jornada útil (9h - 1h almoço)
-
-function fracaoDoDia(horaDecimal: number): number {
-  if (horaDecimal <= DIA_INI_H) return 0;
-  if (horaDecimal >= DIA_FIM_H) return 1;
-  let trabalhadas: number;
-  if (horaDecimal <= ALMOCO_INI)      trabalhadas = horaDecimal - DIA_INI_H;
-  else if (horaDecimal <= ALMOCO_FIM) trabalhadas = ALMOCO_INI - DIA_INI_H;
-  else                                trabalhadas = (ALMOCO_INI - DIA_INI_H) + (horaDecimal - ALMOCO_FIM);
-  return Math.max(0, Math.min(1, trabalhadas / HORAS_DIA));
+/**
+ * Fração de UM dia útil até `horaDecimal`, modelando a jornada de trabalho
+ * como linear entre `startH` e `finishH` (regra de ouro MSP: a janela do
+ * dia útil vem do XML — `<DefaultStartTime>` e `<DefaultFinishTime>`).
+ * Antes do início → 0. Depois do fim → 1. No meio → proporcional.
+ */
+function fracaoDoDia(horaDecimal: number, startH: number, finishH: number): number {
+  if (finishH <= startH) return 1;
+  if (horaDecimal <= startH)  return 0;
+  if (horaDecimal >= finishH) return 1;
+  return Math.max(0, Math.min(1, (horaDecimal - startH) / (finishH - startH)));
 }
 
 export function fracaoDecorridaComHora(
@@ -143,18 +155,20 @@ export function fracaoDecorridaComHora(
 ): number {
   if (!iniIso || !fimIso || !refIsoComHora) return 0;
   const refData = refIsoComHora.slice(0, 10);
-  // Hora opcional: se só veio data, trata como fim de dia (23:59).
   const m = refIsoComHora.match(/T(\d{2}):(\d{2})/);
   const horaDecimal = m ? (parseInt(m[1], 10) + parseInt(m[2], 10) / 60) : 23.99;
+  // Janela útil do dia: do XML do MSP se houver; senão 08:00-17:00.
+  const startH  = horaParaDecimal(cal?.defaultStartTime,  8);
+  const finishH = horaParaDecimal(cal?.defaultFinishTime, 17);
   if (refData < iniIso) return 0;
   if (refData > fimIso) return 1;
-  if (refData === fimIso && horaDecimal >= DIA_FIM_H) return 1;
+  if (refData === fimIso && horaDecimal >= finishH) return 1;
   if (iniIso === fimIso) return 1;
 
   if (!cal) {
     // Sem calendário — linear por timestamp ISO+hora aproximada.
-    const iniMs = D(iniIso).getTime() + DIA_INI_H * 3600_000;
-    const fimMs = D(fimIso).getTime() + DIA_FIM_H * 3600_000;
+    const iniMs = D(iniIso).getTime() + startH  * 3600_000;
+    const fimMs = D(fimIso).getTime() + finishH * 3600_000;
     const refMs = D(refData).getTime() + horaDecimal * 3600_000;
     if (fimMs <= iniMs) return 1;
     return Math.max(0, Math.min(1, (refMs - iniMs) / (fimMs - iniMs)));
@@ -162,15 +176,33 @@ export function fracaoDecorridaComHora(
 
   const totalDias = diasUteisEntre(iniIso, fimIso, cal);
   if (totalDias <= 0) return 0;
-  // Dias completos: do início até o DIA ANTERIOR ao cutoff.
   const cur = D(refData);
   cur.setUTCDate(cur.getUTCDate() - 1);
   const fimDiasCompletosIso = toIso(cur);
   const diasCompletos = fimDiasCompletosIso < iniIso ? 0 : diasUteisEntre(iniIso, fimDiasCompletosIso, cal);
-  // Dia do cutoff: conta como fração SE for dia útil, senão zero.
-  const fracDia = ehDiaUtil(refData, cal) ? fracaoDoDia(horaDecimal) : 0;
+  const fracDia = ehDiaUtil(refData, cal) ? fracaoDoDia(horaDecimal, startH, finishH) : 0;
   const decorrido = diasCompletos + fracDia;
   return Math.max(0, Math.min(1, decorrido / totalDias));
+}
+
+/**
+ * Rev. 1644 — Deriva o cutoff ISO completo a partir do que está disponível
+ * no banco. Prioridade: (1) `dataCorteIso` gravado do XML; (2) `dataCorteAtual`
+ * (date) + `defaultFinishTime` do calendário (ex.: "2026-05-08" + "17:00:00"
+ * → "2026-05-08T17:00:00"); (3) null. Permite que o per-row mostre Previsto%
+ * MSP-compatível mesmo em projetos importados antes da Rev. 1643 (sem hora).
+ */
+export function derivarCutoffIso(
+  dataCorteIso: string | null | undefined,
+  dataCorteAtual: string | null | undefined,
+  cal: CalendarioMSProject | null,
+): string | null {
+  if (dataCorteIso) return dataCorteIso;
+  if (!dataCorteAtual) return null;
+  const dataIso = String(dataCorteAtual).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dataIso)) return null;
+  const hora = (cal?.defaultFinishTime || "17:00:00").slice(0, 8);
+  return `${dataIso}T${hora.length === 5 ? hora + ":00" : hora}`;
 }
 
 /** Versão milissegundo-aware para os call sites antigos que já tinham `Date.getTime()`. */

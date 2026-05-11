@@ -161,7 +161,10 @@ export function parseMSProjectStatusDateIso(doc: Document): string | null {
   return m ? m[1] : null;
 }
 
-/** Versão completa: tarefas + metadados (calendário + StatusDate). */
+/** Versão completa: tarefas + metadados (calendário + StatusDate).
+ *  Rev. 1644 — incluímos no calendarioJson os parâmetros raiz do XML do MSP
+ *  (`DefaultStartTime`, `DefaultFinishTime`, `MinutesPerDay`) usados pela
+ *  fórmula `ProjDateDiff` — regra de ouro: leitura plena do MS Project. */
 export function parseMSProjectFull(text: string): {
   tarefas:        TarefaImportada[];
   statusDate:     string | null;
@@ -175,7 +178,22 @@ export function parseMSProjectFull(text: string): {
   const statusDate    = parseMSProjectStatusDate(doc);
   const statusDateIso = parseMSProjectStatusDateIso(doc);
   const cal           = parseMSProjectCalendar(doc);
-  const calendarioJson = cal ? JSON.stringify(cal) : null;
+  // Usa querySelector simples (igual ao restante do parser que já lê StatusDate,
+  // Calendars, etc. com sucesso). O combinator `Project >` falhava com namespace
+  // default do MSP. querySelector retorna a primeira ocorrência em ordem de
+  // documento — `<DefaultStartTime>` aparece no nó raiz `<Project>` antes de
+  // qualquer ocorrência aninhada em calendários.
+  const defaultStartTime  = doc.querySelector("DefaultStartTime")?.textContent?.trim() || null;
+  const defaultFinishTime = doc.querySelector("DefaultFinishTime")?.textContent?.trim() || null;
+  const minutesPerDayStr  = doc.querySelector("MinutesPerDay")?.textContent?.trim();
+  const minutesPerDay     = minutesPerDayStr ? parseInt(minutesPerDayStr, 10) : null;
+  const calComConfig = cal ? {
+    ...cal,
+    defaultStartTime:  defaultStartTime  || "08:00:00",
+    defaultFinishTime: defaultFinishTime || "17:00:00",
+    minutesPerDay:     (Number.isFinite(minutesPerDay as number) && (minutesPerDay as number) > 0) ? minutesPerDay : 480,
+  } : null;
+  const calendarioJson = calComConfig ? JSON.stringify(calComConfig) : null;
   return { tarefas, statusDate, statusDateIso, calendarioJson };
 }
 

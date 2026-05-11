@@ -1420,8 +1420,11 @@ export const planejamentoRouter = router({
         dataCorteAtualizadaPor: planejamentoProjetos.dataCorteAtualizadaPor,
       }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
       if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
-      // Tenant isolation (replit.md: "All data operations consistently filter by companyId")
-      if (String(proj.companyId) !== String(ctx.user.companyId)) {
+      // Tenant isolation: admin/admin_master bypass (consolidação multi-empresa).
+      // Para usuários comuns, exige mesma company. Padrão herdado de `reativarRevisao`.
+      const isAdminGet = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdminGet && String(proj.companyId) !== String(ctx.user.companyId)) {
+        console.warn(`[getDataCorte] FORBIDDEN projetoId=${input.projetoId} projCompany=${proj.companyId} userCompany=${ctx.user.companyId} role=${ctx.user.role}`);
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
       }
       const { ultimaQuintaAte, proximaQuinta, cutoffEfetivo, todayBR } = await import("../../shared/dataCorte");
@@ -1452,7 +1455,9 @@ export const planejamentoRouter = router({
       const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
         .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
       if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
-      if (String(proj.companyId) !== String(ctx.user.companyId)) {
+      const isAdminFech = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdminFech && String(proj.companyId) !== String(ctx.user.companyId)) {
+        console.warn(`[fecharSemana] FORBIDDEN projetoId=${input.projetoId} projCompany=${proj.companyId} userCompany=${ctx.user.companyId} role=${ctx.user.role}`);
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
       }
       const { ultimaQuintaAte, ehQuinta, todayBR } = await import("../../shared/dataCorte");
@@ -1500,7 +1505,9 @@ export const planejamentoRouter = router({
       const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
         .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
       if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
-      if (String(proj.companyId) !== String(ctx.user.companyId)) {
+      const isAdminMet = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdminMet && String(proj.companyId) !== String(ctx.user.companyId)) {
+        console.warn(`[salvarMetadadosMSProject] FORBIDDEN projetoId=${input.projetoId} projCompany=${proj.companyId} userCompany=${ctx.user.companyId} role=${ctx.user.role}`);
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
       }
       const quem = ctx.user.name || ctx.user.email || "—";
