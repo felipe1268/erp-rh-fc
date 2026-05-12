@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, createAuditLog } from "../db";
 import { importAtividadesCronogramaToFinancial } from "../services/financialIntegrationBridge";
+import { parseCalendarioJson, fracaoDecorridaMs } from "../../shared/diasUteis";
 import { eq, and, desc, asc, sql, isNotNull, inArray, or, ilike, lt, ne, gt } from "drizzle-orm";
 import {
   planejamentoProjetos,
@@ -2056,7 +2057,11 @@ export const planejamentoRouter = router({
             eq(planejamentoAvancos.revisaoId, input.revisaoId),
           ))
           .orderBy(asc(planejamentoAvancos.semana)),
-        db.select({ calendarioJson: planejamentoProjetos.calendarioJson })
+        db.select({
+          calendarioJson: planejamentoProjetos.calendarioJson,
+          dataInicio: planejamentoProjetos.dataInicio,
+          dataTerminoContratual: planejamentoProjetos.dataTerminoContratual,
+        })
           .from(planejamentoProjetos)
           .where(eq(planejamentoProjetos.id, input.projetoId))
           .limit(1),
@@ -2068,6 +2073,11 @@ export const planejamentoRouter = router({
       let calMspRoot: any = null;
       try { calMspRoot = projRow[0]?.calendarioJson ? JSON.parse(projRow[0].calendarioJson) : null; }
       catch { calMspRoot = null; }
+      // Rev. 1689 — Calendário MSP tipado (mesmo parser usado pelo client em
+      // pvMacro) para gerar a Baseline via envelope (du(início→ref)/du(envelope)).
+      const calMSP = parseCalendarioJson(projRow[0]?.calendarioJson ?? null);
+      const projIniIso = projRow[0]?.dataInicio ? toDateStr(projRow[0].dataInicio) : null;
+      const projFimIso = projRow[0]?.dataTerminoContratual ? toDateStr(projRow[0].dataTerminoContratual) : null;
 
       function gerarCurvaPlanejada(ativs: typeof atividades) {
         if (!ativs.length) return [];
@@ -2128,12 +2138,69 @@ export const planejamentoRouter = router({
         return pontos;
       }
 
+      // Rev. 1689 — Curva Planejada via ENVELOPE (pvMacro): a Baseline em
+      // qualquer semana W passa a ser `du(início_projeto → fim_da_semana_W) /
+      // du(envelope_projeto) × 100` — EXATAMENTE a fórmula do card "Previsto"
+      // (Rev. 1646.6 `pvMacro` em `PlanejamentoDetalhe.tsx`). Antes, a Curva S
+      // distribuía o peso de cada atividade igualmente por semanas-calendário,
+      // o que fazia a Baseline "abrir" muito rápido e divergir do card (ex.:
+      // REVTE-CIVIL S3 = 4,5% na curva vs 1,41% no card). Com o envelope ambos
+      // batem: visual e indicador agora contam a MESMA história. Quando faltar
+      // calendário MSP ou datas do projeto, cai no algoritmo legado por atividade.
+      function gerarCurvaMacro(): { semana: string; acumulado: number }[] {
+        // Rev. 1689 — Paridade EXATA com `pvMacro` do client: o helper só roda
+        // quando há calMSP (dias úteis MSP). Sem isso o client cai em outra
+        // rota de cálculo e poderíamos reintroduzir divergência server×client.
+        if (!projIniIso || !projFimIso || !calMSP) return [];
+        const projIniMs = new Date(projIniIso + "T12:00:00Z").getTime();
+        const projFimMs = new Date(projFimIso + "T12:00:00Z").getTime();
+        if (!Number.isFinite(projIniMs) || !Number.isFinite(projFimMs) || projFimMs <= projIniMs) return [];
+        const startMonday = toMondayStr(new Date(projIniMs));
+        const endMonday   = toMondayStr(new Date(projFimMs));
+        const semZero = toMondayStr(new Date(new Date(startMonday + "T12:00:00Z").getTime() - 7 * 86_400_000));
+        const pontos: { semana: string; acumulado: number }[] = [{ semana: semZero, acumulado: 0 }];
+        let cur = startMonday;
+        // Limite data-driven: nº de semanas do envelope + folga de 8 semanas.
+        // Suporta projetos arbitrariamente longos sem truncar pontos intermediários.
+        const semanasEnvelope = Math.ceil((projFimMs - projIniMs) / (7 * 86_400_000)) + 8;
+        const maxIters = Math.max(8, semanasEnvelope);
+        for (let i = 0; i < maxIters && cur <= endMonday; i++) {
+          // Fim da semana = domingo (Monday + 6d). Usa snapshot exato (Texto11)
+          // quando a Sun bate com StatusDate gravado no MSP — mesma regra do
+          // pvMacro do client.
+          const sunMs = new Date(cur + "T12:00:00Z").getTime() + 6 * 86_400_000;
+          const refMs = Math.min(sunMs, projFimMs);
+          const sunIso = new Date(refMs).toISOString().slice(0, 10);
+          let pct: number;
+          const envOk = !calMSP?.envelopeStartSnapshot || !calMSP?.envelopeFinishSnapshot
+            || (projIniIso === calMSP.envelopeStartSnapshot && projFimIso === calMSP.envelopeFinishSnapshot);
+          if (calMSP?.previstoMspSnapshot != null && calMSP?.statusDateSnapshot && sunIso === calMSP.statusDateSnapshot && envOk) {
+            pct = Number(calMSP.previstoMspSnapshot);
+          } else {
+            const frac = fracaoDecorridaMs(projIniMs, refMs, projFimMs, calMSP);
+            pct = Math.min(100, Math.max(0, frac * 100));
+          }
+          pontos.push({ semana: cur, acumulado: +pct.toFixed(2) });
+          cur = toMondayStr(new Date(new Date(cur + "T12:00:00Z").getTime() + 7 * 86_400_000));
+        }
+        // Garante ponto final EXATO em 100% no fim do envelope (fim da última
+        // semana pode ficar antes de projFim se a obra termina no meio da semana).
+        if (pontos.length > 0 && pontos[pontos.length - 1].acumulado < 100) {
+          pontos.push({ semana: endMonday, acumulado: 100 });
+        }
+        return pontos;
+      }
+      const curvaMacro = gerarCurvaMacro();
       // Baseline: sempre gerada (é o plano original imutável — Rev 00)
-      const curvaBaseline = gerarCurvaPlanejada(baseline);
+      const curvaBaseline = curvaMacro.length > 0 ? curvaMacro : gerarCurvaPlanejada(baseline);
       // "Revisão Atual" só faz sentido quando é DIFERENTE da baseline;
       // se há só uma revisão, a curva planejada é idêntica e mostramos apenas a baseline (azul).
+      // Quando o envelope macro está disponível e válido, Revisão Atual = Baseline
+      // (mesma fórmula, mesmo envelope). Para revisões com envelope diferente, o
+      // pvMacro continua refletindo o envelope ATUAL contratado — Baseline e Atual
+      // batem por construção. Mantemos o fallback per-activity caso o macro falhe.
       const curvaPlanejada = input.baselineId !== input.revisaoId
-        ? gerarCurvaPlanejada(atividades)
+        ? (curvaMacro.length > 0 ? [] : gerarCurvaPlanejada(atividades))
         : [];
 
       // Curva realizada — acumulado ponderado por atividade
