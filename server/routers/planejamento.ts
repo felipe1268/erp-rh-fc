@@ -707,7 +707,7 @@ export const planejamentoRouter = router({
       //   • Real Fim    = explícito ?? (max acumulado ≥ 100 ? menor(dataFim plan, semana do 100%) : null)
       // O explícito (`dataInicioReal/FimReal`) sempre prevalece.
       const ids = rows.map(r => r.id);
-      const avMap = new Map<number, { primeira: string | null; concluiuEm: string | null }>();
+      const avMap = new Map<number, { primeira: string | null; concluiuEm: string | null; ultima: string | null }>();
       if (ids.length > 0) {
         const avs = await db.select({
           atividadeId:         planejamentoAvancos.atividadeId,
@@ -721,9 +721,13 @@ export const planejamentoRouter = router({
         for (const a of avs) {
           const acum = parseFloat(String(a.percentualAcumulado ?? "0")) || 0;
           const sem  = parseFloat(String(a.percentualSemanal   ?? "0")) || 0;
-          const cur  = avMap.get(a.atividadeId) ?? { primeira: null, concluiuEm: null };
-          if (cur.primeira == null && (acum > 0 || sem > 0)) cur.primeira = toDateStr(a.semana as any);
-          if (cur.concluiuEm == null && acum >= 100)         cur.concluiuEm = toDateStr(a.semana as any);
+          const cur  = avMap.get(a.atividadeId) ?? { primeira: null, concluiuEm: null, ultima: null };
+          const semISO = toDateStr(a.semana as any);
+          if (acum > 0 || sem > 0) {
+            if (cur.primeira == null) cur.primeira = semISO;
+            cur.ultima = semISO; // varrendo em ordem ASC → ultima sobe a cada iteração
+          }
+          if (cur.concluiuEm == null && acum >= 100) cur.concluiuEm = semISO;
           avMap.set(a.atividadeId, cur);
         }
       }
@@ -736,12 +740,18 @@ export const planejamentoRouter = router({
         const av = avMap.get(r.id);
         const realIniDigitado = r.dataInicioReal ? toDateStr(r.dataInicioReal) : null;
         const realFimDigitado = r.dataFimReal    ? toDateStr(r.dataFimReal)    : null;
+        // Real Fim derivado: prioriza semana do 100%; senão, usa o cutoff da
+        // ÚLTIMA semana com avanço — atividade em andamento mostra "até onde
+        // a obra chegou" (sempre capeada pela data fim planejada).
+        const realFimDerivado = av?.concluiuEm
+          ? minISO(fimPlan, av.concluiuEm)
+          : (av?.ultima ? minISO(fimPlan, av.ultima) : null);
         return {
           ...r,
           dataInicio:       inicioPlan,
           dataFim:          fimPlan,
-          dataInicioReal:   realIniDigitado ?? (av?.primeira   ? inicioPlan : null),
-          dataFimReal:      realFimDigitado ?? (av?.concluiuEm ? minISO(fimPlan, av.concluiuEm) : null),
+          dataInicioReal:   realIniDigitado ?? (av?.primeira ? inicioPlan : null),
+          dataFimReal:      realFimDigitado ?? realFimDerivado,
           responsavelLotus: (r as any).responsavelLotus ?? null,
         };
       });
