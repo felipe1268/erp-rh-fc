@@ -5294,6 +5294,15 @@ export const planejamentoAtividades = pgTable("planejamento_atividades", {
   // como alerta e excluída dos KPIs de PPC/aderência (Last Planner).
   isExterna:            boolean("is_externa").default(false),
   externaResponsavel:   varchar("externa_responsavel", { length: 200 }),
+  // Rev. 1670 — Snapshot do %PREVISTO (Texto10) e %REALIZADO AUX (Texto7) de
+  // CADA atividade, lidos diretamente do XML do MS Project no momento do import.
+  // Fonte: ExtendedAttribute FieldID 188743750 (Texto10, %PREVISTO 4 casas) e
+  // 188743747 (Texto7, %Reali AUX). Permite paridade 100% Project × ERP sem
+  // recalcular ProjDateDiff em JS — Curva S, Avanço Semanal e Programação
+  // Semanal lerão estes campos quando disponíveis (fallback p/ cálculo
+  // dinâmico nas atividades sem snapshot, ex.: cronograma legado).
+  previstoMspPct:       numeric("previsto_msp_pct", { precision: 8, scale: 4 }),
+  realizadoMspPct:      numeric("realizado_msp_pct", { precision: 8, scale: 4 }),
   disabled:             boolean("disabled").default(false),
   criadoEm:             timestamp("criado_em").defaultNow(),
 });

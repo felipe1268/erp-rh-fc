@@ -913,6 +913,11 @@ export const planejamentoRouter = router({
         externaResponsavel:  z.string().nullish(),
         disabled:            z.boolean().optional(),
         percentConcluido:    z.preprocess(v => v == null ? 0 : Number(v), z.number().min(0).max(100)).optional(),
+        // Rev. 1670 — Snapshot %Previsto (Texto10) e %Realizado AUX (Texto7)
+        // por atividade, lidos do XML MSP no import. Quando ausentes, ficam
+        // null e o ERP cai no fallback dinâmico.
+        previstoMspPct:      z.preprocess(v => v == null ? null : Number(v), z.number().min(0).max(100).nullish()),
+        realizadoMspPct:     z.preprocess(v => v == null ? null : Number(v), z.number().min(0).max(100).nullish()),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -944,6 +949,9 @@ export const planejamentoRouter = router({
           isExterna:           a.isExterna ?? false,
           externaResponsavel:  a.externaResponsavel ?? null,
           disabled:            isDisabled,
+          // Rev. 1670 — snapshot por atividade (string p/ Drizzle numeric)
+          previstoMspPct:      a.previstoMspPct == null ? null : String(Number(a.previstoMspPct).toFixed(4)),
+          realizadoMspPct:     a.realizadoMspPct == null ? null : String(Number(a.realizadoMspPct).toFixed(4)),
         };
       });
 
@@ -1020,6 +1028,8 @@ export const planejamentoRouter = router({
             const esc = (v: any) => v == null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
             const escBool = (v: any) => v ? "TRUE" : "FALSE";
             const escNum = (v: any) => v == null ? "0" : String(Number(v) || 0);
+            // Rev. 1670 — numeric nullable: NULL preserva o "sem snapshot" (não vira 0)
+            const escNumNull = (v: any) => v == null ? "NULL" : String(Number(v) || 0);
             const batchIds = batch.map(a => a.id!);
 
             await tx.execute(sql.raw(`
@@ -1041,7 +1051,9 @@ export const planejamentoRouter = router({
                 ${cases("is_indireta", r => escBool(r.isIndireta))},
                 ${cases("is_externa", r => escBool(r.isExterna))},
                 ${cases("externa_responsavel", r => esc(r.externaResponsavel))},
-                ${cases("disabled", r => escBool(r.disabled))}
+                ${cases("disabled", r => escBool(r.disabled))},
+                ${cases("previsto_msp_pct", r => escNumNull(r.previstoMspPct))},
+                ${cases("realizado_msp_pct", r => escNumNull(r.realizadoMspPct))}
               WHERE id IN (${batchIds.join(",")})
                 AND revisao_id = ${input.revisaoId}
             `));
@@ -1191,6 +1203,9 @@ export const planejamentoRouter = router({
         isGrupo:          z.boolean().optional(),
         isMarco:          z.boolean().optional(),
         percentConcluido: z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
+        // Rev. 1670 — Snapshot Texto10/Texto7 por atividade
+        previstoMspPct:   z.preprocess(v => v == null ? null : Number(v), z.number().min(0).max(100).nullish()),
+        realizadoMspPct:  z.preprocess(v => v == null ? null : Number(v), z.number().min(0).max(100).nullish()),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -1234,6 +1249,10 @@ export const planejamentoRouter = router({
             const eap = (a.eapCodigo ?? "").trim();
             const id  = eap ? eapToId.get(eap) : undefined;
 
+            // Rev. 1670 — snapshot Texto10/Texto7 vindo do XML (4 casas, nullable)
+            const previstoMspPct  = a.previstoMspPct  == null ? null : String(Number(a.previstoMspPct).toFixed(4));
+            const realizadoMspPct = a.realizadoMspPct == null ? null : String(Number(a.realizadoMspPct).toFixed(4));
+
             if (id) {
               // Atualiza SOMENTE campos do XML; preserva isMarco, isIndireta, disabled,
               // recursoPrincipal, quantidadePlanejada (campos tipicamente ajustados pelo usuário)
@@ -1249,6 +1268,9 @@ export const planejamentoRouter = router({
                 isGrupo:        a.isGrupo ?? false,
                 // Rev. 1641 — isExterna/externaResponsavel também são preservados (não
                 // mexemos via mesclar XML; só campos do XML são atualizados acima).
+                // Rev. 1670 — snapshot por atividade SEMPRE atualizado pelo XML
+                previstoMspPct,
+                realizadoMspPct,
               }).where(eq(planejamentoAtividades.id, id));
               atualizados++;
             } else {
@@ -1274,6 +1296,8 @@ export const planejamentoRouter = router({
                 isExterna:      false,
                 externaResponsavel: null,
                 disabled:       false,
+                previstoMspPct,
+                realizadoMspPct,
               });
               inseridos++;
             }

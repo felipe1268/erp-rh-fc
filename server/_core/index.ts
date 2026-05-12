@@ -495,7 +495,12 @@ Regras:
           await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS data_inicio_real DATE`);
           await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS data_fim_real DATE`);
           await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS responsavel_lotus VARCHAR(200)`);
-          console.log(`[SyncSchema+] Colunas data_*_real + responsavel_lotus garantidas em planejamento_atividades.`);
+          // Rev. 1670 Fase 1 — Snapshot %Previsto (Texto10) e %Realizado (Texto7)
+          // por atividade, lidos diretos do XML MSP no import. Permite paridade
+          // 100% Project × ERP sem replicar ProjDateDiff em JS.
+          await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS previsto_msp_pct NUMERIC(8,4)`);
+          await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS realizado_msp_pct NUMERIC(8,4)`);
+          console.log(`[SyncSchema+] Colunas data_*_real + responsavel_lotus + previsto/realizado_msp_pct garantidas em planejamento_atividades.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_atividades datas reais:`, e?.message || e); }
 
         try {

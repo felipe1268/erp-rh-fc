@@ -29,6 +29,13 @@ export interface TarefaImportada {
   pesoFin:          number;
   // progresso importado do arquivo
   percentConcluido: number;
+  // Rev. 1670 — Snapshot por atividade lido direto do XML MSP:
+  // previstoMsp = Texto10 (FieldID 188743750, %PREVISTO 4 casas, calculado pelo Project)
+  // realizadoMsp = Texto7 (FieldID 188743747, %Reali AUX, calculado pelo Project)
+  // Quando ausentes (XLSX legado, XML antigo), ficam undefined → ERP cai no
+  // fallback dinâmico (cálculo JS via du(envelope ∩ até cutoff)).
+  previstoMsp?:     number;
+  realizadoMsp?:    number;
 }
 
 // ── Utilitários de parse ──────────────────────────────────────────────────────
@@ -356,6 +363,24 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     const pctRaw = task.querySelector("PercentComplete")?.textContent ?? "";
     const percentConcluido = pctRaw !== "" ? Math.min(100, Math.max(0, parseFloat(pctRaw) || 0)) : 0;
 
+    // Rev. 1670 — Snapshot por atividade (Texto10 + Texto7) lido do XML.
+    // Não confundir com PercentComplete (campo nativo, granularidade inteira).
+    // Texto10 e Texto7 são fórmulas customizadas do template FC com 4 casas
+    // (ex.: "1,41" → 1.41). Filtra ExtendedAttributes filhos diretos do Task
+    // (não dos Assignment aninhados) e converte vírgula BR → ponto.
+    let previstoMsp: number | undefined;
+    let realizadoMsp: number | undefined;
+    for (const child of Array.from(task.children)) {
+      if (child.tagName !== "ExtendedAttribute") continue;
+      const fid = child.querySelector("FieldID")?.textContent ?? "";
+      const val = (child.querySelector("Value")?.textContent ?? "").trim();
+      if (!val) continue;
+      const num = parseFloat(val.replace(",", "."));
+      if (!Number.isFinite(num)) continue;
+      if (fid === "188743750") previstoMsp = Math.min(100, Math.max(0, num));   // Texto10 — %PREVISTO
+      else if (fid === "188743747") realizadoMsp = Math.min(100, Math.max(0, num)); // Texto7 — %Reali AUX
+    }
+
     // Pula a tarefa de nível 0 (cabeçalho do projeto)
     if (uid === "0" || name === "" || level === 0) continue;
 
@@ -363,6 +388,7 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
       wbs, nome: name, nivel: level, inicio: start, fim: fin,
       durDias: parseDuration(durRaw), pred, recurso: res,
       isGrupo: summ, isMarco, eapCodigo: wbs, pesoFin: 0, percentConcluido,
+      previstoMsp, realizadoMsp,
     });
   }
   return result;
@@ -726,6 +752,9 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
       isMarco:             t.isMarco,
       ordem:               i,
       percentConcluido:    t.percentConcluido ?? 0,
+      // Rev. 1670 — snapshot por atividade vindo do XML MSP
+      previstoMspPct:      t.previstoMsp,
+      realizadoMspPct:     t.realizadoMsp,
     }));
 
     if (modoImport === "substituir") {
@@ -750,6 +779,9 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
           ordem:            a.ordem,
           isGrupo:          a.isGrupo,
           isMarco:          a.isMarco,
+          // Rev. 1670 — snapshot Texto10/Texto7 também no modo mesclar
+          previstoMspPct:   a.previstoMspPct,
+          realizadoMspPct:  a.realizadoMspPct,
         })),
       });
     }
