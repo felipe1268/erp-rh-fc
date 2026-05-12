@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1717,
+    titulo: "Proj./Doc. Técnicos — Renomear pasta principal e sub-pasta direto pela árvore (lápis ao lado da lixeira)",
+    descricao: "Solicitado pelo usuário: na árvore PASTAS do explorador (Obras > <obra> > <ficheiro>) já dava pra criar (botão '+' no topo) e excluir (lixeira no hover), mas faltava renomear — único caminho era apagar e recriar, perdendo subpastas filhas e o vínculo dos documentos. Fix Rev. 1717 em 2 camadas: (1) Server `server/routers/gestaodocumentos.ts` ~L361: nova mutation `updatePasta` (id/companyId/nome). Faz `assertFicheiroAccess`, normaliza pra UPPERCASE, bloqueia colisão com outra sub-pasta da MESMA disciplina (TRPCError CONFLICT), atualiza `gd_pastas` e PROPAGA o rename para todos os `gd_documentos` que apontavam pra `(disciplinaId, subpasta=nomeAntigo)` — campo `subpasta` é texto livre, sem FK, então sem essa propagação os docs ficariam órfãos invisíveis na árvore. (2) Client `client/src/pages/gestaodocumentos/index.tsx` ~L354 e ~L1487: dois botões Pencil novos no hover de cada linha — disciplina (pasta principal: pede sigla até 10 chars + nome via `window.prompt`, chama `updateDisciplina` que já existia) e sub-pasta (pede nome via `window.prompt`, chama o novo `updatePasta`). Ambos invalidam `getFicheiroDetail`/`listFicheiros`/`listDocumentos`. Após renomear sub-pasta, `setSelectedSubpasta(null)` força re-pick para evitar referência stale. Sem schema change.",
+    tipo: "feature",
+    modulos: "Proj./Doc. Técnicos, Gestão de Documentos",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-12 21:00:00",
+  },
+  {
     version: 1716,
     titulo: "Proj./Doc. Técnicos (Gestão de Documentos) — PDF do 'Relatório Fotográfico' não abria no iPad/Safari (só aparecia título + assinatura)",
     descricao: "Reportado: ao clicar em 'Visualizar' num PDF (ex.: 'Relatorio fotografico Rev02') no módulo interno Proj./Doc. Técnicos pelo iPad, o visualizador inline mostrava apenas o título 'RELATÓRIO FOTOGRÁFICO TÉCNICO / Imperfeições em Pisos – Nave Norte' no topo e 'Eng. Caio Garufe' no rodapé — toda a área central com as fotos ficava em branco. Causa: em `client/src/pages/gestaodocumentos/index.tsx` ~L2669-2674, o preview usava `<iframe src={arquivoUrl}>` direto. iOS Safari (iPad/iPhone) NÃO pagina PDF dentro de `<iframe>` — renderiza apenas o topo da primeira página em modo estático, sem scroll, e oculta as páginas seguintes (que continham todas as fotos do relatório). É uma limitação histórica conhecida do WebKit. Fix Rev. 1716: trocado por `<object data={arquivoUrl} type=\"application/pdf\">` com fallback 'Abrir em nova aba' (link direto), exatamente o mesmo padrão que o Portal do Cliente já usa desde a Rev. 1641 em `PortalProjDocCliente.tsx` e `PortalRhDocumentosCliente.tsx`. O `<object>` aciona o renderizador de PDF nativo do navegador (incluindo o do iOS Safari, que pagina e mostra imagens), e o fallback cobre Chrome com sandbox restritivo. Mantida a classe `pdf-viewer-frame` (Rev. 1600 — touch-action pinch-zoom). Sem schema change, sem mudança no servidor.",

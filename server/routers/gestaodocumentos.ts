@@ -355,6 +355,48 @@ export const gestaoDocumentosRouter = router({
       return { success: true };
     }),
 
+  // Rev. 1717 — Renomear sub-pasta. Mantém companyId/ficheiroId/disciplinaId
+  // intactos; só atualiza `nome`. Como `selectedSubpasta` no client usa o
+  // próprio nome como chave (não o id), e os documentos referenciam a
+  // subpasta por `subpasta` (texto, ver gdDocumentos), também propagamos
+  // o rename para os documentos da MESMA disciplina+subpasta antiga,
+  // evitando órfãos invisíveis na árvore.
+  updatePasta: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      nome: z.string().min(1).max(50),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [p] = await db.select().from(gdPastas)
+        .where(and(eq(gdPastas.id, input.id), eq(gdPastas.companyId, input.companyId)));
+      if (!p) throw new TRPCError({ code: "NOT_FOUND" });
+      if (p.ficheiroId) await assertFicheiroAccess(ctx, db, p.ficheiroId, input.companyId);
+      const novoNome = input.nome.trim().toUpperCase();
+      const nomeAntigo = p.nome;
+      if (novoNome === nomeAntigo) return { success: true };
+      // Bloqueia colisão dentro da mesma disciplina
+      const [conflict] = await db.select({ id: gdPastas.id }).from(gdPastas)
+        .where(and(
+          eq(gdPastas.companyId, input.companyId),
+          eq(gdPastas.disciplinaId, p.disciplinaId!),
+          eq(gdPastas.nome, novoNome),
+        ));
+      if (conflict) throw new TRPCError({ code: "CONFLICT", message: `Já existe uma sub-pasta "${novoNome}" nesta disciplina.` });
+      await db.update(gdPastas).set({ nome: novoNome })
+        .where(and(eq(gdPastas.id, input.id), eq(gdPastas.companyId, input.companyId)));
+      // Reconcilia documentos — campo `subpasta` em gdDocumentos é texto livre.
+      await db.update(gdDocumentos).set({ subpasta: novoNome })
+        .where(and(
+          eq(gdDocumentos.companyId, input.companyId),
+          eq(gdDocumentos.disciplinaId, p.disciplinaId!),
+          eq(gdDocumentos.subpasta, nomeAntigo),
+        ));
+      return { success: true };
+    }),
+
   listPastas: protectedProcedure
     .input(z.object({ companyId: z.number(), disciplinaId: z.number() }))
     .query(async ({ input, ctx }) => {

@@ -348,6 +348,32 @@ export default function GestaoDocumentos() {
     onError: (e) => toast.error(e.message),
   });
 
+  // Rev. 1717 — Renomear pasta principal (Disciplina) e sub-pasta direto
+  // pela árvore. updateDisciplina reaproveita o endpoint que já existia
+  // (server/routers/gestaodocumentos.ts ~L398, usado pela tela de Config).
+  // updatePasta é novo (Rev. 1717) e propaga rename para os documentos.
+  const renameDisciplinaFicheiro = trpc.gestaoDocumentos.updateDisciplina.useMutation({
+    onSuccess: () => {
+      toast.success("Pasta renomeada");
+      utils.gestaoDocumentos.getFicheiroDetail.invalidate();
+      utils.gestaoDocumentos.listFicheiros.invalidate();
+      utils.gestaoDocumentos.listDisciplinas.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const renamePasta = trpc.gestaoDocumentos.updatePasta.useMutation({
+    onSuccess: (_d, vars) => {
+      toast.success("Sub-pasta renomeada");
+      utils.gestaoDocumentos.getFicheiroDetail.invalidate();
+      utils.gestaoDocumentos.listFicheiros.invalidate();
+      utils.gestaoDocumentos.listDocumentos.invalidate();
+      // Se o usuário estava com a sub-pasta antiga selecionada, libera a
+      // seleção pra forçar re-pick (o novo nome chega via refetch do detail).
+      setSelectedSubpasta(null);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const seedSubpastas = trpc.gestaoDocumentos.seedTiposSubpastaPadrao.useMutation({
     onSuccess: () => utils.gestaoDocumentos.listTiposSubpasta.invalidate(),
   });
@@ -1455,6 +1481,28 @@ export default function GestaoDocumentos() {
                           >
                             <FolderDown className="w-3 h-3" />
                           </button>
+                          {/* Rev. 1717 — Renomear pasta principal (Disciplina) direto da árvore.
+                              Pede sigla (até 10 chars, vira maiúscula) e nome. Reaproveita
+                              updateDisciplina (que aqui chamamos de renameDisciplinaFicheiro). */}
+                          <button
+                            onClick={() => {
+                              const novaSigla = window.prompt(`Nova sigla para a pasta "${disc.sigla}":`, disc.sigla);
+                              if (novaSigla === null) return;
+                              const sigla = novaSigla.trim().toUpperCase();
+                              if (!sigla) { toast.error("Sigla não pode ficar vazia."); return; }
+                              if (sigla.length > 10) { toast.error("Sigla deve ter até 10 caracteres."); return; }
+                              const novoNome = window.prompt(`Novo nome (descrição) para "${sigla}":`, disc.nome);
+                              if (novoNome === null) return;
+                              const nome = novoNome.trim();
+                              if (!nome) { toast.error("Nome não pode ficar vazio."); return; }
+                              if (sigla === disc.sigla && nome === disc.nome) return;
+                              renameDisciplinaFicheiro.mutate({ id: disc.id, companyId, sigla, nome });
+                            }}
+                            className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-600 transition-all"
+                            title="Renomear pasta"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
                           <button
                             onClick={() => { if (confirm(`Remover pasta "${disc.sigla}"?`)) deleteDiscFicheiro.mutate({ id: disc.id, companyId, ficheiroId: activeFicheiroId! }); }}
                             className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"
@@ -1474,6 +1522,23 @@ export default function GestaoDocumentos() {
                                   >
                                     <Folder className="w-3.5 h-3.5 shrink-0 text-gray-400" />
                                     <span className="truncate">{sp.nome}</span>
+                                  </button>
+                                  {/* Rev. 1717 — Renomear sub-pasta. updatePasta no server faz o
+                                      rename E propaga pra todos os documentos que estavam na
+                                      sub-pasta antiga (campo texto), evitando órfãos. */}
+                                  <button
+                                    onClick={() => {
+                                      const novo = window.prompt(`Novo nome para a sub-pasta "${sp.nome}":`, sp.nome);
+                                      if (novo === null) return;
+                                      const nome = novo.trim().toUpperCase();
+                                      if (!nome) { toast.error("Nome não pode ficar vazio."); return; }
+                                      if (nome === sp.nome) return;
+                                      renamePasta.mutate({ id: sp.id, companyId, nome });
+                                    }}
+                                    className="p-0.5 rounded opacity-0 group-hover/sp:opacity-100 text-gray-400 hover:text-blue-600 transition-all shrink-0"
+                                    title="Renomear sub-pasta"
+                                  >
+                                    <Pencil className="w-2.5 h-2.5" />
                                   </button>
                                   <button
                                     onClick={() => { if (confirm(`Remover sub-pasta "${sp.nome}"?`)) deletePasta.mutate({ id: sp.id, companyId }); }}
