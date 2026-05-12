@@ -293,7 +293,7 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
       
       // Parágrafo Único
       if (/^Par[áa]grafo\s[ÚU]nico/i.test(trimmed)) {
-        return <p key={i} className="text-justify text-[11pt] leading-[1.8] mb-2 ml-4 italic">{formatBoldText(trimmed)}</p>;
+        return <p key={i} className="text-justify text-[11pt] leading-[1.8] mb-2 ml-4">{formatBoldText(trimmed)}</p>;
       }
       
       // Título principal do contrato (primeira linha em CAPS)

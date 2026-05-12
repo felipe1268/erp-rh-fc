@@ -202,7 +202,7 @@ function AditivoPJViewInner({ aditivoId }: { aditivoId: number }) {
                 As partes acordam que a referida cláusula passa a vigorar com a seguinte redação:
               </p>
               <div className="ml-8 mr-4 border-l-4 border-blue-800 pl-4 py-2 mb-4 bg-blue-50/30">
-                <p className="text-justify text-[11pt] leading-[1.8] italic whitespace-pre-line">
+                <p className="text-justify text-[11pt] leading-[1.8] whitespace-pre-line">
                   {cl.novoTexto}
                 </p>
               </div>

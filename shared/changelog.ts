@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1705,
+    titulo: "Contratos PJ e Aditivos — Corpo da cláusula sem itálico (mantém fonte padrão 11pt)",
+    descricao: "Reportado: na visualização de Aditivo Contratual (`/terceiros/contratos/aditivo/:id`) o trecho da nova redação da cláusula (caixa azul, ex.: '4.1 O aditivo tem validade de 02 (dois) meses...') aparecia em itálico, o que dificulta a leitura e foge do padrão jurídico. Mesmo problema no contrato original (`/terceiros/contratos/:id/view`) para 'Parágrafo Único'. Fix em 2 pontos: (1) `AditivoPJView.tsx` L205 — removido `italic` do `<p>` que renderiza `cl.novoTexto` dentro da caixa azul. (2) `ContratoPJView.tsx` L296 — removido `italic` do parser de 'Parágrafo Único'. Tamanho de fonte (`text-[11pt]`) e espaçamento (`leading-[1.8]`) preservados — paridade com o restante do documento. Helpers da UI (placeholders 'Nenhuma cláusula', observações de revisão) seguem em itálico — não tocados. Sem schema change.",
+    tipo: "melhoria",
+    modulos: "Terceiros/Contratos PJ",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 08:00:00",
+  },
+  {
     version: 1704,
     titulo: "Férias — Aba 'Vencidas (Confirmar Pagamento)' esconde colaboradores que perderam o direito (Art. 133 IV CLT)",
     descricao: "Reportado: DANIEL CARNEIRO PEREIRA (afastado há 4557 dias) ainda aparecia na aba 'Vencidas — Confirmar Pagamento' com 2 períodos pendentes e botão 'Confirmar Todos (2)' / 'Já foi pago ✓'. Como ele PERDEU o direito de gozo dos períodos correspondentes (CLT Art. 133, IV), não há pagamento a confirmar — os períodos só podem ser ENCERRADOS via aba principal (botão rosa 'Concluir' da Rev. 1703). Fix em `Ferias.tsx` ~L1320: novo `_vencidasFiltradas = vencidasAgrupadas.filter(g => !g.employee.perdeuFeriasPorAfastamento)` aplicado tanto na lista renderizada quanto no `allIds` do botão 'Confirmar Todas como Pagas'. Reaproveita a flag já calculada pelo server `listarVencidas` (Rev. 1694). Sem schema change, sem mudança de endpoint.",
