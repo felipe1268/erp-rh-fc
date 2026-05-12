@@ -63,6 +63,9 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
   const [tipoFiltro, setTipoFiltro] = useState("todos");
   const [statusFiltro, setStatusFiltro] = useState("todos");
   const [searchVal, setSearchVal] = useState("");
+  // Rev. 1718 — Ordenação da tabela (alfabético, data, status).
+  // Default mantém o que o servidor já devolve (mais recente primeiro).
+  const [sortBy, setSortBy] = useState<"padrao" | "alfabetico" | "alfabetico_desc" | "realizacao_desc" | "realizacao_asc" | "validade_asc" | "validade_desc" | "status">("padrao");
   const [modalForm, setModalForm] = useState<any>(null);
   const utils = trpc.useUtils();
 
@@ -131,8 +134,38 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
         (i.funcao || "").toLowerCase().includes(s)
       );
     }
+    // Rev. 1718 — Ordenação aplicada após os filtros. Datas vazias vão pro
+    // FINAL em qualquer ordenação (asc ou desc) pra não poluir o topo. Status
+    // segue prioridade clínica: VENCIDA > A_VENCER > ATIVA > SEM_VENCIMENTO.
+    if (sortBy !== "padrao") {
+      const arr = [...list];
+      const cmpStr = (a: string, b: string) => a.localeCompare(b, "pt-BR", { sensitivity: "base" });
+      const cmpDate = (a: string, b: string, dir: 1 | -1) => {
+        if (!a && !b) return 0; if (!a) return 1; if (!b) return -1; // vazios sempre por último
+        return a < b ? -dir : a > b ? dir : 0;
+      };
+      const statusRank: Record<string, number> = { VENCIDA: 0, A_VENCER: 1, ATIVA: 2, SEM_VENCIMENTO: 3 };
+      arr.sort((a, b) => {
+        switch (sortBy) {
+          case "alfabetico":      return cmpStr(a.nomeCompleto || "", b.nomeCompleto || "");
+          case "alfabetico_desc": return cmpStr(b.nomeCompleto || "", a.nomeCompleto || "");
+          case "realizacao_desc": return cmpDate(a.dataRealizacao || "", b.dataRealizacao || "", -1);
+          case "realizacao_asc":  return cmpDate(a.dataRealizacao || "", b.dataRealizacao || "",  1);
+          case "validade_asc":    return cmpDate(a.dataVencimento || "", b.dataVencimento || "",  1);
+          case "validade_desc":   return cmpDate(a.dataVencimento || "", b.dataVencimento || "", -1);
+          case "status": {
+            const ra = statusRank[a.statusCalc] ?? 99;
+            const rb = statusRank[b.statusCalc] ?? 99;
+            if (ra !== rb) return ra - rb;
+            return cmpStr(a.nomeCompleto || "", b.nomeCompleto || "");
+          }
+          default: return 0;
+        }
+      });
+      return arr;
+    }
     return list;
-  }, [integracoes, tipoFiltro, statusFiltro, funcaoFiltro, searchVal]);
+  }, [integracoes, tipoFiltro, statusFiltro, funcaoFiltro, searchVal, sortBy]);
 
   const kpiCards = [
     { label: "Total", value: kpis?.total ?? 0, color: "slate" },
@@ -194,6 +227,22 @@ function IntegracoesPanel({ companyId, onClickEmployee }: { companyId: number; o
             <SelectItem value="A_VENCER">A Vencer</SelectItem>
             <SelectItem value="VENCIDA">Vencidas</SelectItem>
             <SelectItem value="SEM_VENCIMENTO">Sem Vencimento</SelectItem>
+          </SelectContent>
+        </Select>
+        {/* Rev. 1718 — Ordenação. "Padrão" = ordem do servidor (mais recente
+            primeiro). Datas vazias sempre vão pro final. Status agrupa por
+            urgência: Vencidas → A Vencer → Ativas → Sem Vencimento. */}
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+          <SelectTrigger className="w-[200px]"><SelectValue placeholder="Ordenar por" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="padrao">Ordenação padrão</SelectItem>
+            <SelectItem value="alfabetico">Colaborador (A-Z)</SelectItem>
+            <SelectItem value="alfabetico_desc">Colaborador (Z-A)</SelectItem>
+            <SelectItem value="realizacao_desc">Realização (mais recente)</SelectItem>
+            <SelectItem value="realizacao_asc">Realização (mais antiga)</SelectItem>
+            <SelectItem value="validade_asc">Validade (vence antes)</SelectItem>
+            <SelectItem value="validade_desc">Validade (vence depois)</SelectItem>
+            <SelectItem value="status">Status (urgência)</SelectItem>
           </SelectContent>
         </Select>
         <Button

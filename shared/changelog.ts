@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1718,
+    titulo: "Integrações (Controle de Documentos) — Filtro 'Ordenar por' (alfabético, data, status)",
+    descricao: "Solicitado pelo usuário: a tabela da aba Integrações (Colaborador / Tipo / Cliente / Realização / Validade / Status / Evidência) só permitia filtrar por cliente, função, tipo e status — sem nenhuma forma de ordenar (era a ordem que o servidor devolvia, mais recente primeiro). Fix Rev. 1718 SEM schema change, SEM mudança de servidor, em `client/src/pages/ControleDocumentos.tsx`: (1) novo state `sortBy` com 8 opções: padrão / Colaborador A-Z / Colaborador Z-A / Realização (mais recente) / Realização (mais antiga) / Validade (vence antes) / Validade (vence depois) / Status (urgência). (2) novo `<Select>` na barra de filtros (entre Status e o botão 'Registrar Integração'). (3) Lógica de ordenação no `useMemo filtrados` aplicada APÓS os filtros: `localeCompare` pt-BR sensitivity:base pra alfabético; comparador de data com vazios SEMPRE no final (não polui topo em asc nem desc); rank de status VENCIDA=0 → A_VENCER=1 → ATIVA=2 → SEM_VENCIMENTO=3 com tiebreaker alfabético. Default 'Ordenação padrão' preserva ordem original (mais recente primeiro).",
+    tipo: "feature",
+    modulos: "Controle de Documentos, Integrações",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-12 21:30:00",
+  },
+  {
     version: 1717,
     titulo: "Proj./Doc. Técnicos — Renomear pasta principal e sub-pasta direto pela árvore (lápis ao lado da lixeira)",
     descricao: "Solicitado pelo usuário: na árvore PASTAS do explorador (Obras > <obra> > <ficheiro>) já dava pra criar (botão '+' no topo) e excluir (lixeira no hover), mas faltava renomear — único caminho era apagar e recriar, perdendo subpastas filhas e o vínculo dos documentos. Fix Rev. 1717 em 2 camadas: (1) Server `server/routers/gestaodocumentos.ts` ~L361: nova mutation `updatePasta` (id/companyId/nome). Faz `assertFicheiroAccess`, normaliza pra UPPERCASE, bloqueia colisão com outra sub-pasta da MESMA disciplina (TRPCError CONFLICT), atualiza `gd_pastas` e PROPAGA o rename para todos os `gd_documentos` que apontavam pra `(disciplinaId, subpasta=nomeAntigo)` — campo `subpasta` é texto livre, sem FK, então sem essa propagação os docs ficariam órfãos invisíveis na árvore. (2) Client `client/src/pages/gestaodocumentos/index.tsx` ~L354 e ~L1487: dois botões Pencil novos no hover de cada linha — disciplina (pasta principal: pede sigla até 10 chars + nome via `window.prompt`, chama `updateDisciplina` que já existia) e sub-pasta (pede nome via `window.prompt`, chama o novo `updatePasta`). Ambos invalidam `getFicheiroDetail`/`listFicheiros`/`listDocumentos`. Após renomear sub-pasta, `setSelectedSubpasta(null)` força re-pick para evitar referência stale. Sem schema change.",
