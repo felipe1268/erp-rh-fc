@@ -308,12 +308,21 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   }, [atividadesDaSemana, avancosPorAtv, semIniStr, semFimStr, calMSP, hoje]);
 
   const fmtPct1 = (n: number) => `${n.toFixed(2).replace(".", ",")}%`;
+  // Rev. 1664 — paleta de status:
+  //   • Concluída (acum ≥ 100%)              → VERDE   (única cor verde, exclusiva
+  //                                                     de quem terminou de fato).
+  //   • No prazo (aderência ≥ threshold)      → AZUL    (em andamento dentro do
+  //                                                     ritmo planejado — não é
+  //                                                     "concluído", então não pode
+  //                                                     ser verde).
+  //   • Atrasado / Não exec.                  → VERMELHO
+  //   • Sem meta (fora da janela cobrável)    → CINZA neutro.
   const statusLabel = (m: { metaPct: number; realPct: number; aderenciaPct: number | null; acumPct: number } | undefined) => {
     if (!m) return { txt: "—", cls: "text-slate-400" };
     if (m.acumPct >= 100) return { txt: "Concluída", cls: "text-emerald-700 font-bold bg-emerald-50" };
     if (m.metaPct <= 0)  return { txt: "Sem meta", cls: "text-slate-500" };
     if (m.aderenciaPct == null) return { txt: "—", cls: "text-slate-400" };
-    if (m.aderenciaPct >= ADERENCIA_THRESHOLD) return { txt: "No prazo", cls: "text-emerald-700 font-bold bg-emerald-50" };
+    if (m.aderenciaPct >= ADERENCIA_THRESHOLD) return { txt: "No prazo", cls: "text-blue-700 font-bold bg-blue-50" };
     if (m.realPct <= 0) return { txt: "Não exec.", cls: "text-red-700 font-bold bg-red-50" };
     return { txt: "Atrasado", cls: "text-red-700 font-bold bg-red-50" };
   };
@@ -336,9 +345,10 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
         return s;
       };
-      // Estrutura: ITEM(1) TAREFA(2) PrevIni(3) PrevFim(4) RealIni(5) RealFim(6)
-      //            META SEM(7) RESPONSÁVEL(8) Dias(9..8+N) STATUS(9+N)
-      const totalCols = 9 + dias.length;
+      // Estrutura (Rev. 1664):
+      //   ITEM(1) TAREFA(2) PrevIni(3) PrevFim(4) RealIni(5) RealFim(6)
+      //   MetaPrev(7) MetaReal(8) MetaΔ(9) RESP(10) Dias(11..10+N) STATUS(11+N)
+      const totalCols = 11 + dias.length;
       const lastCol = colLetter(totalCols);
 
       // Header (3 linhas)
@@ -355,7 +365,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         "ITEM", "TAREFA",
         "Previsto Início", "Previsto Fim",
         "Real Início", "Real Fim",
-        "META SEMANAL %",
+        "META SEM. PREV. %", "META SEM. REAL %", "META SEM. Δ pp",
         "RESPONSÁVEL",
         ...dias.map((d) => `${abrevDia(d)} ${fmtDiaMes(d)}`),
         "STATUS",
@@ -376,8 +386,11 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         "bg-orange-400": "FFFB923C",
         "bg-red-500":    "FFEF4444",
       };
-      const diasColStart = 9; // primeira coluna de dia (após META SEMANAL e RESPONSÁVEL)
-      const statusCol = 9 + dias.length;
+      // Rev. 1664 — META SEMANAL agora ocupa 3 colunas (Prev/Real/Δ).
+      // ITEM(1) TAREFA(2) PrevIni(3) PrevFim(4) RealIni(5) RealFim(6)
+      // MetaPrev(7) MetaReal(8) MetaΔ(9) RESP(10) Dias(11..10+N) STATUS(11+N)
+      const diasColStart = 11;
+      const statusCol = 11 + dias.length;
       let r = headerRow + 1;
       linhas.forEach((l) => {
         if (l.tipo === "grupo") {
@@ -388,15 +401,27 @@ export default function ProgramacaoSemanalLotus(props: Props) {
           const a = l.ativ;
           const m = metricas.get(a.id);
           const st = statusLabel(m);
+          const metaPrevTxt = m && m.metaPct > 0 ? fmtPct1(m.metaPct) : "—";
+          const metaRealTxt = m && (m.realPct > 0 || m.metaPct > 0) ? fmtPct1(m.realPct) : "—";
+          const metaDeltaTxt = (() => {
+            if (!m || (m.metaPct <= 0 && m.realPct <= 0)) return "—";
+            const d = m.realPct - m.metaPct;
+            return `${d > 0 ? "+" : ""}${fmtPct1(d)}`;
+          })();
           ws.getRow(r).values = [
             a.eapCodigo, a.nome,
             fmtBR(a.dataInicio), fmtBR(a.dataFim),
             fmtBR(a.dataInicioReal), fmtBR(a.dataFimReal),
-            m && m.metaPct > 0 ? fmtPct1(m.metaPct) : "—",
+            metaPrevTxt, metaRealTxt, metaDeltaTxt,
             (a.responsavelLotus ?? engenheiroResponsavel) || "—",
             ...dias.map(() => ""),
             st.txt,
           ];
+          // Cor do Δ: verde ≥0, vermelho <0
+          if (m && (m.metaPct > 0 || m.realPct > 0)) {
+            const d = m.realPct - m.metaPct;
+            ws.getCell(r, 9).font = { bold: true, color: { argb: d >= 0 ? "FF065F46" : "FF991B1B" } };
+          }
           dias.forEach((d, idx) => {
             const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0);
             // Excel não suporta faixas internas — prioriza realizado (faixa de
@@ -426,8 +451,10 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       ws.getColumn(1).width = 8;
       ws.getColumn(2).width = 50;
       [3, 4, 5, 6].forEach((i) => (ws.getColumn(i).width = 12));
-      ws.getColumn(7).width = 16; // META SEMANAL %
-      ws.getColumn(8).width = 18; // RESPONSÁVEL
+      ws.getColumn(7).width = 14;  // META SEM. PREV. %
+      ws.getColumn(8).width = 14;  // META SEM. REAL %
+      ws.getColumn(9).width = 12;  // META SEM. Δ pp
+      ws.getColumn(10).width = 18; // RESPONSÁVEL
       for (let i = 0; i < dias.length; i++) ws.getColumn(diasColStart + i).width = 9;
       ws.getColumn(statusCol).width = 13;
 
@@ -556,7 +583,11 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                 <th rowSpan={2} className="border border-slate-300 px-2 py-1 text-left font-bold min-w-[260px]">TAREFA</th>
                 <th colSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold">DATA</th>
                 <th colSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold">Real</th>
-                <th rowSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold w-24 whitespace-nowrap" title="Meta semanal de avanço físico — quanto a atividade deveria avançar nesta semana (PV semanal × peso financeiro). Base para o cálculo de aderência (PPC) e do status (Concluída / No prazo / Atrasado / Não exec. / Sem meta).">META SEMANAL</th>
+                {/* Rev. 1664 — META SEMANAL agrupada em 3 colunas: Prev. / Real. / Δ.
+                     Prev = quanto deveria avançar nesta semana (PV semanal × peso).
+                     Real = quanto efetivamente avançou (Σ avanços lançados na semana).
+                     Δ    = Real − Prev (em pontos percentuais; verde se ≥ 0). */}
+                <th colSpan={3} className="border border-slate-300 px-1 py-1 text-center font-bold whitespace-nowrap" title="Meta semanal de avanço físico — Prev (planejado) × Real (executado) × Δ (desvio em pontos percentuais). Base para Aderência (PPC) e Status.">META SEMANAL</th>
                 <th rowSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold w-24">RESPONSÁVEL</th>
                 <th colSpan={dias.length} className="border border-slate-300 px-1 py-1 text-center font-bold">PERÍODO: {periodoStr}</th>
                 <th rowSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold w-20" title="Status da atividade na semana selecionada">STATUS</th>
@@ -566,6 +597,9 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                 <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-16">Fim</th>
                 <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-16">Início</th>
                 <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-16">Fim</th>
+                <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-14 whitespace-nowrap" title="Meta planejada na semana (PV semanal × peso financeiro)">Prev.</th>
+                <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-14 whitespace-nowrap" title="Avanço efetivamente lançado na semana (peso × Σ% semanal / 100)">Real.</th>
+                <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-14 whitespace-nowrap" title="Desvio em pontos percentuais: Real − Prev. Verde se ≥ 0 (em dia/adiantado), vermelho se &lt; 0 (atrasado).">Δ</th>
                 {dias.map((d, i) => (
                   <th key={i} className="border border-slate-300 px-0.5 py-1 text-center font-semibold w-[60px]">
                     <div className="text-[9px]">{abrevDia(d)}</div>
@@ -577,7 +611,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
             <tbody>
               {linhas.length === 0 && (
                 <tr>
-                  <td colSpan={9 + dias.length} className="text-center py-8 text-slate-400 text-xs">
+                  <td colSpan={11 + dias.length} className="text-center py-8 text-slate-400 text-xs">
                     Nenhuma atividade nesta semana.
                   </td>
                 </tr>
@@ -587,7 +621,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                   return (
                     <tr key={`g-${l.eap}-${i}`} className="bg-slate-50">
                       <td className="border border-slate-300 px-1 py-1 font-bold text-red-700">{l.eap}</td>
-                      <td colSpan={8 + dias.length} className="border border-slate-300 px-2 py-1 font-bold text-red-700 uppercase">{l.nome}</td>
+                      <td colSpan={10 + dias.length} className="border border-slate-300 px-2 py-1 font-bold text-red-700 uppercase">{l.nome}</td>
                     </tr>
                   );
                 }
@@ -625,9 +659,26 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                       />
                       <span className="hidden print:inline text-slate-700">{fmtBR(a.dataFimReal).slice(0, 5)}</span>
                     </td>
+                    {/* Rev. 1664 — META SEMANAL: Prev / Real / Δ */}
                     <td className={`border border-slate-300 px-1 py-1 text-center text-[10px] tabular-nums whitespace-nowrap ${m && m.metaPct > 0 ? "text-slate-800 font-semibold" : "text-slate-400"}`} title={tip}>
                       {m && m.metaPct > 0 ? fmtPct1(m.metaPct) : "—"}
                     </td>
+                    <td className={`border border-slate-300 px-1 py-1 text-center text-[10px] tabular-nums whitespace-nowrap ${m && m.realPct > 0 ? "text-emerald-700 font-semibold" : "text-slate-400"}`} title={tip}>
+                      {m && (m.realPct > 0 || m.metaPct > 0) ? fmtPct1(m.realPct) : "—"}
+                    </td>
+                    {(() => {
+                      if (!m || (m.metaPct <= 0 && m.realPct <= 0)) {
+                        return <td className="border border-slate-300 px-1 py-1 text-center text-[10px] text-slate-400" title={tip}>—</td>;
+                      }
+                      const delta = m.realPct - m.metaPct;
+                      const cls = delta >= 0 ? "text-emerald-700 font-semibold" : "text-red-700 font-semibold";
+                      const sinal = delta > 0 ? "+" : "";
+                      return (
+                        <td className={`border border-slate-300 px-1 py-1 text-center text-[10px] tabular-nums whitespace-nowrap ${cls}`} title={tip}>
+                          {sinal}{fmtPct1(delta)}
+                        </td>
+                      );
+                    })()}
                     <td className="border border-slate-300 px-1 py-1 text-center text-slate-700 text-[10px] uppercase">
                       <input
                         type="text"
