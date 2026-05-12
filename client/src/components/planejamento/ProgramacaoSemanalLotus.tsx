@@ -819,19 +819,65 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                 const tip = tooltipAtiv(a);
                 const ant = isAntecipada(a);
                 const st = statusLabel(m, ant);
+                // Rev. 1680 — Tags CRÍTICA / QUASE CRÍTICA / TOP N (maior peso).
+                const isCritica = analiseSemana.criticasIds.has(a.id);
+                const isQuaseCrit = analiseSemana.quaseCriticasIds.has(a.id);
+                const isMaiorPeso = analiseSemana.maiorPesoIds.has(a.id);
+                const topRank = analiseSemana.maiorPesoOrder.get(a.id);
+                const contribPp = analiseSemana.contribById.get(a.id) ?? 0;
+                // Realce de linha: CRÍTICA > MAIOR PESO > QUASE CRÍTICA > ANTECIPADA.
+                const rowBg = isCritica
+                  ? "bg-red-50/70"
+                  : isMaiorPeso
+                    ? "bg-orange-50/60"
+                    : isQuaseCrit
+                      ? "bg-amber-50/40"
+                      : ant
+                        ? "bg-orange-50/40"
+                        : "";
                 return (
-                  <tr key={`a-${a.id}`} className={`hover:bg-blue-50/40 ${ant ? "bg-orange-50/40" : ""}`}>
+                  <tr key={`a-${a.id}`} className={`hover:bg-blue-50/40 ${rowBg}`}>
                     <td className="border border-slate-300 px-1 py-1 text-center text-slate-700">{a.eapCodigo}</td>
                     <td className="border border-slate-300 px-2 py-1 text-slate-800" title={tip}>
-                      {ant && (
-                        <span
-                          title={`Atividade antecipada: previsto começa em ${fmtBR(a.dataInicio)}, mas houve avanço nesta semana.`}
-                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 mr-1.5 rounded-full bg-orange-100 text-orange-700 text-[9px] font-bold ring-1 ring-orange-200 align-middle"
-                        >
-                          🚀 ANTECIPADA
+                      <div className="flex items-start gap-1.5 flex-wrap">
+                        {isCritica && <AlertTriangle className="h-3 w-3 shrink-0 text-red-600 mt-0.5" />}
+                        {!isCritica && isMaiorPeso && <Zap className="h-3 w-3 shrink-0 text-orange-500 mt-0.5" />}
+                        <span className={isCritica ? "font-semibold text-red-900" : isMaiorPeso ? "font-semibold text-orange-900" : ""}>
+                          {a.nome}
                         </span>
-                      )}
-                      {a.nome}
+                        {ant && (
+                          <span
+                            title={`Atividade antecipada: previsto começa em ${fmtBR(a.dataInicio)}, mas houve avanço nesta semana.`}
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[9px] font-bold ring-1 ring-orange-200"
+                          >
+                            🚀 ANTECIPADA
+                          </span>
+                        )}
+                        {isCritica && (
+                          <span
+                            title="Caminho crítico: zero folga até o fim do projeto. Qualquer atraso aqui empurra a entrega."
+                            className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[9px] font-bold ring-1 ring-red-200"
+                          >
+                            CRÍTICA
+                          </span>
+                        )}
+                        {!isCritica && isQuaseCrit && (
+                          <span
+                            title="Quase crítica: folga ≤ 14 dias até o fim do projeto. Pouca margem para atraso."
+                            className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold ring-1 ring-amber-200"
+                          >
+                            QUASE CRÍTICA
+                          </span>
+                        )}
+                        {isMaiorPeso && (
+                          <span
+                            title={`Top ${topRank} da semana por contribuição ao Previsto: ${contribPp.toFixed(2)}pp (peso financeiro × fração da janela semanal).`}
+                            className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[9px] font-bold ring-1 ring-orange-200"
+                          >
+                            TOP {topRank} · {contribPp.toFixed(2)}pp
+                          </span>
+                        )}
+                      </div>
                     </td>
                     {/* Rev. 1678 — Datas dd/MM/aaaa (regra de ouro do projeto). */}
                     <td className="border border-slate-300 px-1 py-1 text-center text-slate-700 text-[10px] tabular-nums whitespace-nowrap">
@@ -947,6 +993,10 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         <div className="border-t border-slate-300 px-3 py-2 bg-white">
           <div className="text-[10px] font-bold text-slate-700 mb-1.5">LEGENDA:</div>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[10px] text-slate-700">
+            {/* Rev. 1680 — Tags do nome da atividade. */}
+            <div className="flex items-center gap-1.5" title="Caminho crítico: zero folga até o fim do projeto."><span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[9px] font-bold ring-1 ring-red-200">CRÍTICA</span>sem folga (atraso = atrasa entrega)</div>
+            <div className="flex items-center gap-1.5" title="Quase crítica: folga ≤ 14 dias."><span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold ring-1 ring-amber-200">QUASE CRÍTICA</span>folga ≤ 14 dias</div>
+            <div className="flex items-center gap-1.5" title="Top 3 da semana por contribuição ao Previsto."><span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[9px] font-bold ring-1 ring-orange-200">TOP N · X,XXpp</span>maior peso da semana (Top 3)</div>
             <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-blue-800 rounded-sm border border-slate-400" />PREVISTO</div>
             <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-green-500 rounded-sm border border-slate-400" />REALIZADO (aderência ≥ {ADERENCIA_THRESHOLD}%)</div>
             <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-yellow-400 rounded-sm border border-slate-400" />SERVIÇO NÃO PROGRAMADO EXECUTADO</div>

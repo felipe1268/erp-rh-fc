@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1680,
+    titulo: "Programação Semanal LOTUS — Tags CRÍTICA / QUASE CRÍTICA / TOP N (maior peso) por atividade",
+    descricao: "Solicitado: na aba Padrão LOTUS, destacar visualmente as atividades **críticas** (caminho crítico, sem folga), **quase críticas** (folga ≤ 14 dias) e as de **maior peso da semana** (Top 3 por contribuição em pp). Implementação em `client/src/components/planejamento/ProgramacaoSemanalLotus.tsx`: (1) novo `useMemo` `analiseSemana` ~L409-442 — replica a lógica do `pesoSemana` da aba Padrão FC: float = (projectEnd − dataFim) em dias corridos; ≤0 → CRÍTICA; ≤14 → QUASE CRÍTICA; Top 3 por `metaPct` (que já é peso financeiro × fração da janela semanal — equivale à `contribuição em pp` da Padrão FC). projectEnd = maior dataFim de todas as folhas do projeto. (2) Tags renderizadas na célula TAREFA (~L825-892): ícone `AlertTriangle` (vermelho) se crítica, `Zap` (laranja) se maior peso (sem ícone se quase crítica). Badges em pílula colorida com tooltip explicativo: `CRÍTICA` (red-100/700), `QUASE CRÍTICA` (amber-100/800), `TOP N · X,XXpp` (orange-100/700). Mais de uma badge pode coexistir (ex: crítica + maior peso). (3) Realce de linha hierárquico: CRÍTICA (`bg-red-50/70`) > MAIOR PESO (`bg-orange-50/60`) > QUASE CRÍTICA (`bg-amber-50/40`) > ANTECIPADA (`bg-orange-50/40`). (4) Legenda atualizada (~L999-1002) com as 3 novas tags na ordem de severidade. Cálculos PV/EV/Δ/Σ inalterados — mudança 100% visual.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 12:00:00",
+  },
+  {
     version: 1679,
     titulo: "Programação Semanal LOTUS — Linha de totais (Prev / Real / Δ) no rodapé da tabela",
     descricao: "Solicitado: na aba Padrão LOTUS, exibir o total semanal das colunas META SEMANAL (Prev., Real. e Δ) no rodapé da tabela, pra leitura rápida do PV/EV semanal e do desvio agregado sem precisar abrir o card do topo. Implementação em `client/src/components/planejamento/ProgramacaoSemanalLotus.tsx`: (1) novo `useMemo` `totaisSemana` ~L409-426 — soma `m.metaPct` (totalPrev) e `m.realPct` (totalReal) de todas as atividades da semana; `totalDelta = totalReal − totalPrev`. Como cada métrica de linha já está em pp do projeto inteiro (peso × fração da semana), Σ é o avanço global semanal. Antecipadas (sem meta) entram no Real mas não no Prev — coerente com a regra Lean. (2) `<tfoot>` ~L857-883 com linha em destaque (`bg-slate-100`, `border-t-2`, `font-bold`): rótulo 'TOTAL DA SEMANA' colSpan=6, depois Prev (slate-900), Real (emerald-700), Δ (verde se ≥0, vermelho se <0, com sinal +/−). Demais colunas (Responsável, dias, Status) ficam vazias. (3) Excel export ~L579-602 — linha equivalente após o loop de atividades, com merge nas 6 primeiras colunas, fill cinza claro, bordas medium top/bottom e cores idênticas ao HTML.",
