@@ -4782,6 +4782,12 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   const userSelectedSemanaRef = useRef(false);
   const setSemanaAtual = (s: string) => { userSelectedSemanaRef.current = true; setSemanaAtualRaw(s); onSemanaChange?.(s); };
   const [avancoLocal, setAvancoLocal] = useState<Record<number, number>>({});
+  // Rev. 1669 — Buffer de digitação livre por linha. O input numérico nativo
+  // forçava "0" quando o campo ficava vazio (parseFloat("") || 0), atrapalhando
+  // a digitação de valores fracionários (ex.: apagar "28" para digitar "33,5"
+  // virava "0" e bloqueava as próximas teclas). Agora o input é text-livre
+  // (inputMode=decimal, aceita ',' e '.') e só é parseado/clampeado no blur.
+  const [inputRaw, setInputRaw] = useState<Record<number, string>>({});
   // Rev. 1537 — Espelha avanços digitados pra cima (barra superior + Visão Geral)
   useEffect(() => { onLocalAvancoChange?.(avancoLocal); }, [avancoLocal, onLocalAvancoChange]);
   const [importStatus, setImportStatus] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -6112,13 +6118,31 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                         style={{ minWidth: 80 }}
                       />
                       <div className="flex items-center gap-0.5 shrink-0">
+                        {/* Rev. 1669 — Input livre xx,xx (aceita vírgula/ponto) */}
                         <input
-                          type="number" min="0" max="100" step="1"
-                          value={atual}
-                          onChange={e => setAvancoLocal(l => ({ ...l, [a.id]: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) }))}
-                          onBlur={() => autoSaveAvanco(a.id)}
+                          type="text"
+                          inputMode="decimal"
+                          value={inputRaw[a.id] !== undefined ? inputRaw[a.id] : (Number.isInteger(atual) ? String(atual) : String(atual).replace(".", ","))}
+                          onFocus={e => {
+                            setInputRaw(r => ({ ...r, [a.id]: Number.isInteger(atual) ? String(atual) : String(atual).replace(".", ",") }));
+                            e.target.select();
+                          }}
+                          onChange={e => {
+                            const raw = e.target.value.replace(/[^\d.,]/g, "");
+                            setInputRaw(r => ({ ...r, [a.id]: raw }));
+                          }}
+                          onBlur={() => {
+                            const raw = inputRaw[a.id];
+                            const parsed = raw === undefined || raw === "" ? 0 : parseFloat(raw.replace(",", "."));
+                            const clamped = Math.min(100, Math.max(0, isNaN(parsed) ? 0 : parsed));
+                            setAvancoLocal(l => ({ ...l, [a.id]: clamped }));
+                            setInputRaw(r => { const { [a.id]: _, ...rest } = r; return rest; });
+                            // Salva após o state propagar
+                            setTimeout(() => autoSaveAvanco(a.id), 0);
+                          }}
+                          onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                           className="h-6 text-xs text-right font-bold border border-slate-200 rounded px-1.5 bg-white"
-                          style={{ width: 52 }}
+                          style={{ width: 56 }}
                         />
                         <span className="text-slate-400 text-xs ml-0.5">%</span>
                       </div>

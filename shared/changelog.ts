@@ -11562,6 +11562,15 @@ export const CHANGELOG: RevisionEntry[] = [
   },
   {
     version: 1669,
+    titulo: "Avanço Semanal — Input de % com digitação livre (xx,xx, aceita vírgula)",
+    descricao: "Reportado pelo usuário: o input do % de avanço por atividade (ao lado do slider) usava `type=number` com `value={atual}` e `onChange={parseFloat(e.target.value) || 0}` — sempre que o campo ficava vazio durante a edição, virava '0' instantaneamente e bloqueava a digitação. Não dava pra apagar '28' e digitar '33,5' fluidamente; precisava selecionar e digitar de uma vez, sem decimais. **Fix (Rev. 1669)**: trocado para `type=text` + `inputMode=decimal` com buffer de digitação por linha (`inputRaw: Record<number, string>`). Comportamento: (a) onFocus seleciona o conteúdo e copia o valor atual pro buffer; (b) onChange aceita só dígitos, vírgula e ponto, atualiza o buffer livre (sem clamp/parse durante a digitação); (c) onBlur (ou Enter) parseia (vírgula→ponto), clampa [0..100], grava em `avancoLocal` e dispara `autoSaveAvanco`. Permite digitar 'xx,xx%' livremente. `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (state ~L4785, input ~L6115-6140).",
+    tipo: "ui",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 04:55:00",
+  },
+  {
+    version: 1669,
     titulo: "Avanço Semanal — '% Previsto' por atividade em paridade EXATA com Programação Semanal (dias úteis MSP)",
     descricao: "Reportado pelo usuário: mesma atividade (ex.: 04/05/2026 → 22/05/2026, cutoff Qui 07/05) mostrava Previsto **16,67%** na aba Avanço Semanal e **26,67%** na aba Programação Semanal. Causa raiz: as duas telas usavam fórmulas diferentes para o 'Previsto' por atividade. Avanço Semanal interpolava por **dias corridos** (`(ref-ini)/(fim-ini)` = 3/18 = 16,67%). Programação Semanal usa `fracaoDecorridaMs(ini, ref, fim, calMSP)` que respeita os **dias úteis do calendário MSP** (Mon-Fri sem feriados) → 4/15 = 26,67%. **Fix (Rev. 1669)**: trocado o `prevInd` per-row do Avanço Semanal para a MESMA helper `fracaoDecorridaMs` com o `calMSP` que já estava no escopo do componente (desde Rev. 1645) e era usado em outros pontos da própria tela (`previstoRealizadoSemana` ~L4982). Cutoff = `semanaFim` end-of-day (Quinta após Rev. 1667). Agora as duas abas mostram exatamente o mesmo número por atividade. `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` ~L6045-6058.",
     tipo: "bugfix",
