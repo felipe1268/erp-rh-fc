@@ -403,6 +403,25 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     return out;
   }, [atividadesDaSemana, avancosPorAtv, semIniStr, semFimStr, calMSP, hoje]);
 
+  // Rev. 1679 — Totalização da semana (Prev / Real / Δ).
+  // Soma simples das colunas META SEMANAL — cada linha já está em pp do
+  // projeto inteiro (peso × fração), então o Σ vira o avanço global da
+  // semana (Σ metaPct = PV semanal · Σ realPct = EV semanal · Δ = Real-Prev).
+  // Antecipadas entram no Real (têm avanço lançado) mas não no Prev (não
+  // estavam no plano da semana) — coerente com a regra Lean já vigente.
+  const totaisSemana = useMemo(() => {
+    let totalPrev = 0;
+    let totalReal = 0;
+    for (const a of atividadesDaSemana) {
+      const m = metricas.get(a.id);
+      if (!m) continue;
+      totalPrev += m.metaPct;
+      totalReal += m.realPct;
+    }
+    const totalDelta = totalReal - totalPrev;
+    return { totalPrev, totalReal, totalDelta };
+  }, [atividadesDaSemana, metricas]);
+
   const fmtPct1 = (n: number) => `${n.toFixed(2).replace(".", ",")}%`;
   // Rev. 1664 — paleta de status:
   //   • Concluída (acum ≥ 100%)              → VERDE   (única cor verde, exclusiva
@@ -553,6 +572,33 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         });
         r++;
       });
+
+      // Rev. 1679 — Linha de totalização (Prev / Real / Δ) no Excel.
+      if (linhas.some((l) => l.tipo === "ativ")) {
+        const totalPrevTxt = fmtPct1(totaisSemana.totalPrev);
+        const totalRealTxt = fmtPct1(totaisSemana.totalReal);
+        const totalDeltaTxt = `${totaisSemana.totalDelta > 0 ? "+" : ""}${fmtPct1(totaisSemana.totalDelta)}`;
+        // Rótulo na coluna 1 (top-left do merge) — Excel descarta valores
+        // das demais células mescladas, então o texto precisa ficar aqui.
+        ws.getRow(r).values = [
+          "TOTAL DA SEMANA", "", "", "", "", "",
+          totalPrevTxt, totalRealTxt, totalDeltaTxt,
+          "", ...dias.map(() => ""), "",
+        ];
+        ws.getRow(r).font = { bold: true };
+        ws.getRow(r).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
+        ws.mergeCells(r, 1, r, 6);
+        ws.getCell(r, 1).alignment = { horizontal: "right", vertical: "middle" };
+        ws.getCell(r, 8).font = { bold: true, color: { argb: "FF065F46" } };
+        ws.getCell(r, 9).font = {
+          bold: true,
+          color: { argb: totaisSemana.totalDelta >= 0 ? "FF065F46" : "FF991B1B" },
+        };
+        ws.getRow(r).eachCell({ includeEmpty: true }, (c) => {
+          c.border = { top: { style: "medium" }, bottom: { style: "medium" }, left: { style: "thin" }, right: { style: "thin" } };
+        });
+        r++;
+      }
 
       // Larguras
       ws.getColumn(1).width = 8;
@@ -832,6 +878,33 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                 );
               })}
             </tbody>
+            {/* Rev. 1679 — Totalização da semana (Prev / Real / Δ). */}
+            {linhas.length > 0 && (
+              <tfoot>
+                <tr className="bg-slate-100 border-t-2 border-slate-500 font-bold">
+                  <td colSpan={6} className="border border-slate-300 px-2 py-2 text-right text-[11px] text-slate-800 uppercase tracking-wide">
+                    Total da semana
+                  </td>
+                  <td className="border border-slate-300 px-1 py-2 text-center text-[11px] tabular-nums whitespace-nowrap text-slate-900" title="Σ Prev. — meta planejada da semana (PV semanal do projeto)">
+                    {fmtPct1(totaisSemana.totalPrev)}
+                  </td>
+                  <td className="border border-slate-300 px-1 py-2 text-center text-[11px] tabular-nums whitespace-nowrap text-emerald-700" title="Σ Real. — avanço executado na semana (EV semanal do projeto)">
+                    {fmtPct1(totaisSemana.totalReal)}
+                  </td>
+                  <td
+                    className={`border border-slate-300 px-1 py-2 text-center text-[11px] tabular-nums whitespace-nowrap ${
+                      totaisSemana.totalDelta >= 0 ? "text-emerald-700" : "text-red-700"
+                    }`}
+                    title="Σ Δ — desvio total da semana em pontos percentuais (Real − Prev)"
+                  >
+                    {`${totaisSemana.totalDelta > 0 ? "+" : ""}${fmtPct1(totaisSemana.totalDelta)}`}
+                  </td>
+                  <td className="border border-slate-300" />
+                  <td colSpan={dias.length} className="border border-slate-300" />
+                  <td className="border border-slate-300" />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 

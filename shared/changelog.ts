@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1679,
+    titulo: "Programação Semanal LOTUS — Linha de totais (Prev / Real / Δ) no rodapé da tabela",
+    descricao: "Solicitado: na aba Padrão LOTUS, exibir o total semanal das colunas META SEMANAL (Prev., Real. e Δ) no rodapé da tabela, pra leitura rápida do PV/EV semanal e do desvio agregado sem precisar abrir o card do topo. Implementação em `client/src/components/planejamento/ProgramacaoSemanalLotus.tsx`: (1) novo `useMemo` `totaisSemana` ~L409-426 — soma `m.metaPct` (totalPrev) e `m.realPct` (totalReal) de todas as atividades da semana; `totalDelta = totalReal − totalPrev`. Como cada métrica de linha já está em pp do projeto inteiro (peso × fração da semana), Σ é o avanço global semanal. Antecipadas (sem meta) entram no Real mas não no Prev — coerente com a regra Lean. (2) `<tfoot>` ~L857-883 com linha em destaque (`bg-slate-100`, `border-t-2`, `font-bold`): rótulo 'TOTAL DA SEMANA' colSpan=6, depois Prev (slate-900), Real (emerald-700), Δ (verde se ≥0, vermelho se <0, com sinal +/−). Demais colunas (Responsável, dias, Status) ficam vazias. (3) Excel export ~L579-602 — linha equivalente após o loop de atividades, com merge nas 6 primeiras colunas, fill cinza claro, bordas medium top/bottom e cores idênticas ao HTML.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 11:30:00",
+  },
+  {
     version: 1678,
     titulo: "Programação Semanal LOTUS — Datas em dd/MM/aaaa em todas as colunas (regra de ouro)",
     descricao: "Reportado: na aba Padrão LOTUS as colunas de data violavam a regra de ouro do projeto (dd/MM/aaaa). Dois bugs: (1) Coluna **DATA** (Início/Fim do previsto) mostrava `04/05-26` — concat estranha `fmtBR(...).slice(0,5) + '-' + fmtBR(...).slice(8)` que pegava só dd/mm + 2 últimos dígitos do ano com hífen no lugar da barra. (2) Colunas **Real** (Início/Fim) usavam `<Input type='date'>` direto, e iOS Safari/Chrome renderizam esse input em formato longo localizado (`4 de mai. de 2026`). Fix: (a) DATA agora usa `fmtBR(a.dataInicio)` direto → `04/05/2026`. (b) Real usa novo componente interno `RealDateCell` com padrão **edit-on-click**: por default mostra `fmtBR(valor)` em um `<button>`; ao clicar vira `<Input type='date'>` autoFocus que abre o picker nativo; no `onBlur`/Enter salva e volta pro display dd/MM/aaaa. (c) Colunas Início/Fim ampliadas de `w-16` (64px) para `w-20` (80px) pra caber `04/05/2026` sem quebrar. Botão usa `tabular-nums` pra alinhar. Excel export já usava `fmtBR()` correto (sem mudança). `client/src/components/planejamento/ProgramacaoSemanalLotus.tsx` ~L303-346 (componente RealDateCell + state editingReal) + ~L758-770 (cells) + ~L661-665 (headers).",
