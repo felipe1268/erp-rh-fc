@@ -1926,6 +1926,119 @@ export const planejamentoRouter = router({
     }),
 
   // ── Curva S ───────────────────────────────────────────────────────────────
+  // ── Rev. 1670 Fase 2 — PV/EV oficiais a qualquer data ──────────────────────
+  // Único endpoint que TODOS os consumidores (top card, Avanço Semanal,
+  // Programação Semanal, Portal Cliente) podem chamar para obter PV/EV
+  // exatos sem replicar fórmulas. Quando refDate === statusDate gravado no
+  // XML, soma snapshots Texto10/Texto7 ponderados por peso financeiro
+  // (paridade absoluta com MSP). Para outras datas, cai no cálculo dinâmico
+  // por dias corridos. Devolve também o detalhamento por atividade para
+  // auditoria/debug (modal Fase 5 consome).
+  pvEvOficialAt: protectedProcedure
+    .input(z.object({
+      revisaoId: z.number(),
+      refDate:   z.string(),               // "YYYY-MM-DD"
+      modoPesoFinanceiro: z.boolean().optional().default(true),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [rev] = await db.select({ projetoId: planejamentoRevisoes.projetoId })
+        .from(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.id, input.revisaoId)).limit(1);
+      if (!rev?.projetoId) return { pv: 0, ev: 0, spi: 0, statusDate: null, snapshotUsed: false, byActivity: [] as any[] };
+
+      const [proj] = await db.select({
+        companyId:      planejamentoProjetos.companyId,
+        dataCorteAtual: planejamentoProjetos.dataCorteAtual,
+        calendarioJson: planejamentoProjetos.calendarioJson,
+      }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, rev.projetoId)).limit(1);
+      if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto da revisão não encontrado." });
+      // Tenant isolation: admin bypass (consolidação multi-empresa). Padrão herdado de getDataCorte.
+      const isAdminPv = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdminPv && String(proj.companyId) !== String(ctx.user.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para esta revisão." });
+      }
+
+      let statusDate: string | null = null;
+      try {
+        const cal = (proj as any)?.calendarioJson ? JSON.parse((proj as any).calendarioJson) : null;
+        statusDate = cal?.statusDateSnapshot ?? (proj?.dataCorteAtual ? toDateStr(proj.dataCorteAtual as any) : null);
+      } catch { statusDate = proj?.dataCorteAtual ? toDateStr(proj.dataCorteAtual as any) : null; }
+
+      const [ativs, avs] = await Promise.all([
+        db.select().from(planejamentoAtividades).where(eq(planejamentoAtividades.revisaoId, input.revisaoId)),
+        db.select({
+          atividadeId: planejamentoAvancos.atividadeId,
+          semana: planejamentoAvancos.semana,
+          percentualAcumulado: planejamentoAvancos.percentualAcumulado,
+        }).from(planejamentoAvancos).where(eq(planejamentoAvancos.revisaoId, input.revisaoId)),
+      ]);
+
+      // Inline (cópia mínima do shared/planejamentoMath p/ não introduzir alias path no server)
+      const num = (v: any): number => { const x = v == null ? 0 : (typeof v === "number" ? v : parseFloat(String(v))); return Number.isFinite(x) ? x : 0; };
+      const folhas = ativs.filter(a => !a.isGrupo && !a.isMarco && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
+      const usarSnapshot = !!statusDate && input.refDate === statusDate;
+      const pesoBruto = input.modoPesoFinanceiro
+        ? folhas.reduce((s, a) => s + num(a.pesoFinanceiro), 0)
+        : folhas.reduce((s, a) => s + (a.duracaoDias ?? 0), 0);
+      const ativComPeso = input.modoPesoFinanceiro
+        ? folhas.filter(a => num(a.pesoFinanceiro) > 0).length
+        : folhas.filter(a => (a.duracaoDias ?? 0) > 0).length;
+      const usarIgual = pesoBruto === 0 || ativComPeso < folhas.length * 0.2;
+      const pesoTotal = usarIgual ? (folhas.length || 1) : pesoBruto;
+      const pesoDe = (a: any): number => usarIgual ? 1 : (input.modoPesoFinanceiro ? num(a.pesoFinanceiro) : (a.duracaoDias ?? 0));
+
+      const latest: Record<number, { val: number; sem: string }> = {};
+      for (const av of avs) {
+        const semISO = toDateStr(av.semana as any);
+        if (semISO > input.refDate) continue;
+        const id = av.atividadeId;
+        if (!latest[id] || semISO > latest[id].sem) latest[id] = { val: num(av.percentualAcumulado), sem: semISO };
+      }
+
+      const fracaoCorrida = (ini: string, ref: string, fim: string): number => {
+        const i = new Date(ini + "T12:00:00Z").getTime();
+        const r = new Date(ref + "T12:00:00Z").getTime();
+        const f = new Date(fim + "T12:00:00Z").getTime();
+        if (r <= i) return 0; if (r >= f) return 1; return (r - i) / (f - i);
+      };
+
+      let pvSoma = 0, evSoma = 0;
+      const byActivity: Array<{
+        id: number; eapCodigo: string | null; nome: string;
+        pesoPct: number; previstoPct: number; realizadoPct: number;
+        previstoSnapshot: number | null; realizadoSnapshot: number | null;
+        usouSnapshotPv: boolean; usouSnapshotEv: boolean;
+      }> = [];
+      for (const a of folhas) {
+        const w = pesoDe(a) / pesoTotal;
+        const snapPv = a.previstoMspPct == null ? null : num(a.previstoMspPct);
+        const snapEv = a.realizadoMspPct == null ? null : num(a.realizadoMspPct);
+        let pvPct: number; let usouSnapshotPv = false;
+        if (usarSnapshot && snapPv != null) { pvPct = Math.min(100, Math.max(0, snapPv)); usouSnapshotPv = true; }
+        else { pvPct = fracaoCorrida(toDateStr(a.dataInicio as any), input.refDate, toDateStr(a.dataFim as any)) * 100; }
+        let evPct: number; let usouSnapshotEv = false;
+        if (latest[a.id]) { evPct = latest[a.id].val; }
+        else if (usarSnapshot && snapEv != null) { evPct = snapEv; usouSnapshotEv = true; }
+        else { evPct = 0; }
+        pvSoma += pvPct * w;
+        evSoma += evPct * w;
+        byActivity.push({
+          id: a.id, eapCodigo: a.eapCodigo, nome: a.nome,
+          pesoPct: +(w * 100).toFixed(4),
+          previstoPct: +pvPct.toFixed(2),
+          realizadoPct: +evPct.toFixed(2),
+          previstoSnapshot: snapPv,
+          realizadoSnapshot: snapEv,
+          usouSnapshotPv, usouSnapshotEv,
+        });
+      }
+      const pv = +Math.min(100, Math.max(0, pvSoma)).toFixed(2);
+      const ev = +Math.min(100, Math.max(0, evSoma)).toFixed(2);
+      const spi = pv > 0 ? +(ev / pv).toFixed(4) : 0;
+      return { pv, ev, spi, statusDate, snapshotUsed: usarSnapshot, byActivity };
+    }),
+
   getCurvaS: protectedProcedure
     .input(z.object({ projetoId: z.number(), revisaoId: z.number(), baselineId: z.number(), usarPesoPorDuracao: z.boolean().optional() }))
     .query(async ({ input }) => {
@@ -4187,6 +4300,165 @@ REGRAS TÉCNICAS:
     }),
 
   // ── Curva S Financeira ───────────────────────────────────────────────────
+  // ── Rev. 1670 Fase 4 — Curva S Financeira via Orçamento (R$ por atividade) ─
+  // Substitui o `valor_atividade = peso% × totalVenda` por `valor_atividade =
+  // custoTotal[eap_codigo] do Orçamento`. Faz join 1:1 entre
+  // `planejamento_atividades.eap_codigo` (vindo do Texto5/WBS do MSP) e
+  // `orcamento_itens.eap_codigo`. Atividades sem match no Orçamento caem no
+  // fallback peso% × totalVenda (compatibilidade com cronogramas legados sem
+  // EAP completo). R$ NUNCA vem do XML — Cost do XML é ignorado (gotcha
+  // documentada: o MSP grava ×100/centavos, gera divergência).
+  getCurvaSFinanceiraOrcamento: protectedProcedure
+    .input(z.object({ projetoId: z.number(), revisaoId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+
+      const [projeto] = await db.select({
+        id: planejamentoProjetos.id,
+        companyId: planejamentoProjetos.companyId,
+        orcamentoId: planejamentoProjetos.orcamentoId,
+        valorContrato: planejamentoProjetos.valorContrato,
+      }).from(planejamentoProjetos)
+        .where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
+
+      if (!projeto) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
+      // Tenant isolation
+      const isAdminCsf = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdminCsf && String(projeto.companyId) !== String(ctx.user.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+      }
+      // Validação de relacionamento revisão↔projeto (evita cross-link via IDs)
+      const [revCheck] = await db.select({ projetoId: planejamentoRevisoes.projetoId })
+        .from(planejamentoRevisoes)
+        .where(eq(planejamentoRevisoes.id, input.revisaoId)).limit(1);
+      if (!revCheck || revCheck.projetoId !== input.projetoId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Revisão não pertence ao projeto." });
+      }
+
+      if (!projeto?.orcamentoId) {
+        return {
+          status: "sem_orcamento" as const,
+          mensagem: "Projeto sem orçamento vinculado — vincule um orçamento para usar custos por EAP.",
+          totalCustoOrc: 0, totalVenda: 0, atividadesComCusto: 0,
+          atividadesSemMatch: [] as Array<{ eapCodigo: string | null; nome: string }>,
+          curva: [] as Array<{ semana: string; acumulado: number }>,
+          curvaRealizada: [] as Array<{ semana: string; acumulado: number }>,
+        };
+      }
+
+      const [orc] = await db.select({
+        id: orcamentos.id,
+        totalVenda: orcamentos.totalVenda,
+      }).from(orcamentos).where(eq(orcamentos.id, projeto.orcamentoId)).limit(1);
+      const totalVenda = n(orc?.totalVenda) || n(projeto?.valorContrato);
+
+      const [ativs, itens, avancosRaw] = await Promise.all([
+        db.select().from(planejamentoAtividades)
+          .where(eq(planejamentoAtividades.revisaoId, input.revisaoId)),
+        db.select({
+          eapCodigo: orcamentoItens.eapCodigo,
+          custoTotal: orcamentoItens.custoTotal,
+        }).from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, projeto.orcamentoId)),
+        db.select().from(planejamentoAvancos).where(and(
+          eq(planejamentoAvancos.projetoId, input.projetoId),
+          eq(planejamentoAvancos.revisaoId, input.revisaoId),
+        )).orderBy(asc(planejamentoAvancos.semana)),
+      ]);
+
+      const custoPorEap = new Map<string, number>();
+      for (const it of itens) {
+        const k = (it.eapCodigo ?? "").trim();
+        if (!k) continue;
+        custoPorEap.set(k, (custoPorEap.get(k) ?? 0) + n(it.custoTotal));
+      }
+      const totalCustoOrc = [...custoPorEap.values()].reduce((s, v) => s + v, 0);
+
+      const folhas = ativs.filter(a =>
+        !a.isGrupo && !a.isMarco && !a.disabled && a.dataInicio && a.dataFim,
+      );
+
+      // Valor R$ por atividade — preferência: custo do Orçamento; fallback peso × venda.
+      const pesoBruto = folhas.reduce((s, a) => s + n(a.pesoFinanceiro), 0);
+      const ativComPeso = folhas.filter(a => n(a.pesoFinanceiro) > 0).length;
+      const usarIgualPeso = pesoBruto === 0 || ativComPeso < folhas.length * 0.2;
+      const pesoTotalFolhas = usarIgualPeso ? (folhas.length || 1) : pesoBruto;
+
+      const valorPorAtiv = new Map<number, number>();
+      const semMatch: Array<{ eapCodigo: string | null; nome: string }> = [];
+      let comCusto = 0;
+      for (const a of folhas) {
+        const k = (a.eapCodigo ?? "").trim();
+        const cOrc = k ? custoPorEap.get(k) : undefined;
+        if (cOrc != null && cOrc > 0) {
+          valorPorAtiv.set(a.id, cOrc);
+          comCusto++;
+        } else {
+          // fallback peso × venda (mesma fórmula histórica)
+          const pesoAtiv = usarIgualPeso ? 1 : n(a.pesoFinanceiro);
+          const fallback = totalVenda > 0 ? (pesoAtiv / pesoTotalFolhas) * totalVenda : 0;
+          valorPorAtiv.set(a.id, fallback);
+          semMatch.push({ eapCodigo: a.eapCodigo, nome: a.nome });
+        }
+      }
+
+      // Distribui o R$ ao longo das semanas (mesma lógica de getCurvaSFinanceira histórica)
+      const dates: Map<string, number> = new Map();
+      for (const a of folhas) {
+        const v = valorPorAtiv.get(a.id) ?? 0;
+        if (v <= 0) continue;
+        const ini = new Date(toDateStr(a.dataInicio as any) + "T12:00:00Z");
+        const fim = new Date(toDateStr(a.dataFim as any)    + "T12:00:00Z");
+        if (isNaN(ini.getTime()) || isNaN(fim.getTime())) continue;
+        const inicioSeg = new Date(toMondayStr(ini) + "T12:00:00Z");
+        const fimSeg    = new Date(toMondayStr(fim) + "T12:00:00Z");
+        const dur       = Math.max(1, (fimSeg.getTime() - inicioSeg.getTime()) / (7 * 86400000) + 1);
+        const semVal    = v / dur;
+        let cur = new Date(inicioSeg);
+        for (let i = 0; i < dur; i++) {
+          const k = toMondayStr(cur);
+          dates.set(k, (dates.get(k) ?? 0) + semVal);
+          cur = new Date(cur.getTime() + 7 * 86400000);
+        }
+      }
+      const sorted = [...dates.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      let acum = 0;
+      const curva = sorted.map(([semana, val]) => { acum += val; return { semana, acumulado: +acum.toFixed(2) }; });
+      if (curva.length > 0) {
+        const primeiraDate = new Date(curva[0].semana + "T12:00:00Z");
+        const semanaAntes  = new Date(primeiraDate.getTime() - 7 * 86400000);
+        curva.unshift({ semana: toMondayStr(semanaAntes), acumulado: 0 });
+      }
+
+      // Curva realizada R$ — por semana, soma (acumulado% × valor R$ por atividade)
+      const semanas = [...new Set(avancosRaw.map(av => toDateStr(av.semana as any)))].sort();
+      const curvaRealizada = semanas.map(sem => {
+        const latest: Record<number, number> = {};
+        const latestSem: Record<number, string> = {};
+        for (const av of avancosRaw) {
+          const s = toDateStr(av.semana as any);
+          if (s > sem) continue;
+          const id = av.atividadeId;
+          if (!latestSem[id] || s > latestSem[id]) { latestSem[id] = s; latest[id] = n(av.percentualAcumulado); }
+        }
+        let soma = 0;
+        for (const a of folhas) {
+          const v = valorPorAtiv.get(a.id) ?? 0;
+          soma += (latest[a.id] ?? 0) / 100 * v;
+        }
+        return { semana: sem, acumulado: +soma.toFixed(2) };
+      });
+
+      return {
+        status: "ok" as const,
+        totalCustoOrc: +totalCustoOrc.toFixed(2),
+        totalVenda: +totalVenda.toFixed(2),
+        atividadesComCusto: comCusto,
+        atividadesSemMatch: semMatch.slice(0, 50),
+        curva,
+        curvaRealizada,
+      };
+    }),
+
   // Distribui o valor total (orçamento ou contrato) pelas atividades folha
   // do cronograma, ponderado pelo peso_financeiro de cada atividade.
   // Se < 20% das atividades têm peso, usa peso igual (1/N).

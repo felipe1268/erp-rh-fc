@@ -1159,6 +1159,44 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
               </div>
               )}
 
+              {/* Rev. 1670 Fase 5 — Auditoria MSP × ERP (pré-save) */}
+              {tarefas.length > 0 && !resultadoImport && (() => {
+                // Mesmos filtros do `pvEvOficialAt` server (folhas contáveis):
+                // !isGrupo && !isMarco && datas válidas. (`isIndireta`/`disabled`
+                // só existem após persistência — aqui no XML ainda não há.)
+                const folhasT = tarefas.filter(t => !t.isGrupo && !t.isMarco && !!t.inicio && !!t.fim);
+                const comPrev = folhasT.filter(t => t.previstoMsp != null);
+                const comReal = folhasT.filter(t => t.realizadoMsp != null);
+                const somaPrevPond = comPrev.reduce((s, t) => s + ((t.previstoMsp ?? 0) * (t.pesoFin ?? 0) / 100), 0);
+                const somaRealPond = comReal.reduce((s, t) => s + ((t.realizadoMsp ?? 0) * (t.pesoFin ?? 0) / 100), 0);
+                const semPrev = folhasT.length - comPrev.length;
+                if (comPrev.length === 0 && comReal.length === 0) {
+                  return (
+                    <div className="border border-slate-200 bg-slate-50 rounded p-2 text-[11px] text-slate-600">
+                      <b>Auditoria MSP × ERP:</b> XML sem ExtendedAttributes Texto10/Texto7 — ERP usará cálculo dinâmico (sem snapshot).
+                    </div>
+                  );
+                }
+                return (
+                  <div className="border border-blue-200 bg-blue-50 rounded p-2 text-[11px] text-slate-700 space-y-1">
+                    <div className="font-semibold text-blue-900">Auditoria MSP × ERP (pré-save):</div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                      <div>Folhas com snapshot Texto10 (% Previsto):</div>
+                      <div className="text-right tabular-nums"><b>{comPrev.length}</b>/{folhasT.length}{semPrev > 0 && <span className="text-amber-700"> · {semPrev} sem</span>}</div>
+                      <div>Folhas com snapshot Texto7 (% Realizado):</div>
+                      <div className="text-right tabular-nums"><b>{comReal.length}</b>/{folhasT.length}</div>
+                      <div>Σ % Previsto MSP (ponderado):</div>
+                      <div className="text-right tabular-nums"><b>{somaPrevPond.toFixed(2)}%</b></div>
+                      <div>Σ % Realizado MSP (ponderado):</div>
+                      <div className="text-right tabular-nums"><b>{somaRealPond.toFixed(2)}%</b></div>
+                    </div>
+                    <div className="text-slate-500 text-[10px] pt-1 border-t border-blue-100">
+                      Após confirmar, esses valores ficam gravados por atividade e o ERP os usa quando o cutoff bate com o StatusDate do XML (paridade absoluta com MSP).
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Resumo pós-import */}
               {resultadoImport && (
                 <div className="border border-emerald-200 bg-emerald-50 rounded p-2 text-[11px] text-emerald-800 flex items-center gap-2">
