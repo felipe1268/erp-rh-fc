@@ -1034,6 +1034,17 @@ export default function PortalPlanejamentoCliente() {
               curvaData={curvaData}
               recoveryWindow={projeto?.recoveryWindowSemanas ?? 4}
               calendarioJson={(data as any)?.calendarioJson ?? null}
+              // Rev. 1682 — replicar ao Portal os mesmos dados que o
+              // módulo Planejamento usa: cabeçalho LOTUS (logos), cutoff
+              // oficial e datas do projeto (paridade absoluta no rodapé
+              // ACUMULADO da Programação Semanal LOTUS).
+              gerenciadoraNome={(obra as any)?.gerenciadoraNome ?? null}
+              gerenciadoraLogoUrl={(obra as any)?.gerenciadoraLogoUrl ?? null}
+              clienteLogoUrl={(obra as any)?.clienteLogoUrl ?? null}
+              engenheiroResponsavel={(obra as any)?.responsavel ?? null}
+              projetoStart={projeto?.dataInicio ?? null}
+              projetoFinish={projeto?.dataTerminoContratual ?? null}
+              cutoffIso={(data as any)?.dataCorte?.oficial ?? null}
             />
           );
           if (aba === "curva_s") return <AbaCurvaS curvaData={curvaData} kpis={kpis} projeto={projeto} curvaMedicoes={curvaMedicoes} />;
@@ -1983,6 +1994,9 @@ function AbaAvancoSemanal({ kpis, semanaAtual, atrasadas, curvaData, recoveryWin
 function AbaProgSemanal({
   atividadesTodas, refisLista, nomeProjeto, nomeCliente, curvaData, recoveryWindow,
   calendarioJson: calendarioJsonPortal = null,
+  gerenciadoraNome = null, gerenciadoraLogoUrl = null, clienteLogoUrl = null,
+  engenheiroResponsavel = null, projetoStart = null, projetoFinish = null,
+  cutoffIso = null,
 }: {
   atividadesTodas: any[];
   refisLista: any[];
@@ -1991,6 +2005,13 @@ function AbaProgSemanal({
   curvaData?: any;
   recoveryWindow?: number;
   calendarioJson?: string | null;
+  gerenciadoraNome?: string | null;
+  gerenciadoraLogoUrl?: string | null;
+  clienteLogoUrl?: string | null;
+  engenheiroResponsavel?: string | null;
+  projetoStart?: string | null;
+  projetoFinish?: string | null;
+  cutoffIso?: string | null;
 }) {
   const avancosMap = useMemo(() => {
     const m: Record<number, number> = {};
@@ -2015,6 +2036,13 @@ function AbaProgSemanal({
       curvaData={curvaData}
       recoveryWindow={recoveryWindow ?? 4}
       calendarioJson={calendarioJsonPortal}
+      gerenciadoraNome={gerenciadoraNome}
+      gerenciadoraLogoUrl={gerenciadoraLogoUrl}
+      clienteLogoUrl={clienteLogoUrl}
+      engenheiroResponsavel={engenheiroResponsavel}
+      projetoStart={projetoStart}
+      projetoFinish={projetoFinish}
+      cutoffIso={cutoffIso}
     />
   );
 }

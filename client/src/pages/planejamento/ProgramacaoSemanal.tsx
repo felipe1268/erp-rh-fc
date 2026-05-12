@@ -379,14 +379,26 @@ export function ProgramacaoSemanal({
   // e "Padrão LOTUS" (modelo da gerenciadora — header com logos, EAP hierárquico,
   // Gantt diário com 5 cores, exportação Excel/PDF). Persiste por projeto no
   // localStorage para manter a preferência do usuário entre sessões.
+  // Rev. 1682 — Quando a obra é gerenciada pela LOTUS (cadastro da obra
+  // tem `gerenciadoraNome` contendo "lotus"), o padrão LOTUS é OBRIGATÓRIO
+  // — não é uma opção. Escondemos o toggle e ignoramos a preferência salva.
+  const isLotusForcado = useMemo(
+    () => /lotus/i.test(String(gerenciadoraNome ?? "")),
+    [gerenciadoraNome]
+  );
   const lotusKey = `progSemView:${projetoId}`;
   const [viewMode, setViewMode] = useState<"fc" | "lotus">(() => {
+    if (isLotusForcado) return "lotus";
     if (typeof window === "undefined") return "fc";
     return (localStorage.getItem(lotusKey) as "fc" | "lotus") || "fc";
   });
   useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem(lotusKey, viewMode);
-  }, [viewMode, lotusKey]);
+    if (isLotusForcado && viewMode !== "lotus") setViewMode("lotus");
+  }, [isLotusForcado, viewMode]);
+  useEffect(() => {
+    // Não persiste preferência quando o modo é forçado (não veio do usuário).
+    if (typeof window !== "undefined" && !isLotusForcado) localStorage.setItem(lotusKey, viewMode);
+  }, [viewMode, lotusKey, isLotusForcado]);
   // Rev. 1534 — Janela atual de Recovery Schedule (default 4 semanas).
   const janelaRecuperacao = Math.max(1, recoveryWindow ?? 4);
   // Rev. 1642 — Calendário MS Project parseado uma vez por render (paridade 100%).
@@ -933,15 +945,25 @@ export function ProgramacaoSemanal({
           <CalendarRange className="h-4 w-4 text-blue-600" />
           <span className="text-sm font-semibold text-slate-700">Programação Semanal</span>
           <span className="text-xs text-slate-400">{semanas.length} semanas no cronograma</span>
-          <div className="inline-flex items-center bg-slate-100 rounded-lg p-0.5 ml-2 print:hidden">
-            <button
-              onClick={() => setViewMode("fc")}
-              className="px-3 py-1 text-xs font-semibold rounded-md text-slate-600 hover:bg-white"
-            >Padrão FC</button>
-            <button
-              className="px-3 py-1 text-xs font-semibold rounded-md bg-white text-blue-700 shadow-sm"
-            >Padrão LOTUS</button>
-          </div>
+          {/* Rev. 1682 — Toggle escondido quando a gerenciadora é a LOTUS:
+              o padrão dela passa a ser obrigatório (regra de cliente). */}
+          {!isLotusForcado && (
+            <div className="inline-flex items-center bg-slate-100 rounded-lg p-0.5 ml-2 print:hidden">
+              <button
+                onClick={() => setViewMode("fc")}
+                className="px-3 py-1 text-xs font-semibold rounded-md text-slate-600 hover:bg-white"
+              >Padrão FC</button>
+              <button
+                className="px-3 py-1 text-xs font-semibold rounded-md bg-white text-blue-700 shadow-sm"
+              >Padrão LOTUS</button>
+            </div>
+          )}
+          {isLotusForcado && (
+            <span
+              className="ml-2 px-2 py-0.5 text-[10px] font-bold uppercase rounded bg-blue-50 text-blue-700 border border-blue-200"
+              title={`Obra gerenciada por ${gerenciadoraNome} — exibição padronizada conforme modelo da gerenciadora.`}
+            >Padrão LOTUS</span>
+          )}
         </div>
         <ProgramacaoSemanalLotus
           projetoId={projetoId}
@@ -974,16 +996,19 @@ export function ProgramacaoSemanal({
           <CalendarRange className="h-4 w-4 text-blue-600" />
           <span className="text-sm font-semibold text-slate-700">Programação Semanal</span>
           <span className="text-xs text-slate-400">{semanas.length} semanas no cronograma</span>
-          {/* Rev. 1662 — Toggle Padrão FC ↔ LOTUS */}
-          <div className="inline-flex items-center bg-slate-100 rounded-lg p-0.5 ml-2">
-            <button
-              className="px-3 py-1 text-xs font-semibold rounded-md bg-white text-blue-700 shadow-sm"
-            >Padrão FC</button>
-            <button
-              onClick={() => setViewMode("lotus")}
-              className="px-3 py-1 text-xs font-semibold rounded-md text-slate-600 hover:bg-white"
-            >Padrão LOTUS</button>
-          </div>
+          {/* Rev. 1662 — Toggle Padrão FC ↔ LOTUS (escondido quando a
+              gerenciadora é LOTUS — Rev. 1682). */}
+          {!isLotusForcado && (
+            <div className="inline-flex items-center bg-slate-100 rounded-lg p-0.5 ml-2">
+              <button
+                className="px-3 py-1 text-xs font-semibold rounded-md bg-white text-blue-700 shadow-sm"
+              >Padrão FC</button>
+              <button
+                onClick={() => setViewMode("lotus")}
+                className="px-3 py-1 text-xs font-semibold rounded-md text-slate-600 hover:bg-white"
+              >Padrão LOTUS</button>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Seletor de quantidade de semanas (visível em modo relatório) */}
