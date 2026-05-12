@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1713,
+    titulo: "REFIS — Previsto agora bate com top card 'Avanço Físico' e Avanço Semanal (pvMacro / envelope MSP)",
+    descricao: "Reportado: REFIS mostrava 'AVANÇO SEMANAL PREVISTO 1,32%' enquanto o top card 'Avanço Físico' (Oficial) e o card 'PREVISTO (SEMANA)' do Avanço Semanal mostravam 1,41% — divergência de 0,09pp na MESMA tela do REVTE-CIVIL Sem 1. Causa em `Refis()`: `avancoPrevisto`/`avancoPrevAntes`/`refisPrevistoComInd`/`avancoPrevAntesComInd` calculavam Σ peso × `prevIndRef(a, ref)` per-atividade — fórmula DIFERENTE do `pvMacro` (Rev. 1646.6) que o top card e o Avanço Semanal já usam (PMBOK 7ª: PV = du(início_projeto→ref) / du(envelope) com calendário MSP, snapshot Texto11 quando ref==StatusDate). Per-atividade infla denominador quando há leaves longas com início futuro. Fix: (1) `pvMacro` propagado como prop para `<Refis>` (criado em PlanejamentoDetalheInner ~L4915, agora consumido também em REFIS). (2) Os 4 useMemo de Previsto retornam `pvMacro(ref)` quando disponível; fallback per-atividade preservado se faltar calendarioJson/datas oficiais. Resultado: REFIS Previsto = top card Previsto = Avanço Semanal Previsto em todas as semanas (passada/corrente/futura). SPI/desvio/custos derivados ficam coerentes. Sem schema change, sem mudança de servidor.",
+    tipo: "fix",
+    modulos: "Planejamento/REFIS",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 15:00:00",
+  },
+  {
     version: 1712,
     titulo: "Documentos com cabeçalho azul — Cache-buster no logo branco/amarelo (forçar recarga após Rev. 1710)",
     descricao: "Reportado: mesmo após Rev. 1710 ter substituído o `logoUrl` antigo (versão dark sobre fundo branco) pelo novo `/logo-fc-branco-amarelo.png` (PNG transparente RGBA com alpha 0 nas bordas, confirmado), o navegador continuava exibindo o logo antigo com fundo branco dentro da barra azul — cache do iframe `srcDoc` (Advertência Terceiros, Advertência interna em Controle de Documentos, Raio-X). Fix: anexado query string `?v=1712` em todas as 5 referências para invalidar cache HTTP/iframe. Arquivos: `AdvertenciasTerceiros.tsx` (L307), `RaioXFuncionario.tsx` (L344), `ControleDocumentos.tsx` (L2612 PDF, L3554 PDF, L3608 preview React). Sem schema change, sem mudança de lógica — apenas cache-busting de asset.",

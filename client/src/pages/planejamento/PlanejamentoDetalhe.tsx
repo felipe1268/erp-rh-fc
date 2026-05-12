@@ -1050,6 +1050,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             refisComIndiretas={refisComIndiretasGlobal}
             setRefisComIndiretas={setRefisComIndiretasGlobal}
             dataCorteInfo={dataCorteInfo}
+            pvMacro={pvMacro}
           />
         )}
         {canViewTab(aba) && aba === "cronograma-financeiro" && (
@@ -10911,7 +10912,7 @@ function Revisoes({ projetoId, revisoes, revisaoAtiva, utils, isAdminMaster }: a
 // ═════════════════════════════════════════════════════════════════════════════
 // ABA: REFIS
 // ═════════════════════════════════════════════════════════════════════════════
-function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, hideFinancial, initialSemana, onInitialSemanaConsumed, onSemanaChange, usarPesoPorDuracao, refisComIndiretas, setRefisComIndiretas, dataCorteInfo }: any) {
+function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, revisaoAtiva, curvaData, curvaMedicoes = [], utils, fmt, fPct: fPct_, isAdminMaster, hideFinancial, initialSemana, onInitialSemanaConsumed, onSemanaChange, usarPesoPorDuracao, refisComIndiretas, setRefisComIndiretas, dataCorteInfo, pvMacro }: any) {
   // Rev. 1656.2 — calMSP no escopo do componente para que `prevIndRef` (L~10731)
   // use dias úteis do calendário do MSP (paridade com MS Project). Sem esta
   // declaração, qualquer render que avalie `prevIndRef` lançava ReferenceError.
@@ -11100,7 +11101,15 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   // Calcula avanço previsto ponderado para a semana a partir do cronograma.
   // Usa o FIM da semana (domingo) como referência — igual ao AvancoSemanal.
+  // Rev. 1712.1 — Quando há `pvMacro` (calendário MSP + envelope contratual),
+  // o REFIS usa a MESMA fonte do top card "Avanço Físico" e dos cards de
+  // Avanço Semanal (PMBOK 7ª: PV = du(início→ref)/du(envelope)). Sem isso,
+  // a soma per-atividade `Σ peso × prevIndRef` divergia do envelope macro
+  // (ex.: 1,32% REFIS vs 1,41% top card no REVTE-CIVIL Sem 1) — atividades
+  // longas com início futuro inflavam o denominador. Fallback per-atividade
+  // só quando pvMacro não está disponível (sem MSP/sem datas oficiais).
   const avancoPrevisto = useMemo(() => {
+    if (pvMacro) return pvMacro(semanaFimRefis);
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
     if (!folhas.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
@@ -11108,7 +11117,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       const peso = getPeso(a, semPeso);
       return s + prevIndRef(a, semanaFimRefis) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, semanaFimRefis, usarPesoPorDuracao]);
+  }, [atividades, semanaFimRefis, usarPesoPorDuracao, pvMacro]);
 
   const semIdx   = semanas.indexOf(semana);
   const semAntes = semIdx > 0 ? semanas[semIdx - 1] : null;
@@ -11124,6 +11133,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const avancoPrevAntes = useMemo(() => {
     if (!semAntesFim) return 0;
+    // Rev. 1712.1 — paridade com `avancoPrevisto`: usa pvMacro quando disponível.
+    if (pvMacro) return pvMacro(semAntesFim);
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
     if (!folhas.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
@@ -11131,7 +11142,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       const peso = getPeso(a, semPeso);
       return s + prevIndRef(a, semAntesFim) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, semAntesFim, usarPesoPorDuracao]);
+  }, [atividades, semAntesFim, usarPesoPorDuracao, pvMacro]);
 
   const avancoPrevSemanal = Math.max(0, avancoPrevisto - avancoPrevAntes);
 
@@ -11178,6 +11189,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const spi = avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0;
 
   const refisPrevistoComInd = useMemo(() => {
+    // Rev. 1712.1 — pvMacro é macro do envelope MSP — independe de
+    // indiretas/diretas, então com ou sem indiretas o Previsto Global é o
+    // mesmo (e bate com o top card e Avanço Semanal).
+    if (pvMacro) return pvMacro(semanaFimRefis);
     const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim);
     if (!f.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(f);
@@ -11185,7 +11200,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       const peso = getPeso(a, semPeso);
       return s + prevIndRef(a, semanaFimRefis) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, semanaFimRefis, usarPesoPorDuracao]);
+  }, [atividades, semanaFimRefis, usarPesoPorDuracao, pvMacro]);
 
   const refisRealComInd = useMemo(() => {
     const m: Record<number, number> = {};
@@ -11221,6 +11236,8 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const avancoPrevAntesComInd = useMemo(() => {
     if (!semAntesFim) return 0;
+    // Rev. 1712.1 — paridade com `refisPrevistoComInd`: pvMacro macro envelope.
+    if (pvMacro) return pvMacro(semAntesFim);
     const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim);
     if (!f.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(f);
@@ -11228,7 +11245,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       const peso = getPeso(a, semPeso);
       return s + prevIndRef(a, semAntesFim) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, semAntesFim, usarPesoPorDuracao]);
+  }, [atividades, semAntesFim, usarPesoPorDuracao, pvMacro]);
 
   const avancoRealAntesComInd = useMemo(() => {
     if (!semAntes) return 0;
