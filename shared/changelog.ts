@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1721,
+    titulo: "Proj./Doc. Técnicos — Atalhos de 'Nova Pasta' agora derivam do catálogo central de Disciplinas (Configurações)",
+    descricao: "Reportado: o modal 'Nova Pasta' (criar disciplina dentro do projeto) mostrava uma lista FIXA hardcoded de atalhos (Estrutural / Elétrica / Hidrossanitário / HVAC / Incêndio / Fundações / Topografia / Paisagismo / Geotecnia / Telecom / Automação) — faltavam disciplinas que o usuário cadastrou em Configurações (ex.: DOC—Documento, COM—Comunicação/Dados) e sobrava 'Telecom/Dados (TEL)' que nem existia no catálogo. Causa em `client/src/pages/gestaodocumentos/index.tsx` ~L964: array literal `DISCIPLINA_SHORTCUTS` definido manualmente. Fix Rev. 1721: a lista agora é um `useMemo` derivado de `disciplinas.data` (query `gestaoDocumentos.listDisciplinas` — catálogo central por companyId, mesmo que alimenta a tela 'Configurações > Disciplinas'). Mantido o array hardcoded como FALLBACK para os primeiros milisegundos antes da query carregar (evita modal vazio). Resultado: usuário vê EXATAMENTE as disciplinas que cadastrou em Configurações como atalhos no momento de criar pasta no projeto. Filtro de 'já criadas no ficheiro' continua funcionando (~L1965). Sem schema change, sem mudança de servidor.",
+    tipo: 'bugfix',
+    modulos: 'Proj./Doc. Técnicos',
+    criadoPor: 'Replit Agent',
+    dataPublicacao: '2026-05-12 23:30:00',
+  },
+  {
     version: 1720,
     titulo: "Proj./Doc. Técnicos — Substituir confirmação nativa do navegador (iPad/Safari 'replit.dev diz') por modal in-app",
     descricao: "Reportado: ao excluir uma sub-pasta (ex.: 'Remover sub-pasta DOC?') no iPad, aparecia o popup nativo do Safari com o cabeçalho feio 'b41aedae-...replit.dev diz' — visualmente quebrado, sem identidade do app. Causa em `client/src/pages/gestaodocumentos/index.tsx` ~L1507 e ~L1544: usava `window.confirm()` direto. Fix Rev. 1720: novo state `confirmModal` + helper `askConfirm()` no componente, com `<AlertDialog>` (shadcn/Radix) renderizado uma única vez no fim do JSX. Suporta título, descrição, label customizado e flag `destructive` (botão vermelho). Substituídos os 2 `confirm()` da árvore PASTAS (excluir disciplina e excluir sub-pasta) — agora abrem modal estilizado com texto explicativo do impacto. Outros `confirm()` legados (ART, documento, lote, revisão) preservados — podem migrar incrementalmente. Sem schema change, sem mudança de servidor.",

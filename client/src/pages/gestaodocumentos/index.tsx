@@ -961,7 +961,12 @@ export default function GestaoDocumentos() {
   }
 
   // Rev. 1345: lista compartilhada de atalhos (usada no modal e em handleCreateDisc).
-  const DISCIPLINA_SHORTCUTS = [
+  // Rev. 1721: agora deriva da catálogo CENTRAL de disciplinas (Configurações),
+  // não mais hardcoded. Antes faltavam disciplinas customizadas (ex.: DOC,
+  // Comunicação/Dados) e sobravam outras que o usuário nem cadastrou (ex.: TEL).
+  // Fallback: se a query ainda não carregou, usa a lista legada hardcoded para
+  // não deixar o modal vazio nos primeiros milisegundos.
+  const DISCIPLINA_SHORTCUTS_FALLBACK = [
     { nome: "Arquitetura", sigla: "ARQ", cor: "#3B82F6" },
     { nome: "Estrutural", sigla: "EST", cor: "#EF4444" },
     { nome: "Elétrica", sigla: "ELE", cor: "#F59E0B" },
@@ -975,6 +980,16 @@ export default function GestaoDocumentos() {
     { nome: "Telecom / Dados", sigla: "TEL", cor: "#0EA5E9" },
     { nome: "Automação", sigla: "AUT", cor: "#6366F1" },
   ];
+  const DISCIPLINA_SHORTCUTS = useMemo(() => {
+    const cfg = (disciplinas.data || []) as Array<{ nome: string; sigla: string; cor: string | null }>;
+    if (cfg.length === 0) return DISCIPLINA_SHORTCUTS_FALLBACK;
+    return cfg.map(d => ({
+      nome: d.nome,
+      sigla: d.sigla,
+      cor: d.cor || "#3B82F6",
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disciplinas.data]);
 
   function handleOpenObra(obra: any) {
     setSelectedDiscId(null);
