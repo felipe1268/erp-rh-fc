@@ -355,7 +355,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         "ITEM", "TAREFA",
         "Previsto Início", "Previsto Fim",
         "Real Início", "Real Fim",
-        "META SEM %",
+        "META SEMANAL %",
         "RESPONSÁVEL",
         ...dias.map((d) => `${abrevDia(d)} ${fmtDiaMes(d)}`),
         "STATUS",
@@ -376,7 +376,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         "bg-orange-400": "FFFB923C",
         "bg-red-500":    "FFEF4444",
       };
-      const diasColStart = 9; // primeira coluna de dia (após META SEM e RESPONSÁVEL)
+      const diasColStart = 9; // primeira coluna de dia (após META SEMANAL e RESPONSÁVEL)
       const statusCol = 9 + dias.length;
       let r = headerRow + 1;
       linhas.forEach((l) => {
@@ -426,7 +426,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       ws.getColumn(1).width = 8;
       ws.getColumn(2).width = 50;
       [3, 4, 5, 6].forEach((i) => (ws.getColumn(i).width = 12));
-      ws.getColumn(7).width = 11; // META SEM %
+      ws.getColumn(7).width = 16; // META SEMANAL %
       ws.getColumn(8).width = 18; // RESPONSÁVEL
       for (let i = 0; i < dias.length; i++) ws.getColumn(diasColStart + i).width = 9;
       ws.getColumn(statusCol).width = 13;
@@ -556,7 +556,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                 <th rowSpan={2} className="border border-slate-300 px-2 py-1 text-left font-bold min-w-[260px]">TAREFA</th>
                 <th colSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold">DATA</th>
                 <th colSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold">Real</th>
-                <th rowSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold w-16" title="Meta de avanço da semana (PV semanal × peso financeiro)">META SEM</th>
+                <th rowSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold w-24 whitespace-nowrap" title="Meta semanal de avanço físico — quanto a atividade deveria avançar nesta semana (PV semanal × peso financeiro). Base para o cálculo de aderência (PPC) e do status (Concluída / No prazo / Atrasado / Não exec. / Sem meta).">META SEMANAL</th>
                 <th rowSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold w-24">RESPONSÁVEL</th>
                 <th colSpan={dias.length} className="border border-slate-300 px-1 py-1 text-center font-bold">PERÍODO: {periodoStr}</th>
                 <th rowSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold w-20" title="Status da atividade na semana selecionada">STATUS</th>
