@@ -201,22 +201,24 @@ export default function ContratoNovo() {
     { enabled: (companyId ?? 0) > 0 }
   );
 
-  const { data: atividades = [] } = trpc.terceiroContratos.listarAtividadesProjeto.useQuery(
-    { projetoId: selectedProjetoId! },
-    { enabled: !!selectedProjetoId }
-  );
-
   // listActive já retorna apenas obras ativas (isActive=1) — sem filtro adicional
   const obrasAtivas = obrasAll as any[];
 
   // Rev. 1699 — selectedProjetoId via useMemo (sem setState) evita loop infinito
   // disparado pelo `data: projetos = []` default do useQuery, que criava nova
   // referência de array a cada render enquanto a query estava carregando.
+  // Rev. 1709 — Declarar ANTES do useQuery de atividades; antes era usado no
+  // `enabled`/`projetoId` em TDZ → ReferenceError "Cannot access ... before initialization".
   const selectedProjetoId = useMemo<number | null>(() => {
     if (!form.obraId) return null;
     const projeto = (projetos as any[]).find(p => String(p.obraId) === form.obraId);
     return projeto?.id ?? null;
   }, [form.obraId, projetos]);
+
+  const { data: atividades = [] } = trpc.terceiroContratos.listarAtividadesProjeto.useQuery(
+    { projetoId: selectedProjetoId! },
+    { enabled: !!selectedProjetoId }
+  );
 
   // Reseta atividades selecionadas APENAS quando a obra muda de verdade
   // (não na primeira montagem nem em re-renders sem mudança real).

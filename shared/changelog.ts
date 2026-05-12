@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1709,
+    titulo: "Contratos de Terceiros — 'Novo Contrato' quebrava com ReferenceError 'Cannot access selectedProjetoId before initialization' (TDZ)",
+    descricao: "Reportado: a tela `/terceiros/contratos/novo` exibia 'Ocorreu um erro inesperado' com `ReferenceError: Cannot access 'selectedProjetoId' before initialization` ainda na montagem. Causa em `client/src/pages/terceiros/contratos/ContratoNovo.tsx`: a Rev. 1699 trocou `selectedProjetoId` (antes `useState`) por `useMemo`, mas o `useMemo` ficou DECLARADO em ~L215, DEPOIS do `useQuery` de `listarAtividadesProjeto` (~L204) que já usava `selectedProjetoId` no `enabled` e no `projetoId`. Em runtime isso é Temporal Dead Zone — `const` declarada com `useMemo` não tem hoisting, então a leitura no useQuery quebra antes da declaração rodar. Fix Rev. 1709: mover o bloco do `useMemo selectedProjetoId` para ANTES do `useQuery` de atividades (e do `obrasAtivas` que não dependia dele). Comentário adicionado explicando o porquê para não regredir. Sem schema change, sem mudança de comportamento — só ordem de declaração.",
+    tipo: "fix",
+    modulos: "Terceiros/Contratos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 11:00:00",
+  },
+  {
     version: 1708,
     titulo: "Painel RH — 'Desembolso pendente (sem baixa)' agora desconta baixas parciais (Rescisão + FGTS + Complementar)",
     descricao: "Reportado: após dar baixa PARCIAL em alguns Avisos Prévios (ex.: só rescisão paga, FGTS pendente), o card 'Avisos Prévios em Andamento' do Painel RH continuava exibindo o `valorEstimadoTotal` integral em 'Desembolso pendente (sem baixa)' — não refletia o que já tinha sido pago. Causa: `homeData.ts` ~L527-563 expunha apenas `valorEstimado: a.valorEstimadoTotal`, ignorando os 3 campos de baixa do schema (`baixaRescisaoValor`, `baixaFgtsValor`, `baixaComplementarValor`). Fix em 2 camadas: (1) Server `homeData.ts` no `.map()` calcula `valorPago = baixaR + baixaF + baixaC` e `saldoPendente = max(0, valorEstimado - valorPago)`, expondo ambos no payload (+ os 3 valores brutos para detalhe futuro). (2) Cliente `PainelRH.tsx` ~L322 muda `totalValorEstimado` pra somar `saldoPendente` (com fallback para o cálculo local quando server antigo) e adiciona `totalJaPago`. Card no header ~L345 mostra '(já baixado: R$ X)' em verde ao lado do desembolso pendente. Sem schema change, sem mudança em endpoints — só leitura/exibição.",
