@@ -3323,6 +3323,11 @@ export const avisoPrevioFeriasRouter = router({
           employeeCpf: employees.cpf,
           employeeCargo: employees.cargo,
           employeeDataAdmissao: employees.dataAdmissao,
+          // Rev. 1694 — exposição p/ tag "Direito de férias perdido por afastamento >180 dias"
+          // (CLT Art. 133, IV — auxílio-doença/INSS por mais de 6 meses no período aquisitivo)
+          employeeStatus: employees.status,
+          employeeLicencaDataInicio: employees.licencaDataInicio,
+          employeeLicencaTipo: employees.licencaTipo,
         })
         .from(vacationPeriods)
         .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))
@@ -3341,6 +3346,19 @@ export const avisoPrevioFeriasRouter = router({
         const grouped: Record<number, { employee: any; periodos: any[] }> = {};
         for (const r of rows) {
           if (!grouped[r.employeeId]) {
+            // Rev. 1694 — calcula dias de afastamento contínuo a partir de
+            // licencaDataInicio quando o status é Afastado/Licenca. Quando
+            // ≥ 180, sinaliza perda do direito a férias do(s) período(s)
+            // aquisitivo(s) sobrepostos (CLT Art. 133, IV).
+            let diasAfastado: number | null = null;
+            const isAfastado = r.employeeStatus === 'Afastado' || r.employeeStatus === 'Licenca' || r.employeeStatus === 'Licença';
+            if (isAfastado && r.employeeLicencaDataInicio) {
+              const ini = new Date(r.employeeLicencaDataInicio + 'T00:00:00');
+              if (!isNaN(ini.getTime())) {
+                const ms = Date.now() - ini.getTime();
+                diasAfastado = Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+              }
+            }
             grouped[r.employeeId] = {
               employee: {
                 id: r.employeeId,
@@ -3348,6 +3366,11 @@ export const avisoPrevioFeriasRouter = router({
                 cpf: r.employeeCpf,
                 cargo: r.employeeCargo,
                 dataAdmissao: r.employeeDataAdmissao,
+                status: r.employeeStatus,
+                licencaDataInicio: r.employeeLicencaDataInicio,
+                licencaTipo: r.employeeLicencaTipo,
+                diasAfastado,
+                perdeuFeriasPorAfastamento: diasAfastado !== null && diasAfastado >= 180,
               },
               periodos: [],
             };

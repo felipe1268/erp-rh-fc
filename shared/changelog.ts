@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1694,
+    titulo: "Férias Vencidas — Tag 'Direito de férias perdido' para afastados há mais de 180 dias (CLT Art. 133, IV)",
+    descricao: "Solicitado: colaboradores com mais de 180 dias contínuos de afastamento perdem o direito às férias do período aquisitivo correspondente (CLT Art. 133, IV — auxílio-doença/INSS por mais de 6 meses). Era preciso uma tag visual nos cards de Férias Vencidas para o RH não confirmar pagamento de quem perdeu o direito. Fix em 2 camadas: (1) Server `listarVencidas` em `avisoPrevioFerias.ts` ~L3329-L3380 — passou a expor `status`, `licencaDataInicio` e `licencaTipo` do funcionário; calcula `diasAfastado` (today − licencaDataInicio em dias, quando status ∈ ['Afastado','Licenca','Licença'] e há licencaDataInicio) e flag derivada `perdeuFeriasPorAfastamento = diasAfastado >= 180` no objeto `employee` agrupado. (2) Client `Ferias.tsx` ~L1303-L1317 — quando a flag é true, renderiza badge rosa (AlertTriangle + texto 'Direito de férias perdido — afastado há N dias (Art. 133, IV CLT)') ao lado do nome no card de Férias Vencidas, com tooltip explicando a regra legal e que a contagem reinicia após o retorno. Sem schema change — usa campos já existentes em `employees` (`licencaDataInicio`, `licencaTipo`).",
+    tipo: "melhoria",
+    modulos: "RH/Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 00:30:00",
+  },
+  {
     version: 1693,
     titulo: "Solicitações de Compra — Badge 'Aguardando Pagamento' separa pendência financeira de pendência logística",
     descricao: "Reportado: SC-2026-0146 (Cimento) continuava com badge 'Pendente' (amarelo) no header mesmo com OC OC-2026-0117 já entregue e material recebido — a única pendência era o pagamento (vencimento 04/06). Causa: badge lia `detalhe.status` cru ('pendente'/'cotacao'), sem distinguir entre pendência logística (entrega) e pendência financeira (pagamento). Mesmo padrão das Revs. 1684 e 1687, agora aplicado ao badge visual. Fix em 3 camadas: (1) Server `getSolicitacao` em `compras.ts` ~L2458 expõe `_ocsEntregues` (TODAS as OCs ativas vinculadas em entregue/recebida/recebido/concluida) — antes só `listarSolicitacoes` tinha esse flag. (2) Client `Solicitacoes.tsx` ~L24-46 — novo status derivado `aguardando_pagamento` (label 'Aguardando Pagamento', cor violeta) no STATUS_CFG + helper `statusEfetivoSC(r)` que retorna `aguardando_pagamento` quando `_ocsEntregues===true && status ∈ ['pendente','cotacao','em_andamento']`. (3) Aplicado nos 2 pontos de render do badge — header do detalhe da SC ~L4364 e tabela de listagem ~L2331. Sem schema change, sem alterar status persistido — fix puramente visual/derivado. Pagamento continua controlado pelo módulo Financeiro.",

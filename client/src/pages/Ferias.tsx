@@ -1297,9 +1297,21 @@ export default function Ferias() {
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <div>
-                              <p className="font-semibold text-blue-700 cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(grupo.employee.id)}>
-                                {grupo.employee.nome}
-                              </p>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-semibold text-blue-700 cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(grupo.employee.id)}>
+                                  {grupo.employee.nome}
+                                </p>
+                                {/* Rev. 1694 — Tag de perda do direito a férias por afastamento >180 dias (CLT Art. 133, IV) */}
+                                {grupo.employee.perdeuFeriasPorAfastamento && (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border bg-rose-50 text-rose-700 border-rose-300"
+                                    title={`Afastado há ${grupo.employee.diasAfastado} dias (desde ${formatDate(grupo.employee.licencaDataInicio)}). Conforme Art. 133, IV da CLT, o empregado que recebe auxílio-doença/INSS por mais de 6 meses (mesmo descontínuos) dentro do período aquisitivo perde o direito às férias daquele período. Reinicia a contagem após o retorno.`}
+                                  >
+                                    <AlertTriangle className="h-3 w-3" />
+                                    Direito de férias perdido — afastado há {grupo.employee.diasAfastado} dias (Art. 133, IV CLT)
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-xs text-muted-foreground">
                                 {grupo.employee.cargo} · CPF: {formatCPF(grupo.employee.cpf)} · Admissão: {formatDate(grupo.employee.dataAdmissao)}
                               </p>
