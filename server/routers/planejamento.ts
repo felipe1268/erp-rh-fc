@@ -739,12 +739,26 @@ export const planejamentoRouter = router({
         const realFimDigitado = r.dataFimReal    ? toDateStr(r.dataFimReal)    : null;
         // Real Fim derivado: prioriza a semana em que atingiu 100% (concluído).
         // Caso contrário usa a ÚLTIMA semana COM avanço — atividade em
-        // andamento mostra "até onde a obra chegou", inclusive APÓS o fim
-        // planejado (preserva sinal de atraso real, conforme PMBOK 7ª: o
-        // realizado nunca deve ser truncado pela linha de base).
-        const realFimDerivado = av?.concluiuEm
-          ? av.concluiuEm
-          : (av?.ultima ? av.ultima : null);
+        // andamento mostra "até onde a obra chegou".
+        // Rev. 1664.1 — `semana` no banco é Segunda-feira (início da semana).
+        // Usar Mon como Real Fim trunca a janela para 1 dia e o LOTUS pintava
+        // só a Segunda. Estende para o DOMINGO da semana (mon+6) para que a
+        // janela cubra a semana inteira de execução. Limita pelo Fim planejado
+        // (uma atividade prevista p/ 04-07 que concluiu na semana 04-10 deve
+        // mostrar realFim=07, não 10) — assim o realizado não cria envelope
+        // que o previsto não cobre.
+        const endOfWeek = (mondayISO: string): string => {
+          const [y, m, d] = mondayISO.split("-").map(Number);
+          const dt = new Date(Date.UTC(y, m - 1, d + 6));
+          return dt.toISOString().slice(0, 10);
+        };
+        const realFimDerivado = (() => {
+          const baseSem = av?.concluiuEm ?? av?.ultima ?? null;
+          if (!baseSem) return null;
+          const fimSem = endOfWeek(baseSem);
+          if (fimPlan && fimSem > fimPlan) return fimPlan;
+          return fimSem;
+        })();
         return {
           ...r,
           dataInicio:       inicioPlan,

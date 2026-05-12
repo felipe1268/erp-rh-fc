@@ -11542,4 +11542,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-12 01:30:00",
   },
+  {
+    version: 1665,
+    titulo: "Programação Semanal LOTUS — Real Fim derivado cobre a semana inteira (não só Segunda)",
+    descricao: "Bugfix complementar do Rev. 1664. Reportado: atividades 2.1.2 (ART, 28%), 2.2.1 (Tapume, 28%), 3.1 (Montagem escoramento, 100%) tinham avanço lançado no FC mas o LOTUS pintava apenas a SEGUNDA verde — Tue/Wed/Thu apareciam vermelhas. Causa: backend `listarAtividades` em `server/routers/planejamento.ts` ~L745 derivava `realFimDerivado = av.concluiuEm ?? av.ultima` — mas `planejamento_avancos.semana` é gravada com data de SEGUNDA-FEIRA (início da semana). Resultado: realFim=04/05 (Mon), janela [04→04] = 1 dia, e o auto-derive do frontend (Rev. 1664) era pulado porque `realIni && realFim` ambos truthy. Correção: `realFimDerivado = endOfWeek(baseSem)` (Mon+6 = Domingo), limitado pelo `fimPlan` planejado para não criar envelope além do previsto. Casos validados: 3.1 plan 04-07 + 100% sem 04 → realFim=07 (todos Mon-Thu verdes); 2.1.2 plan 04-22 + 28% sem 04 → realFim=10 (Mon-Sun verdes na semana corrente). Sem alteração quando `dataFimReal` é digitado manualmente (override preservado). `server/routers/planejamento.ts` ~L743-764.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 01:50:00",
+  },
 ];
