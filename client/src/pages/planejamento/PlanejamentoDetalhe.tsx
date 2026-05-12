@@ -6039,14 +6039,20 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
               const anterior = avancoAnterior[a.id] ?? 0;
               const alterado = avancoLocal[a.id] !== undefined;
 
-              // Previsto individual — usa FIM da semana como referência
+              // Rev. 1669 — Previsto individual em paridade EXATA com Programação
+              // Semanal: usa `fracaoDecorridaMs` (dias úteis do calendário MSP)
+              // em vez de interpolação linear por dias corridos. Antes, atividade
+              // 04/05→22/05 com cutoff 07/05 dava 16,67% aqui (3/18 corridos) e
+              // 26,67% lá (4/15 úteis). A divergência somava e o usuário via
+              // "Previsto" diferente entre as duas abas. Agora batem.
               let prevInd = 0;
               if (a.dataInicio && a.dataFim) {
                 const ini = new Date(a.dataInicio + "T12:00:00").getTime();
                 const fim = new Date(a.dataFim    + "T12:00:00").getTime();
-                const ref = new Date(semanaFim     + "T12:00:00").getTime();
-                if (ref >= fim) prevInd = 100;
-                else if (ref > ini) prevInd = Math.min(100, ((ref - ini) / (fim - ini)) * 100);
+                // Cutoff = fim da semana cutoff (Quinta após Rev. 1667), end of day.
+                const cutoffEod = new Date(semanaFim + "T23:59:59");
+                const ref = cutoffEod.getTime();
+                prevInd = Math.min(100, Math.max(0, fracaoDecorridaMs(ini, ref, fim, calMSP) * 100));
               }
               const atrasada = !alterado && atual < prevInd - 5;
 

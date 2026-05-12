@@ -11562,6 +11562,15 @@ export const CHANGELOG: RevisionEntry[] = [
   },
   {
     version: 1669,
+    titulo: "Avanço Semanal — '% Previsto' por atividade em paridade EXATA com Programação Semanal (dias úteis MSP)",
+    descricao: "Reportado pelo usuário: mesma atividade (ex.: 04/05/2026 → 22/05/2026, cutoff Qui 07/05) mostrava Previsto **16,67%** na aba Avanço Semanal e **26,67%** na aba Programação Semanal. Causa raiz: as duas telas usavam fórmulas diferentes para o 'Previsto' por atividade. Avanço Semanal interpolava por **dias corridos** (`(ref-ini)/(fim-ini)` = 3/18 = 16,67%). Programação Semanal usa `fracaoDecorridaMs(ini, ref, fim, calMSP)` que respeita os **dias úteis do calendário MSP** (Mon-Fri sem feriados) → 4/15 = 26,67%. **Fix (Rev. 1669)**: trocado o `prevInd` per-row do Avanço Semanal para a MESMA helper `fracaoDecorridaMs` com o `calMSP` que já estava no escopo do componente (desde Rev. 1645) e era usado em outros pontos da própria tela (`previstoRealizadoSemana` ~L4982). Cutoff = `semanaFim` end-of-day (Quinta após Rev. 1667). Agora as duas abas mostram exatamente o mesmo número por atividade. `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` ~L6045-6058.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 04:45:00",
+  },
+  {
+    version: 1669,
     titulo: "Avanço Semanal — Nova coluna '% Previsto' + rename '% Acumulado' → '% Realizado (Acum.)'",
     descricao: "Solicitado pelo usuário: na tabela de atividades da aba Avanço Semanal, exibir o '% previsto conforme cronograma' por atividade ao lado do realizado (que já existia rotulado como '% Acumulado'). **Fix**: adicionada coluna 'pen Previsto' (laranja, mesma cor do 'Previsto' do header) entre '% Anterior' e o slider, reaproveitando `prevInd` já calculado por linha — interpolação linear entre `dataInicio` e `dataFim` no fim da semana cutoff (mesma fórmula da Programação Semanal). Coluna do slider renomeada para '% Realizado (Acum.)' pra clareza. colSpan dos placeholders ajustado de 7 para 8. `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` ~L6020-6024 (header), ~L6029/6034 (colSpan), ~L6097-6100 (cell).",
     tipo: "ui",
