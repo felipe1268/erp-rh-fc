@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1699,
+    titulo: "Contratos de Prestação de Serviço (Terceiros) — Tela 'Novo Contrato' explodia com 'Maximum update depth exceeded' (loop infinito)",
+    descricao: "Reportado: ao acessar `/terceiros/contratos/novo` a página renderizava a tela de erro 'Ocorreu um erro inesperado.' com stack trace 'Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate.' Causa em `client/src/pages/terceiros/contratos/ContratoNovo.tsx` ~L214: `useEffect(() => { ... setSelectedProjetoId(...); setSelectedAtividades([]); }, [form.obraId, projetos])` dependia do array `projetos` retornado por `useQuery` com default `data: projetos = []`. Enquanto a query está carregando (data === undefined), o `= []` cria uma NOVA referência de array em cada render → React vê dep mudada → effect re-roda → `setSelectedAtividades([])` força re-render → novo `[]` → loop infinito até React abortar. Fix: (1) trocou `selectedProjetoId` de `useState`+effect para `useMemo` (não chama setState, só recalcula valor — sem loop possível). (2) Reset de `selectedAtividades` agora só dispara via guard `useRef` quando `form.obraId` muda DE FATO (string diferente da última observada), não em todo re-render. Sem schema change.",
+    tipo: "correcao",
+    modulos: "Terceiros / Contratos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 03:00:00",
+  },
+  {
     version: 1698,
     titulo: "Editar Colaborador — Campos de Afastamento (Data, Tipo, Previsão de Retorno) aparecem quando Status = 'Afastado'",
     descricao: "Solicitado: ao colocar status do colaborador como 'Afastado', faltava onde registrar a data do afastamento. Sem isso a regra dos 180 dias da Rev. 1694 (Art. 133, IV CLT — perda do direito a férias por afastamento >6 meses contínuos) não tinha como ser alimentada manualmente. Fix em `client/src/pages/Colaboradores.tsx` ~L1432: novo bloco condicional `form.status === 'Afastado'` no grid da aba Profissional, logo após o select de Status, com 3 campos: (1) **Data de Afastamento** (obrigatório, type=date) → bind em `form.licencaDataInicio` (mesmo campo já consumido por `listarVencidas` em `avisoPrevioFerias.ts` Rev. 1694 para calcular `diasAfastado`/`perdeuFeriasPorAfastamento`); (2) **Tipo de Afastamento** (Auxílio-Doença INSS, Acidente de Trabalho INSS, Atestado Médico, Suspensão Disciplinar, Outros) → bind em `form.licencaTipo`; (3) **Previsão de Retorno** (opcional) → bind em `form.licencaDataFim`. Reutiliza os campos `licenca_data_inicio/licenca_tipo/licenca_data_fim` já existentes no schema (também consumidos pela Licença Maternidade), portanto sem mudança de backend nem de schema. Persistência é automática via mutação de update já existente. Quando o status sai de 'Afastado' os valores ficam preservados (úteis para histórico e para o cálculo retroativo da regra dos 180d).",

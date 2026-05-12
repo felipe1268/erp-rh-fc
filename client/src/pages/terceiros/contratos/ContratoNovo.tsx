@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
@@ -184,7 +184,6 @@ export default function ContratoNovo() {
     dataTermino: "",
     observacoes: "",
   });
-  const [selectedProjetoId, setSelectedProjetoId] = useState<number | null>(null);
   const [selectedAtividades, setSelectedAtividades] = useState<number[]>([]);
 
   const { data: empresas = [] } = trpc.terceiros.empresas.list.useQuery(
@@ -210,16 +209,24 @@ export default function ContratoNovo() {
   // listActive já retorna apenas obras ativas (isActive=1) — sem filtro adicional
   const obrasAtivas = obrasAll as any[];
 
-  // Auto-detecta projeto quando obra muda
-  useEffect(() => {
-    if (form.obraId) {
-      const projeto = (projetos as any[]).find(p => String(p.obraId) === form.obraId);
-      setSelectedProjetoId(projeto?.id ?? null);
-    } else {
-      setSelectedProjetoId(null);
-    }
-    setSelectedAtividades([]);
+  // Rev. 1699 — selectedProjetoId via useMemo (sem setState) evita loop infinito
+  // disparado pelo `data: projetos = []` default do useQuery, que criava nova
+  // referência de array a cada render enquanto a query estava carregando.
+  const selectedProjetoId = useMemo<number | null>(() => {
+    if (!form.obraId) return null;
+    const projeto = (projetos as any[]).find(p => String(p.obraId) === form.obraId);
+    return projeto?.id ?? null;
   }, [form.obraId, projetos]);
+
+  // Reseta atividades selecionadas APENAS quando a obra muda de verdade
+  // (não na primeira montagem nem em re-renders sem mudança real).
+  const lastObraIdRef = useRef<string>(form.obraId);
+  useEffect(() => {
+    if (lastObraIdRef.current !== form.obraId) {
+      lastObraIdRef.current = form.obraId;
+      setSelectedAtividades([]);
+    }
+  }, [form.obraId]);
 
   const importarMut = trpc.terceiroContratos.importarAtividadesPlanejamento.useMutation({
     onSuccess: () => toast.success("Atividades do planejamento vinculadas!"),
