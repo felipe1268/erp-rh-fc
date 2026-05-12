@@ -11650,4 +11650,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-12 04:30:00",
   },
+  {
+    version: 1673,
+    titulo: "Avanço Semanal — Coluna '% Previsto' usa snapshot Texto10 do MSP quando cutoff = StatusDate (paridade absoluta)",
+    descricao: "Reportado pelo usuário: após importar o XML do MSP no REVTE-CIVIL (Semana 1, cutoff 07/05/2026), a coluna '% Previsto' das atividades 2.1.1, 2.1.2, 2.2.1, 2.3.1, 2.3.2 (todas 04/05→22/05) mostrava **33,33%** enquanto o '% Realizado (Acum.)' mostrava **29%** — variação fantasma de -0,08% no card. **Diagnóstico**: o XML traz por atividade `Texto10` (formula `Round(ProjDateDiff(start, statusDate, cal)/ProjDateDiff(start, finish, cal)*100, 4)`) = **28,57%** (4 dias úteis / 14 dias úteis no calendário oficial do MSP) e `PercentComplete` = **29** (= 28,57 arredondado pro inteiro pelo usuário no MSP). Ou seja, no MSP do usuário Previsto≈Realizado. No ERP, a coluna '% Previsto' recalculava via `fracaoDecorridaMs` sobre nosso `calMSP` parseado e dava **33,33%** (4/12 — divergência por arredondamento de minutos parciais e tratamento de feriados na ProjDateDiff oficial), inflando a variação. **Fix (Rev. 1673)**: cleanup do consumer pendente que a Rev. 1671 Fase 2 deixou explícito como 'futuro'. Em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` ~L6112-6127, o `prevInd` per-row da tabela Avanço Semanal agora prefere `a.previstoMspPct` (snapshot Texto10 gravado pela Rev. 1670) quando `semanaFim === calMSP.statusDateSnapshot`. Para cutoffs diferentes do StatusDate (semanas passadas/futuras navegadas), mantém o fallback `fracaoDecorridaMs` — única fonte disponível. Mesmo padrão dos call-sites L617 (top bar) e L4902 (`pvMacro`) que já tratavam o nível de projeto. **Pré-requisito**: o XML deve ser importado pela aba **Cronograma → Importar Cronograma** (Substituir/Mesclar) — não pelo botão 'Importar MS Project' do Avanço Semanal, que só preenche `planejamento_avancos` e não toca `planejamento_atividades.previstoMspPct`. Sem o snapshot no banco, o ERP cai no fallback antigo.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 06:30:00",
+  },
 ];

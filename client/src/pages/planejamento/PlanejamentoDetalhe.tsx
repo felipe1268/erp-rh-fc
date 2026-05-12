@@ -6095,14 +6095,39 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
               // 04/05→22/05 com cutoff 07/05 dava 16,67% aqui (3/18 corridos) e
               // 26,67% lá (4/15 úteis). A divergência somava e o usuário via
               // "Previsto" diferente entre as duas abas. Agora batem.
+              // Rev. 1673 — Cleanup do consumer pendente (Rev. 1671 Fase 2):
+              // quando a atividade tem snapshot Texto10 do MSP gravado
+              // (`previstoMspPct`, Rev. 1670) E o cutoff visualizado coincide
+              // com o StatusDate do XML, usa o snapshot — paridade ABSOLUTA com
+              // o que o MSP exibe. Antes, recalcular com `fracaoDecorridaMs`
+              // sobre nosso calMSP gerava resíduo (ex.: REVTE-CIVIL atividade
+              // 2.1.1 04/05→22/05, cutoff 07/05: ERP recalc = 33,33% (4 dias /
+              // 12 úteis com nosso cal); MSP Texto10 snapshot = 28,57% (4/14 da
+              // ProjDateDiff oficial). PercentComplete (Realizado) = 29% — em
+              // paridade com Texto10 (=Previsto), porém o display ERP mostrava
+              // 29 vs 33,33 → variação fantasma -0,08%. Agora 29 vs 28,57 → ~0.
               let prevInd = 0;
               if (a.dataInicio && a.dataFim) {
-                const ini = new Date(a.dataInicio + "T12:00:00").getTime();
-                const fim = new Date(a.dataFim    + "T12:00:00").getTime();
-                // Cutoff = fim da semana cutoff (Quinta após Rev. 1667), end of day.
-                const cutoffEod = new Date(semanaFim + "T23:59:59");
-                const ref = cutoffEod.getTime();
-                prevInd = Math.min(100, Math.max(0, fracaoDecorridaMs(ini, ref, fim, calMSP) * 100));
+                // Rev. 1673 — `envOk` espelha o guard project-level de L617/L4902:
+                // se o envelope (dataInicio/dataTerminoContratual) foi editado
+                // depois do import, snapshots ficam stale e devolvemos ao recalc.
+                const envOk = !calMSP?.envelopeStartSnapshot || !calMSP?.envelopeFinishSnapshot
+                  || (projIniIso === calMSP.envelopeStartSnapshot && projFimIso === calMSP.envelopeFinishSnapshot);
+                const snap = a.previstoMspPct != null ? Number(a.previstoMspPct) : NaN;
+                const usarSnapshot = Number.isFinite(snap)
+                  && calMSP?.statusDateSnapshot
+                  && semanaFim === calMSP.statusDateSnapshot
+                  && envOk;
+                if (usarSnapshot) {
+                  prevInd = Math.min(100, Math.max(0, snap));
+                } else {
+                  const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+                  const fim = new Date(a.dataFim    + "T12:00:00").getTime();
+                  // Cutoff = fim da semana cutoff (Quinta após Rev. 1667), end of day.
+                  const cutoffEod = new Date(semanaFim + "T23:59:59");
+                  const ref = cutoffEod.getTime();
+                  prevInd = Math.min(100, Math.max(0, fracaoDecorridaMs(ini, ref, fim, calMSP) * 100));
+                }
               }
               const atrasada = !alterado && atual < prevInd - 5;
 
