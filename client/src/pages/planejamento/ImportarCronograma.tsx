@@ -381,6 +381,30 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
       else if (fid === "188743747") realizadoMsp = Math.min(100, Math.max(0, num)); // Texto7 — %Reali AUX
     }
 
+    // Rev. 1674 — Fallback de alta precisão: ActualDuration / (ActualDuration +
+    // RemainingDuration) é o que o MSP usa internamente pra calcular
+    // PercentComplete antes de arredondar pro inteiro. Mesma precisão do
+    // Texto10 (4 casas), sem depender do template FC. Evita o gap de até
+    // ±0,5pp por atividade quando usuário tracka via %Concluída nativo.
+    // Ex.: WBS 4.1.1 do REVTE-CIVIL — AD=2160min, RD=150660min → 1,4134%,
+    // batendo com Texto10=1,41% (PercentComplete=1 perdia 0,41pp). Aplica
+    // só quando Texto7 ausente (Texto7 tem semântica diferente: qto/qt).
+    if (realizadoMsp === undefined) {
+      const adRaw = task.querySelector("ActualDuration")?.textContent ?? "";
+      const rdRaw = task.querySelector("RemainingDuration")?.textContent ?? "";
+      const parseDurMin = (s: string): number | null => {
+        const m = /^PT(\d+)H(\d+)M(\d+)S/.exec(s);
+        if (!m) return null;
+        return +m[1] * 60 + +m[2] + +m[3] / 60;
+      };
+      const adMin = parseDurMin(adRaw);
+      const rdMin = parseDurMin(rdRaw);
+      if (adMin != null && rdMin != null && adMin + rdMin > 0) {
+        const pct = (adMin / (adMin + rdMin)) * 100;
+        if (Number.isFinite(pct)) realizadoMsp = Math.min(100, Math.max(0, pct));
+      }
+    }
+
     // Pula a tarefa de nível 0 (cabeçalho do projeto)
     if (uid === "0" || name === "" || level === 0) continue;
 

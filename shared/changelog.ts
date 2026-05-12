@@ -11659,4 +11659,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-12 06:30:00",
   },
+  {
+    version: 1674,
+    titulo: "Import MS Project — Realizado com precisão MSP nativa via ActualDuration/(AD+RD), eliminando gap por arredondamento de PercentComplete inteiro",
+    descricao: "Reportado pelo usuário: mesmo após Rev. 1672 (lê Texto7) e Rev. 1673 (cleanup do '% Previsto' por atividade), o card 'REALIZADO (ACUM.)' do REVTE-CIVIL Semana 1 continuava em **1,33%** vs Previsto **1,41%** — variação fantasma -0,08pp persistia. **Diagnóstico aprofundado do XML**: o gap NÃO está no ERP nem no import — está no próprio MSP. As atividades não usam Quantidade/QtoRealizada (Texto7 vazio), então o usuário tracka via '% Concluída' nativo do MSP, que é **inteiro** (granularidade 1%). A atividade WBS=4.1.1 'Limpeza permanente da obra' (peso ~12,5% — o maior do projeto) tem `Texto10=1,41%` (previsto preciso) mas `PercentComplete=1` (realizado arredondado de 1,4134% pra 1). Diferença 0,41pp × peso 12,5% = -0,051pp no agregado. Mesma coisa em WBS=2.4.1 (6,45→6, -0,45pp). **Descoberta-chave**: o XML carrega `ActualDuration` e `RemainingDuration` em minutos com alta precisão, e `AD/(AD+RD)` é o cálculo nativo que o MSP usa internamente ANTES de arredondar pro `PercentComplete` inteiro de display. Para WBS 4.1.1: `2160 / (2160 + 150660) = 1,4134%` — bate com Texto10=1,41% com 4 casas. Validado em 21 atividades do REVTE-CIVIL: AD/(AD+RD) bate com Texto10 em TODOS os leaves (5 atividades 28,5714%↔28,5700%, 1 a 6,4516%↔6,4500%, 1 a 1,4134%↔1,4100%, 3 a 100%). **Fix em 2 entry points**: (1) `ImportarCronograma.tsx` ~L387-409 (parser oficial — substituir/mesclar) — `realizadoMsp` agora cai pra AD/(AD+RD) quando Texto7 ausente, ANTES de descer pro fallback PercentComplete; o snapshot `realizado_msp_pct` no banco fica preciso. (2) `PlanejamentoDetalhe.tsx` ~L5337-5409 (botão 'Importar MS Project' do Avanço Semanal) — mesma cadeia Texto7 → AD/(AD+RD) → PercentComplete; banner agora discrimina '(X via %Reali AUX · Y via Duração Real (precisão MSP) · Z via %Concluído inteiro · W sem dado)' pro usuário ver imediatamente quantas atividades caíram em cada fonte. Helper `parseDurMin('PT###H###M###S')` extraído. Esperado pós-fix: agora Realizado ≈ Previsto (ambos próximos de 1,41%) sempre que o usuário tiver tracked via %Concluída no MSP.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 06:55:00",
+  },
 ];
