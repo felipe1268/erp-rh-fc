@@ -1122,24 +1122,37 @@ export function ProgramacaoSemanal({
                   {((calMSPParsed && projetoStart && projetoFinish) ? previstoSemanaDelta : (evmSemana?.previstoCurvaS ?? previstoSemanaDelta)).toFixed(2)}%
                 </span>
               </div>
-              {evmSemana && (
-                <>
-                  <span className="text-slate-300">|</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-slate-600 font-medium">Realizado:</span>
-                    <span className="text-sm font-bold text-emerald-600 tabular-nums">
-                      {evmSemana.realizado.toFixed(2)}%
-                    </span>
-                  </div>
-                  <span className="text-slate-300">|</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-slate-600 font-medium">Aderência (SPI sem.):</span>
-                    <span className={`text-sm font-bold tabular-nums ${evmSemana.aderencia == null ? "text-slate-400" : evmSemana.aderencia >= 95 ? "text-emerald-600" : "text-red-600"}`}>
-                      {evmSemana.aderencia == null ? "—" : `${evmSemana.aderencia.toFixed(0)}%`}
-                    </span>
-                  </div>
-                </>
-              )}
+              {evmSemana && (() => {
+                // Rev. 1669 — Aderência usa o MESMO "Previsto" exibido no card
+                // (envelope MSP quando disponível), em vez de `previstoCurvaS`
+                // (delta Mon-Mon da Curva S). Sem isso, Realizado=Previsto=1,41%
+                // mostrava Aderência=63% porque o denominador era a "fatia
+                // Mon-Mon" da Curva S (~2,24%), divergindo do card.
+                const previstoEfetivo = (calMSPParsed && projetoStart && projetoFinish)
+                  ? previstoSemanaDelta
+                  : (evmSemana.previstoCurvaS || previstoSemanaDelta);
+                const aderenciaEfetiva = previstoEfetivo > 0
+                  ? (evmSemana.realizado / previstoEfetivo) * 100
+                  : null;
+                return (
+                  <>
+                    <span className="text-slate-300">|</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-slate-600 font-medium">Realizado:</span>
+                      <span className="text-sm font-bold text-emerald-600 tabular-nums">
+                        {evmSemana.realizado.toFixed(2)}%
+                      </span>
+                    </div>
+                    <span className="text-slate-300">|</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-slate-600 font-medium">Aderência (SPI sem.):</span>
+                      <span className={`text-sm font-bold tabular-nums ${aderenciaEfetiva == null ? "text-slate-400" : aderenciaEfetiva >= 95 ? "text-emerald-600" : "text-red-600"}`}>
+                        {aderenciaEfetiva == null ? "—" : `${aderenciaEfetiva.toFixed(0)}%`}
+                      </span>
+                    </div>
+                  </>
+                );
+              })()}
               {/* Rev. 1638 — Sub-linha informativa de frentes FORA do plano.
                   PPC/SPI seguem só com programadas (regra Last Planner). */}
               {(frentesForaPlano.antecipadas.length > 0 || frentesForaPlano.arrastadas.length > 0) && (
