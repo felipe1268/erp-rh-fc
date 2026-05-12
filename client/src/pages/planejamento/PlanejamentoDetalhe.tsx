@@ -5029,10 +5029,20 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   // "Previsto na semana" = soma de (peso × overlap dias seg-dom / duracaoDias).
   // Atividades multi-semana contribuem proporcionalmente, não pelo peso integral.
   // "Realizado na semana" = soma de (peso × Δ% acumulado entre fim-semana e fim-semana-anterior).
+  // Rev. 1668 — fronteira do Δsem alinhada ao CUTOFF (Sex→Qui), não mais Mon-a-Mon.
+  // Bug: registros gravados na data do cutoff (ex.: Quinta 07/05 via "Fechar
+  // semana" / conclusões) vazavam da Sem 1 (cutoff 01-07/05) para a Sem 2
+  // porque o cálculo comparava `av.semana <= semanaAtual` (Mon=04/05). Agora
+  // compara contra o FIM da semana cutoff (Quinta), capturando qualquer chave
+  // dentro da janela visual.
   const previstoRealizadoSemana = useMemo(() => {
     const semIniDate = new Date(semanaAtual + "T00:00:00").getTime();
-    const semFimDate = new Date(semanaFim + "T00:00:00").getTime(); // exclusivo (próx Seg)
-    const semAntStr = new Date(semIniDate - 7 * 86400000).toISOString().slice(0, 10);
+    const semFimDate = new Date(semanaFim + "T00:00:00").getTime();
+    // Fim da semana CUTOFF atual (ex.: Quinta 07/05) — limite superior inclusivo.
+    const semFimCutoffStr = semanaFim;
+    // Fim da semana CUTOFF anterior (Quinta da semana passada) — corte do "antes".
+    const semAntFimCutoffStr = new Date(semFimDate - 7 * 86400000)
+      .toISOString().slice(0, 10);
 
     // Realizado da semana — Δ acumulado por atividade (sempre, independe do método de Previsto).
     // Realizado ACUMULADO até o fim da semana — usado pelo SPI/Aderência alinhado ao top bar.
@@ -5041,8 +5051,8 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     folhas.forEach((a: any) => {
       const peso = n(a.pesoFinanceiro);
       const avs = (avancos as any[]).filter((av: any) => av.atividadeId === a.id);
-      const avsAteAtual = avs.filter((av: any) => av.semana <= semanaAtual).sort((x: any, y: any) => y.semana.localeCompare(x.semana));
-      const avsAteAntes = avs.filter((av: any) => av.semana <= semAntStr).sort((x: any, y: any) => y.semana.localeCompare(x.semana));
+      const avsAteAtual = avs.filter((av: any) => av.semana <= semFimCutoffStr).sort((x: any, y: any) => y.semana.localeCompare(x.semana));
+      const avsAteAntes = avs.filter((av: any) => av.semana <= semAntFimCutoffStr).sort((x: any, y: any) => y.semana.localeCompare(x.semana));
       const acumAtual = avsAteAtual.length ? n(avsAteAtual[0].percentualAcumulado) : 0;
       const acumAntes = avsAteAntes.length ? n(avsAteAntes[0].percentualAcumulado) : 0;
       real += peso * Math.max(0, acumAtual - acumAntes) / 100;
@@ -5137,8 +5147,9 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     let evAcum = 0;
     folhas.forEach((a: any) => {
       const peso = n(a.pesoFinanceiro);
+      // Rev. 1668 — EV até o fim da semana CUTOFF anterior (não Mon-1).
       const avs = (avancos as any[])
-        .filter((av: any) => av.atividadeId === a.id && av.semana < semanaAtual)
+        .filter((av: any) => av.atividadeId === a.id && av.semana <= semAntFimCutoffStr)
         .sort((x: any, y: any) => y.semana.localeCompare(x.semana));
       const acum = avs.length ? n(avs[0].percentualAcumulado) : 0;
       evAcum += peso * acum / 100;
