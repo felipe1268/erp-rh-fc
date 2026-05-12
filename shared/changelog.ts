@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1711,
+    titulo: "Advertências para Terceiros — Fonte do PDF aumentada para tamanho padrão (legibilidade)",
+    descricao: "Reportado: o PDF da Advertência Formal de Terceiros vinha com fonte muito pequena, dificultando leitura — corpo 12.5px (~9.4pt) e bloco de partes 11.5px. Fix em `client/src/pages/terceiros/AdvertenciasTerceiros.tsx` (CSS do template HTML do PDF, ~L276-301): body 12.5px → 14px (~10.5pt, padrão de documentos jurídicos); `.partes` 11.5px → 13px (line-height 1.5 → 1.55); assinaturas (`.sig-block .line`/`.sig-block-3 .line`) 10px → 11px; footer 8.5px → 9.5px. Header/banner-bar/num-badge mantidos. Sem mudança estrutural — apenas font-size em 5 seletores.",
+    tipo: "fix",
+    modulos: "Terceiros/Advertências",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 13:00:00",
+  },
+  {
     version: 1710,
     titulo: "Documentos com cabeçalho azul (Advertências interna/terceiros + Raio-X) — Logo branco/amarelo sem fundo",
     descricao: "Reportado: nos PDFs com cabeçalho azul (Advertência Formal de Terceiros, Advertência/Suspensão/Justa Causa interna em Controle de Documentos e Raio-X do Funcionário), o logo da empresa renderizado era a versão dark sobre fundo branco (`logoUrl` cadastrado em company.logoUrl) — destacava como um retângulo branco mal posicionado dentro da barra azul (#1e3a6e/#1B2A4A). Solicitado: usar o logo da FC sem fundo, com escrita branca + detalhe amarelo. Fix Rev. 1710: (1) Asset `attached_assets/logobrancoamarelo-semfundo_1778623280889.png` copiado para `client/public/logo-fc-branco-amarelo.png` (servido via `/logo-fc-branco-amarelo.png`). (2) Substituídas as 5 referências em barras azuis: `AdvertenciasTerceiros.tsx` (PDF terceiros), `ControleDocumentos.tsx` (2 templates HTML do PDF interno + 1 preview React on-screen) e `RaioXFuncionario.tsx` (PDF Raio-X). (3) `.logo-bar img` em AdvertenciasTerceiros ganhou `width: auto; object-fit: contain` para garantir proporção correta. PDFs usam `${window.location.origin}/...` para URL absoluta no print. Headers amarelos/banner-bar (advertência tradicional com banner próprio) NÃO foram tocados.",

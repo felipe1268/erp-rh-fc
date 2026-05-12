@@ -273,7 +273,7 @@ export default function AdvertenciasTerceiros() {
 <style>
   @page { size: A4 portrait; margin: 20mm 18mm 25mm 18mm; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Times New Roman', serif; font-size: 12.5px; color: #000; line-height: 1.7; }
+  body { font-family: 'Times New Roman', serif; font-size: 14px; color: #000; line-height: 1.7; }
   .logo-bar { background: #1e3a6e; padding: 12px 20px; display: flex; align-items: center; gap: 15px; margin-bottom: 20px; }
   .logo-bar img { height: 50px; width: auto; object-fit: contain; }
   .logo-bar .title { color: white; flex: 1; }
@@ -283,7 +283,7 @@ export default function AdvertenciasTerceiros() {
   .banner-bar img { display: block; width: 100%; height: auto; }
   .banner-bar .num-badge { position: absolute; top: 50%; right: 16px; transform: translateY(-50%); }
   .num-badge { background: #dc2626; color: white; font-size: 11px; font-weight: bold; padding: 3px 10px; border-radius: 4px; }
-  .partes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 14px; margin-bottom: 18px; font-size: 11.5px; line-height: 1.5; }
+  .partes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px 14px; margin-bottom: 18px; font-size: 13px; line-height: 1.55; }
   .partes b { color: #1e3a6e; }
   .doc-body { text-align: justify; padding: 0 10px; }
   .doc-body p { margin-bottom: 14px; text-indent: 35px; }
@@ -291,11 +291,11 @@ export default function AdvertenciasTerceiros() {
   .signatures { margin-top: 50px; padding: 0 10px; }
   .sig-row { display: flex; justify-content: space-between; margin-bottom: 40px; gap: 30px; }
   .sig-block { text-align: center; flex: 1; }
-  .sig-block .line { border-top: 1px solid #000; padding-top: 4px; font-size: 10px; }
+  .sig-block .line { border-top: 1px solid #000; padding-top: 4px; font-size: 11px; }
   .sig-row-3 { display: flex; justify-content: space-between; margin-bottom: 40px; gap: 20px; }
   .sig-block-3 { text-align: center; flex: 1; }
-  .sig-block-3 .line { border-top: 1px solid #000; padding-top: 4px; font-size: 10px; }
-  .footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 6px 18mm; border-top: 2px solid #1e3a6e; font-size: 8.5px; display: flex; justify-content: space-between; background: white; }
+  .sig-block-3 .line { border-top: 1px solid #000; padding-top: 4px; font-size: 11px; }
+  .footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 6px 18mm; border-top: 2px solid #1e3a6e; font-size: 9.5px; display: flex; justify-content: space-between; background: white; }
   .footer .lgpd { color: #dc2626; font-weight: 600; }
 </style></head><body>
 ${a.tipoAdvertencia === "Advertencia" ? `
