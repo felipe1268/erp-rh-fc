@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, FileSpreadsheet, Printer, ChevronLeft, ChevronRight, AlertTriangle, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { parseCalendarioJson, ehDiaUtil, diasUteisEntre, type CalendarioMSProject } from "@shared/diasUteis";
+import { parseCalendarioJson, ehDiaUtil, diasUteisEntre, fracaoDecorridaMs, type CalendarioMSProject } from "@shared/diasUteis";
 
 // Rev. 1663 — Threshold de aderência semanal (PPC do Last Planner System).
 // PMBOK 7ª usa SPI ≥ 0,95 como "no prazo". Mantemos a convenção: ≥95% verde,
@@ -17,6 +17,11 @@ interface Atividade {
   nome: string;
   nivel?: number | null;
   isGrupo?: boolean | null;
+  // Rev. 1681 — necessários para alinhar o universo de folhas com o
+  // PlanejamentoDetalhe (`!isGrupo && !disabled && !isIndireta`),
+  // garantindo paridade absoluta no Σ acumulado.
+  isIndireta?: boolean | null;
+  disabled?: boolean | null;
   dataInicio?: string | null;
   dataFim?: string | null;
   dataInicioReal?: string | null;
@@ -44,6 +49,15 @@ interface Props {
    *  começa nessa data ao invés de seguir o cutoff, evitando mostrar
    *  dias anteriores ao início real do projeto. */
   projetoStart?: string | null;
+  /** Data de término contratual do projeto (YYYY-MM-DD). Necessária para
+   *  calcular `pvMacro` (snapshot Texto11/MSP) — fonte oficial do PV
+   *  acumulado, garantindo paridade com o Avanço Físico Semanal. */
+  projetoFinish?: string | null;
+  /** Cutoff oficial do projeto (ISO com hora). Quando o cutoff cai DENTRO
+   *  da janela visível (semIni ≤ cutoff < semFim), o ACUMULADO ATÉ é
+   *  capeado nele (mesma regra de `refFimAcum` do PlanejamentoDetalhe
+   *  ~L5103) — paridade absoluta com cards do Avanço Físico Semanal. */
+  cutoffIso?: string | null;
 }
 
 // Programação LOTUS exibe os 7 dias da semana (seg→dom). Sáb/dom ficam
@@ -173,7 +187,7 @@ function faixasCelula(
 export default function ProgramacaoSemanalLotus(props: Props) {
   const {
     projetoId, revisaoId, companyId, nomeProjeto, nomeCliente, atividades, semanas, semanaIdx, onSemanaChange,
-    gerenciadoraNome, gerenciadoraLogoUrl, clienteLogoUrl, engenheiroResponsavel, calendarioJson, projetoStart,
+    gerenciadoraNome, gerenciadoraLogoUrl, clienteLogoUrl, engenheiroResponsavel, calendarioJson, projetoStart, projetoFinish, cutoffIso,
   } = props;
   const calMSP = useMemo(() => parseCalendarioJson(calendarioJson), [calendarioJson]);
 
@@ -438,24 +452,136 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     return { criticasIds, quaseCriticasIds, maiorPesoIds, maiorPesoOrder, contribById };
   }, [atividades, atividadesDaSemana, metricas]);
 
-  // Rev. 1679 — Totalização da semana (Prev / Real / Δ).
+  // Rev. 1681 — pvMacro replicado de PlanejamentoDetalhe ~L4893 (FONTE ÚNICA
+  // do "Previsto%" do EVM clássico). Garante paridade absoluta com o card
+  // "PREVISTO (SEMANA)" / "Previsto (Acum.)" do Avanço Físico Semanal.
+  // Mesma fórmula: PV(t) = du(início_projeto → t)/du(envelope) × 100, com
+  // snapshot exato do MSP (Texto11) quando refStr === StatusDate gravado.
+  const pvMacro = useMemo(() => {
+    if (!projetoStart || !projetoFinish || !calMSP) return null as null | ((refStr: string) => number);
+    const projIniIso = projetoStart.slice(0, 10);
+    const projFimIso = projetoFinish.slice(0, 10);
+    const projIniMs = new Date(projIniIso + "T12:00:00").getTime();
+    const projFimMs = new Date(projFimIso + "T12:00:00").getTime();
+    if (projFimMs <= projIniMs) return null;
+    const envOk = !calMSP.envelopeStartSnapshot || !calMSP.envelopeFinishSnapshot
+      || (projIniIso === calMSP.envelopeStartSnapshot && projFimIso === calMSP.envelopeFinishSnapshot);
+    return (refStr: string): number => {
+      if (calMSP.previstoMspSnapshot != null && calMSP.statusDateSnapshot
+          && refStr === calMSP.statusDateSnapshot && envOk) {
+        return Number(calMSP.previstoMspSnapshot);
+      }
+      const ref = new Date(refStr + "T12:00:00").getTime();
+      return Math.min(100, Math.max(0, fracaoDecorridaMs(projIniMs, ref, projFimMs, calMSP) * 100));
+    };
+  }, [projetoStart, projetoFinish, calMSP]);
+
+  // Rev. 1681 — Totais OFICIAIS da semana (paridade absoluta com Avanço Físico
+  // Semanal do PlanejamentoDetalhe). O TOTAL DA SEMANA mostra o ACUMULADO até
+  // o fim da janela visível — mesma semântica do card "PREVISTO (SEMANA)"
+  // 1,41% / "REALIZADO (ACUM.)" 1,38% / "VARIAÇÃO" -0,03%.
+  //
+  //  • Previsto = pvMacro(semFim) — snapshot Texto11/MSP da raiz.
+  //  • Realizado = Σ peso × percentualAcumulado/100 (último avanço ≤ semFim
+  //    por atividade, sobre TODAS as folhas do projeto — não só as da
+  //    semana). Mesma fórmula de `previstoRealizadoSemana.realizadoAcumulado`
+  //    em PlanejamentoDetalhe ~L5055-5066.
+  //  • Δ = Real − Prev (negativo = atrasado).
+  //
+  // Σ row-by-row (somatório das colunas META SEMANAL exibidas) é mantido só
+  // como FALLBACK quando pvMacro é null (projeto sem MSP). Rev. 1679 ficou
+  // estritamente como fallback — paridade era impossível pela diferença de
+  // semântica (Σ delta semanal vs snapshot MSP acumulado).
+  const totaisSemana = useMemo(() => {
+    // Universo de folhas IGUAL ao PlanejamentoDetalhe ~L506:
+    //   !isGrupo && !disabled && (refisComIndiretasGlobal || !isIndireta)
+    // LOTUS não expõe o toggle de indiretas, então adotamos o caso default
+    // (refisComIndiretasGlobal=false) — exclui indiretas do total. É o
+    // mesmo cenário do card "PREVISTO (SEMANA)" que o usuário compara.
+    const folhas = atividades.filter((a) => !a.isGrupo && !a.disabled && !a.isIndireta);
+    const pesoOf = (a: Atividade) => parseFloat(String(a.pesoFinanceiro ?? "0")) || 0;
+
+    // refFimAcum espelha PlanejamentoDetalhe ~L5103: para semana CORRENTE
+    // (que contém o cutoff oficial), encurta ao cutoff; para passada/futura,
+    // usa semFim. Garante paridade quando o cutoff oficial não bate exatamente
+    // com o fim visual da janela (ex: cutoff = quarta, janela termina quinta).
+    const cutoffStr = cutoffIso ? cutoffIso.slice(0, 10) : null;
+    const refFimAcum = (cutoffStr && semIniStr && semFimStr
+                        && cutoffStr >= semIniStr && cutoffStr < semFimStr)
+      ? cutoffStr
+      : semFimStr;
+
+    // Realizado ACUMULADO (oficial): Σ peso × acumAtual/100 sobre todas as folhas.
+    let realAcumOficial = 0;
+    if (refFimAcum) {
+      for (const a of folhas) {
+        const peso = pesoOf(a);
+        if (peso === 0) continue;
+        const avs = (avancosPorAtv.get(a.id) ?? [])
+          .filter((av: any) => String(av.semana ?? "").slice(0, 10) <= refFimAcum)
+          .sort((x: any, y: any) => String(y.semana).localeCompare(String(x.semana)));
+        const acumAtual = avs.length ? (parseFloat(String(avs[0].percentualAcumulado ?? "0")) || 0) : 0;
+        realAcumOficial += peso * acumAtual / 100;
+      }
+    }
+
+    // Previsto ACUMULADO (oficial): pvMacro(refFimAcum) quando MSP disponível;
+    // fallback = interpolação linear (mesma fórmula do else de pvMacro
+    // L5107-5119 do PlanejamentoDetalhe).
+    let prevAcumOficial = 0;
+    let fonteOficial: "msp" | "linear" | "fallback" = "fallback";
+    if (refFimAcum && pvMacro) {
+      prevAcumOficial = pvMacro(refFimAcum);
+      fonteOficial = "msp";
+    } else if (refFimAcum && folhas.length > 0) {
+      const refMs = new Date(refFimAcum + "T12:00:00").getTime();
+      for (const a of folhas) {
+        const peso = pesoOf(a);
+        if (peso === 0 || !a.dataInicio || !a.dataFim) continue;
+        const aIni = new Date(a.dataInicio + "T12:00:00").getTime();
+        const aFim = new Date(a.dataFim    + "T12:00:00").getTime();
+        let exp = 0;
+        if (refMs >= aFim)      exp = 100;
+        else if (refMs > aIni)  exp = Math.min(100, ((refMs - aIni) / (aFim - aIni)) * 100);
+        prevAcumOficial += peso * exp / 100;
+      }
+      fonteOficial = "linear";
+    }
+
+    // Σ row-by-row (mantido para auditoria interna / Excel — pode somar com
+    // tooltip explicando que é a contribuição agregada das atividades da
+    // semana corrente, NÃO o avanço acumulado).
+    let totalPrevRow = 0;
+    let totalRealRow = 0;
+    for (const a of atividadesDaSemana) {
+      const m = metricas.get(a.id);
+      if (!m) continue;
+      totalPrevRow += m.metaPct;
+      totalRealRow += m.realPct;
+    }
+
+    return {
+      // Oficiais (acumulados — paridade com card grande):
+      prevAcumOficial,
+      realAcumOficial,
+      deltaOficial: realAcumOficial - prevAcumOficial,
+      fonteOficial,
+      refFimAcum,
+      // Σ row-by-row (mantido como referência interna):
+      totalPrevRow,
+      totalRealRow,
+    };
+  }, [atividades, atividadesDaSemana, avancosPorAtv, metricas, semIniStr, semFimStr, pvMacro, cutoffIso]);
+
+  // Rev. 1679 — Totalização da semana (Prev / Real / Δ) — DEPRECATED.
+  // Substituído pela paridade oficial em `totaisSemana` (Rev. 1681).
+  // Mantido o memo abaixo só pra evitar quebrar referências enquanto
+  // não migramos cada consumer.
   // Soma simples das colunas META SEMANAL — cada linha já está em pp do
   // projeto inteiro (peso × fração), então o Σ vira o avanço global da
   // semana (Σ metaPct = PV semanal · Σ realPct = EV semanal · Δ = Real-Prev).
   // Antecipadas entram no Real (têm avanço lançado) mas não no Prev (não
   // estavam no plano da semana) — coerente com a regra Lean já vigente.
-  const totaisSemana = useMemo(() => {
-    let totalPrev = 0;
-    let totalReal = 0;
-    for (const a of atividadesDaSemana) {
-      const m = metricas.get(a.id);
-      if (!m) continue;
-      totalPrev += m.metaPct;
-      totalReal += m.realPct;
-    }
-    const totalDelta = totalReal - totalPrev;
-    return { totalPrev, totalReal, totalDelta };
-  }, [atividadesDaSemana, metricas]);
 
   const fmtPct1 = (n: number) => `${n.toFixed(2).replace(".", ",")}%`;
   // Rev. 1664 — paleta de status:
@@ -608,16 +734,16 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         r++;
       });
 
-      // Rev. 1679 — Linha de totalização (Prev / Real / Δ) no Excel.
+      // Rev. 1681 — Linha de totalização ACUMULADA (Prev / Real / Δ) no Excel.
+      // Paridade absoluta com o Avanço Físico Semanal (cards grandes do FC).
       if (linhas.some((l) => l.tipo === "ativ")) {
-        const totalPrevTxt = fmtPct1(totaisSemana.totalPrev);
-        const totalRealTxt = fmtPct1(totaisSemana.totalReal);
-        const totalDeltaTxt = `${totaisSemana.totalDelta > 0 ? "+" : ""}${fmtPct1(totaisSemana.totalDelta)}`;
-        // Rótulo na coluna 1 (top-left do merge) — Excel descarta valores
-        // das demais células mescladas, então o texto precisa ficar aqui.
+        const prevTxt = fmtPct1(totaisSemana.prevAcumOficial);
+        const realTxt = fmtPct1(totaisSemana.realAcumOficial);
+        const deltaTxt = `${totaisSemana.deltaOficial > 0 ? "+" : ""}${fmtPct1(totaisSemana.deltaOficial)}`;
+        const labelData = totaisSemana.refFimAcum ? fmtBR(totaisSemana.refFimAcum) : "";
         ws.getRow(r).values = [
-          "TOTAL DA SEMANA", "", "", "", "", "",
-          totalPrevTxt, totalRealTxt, totalDeltaTxt,
+          `ACUMULADO DO PROJETO ATÉ ${labelData}`, "", "", "", "", "",
+          prevTxt, realTxt, deltaTxt,
           "", ...dias.map(() => ""), "",
         ];
         ws.getRow(r).font = { bold: true };
@@ -627,7 +753,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         ws.getCell(r, 8).font = { bold: true, color: { argb: "FF065F46" } };
         ws.getCell(r, 9).font = {
           bold: true,
-          color: { argb: totaisSemana.totalDelta >= 0 ? "FF065F46" : "FF991B1B" },
+          color: { argb: totaisSemana.deltaOficial >= 0 ? "FF065F46" : "FF991B1B" },
         };
         ws.getRow(r).eachCell({ includeEmpty: true }, (c) => {
           c.border = { top: { style: "medium" }, bottom: { style: "medium" }, left: { style: "thin" }, right: { style: "thin" } };
@@ -959,26 +1085,47 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                 );
               })}
             </tbody>
-            {/* Rev. 1679 — Totalização da semana (Prev / Real / Δ). */}
+            {/* Rev. 1681 — Totalização ACUMULADA (Prev / Real / Δ).
+                Paridade absoluta com o Avanço Físico Semanal do FC: o valor
+                aqui mostrado é o ACUMULADO do projeto até o fim desta janela
+                semanal — mesma fonte do card "PREVISTO (SEMANA)" / "REALIZADO
+                (ACUM.)" / "VARIAÇÃO". Não é Σ das colunas Prev./Real. acima
+                (que são deltas semanais por atividade). */}
             {linhas.length > 0 && (
               <tfoot>
                 <tr className="bg-slate-100 border-t-2 border-slate-500 font-bold">
-                  <td colSpan={6} className="border border-slate-300 px-2 py-2 text-right text-[11px] text-slate-800 uppercase tracking-wide">
-                    Total da semana
+                  <td
+                    colSpan={6}
+                    className="border border-slate-300 px-2 py-2 text-right text-[11px] text-slate-800 uppercase tracking-wide"
+                    title={`Avanço acumulado do projeto até ${totaisSemana.refFimAcum ? fmtBR(totaisSemana.refFimAcum) : ""} — fonte: ${
+                      totaisSemana.fonteOficial === "msp"
+                        ? "snapshot MS Project (Texto11/PV oficial)"
+                        : totaisSemana.fonteOficial === "linear"
+                          ? "interpolação linear por peso financeiro (sem MSP)"
+                          : "fallback (sem dados)"
+                    }. Bate com o card 'PREVISTO (SEMANA)' / 'REALIZADO (ACUM.)' do Avanço Físico Semanal.`}
+                  >
+                    Acumulado do projeto até {totaisSemana.refFimAcum ? fmtBR(totaisSemana.refFimAcum) : "—"}
                   </td>
-                  <td className="border border-slate-300 px-1 py-2 text-center text-[11px] tabular-nums whitespace-nowrap text-slate-900" title="Σ Prev. — meta planejada da semana (PV semanal do projeto)">
-                    {fmtPct1(totaisSemana.totalPrev)}
+                  <td
+                    className="border border-slate-300 px-1 py-2 text-center text-[11px] tabular-nums whitespace-nowrap text-slate-900"
+                    title="Previsto acumulado oficial (pvMacro) — paridade absoluta com card 'PREVISTO (SEMANA)' do FC"
+                  >
+                    {fmtPct1(totaisSemana.prevAcumOficial)}
                   </td>
-                  <td className="border border-slate-300 px-1 py-2 text-center text-[11px] tabular-nums whitespace-nowrap text-emerald-700" title="Σ Real. — avanço executado na semana (EV semanal do projeto)">
-                    {fmtPct1(totaisSemana.totalReal)}
+                  <td
+                    className="border border-slate-300 px-1 py-2 text-center text-[11px] tabular-nums whitespace-nowrap text-emerald-700"
+                    title="Realizado acumulado oficial (Σ peso × % acumulado por atividade) — paridade absoluta com card 'REALIZADO (ACUM.)' do FC"
+                  >
+                    {fmtPct1(totaisSemana.realAcumOficial)}
                   </td>
                   <td
                     className={`border border-slate-300 px-1 py-2 text-center text-[11px] tabular-nums whitespace-nowrap ${
-                      totaisSemana.totalDelta >= 0 ? "text-emerald-700" : "text-red-700"
+                      totaisSemana.deltaOficial >= 0 ? "text-emerald-700" : "text-red-700"
                     }`}
-                    title="Σ Δ — desvio total da semana em pontos percentuais (Real − Prev)"
+                    title="Variação acumulada (Real − Prev) — paridade absoluta com card 'VARIAÇÃO (REAL − PREV.)' do FC"
                   >
-                    {`${totaisSemana.totalDelta > 0 ? "+" : ""}${fmtPct1(totaisSemana.totalDelta)}`}
+                    {`${totaisSemana.deltaOficial > 0 ? "+" : ""}${fmtPct1(totaisSemana.deltaOficial)}`}
                   </td>
                   <td className="border border-slate-300" />
                   <td colSpan={dias.length} className="border border-slate-300" />

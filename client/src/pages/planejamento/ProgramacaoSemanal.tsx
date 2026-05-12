@@ -959,6 +959,8 @@ export function ProgramacaoSemanal({
           engenheiroResponsavel={engenheiroResponsavel}
           calendarioJson={calendarioJson}
           projetoStart={projetoStart}
+          projetoFinish={projetoFinish}
+          cutoffIso={cutoffIso}
         />
       </div>
     );

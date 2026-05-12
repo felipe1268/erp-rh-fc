@@ -1114,7 +1114,15 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
             }}
             dataTerminoContratual={proj?.dataTerminoContratual ?? null}
             calendarioJson={(proj as any)?.calendarioJson ?? null}
-            cutoffIso={(proj as any)?.dataCorteIso ?? ((proj as any)?.dataCorteAtual ? `${String((proj as any).dataCorteAtual).slice(0,10)}T17:00:00` : null)}
+            cutoffIso={
+              // Rev. 1681 — fonte UNIFICADA com o Avanço Físico Semanal
+              // (cards `previstoRealizadoSemana`): `dataCorteInfo.dataCorteOficial`
+              // é a verdade do server (refetcha quando muda o dia/consolidação).
+              // Fallback para campos do projeto se o query ainda não respondeu.
+              dataCorteInfo?.dataCorteOficial
+                ?? (proj as any)?.dataCorteIso
+                ?? ((proj as any)?.dataCorteAtual ? `${String((proj as any).dataCorteAtual).slice(0,10)}T17:00:00` : null)
+            }
             projetoStart={(proj as any)?.dataInicio ?? null}
             projetoFinish={(proj as any)?.dataTerminoContratual ?? null}
             diaCorteSemana={dataCorteInfo?.diaCorteSemana ?? 4}
