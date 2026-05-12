@@ -76,6 +76,38 @@ function toMonday(d: Date) {
   const m = new Date(d.getTime() + diff * 86400000);
   return m.toISOString().split("T")[0];
 }
+
+// ── Rev. 1667 — Camada de tradução Cutoff↔Monday ─────────────────────────────
+// O banco continua armazenando `planejamento_avancos.semana` como Segunda-feira
+// (compatibilidade com Curva S, REFIS, Portal, EVM, Medição etc.). Mas a UI
+// passa a EXIBIR semanas alinhadas ao cutoff oficial do projeto (PMBOK Status
+// Date / Last Planner). Para cutoff=Quinta(4), as semanas são Sex→Qui — igual
+// à Programação Semanal. A conversão é 1:1 porque cada janela de 7 dias contém
+// exatamente UMA Segunda. Assim, "Sem 1 (01/05–07/05)" mapeia internamente
+// para Mon 04/05 que é o que vai pro banco.
+//
+// Funções:
+//   • mondayOfCutoffWeek(dateISO, cutoffDow): Monday DENTRO da semana-cutoff
+//     que contém dateISO. Usado para chave de storage / state.
+//   • cutoffWeekFromMonday(mondayISO, cutoffDow): { ini, fim } da semana
+//     visível (Sex→Qui para cutoff=Qui). Usado para labels e ranges visuais.
+function mondayOfCutoffWeek(dateISO: string, cutoffDow: number): string {
+  const startDow = (cutoffDow + 1) % 7;       // dia inicial da semana cutoff
+  const d = new Date(dateISO + "T12:00:00");
+  const back = (d.getDay() - startDow + 7) % 7;
+  const start = new Date(d.getTime() - back * 86400000);   // primeiro dia da semana cutoff
+  const startToMon = (1 - startDow + 7) % 7;               // offset até a Segunda interna
+  const mon = new Date(start.getTime() + startToMon * 86400000);
+  return mon.toISOString().split("T")[0];
+}
+function cutoffWeekFromMonday(mondayISO: string, cutoffDow: number): { ini: string; fim: string } {
+  const startDow = (cutoffDow + 1) % 7;
+  const d = new Date(mondayISO + "T12:00:00");
+  const back = (1 - startDow + 7) % 7;
+  const ini = new Date(d.getTime() - back * 86400000);
+  const fim = new Date(ini.getTime() + 6 * 86400000);
+  return { ini: ini.toISOString().split("T")[0], fim: fim.toISOString().split("T")[0] };
+}
 function ultimasSemanas(n: number) {
   const semanas: string[] = [];
   const hoje = new Date();
@@ -99,16 +131,16 @@ function semanasRange(from: string | null | undefined, to: string | null | undef
   return [...new Set(weeks)];
 }
 
-function labelSemana(s: string, idx: number) {
-  const ini = new Date(s + "T12:00:00");
-  const fim = new Date(ini.getTime() + 6 * 86400000);
-  const br  = (d: Date) => d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-  return `${idx + 1}ª Semana — ${br(ini)} até ${br(fim)}`;
+function labelSemana(s: string, idx: number, cutoffDow: number = 4) {
+  // Rev. 1667 — Mostra a semana cutoff-alinhada (Sex→Qui para cutoff=Qui).
+  const { ini: iniStr, fim: fimStr } = cutoffWeekFromMonday(s, cutoffDow);
+  const br = (iso: string) => iso.split("-").reverse().join("/");
+  return `${idx + 1}ª Semana — ${br(iniStr)} até ${br(fimStr)}`;
 }
-function isCurrentWeek(s: string): boolean {
+function isCurrentWeek(s: string, cutoffDow: number = 4): boolean {
+  // Rev. 1667 — "Atual" agora é a semana cutoff que contém hoje, não Mon-Sun.
   const today = new Date().toISOString().split("T")[0];
-  const ini = s;
-  const fim = new Date(new Date(s + "T12:00:00").getTime() + 6 * 86400000).toISOString().split("T")[0];
+  const { ini, fim } = cutoffWeekFromMonday(s, cutoffDow);
   return today >= ini && today <= fim;
 }
 
@@ -4737,8 +4769,18 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   // Rev. 1645 — calMSP no escopo do componente para que `prevIndRef` use
   // dias úteis do calendário do MSP (paridade com MS Project).
   const calMSP = useMemo(() => parseCalendarioJson((proj as any)?.calendarioJson), [proj]);
-  const [semanaAtual, setSemanaAtualRaw] = useState(() => toMonday(new Date()));
-  const setSemanaAtual = (s: string) => { setSemanaAtualRaw(s); onSemanaChange?.(s); };
+  // Rev. 1667 — cutoffDow vem do projeto (default Quinta=4). Toda exibição/
+  // matching de "semana" passa a usar a semana cutoff (Sex→Qui p/ cutoff=Qui).
+  // Storage no banco continua Monday — conversão 1:1 via mondayOfCutoffWeek.
+  const cutoffDow: number = dataCorteInfo?.diaCorteSemana ?? 4;
+  const [semanaAtual, setSemanaAtualRaw] = useState(() => mondayOfCutoffWeek(
+    new Date().toISOString().split("T")[0], 4
+  ));
+  // Rev. 1667 — Marca se o usuário já selecionou semana manualmente. Enquanto
+  // for false, o effect abaixo é livre para realinhar p/ a semana cutoff de
+  // hoje quando o cutoffDow real do projeto carregar (pode diferir do default 4).
+  const userSelectedSemanaRef = useRef(false);
+  const setSemanaAtual = (s: string) => { userSelectedSemanaRef.current = true; setSemanaAtualRaw(s); onSemanaChange?.(s); };
   const [avancoLocal, setAvancoLocal] = useState<Record<number, number>>({});
   // Rev. 1537 — Espelha avanços digitados pra cima (barra superior + Visão Geral)
   useEffect(() => { onLocalAvancoChange?.(avancoLocal); }, [avancoLocal, onLocalAvancoChange]);
@@ -4771,35 +4813,58 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   }, [pickerOpen]);
 
   // Semanas abrangendo todo o projeto (do menor dataInicio ao maior dataFim das atividades)
+  // Rev. 1667 — Mondays alinhadas ao cutoff (cada Monday = chave de storage da
+  // semana cutoff que o contém). Garante que "Sem 1" comece na cutoff-week que
+  // contém o início real do projeto, não numa Mon-Sun arbitrária anterior.
   const semanas = useMemo(() => {
     const ins  = atividades.map((a: any) => a.dataInicio).filter(Boolean).sort() as string[];
     const fins = atividades.map((a: any) => a.dataFim   ).filter(Boolean).sort() as string[];
-    const s = semanasRange(ins[0] ?? null, fins[fins.length - 1] ?? null);
-    return s.length > 0 ? s : ultimasSemanas(12);
-  }, [atividades]);
+    const ini = ins[0];
+    const fim = fins[fins.length - 1];
+    if (!ini) return ultimasSemanas(12);
+    const firstMon = mondayOfCutoffWeek(ini, cutoffDow);
+    const lastMon  = fim ? mondayOfCutoffWeek(fim, cutoffDow) : firstMon;
+    const out: string[] = [];
+    let curr = firstMon;
+    while (curr <= lastMon) {
+      out.push(curr);
+      const d = new Date(curr + "T12:00:00");
+      d.setDate(d.getDate() + 7);
+      curr = d.toISOString().split("T")[0];
+    }
+    return out;
+  }, [atividades, cutoffDow]);
 
   // Índice da semana selecionada (1-based para exibição)
   const semanaIdx = semanas.indexOf(semanaAtual);
   const semanaNum = semanaIdx >= 0 ? semanaIdx + 1 : 1;
 
-  // Fim da semana selecionada = início da próxima (ou +7 dias se for a última)
-  // Usado no cálculo de previsto: comparar ao FIM da semana, não ao início
+  // Fim da semana selecionada — Rev. 1667 usa o DIA DO CUTOFF (status date PMBOK).
+  // Para cutoff=Qui, fim=Quinta-feira da semana cutoff. Antes era próxima Segunda
+  // (overcontava 4 dias no PV / Previsto% de cada semana).
   const semanaFim = useMemo(() => {
-    const idx = semanas.indexOf(semanaAtual);
-    if (idx >= 0 && idx + 1 < semanas.length) return semanas[idx + 1];
-    const d = new Date(semanaAtual + "T12:00:00");
-    d.setDate(d.getDate() + 7);
-    return d.toISOString().split("T")[0];
-  }, [semanas, semanaAtual]);
+    return cutoffWeekFromMonday(semanaAtual, cutoffDow).fim;
+  }, [semanaAtual, cutoffDow]);
 
   // Mantém semanaAtual dentro da faixa disponível
   useEffect(() => {
     if (semanas.length > 0 && !semanas.includes(semanaAtual)) {
-      const todayMon = toMonday(new Date());
+      const todayMon = mondayOfCutoffWeek(new Date().toISOString().split("T")[0], cutoffDow);
       const past = semanas.filter(s => s <= todayMon);
       setSemanaAtual(past.length > 0 ? past[past.length - 1] : semanas[0]);
     }
-  }, [semanas]);
+  }, [semanas, cutoffDow]);
+
+  // Rev. 1667 — Quando o cutoffDow real do projeto resolver (default 4 → X real),
+  // realinha semanaAtual p/ a Monday da semana cutoff de hoje — desde que o
+  // usuário ainda não tenha clicado manualmente em nenhuma semana. Funciona
+  // para QUALQUER cutoffDow (Mon-Sun, Sat-Fri, etc.) e em qualquer dia da semana
+  // (especialmente Sex/Sáb/Dom, quando Mon-Sun e cutoff-week divergem).
+  useEffect(() => {
+    if (userSelectedSemanaRef.current) return;
+    const todayMon = mondayOfCutoffWeek(new Date().toISOString().split("T")[0], cutoffDow);
+    if (todayMon !== semanaAtual) setSemanaAtualRaw(todayMon);
+  }, [cutoffDow]);
 
   const folhas = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled), [atividades]);
   const folhasComInd = useMemo(() => atividades.filter((a: any) => !a.isGrupo && !a.disabled), [atividades]);
@@ -4837,17 +4902,16 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     };
   }, [projIniIso, projFimIso, calMSP]);
 
-  // Filtra atividades ativas na semana selecionada (Seg-Sex) — base para todos os modos
+  // Filtra atividades ativas na semana selecionada (cutoff Sex→Qui) — base para todos os modos
+  // Rev. 1667 — Antes era Seg-Sex hardcoded, agora respeita a janela cutoff do projeto.
   const folhasNaSemana = useMemo(() => {
     if (filtroAtivo === "todas") return folhas;
-    const mon = new Date(semanaAtual + "T12:00:00");
-    const fri = new Date(mon.getTime() + 4 * 86400000);
-    const friStr = fri.toISOString().split("T")[0];
+    const { ini: semIni, fim: semFim } = cutoffWeekFromMonday(semanaAtual, cutoffDow);
     return folhas.filter((a: any) => {
       if (!a.dataInicio || !a.dataFim) return true;
-      return a.dataInicio <= friStr && a.dataFim >= semanaAtual;
+      return a.dataInicio <= semFim && a.dataFim >= semIni;
     });
-  }, [folhas, semanaAtual, filtroAtivo]);
+  }, [folhas, semanaAtual, cutoffDow, filtroAtivo]);
 
   // % realizado ponderado por semana (para indicador no seletor).
   // CORREÇÃO: para cada semana com dados, usa o ÚLTIMO avanço de cada atividade até
@@ -5441,7 +5505,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                   ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                   : <span className="w-3.5 h-3.5 shrink-0" />}
                 <span className={semanasGlobaisComAvanco.includes(semanaAtual) ? "text-emerald-700 font-medium" : ""}>
-                  {labelSemana(semanaAtual, semanas.indexOf(semanaAtual))}
+                  {labelSemana(semanaAtual, semanas.indexOf(semanaAtual), cutoffDow)}
                 </span>
                 {semanasComDados[semanaAtual] !== undefined && (
                   <span className="text-emerald-600 font-semibold shrink-0">
@@ -5459,7 +5523,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                   const temDados   = pct !== undefined;
                   const temGlobal  = semanasGlobaisComAvanco.includes(s);
                   const isAtual    = s === semanaAtual;
-                  const isCurrent  = isCurrentWeek(s);
+                  const isCurrent  = isCurrentWeek(s, cutoffDow);
                   return (
                     <button
                       key={s}
@@ -5475,7 +5539,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                           : isCurrent
                             ? <span className="w-3.5 h-3.5 shrink-0 rounded-full bg-red-500 flex items-center justify-center"><span className="w-1.5 h-1.5 rounded-full bg-white" /></span>
                             : <span className="w-3.5 h-3.5 shrink-0 border border-slate-200 rounded-full" />}
-                        <span className={`${isAtual ? "font-semibold" : ""} ${isCurrent ? "font-bold" : ""}`}>{labelSemana(s, i)}</span>
+                        <span className={`${isAtual ? "font-semibold" : ""} ${isCurrent ? "font-bold" : ""}`}>{labelSemana(s, i, cutoffDow)}</span>
                         {isCurrent && <span className="ml-1 text-[10px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded-full leading-none">ATUAL</span>}
                       </span>
                       {temDados && (
@@ -10661,6 +10725,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // use dias úteis do calendário do MSP (paridade com MS Project). Sem esta
   // declaração, qualquer render que avalie `prevIndRef` lançava ReferenceError.
   const calMSP = useMemo(() => parseCalendarioJson((proj as any)?.calendarioJson), [proj]);
+  // Rev. 1667 — REFIS também usa cutoffDow do projeto p/ rotular semanas
+  // alinhadas (Sex→Qui p/ cutoff=Qui), em paridade com Avanço Físico e LOTUS.
+  const cutoffDow: number = dataCorteInfo?.diaCorteSemana ?? 4;
   const [semana, setSemanaRaw] = useState(() => toMonday(new Date()));
   const setSemana = (s: string) => { setSemanaRaw(s); onSemanaChange?.(s); };
   const [obs, setObs] = useState("");
@@ -11248,7 +11315,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
             className="border border-input rounded-md px-3 py-1.5 text-xs bg-background"
           >
             {semanas.map((s, i) => (
-              <option key={s} value={s} style={isCurrentWeek(s) ? { fontWeight: "bold", color: "#dc2626" } : {}}>{isCurrentWeek(s) ? "★ " : ""}{labelSemana(s, i)}{refisLista.find((r: any) => r.semana === s) ? " ✓" : ""}</option>
+              <option key={s} value={s} style={isCurrentWeek(s, cutoffDow) ? { fontWeight: "bold", color: "#dc2626" } : {}}>{isCurrentWeek(s, cutoffDow) ? "★ " : ""}{labelSemana(s, i, cutoffDow)}{refisLista.find((r: any) => r.semana === s) ? " ✓" : ""}</option>
             ))}
           </select>
         </div>
