@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1704,
+    titulo: "Férias — Aba 'Vencidas (Confirmar Pagamento)' esconde colaboradores que perderam o direito (Art. 133 IV CLT)",
+    descricao: "Reportado: DANIEL CARNEIRO PEREIRA (afastado há 4557 dias) ainda aparecia na aba 'Vencidas — Confirmar Pagamento' com 2 períodos pendentes e botão 'Confirmar Todos (2)' / 'Já foi pago ✓'. Como ele PERDEU o direito de gozo dos períodos correspondentes (CLT Art. 133, IV), não há pagamento a confirmar — os períodos só podem ser ENCERRADOS via aba principal (botão rosa 'Concluir' da Rev. 1703). Fix em `Ferias.tsx` ~L1320: novo `_vencidasFiltradas = vencidasAgrupadas.filter(g => !g.employee.perdeuFeriasPorAfastamento)` aplicado tanto na lista renderizada quanto no `allIds` do botão 'Confirmar Todas como Pagas'. Reaproveita a flag já calculada pelo server `listarVencidas` (Rev. 1694). Sem schema change, sem mudança de endpoint.",
+    tipo: "melhoria",
+    modulos: "RH/Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 07:00:00",
+  },
+  {
     version: 1703,
     titulo: "Férias — Direito perdido (Art. 133 IV CLT): some 'Editar' e 'Iniciar Gozo', único botão é 'Concluir'",
     descricao: "Reportado: colaborador com a tag rosa 'Direito de férias perdido — afastado há N dias (Art. 133, IV CLT)' (Rev. 1701) continuava com os botões 'Editar período' (lápis azul) e 'Iniciar Gozo' (verde) ativos nas linhas Vencida/A Vencer/Pendente, abrindo brecha pra agendar/iniciar gozo de um período já legalmente perdido. Solicitação: nessas linhas só pode aparecer um caminho — CONCLUIR (encerrar o período aquisitivo sem pagamento de gozo). Linhas já Concluídas seguem com Reverter/Cancelar normalmente. Fix em `client/src/pages/Ferias.tsx`: (1) `perdeuFerias` extraído como const por linha (reaproveitando `employeeStatus` + `employeeLicencaDataInicio` da Rev. 1701); (2) badge passou a ler a const (sem recálculo no IIFE); (3) condições dos botões 'Editar', 'Iniciar Gozo' e 'Concluir (em_gozo)' ganharam `&& !perdeuFerias`; (4) novo botão rosa 'Concluir' aparece quando `perdeuFerias && status !== concluida` em qualquer status (pendente/vencida/agendada/em_gozo) com confirm citando os dias de afastamento e o artigo da CLT; ação grava `status='concluida'` direto. Reverter/Cancelar (Concluida) preservados sem mudança. Sem schema change, sem mudança de endpoint.",

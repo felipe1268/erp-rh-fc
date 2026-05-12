@@ -1317,7 +1317,16 @@ export default function Ferias() {
                 </div>
               </div>
 
-              {(vencidasAgrupadas as any[]).length === 0 ? (
+              {(() => {
+                // Rev. 1704 — Aba Vencidas (confirmar pagamento) deve ESCONDER
+                // colaboradores que perderam o direito por afastamento >180 dias
+                // (CLT Art. 133, IV). Não há pagamento a confirmar nesses casos.
+                // Encerramento desses períodos é feito pela aba principal via
+                // botão rosa "Concluir" (Rev. 1703).
+                const _vencidasFiltradas = (vencidasAgrupadas as any[]).filter(
+                  (g: any) => !g?.employee?.perdeuFeriasPorAfastamento
+                );
+                return _vencidasFiltradas.length === 0 ? (
                 <div className="py-12 text-center text-muted-foreground">
                   <CheckCircle2 className="h-12 w-12 mx-auto mb-3 opacity-30 text-green-500" />
                   <p className="text-lg font-medium">Nenhuma férias vencida pendente!</p>
@@ -1331,7 +1340,7 @@ export default function Ferias() {
                       variant="outline"
                       className="border-green-300 text-green-700 hover:bg-green-50"
                       onClick={() => {
-                        const allIds = (vencidasAgrupadas as any[]).flatMap((g: any) => g.periodos.map((p: any) => p.id));
+                        const allIds = _vencidasFiltradas.flatMap((g: any) => g.periodos.map((p: any) => p.id));
                         if (allIds.length === 0) return;
                         if (confirm(`Confirmar TODAS as ${allIds.length} férias vencidas como pagas?`)) {
                           confirmarVencidasLote.mutate({ ids: allIds, observacao: "Confirmação em lote geral" });
@@ -1344,7 +1353,7 @@ export default function Ferias() {
                     </Button>
                   </div>
 
-                  {(vencidasAgrupadas as any[]).map((grupo: any) => (
+                  {_vencidasFiltradas.map((grupo: any) => (
                     <Card key={grupo.employee.id} className="border-l-4 border-l-red-400">
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between mb-3">
@@ -1418,7 +1427,8 @@ export default function Ferias() {
                     </Card>
                   ))}
                 </div>
-              )}
+              );
+              })()}
             </div>
           </TabsContent>
 
