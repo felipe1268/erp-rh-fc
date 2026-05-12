@@ -5331,6 +5331,17 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     try {
       const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
       const percentMap: Record<string, number> = {};
+      // Rev. 1672 — Bugfix import Avanço Semanal: ler snapshot Texto7
+      // (%Reali AUX, 4 casas) do template FC em vez de só PercentComplete
+      // (campo nativo, granularidade 1% via Int()). PercentComplete do MSP
+      // só aceita inteiros, então uma atividade com 33,33% real virava 33
+      // (e às vezes 29 quando o usuário acompanhava por Qto Realizada/Qtd,
+      // pois Texto7 = Int(qtR/qt*100)). Texto7 e Texto10 já são extraídos
+      // pelo parser oficial em ImportarCronograma.tsx (Rev. 1670); aqui
+      // replicamos a mesma lógica pra paridade.
+      let srcTexto7  = 0;  // contador: atividades com %Reali AUX
+      let srcPctNat  = 0;  // contador: fallback p/ PercentComplete
+      let srcVazio   = 0;  // contador: nenhum dado utilizável
 
       if (ext === "xml") {
         const text = await file.text();
@@ -5339,8 +5350,37 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
           const uid = task.querySelector("UID")?.textContent ?? "";
           if (uid === "0") return;
           const wbs = task.querySelector("WBS")?.textContent?.trim() ?? "";
-          const pct = parseInt(task.querySelector("PercentComplete")?.textContent ?? "0");
-          if (wbs) percentMap[wbs] = pct;
+          if (!wbs) return;
+
+          // 1ª prioridade: Texto7 (%Reali AUX, FieldID 188743747) — 4 casas, vírgula BR
+          let realiAux: number | undefined;
+          for (const child of Array.from(task.children)) {
+            if (child.tagName !== "ExtendedAttribute") continue;
+            const fid = child.querySelector("FieldID")?.textContent ?? "";
+            if (fid !== "188743747") continue;
+            const val = (child.querySelector("Value")?.textContent ?? "").trim();
+            if (!val) continue;
+            const n = parseFloat(val.replace(",", "."));
+            if (Number.isFinite(n)) realiAux = Math.min(100, Math.max(0, n));
+            break;
+          }
+
+          if (realiAux !== undefined) {
+            percentMap[wbs] = realiAux;
+            srcTexto7++;
+            return;
+          }
+
+          // Fallback: PercentComplete nativo (parseFloat p/ não truncar caso o XML traga decimal)
+          const pctRaw = task.querySelector("PercentComplete")?.textContent ?? "";
+          if (pctRaw !== "") {
+            const pct = Math.min(100, Math.max(0, parseFloat(pctRaw) || 0));
+            percentMap[wbs] = pct;
+            srcPctNat++;
+            return;
+          }
+
+          srcVazio++;
         });
       } else if (["xlsx", "xls", "xlsm"].includes(ext)) {
         const buf     = await file.arrayBuffer();
@@ -5372,7 +5412,11 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       });
       const count = Object.keys(newLocal).length;
       setAvancoLocal(prev => ({ ...prev, ...newLocal }));
-      setImportStatus({ ok: true, msg: `${count} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""} automaticamente. Revise e salve.` });
+      // Rev. 1672 — quebra por fonte (só faz sentido em XML; XLSX cai num único caminho)
+      const breakdown = ext === "xml"
+        ? ` (${srcTexto7} via %Reali AUX${srcPctNat ? ` · ${srcPctNat} via %Concluído MSP` : ""}${srcVazio ? ` · ${srcVazio} sem dado` : ""})`
+        : "";
+      setImportStatus({ ok: true, msg: `${count} atividade${count !== 1 ? "s" : ""} preenchida${count !== 1 ? "s" : ""} automaticamente${breakdown}. Revise e salve.` });
     } catch (e: any) {
       setImportStatus({ ok: false, msg: e.message ?? "Erro ao processar o arquivo." });
     } finally {
