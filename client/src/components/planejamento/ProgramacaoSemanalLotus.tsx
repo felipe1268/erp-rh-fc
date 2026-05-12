@@ -297,6 +297,51 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     setRealDates.mutate({ atividadeId, companyId, [campo]: valor || null } as any);
   };
 
+  // Rev. 1678 — Edit-on-click para datas Real Início/Fim. Antes mostrávamos
+  // `<Input type="date">` direto, mas o iOS Safari/Chrome renderizam esse
+  // input em formato longo localizado ("4 de mai. de 2026"), violando a regra
+  // de ouro do projeto (datas dd/MM/aaaa). Agora exibimos um botão com
+  // `fmtBR(...)` por padrão e só trocamos pro input nativo quando o usuário
+  // clica — o picker abre, o usuário escolhe e voltamos ao display dd/MM/aaaa.
+  const [editingReal, setEditingReal] = useState<{ atvId: number; campo: "dataInicioReal" | "dataFimReal" } | null>(null);
+  const RealDateCell = ({ a, campo }: { a: Atividade; campo: "dataInicioReal" | "dataFimReal" }) => {
+    const valor = (campo === "dataInicioReal" ? a.dataInicioReal : a.dataFimReal) || "";
+    const isEditing = editingReal?.atvId === a.id && editingReal?.campo === campo;
+    if (isEditing) {
+      return (
+        <Input
+          type="date"
+          autoFocus
+          defaultValue={valor}
+          onBlur={(e) => {
+            const novo = e.target.value;
+            if (novo !== valor) handleSetReal(a.id, campo, novo);
+            setEditingReal(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+            if (e.key === "Escape") setEditingReal(null);
+          }}
+          className="h-6 text-[10px] px-1 border-slate-200"
+          disabled={setRealDates.isPending}
+        />
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => setEditingReal({ atvId: a.id, campo })}
+        title={valor ? "Clique para alterar" : "Clique para definir"}
+        className={`w-full h-6 text-[10px] tabular-nums whitespace-nowrap text-center rounded px-1 transition-colors ${
+          valor ? "text-slate-700 hover:bg-blue-50" : "text-slate-300 hover:bg-blue-50"
+        } print:hover:bg-transparent print:cursor-default`}
+        disabled={setRealDates.isPending}
+      >
+        {valor ? fmtBR(valor) : "—"}
+      </button>
+    );
+  };
+
   // Rev. 1663 — Métricas de aderência semanal (PPC do Last Planner System).
   // Para cada atividade da semana calcula:
   //   • metaPct       = peso × du(semana ∩ envelope até cutoff) / du(envelope)
@@ -655,10 +700,11 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                 <th rowSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold w-20" title="Status da atividade na semana selecionada">STATUS</th>
               </tr>
               <tr className="bg-slate-50 border-b border-slate-400">
-                <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-16">Início</th>
-                <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-16">Fim</th>
-                <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-16">Início</th>
-                <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-16">Fim</th>
+                {/* Rev. 1678 — Larguras ampliadas (w-16→w-20) para caber dd/MM/aaaa completo. */}
+                <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-20">Início</th>
+                <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-20">Fim</th>
+                <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-20">Início</th>
+                <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-20">Fim</th>
                 <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-14 whitespace-nowrap" title="Meta planejada na semana (PV semanal × peso financeiro)">Prev.</th>
                 <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-14 whitespace-nowrap" title="Avanço efetivamente lançado na semana (peso × Σ% semanal / 100)">Real.</th>
                 <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-14 whitespace-nowrap" title="Desvio em pontos percentuais: Real − Prev. Verde se ≥ 0 (em dia/adiantado), vermelho se &lt; 0 (atrasado).">Δ</th>
@@ -706,31 +752,18 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                       )}
                       {a.nome}
                     </td>
-                    <td className="border border-slate-300 px-1 py-1 text-center text-slate-700 whitespace-nowrap">
-                      {a.dataInicio ? fmtBR(a.dataInicio).slice(0, 5) + "-" + fmtBR(a.dataInicio).slice(8) : "—"}
+                    {/* Rev. 1678 — Datas dd/MM/aaaa (regra de ouro do projeto). */}
+                    <td className="border border-slate-300 px-1 py-1 text-center text-slate-700 text-[10px] tabular-nums whitespace-nowrap">
+                      {fmtBR(a.dataInicio)}
                     </td>
-                    <td className="border border-slate-300 px-1 py-1 text-center text-slate-700 whitespace-nowrap">
-                      {a.dataFim ? fmtBR(a.dataFim).slice(0, 5) + "-" + fmtBR(a.dataFim).slice(8) : "—"}
-                    </td>
-                    <td className="border border-slate-300 px-0.5 py-0.5 text-center print:px-1">
-                      <Input
-                        type="date"
-                        value={a.dataInicioReal || ""}
-                        onChange={(e) => handleSetReal(a.id, "dataInicioReal", e.target.value)}
-                        className="h-6 text-[10px] px-1 border-slate-200 print:hidden"
-                        disabled={setRealDates.isPending}
-                      />
-                      <span className="hidden print:inline text-slate-700">{fmtBR(a.dataInicioReal).slice(0, 5)}</span>
+                    <td className="border border-slate-300 px-1 py-1 text-center text-slate-700 text-[10px] tabular-nums whitespace-nowrap">
+                      {fmtBR(a.dataFim)}
                     </td>
                     <td className="border border-slate-300 px-0.5 py-0.5 text-center print:px-1">
-                      <Input
-                        type="date"
-                        value={a.dataFimReal || ""}
-                        onChange={(e) => handleSetReal(a.id, "dataFimReal", e.target.value)}
-                        className="h-6 text-[10px] px-1 border-slate-200 print:hidden"
-                        disabled={setRealDates.isPending}
-                      />
-                      <span className="hidden print:inline text-slate-700">{fmtBR(a.dataFimReal).slice(0, 5)}</span>
+                      <RealDateCell a={a} campo="dataInicioReal" />
+                    </td>
+                    <td className="border border-slate-300 px-0.5 py-0.5 text-center print:px-1">
+                      <RealDateCell a={a} campo="dataFimReal" />
                     </td>
                     {/* Rev. 1664 — META SEMANAL: Prev / Real / Δ */}
                     <td className={`border border-slate-300 px-1 py-1 text-center text-[10px] tabular-nums whitespace-nowrap ${m && m.metaPct > 0 ? "text-slate-800 font-semibold" : "text-slate-400"}`} title={tip}>
