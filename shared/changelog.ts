@@ -11562,6 +11562,15 @@ export const CHANGELOG: RevisionEntry[] = [
   },
   {
     version: 1669,
+    titulo: "Avanço Semanal — Nova coluna '% Previsto' + rename '% Acumulado' → '% Realizado (Acum.)'",
+    descricao: "Solicitado pelo usuário: na tabela de atividades da aba Avanço Semanal, exibir o '% previsto conforme cronograma' por atividade ao lado do realizado (que já existia rotulado como '% Acumulado'). **Fix**: adicionada coluna 'pen Previsto' (laranja, mesma cor do 'Previsto' do header) entre '% Anterior' e o slider, reaproveitando `prevInd` já calculado por linha — interpolação linear entre `dataInicio` e `dataFim` no fim da semana cutoff (mesma fórmula da Programação Semanal). Coluna do slider renomeada para '% Realizado (Acum.)' pra clareza. colSpan dos placeholders ajustado de 7 para 8. `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` ~L6020-6024 (header), ~L6029/6034 (colSpan), ~L6097-6100 (cell).",
+    tipo: "ui",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 04:30:00",
+  },
+  {
+    version: 1669,
     titulo: "Programação Semanal FC — Cor do Desvio (pp) por sinal (positivo=verde, negativo=vermelho, zero=azul)",
     descricao: "Solicitado pelo usuário: a coluna 'Desvio' (pp) na lista de atividades da Programação Semanal deve seguir uma regra de cor simples e direta — positivo=verde (atividade adiantada), negativo=vermelho (atrasada), zero/no prazo=azul. A regra antiga combinava faixas (`>+2pp` azul, `[−2,+2]` verde, `[−10,−2)` amarelo, `<−10` vermelho) que confundia 'adiantada' (azul) com 'no prazo' (verde) e usava amarelo intermediário sem necessidade. **Fix**: tolerância de ±0,05pp evita ruído de arredondamento. Não muda a pill 'Adiantada/No prazo/Em curso/Atrasada' (regra de aderência semântica, mantém-se). `client/src/pages/planejamento/ProgramacaoSemanal.tsx` ~L1444-1451.",
     tipo: "ui",

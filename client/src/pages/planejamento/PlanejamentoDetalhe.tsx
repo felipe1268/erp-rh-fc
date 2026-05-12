@@ -6016,17 +6016,19 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
               <th className="py-2 px-3 text-left w-24">Fim</th>
               <th className="py-2 px-3 text-right w-20">Peso%</th>
               <th className="py-2 px-3 text-right w-24">% Anterior</th>
-              <th className="py-2 px-3 text-center w-72">% Acumulado</th>
+              {/* Rev. 1669 — Coluna "% Previsto" (cronograma) ao lado do Realizado/Acumulado */}
+              <th className="py-2 px-3 text-right w-24" title="% planejado para esta atividade até o fim da semana cutoff (interpolação linear entre dataInicio e dataFim).">% Previsto</th>
+              <th className="py-2 px-3 text-center w-72">% Realizado (Acum.)</th>
             </tr>
           </thead>
           <tbody>
             {folhas.length === 0 && (
-              <tr><td colSpan={7} className="py-8 text-center text-slate-400">
+              <tr><td colSpan={8} className="py-8 text-center text-slate-400">
                 Nenhuma atividade. Cadastre no Cronograma primeiro.
               </td></tr>
             )}
             {folhasExibidas.length === 0 && folhas.length > 0 && (
-              <tr><td colSpan={7} className="py-8 text-center text-slate-400">
+              <tr><td colSpan={8} className="py-8 text-center text-slate-400">
                 {filtroAtivo === "pendentes"
                   ? "Todas as atividades da semana foram executadas — nenhuma pendência."
                   : "Nenhuma atividade ativa nesta semana. Clique no filtro para ver todas."}
@@ -6089,6 +6091,10 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                   <td className="py-2 px-3 text-slate-500">{fmtBR(a.dataFim)}</td>
                   <td className={`py-2 px-3 text-right font-medium ${isMaiorPeso ? "text-orange-700 font-bold" : "text-slate-600"}`}>{n(a.pesoFinanceiro).toFixed(2)}%</td>
                   <td className="py-2 px-3 text-right text-slate-500">{fPct(anterior)}</td>
+                  {/* Rev. 1669 — % Previsto (cronograma) por atividade no cutoff atual */}
+                  <td className="py-2 px-3 text-right font-medium text-orange-600 tabular-nums" title="% planejado conforme cronograma até o fim da semana cutoff.">
+                    {fPct(prevInd)}
+                  </td>
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-2 min-w-[220px]">
                       <input
