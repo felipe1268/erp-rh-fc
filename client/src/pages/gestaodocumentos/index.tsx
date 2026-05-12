@@ -23,6 +23,16 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -175,6 +185,25 @@ export default function GestaoDocumentos() {
   const [expandedDiscs, setExpandedDiscs] = useState<Set<number>>(new Set());
 
   const [showDocModal, setShowDocModal] = useState(false);
+  // Rev. 1720 — confirm modal in-app (substitui window.confirm nativo, que no
+  // iPad/Safari mostra "<host>.replit.dev diz" e fica feio).
+  const [confirmModal, setConfirmModal] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    confirmLabel?: string;
+    destructive?: boolean;
+    onConfirm: () => void;
+  }>({ open: false, title: "", description: "", onConfirm: () => {} });
+  const askConfirm = useCallback((opts: {
+    title: string;
+    description: string;
+    confirmLabel?: string;
+    destructive?: boolean;
+    onConfirm: () => void;
+  }) => {
+    setConfirmModal({ ...opts, open: true });
+  }, []);
   const [showRevModal, setShowRevModal] = useState(false);
   const [showArtModal, setShowArtModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -1504,7 +1533,13 @@ export default function GestaoDocumentos() {
                             <Pencil className="w-3 h-3" />
                           </button>
                           <button
-                            onClick={() => { if (confirm(`Remover pasta "${disc.sigla}"?`)) deleteDiscFicheiro.mutate({ id: disc.id, companyId, ficheiroId: activeFicheiroId! }); }}
+                            onClick={() => askConfirm({
+                              title: `Remover pasta "${disc.sigla}"?`,
+                              description: `Esta ação remove a disciplina "${disc.sigla} — ${disc.nome}" do projeto. As sub-pastas e o vínculo dos documentos serão afetados.`,
+                              confirmLabel: "Remover pasta",
+                              destructive: true,
+                              onConfirm: () => deleteDiscFicheiro.mutate({ id: disc.id, companyId, ficheiroId: activeFicheiroId! }),
+                            })}
                             className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"
                           >
                             <Trash2 className="w-3 h-3" />
@@ -1541,7 +1576,13 @@ export default function GestaoDocumentos() {
                                     <Pencil className="w-2.5 h-2.5" />
                                   </button>
                                   <button
-                                    onClick={() => { if (confirm(`Remover sub-pasta "${sp.nome}"?`)) deletePasta.mutate({ id: sp.id, companyId }); }}
+                                    onClick={() => askConfirm({
+                                      title: `Remover sub-pasta "${sp.nome}"?`,
+                                      description: `Esta ação remove a sub-pasta "${sp.nome}" da disciplina "${disc.sigla}". Documentos vinculados perderão a referência da sub-pasta.`,
+                                      confirmLabel: "Remover sub-pasta",
+                                      destructive: true,
+                                      onConfirm: () => deletePasta.mutate({ id: sp.id, companyId }),
+                                    })}
                                     className="p-0.5 rounded opacity-0 group-hover/sp:opacity-100 text-gray-400 hover:text-red-500 transition-all shrink-0"
                                   >
                                     <Trash2 className="w-2.5 h-2.5" />
@@ -2770,6 +2811,32 @@ export default function GestaoDocumentos() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Rev. 1720 — Confirm modal in-app (substitui window.confirm). */}
+      <AlertDialog
+        open={confirmModal.open}
+        onOpenChange={(o) => setConfirmModal((p) => ({ ...p, open: o }))}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmModal.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmModal.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className={confirmModal.destructive ? "bg-red-600 hover:bg-red-700 focus:ring-red-600" : undefined}
+              onClick={() => {
+                const fn = confirmModal.onConfirm;
+                setConfirmModal((p) => ({ ...p, open: false }));
+                fn();
+              }}
+            >
+              {confirmModal.confirmLabel || "Confirmar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

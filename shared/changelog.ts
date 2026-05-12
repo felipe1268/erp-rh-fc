@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1720,
+    titulo: "Proj./Doc. Técnicos — Substituir confirmação nativa do navegador (iPad/Safari 'replit.dev diz') por modal in-app",
+    descricao: "Reportado: ao excluir uma sub-pasta (ex.: 'Remover sub-pasta DOC?') no iPad, aparecia o popup nativo do Safari com o cabeçalho feio 'b41aedae-...replit.dev diz' — visualmente quebrado, sem identidade do app. Causa em `client/src/pages/gestaodocumentos/index.tsx` ~L1507 e ~L1544: usava `window.confirm()` direto. Fix Rev. 1720: novo state `confirmModal` + helper `askConfirm()` no componente, com `<AlertDialog>` (shadcn/Radix) renderizado uma única vez no fim do JSX. Suporta título, descrição, label customizado e flag `destructive` (botão vermelho). Substituídos os 2 `confirm()` da árvore PASTAS (excluir disciplina e excluir sub-pasta) — agora abrem modal estilizado com texto explicativo do impacto. Outros `confirm()` legados (ART, documento, lote, revisão) preservados — podem migrar incrementalmente. Sem schema change, sem mudança de servidor.",
+    tipo: 'melhoria',
+    modulos: 'Proj./Doc. Técnicos',
+    criadoPor: 'Replit Agent',
+    dataPublicacao: '2026-05-12 23:00:00',
+  },
+  {
     version: 1719,
     titulo: "Aviso Prévio — 3ª tag 'Rescisão Complementar' aparece SEMPRE (permite baixa de pagamento 'por fora' sem previsão)",
     descricao: "Reportado: GIVALDO DOS SANTOS tinha rescisão complementar paga 'por fora' mas o diálogo 'Dar Baixa no Aviso Prévio' só mostrava 2 cards (Rescisão + Multa FGTS), sem opção de registrar a baixa do complementar. Causa em `client/src/pages/AvisoPrevio.tsx` ~L2641 e em `server/routers/avisoPrevioFerias.ts` ~L1548 (Rev. 1639): o 3º card e a mutation só liberavam complementar quando `previsaoRescisaoComplementar.total > 0` no banco — mas pagamentos 'por fora' não passam pelo cálculo prévio. Fix Rev. 1719 em 2 camadas: (1) Client `AvisoPrevio.tsx`: `temComplementar` agora é sempre true (3 cards SEMPRE no fluxo CLT, 2 cards no pedido de demissão); novo helper `temPrevComplementar` controla apenas o subtítulo do card — quando há previsão mostra 'Estimado: R$ X', quando não há mostra em itálico violeta 'Sem previsão — informar valor pago'. `valorComplementarSugerido` prioriza o valor da baixa já gravada (quando existe) sobre a previsão. (2) Server `avisoPrevioFerias.ts` `darBaixa`: removido o `throw` que bloqueava `tipo='complementar'` quando `!temComplementar`. Variável `temComplementar` preservada e segue alimentando o gate de `deveConcluir` (sem previsão, complementar é opcional e não bloqueia conclusão automática do processo). Sem schema change.",
