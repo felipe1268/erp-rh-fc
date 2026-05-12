@@ -11551,4 +11551,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-12 01:50:00",
   },
+  {
+    version: 1666,
+    titulo: "LOTUS — Real Fim derivado respeita o cutoff oficial (não pinta dias futuros)",
+    descricao: "Refinamento do Rev. 1665. O cap do Real Fim derivado pelo `endOfWeek(semana)+fimPlan` não impedia que dias futuros (após hoje/cutoff) ficassem verdes quando o usuário lançasse avanço no início da semana corrente. Ex.: hoje=Seg 11/05 + cutoff oficial=Qui 07/05; se um avanço fosse lançado na semana 11-17, o realFim derivado virava Dom 17/05 e o LOTUS pintaria 12-17 de verde — dias que NEM ACONTECERAM. Correção: `listarAtividades` agora carrega `planejamento_projetos.dataCorteAtual` (status date PMBOK) e cappa o realFim derivado também por ele. Hierarquia de caps: `min(endOfWeek, fimPlan, cutoffOficial)`. Sem alteração quando o usuário digita Real Fim manualmente. `server/routers/planejamento.ts` ~L706-725 (busca cutoff via JOIN com `planejamentoRevisoes`) e ~L779-789 (cap aplicado).",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 02:10:00",
+  },
 ];

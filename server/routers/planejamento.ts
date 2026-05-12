@@ -700,6 +700,27 @@ export const planejamentoRouter = router({
         .where(eq(planejamentoAtividades.revisaoId, input.revisaoId))
         .orderBy(asc(planejamentoAtividades.ordem), asc(planejamentoAtividades.eapCodigo));
 
+      // Rev. 1666 — Busca a `dataCorteAtual` do projeto para limitar o realFim
+      // derivado: realizado nunca pode passar do cutoff oficial PMBOK (status
+      // date), senão o LOTUS pintaria de verde dias futuros que ainda nem
+      // aconteceram. Ex.: se hoje é Seg 11/05 mas o cutoff oficial é Qui 07/05,
+      // uma atividade com avanço lançado na semana 04-10 não deve "vazar" Real
+      // Fim para 10/05 — o oficialmente medido é só até 07/05.
+      let cutoffISO: string | null = null;
+      if (rows.length > 0) {
+        const [rev] = await db.select({ projetoId: planejamentoRevisoes.projetoId })
+          .from(planejamentoRevisoes)
+          .where(eq(planejamentoRevisoes.id, input.revisaoId))
+          .limit(1);
+        if (rev?.projetoId) {
+          const [proj] = await db.select({ dataCorteAtual: planejamentoProjetos.dataCorteAtual })
+            .from(planejamentoProjetos)
+            .where(eq(planejamentoProjetos.id, rev.projetoId))
+            .limit(1);
+          if (proj?.dataCorteAtual) cutoffISO = toDateStr(proj.dataCorteAtual as any);
+        }
+      }
+
       // Rev. 1662 — Padrão LOTUS: deriva Real Início/Real Fim dos avanços
       // já gravados via "Avanço Semanal" (FC), para que o LOTUS não exija
       // redigitação. Regra:
@@ -755,9 +776,13 @@ export const planejamentoRouter = router({
         const realFimDerivado = (() => {
           const baseSem = av?.concluiuEm ?? av?.ultima ?? null;
           if (!baseSem) return null;
-          const fimSem = endOfWeek(baseSem);
-          if (fimPlan && fimSem > fimPlan) return fimPlan;
-          return fimSem;
+          let fim = endOfWeek(baseSem);
+          // Cap pelo Fim planejado: realizado não cria envelope além do previsto
+          if (fimPlan && fim > fimPlan) fim = fimPlan;
+          // Rev. 1666 — Cap pelo cutoff oficial (status date PMBOK): realizado
+          // nunca passa da data oficial de medição, evitando "verde no futuro".
+          if (cutoffISO && fim > cutoffISO) fim = cutoffISO;
+          return fim;
         })();
         return {
           ...r,
