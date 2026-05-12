@@ -11561,6 +11561,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 02:10:00",
   },
   {
+    version: 1669,
+    titulo: "Programação Semanal FC — Realizado/Aderência da Curva S alinhados ao cutoff (Sex→Qui)",
+    descricao: "Reportado: na aba Programação Semanal (Padrão FC), o card 'Semana 1' mostrava Previsto 1,41% / Realizado 0,00% / Aderência —, mesmo com cada linha de atividade exibindo Real% 28,0% corretamente. Causa: `evmSemana` em `client/src/pages/planejamento/ProgramacaoSemanal.tsx` calculava o realizado da semana via `acumAt(curvaRealizada, semIniStr)` onde `semIniStr = dateStr(semanaAtual.ini)` = Sexta 01/05 (após Rev. 1667). As curvas (curvaPlanejada/curvaRealizada/curvaBaseline) são indexadas por Segunda. Mon 04/05 > Sex 01/05, logo o lookup `<= semIni` não capturava o ponto da Curva S → realizado=0. **Fix (Rev. 1669)**: substituído `semIniStr`/`semAntStr` por `semFimStr`/`semAntFimStr` (Quinta cutoff atual e Quinta da semana anterior). Como a Monday key sempre cai dentro da janela Sex→Qui, `<= semFim` captura corretamente. Aderência (SPI sem.) volta a calcular. Não afeta `previstoSemanaDelta` (já usava envelope MSP correto). `client/src/pages/planejamento/ProgramacaoSemanal.tsx` ~L557-585.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 04:00:00",
+  },
+  {
     version: 1668,
     titulo: "Avanço Físico — Δsem alinhado ao cutoff (Sex→Qui), elimina vazamento de registros entre semanas",
     descricao: "Reportado: usuário lançou avanço só na Sem 1, mas a Sem 2 mostrava Δsem 0,79% 'fantasma'. Causa: o cálculo de `previstoRealizadoSemana` em PlanejamentoDetalhe.tsx usava fronteira Mon-a-Mon (`av.semana <= semanaAtual` e `semAntStr = semanaAtual - 7`), enquanto o botão 'Fechar semana' / conclusões individuais gravam `planejamento_avancos.semana` na data do CUTOFF (ex.: Quinta 07/05). Resultado: registros gravados em 07/05 (que pertencem visualmente à Sem 1 cutoff 01-07/05) eram contabilizados como ganho da Sem 2 porque '04/05 < 07/05 ≤ 11/05'. **Correção (Rev. 1668)**: o filtro do realizado/EV passa a usar o FIM da semana cutoff (Quinta) como limite. `semFimCutoffStr = semanaFim` (já é a Quinta após Rev. 1667) e `semAntFimCutoffStr = semFim - 7d` (Quinta da semana anterior). Filtros: `av.semana <= semFimCutoffStr` (acumAtual), `av.semana <= semAntFimCutoffStr` (acumAntes), e `evAcum` também migrado de `< semanaAtual` para `<= semAntFimCutoffStr`. Qualquer registro entre Sex-Qui cai naturalmente na semana visual correspondente — sem vazamento. `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` ~L5031-5063 (cálculo realizado) e ~L5147-5162 (evAcum/débito).",

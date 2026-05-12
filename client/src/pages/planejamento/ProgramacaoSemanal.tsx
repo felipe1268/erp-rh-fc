@@ -556,9 +556,14 @@ export function ProgramacaoSemanal({
   // Quando curvaData não está disponível, retorna null e o banner esconde estes campos.
   const evmSemana = useMemo(() => {
     if (!semanaAtual || !curvaData) return null;
-    const semIniStr = dateStr(semanaAtual.ini);
-    const semAntDate = new Date(semanaAtual.ini.getTime() - 7 * 86400000);
-    const semAntStr = dateStr(semAntDate);
+    // Rev. 1668 — usa o FIM da semana cutoff (Quinta) em vez do início (Sexta).
+    // As curvas são indexadas por Segunda; quando cutoff=Sex→Qui, a Segunda
+    // (ex.: Mon 04/05) fica DEPOIS do início da semana (Sex 01/05) e NÃO era
+    // capturada pelo `<= semIni` → Realizado virava 0% indevidamente.
+    // Usando `<= semFim` (Qui 07/05), a Monday 04/05 entra no balde correto.
+    const semFimStr = dateStr(semanaAtual.fim);
+    const semAntFimDate = new Date(semanaAtual.fim.getTime() - 7 * 86400000);
+    const semAntFimStr = dateStr(semAntFimDate);
     const acumAt = (arr: { semana: string; acumulado: number }[] | undefined, semFim: string): number => {
       if (!arr || !arr.length) return 0;
       const ord = arr.slice().sort((a, b) => a.semana.localeCompare(b.semana));
@@ -568,10 +573,10 @@ export function ProgramacaoSemanal({
     };
     const planejadaArr = (curvaData.curvaPlanejada?.length ? curvaData.curvaPlanejada : curvaData.curvaBaseline) ?? [];
     const realizadaArr = curvaData.curvaRealizada ?? [];
-    const planAtual = acumAt(planejadaArr, semIniStr);
-    const planAntes = acumAt(planejadaArr, semAntStr);
-    const realAtual = acumAt(realizadaArr, semIniStr);
-    const realAntes = acumAt(realizadaArr, semAntStr);
+    const planAtual = acumAt(planejadaArr, semFimStr);
+    const planAntes = acumAt(planejadaArr, semAntFimStr);
+    const realAtual = acumAt(realizadaArr, semFimStr);
+    const realAntes = acumAt(realizadaArr, semAntFimStr);
     const previstoCurvaS = Math.max(0, planAtual - planAntes);
     const realizado = Math.max(0, realAtual - realAntes);
     const aderencia = previstoCurvaS > 0 ? (realizado / previstoCurvaS) * 100 : null;
