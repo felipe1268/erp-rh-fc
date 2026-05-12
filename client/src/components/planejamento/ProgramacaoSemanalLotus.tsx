@@ -4,7 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, FileSpreadsheet, Printer, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { parseCalendarioJson, ehDiaUtil, type CalendarioMSProject } from "@shared/diasUteis";
+import { parseCalendarioJson, ehDiaUtil, diasUteisEntre, type CalendarioMSProject } from "@shared/diasUteis";
+
+// Rev. 1663 — Threshold de aderência semanal (PPC do Last Planner System).
+// PMBOK 7ª usa SPI ≥ 0,95 como "no prazo". Mantemos a convenção: ≥95% verde,
+// <95% vermelho. Ajuste pontual aqui se o cliente pedir tolerância diferente.
+const ADERENCIA_THRESHOLD = 95;
 
 interface Atividade {
   id: number;
@@ -98,6 +103,8 @@ function faixasCelula(
   realFim: string | null | undefined,
   hoje: Date,
   cal: CalendarioMSProject | null,
+  aderenciaPct: number | null, // Rev. 1663 — % aderência da SEMANA (não do dia)
+  metaPct: number,             // Rev. 1663 — meta semanal da atividade
 ): { top: string | null; bottom: string | null } {
   const ds = dateStr(dia);
   const ehUtil = cal ? ehDiaUtil(ds, cal) : (dia.getDay() !== 0 && dia.getDay() !== 6);
@@ -108,15 +115,26 @@ function faixasCelula(
   // Faixa superior (PREVISTO)
   let top: string | null = null;
   if (inPrev) {
-    top = (passou && !inReal && !realFim) ? "bg-red-500" : "bg-blue-800";
+    // Se passou sem real e a atividade tinha meta exigida na semana, o
+    // previsto vira vermelho ("não executado"). Sem meta (meta=0), permanece
+    // azul informativo.
+    top = (passou && !inReal && !realFim && metaPct > 0) ? "bg-red-500" : "bg-blue-800";
   }
 
   // Faixa inferior (REALIZADO)
   let bottom: string | null = null;
   if (inReal) {
-    if (prevIni && ds < prevIni) bottom = "bg-orange-400";   // antecipado
-    else if (!inPrev)            bottom = "bg-yellow-400";   // fora da janela prevista
-    else                         bottom = "bg-green-500";    // conforme previsto
+    if (prevIni && ds < prevIni) {
+      bottom = "bg-orange-400";   // antecipado (executado antes do envelope)
+    } else if (!inPrev) {
+      bottom = "bg-yellow-400";   // fora da janela prevista (não programado)
+    } else {
+      // Real dentro do plano da semana → cor reflete aderência semanal (PPC).
+      // Sem meta (atividade sem peso ou janela fora da semana atual) → verde
+      // neutro pra não punir injustamente.
+      if (aderenciaPct == null || metaPct <= 0) bottom = "bg-green-500";
+      else bottom = aderenciaPct >= ADERENCIA_THRESHOLD ? "bg-green-500" : "bg-red-500";
+    }
   }
 
   return { top, bottom };
@@ -211,14 +229,94 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     setRealDates.mutate({ atividadeId, companyId, [campo]: valor || null } as any);
   };
 
+  // Rev. 1663 — Métricas de aderência semanal (PPC do Last Planner System).
+  // Para cada atividade da semana calcula:
+  //   • metaPct       = peso × du(semana ∩ envelope até cutoff) / du(envelope)
+  //   • realPct       = peso × Σ(percentualSemanal de avanços que caem na semana) / 100
+  //   • aderenciaPct  = realPct / metaPct × 100
+  //   • acumuladoPct  = avanço acumulado mais recente até semFim
+  // Fonte única: planejamento_avancos (mesmo dado do FC). Sem rateio diário —
+  // a literatura (Ballard, Lean Construction Institute) trata semana como
+  // unidade de compromisso. As cores das células diárias usam a aderência da
+  // SEMANA (não do dia individual).
+  const { data: avancosLista = [] } = trpc.planejamento.listarAvancos.useQuery(
+    { projetoId, revisaoId },
+    { enabled: !!projetoId && !!revisaoId },
+  );
+  const metricas = useMemo(() => {
+    const out = new Map<number, { metaPct: number; realPct: number; aderenciaPct: number | null; acumPct: number }>();
+    if (!semIniStr) return out;
+    // Cutoff = mínimo entre semFim e hoje (semana corrente não cobra dias futuros).
+    const hojeStr = dateStr(hoje);
+    const cutoffStr = hojeStr < semFimStr ? hojeStr : semFimStr;
+    for (const a of atividadesDaSemana) {
+      const peso = parseFloat(String(a.pesoFinanceiro ?? "0")) || 0;
+      const ini = a.dataInicio?.slice(0, 10);
+      const fim = a.dataFim?.slice(0, 10);
+      let metaPct = 0;
+      if (ini && fim && peso > 0) {
+        const duEnv = calMSP ? diasUteisEntre(ini, fim, calMSP) : Math.max(1, Math.round((parseDate(fim).getTime() - parseDate(ini).getTime()) / 86400000) + 1);
+        if (duEnv > 0) {
+          // Janela cobrável da semana: [max(semIni,iniAtv) → min(cutoff,fimAtv)]
+          const janIni = semIniStr > ini ? semIniStr : ini;
+          const janFim = cutoffStr < fim ? cutoffStr : fim;
+          if (janIni <= janFim) {
+            const duJan = calMSP ? diasUteisEntre(janIni, janFim, calMSP) : Math.max(0, Math.round((parseDate(janFim).getTime() - parseDate(janIni).getTime()) / 86400000) + 1);
+            metaPct = peso * (duJan / duEnv);
+          }
+        }
+      }
+      // Realizado da semana = soma dos percentualSemanal cujo `semana` cai no range.
+      const avsAtiv = avancosLista.filter((av: any) => av.atividadeId === a.id);
+      const somaSemanal = avsAtiv
+        .filter((av: any) => av.semana >= semIniStr && av.semana <= semFimStr)
+        .reduce((s: number, av: any) => s + (parseFloat(String(av.percentualSemanal ?? "0")) || 0), 0);
+      const realPct = peso * (somaSemanal / 100);
+      // Acumulado: maior percentualAcumulado até semFim
+      const avsAteFim = avsAtiv.filter((av: any) => av.semana <= semFimStr);
+      const acumPct = avsAteFim.length === 0 ? 0 : Math.max(...avsAteFim.map((av: any) => parseFloat(String(av.percentualAcumulado ?? "0")) || 0));
+      const aderenciaPct = metaPct > 0 ? (realPct / metaPct) * 100 : null;
+      out.set(a.id, { metaPct, realPct, aderenciaPct, acumPct });
+    }
+    return out;
+  }, [atividadesDaSemana, avancosLista, semIniStr, semFimStr, calMSP, hoje]);
+
+  const fmtPct1 = (n: number) => `${n.toFixed(2).replace(".", ",")}%`;
+  const statusLabel = (m: { metaPct: number; realPct: number; aderenciaPct: number | null; acumPct: number } | undefined) => {
+    if (!m) return { txt: "—", cls: "text-slate-400" };
+    if (m.acumPct >= 100) return { txt: "Concluída", cls: "text-emerald-700 font-bold bg-emerald-50" };
+    if (m.metaPct <= 0)  return { txt: "Sem meta", cls: "text-slate-500" };
+    if (m.aderenciaPct == null) return { txt: "—", cls: "text-slate-400" };
+    if (m.aderenciaPct >= ADERENCIA_THRESHOLD) return { txt: "No prazo", cls: "text-emerald-700 font-bold bg-emerald-50" };
+    if (m.realPct <= 0) return { txt: "Não exec.", cls: "text-red-700 font-bold bg-red-50" };
+    return { txt: "Atrasado", cls: "text-red-700 font-bold bg-red-50" };
+  };
+  const tooltipAtiv = (a: Atividade): string => {
+    const m = metricas.get(a.id);
+    if (!m) return a.nome;
+    const aderTxt = m.aderenciaPct == null ? "—" : `${m.aderenciaPct.toFixed(0)}%`;
+    return `${a.nome}\nMeta semanal: ${fmtPct1(m.metaPct)}\nRealizado na semana: ${fmtPct1(m.realPct)}\nAderência: ${aderTxt}\nAcumulado: ${fmtPct1(m.acumPct)}`;
+  };
+
   const handleExportExcel = async () => {
     try {
       const ExcelJS = (await import("exceljs")).default;
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet("Programação Semanal");
 
+      // Helper: número de coluna → letra Excel ("A","B"..."AA"...)
+      const colLetter = (n: number): string => {
+        let s = "";
+        while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+        return s;
+      };
+      // Estrutura: ITEM(1) TAREFA(2) PrevIni(3) PrevFim(4) RealIni(5) RealFim(6)
+      //            META SEM(7) RESPONSÁVEL(8) Dias(9..8+N) STATUS(9+N)
+      const totalCols = 9 + dias.length;
+      const lastCol = colLetter(totalCols);
+
       // Header (3 linhas)
-      ws.mergeCells("A1:O1");
+      ws.mergeCells(`A1:${lastCol}1`);
       const titleCell = ws.getCell("A1");
       titleCell.value = `PROGRAMAÇÃO SEMANAL - ${nomeProjeto.toUpperCase()} - ${periodoStr}`;
       titleCell.font = { bold: true, size: 14 };
@@ -231,9 +329,10 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         "ITEM", "TAREFA",
         "Previsto Início", "Previsto Fim",
         "Real Início", "Real Fim",
+        "META SEM %",
         "RESPONSÁVEL",
         ...dias.map((d) => `${abrevDia(d)} ${fmtDiaMes(d)}`),
-        "Status",
+        "STATUS",
       ];
       const hr = ws.getRow(headerRow);
       hr.font = { bold: true };
@@ -245,12 +344,14 @@ export default function ProgramacaoSemanalLotus(props: Props) {
 
       // Dados
       const corHex: Record<string, string> = {
-        "bg-blue-500":   "FF3B82F6",
+        "bg-blue-800":   "FF1E40AF",
         "bg-green-500":  "FF22C55E",
         "bg-yellow-400": "FFFACC15",
         "bg-orange-400": "FFFB923C",
         "bg-red-500":    "FFEF4444",
       };
+      const diasColStart = 9; // primeira coluna de dia (após META SEM e RESPONSÁVEL)
+      const statusCol = 9 + dias.length;
       let r = headerRow + 1;
       linhas.forEach((l) => {
         if (l.tipo === "grupo") {
@@ -259,24 +360,35 @@ export default function ProgramacaoSemanalLotus(props: Props) {
           ws.getRow(r).alignment = { vertical: "middle" };
         } else {
           const a = l.ativ;
+          const m = metricas.get(a.id);
+          const st = statusLabel(m);
           ws.getRow(r).values = [
             a.eapCodigo, a.nome,
             fmtBR(a.dataInicio), fmtBR(a.dataFim),
             fmtBR(a.dataInicioReal), fmtBR(a.dataFimReal),
+            m && m.metaPct > 0 ? fmtPct1(m.metaPct) : "—",
             (a.responsavelLotus ?? engenheiroResponsavel) || "—",
             ...dias.map(() => ""),
-            a.dataFimReal ? "Realizado" : (a.dataInicio && a.dataInicio <= dateStr(hoje) && !a.dataInicioReal ? "Atrasado" : "Previsto"),
+            st.txt,
           ];
           dias.forEach((d, idx) => {
-            const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP);
-            // Excel não suporta faixas internas — usa a cor da faixa de cima
-            // (previsto) e, se só houver realizado, usa a cor de baixo.
-            const cor = f.top || f.bottom;
+            const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0);
+            // Excel não suporta faixas internas — prioriza realizado (faixa de
+            // baixo). Se só houver previsto, usa a cor do previsto.
+            const cor = f.bottom || f.top;
             if (cor) {
-              const cell = ws.getCell(r, 8 + idx);
+              const cell = ws.getCell(r, diasColStart + idx);
               cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: corHex[cor] || "FF999999" } };
             }
           });
+          // Cor de fundo da célula Status conforme classificação
+          if (st.txt === "No prazo" || st.txt === "Concluída") {
+            ws.getCell(r, statusCol).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1FAE5" } };
+            ws.getCell(r, statusCol).font = { bold: true, color: { argb: "FF065F46" } };
+          } else if (st.txt === "Atrasado" || st.txt === "Não exec.") {
+            ws.getCell(r, statusCol).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEE2E2" } };
+            ws.getCell(r, statusCol).font = { bold: true, color: { argb: "FF991B1B" } };
+          }
         }
         ws.getRow(r).eachCell({ includeEmpty: true }, (c) => {
           c.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
@@ -288,9 +400,10 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       ws.getColumn(1).width = 8;
       ws.getColumn(2).width = 50;
       [3, 4, 5, 6].forEach((i) => (ws.getColumn(i).width = 12));
-      ws.getColumn(7).width = 18;
-      [8, 9, 10, 11, 12, 13, 14].forEach((i) => (ws.getColumn(i).width = 9));
-      ws.getColumn(15).width = 12;
+      ws.getColumn(7).width = 11; // META SEM %
+      ws.getColumn(8).width = 18; // RESPONSÁVEL
+      for (let i = 0; i < dias.length; i++) ws.getColumn(diasColStart + i).width = 9;
+      ws.getColumn(statusCol).width = 13;
 
       // Legenda
       r += 2;
@@ -414,11 +527,13 @@ export default function ProgramacaoSemanalLotus(props: Props) {
             <thead>
               <tr className="bg-slate-100 border-b border-slate-400">
                 <th rowSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold w-12">ITEM</th>
-                <th rowSpan={2} className="border border-slate-300 px-2 py-1 text-left font-bold min-w-[280px]">TAREFA</th>
+                <th rowSpan={2} className="border border-slate-300 px-2 py-1 text-left font-bold min-w-[260px]">TAREFA</th>
                 <th colSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold">DATA</th>
                 <th colSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold">Real</th>
-                <th rowSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold w-28">RESPONSÁVEL</th>
-                <th colSpan={7} className="border border-slate-300 px-1 py-1 text-center font-bold">PERÍODO: {periodoStr}</th>
+                <th rowSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold w-16" title="Meta de avanço da semana (PV semanal × peso financeiro)">META SEM</th>
+                <th rowSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold w-24">RESPONSÁVEL</th>
+                <th colSpan={dias.length} className="border border-slate-300 px-1 py-1 text-center font-bold">PERÍODO: {periodoStr}</th>
+                <th rowSpan={2} className="border border-slate-300 px-1 py-1 text-center font-bold w-20" title="Status da atividade na semana selecionada">STATUS</th>
               </tr>
               <tr className="bg-slate-50 border-b border-slate-400">
                 <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-16">Início</th>
@@ -436,7 +551,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
             <tbody>
               {linhas.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="text-center py-8 text-slate-400 text-xs">
+                  <td colSpan={9 + dias.length} className="text-center py-8 text-slate-400 text-xs">
                     Nenhuma atividade nesta semana.
                   </td>
                 </tr>
@@ -446,15 +561,18 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                   return (
                     <tr key={`g-${l.eap}-${i}`} className="bg-slate-50">
                       <td className="border border-slate-300 px-1 py-1 font-bold text-red-700">{l.eap}</td>
-                      <td colSpan={13} className="border border-slate-300 px-2 py-1 font-bold text-red-700 uppercase">{l.nome}</td>
+                      <td colSpan={8 + dias.length} className="border border-slate-300 px-2 py-1 font-bold text-red-700 uppercase">{l.nome}</td>
                     </tr>
                   );
                 }
                 const a = l.ativ;
+                const m = metricas.get(a.id);
+                const tip = tooltipAtiv(a);
+                const st = statusLabel(m);
                 return (
                   <tr key={`a-${a.id}`} className="hover:bg-blue-50/40">
                     <td className="border border-slate-300 px-1 py-1 text-center text-slate-700">{a.eapCodigo}</td>
-                    <td className="border border-slate-300 px-2 py-1 text-slate-800">{a.nome}</td>
+                    <td className="border border-slate-300 px-2 py-1 text-slate-800" title={tip}>{a.nome}</td>
                     <td className="border border-slate-300 px-1 py-1 text-center text-slate-700 whitespace-nowrap">
                       {a.dataInicio ? fmtBR(a.dataInicio).slice(0, 5) + "-" + fmtBR(a.dataInicio).slice(8) : "—"}
                     </td>
@@ -481,6 +599,9 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                       />
                       <span className="hidden print:inline text-slate-700">{fmtBR(a.dataFimReal).slice(0, 5)}</span>
                     </td>
+                    <td className={`border border-slate-300 px-1 py-1 text-center text-[10px] tabular-nums whitespace-nowrap ${m && m.metaPct > 0 ? "text-slate-800 font-semibold" : "text-slate-400"}`} title={tip}>
+                      {m && m.metaPct > 0 ? fmtPct1(m.metaPct) : "—"}
+                    </td>
                     <td className="border border-slate-300 px-1 py-1 text-center text-slate-700 text-[10px] uppercase">
                       <input
                         type="text"
@@ -505,9 +626,9 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                       />
                     </td>
                     {dias.map((d, idx) => {
-                      const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP);
+                      const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0);
                       return (
-                        <td key={idx} className="border border-slate-300 p-0 h-6 align-middle">
+                        <td key={idx} className="border border-slate-300 p-0 h-6 align-middle" title={tip}>
                           <div className="flex flex-col gap-[2px] mx-0.5 my-1">
                             <div className={`h-[6px] rounded-sm ${f.top ?? "bg-transparent"}`} />
                             <div className={`h-[6px] rounded-sm ${f.bottom ?? "bg-transparent"}`} />
@@ -515,6 +636,9 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                         </td>
                       );
                     })}
+                    <td className={`border border-slate-300 px-1 py-1 text-center text-[10px] whitespace-nowrap ${st.cls}`} title={tip}>
+                      {st.txt}
+                    </td>
                   </tr>
                 );
               })}
@@ -527,10 +651,14 @@ export default function ProgramacaoSemanalLotus(props: Props) {
           <div className="text-[10px] font-bold text-slate-700 mb-1.5">LEGENDA:</div>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[10px] text-slate-700">
             <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-blue-800 rounded-sm border border-slate-400" />PREVISTO</div>
-            <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-green-500 rounded-sm border border-slate-400" />REALIZADO</div>
+            <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-green-500 rounded-sm border border-slate-400" />REALIZADO (aderência ≥ {ADERENCIA_THRESHOLD}%)</div>
             <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-yellow-400 rounded-sm border border-slate-400" />SERVIÇO NÃO PROGRAMADO EXECUTADO</div>
             <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-orange-400 rounded-sm border border-slate-400" />SERVIÇO EXECUTADO ANTECIPADAMENTE</div>
-            <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-red-500 rounded-sm border border-slate-400" />ATRASADO / NÃO EXECUTADO</div>
+            <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-red-500 rounded-sm border border-slate-400" />ATRASADO / NÃO EXECUTADO / ADERÊNCIA &lt; {ADERENCIA_THRESHOLD}%</div>
+          </div>
+          <div className="text-[9px] text-slate-500 mt-1.5">
+            <span className="font-semibold">Meta semanal</span> = peso financeiro × (dias úteis da semana ÷ dias úteis do envelope).
+            <span className="font-semibold"> Aderência</span> = realizado da semana ÷ meta da semana × 100. Threshold conforme PMBOK 7ª (SPI ≥ 0,95).
           </div>
           {engenheiroResponsavel && (
             <div className="text-[10px] text-slate-500 mt-2">

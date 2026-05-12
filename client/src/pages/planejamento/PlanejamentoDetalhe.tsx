@@ -5345,6 +5345,28 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     onError: (e) => toast.error(`Erro ao limpar avanços da semana: ${e.message}`),
   });
 
+  // Rev. 1663 — Auto-save individual: ao perder foco em um input de avanço,
+  // dispara salvarAvanco se o valor digitado divergir do que está no servidor.
+  // Mantém o "Salvar Avanços" do botão pra quem prefere salvar em lote, mas
+  // garante que a Programação Semanal LOTUS sempre vê dados persistidos
+  // (sem depender de o usuário lembrar de clicar em salvar).
+  function autoSaveAvanco(atividadeId: number) {
+    if (!revisaoAtiva?.id) return;
+    const local = avancoLocal[atividadeId];
+    if (local === undefined) return; // não mexeu
+    const servidor = avancoExistente[atividadeId];
+    if (servidor !== undefined && Math.abs(local - servidor) < 0.01) return; // já salvo
+    const anterior = avancoAnterior[atividadeId] ?? 0;
+    salvarMutation.mutate({
+      projetoId,
+      atividadeId,
+      revisaoId: revisaoAtiva.id,
+      semana: semanaAtual,
+      percentualAcumulado: +local.toFixed(2),
+      percentualSemanal: Math.max(0, +(local - anterior).toFixed(2)),
+    });
+  }
+
   async function salvarTudo() {
     const itens = Object.entries(avancoLocal).map(([idStr, pct]) => {
       const atividadeId = parseInt(idStr);
@@ -5970,6 +5992,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                         type="range" min="0" max="100" step="1"
                         value={atual}
                         onChange={e => setAvancoLocal(l => ({ ...l, [a.id]: parseFloat(e.target.value) }))}
+                        onBlur={() => autoSaveAvanco(a.id)}
                         className="flex-1 accent-blue-600 cursor-pointer"
                         style={{ minWidth: 80 }}
                       />
@@ -5978,6 +6001,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
                           type="number" min="0" max="100" step="1"
                           value={atual}
                           onChange={e => setAvancoLocal(l => ({ ...l, [a.id]: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) }))}
+                          onBlur={() => autoSaveAvanco(a.id)}
                           className="h-6 text-xs text-right font-bold border border-slate-200 rounded px-1.5 bg-white"
                           style={{ width: 52 }}
                         />
