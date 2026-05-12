@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1707,
+    titulo: "Medições PJ — Modo de cálculo 'Por Percentual' (mensal) ao lado de 'Por Horas'",
+    descricao: "Solicitado: contratos PJ com `valorMensal` cadastrado precisam permitir medição por percentual (adiantamento, fechamento, parcial), não só por horas × R$/h. Implementação SEM schema change em `client/src/pages/PJMedicoes.tsx`: (1) Form ganhou `tipoMedicao: 'horas' | 'percentual'` + `percentual: string`. (2) Toggle 'Por Horas / Por Percentual (mensal)' no diálogo, acima dos inputs. (3) Modo Percentual mostra: input de % + display read-only do `valorMensal` do contrato selecionado + card 'Total Calculado' = (pct/100) × valorMensal. (4) Validações: pct>0 e valorMensal>0 — mensagens de erro específicas. (5) No `criarMut.mutate`, modo percentual envia `horasTrabalhadas='1'` + `valorHora=total` (math consistente com schema NOT NULL existente) e PREPENDA marker `[MEDIÇÃO POR PERCENTUAL — X% × R$ Y mensal]` em `observacoes`. (6) Listagem (~L308) e diálogo de detalhes (~L388) detectam o marker via `isMedicaoPercentual()` e renderizam badge violeta '%' + 'X% × R$ Y mensal' no lugar de 'Xh trabalhadas · R$ Y/h'. Servidor (`server/routers/pjMedicoes.ts`) inalterado — valorBruto/valorLiquido seguem como fonte de verdade financeira.",
+    tipo: "feature",
+    modulos: "RH/Medições PJ",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 09:30:00",
+  },
+  {
     version: 1706,
     titulo: "Medições PJ — Diálogo 'Nova Medição' redistribuído (max-w-3xl, grid 3 colunas)",
     descricao: "Reportado: o diálogo 'Nova Medição PJ' abria estreito (`max-w-md`), forçando barra de rolagem horizontal nos itens do `Select` de Contrato PJ (nomes longos como 'CRISTIANO FIGUEIREDO AUGUSTO — Prestação de serviço para elaboração do orçamento...' eram cortados com scroll lateral) e empilhando todos os campos verticalmente. Fix em `client/src/pages/PJMedicoes.tsx` ~L378-440: (1) `DialogContent` agora `max-w-3xl max-h-[90vh] overflow-y-auto`. (2) Linha 1: grid 3 col → Contrato PJ ocupa 2/3 + Mês Referência 1/3. (3) Linha 2: grid 3 col → Horas, Valor/Hora e card 'Total Calculado' lado a lado (antes Total era linha cheia desperdiçada). (4) `SelectContent` ganhou `max-w-[--radix-select-trigger-width]` + `<span className='truncate'>` nos itens — sem scroll horizontal. (5) Textarea agora `resize-y` (4 linhas). Em mobile (<md) tudo vira 1 coluna. Sem schema change, sem mudança de payload.",

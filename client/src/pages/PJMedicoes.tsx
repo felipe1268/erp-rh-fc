@@ -29,7 +29,7 @@ export default function PJMedicoes() {
   const [mesRef, setMesRef] = useState(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`);
   const [showDialog, setShowDialog] = useState(false);
   const [selectedMedicao, setSelectedMedicao] = useState<any>(null);
-  const [form, setForm] = useState({ contractId: 0, mesReferencia: mesRef, horasTrabalhadas: "", valorHora: "", valorBruto: "", valorLiquido: "", descricao: "" });
+  const [form, setForm] = useState({ contractId: 0, mesReferencia: mesRef, horasTrabalhadas: "", valorHora: "", valorBruto: "", valorLiquido: "", descricao: "", tipoMedicao: "horas" as "horas" | "percentual", percentual: "" });
 
   const { data: medicoes, isLoading, refetch } = trpc.pjMedicoes.listar.useQuery(
     { companyId, mesReferencia: mesRef },
@@ -57,7 +57,7 @@ export default function PJMedicoes() {
   });
 
   const abrirNovo = () => {
-    setForm({ contractId: 0, mesReferencia: mesRef, horasTrabalhadas: "", valorHora: "", valorBruto: "", valorLiquido: "", descricao: "" });
+    setForm({ contractId: 0, mesReferencia: mesRef, horasTrabalhadas: "", valorHora: "", valorBruto: "", valorLiquido: "", descricao: "", tipoMedicao: "horas", percentual: "" });
     setShowDialog(true);
   };
 
@@ -67,20 +67,58 @@ export default function PJMedicoes() {
     return (h * v).toFixed(2);
   };
 
+  const calcTotalPct = (pct: string, valorMensal: string | number) => {
+    const p = parseFloat(pct) || 0;
+    const m = typeof valorMensal === 'number' ? valorMensal : (parseFloat(valorMensal) || 0);
+    return ((p / 100) * m).toFixed(2);
+  };
+
+  const selectedContractObj = useMemo(
+    () => contratos?.find((c: any) => c.id === form.contractId),
+    [contratos, form.contractId]
+  );
+  const valorMensalContrato = parseFloat(String((selectedContractObj as any)?.valorMensal ?? '0')) || 0;
+
   const salvar = () => {
     if (!form.contractId) return toast.error("Selecione o contrato PJ");
     const selectedContract = contratos?.find((c: any) => c.id === form.contractId);
     if (!selectedContract?.employeeId) return toast.error("Contrato sem funcionário vinculado");
-    const total = calcTotal(form.horasTrabalhadas, form.valorHora);
+
+    let total: string;
+    let horasField: string;
+    let valorHoraField: string;
+    let observacoesFinal = form.descricao || "";
+
+    if (form.tipoMedicao === 'percentual') {
+      const pct = parseFloat(form.percentual) || 0;
+      if (pct <= 0) return toast.error("Informe o percentual da medição");
+      if (valorMensalContrato <= 0) return toast.error("Contrato selecionado não possui Valor Mensal cadastrado");
+      total = calcTotalPct(form.percentual, valorMensalContrato);
+      horasField = "1";
+      valorHoraField = total;
+      const marker = `[MEDIÇÃO POR PERCENTUAL — ${pct.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% × R$ ${valorMensalContrato.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} mensal]`;
+      observacoesFinal = observacoesFinal ? `${marker}\n${observacoesFinal}` : marker;
+    } else {
+      total = calcTotal(form.horasTrabalhadas, form.valorHora);
+      horasField = form.horasTrabalhadas;
+      valorHoraField = form.valorHora;
+    }
+
     criarMut.mutate({ companyId, companyIds, contractId: form.contractId,
       employeeId: selectedContract.employeeId,
       mesReferencia: form.mesReferencia,
-      horasTrabalhadas: form.horasTrabalhadas,
-      valorHora: form.valorHora,
+      horasTrabalhadas: horasField,
+      valorHora: valorHoraField,
       valorBruto: total,
       valorLiquido: total,
-      observacoes: form.descricao || undefined,
+      observacoes: observacoesFinal || undefined,
     });
+  };
+
+  const isMedicaoPercentual = (m: any) => typeof m?.observacoes === 'string' && m.observacoes.startsWith('[MEDIÇÃO POR PERCENTUAL');
+  const extractPctInfo = (obs: string) => {
+    const match = obs.match(/^\[MEDIÇÃO POR PERCENTUAL — ([\d.,]+)% × R\$ ([\d.,]+) mensal\]/);
+    return match ? { pct: match[1], mensal: match[2] } : null;
   };
 
   const totalMes = useMemo(() => {
@@ -265,9 +303,21 @@ export default function PJMedicoes() {
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-foreground truncate">{prestadorNome}</p>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs text-muted-foreground">{m.horasTrabalhadas}h trabalhadas</span>
-                          <span className="text-xs text-muted-foreground">·</span>
-                          <span className="text-xs text-muted-foreground">R$ {parseFloat(m.valorHora || '0').toFixed(2)}/h</span>
+                          {isMedicaoPercentual(m) ? (() => {
+                            const info = extractPctInfo(m.observacoes || '');
+                            return info ? (
+                              <>
+                                <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200 text-[10px] px-1.5 py-0">%</Badge>
+                                <span className="text-xs text-muted-foreground">{info.pct}% × R$ {info.mensal} mensal</span>
+                              </>
+                            ) : <span className="text-xs text-muted-foreground">Medição por percentual</span>;
+                          })() : (
+                            <>
+                              <span className="text-xs text-muted-foreground">{m.horasTrabalhadas}h trabalhadas</span>
+                              <span className="text-xs text-muted-foreground">·</span>
+                              <span className="text-xs text-muted-foreground">R$ {parseFloat(m.valorHora || '0').toFixed(2)}/h</span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -332,16 +382,32 @@ export default function PJMedicoes() {
                   </Badge>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-muted/30 rounded-lg p-3">
-                    <p className="text-[10px] text-muted-foreground uppercase font-medium">Horas Trabalhadas</p>
-                    <p className="text-lg font-bold text-foreground mt-1">{selectedMedicao.horasTrabalhadas}h</p>
+                {isMedicaoPercentual(selectedMedicao) ? (() => {
+                  const info = extractPctInfo(selectedMedicao.observacoes || '');
+                  return (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-muted/30 rounded-lg p-3">
+                        <p className="text-[10px] text-muted-foreground uppercase font-medium">Percentual</p>
+                        <p className="text-lg font-bold text-foreground mt-1">{info?.pct || '—'}%</p>
+                      </div>
+                      <div className="bg-muted/30 rounded-lg p-3">
+                        <p className="text-[10px] text-muted-foreground uppercase font-medium">Valor Mensal</p>
+                        <p className="text-lg font-bold text-foreground mt-1">R$ {info?.mensal || '—'}</p>
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-muted/30 rounded-lg p-3">
+                      <p className="text-[10px] text-muted-foreground uppercase font-medium">Horas Trabalhadas</p>
+                      <p className="text-lg font-bold text-foreground mt-1">{selectedMedicao.horasTrabalhadas}h</p>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-3">
+                      <p className="text-[10px] text-muted-foreground uppercase font-medium">Valor/Hora</p>
+                      <p className="text-lg font-bold text-foreground mt-1">R$ {parseFloat(selectedMedicao.valorHora || '0').toFixed(2)}</p>
+                    </div>
                   </div>
-                  <div className="bg-muted/30 rounded-lg p-3">
-                    <p className="text-[10px] text-muted-foreground uppercase font-medium">Valor/Hora</p>
-                    <p className="text-lg font-bold text-foreground mt-1">R$ {parseFloat(selectedMedicao.valorHora || '0').toFixed(2)}</p>
-                  </div>
-                </div>
+                )}
 
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
                   <div className="flex items-center justify-between">
@@ -410,23 +476,66 @@ export default function PJMedicoes() {
                 <Input type="month" value={form.mesReferencia} onChange={e => setForm(p => ({ ...p, mesReferencia: e.target.value }))} className="mt-1.5 h-11" />
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <Label className="text-xs font-medium">Horas Trabalhadas</Label>
-                <Input value={form.horasTrabalhadas} onChange={e => setForm(p => ({ ...p, horasTrabalhadas: e.target.value }))} className="mt-1.5 h-11" placeholder="0" />
-              </div>
-              <div>
-                <Label className="text-xs font-medium">Valor/Hora (R$)</Label>
-                <Input value={form.valorHora} onChange={e => setForm(p => ({ ...p, valorHora: e.target.value }))} className="mt-1.5 h-11" placeholder="0,00" />
-              </div>
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-200 flex flex-col justify-center">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <DollarSign className="w-4 h-4 text-blue-600" />
-                  <span className="text-xs font-medium text-blue-700">Total Calculado</span>
-                </div>
-                <span className="text-lg font-bold text-blue-700 leading-tight">R$ {calcTotal(form.horasTrabalhadas, form.valorHora)}</span>
+            <div>
+              <Label className="text-xs font-medium mb-1.5 block">Modo de Cálculo</Label>
+              <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setForm(p => ({ ...p, tipoMedicao: 'horas' }))}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${form.tipoMedicao === 'horas' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >Por Horas</button>
+                <button
+                  type="button"
+                  onClick={() => setForm(p => ({ ...p, tipoMedicao: 'percentual' }))}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${form.tipoMedicao === 'percentual' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >Por Percentual (mensal)</button>
               </div>
             </div>
+
+            {form.tipoMedicao === 'horas' ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs font-medium">Horas Trabalhadas</Label>
+                  <Input value={form.horasTrabalhadas} onChange={e => setForm(p => ({ ...p, horasTrabalhadas: e.target.value }))} className="mt-1.5 h-11" placeholder="0" />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium">Valor/Hora (R$)</Label>
+                  <Input value={form.valorHora} onChange={e => setForm(p => ({ ...p, valorHora: e.target.value }))} className="mt-1.5 h-11" placeholder="0,00" />
+                </div>
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-200 flex flex-col justify-center">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <DollarSign className="w-4 h-4 text-blue-600" />
+                    <span className="text-xs font-medium text-blue-700">Total Calculado</span>
+                  </div>
+                  <span className="text-lg font-bold text-blue-700 leading-tight">R$ {calcTotal(form.horasTrabalhadas, form.valorHora)}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs font-medium">Percentual (%)</Label>
+                  <Input value={form.percentual} onChange={e => setForm(p => ({ ...p, percentual: e.target.value }))} className="mt-1.5 h-11" placeholder="Ex.: 50" />
+                  <p className="text-[10px] text-muted-foreground mt-1">Adiantamento, fechamento, parcial etc.</p>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium">Valor Mensal do Contrato</Label>
+                  <div className="mt-1.5 h-11 rounded-md border border-border bg-muted/30 px-3 flex items-center text-sm font-medium text-foreground">
+                    R$ {valorMensalContrato.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  {form.contractId > 0 && valorMensalContrato <= 0 && (
+                    <p className="text-[10px] text-red-600 mt-1">Contrato sem Valor Mensal cadastrado.</p>
+                  )}
+                </div>
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-200 flex flex-col justify-center">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <DollarSign className="w-4 h-4 text-blue-600" />
+                    <span className="text-xs font-medium text-blue-700">Total Calculado</span>
+                  </div>
+                  <span className="text-lg font-bold text-blue-700 leading-tight">R$ {calcTotalPct(form.percentual, valorMensalContrato)}</span>
+                  <span className="text-[10px] text-blue-700/70 mt-0.5">{(parseFloat(form.percentual) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% × mensal</span>
+                </div>
+              </div>
+            )}
             <div>
               <Label className="text-xs font-medium">Descrição / Observações</Label>
               <textarea value={form.descricao || ''} onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))} rows={4} className="w-full rounded-lg border border-border bg-input px-3 py-2.5 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-ring mt-1.5" placeholder="Descreva os serviços prestados..." />
