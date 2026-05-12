@@ -2021,6 +2021,14 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
         nivel: a.nivel,
         dataInicio: a.dataInicio,
         dataFim: a.dataFim,
+        // Rev. 1685 — Datas REAIS por atividade (necessárias para a coluna
+        // Real e para a barra verde de execução nas células diárias da
+        // Programação Semanal LOTUS). Sem isso, o LOTUS do Portal pintava
+        // apenas a barra azul (previsto) e mostrava "—" nas colunas Real
+        // mesmo quando o módulo Planejamento já tinha datas reais lançadas.
+        dataInicioReal: _toDateStr(a.dataInicioReal),
+        dataFimReal: _toDateStr(a.dataFimReal),
+        responsavelLotus: a.responsavelLotus ?? null,
         pesoFinanceiro: Number(a.pesoFinanceiro || 0),
         recursoPrincipal: a.recursoPrincipal,
         isGrupo: a.isGrupo,
