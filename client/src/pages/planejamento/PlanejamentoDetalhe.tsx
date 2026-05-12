@@ -5350,12 +5350,25 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   // Mantém o "Salvar Avanços" do botão pra quem prefere salvar em lote, mas
   // garante que a Programação Semanal LOTUS sempre vê dados persistidos
   // (sem depender de o usuário lembrar de clicar em salvar).
+  //
+  // Rev. 1663.2 — BUGFIX crítico: comparar contra o BASELINE IMPLÍCITO mostrado
+  // no input (não só `avancoExistente` da semana exata). Bug original: ao
+  // visualizar uma semana SEM registro próprio, o input já vinha populado com
+  // `avancoMaisRecente` (último valor conhecido); um clique acidental no
+  // slider disparava `onChange` com o mesmo valor herdado, populando
+  // `avancoLocal[id]`; no `onBlur`, a guarda anterior `servidor !== undefined`
+  // não barrava (servidor era `undefined`) e o sistema gravava um registro
+  // FANTASMA na semana visualizada com o acumulado da semana anterior — gerando
+  // Δsem espúrio (ex.: usuário reportou Realizado Acum. 1,80% na Semana 2 sem
+  // ter lançado nada, com Δsem 0,40%). A correção compara contra o mesmo
+  // baseline que o input usa (`servidor ?? maisRecente ?? 0`); se o usuário
+  // não alterou de fato, não salva nada.
   function autoSaveAvanco(atividadeId: number) {
     if (!revisaoAtiva?.id) return;
     const local = avancoLocal[atividadeId];
     if (local === undefined) return; // não mexeu
-    const servidor = avancoExistente[atividadeId];
-    if (servidor !== undefined && Math.abs(local - servidor) < 0.01) return; // já salvo
+    const baseline = avancoExistente[atividadeId] ?? avancoMaisRecente[atividadeId] ?? 0;
+    if (Math.abs(local - baseline) < 0.01) return; // valor igual ao mostrado no input → nada a salvar
     const anterior = avancoAnterior[atividadeId] ?? 0;
     salvarMutation.mutate({
       projetoId,
