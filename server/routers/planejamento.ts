@@ -691,6 +691,7 @@ export const planejamentoRouter = router({
     }),
 
   // ── Atividades ────────────────────────────────────────────────────────────
+
   listarAtividades: protectedProcedure
     .input(z.object({ revisaoId: z.number() }))
     .query(async ({ input }) => {
@@ -698,14 +699,52 @@ export const planejamentoRouter = router({
       const rows = await db.select().from(planejamentoAtividades)
         .where(eq(planejamentoAtividades.revisaoId, input.revisaoId))
         .orderBy(asc(planejamentoAtividades.ordem), asc(planejamentoAtividades.eapCodigo));
-      return rows.map(r => ({
-        ...r,
-        dataInicio:     r.dataInicio     ? toDateStr(r.dataInicio)     : null,
-        dataFim:        r.dataFim        ? toDateStr(r.dataFim)        : null,
-        dataInicioReal:   r.dataInicioReal ? toDateStr(r.dataInicioReal) : null,
-        dataFimReal:      r.dataFimReal    ? toDateStr(r.dataFimReal)    : null,
-        responsavelLotus: (r as any).responsavelLotus ?? null,
-      }));
+
+      // Rev. 1662 — Padrão LOTUS: deriva Real Início/Real Fim dos avanços
+      // já gravados via "Avanço Semanal" (FC), para que o LOTUS não exija
+      // redigitação. Regra:
+      //   • Real Início = explícito ?? (existe avanço > 0 ? dataInicio planejada : null)
+      //   • Real Fim    = explícito ?? (max acumulado ≥ 100 ? menor(dataFim plan, semana do 100%) : null)
+      // O explícito (`dataInicioReal/FimReal`) sempre prevalece.
+      const ids = rows.map(r => r.id);
+      const avMap = new Map<number, { primeira: string | null; concluiuEm: string | null }>();
+      if (ids.length > 0) {
+        const avs = await db.select({
+          atividadeId:         planejamentoAvancos.atividadeId,
+          semana:              planejamentoAvancos.semana,
+          percentualAcumulado: planejamentoAvancos.percentualAcumulado,
+          percentualSemanal:   planejamentoAvancos.percentualSemanal,
+        })
+          .from(planejamentoAvancos)
+          .where(inArray(planejamentoAvancos.atividadeId, ids))
+          .orderBy(asc(planejamentoAvancos.atividadeId), asc(planejamentoAvancos.semana));
+        for (const a of avs) {
+          const acum = parseFloat(String(a.percentualAcumulado ?? "0")) || 0;
+          const sem  = parseFloat(String(a.percentualSemanal   ?? "0")) || 0;
+          const cur  = avMap.get(a.atividadeId) ?? { primeira: null, concluiuEm: null };
+          if (cur.primeira == null && (acum > 0 || sem > 0)) cur.primeira = toDateStr(a.semana as any);
+          if (cur.concluiuEm == null && acum >= 100)         cur.concluiuEm = toDateStr(a.semana as any);
+          avMap.set(a.atividadeId, cur);
+        }
+      }
+      const minISO = (a: string | null, b: string | null) =>
+        a && b ? (a < b ? a : b) : (a ?? b ?? null);
+
+      return rows.map(r => {
+        const inicioPlan = r.dataInicio ? toDateStr(r.dataInicio) : null;
+        const fimPlan    = r.dataFim    ? toDateStr(r.dataFim)    : null;
+        const av = avMap.get(r.id);
+        const realIniDigitado = r.dataInicioReal ? toDateStr(r.dataInicioReal) : null;
+        const realFimDigitado = r.dataFimReal    ? toDateStr(r.dataFimReal)    : null;
+        return {
+          ...r,
+          dataInicio:       inicioPlan,
+          dataFim:          fimPlan,
+          dataInicioReal:   realIniDigitado ?? (av?.primeira   ? inicioPlan : null),
+          dataFimReal:      realFimDigitado ?? (av?.concluiuEm ? minISO(fimPlan, av.concluiuEm) : null),
+          responsavelLotus: (r as any).responsavelLotus ?? null,
+        };
+      });
     }),
 
   // Rev. 1662 — Datas reais por atividade (visão LOTUS).
@@ -721,7 +760,7 @@ export const planejamentoRouter = router({
       dataFimReal:      z.string().nullable().optional(),
       responsavelLotus: z.string().nullable().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const patch: any = {};
       if (input.dataInicioReal   !== undefined) patch.dataInicioReal   = input.dataInicioReal   || null;
@@ -740,7 +779,10 @@ export const planejamentoRouter = router({
         .innerJoin(planejamentoProjetos, eq(planejamentoProjetos.id, planejamentoAtividades.projetoId))
         .where(eq(planejamentoAtividades.id, input.atividadeId));
       if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "Atividade não encontrada" });
-      if (check.projetoCompany !== input.companyId) {
+      // Tenant: usa SEMPRE companyId do usuário autenticado; admin/admin_master pode atravessar.
+      const isAdminSet = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      const userCompany = (ctx.user as any).companyId;
+      if (!isAdminSet && String(check.projetoCompany) !== String(userCompany)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Atividade fora da sua empresa" });
       }
       await db.update(planejamentoAtividades).set(patch).where(eq(planejamentoAtividades.id, input.atividadeId));
