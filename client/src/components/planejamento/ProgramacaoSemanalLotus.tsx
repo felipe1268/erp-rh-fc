@@ -665,7 +665,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       // Header (3 linhas)
       ws.mergeCells(`A1:${lastCol}1`);
       const titleCell = ws.getCell("A1");
-      titleCell.value = `PROGRAMAÇÃO SEMANAL - ${nomeProjeto.toUpperCase()} - ${periodoStr}`;
+      titleCell.value = `PROGRAMAÇÃO SEMANAL - ${nomeProjeto.toUpperCase()} - ${semana.numero}ª SEMANA - ${periodoStr}`;
       titleCell.font = { bold: true, size: 14 };
       titleCell.alignment = { horizontal: "center", vertical: "middle" };
       ws.getRow(1).height = 28;
@@ -821,7 +821,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Programacao_Semanal_${nomeProjeto.replace(/\s+/g, "_")}_${periodoStr.replace(/[\/\s]/g, "")}.xlsx`;
+      a.download = `Programacao_Semanal_${nomeProjeto.replace(/\s+/g, "_")}_S${semana.numero}_${periodoStr.replace(/[\/\s]/g, "")}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
       toast({ title: "Excel exportado", description: a.download });
@@ -899,7 +899,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
           <div className="flex-1 flex items-center justify-center px-4 h-full">
             <div className="text-center">
               <div className="text-[15px] font-bold tracking-tight text-slate-900 uppercase">
-                Programação Semanal — {nomeProjeto}
+                Programação Semanal — {nomeProjeto} — {semana.numero}ª SEMANA
               </div>
               <div className="text-[12px] text-slate-700 mt-0.5">{periodoStr}</div>
               {nomeCliente && <div className="text-[11px] text-slate-500 mt-0.5">Cliente: {nomeCliente}</div>}

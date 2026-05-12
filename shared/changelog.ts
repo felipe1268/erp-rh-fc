@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1692,
+    titulo: "Programação Semanal LOTUS — Número da semana no título (Nª SEMANA)",
+    descricao: "Solicitado pelo usuário: o título do cabeçalho da folha LOTUS (modo imprimível) só mostrava 'PROGRAMAÇÃO SEMANAL — REVTE-CIVIL' + período (04/05/2026 a 07/05/2026), sem deixar claro qual semana do projeto está sendo exibida. Adicionado `{semana.numero}ª SEMANA` ao título em 3 lugares de `ProgramacaoSemanalLotus.tsx`: (1) título on-screen ~L905 — 'Programação Semanal — REVTE-CIVIL — 1ª SEMANA'; (2) título do Excel exportado ~L671 — 'PROGRAMAÇÃO SEMANAL - REVTE-CIVIL - 1ª SEMANA - 04/05/2026 a 07/05/2026'; (3) nome do arquivo .xlsx ~L827 — `Programacao_Semanal_REVTE-CIVIL_S1_04052026a07052026.xlsx`. `semana.numero` já estava disponível no escopo (vinha de `semanas[semanaIdx].numero`).",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 23:20:00",
+  },
+  {
     version: 1691,
     titulo: "Curva S de Trabalho — Zoom/janela via Brush para inspecionar trechos específicos",
     descricao: "Solicitado pelo usuário: depois das Rev. 1689/1690 a curva ficou útil mas o eixo X mostra o projeto inteiro (~80 semanas no REVTE-CIVIL), tornando difícil ler o trecho inicial onde o Realizado está concentrado. Implementação: componente `<Brush>` nativo do recharts adicionado ao final do `<LineChart>` da Curva S de Trabalho em `PlanejamentoDetalhe.tsx` ~L4527. Usuário arrasta as alças da barrinha embaixo do gráfico para selecionar a janela de semanas exibidas; duplo-clique nas alças reseta. `dataKey='semana'`, `tickFormatter` reaproveitando `semanaLabel` (mesmas labels do eixo principal), `stroke='#1e40af'` (azul Baseline). Brush só aparece quando há mais de 6 pontos (projetos curtos não precisam). Dica textual abaixo do gráfico explicando a interação. Sem mudança no servidor, sem schema change — recharts já estava no bundle.",
