@@ -2124,6 +2124,10 @@ export default function Solicitacoes() {
   const scEntregueTotal = (r: any) => {
     const st = String(r.status || "");
     if (["aprovado", "concluida", "recebido", "recusado", "cancelado"].includes(st)) return true;
+    // Rev. 1684: separar entrega (logística) de pagamento (financeiro).
+    // Quando TODAS as OCs vinculadas estão em status de entrega, a SC é considerada
+    // entregue mesmo que o pagamento ainda esteja pendente.
+    if (r._ocsEntregues === true) return true;
     const it = r._itens || { total: 0, atendidos: 0 };
     return it.total > 0 && it.atendidos >= it.total;
   };
