@@ -44,7 +44,7 @@ import { getNrDescricao } from "@shared/trainingRules";
 import {
   LineChart, Line, BarChart, Bar, Cell, ComposedChart,
   XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend, ReferenceLine, LabelList,
+  ResponsiveContainer, Legend, ReferenceLine, LabelList, Brush,
 } from "recharts";
 
 const n = (v: any) => parseFloat(v || "0") || 0;
@@ -4539,8 +4539,22 @@ function CurvaS({ curvaData, curvaLoading, curvaFetching, proj, avancoAtual, fPc
                 />
               ) : null
             )}
+            {/* Rev. 1691 — Zoom/seleção de janela via Brush nativo do recharts.
+               Arrastar as alças escolhe o trecho exibido; duplo-clique reseta. */}
+            {merged.length > 6 && (
+              <Brush
+                dataKey="semana"
+                height={28}
+                stroke="#1e40af"
+                travellerWidth={10}
+                tickFormatter={v => semanaLabel[v] ?? v}
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
+        <p className="text-[11px] text-slate-400 mt-1 italic">
+          Dica: arraste as alças da barrinha embaixo do gráfico para dar zoom em um trecho específico (ex.: só os últimos meses).
+        </p>
       </div>
 
       {/* Interpretação */}

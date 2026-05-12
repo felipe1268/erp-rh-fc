@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1691,
+    titulo: "Curva S de Trabalho — Zoom/janela via Brush para inspecionar trechos específicos",
+    descricao: "Solicitado pelo usuário: depois das Rev. 1689/1690 a curva ficou útil mas o eixo X mostra o projeto inteiro (~80 semanas no REVTE-CIVIL), tornando difícil ler o trecho inicial onde o Realizado está concentrado. Implementação: componente `<Brush>` nativo do recharts adicionado ao final do `<LineChart>` da Curva S de Trabalho em `PlanejamentoDetalhe.tsx` ~L4527. Usuário arrasta as alças da barrinha embaixo do gráfico para selecionar a janela de semanas exibidas; duplo-clique nas alças reseta. `dataKey='semana'`, `tickFormatter` reaproveitando `semanaLabel` (mesmas labels do eixo principal), `stroke='#1e40af'` (azul Baseline). Brush só aparece quando há mais de 6 pontos (projetos curtos não precisam). Dica textual abaixo do gráfico explicando a interação. Sem mudança no servidor, sem schema change — recharts já estava no bundle.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 23:00:00",
+  },
+  {
     version: 1690,
     titulo: "Curva S de Trabalho — Baseline per-atividade com dias úteis MSP (forma de S restaurada + paridade com card)",
     descricao: "Reportado pelo usuário após Rev. 1689: a Baseline virou uma RETA (sem forma de S), mesmo batendo numericamente com o card. Causa: a Rev. 1689 colou a Baseline na fórmula MACRO do card (`du(início_proj→ref)/du(envelope)`) que é INTRINSICAMENTE LINEAR em tempo decorrido — perde a curvatura natural do plano. Fix correto: novo `gerarCurvaPlanejadaMSP(ativs)` em `server/routers/planejamento.ts` calcula em cada Sunday `Σ peso_i × fracaoDecorridaMs(iniAtv_i, min(sun, fimAtv_i), fimAtv_i, calMSP)` — soma ponderada per-atividade usando dias úteis do calendário MSP. Devolve forma de S natural (atividades concentram trabalho no miolo do projeto) E fica próximo do card em qualquer ponto (ambos em working days). Snapshot Texto10 (`previstoMspPct`) ponderado é usado quando Sunday == `statusDateSnapshot` — paridade absoluta MSP. Aplicado tanto à Baseline quanto à Revisão Atual (cada uma com suas próprias atividades). Pesagem unificada (`usarPesoPorDuracao` ? duracaoDias : pesoFinanceiro, com fallback peso igual quando <20% têm peso). Fallback: algoritmo legado (`gerarCurvaPlanejada` linear por semanas-calendário) quando faltar calMSP — projetos pré-MSP continuam funcionando. Loop limitado por `weeksBetween(min,max)+8` (data-driven, sem cap arbitrário).",
