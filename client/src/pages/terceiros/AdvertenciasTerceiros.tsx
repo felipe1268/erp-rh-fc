@@ -275,7 +275,7 @@ export default function AdvertenciasTerceiros() {
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'Times New Roman', serif; font-size: 12.5px; color: #000; line-height: 1.7; }
   .logo-bar { background: #1e3a6e; padding: 12px 20px; display: flex; align-items: center; gap: 15px; margin-bottom: 20px; }
-  .logo-bar img { height: 50px; }
+  .logo-bar img { height: 50px; width: auto; object-fit: contain; }
   .logo-bar .title { color: white; flex: 1; }
   .logo-bar .title h1 { font-size: 15px; font-weight: bold; letter-spacing: 1px; }
   .logo-bar .title p { font-size: 10px; opacity: 0.85; }
@@ -304,7 +304,7 @@ ${a.tipoAdvertencia === "Advertencia" ? `
   <span class="num-badge">${a.sequencia || 1}ª MEDIDA</span>
 </div>` : `
 <div class="logo-bar">
-  ${logoUrl ? `<img src="${logoUrl}" alt="Logo" />` : ""}
+  <img src="${window.location.origin}/logo-fc-branco-amarelo.png" alt="FC Engenharia" />
   <div class="title"><h1>${tipo.titulo}</h1><p>À empresa prestadora de serviços e ao colaborador terceirizado</p></div>
   <span class="num-badge">${a.sequencia || 1}ª MEDIDA</span>
 </div>`}

@@ -338,7 +338,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
 
     // HEADER COM LOGO
     const statusColor = emp?.status === 'Ativo' ? 'background:#dcfce7;color:#166534' : emp?.status === 'Desligado' ? 'background:#fef2f2;color:#991b1b' : emp?.status === 'Ferias' ? 'background:#dbeafe;color:#1e40af' : emp?.status === 'Afastado' ? 'background:#fefce8;color:#854d0e' : 'background:#f3f4f6;color:#374151';
-    html += `<div class="logo-bar"><img src="${logoUrl}" alt="Logo" /><div class="title"><h1>RAIO-X DO FUNCION\u00C1RIO</h1><p>${nomeEmpresa.toUpperCase()}${cnpjEmpresa ? ' — CNPJ: ' + cnpjEmpresa : ''}</p></div><div class="info-right"><p>CPF: ${formatCPFSafe(emp?.cpf)}</p><p>Status: ${emp?.status || "-"}</p>${(emp as any)?.codigoInterno ? `<p>C\u00F3d: ${(emp as any).codigoInterno}</p>` : ''}<p>${dataEmissao}</p></div></div>`;
+    html += `<div class="logo-bar"><img src="${window.location.origin}/logo-fc-branco-amarelo.png" alt="FC Engenharia" /><div class="title"><h1>RAIO-X DO FUNCION\u00C1RIO</h1><p>${nomeEmpresa.toUpperCase()}${cnpjEmpresa ? ' — CNPJ: ' + cnpjEmpresa : ''}</p></div><div class="info-right"><p>CPF: ${formatCPFSafe(emp?.cpf)}</p><p>Status: ${emp?.status || "-"}</p>${(emp as any)?.codigoInterno ? `<p>C\u00F3d: ${(emp as any).codigoInterno}</p>` : ''}<p>${dataEmissao}</p></div></div>`;
     html += `<div class="emp-name-bar">${emp?.fotoUrl ? `<img src="${emp.fotoUrl}" alt="Foto" style="width:60px;height:60px;object-fit:cover;object-position:top;border-radius:50%;border:3px solid #1B2A4A;box-shadow:0 2px 8px rgba(0,0,0,0.15);margin-right:12px;" />` : ''}<h2>${emp?.nomeCompleto || "-"}</h2><span class="status-badge" style="${statusColor}">${emp?.status || "-"}</span></div>`;
 
     // DADOS PESSOAIS

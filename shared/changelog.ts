@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1710,
+    titulo: "Documentos com cabeçalho azul (Advertências interna/terceiros + Raio-X) — Logo branco/amarelo sem fundo",
+    descricao: "Reportado: nos PDFs com cabeçalho azul (Advertência Formal de Terceiros, Advertência/Suspensão/Justa Causa interna em Controle de Documentos e Raio-X do Funcionário), o logo da empresa renderizado era a versão dark sobre fundo branco (`logoUrl` cadastrado em company.logoUrl) — destacava como um retângulo branco mal posicionado dentro da barra azul (#1e3a6e/#1B2A4A). Solicitado: usar o logo da FC sem fundo, com escrita branca + detalhe amarelo. Fix Rev. 1710: (1) Asset `attached_assets/logobrancoamarelo-semfundo_1778623280889.png` copiado para `client/public/logo-fc-branco-amarelo.png` (servido via `/logo-fc-branco-amarelo.png`). (2) Substituídas as 5 referências em barras azuis: `AdvertenciasTerceiros.tsx` (PDF terceiros), `ControleDocumentos.tsx` (2 templates HTML do PDF interno + 1 preview React on-screen) e `RaioXFuncionario.tsx` (PDF Raio-X). (3) `.logo-bar img` em AdvertenciasTerceiros ganhou `width: auto; object-fit: contain` para garantir proporção correta. PDFs usam `${window.location.origin}/...` para URL absoluta no print. Headers amarelos/banner-bar (advertência tradicional com banner próprio) NÃO foram tocados.",
+    tipo: "fix",
+    modulos: "Documentos/Brand",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 12:00:00",
+  },
+  {
     version: 1709,
     titulo: "Contratos de Terceiros — 'Novo Contrato' quebrava com ReferenceError 'Cannot access selectedProjetoId before initialization' (TDZ)",
     descricao: "Reportado: a tela `/terceiros/contratos/novo` exibia 'Ocorreu um erro inesperado' com `ReferenceError: Cannot access 'selectedProjetoId' before initialization` ainda na montagem. Causa em `client/src/pages/terceiros/contratos/ContratoNovo.tsx`: a Rev. 1699 trocou `selectedProjetoId` (antes `useState`) por `useMemo`, mas o `useMemo` ficou DECLARADO em ~L215, DEPOIS do `useQuery` de `listarAtividadesProjeto` (~L204) que já usava `selectedProjetoId` no `enabled` e no `projetoId`. Em runtime isso é Temporal Dead Zone — `const` declarada com `useMemo` não tem hoisting, então a leitura no useQuery quebra antes da declaração rodar. Fix Rev. 1709: mover o bloco do `useMemo selectedProjetoId` para ANTES do `useQuery` de atividades (e do `obrasAtivas` que não dependia dele). Comentário adicionado explicando o porquê para não regredir. Sem schema change, sem mudança de comportamento — só ordem de declaração.",
