@@ -1,15 +1,38 @@
 import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb, getCompaniesForUser } from "../db";
+import { getDb, getCompaniesForUser, getUserCompanyLinks } from "../db";
 
-/** Garante que o usuário autenticado tem acesso à companyId/companyIds. */
+/**
+ * Garante que o usuário autenticado tem acesso à companyId/companyIds.
+ *
+ * Rev. 1702 — Reescrito para liberar usuários NÃO-admin (compras, RH,
+ * financeiro, planejamento etc.) que estão em grupos com módulo Terceiros
+ * habilitado mas sem vínculo explícito em `user_companies`. Antes, o helper
+ * `getCompaniesForUser` aplicava um fallback "LIMIT 1" que retornava UMA
+ * empresa aleatória — quase sempre diferente da que o usuário tinha
+ * selecionado no seletor — e o create estourava "Sem acesso a esta empresa".
+ *
+ * Nova regra:
+ *  - admin / admin_master → libera (mantém Rev. 1696/1697).
+ *  - Usuário com vínculos em `user_companies` → enforça membership real.
+ *  - Usuário SEM nenhum vínculo (configuração global, controlada por
+ *    grupo/módulo) → libera. Permissão por MÓDULO já é checada na UI/menu;
+ *    o acesso por empresa só faz sentido quando há restrição explícita.
+ */
 async function _assertCompanyAccess(ctxUser: any, input: { companyId: number; companyIds?: number[] }) {
   if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
-  const allowed = await getCompaniesForUser(ctxUser.id, ctxUser.role);
-  // getCompaniesForUser pode retornar array de objetos {id, ...} OU array de
-  // numbers, dependendo do branch. Normalizar para array de IDs (numbers).
-  const allowedIds = (allowed as any[]).map((x: any) => typeof x === "number" ? x : x?.id).filter((v: any) => typeof v === "number");
+
+  // Bypass para roles globais (paridade com getCompaniesForUser L197).
+  if (ctxUser.role === "admin" || ctxUser.role === "admin_master") return;
+
+  // Lê vínculos REAIS (sem o fallback LIMIT 1 do getCompaniesForUser).
+  const links = await getUserCompanyLinks(ctxUser.id);
+  const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+
+  // Sem vínculos explícitos → considera acesso global (controlado por grupo/módulo).
+  if (allowedIds.length === 0) return;
+
   const allowedSet = new Set<number>(allowedIds);
   if (!allowedSet.has(input.companyId)) {
     console.error("[terceiros._assertCompanyAccess] BLOQUEADO", {
