@@ -11677,4 +11677,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-12 07:30:00",
   },
+  {
+    version: 1676,
+    titulo: "Curva S de Trabalho — linha Realizado aparece após import pelo Cronograma (snapshot MSP fallback)",
+    descricao: "Reportado: Curva S de Trabalho do REVTE-CIVIL mostrava SÓ a Baseline (azul) — sem linha verde de Realizado, sem Revisão Atual, sem Tendência — mesmo o card mostrando 'Realizado atual: 1,38%'. Diagnóstico: `getCurvaS` em `server/routers/planejamento.ts` ~L2042 monta `curvaRealizada` exclusivamente de lançamentos em `planejamento_avancos` (tabela populada por inputs semanais ou pelo botão 'Importar MS Project' do Avanço Semanal). Quando o usuário importa pela aba **Cronograma → Importar Cronograma**, populamos `realizado_msp_pct` por atividade (Rev. 1670/1674) + `realizadoMspSnapshot` da raiz no `calendarioJson` (Rev. 1675), MAS NÃO gravamos em `planejamento_avancos`. Resultado: card e curva vinham de fontes diferentes, curva ficava órfã. Fix em `server/routers/planejamento.ts` ~L2049-2073 (load do `calendarioJson` do projeto via Promise.all) e ~L2175-2217 (sintetiza ponto na semana do StatusDate quando não há avanço para essa semana). Hierarquia de fallback espelhando Rev. 1675: (1) `realizadoMspSnapshot` da raiz UID=0 (paridade absoluta MSP — 1,33% no REVTE-CIVIL); (2) ponderar `realizadoMspPct` por atividade com pesos da curva (1,38%); (3) sem nada → curva continua vazia (backward-compat). Ponto ancorado em `toMondayStr(statusDate)`. Pré-requisito UX: re-importar pelo Cronograma (mesma instrução da Rev. 1675). Resultado: linha verde aparece terminando em ~1,33% no cutoff oficial 07/05/2026; Tendência derivada do regression linear também passa a renderizar (precisa de ≥2 pontos — o seed S0=0 + ponto sintético dão isso).",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 08:15:00",
+  },
 ];

@@ -2043,7 +2043,7 @@ export const planejamentoRouter = router({
     .input(z.object({ projetoId: z.number(), revisaoId: z.number(), baselineId: z.number(), usarPesoPorDuracao: z.boolean().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
-      const [atividades, baseline, avancosRaw] = await Promise.all([
+      const [atividades, baseline, avancosRaw, projRow] = await Promise.all([
         db.select().from(planejamentoAtividades)
           .where(eq(planejamentoAtividades.revisaoId, input.revisaoId))
           .orderBy(asc(planejamentoAtividades.dataInicio)),
@@ -2056,9 +2056,18 @@ export const planejamentoRouter = router({
             eq(planejamentoAvancos.revisaoId, input.revisaoId),
           ))
           .orderBy(asc(planejamentoAvancos.semana)),
+        db.select({ calendarioJson: planejamentoProjetos.calendarioJson })
+          .from(planejamentoProjetos)
+          .where(eq(planejamentoProjetos.id, input.projetoId))
+          .limit(1),
       ]);
       // Normaliza semana para "YYYY-MM-DD" (pg retorna colunas date como Date objects)
       const avancos = avancosRaw.map(av => ({ ...av, semana: toDateStr(av.semana) }));
+      // Rev. 1675 — parse do snapshot do calendarioJson para fallback do
+      // Realizado quando não há lançamentos em planejamento_avancos.
+      let calMspRoot: any = null;
+      try { calMspRoot = projRow[0]?.calendarioJson ? JSON.parse(projRow[0].calendarioJson) : null; }
+      catch { calMspRoot = null; }
 
       function gerarCurvaPlanejada(ativs: typeof atividades) {
         if (!ativs.length) return [];
@@ -2160,6 +2169,49 @@ export const planejamentoRouter = router({
         return { semana, acumulado: +Math.min(100, soma).toFixed(2) };
       });
 
+      // Rev. 1675 — Fallback de snapshot MSP para a curva Realizada.
+      // Quando o usuário importa o XML pela aba "Cronograma → Importar
+      // Cronograma", populamos `realizado_msp_pct` por atividade + o
+      // snapshot da raiz `realizadoMspSnapshot` no calendarioJson, MAS
+      // não criamos lançamentos em `planejamento_avancos` (a tabela
+      // tradicional só é populada por inputs semanais ou pelo botão
+      // "Importar MS Project" do Avanço Semanal). Sem este fallback, a
+      // Curva S de Trabalho fica sem linha verde mesmo o card mostrando
+      // 1,38% — porque vem de fontes diferentes. Estratégia (mesma
+      // hierarquia da Rev. 1675 no card e na top bar):
+      //   1) snapshot da raiz `realizadoMspSnapshot` (paridade absoluta MSP)
+      //   2) ponderar `realizadoMspPct` por atividade (1,38% no REVTE)
+      //   3) sem nada → curva continua vazia (comportamento antigo).
+      // O ponto sintético é ancorado na semana do StatusDate (segunda-feira
+      // da semana de cutoff oficial gravada no XML), só é injetado se essa
+      // semana ainda não tiver dado vindo de planejamento_avancos.
+      const statusDateMsp = typeof calMspRoot?.statusDateSnapshot === "string" ? calMspRoot.statusDateSnapshot : null;
+      if (statusDateMsp) {
+        const semStatus = toMondayStr(new Date(statusDateMsp + "T12:00:00Z"));
+        const jaTem = curvaRealizada.some(p => p.semana === semStatus);
+        if (!jaTem) {
+          let snapAcum: number | null = null;
+          if (typeof calMspRoot.realizadoMspSnapshot === "number") {
+            snapAcum = Math.min(100, Math.max(0, calMspRoot.realizadoMspSnapshot));
+          } else {
+            // Fallback: pondera realizado_msp_pct por atividade (mesma base de pesos da curva).
+            let soma = 0; let temAlgumSnap = false;
+            folhasParaCurva.forEach(a => {
+              const snap = (a as any).realizadoMspPct == null ? null : n((a as any).realizadoMspPct);
+              if (snap != null) {
+                temAlgumSnap = true;
+                const peso = usarIgualCurva ? 1 : (porDuracaoCurva ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
+                soma += snap * (peso / pesoTotalCurva);
+              }
+            });
+            if (temAlgumSnap) snapAcum = +Math.min(100, soma).toFixed(2);
+          }
+          if (snapAcum != null) {
+            curvaRealizada.push({ semana: semStatus, acumulado: +snapAcum.toFixed(2) });
+            curvaRealizada.sort((a, b) => a.semana.localeCompare(b.semana));
+          }
+        }
+      }
       if (curvaRealizada.length > 0) {
         if (curvaRealizada[0].acumulado !== 0) {
           const primeiraSemReal = curvaRealizada[0].semana;
