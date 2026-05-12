@@ -1181,29 +1181,28 @@ export default function Ferias() {
                         // Vermelho apenas no 2º período (ou superior) — 1º período não exige alerta vermelho
                         const isVencida = estaVencidaOuExpirada && (f.numeroPeriodo || 1) >= 2;
                         const isPrimeiroVencido = estaVencidaOuExpirada && (f.numeroPeriodo || 1) < 2;
+                        // Rev. 1703 — flag "perdeu direito" (≥180 dias afastado, CLT Art. 133 IV)
+                        // calculada uma vez por linha p/ reuso no badge e nos botões.
+                        const _isAfast = f.employeeStatus === 'Afastado' || f.employeeStatus === 'Licenca' || f.employeeStatus === 'Licença';
+                        let _diasAfast = 0;
+                        if (_isAfast && f.employeeLicencaDataInicio) {
+                          const _ini = new Date(f.employeeLicencaDataInicio + 'T00:00:00');
+                          if (!isNaN(_ini.getTime())) _diasAfast = Math.max(0, Math.floor((Date.now() - _ini.getTime()) / 86400000));
+                        }
+                        const perdeuFerias = _isAfast && _diasAfast >= 180;
                         return (
                           <tr key={f.id} className={`border-b last:border-0 hover:bg-muted/20 ${isVencida ? "bg-red-50/50" : isPrimeiroVencido ? "bg-amber-50/40" : ""}`}>
                             <td className="p-3">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(f.employeeId)}>{f.employeeName}</div>
-                                {(() => {
-                                  // Rev. 1701 — Badge "Direito de férias perdido" (CLT Art. 133, IV)
-                                  // quando o colaborador está afastado há ≥180 dias contínuos.
-                                  const isAfast = f.employeeStatus === 'Afastado' || f.employeeStatus === 'Licenca' || f.employeeStatus === 'Licença';
-                                  if (!isAfast || !f.employeeLicencaDataInicio) return null;
-                                  const ini = new Date(f.employeeLicencaDataInicio + 'T00:00:00');
-                                  if (isNaN(ini.getTime())) return null;
-                                  const diasAfast = Math.max(0, Math.floor((Date.now() - ini.getTime()) / 86400000));
-                                  if (diasAfast < 180) return null;
-                                  return (
-                                    <Badge
-                                      className="bg-pink-100 text-pink-700 border border-pink-300 text-[10px] gap-1"
-                                      title={`Afastado há ${diasAfast} dias (desde ${formatDate(f.employeeLicencaDataInicio)}). Conforme Art. 133, IV da CLT, o empregado que recebe auxílio-doença/INSS por mais de 6 meses (mesmo descontínuos) dentro do período aquisitivo perde o direito às férias daquele período. Reinicia a contagem após o retorno.`}
-                                    >
-                                      <AlertTriangle className="h-3 w-3" /> Direito de férias perdido — afastado há {diasAfast} dias (Art. 133, IV CLT)
-                                    </Badge>
-                                  );
-                                })()}
+                                {perdeuFerias && (
+                                  <Badge
+                                    className="bg-pink-100 text-pink-700 border border-pink-300 text-[10px] gap-1"
+                                    title={`Afastado há ${_diasAfast} dias (desde ${formatDate(f.employeeLicencaDataInicio)}). Conforme Art. 133, IV da CLT, o empregado que recebe auxílio-doença/INSS por mais de 6 meses (mesmo descontínuos) dentro do período aquisitivo perde o direito às férias daquele período. Reinicia a contagem após o retorno.`}
+                                  >
+                                    <AlertTriangle className="h-3 w-3" /> Direito de férias perdido — afastado há {_diasAfast} dias (Art. 133, IV CLT)
+                                  </Badge>
+                                )}
                               </div>
                               <div className="text-xs text-muted-foreground">{f.employeeCargo || f.employeeFuncao || "-"}</div>
                             </td>
@@ -1226,12 +1225,12 @@ export default function Ferias() {
                             </td>
                             <td className="p-3">
                               <div className="flex items-center justify-center gap-1">
-                                {(f.status === "pendente" || f.status === "vencida" || f.status === "em_gozo" || f.status === "agendada") && (
+                                {(f.status === "pendente" || f.status === "vencida" || f.status === "em_gozo" || f.status === "agendada") && !perdeuFerias && (
                                   <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600" title="Editar período de férias" onClick={() => handleDefinirData(f)}>
                                     <PenLine className="h-3.5 w-3.5" />
                                   </Button>
                                 )}
-                                {(f.status === "agendada" || f.status === "pendente" || f.status === "vencida") && (
+                                {(f.status === "agendada" || f.status === "pendente" || f.status === "vencida") && !perdeuFerias && (
                                   <Button size="sm" variant="ghost" className="h-7 px-2 text-green-700 hover:bg-green-50 font-medium text-xs" title="Marcar como Em Gozo" onClick={() => {
                                     if (confirm(`Confirmar que ${f.employeeName} está em gozo de férias?`)) {
                                       updateFerias.mutate({ id: f.id, status: "em_gozo" });
@@ -1240,7 +1239,18 @@ export default function Ferias() {
                                     <Play className="h-3.5 w-3.5 mr-1" /> Iniciar Gozo
                                   </Button>
                                 )}
-                                {f.status === "em_gozo" && (
+                                {/* Rev. 1703 — Direito perdido (Art. 133 IV CLT): único botão é Concluir,
+                                    sem passar por agendamento/em gozo. Encerra o período aquisitivo. */}
+                                {perdeuFerias && f.status !== "concluida" && (
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-pink-700 hover:bg-pink-50 font-medium text-xs border border-pink-200" title="Concluir período (direito perdido por afastamento >180d — Art. 133 IV CLT)" onClick={() => {
+                                    if (confirm(`${f.employeeName} está afastado há ${_diasAfast} dias. Pelo Art. 133, IV da CLT, o direito de gozo deste período aquisitivo foi PERDIDO. Confirmar conclusão (encerramento) deste período sem pagamento de gozo?`)) {
+                                      updateFerias.mutate({ id: f.id, status: "concluida" });
+                                    }
+                                  }}>
+                                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Concluir
+                                  </Button>
+                                )}
+                                {f.status === "em_gozo" && !perdeuFerias && (
                                   <Button size="sm" variant="ghost" className="h-7 px-2 text-gray-700 hover:bg-gray-100 font-medium text-xs" title="Concluir Férias" onClick={() => {
                                     if (confirm(`Confirmar conclusão das férias de ${f.employeeName}?`)) {
                                       updateFerias.mutate({ id: f.id, status: "concluida" });

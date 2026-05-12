@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1703,
+    titulo: "Férias — Direito perdido (Art. 133 IV CLT): some 'Editar' e 'Iniciar Gozo', único botão é 'Concluir'",
+    descricao: "Reportado: colaborador com a tag rosa 'Direito de férias perdido — afastado há N dias (Art. 133, IV CLT)' (Rev. 1701) continuava com os botões 'Editar período' (lápis azul) e 'Iniciar Gozo' (verde) ativos nas linhas Vencida/A Vencer/Pendente, abrindo brecha pra agendar/iniciar gozo de um período já legalmente perdido. Solicitação: nessas linhas só pode aparecer um caminho — CONCLUIR (encerrar o período aquisitivo sem pagamento de gozo). Linhas já Concluídas seguem com Reverter/Cancelar normalmente. Fix em `client/src/pages/Ferias.tsx`: (1) `perdeuFerias` extraído como const por linha (reaproveitando `employeeStatus` + `employeeLicencaDataInicio` da Rev. 1701); (2) badge passou a ler a const (sem recálculo no IIFE); (3) condições dos botões 'Editar', 'Iniciar Gozo' e 'Concluir (em_gozo)' ganharam `&& !perdeuFerias`; (4) novo botão rosa 'Concluir' aparece quando `perdeuFerias && status !== concluida` em qualquer status (pendente/vencida/agendada/em_gozo) com confirm citando os dias de afastamento e o artigo da CLT; ação grava `status='concluida'` direto. Reverter/Cancelar (Concluida) preservados sem mudança. Sem schema change, sem mudança de endpoint.",
+    tipo: "melhoria",
+    modulos: "RH/Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 06:00:00",
+  },
+  {
     version: 1702,
     titulo: "Empresas Terceiras — Liberar cadastro para usuários de Compras/RH/Financeiro/Planejamento (sem vínculo explícito em user_companies)",
     descricao: "Reportado: usuários NÃO-admin de Compras, RH, Financeiro e Planejamento, mesmo com o módulo Terceiros habilitado no grupo, recebiam 'Sem acesso a esta empresa.' ao tentar finalizar o cadastro de uma nova empresa terceira. Causa em `_assertCompanyAccess` (`server/routers/terceiros.ts` ~L7): o helper consultava `getCompaniesForUser`, que para usuários NÃO-admin sem vínculo explícito em `user_companies` aplica fallback LIMIT 1 — retorna UMA empresa aleatória, quase sempre diferente daquela selecionada no seletor — bloqueando o create. Fix: `_assertCompanyAccess` reescrito (Rev. 1702) — (1) bypass admin/admin_master mantido (Rev. 1696/1697); (2) lê `getUserCompanyLinks` direto (sem fallback) p/ obter os vínculos REAIS; (3) **se o usuário NÃO tem nenhum vínculo explícito**, libera (acesso global controlado por grupo/módulo); (4) se tem vínculos, enforça membership normal. Permissão por MÓDULO continua sendo enforçada na UI/menu — restrição por empresa só faz sentido quando há vínculo explícito em `user_companies`. Sem schema change.",
