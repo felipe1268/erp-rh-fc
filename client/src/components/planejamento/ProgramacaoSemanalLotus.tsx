@@ -158,7 +158,16 @@ function faixasCelula(
       if (temAvancoNaSemana) inReal = true;
       else if (acumPctAteSemana >= 100 && passou) inReal = true;
     } else if (temAvancoNaSemana && passou && ehUtil) {
-      inReal = true;
+      // Rev. 1688 — Só auto-deriva REAL fora do envelope previsto quando o
+      // dia está ANTES do início previsto (atividade antecipada — pinta
+      // LARANJA pelo branch `ds < prevIni` abaixo). Para dias APÓS `prevFim`
+      // não pinta nada: a atividade já terminou e não faz sentido marcar
+      // execução "fantasma" amarela depois do fim do plano. Antes desta
+      // revisão, atividades curtas (ex: "Início" 04/05→04/05) com avanço
+      // lançado na semana ganhavam células AMARELAS em ter/qua/qui — bug
+      // visível no Portal do Cliente, divergente do módulo Planejamento.
+      const passouFimPrev = !!prevFim && ds > prevFim;
+      if (!passouFimPrev) inReal = true;
     }
   }
 
