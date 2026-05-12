@@ -621,6 +621,39 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     return +Math.min(100, pct).toFixed(2);
   }, [atividades, refisComIndiretasGlobal, refDateStr, modoVisao, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual, dataCorteInfo?.dataCorteOficial, semanaVisualizacao]);
 
+  // ── Rev. 1715 — pvMacro elevado ao escopo do Inner ─────────────────────
+  // A Rev. 1713 começou a propagar `pvMacro={pvMacro}` para `<Refis>` (L~1053)
+  // dentro da JSX deste componente, mas o `pvMacro` original mora dentro de
+  // `AvancoSemanal` (~L4916). Como `Refis` está fora dessa função, qualquer
+  // render que tocasse essa JSX disparava `ReferenceError: pvMacro is not
+  // defined`, derrubando a tela inteira de Planejamento (não só a aba REFIS).
+  // Solução: replicar BIT-A-BIT a definição aqui (mesma fórmula EVM clássica
+  // da Rev. 1646.6 — snapshot Texto11 quando ref bate com StatusDate, senão
+  // PV(t) = du(início_projeto → t) / du(envelope) × 100). Mantida a versão
+  // local em `AvancoSemanal` para não cascatear refactor — qualquer mudança
+  // futura na fórmula precisa ser aplicada NOS DOIS LUGARES.
+  // ATENÇÃO: precisa ficar ANTES dos early returns abaixo, senão a ordem
+  // de hooks muda entre renders e o React quebra a tela.
+  const _calMSPInner = useMemo(() => parseCalendarioJson((proj as any)?.calendarioJson), [proj]);
+  const _projIniIsoInner = (proj as any)?.dataInicio as string | null | undefined;
+  const _projFimIsoInner = (proj as any)?.dataTerminoContratual as string | null | undefined;
+  const pvMacro = useMemo(() => {
+    if (!_projIniIsoInner || !_projFimIsoInner || !_calMSPInner) return null as null | ((refStr: string) => number);
+    const projIniMs = new Date(_projIniIsoInner + "T12:00:00").getTime();
+    const projFimMs = new Date(_projFimIsoInner + "T12:00:00").getTime();
+    if (projFimMs <= projIniMs) return null;
+    const envOk = !_calMSPInner.envelopeStartSnapshot || !_calMSPInner.envelopeFinishSnapshot
+      || (_projIniIsoInner === _calMSPInner.envelopeStartSnapshot && _projFimIsoInner === _calMSPInner.envelopeFinishSnapshot);
+    return (refStr: string): number => {
+      if (_calMSPInner.previstoMspSnapshot != null && _calMSPInner.statusDateSnapshot
+          && refStr === _calMSPInner.statusDateSnapshot && envOk) {
+        return Number(_calMSPInner.previstoMspSnapshot);
+      }
+      const ref = new Date(refStr + "T12:00:00").getTime();
+      return Math.min(100, Math.max(0, fracaoDecorridaMs(projIniMs, ref, projFimMs, _calMSPInner) * 100));
+    };
+  }, [_projIniIsoInner, _projFimIsoInner, _calMSPInner]);
+
   // ── Cabeçalho de impressão (idêntico ao Portal do Cliente) ──────────
   // ATENÇÃO: este useMemo precisa ficar ANTES dos early returns abaixo,
   // senão a ordem de hooks muda entre renders e o React quebra a tela.

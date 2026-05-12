@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1715,
+    titulo: "Planejamento — tela quebrada com 'Ocorreu um erro inesperado' (pvMacro fora de escopo após Rev. 1713)",
+    descricao: "Reportado: a tela de detalhe do Planejamento parou de carregar e exibia 'Ocorreu um erro inesperado' (stack PlanejamentoDetalheInner). Causa: a Rev. 1713 passou a propagar `pvMacro={pvMacro}` para o componente `<Refis>` na JSX de `PlanejamentoDetalheInner` (PlanejamentoDetalhe.tsx ~L1053), porém o `pvMacro` original mora dentro da função `AvancoSemanal` (~L4916) — fora do escopo do Inner. Em runtime, qualquer render do Inner disparava `ReferenceError: pvMacro is not defined`, derrubando a tela inteira (não apenas a aba REFIS). Fix Rev. 1715: replicado bit-a-bit o `useMemo` de `pvMacro` (com `_calMSPInner`, `_projIniIsoInner`, `_projFimIsoInner`) no escopo de `PlanejamentoDetalheInner`, ANTES dos early returns (`loadingProj` / `!proj`), espelhando exatamente a fórmula EVM clássica da Rev. 1646.6 — snapshot Texto11 do MSP quando `refStr === statusDateSnapshot && envOk`, senão `PV(t) = du(início_projeto → t) / du(envelope) × 100`. A versão local em `AvancoSemanal` foi PRESERVADA (qualquer mudança futura na fórmula precisa ser aplicada nos dois lugares — comentário inline já alerta). Sem schema change, sem mudança de cálculo — REFIS volta a bater com top card 'Avanço Físico' e Avanço Semanal exatamente como prometido pela Rev. 1713.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-12 15:00:00",
+  },
+  {
     version: 1714,
     titulo: "Efetivo da Obra (Planejamento) — Integração SST agora bate com o módulo SST (fonte de dados corrigida)",
     descricao: "Reportado: na aba Efetivo da Obra, o bloco 'Integração SST' do colaborador mostrava 'Sem integração registrada' mesmo quando o módulo Integração SST exibia o registro ativo do mesmo funcionário. Causa: o endpoint `obras.docsSstFuncionarios` (server/routers.ts ~L1568, introduzido na Rev. 1590) consultava a tabela `sst_integracao_registros` filtrando por `status='aprovado'`, mas o módulo Integração SST (router `integracoes.ts`, tela ControleDocumentos > 'Registrar Integração') grava em OUTRA tabela: `employee_integrations` — schema diferente (`dataVencimento` em vez de `dataValidade`, sem coluna `status`, status calculado em runtime pelo vencimento). As duas tabelas convivem por legado e ficaram desconectadas. Fix Rev. 1714: trocada a fonte do `integRows` para `employee_integrations`, mantendo a mesma classificação de status (vigente / vence_em_breve quando ≤30d / vencido) usada pelo módulo SST. `temPdf` agora deriva de `evidencia` (campo equivalente ao certificado nessa tabela). Sem schema change. Aba Efetivo do Planejamento volta a refletir a realidade do módulo SST — alerta âmbar/vermelho de reciclagem (Rev. 1590) continua funcionando.",
