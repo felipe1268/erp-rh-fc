@@ -731,21 +731,20 @@ export const planejamentoRouter = router({
           avMap.set(a.atividadeId, cur);
         }
       }
-      const minISO = (a: string | null, b: string | null) =>
-        a && b ? (a < b ? a : b) : (a ?? b ?? null);
-
       return rows.map(r => {
         const inicioPlan = r.dataInicio ? toDateStr(r.dataInicio) : null;
         const fimPlan    = r.dataFim    ? toDateStr(r.dataFim)    : null;
         const av = avMap.get(r.id);
         const realIniDigitado = r.dataInicioReal ? toDateStr(r.dataInicioReal) : null;
         const realFimDigitado = r.dataFimReal    ? toDateStr(r.dataFimReal)    : null;
-        // Real Fim derivado: prioriza semana do 100%; senão, usa o cutoff da
-        // ÚLTIMA semana com avanço — atividade em andamento mostra "até onde
-        // a obra chegou" (sempre capeada pela data fim planejada).
+        // Real Fim derivado: prioriza a semana em que atingiu 100% (concluído).
+        // Caso contrário usa a ÚLTIMA semana COM avanço — atividade em
+        // andamento mostra "até onde a obra chegou", inclusive APÓS o fim
+        // planejado (preserva sinal de atraso real, conforme PMBOK 7ª: o
+        // realizado nunca deve ser truncado pela linha de base).
         const realFimDerivado = av?.concluiuEm
-          ? minISO(fimPlan, av.concluiuEm)
-          : (av?.ultima ? minISO(fimPlan, av.ultima) : null);
+          ? av.concluiuEm
+          : (av?.ultima ? av.ultima : null);
         return {
           ...r,
           dataInicio:       inicioPlan,

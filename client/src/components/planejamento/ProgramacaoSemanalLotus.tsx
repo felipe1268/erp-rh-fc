@@ -118,7 +118,12 @@ function faixasCelula(
     // Se passou sem real e a atividade tinha meta exigida na semana, o
     // previsto vira vermelho ("não executado"). Sem meta (meta=0), permanece
     // azul informativo.
-    top = (passou && !inReal && !realFim && metaPct > 0) ? "bg-red-500" : "bg-blue-800";
+    // Regra de negócio: previsto que JÁ PASSOU (dia ≤ hoje) sem real no
+    // próprio dia e com meta exigida na semana → vermelho. NÃO depende de
+    // realFim global da atividade — uma atividade pode ter realFim em D-2 e
+    // mesmo assim ter dias previstos D-1/D sem execução, que devem aparecer
+    // vermelhos por dia (o que vale é "tem real NESSE dia? — `inReal`").
+    top = (passou && !inReal && metaPct > 0) ? "bg-red-500" : "bg-blue-800";
   }
 
   // Faixa inferior (REALIZADO)
@@ -243,6 +248,17 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     { projetoId, revisaoId },
     { enabled: !!projetoId && !!revisaoId },
   );
+  // Index de avanços por atividadeId — evita O(atv × avancos) no loop abaixo.
+  const avancosPorAtv = useMemo(() => {
+    const idx = new Map<number, any[]>();
+    for (const av of (avancosLista as any[])) {
+      const arr = idx.get(av.atividadeId) ?? [];
+      arr.push(av);
+      idx.set(av.atividadeId, arr);
+    }
+    return idx;
+  }, [avancosLista]);
+
   const metricas = useMemo(() => {
     const out = new Map<number, { metaPct: number; realPct: number; aderenciaPct: number | null; acumPct: number }>();
     if (!semIniStr) return out;
@@ -255,31 +271,41 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       const fim = a.dataFim?.slice(0, 10);
       let metaPct = 0;
       if (ini && fim && peso > 0) {
-        const duEnv = calMSP ? diasUteisEntre(ini, fim, calMSP) : Math.max(1, Math.round((parseDate(fim).getTime() - parseDate(ini).getTime()) / 86400000) + 1);
+        // Sempre dias úteis (com calMSP quando disponível, ou seg-sex como
+        // fallback — `diasUteisEntre` aceita `null` e considera dia útil
+        // segunda a sexta). Garante paridade visual independentemente do
+        // projeto ter calendário customizado importado.
+        const duEnv = diasUteisEntre(ini, fim, calMSP);
         if (duEnv > 0) {
           // Janela cobrável da semana: [max(semIni,iniAtv) → min(cutoff,fimAtv)]
           const janIni = semIniStr > ini ? semIniStr : ini;
           const janFim = cutoffStr < fim ? cutoffStr : fim;
           if (janIni <= janFim) {
-            const duJan = calMSP ? diasUteisEntre(janIni, janFim, calMSP) : Math.max(0, Math.round((parseDate(janFim).getTime() - parseDate(janIni).getTime()) / 86400000) + 1);
+            const duJan = diasUteisEntre(janIni, janFim, calMSP);
             metaPct = peso * (duJan / duEnv);
           }
         }
       }
       // Realizado da semana = soma dos percentualSemanal cujo `semana` cai no range.
-      const avsAtiv = avancosLista.filter((av: any) => av.atividadeId === a.id);
-      const somaSemanal = avsAtiv
-        .filter((av: any) => av.semana >= semIniStr && av.semana <= semFimStr)
-        .reduce((s: number, av: any) => s + (parseFloat(String(av.percentualSemanal ?? "0")) || 0), 0);
+      const avsAtiv = avancosPorAtv.get(a.id) ?? [];
+      let somaSemanal = 0;
+      let acumPct = 0;
+      for (const av of avsAtiv) {
+        const sem = av.semana as string;
+        if (sem >= semIniStr && sem <= semFimStr) {
+          somaSemanal += parseFloat(String(av.percentualSemanal ?? "0")) || 0;
+        }
+        if (sem <= semFimStr) {
+          const acu = parseFloat(String(av.percentualAcumulado ?? "0")) || 0;
+          if (acu > acumPct) acumPct = acu;
+        }
+      }
       const realPct = peso * (somaSemanal / 100);
-      // Acumulado: maior percentualAcumulado até semFim
-      const avsAteFim = avsAtiv.filter((av: any) => av.semana <= semFimStr);
-      const acumPct = avsAteFim.length === 0 ? 0 : Math.max(...avsAteFim.map((av: any) => parseFloat(String(av.percentualAcumulado ?? "0")) || 0));
       const aderenciaPct = metaPct > 0 ? (realPct / metaPct) * 100 : null;
       out.set(a.id, { metaPct, realPct, aderenciaPct, acumPct });
     }
     return out;
-  }, [atividadesDaSemana, avancosLista, semIniStr, semFimStr, calMSP, hoje]);
+  }, [atividadesDaSemana, avancosPorAtv, semIniStr, semFimStr, calMSP, hoje]);
 
   const fmtPct1 = (n: number) => `${n.toFixed(2).replace(".", ",")}%`;
   const statusLabel = (m: { metaPct: number; realPct: number; aderenciaPct: number | null; acumPct: number } | undefined) => {
