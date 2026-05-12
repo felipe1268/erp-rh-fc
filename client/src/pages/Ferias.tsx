@@ -1184,7 +1184,27 @@ export default function Ferias() {
                         return (
                           <tr key={f.id} className={`border-b last:border-0 hover:bg-muted/20 ${isVencida ? "bg-red-50/50" : isPrimeiroVencido ? "bg-amber-50/40" : ""}`}>
                             <td className="p-3">
-                              <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(f.employeeId)}>{f.employeeName}</div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <div className="font-medium text-blue-700 cursor-pointer hover:underline" onClick={() => setGanttEmployeeId(f.employeeId)}>{f.employeeName}</div>
+                                {(() => {
+                                  // Rev. 1701 — Badge "Direito de férias perdido" (CLT Art. 133, IV)
+                                  // quando o colaborador está afastado há ≥180 dias contínuos.
+                                  const isAfast = f.employeeStatus === 'Afastado' || f.employeeStatus === 'Licenca' || f.employeeStatus === 'Licença';
+                                  if (!isAfast || !f.employeeLicencaDataInicio) return null;
+                                  const ini = new Date(f.employeeLicencaDataInicio + 'T00:00:00');
+                                  if (isNaN(ini.getTime())) return null;
+                                  const diasAfast = Math.max(0, Math.floor((Date.now() - ini.getTime()) / 86400000));
+                                  if (diasAfast < 180) return null;
+                                  return (
+                                    <Badge
+                                      className="bg-pink-100 text-pink-700 border border-pink-300 text-[10px] gap-1"
+                                      title={`Afastado há ${diasAfast} dias (desde ${formatDate(f.employeeLicencaDataInicio)}). Conforme Art. 133, IV da CLT, o empregado que recebe auxílio-doença/INSS por mais de 6 meses (mesmo descontínuos) dentro do período aquisitivo perde o direito às férias daquele período. Reinicia a contagem após o retorno.`}
+                                    >
+                                      <AlertTriangle className="h-3 w-3" /> Direito de férias perdido — afastado há {diasAfast} dias (Art. 133, IV CLT)
+                                    </Badge>
+                                  );
+                                })()}
+                              </div>
                               <div className="text-xs text-muted-foreground">{f.employeeCargo || f.employeeFuncao || "-"}</div>
                             </td>
                             <td className="p-3 text-xs">{formatDate(f.periodoAquisitivoInicio)} a {formatDate(f.periodoAquisitivoFim)}</td>

@@ -2266,6 +2266,11 @@ export const avisoPrevioFeriasRouter = router({
           employeeFuncao: employees.funcao,
           employeeSetor: employees.setor,
           employeeSalario: employees.salarioBase,
+          // Rev. 1701 — exposição p/ tag "Direito de férias perdido por afastamento >180 dias"
+          // (CLT Art. 133, IV) também na lista principal de períodos.
+          employeeStatus: employees.status,
+          employeeLicencaDataInicio: employees.licencaDataInicio,
+          employeeLicencaTipo: employees.licencaTipo,
         })
         .from(vacationPeriods)
         .innerJoin(employees, eq(vacationPeriods.employeeId, employees.id))

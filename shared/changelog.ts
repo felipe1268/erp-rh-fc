@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1701,
+    titulo: "Férias — Tag 'Direito de férias perdido' (Art. 133, IV CLT) também na lista principal de períodos",
+    descricao: "Reportado: colaborador afastado há mais de 180 dias contínuos (auxílio-doença/INSS) continuava aparecendo SÓ com o badge vermelho 'Vencida' na lista principal de Férias, sem nenhum sinal visual de que aquele(s) período(s) aquisitivo(s) já foram perdidos pela regra do Art. 133, IV da CLT. A Rev. 1694 implementou o cálculo da flag `perdeuFeriasPorAfastamento` (≥180 dias de afastamento) e o badge cor-de-rosa, mas o badge só aparecia na ABA AGRUPADA 'Vencidas' (`grupo.employee.perdeuFeriasPorAfastamento`) — não na lista principal de períodos onde está o botão 'Iniciar Gozo'. Fix em 2 camadas: (1) Server `list` em `avisoPrevioFerias.ts` ~L2272 expõe `employeeStatus`, `employeeLicencaDataInicio`, `employeeLicencaTipo` no select. (2) Client `Ferias.tsx` ~L1187 a célula 'Colaborador' agora calcula `diasAfastado = (hoje − licencaDataInicio)` quando o status é 'Afastado'/'Licenca'/'Licença' e renderiza o badge rosa (AlertTriangle) ao lado do nome quando ≥180, com tooltip da regra legal idêntico ao da aba Vencidas. Reaproveita os campos já preenchidos pela Rev. 1698 ('Editar Colaborador → Status Afastado → Data de Afastamento'). Sem schema change.",
+    tipo: "melhoria",
+    modulos: "RH/Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 04:00:00",
+  },
+  {
     version: 1700,
     titulo: "Grupos de Usuários — Toggle 'Portal do Cliente' adicionado à lista de módulos",
     descricao: "Solicitado: a tela de Grupos de Usuários (`/usuarios` aba Grupos) listava 16 módulos (RH/DP, SST, Jurídico, Avaliação, Terceiros, Parceiros, Orçamento, Planejamento, Cadastro, Compras, Almoxarifado, Financeiro, Operacional, Proj./Doc. Técnicos, Frotas, Medição) mas faltava 'Portal do Cliente' como toggle independente para liberar/restringir acesso à área administrativa do portal externo do cliente. Fix em `client/src/pages/Usuarios.tsx` ~L47: nova entrada `{ id: 'portal-cliente', label: 'Portal do Cliente', dot: 'bg-blue-600', tag: 'bg-blue-100 text-blue-700 border-blue-200' }` no array `ALL_MODULES`. Sem schema change — `moduleAccess` no banco já é JSON livre por chave de módulo.",
