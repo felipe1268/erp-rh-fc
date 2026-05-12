@@ -7,9 +7,19 @@ import { getDb, getCompaniesForUser } from "../db";
 async function _assertCompanyAccess(ctxUser: any, input: { companyId: number; companyIds?: number[] }) {
   if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
   const allowed = await getCompaniesForUser(ctxUser.id, ctxUser.role);
-  const allowedSet = new Set(allowed);
+  // getCompaniesForUser pode retornar array de objetos {id, ...} OU array de
+  // numbers, dependendo do branch. Normalizar para array de IDs (numbers).
+  const allowedIds = (allowed as any[]).map((x: any) => typeof x === "number" ? x : x?.id).filter((v: any) => typeof v === "number");
+  const allowedSet = new Set<number>(allowedIds);
   if (!allowedSet.has(input.companyId)) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+    console.error("[terceiros._assertCompanyAccess] BLOQUEADO", {
+      userId: ctxUser.id,
+      role: ctxUser.role,
+      inputCompanyId: input.companyId,
+      inputCompanyIds: input.companyIds,
+      allowedIds,
+    });
+    throw new TRPCError({ code: "FORBIDDEN", message: `Sem acesso a esta empresa. (user=${ctxUser.id} role=${ctxUser.role} req=${input.companyId} allowed=[${allowedIds.join(",")}])` });
   }
   if (input.companyIds && input.companyIds.length > 0) {
     for (const cid of input.companyIds) {

@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1697,
+    titulo: "Empresas Terceiras — `_assertCompanyAccess` comparava objetos com número (Set bug) e bloqueava 100% dos creates",
+    descricao: "Reportado: mesmo após Rev. 1696, o cadastro de empresa terceira continuava retornando 'Sem acesso a esta empresa.' para o usuário admin_master Felipe Alves (id=1). Diagnóstico: `getCompaniesForUser` em `server/db.ts` retorna um array de OBJETOS de companies (rows com `.id`, `.razaoSocial`, etc.) — não um array de IDs. Mas `_assertCompanyAccess` em `server/routers/terceiros.ts` ~L10 fazia `new Set(allowed)` e depois `allowedSet.has(input.companyId)` — comparando referências de objeto com um número primitivo, sempre retornava `false`. Bloqueio universal independente de role ou permissão. Por isso a Rev. 1696 (bypass admin) não resolveu — ambas as branches (admin_master via getCompanies + non-admin via userCompanies join) retornam objetos. A `list` não tinha o check (por isso a tela abria), e nenhum teste cobria o fluxo create. Fix: normalizar `allowed.map(x => typeof x==='number' ? x : x?.id).filter(v => typeof v==='number')` antes do Set. Também adicionado `console.error` com diagnóstico (userId, role, companyId pedido, allowedIds) e mensagem do TRPCError enriquecida com os mesmos dados, facilitando triagem caso volte a aparecer (ex.: usuário tentando criar em empresa deletada). Sem schema change.",
+    tipo: "correcao",
+    modulos: "Terceiros / Permissões",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 02:00:00",
+  },
+  {
     version: 1696,
     titulo: "Empresas Terceiras — Cadastro de nova empresa retornava 'Sem acesso a esta empresa' para role 'admin'",
     descricao: "Reportado: ao tentar cadastrar uma nova empresa terceira (Nova Empresa Terceira → Salvar), aparecia toast de erro 'Sem acesso a esta empresa.' mesmo com a tela de listagem abrindo normalmente. Causa: `getCompaniesForUser` em `server/db.ts` ~L188 só dava bypass de permissão para role `admin_master`; o role `admin` caía no fluxo de `userCompanies` links e, se o usuário não tivesse vínculo explícito na tabela `user_companies` com a empresa selecionada, o `_assertCompanyAccess` em `terceiros.ts` ~L11 bloqueava o create. Inconsistência: `getEffectiveAllowedCompanyIds` ~L260 já tratava `admin` e `admin_master` como acesso global (retorna null = sem restrição) e a procedure `list` de terceiros também não chama `_assertCompanyAccess` (só `companyFilter`), permitindo visualizar a tela mas não criar. Fix: `getCompaniesForUser` agora retorna `getCompanies()` para `role === 'admin' || role === 'admin_master'` — paridade com o resto do sistema. Sem schema change. Afeta também outras mutações que usam `_assertCompanyAccess` (terceiros.empresas.update/delete e qualquer outro consumer de `getCompaniesForUser`).",
