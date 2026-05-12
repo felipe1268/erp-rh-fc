@@ -2638,10 +2638,18 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
               let prevComplementar: any = null;
               try { prevComplementar = ad?.previsaoRescisaoComplementar ? JSON.parse(ad.previsaoRescisaoComplementar) : null; } catch {}
               const totalComplementar = parseFloat(String(prevComplementar?.total ?? '0'));
-              const temComplementar = totalComplementar > 0;
+              // Rev. 1719 — A 3ª tag "Rescisão Complementar" agora aparece SEMPRE
+              // (antes só quando havia previsão pré-calculada > 0). Motivo: muitos
+              // casos pagos "por fora" não têm previsão registrada, e ainda assim
+              // o RH precisa dar baixa do valor real depois. Quando já existe baixa
+              // gravada, prioriza esse valor pra exibir como sugerido.
+              const temComplementar = true;
+              const temPrevComplementar = totalComplementar > 0;
               const valorRescisaoSugerido = prev ? (prev.totalLiquido || prev.total || '0') : (ad?.valorEstimadoTotal || '0');
               const valorFgtsSugerido = prev ? (prev.multaFGTS || '0') : '0';
-              const valorComplementarSugerido = temComplementar ? String(totalComplementar.toFixed(2)) : '0';
+              const valorComplementarSugerido = complementarJaFeita
+                ? String(parseFloat(String(ad?.baixaComplementarValor || '0')).toFixed(2))
+                : (temPrevComplementar ? String(totalComplementar.toFixed(2)) : '0');
 
               return (
                 <>
@@ -2672,8 +2680,10 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                   <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-3">
                     <p className="text-xs font-semibold text-blue-700 uppercase">Tipo da Baixa</p>
                     {!fgtsNaoAplica ? (
-                      // Rev. 1639 — 3 cards quando há complementar (>0), senão 2.
-                      <div className={`grid gap-2 ${temComplementar ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                      // Rev. 1719 — 3 cards SEMPRE: Rescisão + Multa FGTS + Rescisão Complementar.
+                      // Antes (Rev. 1639) o 3º só aparecia quando havia previsão pré-calculada > 0,
+                      // mas pagamentos "por fora" sem previsão também precisam de baixa.
+                      <div className="grid gap-2 grid-cols-3">
                         <button
                           type="button"
                           disabled={rescisaoJaFeita}
@@ -2708,29 +2718,31 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                           {prev && <div className="text-xs text-amber-700 font-semibold mt-1">Estimado: {formatMoeda(valorFgtsSugerido)}</div>}
                           {fgtsJaFeita && <div className="text-[10px] text-green-600 mt-1 font-semibold">Já registrada</div>}
                         </button>
-                        {temComplementar && (
-                          <button
-                            type="button"
-                            disabled={complementarJaFeita}
-                            className={`p-3 rounded-lg border-2 text-left transition-all ${
-                              darBaixaForm.tipo === 'complementar' && !complementarJaFeita
-                                ? 'border-violet-500 bg-violet-50 shadow-sm'
-                                : complementarJaFeita
-                                  ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                                  : 'border-gray-200 hover:border-blue-300 cursor-pointer'
-                            }`}
-                            onClick={() => { if (!complementarJaFeita) setDarBaixaForm(f => ({ ...f, tipo: 'complementar', valor: '' })); }}
-                          >
-                            <div className="text-sm font-semibold text-slate-800">Rescisão Complementar</div>
-                            <div className="text-[10px] text-slate-500 mt-0.5">Uso interno — pago "por fora"</div>
+                        <button
+                          type="button"
+                          disabled={complementarJaFeita}
+                          className={`p-3 rounded-lg border-2 text-left transition-all ${
+                            darBaixaForm.tipo === 'complementar' && !complementarJaFeita
+                              ? 'border-violet-500 bg-violet-50 shadow-sm'
+                              : complementarJaFeita
+                                ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                                : 'border-gray-200 hover:border-blue-300 cursor-pointer'
+                          }`}
+                          onClick={() => { if (!complementarJaFeita) setDarBaixaForm(f => ({ ...f, tipo: 'complementar', valor: '' })); }}
+                        >
+                          <div className="text-sm font-semibold text-slate-800">Rescisão Complementar</div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">Uso interno — pago "por fora"</div>
+                          {temPrevComplementar ? (
                             <div className="text-xs text-violet-700 font-semibold mt-1">Estimado: {formatMoeda(valorComplementarSugerido)}</div>
-                            {complementarJaFeita && <div className="text-[10px] text-green-600 mt-1 font-semibold">Já registrada</div>}
-                          </button>
-                        )}
+                          ) : (
+                            <div className="text-[10px] text-violet-600 mt-1 italic">Sem previsão — informar valor pago</div>
+                          )}
+                          {complementarJaFeita && <div className="text-[10px] text-green-600 mt-1 font-semibold">Já registrada</div>}
+                        </button>
                       </div>
                     ) : (
-                      // Pedido de demissão: rescisão + (opcional) complementar.
-                      <div className={`grid gap-2 ${temComplementar ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                      // Pedido de demissão: rescisão + complementar (sempre).
+                      <div className="grid gap-2 grid-cols-2">
                         <button
                           type="button"
                           disabled={rescisaoJaFeita}
@@ -2748,25 +2760,27 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                           {prev && <div className="text-xs text-green-700 font-semibold mt-1">Estimado: {formatMoeda(valorRescisaoSugerido)}</div>}
                           {rescisaoJaFeita && <div className="text-[10px] text-green-600 mt-1 font-semibold">Já registrada</div>}
                         </button>
-                        {temComplementar && (
-                          <button
-                            type="button"
-                            disabled={complementarJaFeita}
-                            className={`p-3 rounded-lg border-2 text-left transition-all ${
-                              darBaixaForm.tipo === 'complementar' && !complementarJaFeita
-                                ? 'border-violet-500 bg-violet-50 shadow-sm'
-                                : complementarJaFeita
-                                  ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
-                                  : 'border-gray-200 hover:border-blue-300 cursor-pointer'
-                            }`}
-                            onClick={() => { if (!complementarJaFeita) setDarBaixaForm(f => ({ ...f, tipo: 'complementar', valor: '' })); }}
-                          >
-                            <div className="text-sm font-semibold text-slate-800">Rescisão Complementar</div>
-                            <div className="text-[10px] text-slate-500 mt-0.5">Uso interno — pago "por fora"</div>
+                        <button
+                          type="button"
+                          disabled={complementarJaFeita}
+                          className={`p-3 rounded-lg border-2 text-left transition-all ${
+                            darBaixaForm.tipo === 'complementar' && !complementarJaFeita
+                              ? 'border-violet-500 bg-violet-50 shadow-sm'
+                              : complementarJaFeita
+                                ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                                : 'border-gray-200 hover:border-blue-300 cursor-pointer'
+                          }`}
+                          onClick={() => { if (!complementarJaFeita) setDarBaixaForm(f => ({ ...f, tipo: 'complementar', valor: '' })); }}
+                        >
+                          <div className="text-sm font-semibold text-slate-800">Rescisão Complementar</div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">Uso interno — pago "por fora"</div>
+                          {temPrevComplementar ? (
                             <div className="text-xs text-violet-700 font-semibold mt-1">Estimado: {formatMoeda(valorComplementarSugerido)}</div>
-                            {complementarJaFeita && <div className="text-[10px] text-green-600 mt-1 font-semibold">Já registrada</div>}
-                          </button>
-                        )}
+                          ) : (
+                            <div className="text-[10px] text-violet-600 mt-1 italic">Sem previsão — informar valor pago</div>
+                          )}
+                          {complementarJaFeita && <div className="text-[10px] text-green-600 mt-1 font-semibold">Já registrada</div>}
+                        </button>
                       </div>
                     )}
                   </div>

@@ -1537,7 +1537,11 @@ export const avisoPrevioFeriasRouter = router({
         if (input.tipo === 'fgts' && fgtsNaoAplica)
           throw new TRPCError({ code: 'BAD_REQUEST', message: 'Multa FGTS não se aplica a pedido de demissão.' });
 
-        // Rev. 1639 — Complementar só pode ser dado se houver previsão > 0.
+        // Rev. 1719 — Complementar pode ser registrado SEMPRE (mesmo sem previsão pré-calculada).
+        // Antes (Rev. 1639) só era permitido se previsaoRescisaoComplementar.total > 0,
+        // mas pagamentos "por fora" não passam pelo cálculo prévio e ainda assim precisam
+        // ser registrados. `temComplementar` (com previsão) segue sendo usado apenas para
+        // gate de conclusão automática do processo (deveConcluir abaixo).
         let temComplementar = false;
         try {
           const pc = (aviso as any).previsaoRescisaoComplementar
@@ -1545,8 +1549,6 @@ export const avisoPrevioFeriasRouter = router({
             : null;
           temComplementar = pc && parseFloat(String(pc.total ?? '0')) > 0;
         } catch { temComplementar = false; }
-        if (input.tipo === 'complementar' && !temComplementar)
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Este funcionário não possui rescisão complementar prevista.' });
 
         const valorNum = parseFloat(input.valor);
         if (isNaN(valorNum) || valorNum < 0)

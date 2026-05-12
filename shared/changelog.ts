@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1719,
+    titulo: "Aviso Prévio — 3ª tag 'Rescisão Complementar' aparece SEMPRE (permite baixa de pagamento 'por fora' sem previsão)",
+    descricao: "Reportado: GIVALDO DOS SANTOS tinha rescisão complementar paga 'por fora' mas o diálogo 'Dar Baixa no Aviso Prévio' só mostrava 2 cards (Rescisão + Multa FGTS), sem opção de registrar a baixa do complementar. Causa em `client/src/pages/AvisoPrevio.tsx` ~L2641 e em `server/routers/avisoPrevioFerias.ts` ~L1548 (Rev. 1639): o 3º card e a mutation só liberavam complementar quando `previsaoRescisaoComplementar.total > 0` no banco — mas pagamentos 'por fora' não passam pelo cálculo prévio. Fix Rev. 1719 em 2 camadas: (1) Client `AvisoPrevio.tsx`: `temComplementar` agora é sempre true (3 cards SEMPRE no fluxo CLT, 2 cards no pedido de demissão); novo helper `temPrevComplementar` controla apenas o subtítulo do card — quando há previsão mostra 'Estimado: R$ X', quando não há mostra em itálico violeta 'Sem previsão — informar valor pago'. `valorComplementarSugerido` prioriza o valor da baixa já gravada (quando existe) sobre a previsão. (2) Server `avisoPrevioFerias.ts` `darBaixa`: removido o `throw` que bloqueava `tipo='complementar'` quando `!temComplementar`. Variável `temComplementar` preservada e segue alimentando o gate de `deveConcluir` (sem previsão, complementar é opcional e não bloqueia conclusão automática do processo). Sem schema change.",
+    tipo: 'bugfix',
+    modulos: 'Aviso Prévio / Rescisões',
+    criadoPor: 'Replit Agent',
+    dataPublicacao: '2026-05-12 22:30:00',
+  },
+  {
     version: 1718,
     titulo: "Integrações (Controle de Documentos) — Filtro 'Ordenar por' (alfabético, data, status)",
     descricao: "Solicitado pelo usuário: a tabela da aba Integrações (Colaborador / Tipo / Cliente / Realização / Validade / Status / Evidência) só permitia filtrar por cliente, função, tipo e status — sem nenhuma forma de ordenar (era a ordem que o servidor devolvia, mais recente primeiro). Fix Rev. 1718 SEM schema change, SEM mudança de servidor, em `client/src/pages/ControleDocumentos.tsx`: (1) novo state `sortBy` com 8 opções: padrão / Colaborador A-Z / Colaborador Z-A / Realização (mais recente) / Realização (mais antiga) / Validade (vence antes) / Validade (vence depois) / Status (urgência). (2) novo `<Select>` na barra de filtros (entre Status e o botão 'Registrar Integração'). (3) Lógica de ordenação no `useMemo filtrados` aplicada APÓS os filtros: `localeCompare` pt-BR sensitivity:base pra alfabético; comparador de data com vazios SEMPRE no final (não polui topo em asc nem desc); rank de status VENCIDA=0 → A_VENCER=1 → ATIVA=2 → SEM_VENCIMENTO=3 com tiebreaker alfabético. Default 'Ordenação padrão' preserva ordem original (mais recente primeiro).",
