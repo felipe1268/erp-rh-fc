@@ -1045,6 +1045,7 @@ export default function PortalPlanejamentoCliente() {
               projetoStart={projeto?.dataInicio ?? null}
               projetoFinish={projeto?.dataTerminoContratual ?? null}
               cutoffIso={(data as any)?.dataCorte?.oficial ?? null}
+              avancosLista={(data as any)?.avancosLista ?? null}
             />
           );
           if (aba === "curva_s") return <AbaCurvaS curvaData={curvaData} kpis={kpis} projeto={projeto} curvaMedicoes={curvaMedicoes} />;
@@ -1996,7 +1997,7 @@ function AbaProgSemanal({
   calendarioJson: calendarioJsonPortal = null,
   gerenciadoraNome = null, gerenciadoraLogoUrl = null, clienteLogoUrl = null,
   engenheiroResponsavel = null, projetoStart = null, projetoFinish = null,
-  cutoffIso = null,
+  cutoffIso = null, avancosLista = null,
 }: {
   atividadesTodas: any[];
   refisLista: any[];
@@ -2012,6 +2013,7 @@ function AbaProgSemanal({
   projetoStart?: string | null;
   projetoFinish?: string | null;
   cutoffIso?: string | null;
+  avancosLista?: any[] | null;
 }) {
   const avancosMap = useMemo(() => {
     const m: Record<number, number> = {};
@@ -2043,6 +2045,7 @@ function AbaProgSemanal({
       projetoStart={projetoStart}
       projetoFinish={projetoFinish}
       cutoffIso={cutoffIso}
+      avancosLista={avancosLista}
     />
   );
 }

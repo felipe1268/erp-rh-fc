@@ -160,6 +160,16 @@ interface Props {
    *  Quando definido, o per-row de "Previsto%" usa esse cutoff exato (em
    *  vez de "domingo 23:59 da semana"), garantindo paridade com MSP. */
   cutoffIso?: string | null;
+  /** Rev. 1683 — Lista bruta de avanços (planejamento_avancos) usada pela
+   *  visão LOTUS para calcular PV/EV/Δ semanais. No ERP interno fica
+   *  undefined (a LOTUS busca via tRPC); no Portal do Cliente é injetada
+   *  pelo payload `portalExterno.cliente.planejamentoObra.avancosLista`. */
+  avancosLista?: Array<{
+    atividadeId: number;
+    semana: string;
+    percentualAcumulado: number | string;
+    percentualSemanal: number | string;
+  }> | null;
   /** Rev. 1638.4 — Prazo contratual do projeto (YYYY-MM-DD). Quando definido,
    * o seletor de janela de recuperação BLOQUEIA valores que empurrariam a data
    * de convergência (semFim + N×7 dias) além do prazo contratual. */
@@ -374,6 +384,7 @@ export function ProgramacaoSemanal({
   gerenciadoraLogoUrl = null,
   clienteLogoUrl = null,
   engenheiroResponsavel = null,
+  avancosLista: avancosListaProp = null,
 }: Props) {
   // Rev. 1662 — Toggle entre "Padrão FC" (visão atual completa com EVM/SPI/etc.)
   // e "Padrão LOTUS" (modelo da gerenciadora — header com logos, EAP hierárquico,
@@ -966,6 +977,7 @@ export function ProgramacaoSemanal({
           )}
         </div>
         <ProgramacaoSemanalLotus
+          avancosOverride={avancosListaProp}
           projetoId={projetoId}
           revisaoId={revisaoId}
           companyId={companyId}

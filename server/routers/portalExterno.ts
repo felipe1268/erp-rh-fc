@@ -2423,9 +2423,23 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
       ).map((a: any) => ({ ...a, percentRealizado: ultimoAvancoPorAtiv[a.id] ?? 0 }))
        .sort((x: any, y: any) => x.dataInicio!.localeCompare(y.dataInicio!));
 
+      // Rev. 1683 — avanços brutos (planejamento_avancos) que a Programação
+      // Semanal LOTUS consome para calcular PV/EV/Δ semanais por atividade.
+      // No ERP esses dados vêm via `trpc.planejamento.listarAvancos`, que
+      // exige sessão autenticada e companyId>0 — indisponível no Portal.
+      // Forwardamos a mesma forma (atividadeId, semana ISO, percentualAcumulado,
+      // percentualSemanal) para que o componente reuse a lógica existente.
+      const avancosLista = avancosRaw.map((av: any) => ({
+        atividadeId: av.atividadeId as number,
+        semana: _toDateStr(av.semana),
+        percentualAcumulado: _n(av.percentualAcumulado),
+        percentualSemanal: _n(av.percentualSemanal),
+      }));
+
       return {
         obra,
         abasLiberadas,
+        avancosLista,
         projeto: {
           id: projeto.id, nome: projeto.nome, dataInicio: projeto.dataInicio,
           dataTerminoContratual: projeto.dataTerminoContratual, status: projeto.status,

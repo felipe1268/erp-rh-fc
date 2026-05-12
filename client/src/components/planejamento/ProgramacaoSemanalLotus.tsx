@@ -58,6 +58,17 @@ interface Props {
    *  capeado nele (mesma regra de `refFimAcum` do PlanejamentoDetalhe
    *  ~L5103) — paridade absoluta com cards do Avanço Físico Semanal. */
   cutoffIso?: string | null;
+  /** Rev. 1683 — No Portal do Cliente o `trpc.planejamento.listarAvancos`
+   *  não está disponível (companyId=0, sem auth interna). Quando esta prop
+   *  é fornecida, ela substitui a query e alimenta `avancosPorAtv`/
+   *  `temAvSemPorAtv` exatamente com os mesmos campos
+   *  (atividadeId, semana, percentualAcumulado, percentualSemanal). */
+  avancosOverride?: Array<{
+    atividadeId: number;
+    semana: string;
+    percentualAcumulado: number | string;
+    percentualSemanal: number | string;
+  }> | null;
 }
 
 // Programação LOTUS exibe os 7 dias da semana (seg→dom). Sáb/dom ficam
@@ -188,6 +199,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   const {
     projetoId, revisaoId, companyId, nomeProjeto, nomeCliente, atividades, semanas, semanaIdx, onSemanaChange,
     gerenciadoraNome, gerenciadoraLogoUrl, clienteLogoUrl, engenheiroResponsavel, calendarioJson, projetoStart, projetoFinish, cutoffIso,
+    avancosOverride = null,
   } = props;
   const calMSP = useMemo(() => parseCalendarioJson(calendarioJson), [calendarioJson]);
 
@@ -231,10 +243,16 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   // avanço nesta semana). Antes da Rev. 1677 essas atividades sumiam da
   // tabela LOTUS — agora aparecem com a barra inferior LARANJA conforme
   // a legenda da gerenciadora (SERVIÇO EXECUTADO ANTECIPADAMENTE).
-  const { data: avancosLista = [] } = trpc.planejamento.listarAvancos.useQuery(
+  // Rev. 1683 — No Portal do Cliente `companyId=0` e a query interna
+  // `listarAvancos` não está disponível (ela exige sessão autenticada).
+  // Quando `avancosOverride` é fornecido (Portal), usamos diretamente os
+  // avanços vindos do payload do tRPC `portalExterno.cliente.planejamentoObra`,
+  // mantendo a paridade absoluta dos cálculos PV/EV/Δ entre ERP e Portal.
+  const { data: avancosListaQuery = [] } = trpc.planejamento.listarAvancos.useQuery(
     { projetoId, revisaoId },
-    { enabled: !!projetoId && !!revisaoId },
+    { enabled: !avancosOverride && !!projetoId && !!revisaoId },
   );
+  const avancosLista = avancosOverride ?? avancosListaQuery;
   const avancosPorAtv = useMemo(() => {
     const idx = new Map<number, any[]>();
     for (const av of (avancosLista as any[])) {
