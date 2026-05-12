@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1698,
+    titulo: "Editar Colaborador — Campos de Afastamento (Data, Tipo, Previsão de Retorno) aparecem quando Status = 'Afastado'",
+    descricao: "Solicitado: ao colocar status do colaborador como 'Afastado', faltava onde registrar a data do afastamento. Sem isso a regra dos 180 dias da Rev. 1694 (Art. 133, IV CLT — perda do direito a férias por afastamento >6 meses contínuos) não tinha como ser alimentada manualmente. Fix em `client/src/pages/Colaboradores.tsx` ~L1432: novo bloco condicional `form.status === 'Afastado'` no grid da aba Profissional, logo após o select de Status, com 3 campos: (1) **Data de Afastamento** (obrigatório, type=date) → bind em `form.licencaDataInicio` (mesmo campo já consumido por `listarVencidas` em `avisoPrevioFerias.ts` Rev. 1694 para calcular `diasAfastado`/`perdeuFeriasPorAfastamento`); (2) **Tipo de Afastamento** (Auxílio-Doença INSS, Acidente de Trabalho INSS, Atestado Médico, Suspensão Disciplinar, Outros) → bind em `form.licencaTipo`; (3) **Previsão de Retorno** (opcional) → bind em `form.licencaDataFim`. Reutiliza os campos `licenca_data_inicio/licenca_tipo/licenca_data_fim` já existentes no schema (também consumidos pela Licença Maternidade), portanto sem mudança de backend nem de schema. Persistência é automática via mutação de update já existente. Quando o status sai de 'Afastado' os valores ficam preservados (úteis para histórico e para o cálculo retroativo da regra dos 180d).",
+    tipo: "melhoria",
+    modulos: "RH/Colaboradores",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 02:30:00",
+  },
+  {
     version: 1697,
     titulo: "Empresas Terceiras — `_assertCompanyAccess` comparava objetos com número (Set bug) e bloqueava 100% dos creates",
     descricao: "Reportado: mesmo após Rev. 1696, o cadastro de empresa terceira continuava retornando 'Sem acesso a esta empresa.' para o usuário admin_master Felipe Alves (id=1). Diagnóstico: `getCompaniesForUser` em `server/db.ts` retorna um array de OBJETOS de companies (rows com `.id`, `.razaoSocial`, etc.) — não um array de IDs. Mas `_assertCompanyAccess` em `server/routers/terceiros.ts` ~L10 fazia `new Set(allowed)` e depois `allowedSet.has(input.companyId)` — comparando referências de objeto com um número primitivo, sempre retornava `false`. Bloqueio universal independente de role ou permissão. Por isso a Rev. 1696 (bypass admin) não resolveu — ambas as branches (admin_master via getCompanies + non-admin via userCompanies join) retornam objetos. A `list` não tinha o check (por isso a tela abria), e nenhum teste cobria o fluxo create. Fix: normalizar `allowed.map(x => typeof x==='number' ? x : x?.id).filter(v => typeof v==='number')` antes do Set. Também adicionado `console.error` com diagnóstico (userId, role, companyId pedido, allowedIds) e mensagem do TRPCError enriquecida com os mesmos dados, facilitando triagem caso volte a aparecer (ex.: usuário tentando criar em empresa deletada). Sem schema change.",

@@ -1426,6 +1426,48 @@ export default function Colaboradores() {
                     <p className="text-xs text-blue-600 mt-1">Status calculado automaticamente pelo sistema</p>
                   )}
                 </div>
+                {form.status === 'Afastado' && (
+                  <>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                        🏥 Data de Afastamento <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        type="date"
+                        value={form.licencaDataInicio ?? ""}
+                        onChange={e => set("licencaDataInicio", e.target.value)}
+                        className="bg-input mt-1"
+                      />
+                      <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                        Início do afastamento (INSS, atestado, etc.) — usado p/ regra dos 180 dias (CLT Art. 133, IV)
+                      </span>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Tipo de Afastamento</Label>
+                      <Select value={form.licencaTipo || "none"} onValueChange={v => set("licencaTipo", v === "none" ? "" : v)}>
+                        <SelectTrigger className="bg-input mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Selecione</SelectItem>
+                          <SelectItem value="auxilio_doenca">Auxílio-Doença (INSS)</SelectItem>
+                          <SelectItem value="acidente_trabalho">Acidente de Trabalho (INSS)</SelectItem>
+                          <SelectItem value="atestado_medico">Atestado Médico</SelectItem>
+                          <SelectItem value="suspensao">Suspensão Disciplinar</SelectItem>
+                          <SelectItem value="outros">Outros</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground">Previsão de Retorno</Label>
+                      <Input
+                        type="date"
+                        value={form.licencaDataFim ?? ""}
+                        onChange={e => set("licencaDataFim", e.target.value)}
+                        className="bg-input mt-1"
+                      />
+                      <span className="text-[10px] text-muted-foreground mt-0.5 block">Opcional</span>
+                    </div>
+                  </>
+                )}
                 <div>
                   <Label className="text-xs font-medium text-muted-foreground">Função</Label>
                   <Select value={form.funcao || "none"} onValueChange={v => set("funcao", v === "none" ? "" : v)}>
