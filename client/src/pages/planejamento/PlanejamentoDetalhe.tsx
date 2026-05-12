@@ -5281,14 +5281,45 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   }, [folhasComInd, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, pvMacro, dataCorteInfo?.dataCorteOficial]);
 
   const realizadoComInd = useMemo(() => {
+    // Rev. 1642 — calendário MS Project para indiretas (paridade 100%).
+    const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
+    // Rev. 1675 — Paridade absoluta com MSP no card "Realizado (Acum.)":
+    // quando o cutoff da semana visualizada bate com o StatusDate gravado
+    // no XML, o envelope continua intacto E o usuário NÃO modificou nenhum
+    // avanço local nesta sessão (avancoLocal vazio), usa o snapshot
+    // AD/(AD+RD) da raiz do MSP direto. Sem isso, o agregado dinâmico
+    // ponderado por pesoFinanceiro divergia do MSP nativo (ponderação por
+    // duração) — gap residual ~0,03-0,05pp por causa da diferença de base
+    // (custo vs duração). Edição local invalida snapshot na hora pra não
+    // mostrar valor stale após salvar manualmente.
+    const projIniIso = (proj as any)?.dataInicio as string | null | undefined;
+    const projFimIso = (proj as any)?.dataTerminoContratual as string | null | undefined;
+    const envOk = !calMSP?.envelopeStartSnapshot || !calMSP?.envelopeFinishSnapshot
+      || (projIniIso === calMSP.envelopeStartSnapshot && projFimIso === calMSP.envelopeFinishSnapshot);
+    // Rev. 1675 hardening — só usa snapshot quando NÃO há indiretas no
+    // projeto. Indiretas são atividades adicionadas no ERP (não no XML) e
+    // contribuem proporcionalmente ao tempo decorrido. O snapshot UID=0 do
+    // MSP só conhece tarefas do XML — usá-lo num projeto com indiretas
+    // causaria "pulo" de valor (subestimaria o realizado total). Para esses
+    // projetos, mantém o agregado dinâmico (perde paridade absoluta com MSP
+    // mas preserva consistência com indiretas).
+    const temIndiretas = folhasComInd.some((a: any) => a.isIndireta);
+    if (
+      calMSP?.realizadoMspSnapshot != null
+      && calMSP?.statusDateSnapshot
+      && semanaFim === calMSP.statusDateSnapshot
+      && envOk
+      && !temIndiretas
+      && Object.keys(avancoLocal).length === 0
+    ) {
+      return Number(calMSP.realizadoMspSnapshot);
+    }
     const pesoBruto = usarPesoPorDuracao
       ? folhasComInd.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
       : folhasComInd.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
     const semPeso = pesoBruto === 0;
     const denom   = semPeso ? (folhasComInd.length || 1) : pesoBruto;
     let soma = 0;
-    // Rev. 1642 — calendário MS Project para indiretas (paridade 100%).
-    const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
     folhasComInd.forEach((a: any) => {
       let val: number;
       if (a.isIndireta) {
@@ -5309,7 +5340,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     });
     // Rev. 1538 — sem arredondamento intermediário (consistência com a barra superior).
     return soma;
-  }, [folhasComInd, avancoExistente, avancoMaisRecente, avancoLocal, semanaFim, usarPesoPorDuracao, (proj as any)?.calendarioJson]);
+  }, [folhasComInd, avancoExistente, avancoMaisRecente, avancoLocal, semanaFim, usarPesoPorDuracao, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual]);
 
   const distorcaoPrev = +(previstoComInd - previsto).toFixed(2);
   const distorcaoReal = +(realizadoComInd - realizadoAcum).toFixed(2);

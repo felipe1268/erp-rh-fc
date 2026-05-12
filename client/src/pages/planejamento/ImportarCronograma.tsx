@@ -247,6 +247,13 @@ export function parseMSProjectFull(text: string): {
   // BUG anterior (1646.4): líamos só 188743997, que NÃO EXISTE neste template
   // REVTE-CIVIL — resultado: snapshot stale, divergência permanente após reimport.
   let previstoMspRaiz: number | null = null;
+  // Rev. 1675 — Snapshot do %REALIZADO ACUMULADO da tarefa raiz (UID=0)
+  // computado via ActualDuration / (ActualDuration + RemainingDuration).
+  // Tem precisão de minutos (4+ casas decimais) e é o número que o MSP usa
+  // internamente antes de arredondar pro PercentComplete inteiro display.
+  // Permite paridade absoluta entre o card "Realizado (Acum.)" do ERP e a
+  // linha de projeto do MSP (ex.: REVTE-CIVIL → 1,3324% = 1,33% no MSP).
+  let realizadoMspRaiz: number | null = null;
   const taskEls = Array.from(doc.querySelectorAll("Task"));
   for (const t of taskEls) {
     const uid = t.querySelector("UID")?.textContent?.trim();
@@ -270,6 +277,18 @@ export function parseMSProjectFull(text: string): {
         valorPorFid["188743997"] ??  // Texto11 — alguns templates customizados
         valorPorFid["188743746"] ??  // Texto6 — versão truncada Int(...) + "%"
         null;
+      // Rev. 1675 — AD/(AD+RD) da raiz: precisão MSP-nativa do realizado.
+      const parseDurMin = (s: string): number | null => {
+        const m = /^PT(\d+)H(\d+)M(\d+)S/.exec(s);
+        if (!m) return null;
+        return +m[1] * 60 + +m[2] + +m[3] / 60;
+      };
+      const adMin = parseDurMin(t.querySelector("ActualDuration")?.textContent?.trim() || "");
+      const rdMin = parseDurMin(t.querySelector("RemainingDuration")?.textContent?.trim() || "");
+      if (adMin != null && rdMin != null && adMin + rdMin > 0) {
+        const pct = (adMin / (adMin + rdMin)) * 100;
+        if (Number.isFinite(pct)) realizadoMspRaiz = Math.min(100, Math.max(0, pct));
+      }
       break;
     }
   }
@@ -296,6 +315,8 @@ export function parseMSProjectFull(text: string): {
     statusDateSnapshot:     statusDate,
     envelopeStartSnapshot:  projetoStart,
     envelopeFinishSnapshot: projetoFinish,
+    // Rev. 1675 — snapshot do %Realizado raiz (AD/(AD+RD)) com precisão MSP.
+    realizadoMspSnapshot:   realizadoMspRaiz,
   } : null;
   const calendarioJson = calComConfig ? JSON.stringify(calComConfig) : null;
   return { tarefas, statusDate, statusDateIso, calendarioJson, projetoStart, projetoFinish, previstoMspRaiz };

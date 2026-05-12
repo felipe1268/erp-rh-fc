@@ -30,6 +30,16 @@ export interface CalendarioMSProject {
   statusDateSnapshot?:     string;            // "YYYY-MM-DD"
   envelopeStartSnapshot?:  string;            // "YYYY-MM-DD" — invalida snapshot se mudou
   envelopeFinishSnapshot?: string;            // "YYYY-MM-DD"
+  // Rev. 1675 — Snapshot do %REALIZADO ACUMULADO calculado pelo MSP na raiz
+  // (UID=0) via ActualDuration / (ActualDuration + RemainingDuration). Tem
+  // 4 casas de precisão (mesma base interna que MSP usa pra arredondar pro
+  // PercentComplete inteiro). Quando o cutoff = statusDateSnapshot E o
+  // envelope continua intacto E o usuário não editou nenhum avanço local,
+  // o card "Realizado (Acum.)" usa esse número direto — paridade absoluta
+  // com a tela de projeto do MSP. Senão, cai no agregado dinâmico do ERP
+  // (Σ avanco × pesoFin). Ex.: REVTE-CIVIL UID=0 AD=2043min RD=151317min
+  // → 1.3324% (= 1,33% que o MSP exibe).
+  realizadoMspSnapshot?:   number;            // ex.: 1.3324
 }
 
 export function parseCalendarioJson(raw: unknown): CalendarioMSProject | null {
@@ -47,6 +57,7 @@ export function parseCalendarioJson(raw: unknown): CalendarioMSProject | null {
       statusDateSnapshot:     typeof obj.statusDateSnapshot     === "string" ? obj.statusDateSnapshot     : undefined,
       envelopeStartSnapshot:  typeof obj.envelopeStartSnapshot  === "string" ? obj.envelopeStartSnapshot  : undefined,
       envelopeFinishSnapshot: typeof obj.envelopeFinishSnapshot === "string" ? obj.envelopeFinishSnapshot : undefined,
+      realizadoMspSnapshot:   typeof obj.realizadoMspSnapshot   === "number" ? obj.realizadoMspSnapshot   : undefined,
     };
   } catch { return null; }
 }

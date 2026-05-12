@@ -11668,4 +11668,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-12 06:55:00",
   },
+  {
+    version: 1675,
+    titulo: "Avanço Semanal — Card 'Realizado (Acum.)' usa snapshot AD/(AD+RD) da raiz do MSP (paridade absoluta com tela de projeto MSP)",
+    descricao: "Reportado: após Rev. 1674, gap caiu de -0,08pp pra -0,03pp (REVTE-CIVIL: Previsto 1,41% vs Realizado 1,38%). Diagnóstico: residual vem de bases de ponderação diferentes — Previsto card usa snapshot Texto10 da raiz do projeto (ponderação MSP-nativa por duração via ProjDateDiff) enquanto Realizado card faz Σ(avanço × pesoFinanceiro) (cost-weighted). Mesmo com TODOS os avanços por atividade exatamente iguais ao Texto10 correspondente, a diferença de base de ponderação produz residual ~0,03-0,05pp. Decisão do usuário (opção C): paridade absoluta com MSP, mesmo que mostre gap intrínseco do MSP (1,41 vs 1,33). **Fix em 3 camadas**: (1) `ImportarCronograma.tsx` ~L253-296 — captura `realizadoMspRaiz` da tarefa raiz UID=0 via AD/(AD+RD) (mesma fórmula da Rev. 1674 mas no nível projeto). Validado: REVTE-CIVIL UID=0 tem AD=PT34H3M12S=2043,2min e RD=PT2521H56M48S=151316,8min → 1,3324% (= 1,33% que MSP exibe na linha do projeto). (2) `shared/diasUteis.ts` — adicionado campo `realizadoMspSnapshot?: number` em `CalendarioMSProject` e no parser `parseCalendarioJson`. Backward-compat: campo opcional, projetos antigos sem o snapshot caem no agregado dinâmico. Persistido dentro do JSON `calendario_json` (sem mudança de schema no banco). (3) `PlanejamentoDetalhe.tsx` ~L5286-5310 — `realizadoComInd` useMemo prefere o snapshot quando: (a) `semanaFim === statusDateSnapshot` (cutoff bate com o gravado no XML), (b) `envelopeStart/Finish` continuam intactos (proteção contra edição manual de datas pós-import), (c) `Object.keys(avancoLocal).length === 0` (usuário NÃO modificou avanços nesta sessão — invalida snapshot na hora pra não mostrar valor stale). Senão cai no agregado original Σ(avanço × pesoFin). Mesmo padrão da `pvMacro` (Rev. 1646.4) que já trata Previsto. **Pré-requisito UX**: re-importar via Cronograma → Importar Cronograma pra repopular `realizadoMspSnapshot`. Resultado esperado: card REALIZADO 1,33% (= MSP exato) vs Previsto 1,41% (= MSP exato). Gap 0,08pp agora reflete fielmente a granularidade inteira do %Concluída do MSP, não é distorção do ERP.",
+    tipo: "bugfix",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 07:30:00",
+  },
 ];
