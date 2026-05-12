@@ -4617,9 +4617,24 @@ export default function Solicitacoes() {
                           <div className="flex-1 min-w-0">
                             <div className="text-xs font-semibold text-gray-900">
                               Cotação {cot.numeroCotacao}
-                              <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded border ${cot.status === "finalizada" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : cot.status === "cancelada" ? "bg-red-50 text-red-600 border-red-200" : "bg-purple-50 text-purple-600 border-purple-200"}`}>
-                                {cot.status === "finalizada" ? "Finalizada" : cot.status === "cancelada" ? "Cancelada" : cot.status === "em_andamento" ? "Em andamento" : cot.status}
-                              </span>
+                              {/* Rev. 1687 — Quando há OC ativa vinculada, força badge "Aprovada"
+                                  mesmo se o status cru no banco ficou em 'pendente' (path manual / legado). */}
+                              {(() => {
+                                const efetivoAprovada = cot._temOC === true && (cot.status === "pendente" || cot.status === "em_andamento");
+                                const efetivoStatus = efetivoAprovada ? "aprovada" : cot.status;
+                                const cls = efetivoStatus === "finalizada" || efetivoStatus === "aprovada" || efetivoStatus === "concluida"
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : efetivoStatus === "cancelada"
+                                    ? "bg-red-50 text-red-600 border-red-200"
+                                    : "bg-purple-50 text-purple-600 border-purple-200";
+                                const label = efetivoStatus === "finalizada" ? "Finalizada"
+                                  : efetivoStatus === "aprovada" ? "Aprovada"
+                                  : efetivoStatus === "concluida" ? "Concluída"
+                                  : efetivoStatus === "cancelada" ? "Cancelada"
+                                  : efetivoStatus === "em_andamento" ? "Em andamento"
+                                  : efetivoStatus;
+                                return <span className={`ml-2 text-[9px] px-1.5 py-0.5 rounded border ${cls}`}>{label}</span>;
+                              })()}
                             </div>
                             <div className="text-[10px] text-gray-500 mt-0.5">
                               {new Date(cot.criadoEm).toLocaleString("pt-BR")}
@@ -4870,7 +4885,14 @@ export default function Solicitacoes() {
                     const participantes = mapa?.participantes ?? [];
                     const mapaItens = mapa?.itens ?? [];
                     const vencedor = participantes.find((p: any) => p.selecionado);
-                    const cotStatus = (cot as any).status;
+                    const cotStatusRaw = (cot as any).status;
+                    // Rev. 1687 — status efetivo: se a cotação tem OC ATIVA vinculada
+                    // (sinalizado pelo `_temOC` da rastreio do SC), exibe "Aprovada"
+                    // mesmo quando o banco ficou em 'pendente'/'em_andamento'.
+                    const cotRastreio = (detalhe?.rastreio?.cotacoes as any[] | undefined)?.find((c: any) => c.id === scCotacaoId);
+                    const cotStatus = (cotRastreio?._temOC === true && (cotStatusRaw === "pendente" || cotStatusRaw === "em_andamento"))
+                      ? "aprovada"
+                      : cotStatusRaw;
                     const statusCfg: Record<string, { label: string; cls: string }> = {
                       pendente: { label: "Pendente", cls: "bg-amber-100 text-amber-700 border-amber-200" },
                       em_andamento: { label: "Em Andamento", cls: "bg-blue-100 text-blue-700 border-blue-200" },

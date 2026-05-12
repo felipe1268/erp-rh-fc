@@ -2363,6 +2363,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           aprovacaoStatus: comprasOrdens.aprovacaoStatus,
           aprovadorId: comprasOrdens.aprovadorId,
           criadoPorNome: comprasOrdens.criadoPorNome,
+          cotacaoId: comprasOrdens.cotacaoId, // Rev. 1687 — necessário p/ derivar _temOC
         }).from(comprasOrdens)
           .where(and(eq(comprasOrdens.solicitacaoId, input.id), eq(comprasOrdens.companyId, sc.companyId)))
           .orderBy(desc(comprasOrdens.criadoEm));
@@ -2424,7 +2425,27 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         solicitanteNome,
         aprovadorNome,
         rastreio: {
-          cotacoes: (cotacoes || []).map(c => ({ id: c.id, numeroCotacao: c.numeroCotacao, status: c.status, criadoEm: c.criadoEm, total: parseFloat(String(c.total || "0")), criadoPorNome: c.criadoPorNome || null })),
+          // Rev. 1687 — flag `_temOC`: indica se a cotação já tem ao menos uma OC
+          // ATIVA (ignorando rascunho/cancelada). Permite ao client derivar um
+          // status efetivo "Aprovada" mesmo quando o status cru no banco ficou
+          // travado em 'pendente' (caso de OC criada por path manual ou de
+          // cotações legadas anteriores ao auto-update). Mesmo padrão da
+          // Rev. 1684 (KPI Pend. de Entrega).
+          cotacoes: (cotacoes || []).map(c => {
+            const ocsAtivas = (ordens || []).filter((o: any) =>
+              o.cotacaoId === c.id &&
+              !["rascunho", "cancelada"].includes(String(o.status ?? ""))
+            );
+            return {
+              id: c.id,
+              numeroCotacao: c.numeroCotacao,
+              status: c.status,
+              criadoEm: c.criadoEm,
+              total: parseFloat(String(c.total || "0")),
+              criadoPorNome: c.criadoPorNome || null,
+              _temOC: ocsAtivas.length > 0,
+            };
+          }),
           ordens: (ordens || []).map(o => ({
             id: o.id, numeroOc: o.numeroOc, status: o.status, fornecedorNome: o.fornecedorNome,
             total: parseFloat(String(o.total || "0")), criadoEm: o.criadoEm,

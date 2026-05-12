@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1687,
+    titulo: "Solicitações de Compra — Badge da Cotação cai para 'Aprovada' quando já existe OC ativa vinculada",
+    descricao: "Reportado: SC-2026-0146 — a cotação COT-2026-0127 continuava com badge 'Pendente' (amarelo) na timeline e na aba Cotação do detalhe da SC, mesmo já existindo OC OC-2026-0117 (status 'Entregue', R$ 517,20) gerada a partir dela. Causa: o badge da cotação lia o `status` cru do banco. O auto-update para 'aprovada' existe em `criarOrdemDeCotacao` (~L6045) e em `criarOCsParciais` (~L6429), mas pode ficar travado em 'pendente' em casos legados ou quando a OC é gerada por um path manual que não atualiza a cotação. Mesmo padrão da Rev. 1684 (KPI 'Pend. de Entrega'): em vez de depender apenas do status persistido, derivamos um status efetivo a partir da existência de OC ativa. Fix em 3 camadas: (1) `server/routers/compras.ts` `getSolicitacao` ~L2356: select de `ordens` agora inclui `cotacaoId`. (2) ~L2429-2450: cada item de `rastreio.cotacoes` ganha flag `_temOC = (ordens || []).some(o => o.cotacaoId === c.id && !['rascunho','cancelada'].includes(o.status))`. (3) `client/src/pages/compras/Solicitacoes.tsx` em DOIS pontos: timeline (~L4621) e aba Cotação (~L4891) calculam `efetivoStatus = (cot._temOC && status in ['pendente','em_andamento']) ? 'aprovada' : status` antes de pintar o badge. Resultado: SC com OC ativa vinculada à cotação mostra badge verde 'Aprovada' em vez de amarelo 'Pendente'. Sem schema change. Sem alterar o status persistido (cotação só é re-aprovada pelos paths normais — fix puramente visual/derivado). OCs em rascunho/cancelada NÃO promovem o status (ainda são pendentes de fato).",
+    tipo: "correcao",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 20:00:00",
+  },
+  {
     version: 1686,
     titulo: "Proj./Doc. Técnicos — Subpasta DOC aceita qualquer tipo de arquivo (sem regra de versão)",
     descricao: "Solicitado: a subpasta DOC dentro de cada disciplina (ARQ, ELE, EST, HID, TOP) deve funcionar como uma pasta livre — aceitar QUALQUER tipo de arquivo (não só .doc/.docx) e sem regra de paridade/verificação de versão. Antes: `SUBPASTA_EXTENSIONS.DOC = ['.doc','.docx']` em `client/src/pages/gestaodocumentos/index.tsx` ~L91 limitava o `<input accept>` e o `isExtensionAllowed()` rejeitava qualquer outra extensão. Fix: remover a chave DOC do mapa. Como `getAcceptForSubpasta` retorna `undefined` quando a subpasta não está mapeada, o input cai no fallback genérico (que já lista `.pdf,.dwg,.dxf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rvt,.ifc`) — e como `isExtensionAllowed` retorna `true` quando não há lista, qualquer extensão passa. Versão (revMismatch) só compara DWG↔PDF; DOC nunca foi tocado por essa regra, então não há mudança de validação de versão. Servidor (`server/routers/gestaodocumentos.ts`) não tinha whitelist de extensões — só client. Sem schema change, sem migração, sem mudança em outras subpastas (DWG, PDF, IFC, REVIT, SKP, XLS, FOTOS, BIM, MEMORIAIS continuam restritas).",
