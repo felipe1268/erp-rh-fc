@@ -2167,16 +2167,20 @@ export const planejamentoRouter = router({
           usarIgual ? 1 : (porDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
         // Pré-calcula timestamps das atividades.
         type Folha = { peso: number; iniMs: number; fimMs: number; iniIso: string; fimIso: string; previstoMspPct: number | null };
-        const folhasPrep: Folha[] = folhas.map(a => {
+        // `previsto_msp_pct` é NUMERIC nullable em planejamento_atividades (Rev. 1670 Fase 1).
+        // Tipo do row inclui essa coluna desde o ColFix do startup; tipagem explícita evita `any`.
+        type AtivRow = typeof folhas[number] & { previstoMspPct?: string | number | null };
+        const folhasPrep: Folha[] = folhas.map((a: AtivRow) => {
           const iniIso = toDateStr(a.dataInicio);
           const fimIso = toDateStr(a.dataFim);
-          const prev = (a as any).previstoMspPct;
+          const prev = a.previstoMspPct;
+          const prevNum = prev == null ? null : (typeof prev === "number" ? prev : parseFloat(String(prev)));
           return {
             peso: pesoDe(a),
             iniMs: new Date(iniIso + "T12:00:00Z").getTime(),
             fimMs: new Date(fimIso + "T12:00:00Z").getTime(),
             iniIso, fimIso,
-            previstoMspPct: prev == null ? null : Number(prev),
+            previstoMspPct: prevNum != null && Number.isFinite(prevNum) ? prevNum : null,
           };
         }).filter(f => Number.isFinite(f.iniMs) && Number.isFinite(f.fimMs) && f.fimMs >= f.iniMs);
         if (!folhasPrep.length) return [];
@@ -2201,10 +2205,16 @@ export const planejamentoRouter = router({
             if (usarSnapshot && f.previstoMspPct != null) {
               pct = Math.min(100, Math.max(0, f.previstoMspPct));
             } else {
-              const refMs = Math.min(sunMs, f.fimMs);
-              if (refMs <= f.iniMs) { pct = 0; }
-              else if (f.fimMs <= f.iniMs) { pct = 100; }
-              else { pct = Math.min(100, Math.max(0, fracaoDecorridaMs(f.iniMs, refMs, f.fimMs, calMSP) * 100)); }
+              // Atividade pontual (marco/início/fim — ini==fim): 100% no dia que
+              // o cursor atinge ou ultrapassa a data, 0% antes. Cobrir ANTES do
+              // teste `refMs<=ini` pra evitar que marco fique zerado eternamente.
+              if (f.fimMs <= f.iniMs) {
+                pct = sunMs >= f.iniMs ? 100 : 0;
+              } else {
+                const refMs = Math.min(sunMs, f.fimMs);
+                if (refMs <= f.iniMs) pct = 0;
+                else pct = Math.min(100, Math.max(0, fracaoDecorridaMs(f.iniMs, refMs, f.fimMs, calMSP) * 100));
+              }
             }
             soma += pct * (f.peso / pesoTotal);
           }
