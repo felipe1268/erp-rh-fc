@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1693,
+    titulo: "Solicitações de Compra — Badge 'Aguardando Pagamento' separa pendência financeira de pendência logística",
+    descricao: "Reportado: SC-2026-0146 (Cimento) continuava com badge 'Pendente' (amarelo) no header mesmo com OC OC-2026-0117 já entregue e material recebido — a única pendência era o pagamento (vencimento 04/06). Causa: badge lia `detalhe.status` cru ('pendente'/'cotacao'), sem distinguir entre pendência logística (entrega) e pendência financeira (pagamento). Mesmo padrão das Revs. 1684 e 1687, agora aplicado ao badge visual. Fix em 3 camadas: (1) Server `getSolicitacao` em `compras.ts` ~L2458 expõe `_ocsEntregues` (TODAS as OCs ativas vinculadas em entregue/recebida/recebido/concluida) — antes só `listarSolicitacoes` tinha esse flag. (2) Client `Solicitacoes.tsx` ~L24-46 — novo status derivado `aguardando_pagamento` (label 'Aguardando Pagamento', cor violeta) no STATUS_CFG + helper `statusEfetivoSC(r)` que retorna `aguardando_pagamento` quando `_ocsEntregues===true && status ∈ ['pendente','cotacao','em_andamento']`. (3) Aplicado nos 2 pontos de render do badge — header do detalhe da SC ~L4364 e tabela de listagem ~L2331. Sem schema change, sem alterar status persistido — fix puramente visual/derivado. Pagamento continua controlado pelo módulo Financeiro.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 23:50:00",
+  },
+  {
     version: 1692,
     titulo: "Programação Semanal LOTUS — Número da semana no título (Nª SEMANA)",
     descricao: "Solicitado pelo usuário: o título do cabeçalho da folha LOTUS (modo imprimível) só mostrava 'PROGRAMAÇÃO SEMANAL — REVTE-CIVIL' + período (04/05/2026 a 07/05/2026), sem deixar claro qual semana do projeto está sendo exibida. Adicionado `{semana.numero}ª SEMANA` ao título em 3 lugares de `ProgramacaoSemanalLotus.tsx`: (1) título on-screen ~L905 — 'Programação Semanal — REVTE-CIVIL — 1ª SEMANA'; (2) título do Excel exportado ~L671 — 'PROGRAMAÇÃO SEMANAL - REVTE-CIVIL - 1ª SEMANA - 04/05/2026 a 07/05/2026'; (3) nome do arquivo .xlsx ~L827 — `Programacao_Semanal_REVTE-CIVIL_S1_04052026a07052026.xlsx`. `semana.numero` já estava disponível no escopo (vinha de `semanas[semanaIdx].numero`).",

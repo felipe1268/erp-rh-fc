@@ -2455,6 +2455,17 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           })),
           recebimentos: recebimentos || [],
         },
+        // Rev. 1693 — flag derivada: TODAS as OCs vinculadas estão em status
+        // de entrega (entregue/recebida/recebido/concluida). Permite ao client
+        // exibir badge "Aguardando Pagamento" em vez de "Pendente" quando só
+        // o financeiro está em aberto. Mesmo padrão da Rev. 1684.
+        _ocsEntregues: (() => {
+          const OC_ENTREGUE = new Set(["entregue", "recebida", "recebido", "concluida"]);
+          const sts = (ordens || [])
+            .map(o => String(o.status ?? "").toLowerCase())
+            .filter(s => s && s !== "rascunho" && s !== "cancelada");
+          return sts.length > 0 && sts.every(s => OC_ENTREGUE.has(s));
+        })(),
       };
       } catch (err: any) {
         console.error("[getSolicitacao] CRASH for SC id=" + input.id + ":", err?.message);

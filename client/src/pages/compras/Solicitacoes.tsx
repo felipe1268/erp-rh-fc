@@ -28,7 +28,24 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   aprovado:  { label: "Concluído",   cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   recusado:  { label: "Recusado",    cls: "bg-red-50 text-red-700 border-red-200" },
   cancelado: { label: "Cancelado",   cls: "bg-gray-100 text-gray-500 border-gray-200" },
+  // Rev. 1693 — Status derivado (não persistido). Usado quando todas as OCs
+  // vinculadas já foram entregues/recebidas e só o pagamento (financeiro)
+  // está em aberto. Separa pendência logística de pendência financeira.
+  aguardando_pagamento: { label: "Aguardando Pagamento", cls: "bg-violet-50 text-violet-700 border-violet-200" },
 };
+
+// Rev. 1693 — Deriva o status efetivo da SC para fins de badge visual.
+// Se todas as OCs estão entregues mas o status cru ainda é pendente/cotacao/
+// em_andamento (porque o pagamento não saiu), exibe "Aguardando Pagamento"
+// em vez de "Pendente" — clareza para o usuário e separação clara entre
+// pendência logística (entrega) e pendência financeira (pagamento).
+function statusEfetivoSC(r: any): string {
+  const st = String(r?.status ?? "");
+  if (r?._ocsEntregues === true && ["pendente", "cotacao", "em_andamento"].includes(st)) {
+    return "aguardando_pagamento";
+  }
+  return st;
+}
 
 const APROV_CFG: Record<string, { label: string; icon: JSX.Element; cls: string }> = {
   aguardando: { label: "Aguardando", icon: <Clock className="h-3 w-3" />,        cls: "text-amber-600" },
@@ -2328,7 +2345,7 @@ export default function Solicitacoes() {
                     />
                   </TableCell>
                   <TableCell><AprovBadge status={sc.aprovacaoStatus} /></TableCell>
-                  <TableCell><StatusBadge status={sc.status} /></TableCell>
+                  <TableCell><StatusBadge status={statusEfetivoSC(sc)} /></TableCell>
                   <TableCell className="text-gray-900 font-mono font-semibold text-xs">
                     <div className="flex items-center gap-1.5">
                       {isUrgente && (
@@ -4361,7 +4378,7 @@ export default function Solicitacoes() {
                         <Pencil className="h-3 w-3" /> Editar
                       </Button>
                     )}
-                    <StatusBadge status={detalhe.status} />
+                    <StatusBadge status={statusEfetivoSC(detalhe)} />
                   </div>
                 </div>
                 {(detalhe.itens as any[])?.some((it: any) => it.semVerba) && (() => {
