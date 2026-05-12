@@ -44,7 +44,7 @@ import {
 import { DEFAULT_PERMISSIONS, MODULE_KEYS } from "../shared/modules";
 import { getDb, encerrarContratosPjDoFuncionario } from "./db";
 import { normalizeCidadeInput } from "../shared/normalizeCidade";
-import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros } from "../drizzle/schema";
+import { obraSns, employees, blacklistReactivationRequests, companies, employeeSiteHistory, employeeTerminationChecklist, asos, trainings, sstIntegracaoRegistros, employeeIntegrations } from "../drizzle/schema";
 import { eq, and, sql, or, ilike, isNull, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "./companyHelper";
 import type { ProfileType } from "../shared/modules";
@@ -1562,22 +1562,26 @@ export const appRouter = router({
         isNull(trainings.deletedAt),
       )).orderBy(sql`${trainings.dataRealizacao} DESC`);
 
-      // Rev. 1590 — Integração de Segurança SST. Pega o último registro
-      // APROVADO por funcionário (ordenado por dataRealizacao DESC) e
-      // calcula status: vigente / vence_em_breve (≤30d) / vencido / sem.
+      // Rev. 1590 — Integração de Segurança SST.
+      // Rev. 1714 — fonte CORRIGIDA: o módulo "Integração SST" grava em
+      // `employee_integrations` (router integracoes.ts), não em
+      // `sst_integracao_registros`. A consulta antiga filtrava por
+      // status='aprovado' numa tabela paralela que ficava vazia, e a aba
+      // Efetivo do Planejamento sempre mostrava "Sem integração registrada"
+      // mesmo quando o módulo SST exibia o registro. Agora pegamos o último
+      // registro por funcionário (DESC dataRealizacao) e classificamos pelo
+      // dataVencimento — mesma regra usada pelo módulo (vigente / vence_em_breve
+      // ≤30d / vencido).
       const integRows = await db.select({
-        id: sstIntegracaoRegistros.id,
-        employeeId: sstIntegracaoRegistros.employeeId,
-        dataRealizacao: sstIntegracaoRegistros.dataRealizacao,
-        dataValidade: sstIntegracaoRegistros.dataValidade,
-        status: sstIntegracaoRegistros.status,
-        certificadoUrl: sstIntegracaoRegistros.certificadoUrl,
-      }).from(sstIntegracaoRegistros).where(and(
-        eq(sstIntegracaoRegistros.companyId, input.companyId),
-        inArray(sstIntegracaoRegistros.employeeId, input.employeeIds),
-        eq(sstIntegracaoRegistros.status, "aprovado"),
-        isNull(sstIntegracaoRegistros.deletedAt),
-      )).orderBy(sql`${sstIntegracaoRegistros.dataRealizacao} DESC`);
+        id: employeeIntegrations.id,
+        employeeId: employeeIntegrations.employeeId,
+        dataRealizacao: employeeIntegrations.dataRealizacao,
+        dataVencimento: employeeIntegrations.dataVencimento,
+        evidencia: employeeIntegrations.evidencia,
+      }).from(employeeIntegrations).where(and(
+        eq(employeeIntegrations.companyId, input.companyId),
+        inArray(employeeIntegrations.employeeId, input.employeeIds),
+      )).orderBy(sql`${employeeIntegrations.dataRealizacao} DESC`);
 
       for (const eid of input.employeeIds) result[eid] = { aso: null, treinamentos: [], integracao: null };
       for (const a of asoRows) {
@@ -1598,7 +1602,7 @@ export const appRouter = router({
       }
       for (const i of integRows) {
         const slot = result[i.employeeId]; if (!slot || slot.integracao) continue;
-        const dv = i.dataValidade ? String(i.dataValidade).slice(0, 10) : null;
+        const dv = i.dataVencimento ? String(i.dataVencimento).slice(0, 10) : null;
         const status = !dv ? "vigente"
           : dv < today ? "vencido"
           : dv <= limite30Str ? "vence_em_breve"
@@ -1608,7 +1612,7 @@ export const appRouter = router({
           dataRealizacao: i.dataRealizacao ? String(i.dataRealizacao).slice(0, 10) : null,
           dataValidade: dv,
           status,
-          temPdf: !!i.certificadoUrl,
+          temPdf: !!i.evidencia,
         };
       }
       return result;
