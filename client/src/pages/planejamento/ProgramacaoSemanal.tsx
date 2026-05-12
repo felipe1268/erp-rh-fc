@@ -1438,12 +1438,14 @@ export function ProgramacaoSemanal({
                         : desvio >  2 ? { label: "Adiantada", icon: "▲", cls: "bg-blue-50 text-blue-700 ring-blue-200" }
                         : desvio < -2 ? { label: "Em curso",  icon: "•", cls: "bg-amber-50 text-amber-700 ring-amber-200" }
                         :               { label: "No prazo",  icon: "●", cls: "bg-emerald-50 text-emerald-700 ring-emerald-200" };
+                      // Rev. 1669 — Cor do Desvio (pp) por sinal: positivo=verde,
+                      // negativo=vermelho, zero (no prazo)=azul. Tolerância de
+                      // ±0,05pp evita ruído de arredondamento (vira azul).
                       const desvioCor = semanaFutura
                         ? "text-slate-400"
-                        : desvio >  2  ? "text-blue-600"    :
-                          desvio >= -2 ? "text-emerald-600" :
-                          desvio >= -10 ? "text-amber-600"  :
-                                          "text-red-600";
+                        : desvio >  0.05 ? "text-emerald-600"
+                        : desvio < -0.05 ? "text-red-600"
+                        :                   "text-blue-600";
                       // Rev. 1544 — Realce de linha: CRÍTICA tem prioridade visual
                       // (vermelho) sobre MAIOR PESO (laranja); ambas podem aparecer
                       // simultaneamente nos badges do nome.

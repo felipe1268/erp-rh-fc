@@ -11562,6 +11562,15 @@ export const CHANGELOG: RevisionEntry[] = [
   },
   {
     version: 1669,
+    titulo: "Programação Semanal FC — Cor do Desvio (pp) por sinal (positivo=verde, negativo=vermelho, zero=azul)",
+    descricao: "Solicitado pelo usuário: a coluna 'Desvio' (pp) na lista de atividades da Programação Semanal deve seguir uma regra de cor simples e direta — positivo=verde (atividade adiantada), negativo=vermelho (atrasada), zero/no prazo=azul. A regra antiga combinava faixas (`>+2pp` azul, `[−2,+2]` verde, `[−10,−2)` amarelo, `<−10` vermelho) que confundia 'adiantada' (azul) com 'no prazo' (verde) e usava amarelo intermediário sem necessidade. **Fix**: tolerância de ±0,05pp evita ruído de arredondamento. Não muda a pill 'Adiantada/No prazo/Em curso/Atrasada' (regra de aderência semântica, mantém-se). `client/src/pages/planejamento/ProgramacaoSemanal.tsx` ~L1444-1451.",
+    tipo: "ui",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 04:15:00",
+  },
+  {
+    version: 1669,
     titulo: "Programação Semanal FC — Realizado/Aderência da Curva S alinhados ao cutoff (Sex→Qui)",
     descricao: "Reportado: na aba Programação Semanal (Padrão FC), o card 'Semana 1' mostrava Previsto 1,41% / Realizado 0,00% / Aderência —, mesmo com cada linha de atividade exibindo Real% 28,0% corretamente. **Fix 1**: `evmSemana` calculava o realizado via `acumAt(curvaRealizada, semIniStr)` onde semIniStr = Sex 01/05 (após Rev. 1667). Curvas são indexadas por Segunda; Mon 04/05 > Sex 01/05 → lookup `<= semIni` não capturava o ponto → realizado=0. Substituído `semIniStr`/`semAntStr` por `semFimStr`/`semAntFimStr` (Quinta cutoff). **Fix 2 (segundo passe)**: após o Fix 1, Realizado virou 1,41% mas Aderência apareceu 63% — o numerador era o realizado da semana cutoff (Sex-Qui = 1,41%), mas o denominador (`evmSemana.previstoCurvaS`) era o delta Mon-Mon da Curva S (~2,24%), divergindo do 'Previsto' EXIBIDO no card (`previstoSemanaDelta` do envelope MSP = 1,41%). Aderência inline no JSX agora usa `previstoEfetivo = (calMSP+envelope) ? previstoSemanaDelta : previstoCurvaS` — mesmo número que aparece em 'Previsto:'. Resultado: 1,41/1,41 = 100%. `client/src/pages/planejamento/ProgramacaoSemanal.tsx` ~L557-585 (evmSemana) e ~L1128-1158 (banner Aderência inline).",
     tipo: "bugfix",
