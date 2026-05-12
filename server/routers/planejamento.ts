@@ -2138,69 +2138,96 @@ export const planejamentoRouter = router({
         return pontos;
       }
 
-      // Rev. 1689 — Curva Planejada via ENVELOPE (pvMacro): a Baseline em
-      // qualquer semana W passa a ser `du(início_projeto → fim_da_semana_W) /
-      // du(envelope_projeto) × 100` — EXATAMENTE a fórmula do card "Previsto"
-      // (Rev. 1646.6 `pvMacro` em `PlanejamentoDetalhe.tsx`). Antes, a Curva S
-      // distribuía o peso de cada atividade igualmente por semanas-calendário,
-      // o que fazia a Baseline "abrir" muito rápido e divergir do card (ex.:
-      // REVTE-CIVIL S3 = 4,5% na curva vs 1,41% no card). Com o envelope ambos
-      // batem: visual e indicador agora contam a MESMA história. Quando faltar
-      // calendário MSP ou datas do projeto, cai no algoritmo legado por atividade.
-      function gerarCurvaMacro(): { semana: string; acumulado: number }[] {
-        // Rev. 1689 — Paridade EXATA com `pvMacro` do client: o helper só roda
-        // quando há calMSP (dias úteis MSP). Sem isso o client cai em outra
-        // rota de cálculo e poderíamos reintroduzir divergência server×client.
-        if (!projIniIso || !projFimIso || !calMSP) return [];
-        const projIniMs = new Date(projIniIso + "T12:00:00Z").getTime();
-        const projFimMs = new Date(projFimIso + "T12:00:00Z").getTime();
-        if (!Number.isFinite(projIniMs) || !Number.isFinite(projFimMs) || projFimMs <= projIniMs) return [];
-        const startMonday = toMondayStr(new Date(projIniMs));
-        const endMonday   = toMondayStr(new Date(projFimMs));
+      // Rev. 1689.1 — Curva Planejada PER-ACTIVITY com dias úteis MSP.
+      // Reescrita do `gerarCurvaPlanejadaMSP`: para cada semana W (Sunday),
+      // Baseline(W) = Σ peso_i × fracaoDecorridaMs(iniAtv_i, min(W, fimAtv_i), fimAtv_i, calMSP).
+      // Isso devolve a forma de S natural (atividades concentram trabalho no
+      // miolo do projeto) e fica próximo do card `pvMacro` em qualquer ponto,
+      // porque ambos usam dias úteis MSP — apenas com granularidade diferente
+      // (per-atividade aqui, envelope inteiro no card). Snapshot Texto10
+      // (`previstoMspPct`) ponderado é usado quando o Sunday bate com o
+      // `statusDateSnapshot` gravado no XML — paridade absoluta MSP.
+      // Fallback: algoritmo legado per-activity (`gerarCurvaPlanejada`) quando
+      // não houver calMSP ou faltar dataInicio/dataFim nas atividades.
+      function gerarCurvaPlanejadaMSP(ativs: typeof atividades): { semana: string; acumulado: number }[] {
+        if (!calMSP) return [];
+        const folhas = ativs.filter(a => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
+        if (!folhas.length) return [];
+        // Pesagem unificada (mesma regra do helper legado e do client).
+        const porDuracao = !!input.usarPesoPorDuracao;
+        const pesoBruto = porDuracao
+          ? folhas.reduce((s, a) => s + (a.duracaoDias ?? 0), 0)
+          : folhas.reduce((s, a) => s + n(a.pesoFinanceiro), 0);
+        const ativComPeso = porDuracao
+          ? folhas.filter(a => (a.duracaoDias ?? 0) > 0).length
+          : folhas.filter(a => n(a.pesoFinanceiro) > 0).length;
+        const usarIgual = pesoBruto === 0 || ativComPeso < folhas.length * 0.2;
+        const pesoTotal = usarIgual ? folhas.length : pesoBruto;
+        const pesoDe = (a: typeof folhas[number]): number =>
+          usarIgual ? 1 : (porDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
+        // Pré-calcula timestamps das atividades.
+        type Folha = { peso: number; iniMs: number; fimMs: number; iniIso: string; fimIso: string; previstoMspPct: number | null };
+        const folhasPrep: Folha[] = folhas.map(a => {
+          const iniIso = toDateStr(a.dataInicio);
+          const fimIso = toDateStr(a.dataFim);
+          const prev = (a as any).previstoMspPct;
+          return {
+            peso: pesoDe(a),
+            iniMs: new Date(iniIso + "T12:00:00Z").getTime(),
+            fimMs: new Date(fimIso + "T12:00:00Z").getTime(),
+            iniIso, fimIso,
+            previstoMspPct: prev == null ? null : Number(prev),
+          };
+        }).filter(f => Number.isFinite(f.iniMs) && Number.isFinite(f.fimMs) && f.fimMs >= f.iniMs);
+        if (!folhasPrep.length) return [];
+        // Janela do gráfico: do Monday da menor data até o Monday da maior.
+        const minIniMs = Math.min(...folhasPrep.map(f => f.iniMs));
+        const maxFimMs = Math.max(...folhasPrep.map(f => f.fimMs));
+        const startMonday = toMondayStr(new Date(minIniMs));
+        const endMonday   = toMondayStr(new Date(maxFimMs));
         const semZero = toMondayStr(new Date(new Date(startMonday + "T12:00:00Z").getTime() - 7 * 86_400_000));
         const pontos: { semana: string; acumulado: number }[] = [{ semana: semZero, acumulado: 0 }];
-        let cur = startMonday;
-        // Limite data-driven: nº de semanas do envelope + folga de 8 semanas.
-        // Suporta projetos arbitrariamente longos sem truncar pontos intermediários.
-        const semanasEnvelope = Math.ceil((projFimMs - projIniMs) / (7 * 86_400_000)) + 8;
+        const semanasEnvelope = Math.ceil((maxFimMs - minIniMs) / (7 * 86_400_000)) + 8;
         const maxIters = Math.max(8, semanasEnvelope);
+        let cur = startMonday;
         for (let i = 0; i < maxIters && cur <= endMonday; i++) {
-          // Fim da semana = domingo (Monday + 6d). Usa snapshot exato (Texto11)
-          // quando a Sun bate com StatusDate gravado no MSP — mesma regra do
-          // pvMacro do client.
           const sunMs = new Date(cur + "T12:00:00Z").getTime() + 6 * 86_400_000;
-          const refMs = Math.min(sunMs, projFimMs);
-          const sunIso = new Date(refMs).toISOString().slice(0, 10);
-          let pct: number;
-          const envOk = !calMSP?.envelopeStartSnapshot || !calMSP?.envelopeFinishSnapshot
-            || (projIniIso === calMSP.envelopeStartSnapshot && projFimIso === calMSP.envelopeFinishSnapshot);
-          if (calMSP?.previstoMspSnapshot != null && calMSP?.statusDateSnapshot && sunIso === calMSP.statusDateSnapshot && envOk) {
-            pct = Number(calMSP.previstoMspSnapshot);
-          } else {
-            const frac = fracaoDecorridaMs(projIniMs, refMs, projFimMs, calMSP);
-            pct = Math.min(100, Math.max(0, frac * 100));
+          const sunIso = new Date(sunMs).toISOString().slice(0, 10);
+          // Snapshot Texto10 ponderado quando Sunday == StatusDate (paridade MSP).
+          const usarSnapshot = !!calMSP.statusDateSnapshot && sunIso === calMSP.statusDateSnapshot;
+          let soma = 0;
+          for (const f of folhasPrep) {
+            let pct: number;
+            if (usarSnapshot && f.previstoMspPct != null) {
+              pct = Math.min(100, Math.max(0, f.previstoMspPct));
+            } else {
+              const refMs = Math.min(sunMs, f.fimMs);
+              if (refMs <= f.iniMs) { pct = 0; }
+              else if (f.fimMs <= f.iniMs) { pct = 100; }
+              else { pct = Math.min(100, Math.max(0, fracaoDecorridaMs(f.iniMs, refMs, f.fimMs, calMSP) * 100)); }
+            }
+            soma += pct * (f.peso / pesoTotal);
           }
-          pontos.push({ semana: cur, acumulado: +pct.toFixed(2) });
+          pontos.push({ semana: cur, acumulado: +Math.min(100, Math.max(0, soma)).toFixed(2) });
           cur = toMondayStr(new Date(new Date(cur + "T12:00:00Z").getTime() + 7 * 86_400_000));
         }
-        // Garante ponto final EXATO em 100% no fim do envelope (fim da última
-        // semana pode ficar antes de projFim se a obra termina no meio da semana).
-        if (pontos.length > 0 && pontos[pontos.length - 1].acumulado < 100) {
+        // Garante ponto final 100% se a última semana ficou abaixo (atividade
+        // que termina no meio da semana após o último Sunday iterado).
+        if (pontos.length > 1 && pontos[pontos.length - 1].acumulado < 100) {
           pontos.push({ semana: endMonday, acumulado: 100 });
         }
         return pontos;
       }
-      const curvaMacro = gerarCurvaMacro();
-      // Baseline: sempre gerada (é o plano original imutável — Rev 00)
-      const curvaBaseline = curvaMacro.length > 0 ? curvaMacro : gerarCurvaPlanejada(baseline);
-      // "Revisão Atual" só faz sentido quando é DIFERENTE da baseline;
-      // se há só uma revisão, a curva planejada é idêntica e mostramos apenas a baseline (azul).
-      // Quando o envelope macro está disponível e válido, Revisão Atual = Baseline
-      // (mesma fórmula, mesmo envelope). Para revisões com envelope diferente, o
-      // pvMacro continua refletindo o envelope ATUAL contratado — Baseline e Atual
-      // batem por construção. Mantemos o fallback per-activity caso o macro falhe.
+      // Baseline: prefere helper MSP per-activity (forma de S + paridade card).
+      // Fallback: algoritmo legado quando não há calMSP/snapshot.
+      const baselineMSP = gerarCurvaPlanejadaMSP(baseline);
+      const curvaBaseline = baselineMSP.length > 0 ? baselineMSP : gerarCurvaPlanejada(baseline);
+      // "Revisão Atual" só aparece quando difere da baseline.
       const curvaPlanejada = input.baselineId !== input.revisaoId
-        ? (curvaMacro.length > 0 ? [] : gerarCurvaPlanejada(atividades))
+        ? (() => {
+            const planMSP = gerarCurvaPlanejadaMSP(atividades);
+            return planMSP.length > 0 ? planMSP : gerarCurvaPlanejada(atividades);
+          })()
         : [];
 
       // Curva realizada — acumulado ponderado por atividade
