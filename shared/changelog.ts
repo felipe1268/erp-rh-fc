@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1700,
+    titulo: "Grupos de Usuários — Toggle 'Portal do Cliente' adicionado à lista de módulos",
+    descricao: "Solicitado: a tela de Grupos de Usuários (`/usuarios` aba Grupos) listava 16 módulos (RH/DP, SST, Jurídico, Avaliação, Terceiros, Parceiros, Orçamento, Planejamento, Cadastro, Compras, Almoxarifado, Financeiro, Operacional, Proj./Doc. Técnicos, Frotas, Medição) mas faltava 'Portal do Cliente' como toggle independente para liberar/restringir acesso à área administrativa do portal externo do cliente. Fix em `client/src/pages/Usuarios.tsx` ~L47: nova entrada `{ id: 'portal-cliente', label: 'Portal do Cliente', dot: 'bg-blue-600', tag: 'bg-blue-100 text-blue-700 border-blue-200' }` no array `ALL_MODULES`. Sem schema change — `moduleAccess` no banco já é JSON livre por chave de módulo.",
+    tipo: "melhoria",
+    modulos: "Usuários e Permissões",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 03:30:00",
+  },
+  {
     version: 1699,
     titulo: "Contratos de Prestação de Serviço (Terceiros) — Tela 'Novo Contrato' explodia com 'Maximum update depth exceeded' (loop infinito)",
     descricao: "Reportado: ao acessar `/terceiros/contratos/novo` a página renderizava a tela de erro 'Ocorreu um erro inesperado.' com stack trace 'Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate.' Causa em `client/src/pages/terceiros/contratos/ContratoNovo.tsx` ~L214: `useEffect(() => { ... setSelectedProjetoId(...); setSelectedAtividades([]); }, [form.obraId, projetos])` dependia do array `projetos` retornado por `useQuery` com default `data: projetos = []`. Enquanto a query está carregando (data === undefined), o `= []` cria uma NOVA referência de array em cada render → React vê dep mudada → effect re-roda → `setSelectedAtividades([])` força re-render → novo `[]` → loop infinito até React abortar. Fix: (1) trocou `selectedProjetoId` de `useState`+effect para `useMemo` (não chama setState, só recalcula valor — sem loop possível). (2) Reset de `selectedAtividades` agora só dispara via guard `useRef` quando `form.obraId` muda DE FATO (string diferente da última observada), não em todo re-render. Sem schema change.",
