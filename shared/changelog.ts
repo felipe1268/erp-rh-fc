@@ -11533,4 +11533,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-11 19:00:00",
   },
+  {
+    version: 1664,
+    titulo: "Programação Semanal LOTUS — auto-sync FC, META SEMANAL com 3 colunas (Prev/Real/Δ) e nova paleta de Status",
+    descricao: "3 melhorias na visão LOTUS. (1) **Auto-sync com avanço do FC**: antes, as barras verdes/realizado só apareciam se o usuário preenchesse manualmente os campos 'Real Início' e 'Real Fim' no cabeçalho da atividade. Mas o FC já lança avanço semanal (% por semana) e essas duas fontes não conversavam — gerava o sintoma 'no FC mostra 100%, mas no LOTUS está tudo vermelho'. Agora `faixasCelula` recebe `temAvancoNaSemana` (somaSemanal>0) e `acumPctAteSemana`; quando NÃO há real explícito, dias previstos da semana com avanço lançado viram verdes automaticamente, e atividades com acumulado≥100% pintam toda a janela prevista até hoje. Mantém comportamento manual quando datas reais são preenchidas. `client/src/components/planejamento/ProgramacaoSemanalLotus.tsx` ~L101-131, L324, L727, L447. (2) **META SEMANAL agrupada em 3 sub-colunas**: Prev. (cinza/neutro), Real. (verde quando >0), Δ pp (verde se ≥0, vermelho se <0, com sinal +/−). Substitui a coluna única 'META SEM %'. Header com colSpan=3, sub-headers 'Prev/Real/Δ' e tooltips explicativos. Excel export atualizado com 3 colunas e cor automática no Δ. (3) **Paleta de Status reformulada**: Concluída=VERDE (única cor verde — exclusiva de quem terminou de fato, acum≥100%), No prazo=AZUL (era verde — em andamento dentro do ritmo, aderência≥95% PMBOK SPI), Atrasado/Não exec.=VERMELHO. Elimina ambiguidade visual entre 'em dia' e 'finalizada'. Excel export, tabela em tela, totalCols/colLetter/mergeCells e larguras de coluna ajustados. Sem impacto em EVM/SPI/Curva S do módulo principal — LOTUS continua sendo visão paralela.",
+    tipo: "melhoria",
+    modulos: "Planejamento",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 01:30:00",
+  },
 ];

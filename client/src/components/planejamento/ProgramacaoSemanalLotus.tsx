@@ -105,11 +105,27 @@ function faixasCelula(
   cal: CalendarioMSProject | null,
   aderenciaPct: number | null, // Rev. 1663 — % aderência da SEMANA (não do dia)
   metaPct: number,             // Rev. 1663 — meta semanal da atividade
+  // Rev. 1664.1 — Auto-derivação do REAL a partir do avanço semanal do FC.
+  // Quando o usuário lança avanço no FC (planejamento_avancos), o LOTUS
+  // passa a refletir esse avanço sem precisar preencher Real Início/Fim
+  // manualmente. Isso elimina a divergência clássica "FC mostra 100%, mas
+  // LOTUS mostra tudo vermelho".
+  temAvancoNaSemana: boolean = false,
+  acumPctAteSemana: number = 0,
 ): { top: string | null; bottom: string | null } {
   const ds = dateStr(dia);
   const ehUtil = cal ? ehDiaUtil(ds, cal) : (dia.getDay() !== 0 && dia.getDay() !== 6);
   const inPrev = ehUtil && !!(prevIni && prevFim && ds >= prevIni && ds <= prevFim);
-  const inReal = !!(realIni && realFim && ds >= realIni && ds <= realFim);
+  let inReal = !!(realIni && realFim && ds >= realIni && ds <= realFim);
+  // Auto-derivação: sem datas reais explícitas, usa o avanço semanal do FC
+  // como sinal de "executado". Cobre dois cenários:
+  //  • Avanço lançado nesta semana → dias previstos da semana viram verdes.
+  //  • Acumulado ≥ 100% → toda a janela prevista (até hoje) vira verde,
+  //    inclusive em semanas anteriores que ainda não tinham real.
+  if (!inReal && !(realIni && realFim) && inPrev) {
+    if (temAvancoNaSemana) inReal = true;
+    else if (acumPctAteSemana >= 100 && dia.getTime() <= hoje.getTime()) inReal = true;
+  }
   const passou = dia.getTime() <= hoje.getTime();
 
   // Faixa superior (PREVISTO)
@@ -260,7 +276,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   }, [avancosLista]);
 
   const metricas = useMemo(() => {
-    const out = new Map<number, { metaPct: number; realPct: number; aderenciaPct: number | null; acumPct: number }>();
+    const out = new Map<number, { metaPct: number; realPct: number; aderenciaPct: number | null; acumPct: number; somaSemanal: number }>();
     if (!semIniStr) return out;
     // Cutoff = mínimo entre semFim e hoje (semana corrente não cobra dias futuros).
     const hojeStr = dateStr(hoje);
@@ -302,7 +318,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       }
       const realPct = peso * (somaSemanal / 100);
       const aderenciaPct = metaPct > 0 ? (realPct / metaPct) * 100 : null;
-      out.set(a.id, { metaPct, realPct, aderenciaPct, acumPct });
+      out.set(a.id, { metaPct, realPct, aderenciaPct, acumPct, somaSemanal });
     }
     return out;
   }, [atividadesDaSemana, avancosPorAtv, semIniStr, semFimStr, calMSP, hoje]);
@@ -317,7 +333,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   //                                                     ser verde).
   //   • Atrasado / Não exec.                  → VERMELHO
   //   • Sem meta (fora da janela cobrável)    → CINZA neutro.
-  const statusLabel = (m: { metaPct: number; realPct: number; aderenciaPct: number | null; acumPct: number } | undefined) => {
+  const statusLabel = (m: { metaPct: number; realPct: number; aderenciaPct: number | null; acumPct: number; somaSemanal: number } | undefined) => {
     if (!m) return { txt: "—", cls: "text-slate-400" };
     if (m.acumPct >= 100) return { txt: "Concluída", cls: "text-emerald-700 font-bold bg-emerald-50" };
     if (m.metaPct <= 0)  return { txt: "Sem meta", cls: "text-slate-500" };
@@ -422,8 +438,10 @@ export default function ProgramacaoSemanalLotus(props: Props) {
             const d = m.realPct - m.metaPct;
             ws.getCell(r, 9).font = { bold: true, color: { argb: d >= 0 ? "FF065F46" : "FF991B1B" } };
           }
+          const temAvSemX = !!m && m.somaSemanal > 0;
+          const acumAteSemX = m?.acumPct ?? 0;
           dias.forEach((d, idx) => {
-            const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0);
+            const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSemX, acumAteSemX);
             // Excel não suporta faixas internas — prioriza realizado (faixa de
             // baixo). Se só houver previsto, usa a cor do previsto.
             const cor = f.bottom || f.top;
@@ -702,17 +720,23 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                         disabled={setRealDates.isPending}
                       />
                     </td>
-                    {dias.map((d, idx) => {
-                      const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0);
-                      return (
-                        <td key={idx} className="border border-slate-300 p-0 h-6 align-middle" title={tip}>
-                          <div className="flex flex-col gap-[2px] mx-0.5 my-1">
-                            <div className={`h-[6px] rounded-sm ${f.top ?? "bg-transparent"}`} />
-                            <div className={`h-[6px] rounded-sm ${f.bottom ?? "bg-transparent"}`} />
-                          </div>
-                        </td>
-                      );
-                    })}
+                    {(() => {
+                      // Constantes por atividade — fora do dias.map pra evitar
+                      // recálculo a cada um dos 7 dias (sugestão code review Rev 1664).
+                      const temAvSem = !!m && m.somaSemanal > 0;
+                      const acumAteSem = m?.acumPct ?? 0;
+                      return dias.map((d, idx) => {
+                        const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSem, acumAteSem);
+                        return (
+                          <td key={idx} className="border border-slate-300 p-0 h-6 align-middle" title={tip}>
+                            <div className="flex flex-col gap-[2px] mx-0.5 my-1">
+                              <div className={`h-[6px] rounded-sm ${f.top ?? "bg-transparent"}`} />
+                              <div className={`h-[6px] rounded-sm ${f.bottom ?? "bg-transparent"}`} />
+                            </div>
+                          </td>
+                        );
+                      });
+                    })()}
                     <td className={`border border-slate-300 px-1 py-1 text-center text-[10px] whitespace-nowrap ${st.cls}`} title={tip}>
                       {st.txt}
                     </td>
