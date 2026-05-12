@@ -5822,15 +5822,30 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
             <div className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4 text-blue-600" />
               <span className="text-xs font-semibold text-blue-800">Semana {semanaNum} —</span>
-              <span className="text-[11px] text-slate-600">Previsto:</span>
+              {/* Rev. 1663.1 — Rótulos explícitos "(Acum.)" + delta da semana
+                   entre parênteses. Antes mostrava só "Previsto: X% Realizado: Y%"
+                   sem indicar que era acumulado, e usuários reportavam confusão
+                   ("aparece 1,80% mas não lancei nada na semana 2" — era o
+                   acumulado vindo da semana anterior). Agora fica claro: o
+                   número grande é ACUMULADO até o fim da semana, e entre
+                   parênteses vem o DELTA do que foi lançado/previsto NA
+                   semana selecionada. */}
+              <span className="text-[11px] text-slate-600" title="Avanço previsto ACUMULADO até o fim da semana — alinhado com top bar e card 'PREVISTO (SEMANA)'">Previsto (Acum.):</span>
               <span className="text-sm font-bold text-orange-600 tabular-nums">{previstoRealizadoSemana.previstoAcumulado.toFixed(2)}%</span>
+              <span className="text-[10px] text-slate-400" title="Delta apenas da semana selecionada (sem acumular semanas anteriores)">
+                (Δsem {previstoRealizadoSemana.previsto.toFixed(2)}%)
+              </span>
             </div>
             <span className="text-slate-300">|</span>
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-slate-600">Realizado:</span>
+              <span className="text-[11px] text-slate-600" title="Avanço realizado ACUMULADO até o fim da semana — alinhado com card 'REALIZADO (ACUM.)'. Inclui tudo lançado em semanas anteriores.">Realizado (Acum.):</span>
               {/* Rev. 1656.4 — usa realizadoAcumulado (não DELTA) p/ paridade
-                   semântica com Previsto Acumulado e Aderência (SPI EVM). */}
+                   semântica com Previsto Acumulado e Aderência (SPI EVM).
+                   Rev. 1663.1 — rótulo passou a "(Acum.)" + delta da semana. */}
               <span className="text-sm font-bold text-emerald-600 tabular-nums">{previstoRealizadoSemana.realizadoAcumulado.toFixed(2)}%</span>
+              <span className="text-[10px] text-slate-400" title="Delta apenas da semana selecionada (Σ percentual semanal lançado nas atividades)">
+                (Δsem {previstoRealizadoSemana.realizado.toFixed(2)}%)
+              </span>
             </div>
             <span className="text-slate-300">|</span>
             <div className="flex items-center gap-2">
