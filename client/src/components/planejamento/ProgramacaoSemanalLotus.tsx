@@ -117,16 +117,25 @@ function faixasCelula(
   const ehUtil = cal ? ehDiaUtil(ds, cal) : (dia.getDay() !== 0 && dia.getDay() !== 6);
   const inPrev = ehUtil && !!(prevIni && prevFim && ds >= prevIni && ds <= prevFim);
   let inReal = !!(realIni && realFim && ds >= realIni && ds <= realFim);
+  const passou = dia.getTime() <= hoje.getTime();
   // Auto-derivação: sem datas reais explícitas, usa o avanço semanal do FC
-  // como sinal de "executado". Cobre dois cenários:
-  //  • Avanço lançado nesta semana → dias previstos da semana viram verdes.
+  // como sinal de "executado". Cobre três cenários:
+  //  • Avanço lançado nesta semana DENTRO do envelope previsto → dias
+  //    previstos da semana viram verdes (caminho original).
   //  • Acumulado ≥ 100% → toda a janela prevista (até hoje) vira verde,
   //    inclusive em semanas anteriores que ainda não tinham real.
-  if (!inReal && !(realIni && realFim) && inPrev) {
-    if (temAvancoNaSemana) inReal = true;
-    else if (acumPctAteSemana >= 100 && dia.getTime() <= hoje.getTime()) inReal = true;
+  //  • Rev. 1677 — Avanço lançado em atividade ANTECIPADA / NÃO PROGRAMADA
+  //    (sem inPrev no dia): pinta dias úteis já passados da semana. Como
+  //    ds < prevIni, o branch abaixo já cuida de pintar LARANJA (antecipado);
+  //    quando não há prevIni no horizonte, cai em AMARELO (não programado).
+  if (!inReal && !(realIni && realFim)) {
+    if (inPrev) {
+      if (temAvancoNaSemana) inReal = true;
+      else if (acumPctAteSemana >= 100 && passou) inReal = true;
+    } else if (temAvancoNaSemana && passou && ehUtil) {
+      inReal = true;
+    }
   }
-  const passou = dia.getTime() <= hoje.getTime();
 
   // Faixa superior (PREVISTO)
   let top: string | null = null;
@@ -202,15 +211,53 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   // Filtra atividades que tocam a semana (previsto OU real dentro do range)
   const semIniStr = dias.length ? dateStr(dias[0]) : "";
   const semFimStr = dias.length ? dateStr(dias[dias.length - 1]) : "";
+
+  // Rev. 1677 — Carrega avanços ANTES do filtro pra detectar antecipadas
+  // (atividades cujo previsto começa no futuro mas o engenheiro já lançou
+  // avanço nesta semana). Antes da Rev. 1677 essas atividades sumiam da
+  // tabela LOTUS — agora aparecem com a barra inferior LARANJA conforme
+  // a legenda da gerenciadora (SERVIÇO EXECUTADO ANTECIPADAMENTE).
+  const { data: avancosLista = [] } = trpc.planejamento.listarAvancos.useQuery(
+    { projetoId, revisaoId },
+    { enabled: !!projetoId && !!revisaoId },
+  );
+  const avancosPorAtv = useMemo(() => {
+    const idx = new Map<number, any[]>();
+    for (const av of (avancosLista as any[])) {
+      const arr = idx.get(av.atividadeId) ?? [];
+      arr.push(av);
+      idx.set(av.atividadeId, arr);
+    }
+    return idx;
+  }, [avancosLista]);
+  // Set de atividadeIds que tiveram avanço lançado nesta semana (semana ISO
+  // do registro está no campo `semana` de planejamento_avancos).
+  const temAvSemPorAtv = useMemo(() => {
+    const s = new Set<number>();
+    if (!semIniStr) return s;
+    for (const av of (avancosLista as any[])) {
+      const sem = String(av.semana ?? "").slice(0, 10);
+      if (sem >= semIniStr && sem <= semFimStr) {
+        const pct = parseFloat(String(av.percentualSemanal ?? "0")) || 0;
+        if (pct > 0) s.add(av.atividadeId);
+      }
+    }
+    return s;
+  }, [avancosLista, semIniStr, semFimStr]);
+
   const atividadesDaSemana = useMemo(() => {
     if (!semIniStr) return [];
     return atividades.filter((a) => {
       if (a.isGrupo) return false; // só folhas com data
       const tocaPrev = a.dataInicio && a.dataFim && !(a.dataFim < semIniStr || a.dataInicio > semFimStr);
       const tocaReal = a.dataInicioReal && a.dataFimReal && !(a.dataFimReal < semIniStr || a.dataInicioReal > semFimStr);
-      return tocaPrev || tocaReal;
+      // Rev. 1677 — Antecipada: previsto inteiramente no futuro (dataInicio
+      // > semFim) mas com avanço lançado nesta semana. Inclui na tabela pra
+      // a barra inferior aparecer LARANJA (executado antecipadamente).
+      const antecipadaComAvanco = !!a.dataInicio && a.dataInicio > semFimStr && temAvSemPorAtv.has(a.id);
+      return tocaPrev || tocaReal || antecipadaComAvanco;
     });
-  }, [atividades, semIniStr, semFimStr]);
+  }, [atividades, semIniStr, semFimStr, temAvSemPorAtv]);
 
   // Agrupa por EAP-pai (nivel 1 = grupo principal, nivel 2 = subgrupo)
   // Mostra cabeçalhos de grupo na ordem hierárquica.
@@ -260,20 +307,8 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   // a literatura (Ballard, Lean Construction Institute) trata semana como
   // unidade de compromisso. As cores das células diárias usam a aderência da
   // SEMANA (não do dia individual).
-  const { data: avancosLista = [] } = trpc.planejamento.listarAvancos.useQuery(
-    { projetoId, revisaoId },
-    { enabled: !!projetoId && !!revisaoId },
-  );
-  // Index de avanços por atividadeId — evita O(atv × avancos) no loop abaixo.
-  const avancosPorAtv = useMemo(() => {
-    const idx = new Map<number, any[]>();
-    for (const av of (avancosLista as any[])) {
-      const arr = idx.get(av.atividadeId) ?? [];
-      arr.push(av);
-      idx.set(av.atividadeId, arr);
-    }
-    return idx;
-  }, [avancosLista]);
+  // (Rev. 1677: avancosLista/avancosPorAtv subiram para o bloco do filtro
+  //  atividadesDaSemana — uma única chamada de hook).
 
   const metricas = useMemo(() => {
     const out = new Map<number, { metaPct: number; realPct: number; aderenciaPct: number | null; acumPct: number; somaSemanal: number }>();
@@ -333,9 +368,16 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   //                                                     ser verde).
   //   • Atrasado / Não exec.                  → VERMELHO
   //   • Sem meta (fora da janela cobrável)    → CINZA neutro.
-  const statusLabel = (m: { metaPct: number; realPct: number; aderenciaPct: number | null; acumPct: number; somaSemanal: number } | undefined) => {
+  // Rev. 1677 — Detecta atividade ANTECIPADA: previsto começa depois do fim
+  // da semana atual e há avanço lançado na semana. Status separado em laranja
+  // (mesma cor da barra inferior — paridade com a legenda da gerenciadora).
+  const isAntecipada = (a: Atividade): boolean => {
+    return !!a.dataInicio && !!semFimStr && a.dataInicio > semFimStr && temAvSemPorAtv.has(a.id);
+  };
+  const statusLabel = (m: { metaPct: number; realPct: number; aderenciaPct: number | null; acumPct: number; somaSemanal: number } | undefined, antecipada = false) => {
     if (!m) return { txt: "—", cls: "text-slate-400" };
     if (m.acumPct >= 100) return { txt: "Concluída", cls: "text-emerald-700 font-bold bg-emerald-50" };
+    if (antecipada) return { txt: "Antecipada", cls: "text-orange-700 font-bold bg-orange-50" };
     if (m.metaPct <= 0)  return { txt: "Sem meta", cls: "text-slate-500" };
     if (m.aderenciaPct == null) return { txt: "—", cls: "text-slate-400" };
     if (m.aderenciaPct >= ADERENCIA_THRESHOLD) return { txt: "No prazo", cls: "text-blue-700 font-bold bg-blue-50" };
@@ -346,7 +388,8 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     const m = metricas.get(a.id);
     if (!m) return a.nome;
     const aderTxt = m.aderenciaPct == null ? "—" : `${m.aderenciaPct.toFixed(0)}%`;
-    return `${a.nome}\nMeta semanal: ${fmtPct1(m.metaPct)}\nRealizado na semana: ${fmtPct1(m.realPct)}\nAderência: ${aderTxt}\nAcumulado: ${fmtPct1(m.acumPct)}`;
+    const antPrefix = isAntecipada(a) ? "🚀 ANTECIPADA — previsto começa em " + fmtBR(a.dataInicio) + "\n" : "";
+    return `${antPrefix}${a.nome}\nMeta semanal: ${fmtPct1(m.metaPct)}\nRealizado na semana: ${fmtPct1(m.realPct)}\nAderência: ${aderTxt}\nAcumulado: ${fmtPct1(m.acumPct)}`;
   };
 
   const handleExportExcel = async () => {
@@ -416,7 +459,8 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         } else {
           const a = l.ativ;
           const m = metricas.get(a.id);
-          const st = statusLabel(m);
+          const ant = isAntecipada(a);
+          const st = statusLabel(m, ant);
           const metaPrevTxt = m && m.metaPct > 0 ? fmtPct1(m.metaPct) : "—";
           const metaRealTxt = m && (m.realPct > 0 || m.metaPct > 0) ? fmtPct1(m.realPct) : "—";
           const metaDeltaTxt = (() => {
@@ -646,11 +690,22 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                 const a = l.ativ;
                 const m = metricas.get(a.id);
                 const tip = tooltipAtiv(a);
-                const st = statusLabel(m);
+                const ant = isAntecipada(a);
+                const st = statusLabel(m, ant);
                 return (
-                  <tr key={`a-${a.id}`} className="hover:bg-blue-50/40">
+                  <tr key={`a-${a.id}`} className={`hover:bg-blue-50/40 ${ant ? "bg-orange-50/40" : ""}`}>
                     <td className="border border-slate-300 px-1 py-1 text-center text-slate-700">{a.eapCodigo}</td>
-                    <td className="border border-slate-300 px-2 py-1 text-slate-800" title={tip}>{a.nome}</td>
+                    <td className="border border-slate-300 px-2 py-1 text-slate-800" title={tip}>
+                      {ant && (
+                        <span
+                          title={`Atividade antecipada: previsto começa em ${fmtBR(a.dataInicio)}, mas houve avanço nesta semana.`}
+                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 mr-1.5 rounded-full bg-orange-100 text-orange-700 text-[9px] font-bold ring-1 ring-orange-200 align-middle"
+                        >
+                          🚀 ANTECIPADA
+                        </span>
+                      )}
+                      {a.nome}
+                    </td>
                     <td className="border border-slate-300 px-1 py-1 text-center text-slate-700 whitespace-nowrap">
                       {a.dataInicio ? fmtBR(a.dataInicio).slice(0, 5) + "-" + fmtBR(a.dataInicio).slice(8) : "—"}
                     </td>
