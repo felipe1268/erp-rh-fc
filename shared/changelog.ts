@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1696,
+    titulo: "Empresas Terceiras — Cadastro de nova empresa retornava 'Sem acesso a esta empresa' para role 'admin'",
+    descricao: "Reportado: ao tentar cadastrar uma nova empresa terceira (Nova Empresa Terceira → Salvar), aparecia toast de erro 'Sem acesso a esta empresa.' mesmo com a tela de listagem abrindo normalmente. Causa: `getCompaniesForUser` em `server/db.ts` ~L188 só dava bypass de permissão para role `admin_master`; o role `admin` caía no fluxo de `userCompanies` links e, se o usuário não tivesse vínculo explícito na tabela `user_companies` com a empresa selecionada, o `_assertCompanyAccess` em `terceiros.ts` ~L11 bloqueava o create. Inconsistência: `getEffectiveAllowedCompanyIds` ~L260 já tratava `admin` e `admin_master` como acesso global (retorna null = sem restrição) e a procedure `list` de terceiros também não chama `_assertCompanyAccess` (só `companyFilter`), permitindo visualizar a tela mas não criar. Fix: `getCompaniesForUser` agora retorna `getCompanies()` para `role === 'admin' || role === 'admin_master'` — paridade com o resto do sistema. Sem schema change. Afeta também outras mutações que usam `_assertCompanyAccess` (terceiros.empresas.update/delete e qualquer outro consumer de `getCompaniesForUser`).",
+    tipo: "correcao",
+    modulos: "Terceiros / Permissões",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 01:30:00",
+  },
+  {
     version: 1695,
     titulo: "Definir Data de Férias — Campo 'Dias de Gozo' editável (suporte a fracionamento, Art. 134 §1° CLT)",
     descricao: "Solicitado: nem sempre o gozo é de 30 dias direto — pode ser fracionado (até 3 períodos, mín. 5 dias cada, conforme Art. 134 §1° CLT). O campo 'Dias de Gozo' no modal 'Definir Data de Férias' estava `disabled` e fixo no máximo legal (diasDireito − diasAbono). Fix em `client/src/pages/Ferias.tsx` `DefinirFeriasForm` (~L67-82, ~L206-228, ~L193-203): (1) novo `diasMaxGozo = diasDireito − diasAbono` separado do `diasGozo` exibido; `diasGozo` agora prefere `definirForm.diasGozo` se setado e válido (clamp em 1..diasMaxGozo). (2) input perdeu `disabled` + `bg-muted/50`, ganhou onChange que clamp [1, diasMaxGozo], recalcula `dataFim = dataInicio + dias − 1` e atualiza `definirForm`. (3) onChange da Data Início passou a usar o `diasGozo` atual (editável) em vez do máximo. (4) Texto auxiliar abaixo do input mostra máx. permitido + lembrete dos 5 dias mínimos por fração. useEffect de inicialização preservado (reseta para o máximo quando faltas/abono mudam — comportamento padrão). Sem schema change.",

@@ -184,11 +184,17 @@ export async function getConstrutorasIds(): Promise<number[]> {
   return list.map(c => c.id);
 }
 
-// Retorna empresas que o usuário pode ver (admin_master vê todas)
+// Retorna empresas que o usuário pode ver (admin_master e admin veem todas)
 export async function getCompaniesForUser(userId: number, role: string) {
   const db = await getDb();
   if (!db) return [];
-  if (role === 'admin_master') {
+  // Rev. 1696 — `admin` também é tratado como acesso global (paridade com
+  // `getEffectiveAllowedCompanyIds` L260 que já retorna null para ambos).
+  // Sem isso, usuários `admin` sem vínculo explícito em `user_companies`
+  // recebiam "Sem acesso a esta empresa" em mutações que chamam
+  // `_assertCompanyAccess` (ex.: terceiros.empresas.create), mesmo conseguindo
+  // listar/visualizar normalmente (pois list não tem o check).
+  if (role === 'admin_master' || role === 'admin') {
     return getCompanies();
   }
   const links = await db.select({ companyId: userCompanies.companyId })
