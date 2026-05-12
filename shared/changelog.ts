@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1695,
+    titulo: "Definir Data de Férias — Campo 'Dias de Gozo' editável (suporte a fracionamento, Art. 134 §1° CLT)",
+    descricao: "Solicitado: nem sempre o gozo é de 30 dias direto — pode ser fracionado (até 3 períodos, mín. 5 dias cada, conforme Art. 134 §1° CLT). O campo 'Dias de Gozo' no modal 'Definir Data de Férias' estava `disabled` e fixo no máximo legal (diasDireito − diasAbono). Fix em `client/src/pages/Ferias.tsx` `DefinirFeriasForm` (~L67-82, ~L206-228, ~L193-203): (1) novo `diasMaxGozo = diasDireito − diasAbono` separado do `diasGozo` exibido; `diasGozo` agora prefere `definirForm.diasGozo` se setado e válido (clamp em 1..diasMaxGozo). (2) input perdeu `disabled` + `bg-muted/50`, ganhou onChange que clamp [1, diasMaxGozo], recalcula `dataFim = dataInicio + dias − 1` e atualiza `definirForm`. (3) onChange da Data Início passou a usar o `diasGozo` atual (editável) em vez do máximo. (4) Texto auxiliar abaixo do input mostra máx. permitido + lembrete dos 5 dias mínimos por fração. useEffect de inicialização preservado (reseta para o máximo quando faltas/abono mudam — comportamento padrão). Sem schema change.",
+    tipo: "melhoria",
+    modulos: "RH/Férias",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 00:50:00",
+  },
+  {
     version: 1694,
     titulo: "Férias Vencidas — Tag 'Direito de férias perdido' para afastados há mais de 180 dias (CLT Art. 133, IV)",
     descricao: "Solicitado: colaboradores com mais de 180 dias contínuos de afastamento perdem o direito às férias do período aquisitivo correspondente (CLT Art. 133, IV — auxílio-doença/INSS por mais de 6 meses). Era preciso uma tag visual nos cards de Férias Vencidas para o RH não confirmar pagamento de quem perdeu o direito. Fix em 2 camadas: (1) Server `listarVencidas` em `avisoPrevioFerias.ts` ~L3329-L3380 — passou a expor `status`, `licencaDataInicio` e `licencaTipo` do funcionário; calcula `diasAfastado` (today − licencaDataInicio em dias, quando status ∈ ['Afastado','Licenca','Licença'] e há licencaDataInicio) e flag derivada `perdeuFeriasPorAfastamento = diasAfastado >= 180` no objeto `employee` agrupado. (2) Client `Ferias.tsx` ~L1303-L1317 — quando a flag é true, renderiza badge rosa (AlertTriangle + texto 'Direito de férias perdido — afastado há N dias (Art. 133, IV CLT)') ao lado do nome no card de Férias Vencidas, com tooltip explicando a regra legal e que a contagem reinicia após o retorno. Sem schema change — usa campos já existentes em `employees` (`licencaDataInicio`, `licencaTipo`).",

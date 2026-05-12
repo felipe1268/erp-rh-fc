@@ -66,7 +66,12 @@ function DefinirFeriasForm({ definirItem, definirForm, setDefinirForm, companyId
   const faltas = faltasQuery.data;
   const diasDireito = faltas?.diasDireito ?? 30;
   const diasAbono = definirForm.abonoPecuniario === 1 ? Math.floor(diasDireito / 3) : 0;
-  const diasGozo = diasDireito - diasAbono;
+  const diasMaxGozo = diasDireito - diasAbono;
+  // Rev. 1695 — Dias de Gozo agora é editável (CLT permite fracionamento, Art. 134 §1°).
+  // Quando o usuário não digitou nada ainda, usa o máximo legal como default.
+  const diasGozo = (typeof definirForm.diasGozo === "number" && definirForm.diasGozo > 0)
+    ? Math.min(definirForm.diasGozo, diasMaxGozo)
+    : diasMaxGozo;
 
   useEffect(() => {
     if (faltas && !faltas.perdeuDireito) {
@@ -192,7 +197,7 @@ function DefinirFeriasForm({ definirItem, definirForm, setDefinirForm, companyId
               <label className="text-sm font-medium">Data Início *</label>
               <Input type="date" value={definirForm.dataInicio || ""} onChange={e => {
                 const inicio = e.target.value;
-                const dias = diasGozo;
+                const dias = diasGozo; // Rev. 1695 — usa o valor atual (editável) em vez do máximo
                 let fim = "";
                 if (inicio) {
                   const d = new Date(inicio + "T00:00:00");
@@ -204,10 +209,28 @@ function DefinirFeriasForm({ definirItem, definirForm, setDefinirForm, companyId
             </div>
             <div>
               <label className="text-sm font-medium">Dias de Gozo</label>
-              <Input type="number" min={1} max={diasDireito} value={diasGozo} disabled className="bg-muted/50" />
+              {/* Rev. 1695 — campo editável: permite fracionamento (Art. 134 §1° CLT). Data Fim recalcula automaticamente. */}
+              <Input
+                type="number"
+                min={1}
+                max={diasMaxGozo}
+                value={diasGozo}
+                onChange={e => {
+                  const raw = parseInt(e.target.value || "0", 10);
+                  const dias = Math.max(1, Math.min(isNaN(raw) ? 1 : raw, diasMaxGozo));
+                  let fim = "";
+                  if (definirForm.dataInicio) {
+                    const d = new Date(definirForm.dataInicio + "T00:00:00");
+                    d.setDate(d.getDate() + dias - 1);
+                    fim = d.toISOString().slice(0, 10);
+                  }
+                  setDefinirForm({ ...definirForm, diasGozo: dias, dataFim: fim });
+                }}
+              />
               {diasDireito < 30 && (
                 <p className="text-[10px] text-amber-600 mt-0.5">Reduzido de 30 para {diasDireito} dias (Art. 130)</p>
               )}
+              <p className="text-[10px] text-muted-foreground mt-0.5">Máx. permitido: {diasMaxGozo} dias{definirForm.abonoPecuniario === 1 ? ` (após abono de ${diasAbono})` : ""}. Mín. 5 dias por fração (Art. 134 §1°).</p>
             </div>
             <div>
               <label className="text-sm font-medium">Data Fim <span className="text-xs text-muted-foreground font-normal">(calculada)</span></label>
