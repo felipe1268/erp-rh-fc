@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, FileSpreadsheet, Printer, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, FileSpreadsheet, Printer, ChevronLeft, ChevronRight, AlertTriangle, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { parseCalendarioJson, ehDiaUtil, diasUteisEntre, type CalendarioMSProject } from "@shared/diasUteis";
 
@@ -402,6 +402,41 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     }
     return out;
   }, [atividadesDaSemana, avancosPorAtv, semIniStr, semFimStr, calMSP, hoje]);
+
+  // Rev. 1680 — Análise da semana: caminho crítico (CPM) + maior peso (Top 3).
+  // Replica a lógica do `pesoSemana` da aba Padrão FC (`ProgramacaoSemanal.tsx` ~L641):
+  //  • float = (projectEnd − dataFim) em dias corridos. ≤0 = crítica, ≤14 = quase crítica.
+  //  • maiorPeso = Top 3 por contribuição em pp na semana (= metaPct, que já
+  //    é peso financeiro × fração da janela semanal). Filtra contribuições > 0.
+  // projectEnd = maior dataFim de TODAS as atividades do projeto (folhas).
+  const analiseSemana = useMemo(() => {
+    const folhas = atividades.filter((a) => !a.isGrupo && a.dataFim);
+    const projectEndStr = folhas
+      .map((a) => a.dataFim!)
+      .filter(Boolean)
+      .sort()
+      .pop();
+    const projectEndMs = projectEndStr ? new Date(projectEndStr + "T12:00:00").getTime() : 0;
+    const criticasIds = new Set<number>();
+    const quaseCriticasIds = new Set<number>();
+    const contribById = new Map<number, number>();
+    for (const a of atividadesDaSemana) {
+      const fimMs = a.dataFim ? new Date(a.dataFim + "T12:00:00").getTime() : 0;
+      const float = (projectEndMs && fimMs)
+        ? Math.round((projectEndMs - fimMs) / 86400000)
+        : 999;
+      if (float <= 0) criticasIds.add(a.id);
+      else if (float <= 14) quaseCriticasIds.add(a.id);
+      const m = metricas.get(a.id);
+      if (m && m.metaPct > 0) contribById.set(a.id, m.metaPct);
+    }
+    const top3 = Array.from(contribById.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+    const maiorPesoIds = new Set<number>(top3.map(([id]) => id));
+    const maiorPesoOrder = new Map<number, number>(top3.map(([id], idx) => [id, idx + 1]));
+    return { criticasIds, quaseCriticasIds, maiorPesoIds, maiorPesoOrder, contribById };
+  }, [atividades, atividadesDaSemana, metricas]);
 
   // Rev. 1679 — Totalização da semana (Prev / Real / Δ).
   // Soma simples das colunas META SEMANAL — cada linha já está em pp do
