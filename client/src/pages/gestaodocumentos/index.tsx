@@ -85,10 +85,15 @@ const ART_STATUS: Record<string, { label: string; color: string }> = {
   cancelada: { label: "Cancelada", color: "bg-gray-200 text-gray-600" },
 };
 
+// Rev. 1686 — DOC removido da whitelist a pedido do usuário: a subpasta DOC
+// passa a aceitar QUALQUER tipo de arquivo (sem restrição de extensão).
+// Como `getAcceptForSubpasta` retorna undefined quando a chave não existe e
+// `isExtensionAllowed` retorna true no mesmo caso, basta omitir DOC daqui
+// para liberar geral. A regra de paridade DWG↔PDF (versão) já não tocava
+// DOC, então não há mudança em validação de versão.
 const SUBPASTA_EXTENSIONS: Record<string, string[]> = {
   DWG: [".dwg", ".dxf"],
   PDF: [".pdf"],
-  DOC: [".doc", ".docx"],
   IFC: [".ifc"],
   REVIT: [".rvt", ".rfa"],
   SKP: [".skp"],
@@ -1520,7 +1525,7 @@ export default function GestaoDocumentos() {
                     type="file"
                     multiple
                     className="hidden"
-                    accept={getAcceptForSubpasta(selectedSubpasta) || ".pdf,.dwg,.dxf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rvt,.ifc"}
+                    accept={selectedSubpasta?.toUpperCase() === "DOC" ? undefined : (getAcceptForSubpasta(selectedSubpasta) || ".pdf,.dwg,.dxf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rvt,.ifc")}
                     onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleBatchUpload(e.target.files); }}
                   />
                   {selectedSubpasta && (documentos.data || []).length > 0 && (
@@ -2044,7 +2049,7 @@ export default function GestaoDocumentos() {
                 ref={fileInputRef}
                 type="file"
                 className="hidden"
-                accept={getAcceptForSubpasta(selectedSubpasta) || ".pdf,.dwg,.dxf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rvt,.ifc"}
+                accept={selectedSubpasta?.toUpperCase() === "DOC" ? undefined : (getAcceptForSubpasta(selectedSubpasta) || ".pdf,.dwg,.dxf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rvt,.ifc")}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) {

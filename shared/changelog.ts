@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1686,
+    titulo: "Proj./Doc. Técnicos — Subpasta DOC aceita qualquer tipo de arquivo (sem regra de versão)",
+    descricao: "Solicitado: a subpasta DOC dentro de cada disciplina (ARQ, ELE, EST, HID, TOP) deve funcionar como uma pasta livre — aceitar QUALQUER tipo de arquivo (não só .doc/.docx) e sem regra de paridade/verificação de versão. Antes: `SUBPASTA_EXTENSIONS.DOC = ['.doc','.docx']` em `client/src/pages/gestaodocumentos/index.tsx` ~L91 limitava o `<input accept>` e o `isExtensionAllowed()` rejeitava qualquer outra extensão. Fix: remover a chave DOC do mapa. Como `getAcceptForSubpasta` retorna `undefined` quando a subpasta não está mapeada, o input cai no fallback genérico (que já lista `.pdf,.dwg,.dxf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rvt,.ifc`) — e como `isExtensionAllowed` retorna `true` quando não há lista, qualquer extensão passa. Versão (revMismatch) só compara DWG↔PDF; DOC nunca foi tocado por essa regra, então não há mudança de validação de versão. Servidor (`server/routers/gestaodocumentos.ts`) não tinha whitelist de extensões — só client. Sem schema change, sem migração, sem mudança em outras subpastas (DWG, PDF, IFC, REVIT, SKP, XLS, FOTOS, BIM, MEMORIAIS continuam restritas).",
+    tipo: "melhoria",
+    modulos: "Proj./Doc. Técnicos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-12 19:00:00",
+  },
+  {
     version: 1685,
     titulo: "Portal do Cliente — Programação Semanal LOTUS: colunas Real (Início/Fim) + barra verde de execução agora preenchidas",
     descricao: "Reportado: após Rev. 1683 (avanços/Acumulado OK), o LOTUS do Portal ainda divergia visualmente do módulo Planejamento — as colunas Real Início e Real Fim de cada atividade exibiam '—' (no Planejamento mostravam 04/05/2026 / 07/05/2026) e as células diárias só pintavam a barra azul (Previsto), faltando a barra verde de Realizado e o status Concluída/No prazo. Causa: a serialização de atividades em `server/routers/portalExterno.ts cliente.planejamentoObra` ~L2017-2037 não incluía os campos `dataInicioReal`, `dataFimReal` e `responsavelLotus` da tabela `planejamento_atividades`. A query `db.select().from(planejamentoAtividades)` os carregava do banco, mas o `.map()` que monta o payload os omitia. Resultado: no client, `a.dataInicioReal && a.dataFimReal` era falsy → `tocaReal=false` em `atividadesDaSemana` (~L285) → barra verde não renderizada e `<RealDateCell>` exibia botão vazio ('—'). Fix: adicionar `dataInicioReal: _toDateStr(a.dataInicioReal)`, `dataFimReal: _toDateStr(a.dataFimReal)` e `responsavelLotus: a.responsavelLotus ?? null` ao payload. `_toDateStr(null)` retorna '' (string vazia), que é falsy em JS — preserva semântica do nullable original sem quebrar `tocaReal`. Para atividades já com data real lançada, agora o Portal mostra a coluna preenchida (dd/MM/aaaa via fmtBR) e a barra verde nas células do período executado, espelhando 100% o módulo Planejamento. Sem schema change, sem query nova.",
