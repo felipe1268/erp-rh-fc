@@ -319,7 +319,13 @@ export default function PainelRH() {
                 const avisosValidos = homeData!.avisosPrevios.filter((a: any) => a.nome && a.nome !== 'Funcionário' && a.nome !== 'Funcionário excluído');
                 const emAndamento = avisosValidos.filter((a: any) => a.urgencia !== 'aguardando_pagamento');
                 const aguardandoPgto = avisosValidos.filter((a: any) => a.urgencia === 'aguardando_pagamento');
-                const totalValorEstimado = avisosValidos.reduce((acc: number, a: any) => acc + (parseFloat(a.valorEstimado) || 0), 0);
+                const totalValorEstimado = avisosValidos.reduce((acc: number, a: any) => {
+                  const saldo = a.saldoPendente != null
+                    ? (parseFloat(a.saldoPendente) || 0)
+                    : Math.max(0, (parseFloat(a.valorEstimado) || 0) - (parseFloat(a.valorPago) || 0));
+                  return acc + saldo;
+                }, 0);
+                const totalJaPago = avisosValidos.reduce((acc: number, a: any) => acc + (parseFloat(a.valorPago) || 0), 0);
                 return avisosValidos.length > 0 && (
                 <Card className="border-2 border-red-300 bg-gradient-to-r from-red-50 to-orange-50">
                   <CardHeader className="pb-2">
@@ -333,11 +339,16 @@ export default function PainelRH() {
                       </CardTitle>
                       <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => navigate('/aviso-previo')}>Ver todos <ChevronRight className="h-3 w-3 ml-1" /></Button>
                     </div>
-                    {canSeeValues && totalValorEstimado > 0 && (
-                      <div className="mt-2 flex items-center gap-2 bg-red-100/60 rounded-lg px-3 py-2">
+                    {canSeeValues && (totalValorEstimado > 0 || totalJaPago > 0) && (
+                      <div className="mt-2 flex items-center gap-2 bg-red-100/60 rounded-lg px-3 py-2 flex-wrap">
                         <DollarSign className="h-4 w-4 text-red-600" />
                         <span className="text-xs text-red-700">Desembolso pendente (sem baixa):</span>
                         <span className="text-sm font-bold text-red-700">R$ {totalValorEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        {totalJaPago > 0 && (
+                          <span className="text-[11px] text-emerald-700 ml-2">
+                            (já baixado: R$ {totalJaPago.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                          </span>
+                        )}
                       </div>
                     )}
                   </CardHeader>

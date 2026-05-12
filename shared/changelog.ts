@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1708,
+    titulo: "Painel RH — 'Desembolso pendente (sem baixa)' agora desconta baixas parciais (Rescisão + FGTS + Complementar)",
+    descricao: "Reportado: após dar baixa PARCIAL em alguns Avisos Prévios (ex.: só rescisão paga, FGTS pendente), o card 'Avisos Prévios em Andamento' do Painel RH continuava exibindo o `valorEstimadoTotal` integral em 'Desembolso pendente (sem baixa)' — não refletia o que já tinha sido pago. Causa: `homeData.ts` ~L527-563 expunha apenas `valorEstimado: a.valorEstimadoTotal`, ignorando os 3 campos de baixa do schema (`baixaRescisaoValor`, `baixaFgtsValor`, `baixaComplementarValor`). Fix em 2 camadas: (1) Server `homeData.ts` no `.map()` calcula `valorPago = baixaR + baixaF + baixaC` e `saldoPendente = max(0, valorEstimado - valorPago)`, expondo ambos no payload (+ os 3 valores brutos para detalhe futuro). (2) Cliente `PainelRH.tsx` ~L322 muda `totalValorEstimado` pra somar `saldoPendente` (com fallback para o cálculo local quando server antigo) e adiciona `totalJaPago`. Card no header ~L345 mostra '(já baixado: R$ X)' em verde ao lado do desembolso pendente. Sem schema change, sem mudança em endpoints — só leitura/exibição.",
+    tipo: "fix",
+    modulos: "RH/Aviso Prévio",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 10:00:00",
+  },
+  {
     version: 1707,
     titulo: "Medições PJ — Modo de cálculo 'Por Percentual' (mensal) ao lado de 'Por Horas'",
     descricao: "Solicitado: contratos PJ com `valorMensal` cadastrado precisam permitir medição por percentual (adiantamento, fechamento, parcial), não só por horas × R$/h. Implementação SEM schema change em `client/src/pages/PJMedicoes.tsx`: (1) Form ganhou `tipoMedicao: 'horas' | 'percentual'` + `percentual: string`. (2) Toggle 'Por Horas / Por Percentual (mensal)' no diálogo, acima dos inputs. (3) Modo Percentual mostra: input de % + display read-only do `valorMensal` do contrato selecionado + card 'Total Calculado' = (pct/100) × valorMensal. (4) Validações: pct>0 e valorMensal>0 — mensagens de erro específicas. (5) No `criarMut.mutate`, modo percentual envia `horasTrabalhadas='1'` + `valorHora=total` (math consistente com schema NOT NULL existente) e PREPENDA marker `[MEDIÇÃO POR PERCENTUAL — X% × R$ Y mensal]` em `observacoes`. (6) Listagem (~L308) e diálogo de detalhes (~L388) detectam o marker via `isMedicaoPercentual()` e renderizam badge violeta '%' + 'X% × R$ Y mensal' no lugar de 'Xh trabalhadas · R$ Y/h'. Servidor (`server/routers/pjMedicoes.ts`) inalterado — valorBruto/valorLiquido seguem como fonte de verdade financeira.",

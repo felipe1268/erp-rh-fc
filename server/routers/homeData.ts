@@ -530,6 +530,12 @@ export const homeDataRouter = router({
         const dataFim = new Date(dataFimStr + 'T00:00:00');
         const diasRestantes = Math.ceil((dataFim.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
         const aguardando = a.status === 'aguardando_pagamento';
+        const baixaR = parseFloat(String((a as any).baixaRescisaoValor ?? '0')) || 0;
+        const baixaF = parseFloat(String((a as any).baixaFgtsValor ?? '0')) || 0;
+        const baixaC = parseFloat(String((a as any).baixaComplementarValor ?? '0')) || 0;
+        const valorPago = baixaR + baixaF + baixaC;
+        const valorEstimadoNum = parseFloat(String(a.valorEstimadoTotal ?? '0')) || 0;
+        const saldoPendente = Math.max(0, valorEstimadoNum - valorPago);
         return {
           id: a.id,
           employeeId: a.employeeId,
@@ -541,6 +547,11 @@ export const homeDataRouter = router({
           dataFim: dataFimStr,
           diasRestantes,
           valorEstimado: a.valorEstimadoTotal,
+          valorPago: valorPago.toFixed(2),
+          saldoPendente: saldoPendente.toFixed(2),
+          baixaRescisaoValor: (a as any).baixaRescisaoValor || null,
+          baixaFgtsValor: (a as any).baixaFgtsValor || null,
+          baixaComplementarValor: (a as any).baixaComplementarValor || null,
           dataLimitePagamento: (() => {
             try {
               const prev = JSON.parse(a.previsaoRescisao || '{}');
