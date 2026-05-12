@@ -304,7 +304,7 @@ ${a.tipoAdvertencia === "Advertencia" ? `
   <span class="num-badge">${a.sequencia || 1}ª MEDIDA</span>
 </div>` : `
 <div class="logo-bar">
-  <img src="${window.location.origin}/logo-fc-branco-amarelo.png" alt="FC Engenharia" />
+  <img src="${window.location.origin}/logo-fc-branco-amarelo.png?v=1712" alt="FC Engenharia" />
   <div class="title"><h1>${tipo.titulo}</h1><p>À empresa prestadora de serviços e ao colaborador terceirizado</p></div>
   <span class="num-badge">${a.sequencia || 1}ª MEDIDA</span>
 </div>`}

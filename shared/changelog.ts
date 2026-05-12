@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1712,
+    titulo: "Documentos com cabeçalho azul — Cache-buster no logo branco/amarelo (forçar recarga após Rev. 1710)",
+    descricao: "Reportado: mesmo após Rev. 1710 ter substituído o `logoUrl` antigo (versão dark sobre fundo branco) pelo novo `/logo-fc-branco-amarelo.png` (PNG transparente RGBA com alpha 0 nas bordas, confirmado), o navegador continuava exibindo o logo antigo com fundo branco dentro da barra azul — cache do iframe `srcDoc` (Advertência Terceiros, Advertência interna em Controle de Documentos, Raio-X). Fix: anexado query string `?v=1712` em todas as 5 referências para invalidar cache HTTP/iframe. Arquivos: `AdvertenciasTerceiros.tsx` (L307), `RaioXFuncionario.tsx` (L344), `ControleDocumentos.tsx` (L2612 PDF, L3554 PDF, L3608 preview React). Sem schema change, sem mudança de lógica — apenas cache-busting de asset.",
+    tipo: "fix",
+    modulos: "Documentos/Brand",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 14:00:00",
+  },
+  {
     version: 1711,
     titulo: "Advertências para Terceiros — Fonte do PDF aumentada para tamanho padrão (legibilidade)",
     descricao: "Reportado: o PDF da Advertência Formal de Terceiros vinha com fonte muito pequena, dificultando leitura — corpo 12.5px (~9.4pt) e bloco de partes 11.5px. Fix em `client/src/pages/terceiros/AdvertenciasTerceiros.tsx` (CSS do template HTML do PDF, ~L276-301): body 12.5px → 14px (~10.5pt, padrão de documentos jurídicos); `.partes` 11.5px → 13px (line-height 1.5 → 1.55); assinaturas (`.sig-block .line`/`.sig-block-3 .line`) 10px → 11px; footer 8.5px → 9.5px. Header/banner-bar/num-badge mantidos. Sem mudança estrutural — apenas font-size em 5 seletores.",

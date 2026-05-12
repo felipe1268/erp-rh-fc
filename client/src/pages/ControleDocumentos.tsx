@@ -2606,7 +2606,7 @@ export default function ControleDocumentos() {
                                   .footer .lgpd { color: #dc2626; font-weight: 600; }
                                 </style></head><body>
                                 <div class="logo-bar">
-                                  <img src="${window.location.origin}/logo-fc-branco-amarelo.png" alt="FC Engenharia" />
+                                  <img src="${window.location.origin}/logo-fc-branco-amarelo.png?v=1712" alt="FC Engenharia" />
                                   <div class="title"><h1>${tipoTitulo}</h1><p>${nomeEmpresaCompleto}</p></div>
                                   <span class="num-badge">${numAdv}ª MEDIDA</span>
                                 </div>
@@ -3548,7 +3548,7 @@ export default function ControleDocumentos() {
                     .footer .lgpd { color: #dc2626; font-weight: 600; }
                   </style></head><body>
                   <div class="logo-bar">
-                    <img src="${window.location.origin}/logo-fc-branco-amarelo.png" alt="FC Engenharia" />
+                    <img src="${window.location.origin}/logo-fc-branco-amarelo.png?v=1712" alt="FC Engenharia" />
                     <div class="title"><h1>${tipoTitulo}</h1><p>${nomeEmpresaCompleto}</p></div>
                     <span class="num-badge">${numAdv}ª MEDIDA</span>
                   </div>
@@ -3602,7 +3602,7 @@ export default function ControleDocumentos() {
               <div className="max-w-[800px] mx-auto bg-white shadow-xl" style={{ fontFamily: "'Times New Roman', serif" }}>
                 {/* Logo bar */}
                 <div className="bg-[#1e3a6e] p-4 flex items-center gap-4">
-                  <img src="/logo-fc-branco-amarelo.png" alt="FC Engenharia" className="h-14 object-contain" />
+                  <img src="/logo-fc-branco-amarelo.png?v=1712" alt="FC Engenharia" className="h-14 object-contain" />
                   <div className="text-white">
                     <h2 className="text-lg font-bold tracking-widest">{tipoTitulo}</h2>
                     <p className="text-xs text-blue-200">{nomeEmpresaCompleto}</p>
