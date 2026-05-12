@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1716,
+    titulo: "Proj./Doc. Técnicos (Gestão de Documentos) — PDF do 'Relatório Fotográfico' não abria no iPad/Safari (só aparecia título + assinatura)",
+    descricao: "Reportado: ao clicar em 'Visualizar' num PDF (ex.: 'Relatorio fotografico Rev02') no módulo interno Proj./Doc. Técnicos pelo iPad, o visualizador inline mostrava apenas o título 'RELATÓRIO FOTOGRÁFICO TÉCNICO / Imperfeições em Pisos – Nave Norte' no topo e 'Eng. Caio Garufe' no rodapé — toda a área central com as fotos ficava em branco. Causa: em `client/src/pages/gestaodocumentos/index.tsx` ~L2669-2674, o preview usava `<iframe src={arquivoUrl}>` direto. iOS Safari (iPad/iPhone) NÃO pagina PDF dentro de `<iframe>` — renderiza apenas o topo da primeira página em modo estático, sem scroll, e oculta as páginas seguintes (que continham todas as fotos do relatório). É uma limitação histórica conhecida do WebKit. Fix Rev. 1716: trocado por `<object data={arquivoUrl} type=\"application/pdf\">` com fallback 'Abrir em nova aba' (link direto), exatamente o mesmo padrão que o Portal do Cliente já usa desde a Rev. 1641 em `PortalProjDocCliente.tsx` e `PortalRhDocumentosCliente.tsx`. O `<object>` aciona o renderizador de PDF nativo do navegador (incluindo o do iOS Safari, que pagina e mostra imagens), e o fallback cobre Chrome com sandbox restritivo. Mantida a classe `pdf-viewer-frame` (Rev. 1600 — touch-action pinch-zoom). Sem schema change, sem mudança no servidor.",
+    tipo: "bugfix",
+    modulos: "Proj./Doc. Técnicos, Gestão de Documentos, iPad/Safari",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-12 20:30:00",
+  },
+  {
     version: 1715,
     titulo: "Planejamento — tela quebrada com 'Ocorreu um erro inesperado' (pvMacro fora de escopo após Rev. 1713)",
     descricao: "Reportado: a tela de detalhe do Planejamento parou de carregar e exibia 'Ocorreu um erro inesperado' (stack PlanejamentoDetalheInner). Causa: a Rev. 1713 passou a propagar `pvMacro={pvMacro}` para o componente `<Refis>` na JSX de `PlanejamentoDetalheInner` (PlanejamentoDetalhe.tsx ~L1053), porém o `pvMacro` original mora dentro da função `AvancoSemanal` (~L4916) — fora do escopo do Inner. Em runtime, qualquer render do Inner disparava `ReferenceError: pvMacro is not defined`, derrubando a tela inteira (não apenas a aba REFIS). Fix Rev. 1715: replicado bit-a-bit o `useMemo` de `pvMacro` (com `_calMSPInner`, `_projIniIsoInner`, `_projFimIsoInner`) no escopo de `PlanejamentoDetalheInner`, ANTES dos early returns (`loadingProj` / `!proj`), espelhando exatamente a fórmula EVM clássica da Rev. 1646.6 — snapshot Texto11 do MSP quando `refStr === statusDateSnapshot && envOk`, senão `PV(t) = du(início_projeto → t) / du(envelope) × 100`. A versão local em `AvancoSemanal` foi PRESERVADA (qualquer mudança futura na fórmula precisa ser aplicada nos dois lugares — comentário inline já alerta). Sem schema change, sem mudança de cálculo — REFIS volta a bater com top card 'Avanço Físico' e Avanço Semanal exatamente como prometido pela Rev. 1713.",

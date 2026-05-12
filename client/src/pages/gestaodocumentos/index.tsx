@@ -2667,11 +2667,31 @@ export default function GestaoDocumentos() {
           </div>
           <div className="flex-1 overflow-hidden bg-gray-100">
             {previewDoc?.arquivoUrl && /\.pdf$/i.test(previewDoc.arquivoNome || "") && (
-              <iframe
-                src={previewDoc.arquivoUrl}
-                className="w-full h-full min-h-[70vh]"
-                title="Preview PDF"
-              />
+              // Rev. 1716 — iPad/Safari não pagina PDF dentro de <iframe>
+              // (renderiza só o topo da primeira página e ESCONDE as imagens
+              // das páginas seguintes — caso típico do "Relatorio fotografico"
+              // que aparecia só com título e assinatura, sem as fotos). Mesmo
+              // padrão usado pelo Portal do Cliente desde a Rev. 1641:
+              // <object type="application/pdf"> com fallback "Abrir em nova
+              // aba" pra navegadores que bloquearem o plugin.
+              <object
+                data={previewDoc.arquivoUrl}
+                type="application/pdf"
+                className="pdf-viewer-frame w-full h-full min-h-[70vh] bg-white"
+                aria-label={previewDoc.titulo || "Preview PDF"}
+              >
+                <div className="flex flex-col items-center justify-center h-full min-h-[70vh] bg-slate-100 text-slate-700 p-6 text-center gap-3">
+                  <p className="text-sm">Não foi possível exibir o PDF neste navegador.</p>
+                  <a
+                    href={previewDoc.arquivoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition"
+                  >
+                    Abrir em nova aba
+                  </a>
+                </div>
+              </object>
             )}
             {previewDoc?.arquivoUrl && /\.(png|jpg|jpeg|gif|webp)$/i.test(previewDoc.arquivoNome || "") && (
               <div className="flex items-center justify-center h-full min-h-[70vh] p-4">
