@@ -11678,6 +11678,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-12 07:30:00",
   },
   {
+    version: 1706,
+    titulo: "Medições PJ — Diálogo 'Nova Medição' redistribuído (max-w-3xl, grid 3 colunas)",
+    descricao: "Reportado: o diálogo 'Nova Medição PJ' abria estreito (`max-w-md`), forçando barra de rolagem horizontal nos itens do `Select` de Contrato PJ (nomes longos como 'CRISTIANO FIGUEIREDO AUGUSTO — Prestação de serviço para elaboração do orçamento...' eram cortados com scroll lateral) e empilhando todos os campos verticalmente. Fix em `client/src/pages/PJMedicoes.tsx` ~L378-440: (1) `DialogContent` agora `max-w-3xl max-h-[90vh] overflow-y-auto`. (2) Linha 1: grid 3 col → Contrato PJ ocupa 2/3 + Mês Referência 1/3. (3) Linha 2: grid 3 col → Horas, Valor/Hora e card 'Total Calculado' lado a lado (antes Total era linha cheia desperdiçada). (4) `SelectContent` ganhou `max-w-[--radix-select-trigger-width]` + `<span className='truncate'>` nos itens — sem scroll horizontal. (5) Textarea agora `resize-y` (4 linhas). Em mobile (<md) tudo vira 1 coluna. Sem schema change, sem mudança de payload.",
+    tipo: "melhoria",
+    modulos: "RH/Medições PJ",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 09:00:00",
+  },
+  {
     version: 1705,
     titulo: "Contratos PJ e Aditivos — Corpo da cláusula sem itálico (mantém fonte padrão 11pt)",
     descricao: "Reportado: na visualização de Aditivo Contratual (`/terceiros/contratos/aditivo/:id`) o trecho da nova redação da cláusula (caixa azul, ex.: '4.1 O aditivo tem validade de 02 (dois) meses...') aparecia em itálico, o que dificulta a leitura e foge do padrão jurídico. Mesmo problema no contrato original (`/terceiros/contratos/:id/view`) para 'Parágrafo Único'. Fix em 2 pontos: (1) `AditivoPJView.tsx` L205 — removido `italic` do `<p>` que renderiza `cl.novoTexto` dentro da caixa azul. (2) `ContratoPJView.tsx` L296 — removido `italic` do parser de 'Parágrafo Único'. Tamanho de fonte (`text-[11pt]`) e espaçamento (`leading-[1.8]`) preservados — paridade com o restante do documento. Helpers da UI (placeholders 'Nenhuma cláusula', observações de revisão) seguem em itálico — não tocados. Sem schema change.",

@@ -375,7 +375,7 @@ export default function PJMedicoes() {
 
       {/* Dialog Nova Medição */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="w-5 h-5 text-blue-600" />
@@ -383,30 +383,34 @@ export default function PJMedicoes() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label className="text-xs font-medium">Contrato PJ</Label>
-              <Select value={form.contractId ? String(form.contractId) : "none"} onValueChange={v => {
-                const id = Number(v);
-                setForm(p => ({ ...p, contractId: id }));
-              }}>
-                <SelectTrigger className="mt-1.5 h-11"><SelectValue placeholder="Selecione o contrato" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Selecione o contrato</SelectItem>
-                  {contratos?.filter((c: any) => c.status === 'ativo').map((c: any) => {
-                    const nome = c.employeeName || c.razaoSocialPrestador || `Contrato #${c.id}`;
-                    const objeto = c.objetoContrato || c.employeeCargo || 'PJ';
-                    return (
-                      <SelectItem key={c.id} value={String(c.id)}>{nome} — {objeto}</SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="md:col-span-2">
+                <Label className="text-xs font-medium">Contrato PJ</Label>
+                <Select value={form.contractId ? String(form.contractId) : "none"} onValueChange={v => {
+                  const id = Number(v);
+                  setForm(p => ({ ...p, contractId: id }));
+                }}>
+                  <SelectTrigger className="mt-1.5 h-11"><SelectValue placeholder="Selecione o contrato" /></SelectTrigger>
+                  <SelectContent className="max-w-[--radix-select-trigger-width]">
+                    <SelectItem value="none">Selecione o contrato</SelectItem>
+                    {contratos?.filter((c: any) => c.status === 'ativo').map((c: any) => {
+                      const nome = c.employeeName || c.razaoSocialPrestador || `Contrato #${c.id}`;
+                      const objeto = c.objetoContrato || c.employeeCargo || 'PJ';
+                      return (
+                        <SelectItem key={c.id} value={String(c.id)}>
+                          <span className="truncate block max-w-full">{nome} — {objeto}</span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs font-medium">Mês Referência</Label>
+                <Input type="month" value={form.mesReferencia} onChange={e => setForm(p => ({ ...p, mesReferencia: e.target.value }))} className="mt-1.5 h-11" />
+              </div>
             </div>
-            <div>
-              <Label className="text-xs font-medium">Mês Referência</Label>
-              <Input type="month" value={form.mesReferencia} onChange={e => setForm(p => ({ ...p, mesReferencia: e.target.value }))} className="mt-1.5 h-11" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs font-medium">Horas Trabalhadas</Label>
                 <Input value={form.horasTrabalhadas} onChange={e => setForm(p => ({ ...p, horasTrabalhadas: e.target.value }))} className="mt-1.5 h-11" placeholder="0" />
@@ -415,19 +419,17 @@ export default function PJMedicoes() {
                 <Label className="text-xs font-medium">Valor/Hora (R$)</Label>
                 <Input value={form.valorHora} onChange={e => setForm(p => ({ ...p, valorHora: e.target.value }))} className="mt-1.5 h-11" placeholder="0,00" />
               </div>
-            </div>
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-200 flex flex-col justify-center">
+                <div className="flex items-center gap-2 mb-0.5">
                   <DollarSign className="w-4 h-4 text-blue-600" />
                   <span className="text-xs font-medium text-blue-700">Total Calculado</span>
                 </div>
-                <span className="text-xl font-bold text-blue-700">R$ {calcTotal(form.horasTrabalhadas, form.valorHora)}</span>
+                <span className="text-lg font-bold text-blue-700 leading-tight">R$ {calcTotal(form.horasTrabalhadas, form.valorHora)}</span>
               </div>
             </div>
             <div>
               <Label className="text-xs font-medium">Descrição / Observações</Label>
-              <textarea value={form.descricao || ''} onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))} rows={3} className="w-full rounded-lg border border-border bg-input px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring mt-1.5" placeholder="Descreva os serviços prestados..." />
+              <textarea value={form.descricao || ''} onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))} rows={4} className="w-full rounded-lg border border-border bg-input px-3 py-2.5 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-ring mt-1.5" placeholder="Descreva os serviços prestados..." />
             </div>
           </div>
           <DialogFooter className="gap-2">
