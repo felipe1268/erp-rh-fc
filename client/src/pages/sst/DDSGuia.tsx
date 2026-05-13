@@ -175,8 +175,38 @@ export default function DDSGuia() {
   );
   const [showRoteiro, setShowRoteiro] = useState(false);
   const [buscaFunc, setBuscaFunc] = useState("");
+  // Rev. 1731 — sidebar de obras + transferência inline + alerta de acidente D-1
+  const [buscaObra, setBuscaObra] = useState("");
+  const [showTransferir, setShowTransferir] = useState(false);
+  const [buscaTransferir, setBuscaTransferir] = useState("");
+  const candidatosTransferQ = trpc.dds.colaboradoresParaTransferir.useQuery(
+    { companyId, obraId: Number(sessaoForm.obraId) },
+    { enabled: !!companyId && !!sessaoForm.obraId && showTransferir }
+  );
+  const transferirMut = trpc.dds.transferirParaObra.useMutation({
+    onSuccess: (_d, vars) => {
+      toast.success("Colaborador transferido para a obra");
+      // Rev. 1731 fix (architect): usa vars.obraId (não fechamento sessaoForm.obraId)
+      // pra evitar invalidação na obra errada se o usuário trocou de obra durante o request.
+      utils.dds.funcionariosDaObra.invalidate({ companyId, obraId: vars.obraId });
+      utils.dds.colaboradoresParaTransferir.invalidate({ companyId, obraId: vars.obraId });
+      // Auto-marca como presente APENAS se a obra alvo do form continua sendo a mesma da transferência
+      setSessaoForm((s: any) => {
+        if (Number(s.obraId) !== vars.obraId) return s;
+        if (s.funcionarioIds.includes(vars.employeeId)) return s;
+        return { ...s, funcionarioIds: [...s.funcionarioIds, vars.employeeId] };
+      });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  // Acidentes recentes (últimos 7 dias) — D-1 vira alerta vermelho obrigatório
+  const acidentesQ = trpc.dds.acidentesRecentes.useQuery(
+    { companyId, obraId: sessaoForm.obraId ? Number(sessaoForm.obraId) : undefined, diasJanela: 7 },
+    { enabled: !!companyId && showSessao }
+  );
   // Reseta busca/roteiro ao reabrir
-  useEffect(() => { if (showSessao) { setShowRoteiro(false); setBuscaFunc(""); } }, [showSessao]);
+  useEffect(() => { if (showSessao) { setShowRoteiro(false); setBuscaFunc(""); setBuscaObra(""); } }, [showSessao]);
+  useEffect(() => { if (showTransferir) setBuscaTransferir(""); }, [showTransferir]);
 
   const handleSalvarSessao = () => {
     if (!sessaoForm.tituloTema || sessaoForm.tituloTema.length < 3) { toast.error("Informe o título do tema"); return; }
@@ -570,9 +600,9 @@ export default function DDSGuia() {
         </DialogContent>
       </Dialog>
 
-      {/* ===== MODAL: NOVA SESSÃO (Rev. 1730 — redesign com automação) ===== */}
+      {/* ===== MODAL: NOVA SESSÃO (Rev. 1731 — full-screen + sidebar de obras + alerta acidente D-1 + transferir colaborador) ===== */}
       <Dialog open={showSessao} onOpenChange={setShowSessao}>
-        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-0">
+        <DialogContent className="!max-w-[98vw] w-[98vw] h-[95vh] p-0 flex flex-col gap-0 overflow-hidden">
           {(() => {
             const temaSel = temas.find((t: any) => String(t.id) === String(sessaoForm.temaId));
             const corBanner = temaSel?.corCampanha ? corCfg(temaSel.corCampanha) : null;
@@ -589,6 +619,51 @@ export default function DDSGuia() {
                   e.funcao?.toLowerCase().includes(buscaFunc.toLowerCase())
                 )
               : equipeObra;
+            const obrasList = (obrasQ.data as any[]) ?? [];
+            const obrasFiltradas = buscaObra
+              ? obrasList.filter((o: any) => o.nome?.toLowerCase().includes(buscaObra.toLowerCase()))
+              : obrasList;
+            const obraSelObj = obrasList.find((o: any) => String(o.id) === String(sessaoForm.obraId));
+            const acidentesAll = (acidentesQ.data as any[]) ?? [];
+            const acidentesObrigatorios = acidentesAll.filter((a: any) => a.obrigatorio);
+            const fmtData = (iso: string) => {
+              const [y, m, d] = (iso || "").split("-");
+              return d ? `${d}/${m}/${y}` : iso;
+            };
+            const aplicarAcidenteComoTema = (a: any) => {
+              const titulo = `Análise do acidente de ${fmtData(a.dataAcidente)} — ${a.tipoAcidente}`;
+              const conteudo = [
+                `📋 ANÁLISE DO ACIDENTE — DDS OBRIGATÓRIO (Lei art. 157 CLT, NR-1)`,
+                ``,
+                `📅 Data/hora: ${fmtData(a.dataAcidente)}${a.horaAcidente ? ` às ${a.horaAcidente}` : ""}`,
+                a.empNome ? `👤 Colaborador envolvido: ${a.empNome}` : null,
+                a.obraNome ? `🏗️ Obra: ${a.obraNome}` : null,
+                `⚠️ Tipo: ${a.tipoAcidente}`,
+                `🩹 Gravidade: ${a.gravidade}`,
+                a.localAcidente ? `📍 Local: ${a.localAcidente}` : null,
+                a.parteCorpoAtingida ? `🦴 Parte do corpo atingida: ${a.parteCorpoAtingida}` : null,
+                a.agenteCausador ? `🔧 Agente causador: ${a.agenteCausador}` : null,
+                a.diasAfastamento ? `⏱️ Dias de afastamento: ${a.diasAfastamento}` : null,
+                ``,
+                a.descricao ? `📝 DESCRIÇÃO DOS FATOS:\n${a.descricao}` : null,
+                ``,
+                a.acaoCorretiva ? `✅ AÇÃO CORRETIVA / LIÇÕES APRENDIDAS:\n${a.acaoCorretiva}` : null,
+                ``,
+                `🎯 PONTOS A REFORÇAR COM A EQUIPE:`,
+                `- Causa raiz e fatores contribuintes`,
+                `- Procedimento correto a ser seguido`,
+                `- EPIs / medidas de proteção aplicáveis`,
+                `- Como reportar quase-acidentes`,
+              ].filter(Boolean).join("\n");
+              setSessaoForm((s: any) => ({
+                ...s,
+                temaId: "",
+                tituloTema: titulo,
+                conteudoMd: conteudo,
+              }));
+              setShowRoteiro(true);
+              toast.success("Tema preenchido com os dados do acidente");
+            };
             return (
               <>
                 {/* HEADER colorido (cor da campanha quando há tema selecionado) */}
@@ -611,58 +686,174 @@ export default function DDSGuia() {
                   </DialogHeader>
                 </div>
 
-                <div className="px-6 py-5 space-y-5">
-                  {/* BLOCO 1 — QUANDO + ONDE */}
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                    <div className="md:col-span-4">
-                      <label className="text-xs font-medium text-slate-600 flex items-center gap-1">
-                        <CalendarDays className="h-3 w-3" /> Data *
-                      </label>
-                      <Input type="date" value={sessaoForm.data} onChange={e => setSessaoForm({ ...sessaoForm, data: e.target.value })} />
-                      <div className="flex gap-1 mt-1">
-                        <button type="button"
-                          onClick={() => setSessaoForm({ ...sessaoForm, data: hoje })}
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${sessaoForm.data === hoje ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>
-                          Hoje
-                        </button>
-                        <button type="button"
-                          onClick={() => setSessaoForm({ ...sessaoForm, data: ontem })}
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${sessaoForm.data === ontem ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>
-                          Ontem
-                        </button>
+                <div className="flex-1 grid grid-cols-12 overflow-hidden min-h-0">
+                  {/* ====== SIDEBAR: OBRAS (eixo principal — DDS é por obra) ====== */}
+                  <aside className="col-span-12 lg:col-span-3 border-r border-slate-200 bg-slate-50/60 overflow-y-auto p-3 space-y-2">
+                    <div className="sticky top-0 bg-slate-50/95 backdrop-blur pb-2 -mt-3 -mx-3 px-3 pt-3 border-b border-slate-200 z-10">
+                      <div className="text-[10px] font-bold uppercase text-slate-500 tracking-wider mb-1">
+                        Obras ({obrasList.length})
+                      </div>
+                      <div className="relative">
+                        <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-slate-400" />
+                        <Input value={buscaObra} onChange={e => setBuscaObra(e.target.value)}
+                          placeholder="Buscar obra..." className="h-8 pl-7 text-xs" />
                       </div>
                     </div>
-                    <div className="md:col-span-3">
-                      <label className="text-xs font-medium text-slate-600">Hora</label>
-                      <Input type="time" value={sessaoForm.hora} onChange={e => setSessaoForm({ ...sessaoForm, hora: e.target.value })} />
-                      <div className="flex gap-1 mt-1">
-                        {["07:00", "07:30", "12:00", "13:00"].map(h => (
-                          <button key={h} type="button"
-                            onClick={() => setSessaoForm({ ...sessaoForm, hora: h })}
-                            className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${sessaoForm.hora === h ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>
-                            {h}
-                          </button>
-                        ))}
+                    {/* Card "Avulsa/Escritório" */}
+                    <button type="button"
+                      onClick={() => setSessaoForm({ ...sessaoForm, obraId: "", funcionarioIds: [] })}
+                      className={`w-full text-left rounded-lg border-2 px-3 py-2 transition ${!sessaoForm.obraId ? "border-emerald-500 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-3.5 w-3.5 text-slate-500" />
+                        <span className="text-sm font-semibold text-slate-700">Avulsa / Escritório</span>
                       </div>
-                    </div>
-                    <div className="md:col-span-5">
-                      <label className="text-xs font-medium text-slate-600 flex items-center gap-1">
-                        <MapPin className="h-3 w-3" /> Obra
-                      </label>
-                      <Select value={sessaoForm.obraId || "_avulsa"}
-                        onValueChange={v => setSessaoForm({ ...sessaoForm, obraId: v === "_avulsa" ? "" : v, funcionarioIds: [] })}>
-                        <SelectTrigger><SelectValue placeholder="Avulsa/Escritório" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="_avulsa">Avulsa / Escritório</SelectItem>
-                          {((obrasQ.data as any[]) ?? []).map((o: any) => (
-                            <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">Sem vínculo a obra</div>
+                    </button>
+                    {/* Lista de obras */}
+                    {obrasFiltradas.map((o: any) => {
+                      const sel = String(o.id) === String(sessaoForm.obraId);
+                      const acidObra = acidentesAll.filter((a: any) => a.obraId === o.id && a.obrigatorio).length;
+                      return (
+                        <button key={o.id} type="button"
+                          onClick={() => setSessaoForm({ ...sessaoForm, obraId: String(o.id), funcionarioIds: [] })}
+                          className={`w-full text-left rounded-lg border-2 px-3 py-2 transition ${sel ? "border-emerald-500 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                          <div className="flex items-start gap-2">
+                            <div className={`h-2 w-2 rounded-full mt-1.5 flex-shrink-0 ${sel ? "bg-emerald-500" : "bg-slate-300"}`} />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-semibold text-slate-800 truncate">{o.nome}</div>
+                              {o.cidade && <div className="text-[10px] text-slate-500 truncate">{o.cidade}{o.uf ? `/${o.uf}` : ""}</div>}
+                            </div>
+                            {acidObra > 0 && (
+                              <span title="Acidente recente — DDS obrigatório" className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold animate-pulse">
+                                ⚠️ {acidObra}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                    {obrasFiltradas.length === 0 && (
+                      <p className="text-xs text-slate-400 italic text-center py-4">
+                        {buscaObra ? `Nenhuma obra para "${buscaObra}"` : "Nenhuma obra cadastrada"}
+                      </p>
+                    )}
+                  </aside>
 
-                  {/* BLOCO 2 — TEMA (com sugestão automática + categorias) */}
+                  {/* ====== MAIN: FORMULÁRIO ====== */}
+                  <main className="col-span-12 lg:col-span-9 overflow-y-auto p-5 space-y-4">
+                    {/* OBRA SELECIONADA — barra-resumo */}
+                    <div className="flex items-center gap-3 pb-3 border-b border-slate-200">
+                      <MapPin className="h-5 w-5 text-emerald-600" />
+                      <div className="flex-1">
+                        <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Obra alvo do DDS</div>
+                        <div className="text-base font-bold text-slate-800">
+                          {obraSelObj ? obraSelObj.nome : "Avulsa / Escritório"}
+                        </div>
+                      </div>
+                      {sessaoForm.obraId && (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
+                          {equipeObra.length} colaborador(es) na equipe
+                        </span>
+                      )}
+                    </div>
+
+                    {/* ⚠️ ALERTA ACIDENTE D-1 (Lei art. 157 CLT) — TOPO ABSOLUTO */}
+                    {acidentesObrigatorios.length > 0 && (
+                      <div className="rounded-xl border-2 border-red-400 bg-red-50 p-4 shadow-sm">
+                        <div className="flex items-start gap-3">
+                          <div className="h-10 w-10 rounded-full bg-red-500 text-white flex items-center justify-center text-xl flex-shrink-0">⚠️</div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-sm font-bold text-red-900">
+                              DDS OBRIGATÓRIO HOJE — Acidente registrado ontem
+                            </h3>
+                            <p className="text-xs text-red-700 mb-2">
+                              Lei art. 157 CLT / NR-1: o DDS do dia seguinte ao acidente deve abordar obrigatoriamente os fatos, causas e medidas preventivas.
+                            </p>
+                            <div className="space-y-2">
+                              {acidentesObrigatorios.map((a: any) => (
+                                <div key={a.id} className="rounded-lg bg-white border border-red-200 px-3 py-2">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-xs font-bold text-red-900">
+                                        {a.tipoAcidente} <span className="font-normal text-slate-600">— {a.gravidade}</span>
+                                      </div>
+                                      <div className="text-[11px] text-slate-700 mt-0.5">
+                                        {a.empNome && <span className="font-medium">{a.empNome}</span>}
+                                        {a.obraNome && <> · {a.obraNome}</>}
+                                        {a.localAcidente && <> · {a.localAcidente}</>}
+                                      </div>
+                                      {a.descricao && (
+                                        <p className="text-[11px] text-slate-600 mt-1 line-clamp-2 italic">"{a.descricao}"</p>
+                                      )}
+                                    </div>
+                                    <button type="button"
+                                      onClick={() => aplicarAcidenteComoTema(a)}
+                                      className="px-2.5 py-1 rounded-md bg-red-600 text-white text-[10px] font-bold hover:bg-red-700 whitespace-nowrap">
+                                      Aplicar como tema
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Acidentes nos últimos 7 dias (não-obrigatórios) — dica suave */}
+                    {acidentesAll.filter((a: any) => !a.obrigatorio).length > 0 && acidentesObrigatorios.length === 0 && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs">
+                        <div className="font-semibold text-amber-900 mb-1">
+                          ℹ️ {acidentesAll.length} acidente(s) nos últimos 7 dias{sessaoForm.obraId ? " (nesta obra/empresa)" : " na empresa"}
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {acidentesAll.slice(0, 3).map((a: any) => (
+                            <button key={a.id} type="button"
+                              onClick={() => aplicarAcidenteComoTema(a)}
+                              className="px-2 py-0.5 rounded-full bg-white border border-amber-300 text-amber-800 text-[10px] hover:bg-amber-100">
+                              {fmtData(a.dataAcidente)} · {a.tipoAcidente}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* BLOCO 1 — QUANDO (Data + Hora) */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                      <div className="md:col-span-6">
+                        <label className="text-xs font-medium text-slate-600 flex items-center gap-1">
+                          <CalendarDays className="h-3 w-3" /> Data *
+                        </label>
+                        <Input type="date" value={sessaoForm.data} onChange={e => setSessaoForm({ ...sessaoForm, data: e.target.value })} />
+                        <div className="flex gap-1 mt-1">
+                          <button type="button"
+                            onClick={() => setSessaoForm({ ...sessaoForm, data: hoje })}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${sessaoForm.data === hoje ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>
+                            Hoje
+                          </button>
+                          <button type="button"
+                            onClick={() => setSessaoForm({ ...sessaoForm, data: ontem })}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${sessaoForm.data === ontem ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>
+                            Ontem
+                          </button>
+                        </div>
+                      </div>
+                      <div className="md:col-span-6">
+                        <label className="text-xs font-medium text-slate-600">Hora</label>
+                        <Input type="time" value={sessaoForm.hora} onChange={e => setSessaoForm({ ...sessaoForm, hora: e.target.value })} />
+                        <div className="flex gap-1 mt-1">
+                          {["07:00", "07:30", "12:00", "13:00"].map(h => (
+                            <button key={h} type="button"
+                              onClick={() => setSessaoForm({ ...sessaoForm, hora: h })}
+                              className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${sessaoForm.hora === h ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>
+                              {h}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* BLOCO 2 — TEMA (com sugestão automática + categorias) */}
                   <div>
                     <label className="text-xs font-medium text-slate-600 flex items-center gap-1">
                       <BookOpen className="h-3 w-3" /> Tema da biblioteca
@@ -787,105 +978,185 @@ export default function DDSGuia() {
                     )}
                   </div>
 
-                  {/* BLOCO 6 — EQUIPE DA OBRA (pré-seleção em massa) */}
-                  {sessaoForm.obraId && (
-                    <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/40 p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-bold text-emerald-900 flex items-center gap-1">
-                          <Users className="h-3 w-3" /> Equipe da obra
-                          {funcsObraQ.isLoading && <span className="text-[10px] font-normal text-slate-500 italic">(carregando...)</span>}
-                          {!funcsObraQ.isLoading && (
-                            <span className="text-[10px] font-normal text-slate-600">
-                              ({sessaoForm.funcionarioIds.length} de {equipeObra.length} selecionado(s))
-                            </span>
-                          )}
-                        </label>
+                    {/* BLOCO 6 — EQUIPE DA OBRA (pré-seleção em massa + transferir colaborador) */}
+                    {sessaoForm.obraId && (
+                      <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50/40 p-4">
+                        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                          <label className="text-sm font-bold text-emerald-900 flex items-center gap-1.5">
+                            <Users className="h-4 w-4" /> Equipe da obra
+                            {funcsObraQ.isLoading && <span className="text-[11px] font-normal text-slate-500 italic">(carregando...)</span>}
+                            {!funcsObraQ.isLoading && (
+                              <span className="text-[11px] font-normal text-slate-600">
+                                ({sessaoForm.funcionarioIds.length} de {equipeObra.length} marcado(s) como presente)
+                              </span>
+                            )}
+                          </label>
+                          <div className="flex items-center gap-2">
+                            {equipeObra.length > 0 && (
+                              <button type="button"
+                                onClick={() => {
+                                  if (todosSelecionados) {
+                                    setSessaoForm({ ...sessaoForm, funcionarioIds: [] });
+                                  } else {
+                                    setSessaoForm({ ...sessaoForm, funcionarioIds: equipeObra.map((e: any) => e.employeeId) });
+                                  }
+                                }}
+                                className="text-[11px] font-semibold text-emerald-700 hover:underline">
+                                {todosSelecionados ? "Desmarcar todos" : `✓ Selecionar todos (${equipeObra.length})`}
+                              </button>
+                            )}
+                            <button type="button"
+                              onClick={() => setShowTransferir(true)}
+                              className="px-2.5 py-1 rounded-md bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-700 flex items-center gap-1">
+                              <Plus className="h-3 w-3" /> Transferir colaborador
+                            </button>
+                          </div>
+                        </div>
+                        {equipeObra.length === 0 && !funcsObraQ.isLoading && (
+                          <div className="rounded-lg bg-amber-50 border border-amber-300 p-3 text-center">
+                            <p className="text-xs text-amber-900 font-semibold mb-1">
+                              ⚠️ Nenhum colaborador vinculado a esta obra
+                            </p>
+                            <p className="text-[11px] text-amber-700 mb-2">
+                              Use "Transferir colaborador" para vincular colaboradores ativos da empresa e regularizar a equipe agora.
+                            </p>
+                          </div>
+                        )}
                         {equipeObra.length > 0 && (
-                          <button type="button"
-                            onClick={() => {
-                              if (todosSelecionados) {
-                                setSessaoForm({ ...sessaoForm, funcionarioIds: [] });
-                              } else {
-                                setSessaoForm({ ...sessaoForm, funcionarioIds: equipeObra.map((e: any) => e.employeeId) });
-                              }
-                            }}
-                            className="text-[11px] font-semibold text-emerald-700 hover:underline">
-                            {todosSelecionados ? "Desmarcar todos" : `✓ Selecionar todos (${equipeObra.length})`}
-                          </button>
+                          <>
+                            <div className="relative mb-2">
+                              <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-slate-400" />
+                              <Input value={buscaFunc} onChange={e => setBuscaFunc(e.target.value)}
+                                placeholder="Buscar por nome ou função..." className="h-8 pl-7 text-xs" />
+                            </div>
+                            <div className="max-h-72 overflow-y-auto bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+                              {equipeFiltrada.map((e: any) => {
+                                const sel = sessaoForm.funcionarioIds.includes(e.employeeId);
+                                return (
+                                  <label key={e.employeeId}
+                                    className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-emerald-50 ${sel ? "bg-emerald-50" : ""}`}>
+                                    <input type="checkbox" checked={sel}
+                                      onChange={() => {
+                                        const ids = sessaoForm.funcionarioIds;
+                                        setSessaoForm({
+                                          ...sessaoForm,
+                                          funcionarioIds: sel
+                                            ? ids.filter((x: number) => x !== e.employeeId)
+                                            : [...ids, e.employeeId],
+                                        });
+                                      }}
+                                      className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4" />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-sm font-medium text-slate-800 truncate">{e.nome}</div>
+                                      <div className="text-[11px] text-slate-500 truncate">
+                                        {e.funcaoNaObra ?? e.funcao ?? "—"}
+                                        {e.status && e.status !== "Ativo" && (
+                                          <span className="ml-1 px-1 rounded bg-amber-100 text-amber-800 font-semibold">{e.status}</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                              {equipeFiltrada.length === 0 && (
+                                <p className="text-xs text-slate-400 italic text-center py-3">Nenhum resultado para "{buscaFunc}"</p>
+                              )}
+                            </div>
+                          </>
                         )}
                       </div>
-                      {equipeObra.length === 0 && !funcsObraQ.isLoading && (
-                        <p className="text-xs text-slate-500 italic">
-                          Nenhum colaborador ativo vinculado a esta obra. Você poderá adicionar manualmente após criar a sessão.
-                        </p>
-                      )}
-                      {equipeObra.length > 0 && (
-                        <>
-                          <div className="relative mb-2">
-                            <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-slate-400" />
-                            <Input value={buscaFunc} onChange={e => setBuscaFunc(e.target.value)}
-                              placeholder="Buscar por nome ou função..." className="h-8 pl-7 text-xs" />
-                          </div>
-                          <div className="max-h-44 overflow-y-auto bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
-                            {equipeFiltrada.map((e: any) => {
-                              const sel = sessaoForm.funcionarioIds.includes(e.employeeId);
-                              return (
-                                <label key={e.employeeId}
-                                  className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-50 ${sel ? "bg-emerald-50" : ""}`}>
-                                  <input type="checkbox" checked={sel}
-                                    onChange={() => {
-                                      const ids = sessaoForm.funcionarioIds;
-                                      setSessaoForm({
-                                        ...sessaoForm,
-                                        funcionarioIds: sel
-                                          ? ids.filter((x: number) => x !== e.employeeId)
-                                          : [...ids, e.employeeId],
-                                      });
-                                    }}
-                                    className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-xs font-medium text-slate-800 truncate">{e.nome}</div>
-                                    <div className="text-[10px] text-slate-500 truncate">
-                                      {e.funcaoNaObra ?? e.funcao ?? "—"}
-                                      {e.status && e.status !== "Ativo" && (
-                                        <span className="ml-1 px-1 rounded bg-amber-100 text-amber-800 font-semibold">{e.status}</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </label>
-                              );
-                            })}
-                            {equipeFiltrada.length === 0 && (
-                              <p className="text-xs text-slate-400 italic text-center py-3">Nenhum resultado para "{buscaFunc}"</p>
-                            )}
-                          </div>
-                        </>
-                      )}
+                    )}
+
+                    {/* BLOCO 7 — OBSERVAÇÕES (compacto) */}
+                    <div>
+                      <label className="text-xs font-medium text-slate-600">Observações (opcional)</label>
+                      <Textarea rows={2} value={sessaoForm.observacoes}
+                        onChange={e => setSessaoForm({ ...sessaoForm, observacoes: e.target.value })}
+                        placeholder="Notas adicionais sobre esta sessão..." />
                     </div>
-                  )}
-
-                  {/* BLOCO 7 — OBSERVAÇÕES (compacto) */}
-                  <div>
-                    <label className="text-xs font-medium text-slate-600">Observações (opcional)</label>
-                    <Textarea rows={2} value={sessaoForm.observacoes}
-                      onChange={e => setSessaoForm({ ...sessaoForm, observacoes: e.target.value })}
-                      placeholder="Notas adicionais sobre esta sessão..." />
-                  </div>
-
-                  {!sessaoForm.obraId && (
-                    <p className="text-xs text-slate-500 italic bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                      💡 Selecione uma obra acima para pré-carregar a equipe automaticamente. Caso contrário, a presença pode ser adicionada após criar a sessão.
-                    </p>
-                  )}
+                  </main>
                 </div>
               </>
             );
           })()}
-          <DialogFooter>
+          <DialogFooter className="px-5 py-3 border-t border-slate-200 bg-white !mt-0 flex-shrink-0">
             <Button variant="outline" onClick={() => setShowSessao(false)}>Cancelar</Button>
             <Button onClick={handleSalvarSessao} disabled={criarSessaoMut.isPending}>
               {criarSessaoMut.isPending ? "Criando..." : "Criar sessão"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== SUB-DIÁLOGO: TRANSFERIR COLABORADOR PARA A OBRA (Rev. 1731) ===== */}
+      <Dialog open={showTransferir} onOpenChange={setShowTransferir}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col p-0">
+          <DialogHeader className="px-5 pt-4 pb-3 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-blue-600" /> Transferir colaborador para a obra
+            </DialogTitle>
+            <p className="text-xs text-slate-500 mt-1">
+              Lista colaboradores ativos da empresa que ainda <strong>não estão vinculados</strong> a esta obra.
+              Ao confirmar, o colaborador é vinculado e marcado como presente nesta sessão.
+            </p>
+          </DialogHeader>
+          <div className="px-5 py-3 border-b">
+            <div className="relative">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
+              <Input value={buscaTransferir} onChange={e => setBuscaTransferir(e.target.value)}
+                placeholder="Buscar por nome, CPF ou função..." className="pl-8" />
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto px-5 py-2">
+            {candidatosTransferQ.isLoading && (
+              <p className="text-xs text-slate-500 italic text-center py-6">Carregando colaboradores...</p>
+            )}
+            {!candidatosTransferQ.isLoading && (() => {
+              const all = (candidatosTransferQ.data as any[]) ?? [];
+              const filtrados = buscaTransferir
+                ? all.filter((c: any) =>
+                    c.nome?.toLowerCase().includes(buscaTransferir.toLowerCase()) ||
+                    c.cpf?.includes(buscaTransferir) ||
+                    c.funcao?.toLowerCase().includes(buscaTransferir.toLowerCase()))
+                : all;
+              if (filtrados.length === 0) {
+                return (
+                  <p className="text-xs text-slate-400 italic text-center py-6">
+                    {buscaTransferir
+                      ? `Nenhum colaborador para "${buscaTransferir}"`
+                      : "Todos os colaboradores ativos já estão vinculados a esta obra."}
+                  </p>
+                );
+              }
+              return (
+                <div className="divide-y divide-slate-100">
+                  {filtrados.map((c: any) => (
+                    <div key={c.id} className="flex items-center gap-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-slate-800 truncate">{c.nome}</div>
+                        <div className="text-[11px] text-slate-500 truncate">
+                          {c.funcao ?? "—"}
+                          {c.cpf && <> · CPF {maskCpf(c.cpf)}</>}
+                          {c.status && c.status !== "Ativo" && (
+                            <span className="ml-1 px-1 rounded bg-amber-100 text-amber-800 font-semibold">{c.status}</span>
+                          )}
+                        </div>
+                      </div>
+                      <Button size="sm" variant="outline"
+                        onClick={() => transferirMut.mutate({
+                          companyId, obraId: Number(sessaoForm.obraId), employeeId: c.id,
+                        })}
+                        disabled={transferirMut.isPending}>
+                        Transferir →
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+          <DialogFooter className="px-5 py-3 border-t">
+            <Button variant="outline" onClick={() => setShowTransferir(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -3,9 +3,9 @@ import { z } from "zod";
 import { getDb } from "../db";
 import {
   ddsTemas, ddsSessoes, ddsSessaoFuncionarios,
-  employees, obras,
+  employees, obras, accidents, obraFuncionarios,
 } from "../../drizzle/schema";
-import { eq, and, sql, desc, isNull, inArray, notInArray } from "drizzle-orm";
+import { eq, and, sql, desc, isNull, inArray, notInArray, gte, lte, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 function assertCompanyAccess(ctx: any, companyId: number) {
@@ -359,8 +359,6 @@ export const ddsRouter = router({
     .query(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
-      // Import dinâmico via require pra evitar circular — obraFuncionarios já existe no schema
-      const { obraFuncionarios } = await import("../../drizzle/schema");
       const rows = await db.select({
         employeeId: employees.id,
         nome: employees.nome,
@@ -379,6 +377,143 @@ export const ddsRouter = router({
         .orderBy(employees.nome);
       // Filtra apenas Ativo/Férias/Licença/Afastado (corta Desligado)
       return rows.filter((r: any) => !["Desligado", "Lista_Negra", "ListaNegra"].includes(r.status));
+    }),
+
+  // Rev. 1731 — Lista colaboradores ativos da empresa que NÃO estão na obra (para transferência inline).
+  colaboradoresParaTransferir: protectedProcedure
+    .input(z.object({ companyId: z.number().int().positive(), obraId: z.number().int().positive() }))
+    .query(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      // Rev. 1731 fix (architect): valida ownership da obra (id + companyId)
+      const [obraOk] = await db.select({ id: obras.id }).from(obras)
+        .where(and(eq(obras.id, input.obraId), eq(obras.companyId, input.companyId))).limit(1);
+      if (!obraOk) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não pertence a esta empresa." });
+      // Subquery: ids já vinculados ATIVOS nesta obra
+      const jaNaObra = db.select({ id: obraFuncionarios.employeeId })
+        .from(obraFuncionarios)
+        .where(and(
+          eq(obraFuncionarios.companyId, input.companyId),
+          eq(obraFuncionarios.obraId, input.obraId),
+          eq(obraFuncionarios.isActive, 1),
+        ));
+      const rows = await db.select({
+        id: employees.id, nome: employees.nome, cpf: employees.cpf,
+        funcao: employees.funcao, status: employees.status,
+      }).from(employees).where(and(
+        eq(employees.companyId, input.companyId),
+        isNull(employees.deletedAt),
+        notInArray(employees.id, jaNaObra),
+        notInArray(employees.status, ["Desligado", "Lista_Negra", "ListaNegra"] as any),
+      )).orderBy(employees.nome);
+      return rows;
+    }),
+
+  // Rev. 1731 — Vincula colaborador à obra (cria/reativa registro em obra_funcionarios).
+  transferirParaObra: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      obraId: z.number().int().positive(),
+      employeeId: z.number().int().positive(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      // Rev. 1731 fix (architect): valida ownership da obra (id + companyId) antes de qualquer escrita
+      const [obraOk] = await db.select({ id: obras.id }).from(obras)
+        .where(and(eq(obras.id, input.obraId), eq(obras.companyId, input.companyId))).limit(1);
+      if (!obraOk) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não pertence a esta empresa." });
+      // Confere se o colaborador é da MESMA empresa
+      const [emp] = await db.select({ id: employees.id, status: employees.status })
+        .from(employees).where(and(
+          eq(employees.id, input.employeeId),
+          eq(employees.companyId, input.companyId),
+          isNull(employees.deletedAt),
+        ));
+      if (!emp) throw new TRPCError({ code: "FORBIDDEN", message: "Colaborador não pertence a esta empresa." });
+      if (["Desligado", "Lista_Negra", "ListaNegra"].includes(emp.status as any)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Colaborador desligado não pode ser vinculado." });
+      }
+      // Já existe vínculo (ativo ou inativo)?
+      const [exist] = await db.select({ id: obraFuncionarios.id, isActive: obraFuncionarios.isActive })
+        .from(obraFuncionarios).where(and(
+          eq(obraFuncionarios.companyId, input.companyId),
+          eq(obraFuncionarios.obraId, input.obraId),
+          eq(obraFuncionarios.employeeId, input.employeeId),
+        )).limit(1);
+      if (exist) {
+        if (exist.isActive === 1) return { ok: true, reativado: false };
+        await db.update(obraFuncionarios)
+          .set({ isActive: 1, dataFim: null as any })
+          .where(eq(obraFuncionarios.id, exist.id));
+        return { ok: true, reativado: true };
+      }
+      const hoje = new Date().toISOString().slice(0, 10);
+      await db.insert(obraFuncionarios).values({
+        obraId: input.obraId,
+        employeeId: input.employeeId,
+        companyId: input.companyId,
+        dataInicio: hoje,
+        isActive: 1,
+      } as any);
+      return { ok: true, reativado: false };
+    }),
+
+  // Rev. 1731 — Acidentes recentes (default últimos 7 dias) que potencialmente exigem DDS de análise (Lei art. 157 CLT, NR-1).
+  // Quando obraId é informado, prioriza acidentes daquela obra. D-1 (ontem) recebe flag obrigatorio=true.
+  acidentesRecentes: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      obraId: z.number().int().positive().optional(),
+      diasJanela: z.number().int().positive().default(7),
+    }))
+    .query(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      // Rev. 1731 fix (architect): obraId opcional → também valida ownership quando informado
+      if (input.obraId) {
+        const [obraOk] = await db.select({ id: obras.id }).from(obras)
+          .where(and(eq(obras.id, input.obraId), eq(obras.companyId, input.companyId))).limit(1);
+        if (!obraOk) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não pertence a esta empresa." });
+      }
+      // Rev. 1731 fix (architect): D-1 calculado em America/Sao_Paulo (regra legal brasileira) — robusto a TZ do servidor.
+      const fmtSP = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+      const agora = new Date();
+      const hojeIso = fmtSP(agora);
+      const ontemIso = fmtSP(new Date(agora.getTime() - 24 * 60 * 60 * 1000));
+      const inicioIso = fmtSP(new Date(agora.getTime() - input.diasJanela * 24 * 60 * 60 * 1000));
+      const conds: any[] = [
+        eq(accidents.companyId, input.companyId),
+        isNull(accidents.deletedAt),
+        gte(accidents.dataAcidente, inicioIso),
+        lte(accidents.dataAcidente, hojeIso), // sem acidentes no futuro
+      ];
+      if (input.obraId) conds.push(or(eq(accidents.obraId, input.obraId), isNull(accidents.obraId)));
+      const rows = await db.select({
+        id: accidents.id,
+        dataAcidente: accidents.dataAcidente,
+        horaAcidente: accidents.horaAcidente,
+        tipoAcidente: accidents.tipoAcidente,
+        gravidade: accidents.gravidade,
+        localAcidente: accidents.localAcidente,
+        parteCorpoAtingida: accidents.parteCorpoAtingida,
+        agenteCausador: accidents.agenteCausador,
+        descricao: accidents.descricao,
+        acaoCorretiva: accidents.acaoCorretiva,
+        diasAfastamento: accidents.diasAfastamento,
+        employeeId: accidents.employeeId,
+        empNome: employees.nome,
+        obraId: accidents.obraId,
+        obraNome: obras.nome,
+      }).from(accidents)
+        .leftJoin(employees, eq(employees.id, accidents.employeeId))
+        .leftJoin(obras, eq(obras.id, accidents.obraId))
+        .where(and(...conds))
+        .orderBy(desc(accidents.dataAcidente), desc(accidents.id));
+      return rows.map((r: any) => ({
+        ...r,
+        obrigatorio: r.dataAcidente === ontemIso, // D-1 → DDS obrigatório no dia seguinte
+      }));
     }),
 
   getSessao: protectedProcedure
