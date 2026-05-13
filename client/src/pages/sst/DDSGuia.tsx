@@ -548,6 +548,15 @@ export default function DDSGuia() {
     onSuccess: () => { toast.success("Sessão excluída"); utils.dds.listSessoes.invalidate(); setSelectedSessaoId(null); },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 1752 — exclusão em lote a partir da tabela.
+  const excluirSessoesMut = trpc.dds.excluirSessoes.useMutation({
+    onSuccess: (r) => { toast.success(`${r.excluidos} sessão(ões) excluída(s)`); utils.dds.listSessoes.invalidate(); setSelecionadasIds(new Set()); },
+    onError: (e) => toast.error(e.message),
+  });
+  const [selecionadasIds, setSelecionadasIds] = useState<Set<number>>(new Set());
+  const toggleSelecionada = (id: number) => {
+    setSelecionadasIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
   const presencaMut = trpc.dds.marcarPresenca.useMutation({
     onSuccess: () => { utils.dds.getSessao.invalidate(); utils.dds.listSessoes.invalidate(); },
     onError: (e) => toast.error(e.message),
@@ -957,72 +966,148 @@ export default function DDSGuia() {
 
         {/* =================== SESSÕES =================== */}
         <TabsContent value="sessoes" className="mt-4">
-          {selectedSessaoId && sessaoDetalheQ.data ? (
-            <SessaoDetalhe
-              companyId={companyId}
-              sessao={sessaoDetalheQ.data as any}
-              employees={(employeesQ.data as any[]) ?? []}
-              idsJaNaSessao={idsJaNaSessao}
-              addFuncId={addFuncId}
-              setAddFuncId={setAddFuncId}
-              presencaMut={presencaMut}
-              finalizarMut={finalizarSessaoMut}
-              excluirMut={excluirSessaoMut}
-              gerarIAMut={gerarIAMut}
-              atualizarSessaoMut={atualizarSessaoMut}
-              voltar={() => setSelectedSessaoId(null)}
-            />
+          {selectedSessaoId ? (
+            sessaoDetalheQ.isLoading ? (
+              <div className="flex items-center justify-center py-16 text-slate-500">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" /> Abrindo sessão #{selectedSessaoId}…
+              </div>
+            ) : sessaoDetalheQ.isError ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+                <p className="text-red-700 font-semibold mb-2">Não foi possível abrir esta sessão.</p>
+                <p className="text-xs text-red-600 mb-4">{(sessaoDetalheQ.error as any)?.message ?? "Erro desconhecido"}</p>
+                <Button size="sm" variant="outline" onClick={() => setSelectedSessaoId(null)}>← Voltar à lista</Button>
+              </div>
+            ) : sessaoDetalheQ.data ? (
+              <SessaoDetalhe
+                companyId={companyId}
+                sessao={sessaoDetalheQ.data as any}
+                employees={(employeesQ.data as any[]) ?? []}
+                idsJaNaSessao={idsJaNaSessao}
+                addFuncId={addFuncId}
+                setAddFuncId={setAddFuncId}
+                presencaMut={presencaMut}
+                finalizarMut={finalizarSessaoMut}
+                excluirMut={excluirSessaoMut}
+                gerarIAMut={gerarIAMut}
+                atualizarSessaoMut={atualizarSessaoMut}
+                voltar={() => setSelectedSessaoId(null)}
+              />
+            ) : null
           ) : (
             <div>
-              <Button size="sm" onClick={() => abrirNovaSessao()} className="mb-3">
-                <Plus className="h-4 w-4 mr-1" /> Nova sessão
-              </Button>
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                <Button size="sm" onClick={() => abrirNovaSessao()}>
+                  <Plus className="h-4 w-4 mr-1" /> Nova sessão
+                </Button>
+                {selecionadasIds.size > 0 && (
+                  <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5">
+                    <span className="text-sm font-semibold text-rose-800">{selecionadasIds.size} selecionada(s)</span>
+                    <Button size="sm" variant="outline" onClick={() => setSelecionadasIds(new Set())}>Limpar</Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={excluirSessoesMut.isPending}
+                      onClick={() => {
+                        if (!confirm(`Excluir ${selecionadasIds.size} sessão(ões)? Esta ação não pode ser desfeita.`)) return;
+                        excluirSessoesMut.mutate({ companyId, ids: Array.from(selecionadasIds) });
+                      }}
+                    >
+                      {excluirSessoesMut.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Trash2 className="h-3 w-3 mr-1" />}
+                      Excluir selecionadas
+                    </Button>
+                  </div>
+                )}
+              </div>
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-slate-600 text-xs uppercase">
                     <tr>
+                      <th className="px-3 py-2 w-10">
+                        <input
+                          type="checkbox"
+                          aria-label="Selecionar todas"
+                          checked={sessoes.length > 0 && selecionadasIds.size === sessoes.length}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelecionadasIds(new Set(sessoes.map((s: any) => s.id)));
+                            else setSelecionadasIds(new Set());
+                          }}
+                        />
+                      </th>
                       <th className="px-3 py-2 text-left">Data</th>
                       <th className="px-3 py-2 text-left">Tema</th>
                       <th className="px-3 py-2 text-left">Obra</th>
                       <th className="px-3 py-2 text-left">Instrutor</th>
                       <th className="px-3 py-2 text-center">Presentes</th>
                       <th className="px-3 py-2 text-center">Status</th>
-                      <th className="px-3 py-2"></th>
+                      <th className="px-3 py-2 text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
                     {sessoes.length === 0 && (
-                      <tr><td colSpan={7} className="text-center py-12 text-slate-400">Nenhuma sessão registrada ainda.</td></tr>
+                      <tr><td colSpan={8} className="text-center py-12 text-slate-400">Nenhuma sessão registrada ainda.</td></tr>
                     )}
-                    {sessoes.map((s: any) => (
-                      <tr key={s.id} className="border-t hover:bg-slate-50 cursor-pointer"
-                        onClick={() => setSelectedSessaoId(s.id)}>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          {s.data ? new Date(s.data + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
-                          {s.hora && <span className="text-xs text-slate-400 ml-1">{s.hora}</span>}
-                        </td>
-                        <td className="px-3 py-2 font-medium text-slate-800">{s.tituloTema}</td>
-                        <td className="px-3 py-2 text-slate-600">{s.obraNome ?? <span className="italic text-slate-400">Avulsa/Escritório</span>}</td>
-                        <td className="px-3 py-2 text-slate-600">{s.instrutor ?? "—"}</td>
-                        <td className="px-3 py-2 text-center">
-                          <span className="font-semibold text-emerald-700">{s.presentes}</span>
-                          <span className="text-slate-400">/{s.totalParticipantes}</span>
-                          {s.assinados > 0 && (
-                            <span className="ml-1 text-[10px] text-blue-600">({s.assinados} assin.)</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          {s.status === "finalizada" ? (
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs">Finalizada</span>
-                          ) : s.status === "cancelada" ? (
-                            <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs">Cancelada</span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs">Aberta</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right"><ChevronRight className="h-4 w-4 text-slate-400 inline" /></td>
-                      </tr>
-                    ))}
+                    {sessoes.map((s: any) => {
+                      const selecionada = selecionadasIds.has(s.id);
+                      return (
+                        <tr key={s.id} className={`border-t hover:bg-slate-50 ${selecionada ? "bg-rose-50/40" : ""}`}>
+                          <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              aria-label={`Selecionar sessão ${s.id}`}
+                              checked={selecionada}
+                              onChange={() => toggleSelecionada(s.id)}
+                            />
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap cursor-pointer" onClick={() => setSelectedSessaoId(s.id)}>
+                            {s.data ? new Date(s.data + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
+                            {s.hora && <span className="text-xs text-slate-400 ml-1">{s.hora}</span>}
+                          </td>
+                          <td className="px-3 py-2 font-medium text-slate-800 cursor-pointer" onClick={() => setSelectedSessaoId(s.id)}>{s.tituloTema}</td>
+                          <td className="px-3 py-2 text-slate-600 cursor-pointer" onClick={() => setSelectedSessaoId(s.id)}>{s.obraNome ?? <span className="italic text-slate-400">Avulsa/Escritório</span>}</td>
+                          <td className="px-3 py-2 text-slate-600 cursor-pointer" onClick={() => setSelectedSessaoId(s.id)}>{s.instrutor ?? "—"}</td>
+                          <td className="px-3 py-2 text-center cursor-pointer" onClick={() => setSelectedSessaoId(s.id)}>
+                            <span className="font-semibold text-emerald-700">{s.presentes}</span>
+                            <span className="text-slate-400">/{s.totalParticipantes}</span>
+                            {s.assinados > 0 && (
+                              <span className="ml-1 text-[10px] text-blue-600">({s.assinados} assin.)</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-center cursor-pointer" onClick={() => setSelectedSessaoId(s.id)}>
+                            {s.status === "finalizada" ? (
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs">Finalizada</span>
+                            ) : s.status === "cancelada" ? (
+                              <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs">Cancelada</span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs">Aberta</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-900 hover:bg-blue-50 rounded px-2 py-1 mr-1"
+                              onClick={(e) => { e.stopPropagation(); setSelectedSessaoId(s.id); }}
+                              title="Abrir / editar"
+                            >
+                              <PenLine className="h-3.5 w-3.5" /> Abrir
+                            </button>
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 text-xs font-medium text-rose-700 hover:text-rose-900 hover:bg-rose-50 rounded px-2 py-1"
+                              disabled={excluirSessaoMut.isPending}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (!confirm(`Excluir a sessão "${s.tituloTema}" de ${s.data ? new Date(s.data + "T12:00:00").toLocaleDateString("pt-BR") : ""}?`)) return;
+                                try { await excluirSessaoMut.mutateAsync({ companyId, id: s.id }); }
+                                catch (_) { /* toast já mostrado */ }
+                              }}
+                              title="Excluir"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" /> Excluir
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

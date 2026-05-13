@@ -1595,6 +1595,25 @@ Gere o roteiro detalhado seguindo EXATAMENTE o formato exigido.`;
       }
     }),
 
+  // Rev. 1752 — exclusão em lote (multi-seleção na lista).
+  excluirSessoes: protectedProcedure
+    .input(z.object({ companyId: z.number().int().positive(), ids: z.array(z.number().int().positive()).min(1).max(200) }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        assertCompanyAccess(ctx, input.companyId);
+        const db = (await getDb())!;
+        const rows = await db.update(ddsSessoes)
+          .set({ deletedAt: sql`NOW()` } as any)
+          .where(and(inArray(ddsSessoes.id, input.ids), eq(ddsSessoes.companyId, input.companyId)))
+          .returning({ id: ddsSessoes.id });
+        return { ok: true, excluidos: rows.length, ids: rows.map(r => r.id) };
+      } catch (e: any) {
+        console.error("[dds.excluirSessoes] erro", { ids: input.ids, companyId: input.companyId, msg: e?.message });
+        if (e instanceof TRPCError) throw e;
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "Erro ao excluir sessões" });
+      }
+    }),
+
   // Adiciona / atualiza lista de presença em lote.
   marcarPresenca: protectedProcedure
     .input(z.object({
