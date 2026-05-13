@@ -2594,14 +2594,43 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           break;
         } catch (e: any) {
           lastErr = e;
-          const msg = String(e?.message || e?.code || "");
-          if (msg.includes("duplicate key") || msg.includes("23505") || msg.includes("uq_compras_solicitacoes_numero")) {
+          // Rev. 1758 — detecção robusta: pg-driver expõe `e.code === '23505'` (unique_violation)
+          // e `e.constraint`. Antes confiávamos só em string match — perdíamos casos onde a msg
+          // vinha sem 'duplicate key' (ex.: localizada). Outros erros (FK 23503, NOT NULL 23502)
+          // logam tudo (code/constraint/detail/table/column) e propagam mensagem ÚTIL ao cliente.
+          const code = e?.code || e?.cause?.code;
+          const constraint = e?.constraint || e?.cause?.constraint || "";
+          if (code === "23505" || constraint.includes("uq_compras_solicitacoes_numero") || String(e?.message || "").toLowerCase().includes("duplicate key")) {
             continue;
           }
-          throw e;
+          console.error("[compras.criarSolicitacao] insert falhou", {
+            companyId: input.companyId,
+            numeroScTentativa: numeroSc,
+            tentativa,
+            code,
+            constraint,
+            detail: e?.detail || e?.cause?.detail,
+            table: e?.table || e?.cause?.table,
+            column: e?.column || e?.cause?.column,
+            message: e?.message,
+            stack: e?.stack?.split("\n").slice(0, 5).join("\n"),
+          });
+          // Mensagens mais úteis pelo código Postgres
+          let friendly = e?.message || "Erro desconhecido";
+          if (code === "23502") friendly = `Campo obrigatório vazio: ${e?.column || "(coluna não identificada)"}.`;
+          else if (code === "23503") friendly = `Referência inválida (FK): ${constraint || e?.detail || ""}.`;
+          else if (code === "22001") friendly = `Texto muito longo para a coluna ${e?.column || ""}.`;
+          else if (code === "22P02") friendly = `Tipo de dado inválido: ${e?.detail || e?.message || ""}.`;
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Erro ao criar SC: ${friendly}` });
         }
       }
-      if (!sc) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao gerar número único de SC após 8 tentativas: ${lastErr?.message ?? "desconhecido"}` });
+      if (!sc) {
+        console.error("[compras.criarSolicitacao] esgotaram 8 tentativas de número único", {
+          companyId: input.companyId,
+          lastErr: { code: lastErr?.code, message: lastErr?.message, constraint: lastErr?.constraint },
+        });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao gerar número único de SC após 8 tentativas: ${lastErr?.message ?? "desconhecido"}` });
+      }
       if (input.itens.length > 0) {
         await db.insert(comprasSolicitacoesItens).values(
           input.itens.map(it => ({

@@ -12415,4 +12415,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-13 10:10:00",
   },
+  {
+    version: 1758,
+    titulo: "Compras · criarSolicitacao — diagnóstico robusto de falhas no INSERT (code/constraint/detail) + retry por código Postgres",
+    descricao: "Reportado pelo usuário (screenshot do modal Nova Solicitação de Compra mostrando toast vermelho com 'Failed query: insert into compras_solicitacoes ...' truncado, sem o motivo real do Postgres). O catch antigo confiava em `msg.includes('duplicate key')` para detectar colisão de número e propagava o erro cru pro cliente — quando a mensagem vinha sem essa string ou estava localizada/truncada, perdíamos info crítica e o usuário via só o SQL gigante sem entender o motivo. **Fix em `server/routers/compras.ts` ~L2598-2636 (sem schema change)**: (1) Detecção de duplicate key agora usa `e.code === '23505'` OU `e.constraint.includes('uq_compras_solicitacoes_numero')` OU fallback string — pega TODOS os casos do pg-driver. (2) `console.error('[compras.criarSolicitacao] insert falhou', {...})` rico com `code`, `constraint`, `detail`, `table`, `column`, `message` e stack truncado em 5 linhas — qualquer falha futura aparece nos logs do servidor com TUDO que o pg-driver expõe. (3) Mensagens de erro friendly por código Postgres antes de propagar como `TRPCError BAD_REQUEST`: 23502 (NOT NULL) → 'Campo obrigatório vazio: <coluna>'; 23503 (FK violation) → 'Referência inválida (FK): <constraint/detail>'; 22001 (string overflow) → 'Texto muito longo para a coluna <coluna>'; 22P02 (type mismatch) → 'Tipo de dado inválido: <detail>'. (4) Logger separado para 'esgotou 8 tentativas' com last error info. Próxima tentativa do usuário vai mostrar o motivo real no toast E nos logs do servidor — sem mais 'Failed query' sem causa.",
+    tipo: "melhoria",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 12:35:00",
+  },
 ];
