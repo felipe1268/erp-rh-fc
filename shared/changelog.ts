@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1762,
+    titulo: "Aniversariantes — Funcionários desligados / Lista Negra não aparecem mais (filtro robusto a variantes do status)",
+    descricao: "Reportado pelo usuário (screenshot 'Aniversariantes — Maio'): EDIVALDO, ADEILDO, EMERSON e outros com badge vermelho 'Lista Negra' continuavam aparecendo no widget de aniversariantes (tanto no PainelRH quanto na Home). Pedido: 'Quem foi desligado não precisa aparecer aqui'. **Causa raiz** em `server/routers/homeData.ts` L47: o Set `STATUS_FORA = ['Desligado', 'Lista_Negra', 'Inativo']` exigia match EXATO da string, mas o componente `EmpStatusBadge` aceita 2 grafias diferentes (`Lista_Negra` com underscore E `Lista Negra` com espaço — ver `client/src/components/EmpStatusBadge.tsx` L5,L10). Registros salvos com a variante 'Lista Negra' (espaço) escapavam do filtro e vazavam pra todos os widgets de aniversário (mês + dia + aniversário de empresa). **Fix sem schema change** em `server/routers/homeData.ts` ~L47-61: (1) Helper `normStatus(s)` faz `lowercase + replace /[\\s_]+/g` — colapsa 'Lista Negra'/'Lista_Negra'/'lista negra'/'LISTA_NEGRA' todos pra 'listanegra'. (2) Set `STATUS_FORA_NORM = {desligado, listanegra, inativo}` comparado contra valor normalizado. (3) Cinto e suspensório: também checa flag `listaNegra === 1` (coluna SMALLINT em `employees`, schema L941) — se a flag tá ligada o registro é excluído mesmo que o status esteja em outro valor (ex.: alguém marcado como blacklist mas com status 'Aviso Prévio'). Afeta `aniversariantes` (mês), `aniversariosEmpresa` (anos de casa) e contadores `aniversariantesHoje`/`aniversariantesMes`/`aniversariosEmpresaHoje`/`aniversariosEmpresaMes`. Sem alteração de cliente.",
+    tipo: "bugfix",
+    modulos: "RH",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-13 09:00:00",
+  },
+  {
     version: 1754,
     titulo: "ModuleHub — Tile ORÁCULO agora respeita o toggle das Configurações (estava hardcoded)",
     descricao: "Reportado pelo usuário (screenshots: home com card roxo ORÁCULO ativo + Configurações > Módulos do Sistema mostrando Oráculo 'Desabilitado'): mesmo após a Rev. 1751 que ocultou os módulos desabilitados da seção 'Em Desenvolvimento', o tile ORÁCULO continuava aparecendo ATIVO no grid principal. **Causa**: `client/src/pages/ModuleHub.tsx` L798 renderizava o tile do Oráculo HARDCODED — fora do loop `activeModules.map(...)` — com condição apenas `{isAdminMaster && (...)}`. Não passava por nenhum filtro de configuração. Quebrava a regra de ouro 'desabilitado = oculto em TODA tela' para esse módulo específico. **Fix em 1 linha, sem schema/server change**: condição vira `{isAdminMaster && isModuleEnabled('oraculo') && (...)}` — usa o mesmo helper já no escopo (Rev. 1751). Quando o admin desabilita Oráculo nas Configurações, o tile some imediatamente da home para todos os usuários, inclusive admin_master.",

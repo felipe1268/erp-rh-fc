@@ -44,8 +44,18 @@ export const homeDataRouter = router({
       const ativos = allEmps.filter(e => e.status === "Ativo");
       // Rev. 1356: Excluir também Lista_Negra e Inativo dos cards de aniversariantes
       // (alinhado com filtros de db.ts que sempre tratam esses 3 como "fora")
-      const STATUS_FORA = new Set(["Desligado", "Lista_Negra", "Inativo"]);
-      const todosNaoDesligados = allEmps.filter(e => !STATUS_FORA.has(e.status || ""));
+      // Rev. 1762: Robustez — normaliza status (lowercase + sem espaço/underscore) pra
+      // pegar variantes "Lista Negra"/"Lista_Negra"/"listaNegra", e respeita flag
+      // listaNegra=1 mesmo que o status esteja em outro valor. Reportado: desligados
+      // continuavam aparecendo nos aniversariantes porque o registro estava salvo como
+      // "Lista Negra" (com espaço) e o Set só checava "Lista_Negra".
+      const normStatus = (s: string | null | undefined) =>
+        (s || "").toLowerCase().replace(/[\s_]+/g, "");
+      const STATUS_FORA_NORM = new Set(["desligado", "listanegra", "inativo"]);
+      const todosNaoDesligados = allEmps.filter(e => {
+        if ((e as any).listaNegra === 1) return false;
+        return !STATUS_FORA_NORM.has(normStatus(e.status));
+      });
 
       // ============================================================
       // 2. ANIVERSARIANTES DO MÊS
