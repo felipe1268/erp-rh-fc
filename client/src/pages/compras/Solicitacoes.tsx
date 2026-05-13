@@ -17,7 +17,7 @@ import { normalizarTexto, stripAccents } from "@shared/textNormalization";
 import {
   Plus, Search, Trash2, ClipboardList, ChevronRight, ChevronDown, Loader2,
   CheckCircle2, XCircle, Clock, Building2, ListTree, CalendarDays, ShoppingCart, AlertTriangle, Zap, FileText, Package,
-  Camera, ImageIcon, X, Briefcase, History, ShoppingBag, Pencil, Copy, CheckSquare,
+  Camera, ImageIcon, X, Briefcase, History, ShoppingBag, Pencil, Copy, CheckSquare, FileDown,
   UserCircle, ShieldCheck, FileSearch, Truck, Users, Layers, ArrowRightLeft, Sparkles, RotateCw, Car, Link2, Film, Paperclip,
 } from "lucide-react";
 
@@ -1353,6 +1353,78 @@ export default function Solicitacoes() {
     onSuccess: (data) => { toast.success(`SC ${data.numeroSc} criada (cópia)!`); q.refetch(); setShowDetalhe(data.id); },
     onError: (e) => toast.error(e.message),
   });
+
+  // Rev. 1743 — Atalho "Gerar PDF" por SC: monta HTML standalone e dispara print do navegador.
+  // No iOS Safari/iPadOS o diálogo de print oferece "Salvar em PDF" automaticamente.
+  const gerarPdfSC = async (scId: number) => {
+    try {
+      const sc: any = await trpcCtx.compras.getSolicitacao.fetch({ id: scId });
+      if (!sc) { toast.error("SC não encontrada"); return; }
+      const fmtBR = (s?: string | null) => s ? String(s).split("T")[0].split("-").reverse().join("/") : "—";
+      const fmtMoeda = (v: any) => v != null ? `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
+      const esc = (s: any) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+      const itensHtml = (sc.itens as any[] || []).map((it, i) => `
+        <tr>
+          <td style="text-align:center">${i + 1}</td>
+          <td>${esc(it.descricao)}${it.eapCodigo ? `<div style="font-size:10px;color:#666">EAP: ${esc(it.eapCodigo)}</div>` : ""}</td>
+          <td style="text-align:right">${esc(it.quantidade)}</td>
+          <td style="text-align:center">${esc(it.unidade || "—")}</td>
+          <td style="text-align:right">${it.precoMeta ? fmtMoeda(it.precoMeta) : "—"}</td>
+          <td>${esc(it.observacoes || "")}</td>
+        </tr>`).join("");
+      const tipoLabel = sc.tipo === "servico" ? "Mão de Obra" : sc.tipo === "pacote" ? "Pacote (MAT+MO)" : sc.tipo === "equipamento" ? "Equipamento" : sc.tipo === "pecas_veiculo" ? "Manutenção de Veículos" : "Material";
+      const prioLabel: Record<string, string> = { baixa: "Baixa", normal: "Normal", urgente: "URGENTE" };
+      const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(sc.numeroSc)}</title>
+<style>
+  *{box-sizing:border-box} body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2937;margin:24px;font-size:12px}
+  h1{font-size:20px;margin:0 0 4px 0;color:#0f172a}
+  .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:16px}
+  .meta{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 24px;margin-bottom:16px}
+  .meta div{padding:6px 8px;background:#f8fafc;border-left:3px solid #3b82f6;border-radius:4px}
+  .meta b{display:block;font-size:10px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:2px}
+  table{width:100%;border-collapse:collapse;margin-top:8px}
+  th{background:#1e293b;color:#fff;padding:8px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.3px}
+  td{padding:8px;border-bottom:1px solid #e2e8f0;vertical-align:top}
+  tbody tr:nth-child(even){background:#f8fafc}
+  .obs{margin-top:16px;padding:12px;background:#fef9c3;border-left:4px solid #ca8a04;border-radius:4px}
+  .footer{margin-top:24px;padding-top:12px;border-top:1px solid #cbd5e1;font-size:10px;color:#64748b;display:flex;justify-content:space-between}
+  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;text-transform:uppercase}
+  .b-pri-urg{background:#fee2e2;color:#991b1b} .b-pri-norm{background:#dbeafe;color:#1e40af} .b-pri-baixa{background:#dcfce7;color:#166534}
+  @media print{body{margin:12px} .noprint{display:none}}
+</style></head><body>
+<div class="head">
+  <div>
+    <h1>Solicitação de Compra ${esc(sc.numeroSc)}</h1>
+    <div style="color:#64748b;font-size:11px">${esc(sc.titulo || "")}</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:14px;font-weight:600">${esc(tipoLabel)}</div>
+    <span class="badge b-pri-${sc.prioridade === "urgente" ? "urg" : sc.prioridade === "baixa" ? "baixa" : "norm"}">${esc(prioLabel[sc.prioridade] || sc.prioridade || "—")}</span>
+  </div>
+</div>
+<div class="meta">
+  <div><b>Obra</b>${esc(sc.obraNome || sc.projetoNome || "—")}</div>
+  <div><b>Departamento</b>${esc(sc.departamento || "—")}</div>
+  <div><b>Solicitante</b>${esc(sc.solicitanteNome || sc.criadoPorNome || "—")}</div>
+  <div><b>Data Necessidade</b>${fmtBR(sc.dataNecessidade)}</div>
+  <div><b>Status</b>${esc(sc.status || "—")} · ${esc(sc.aprovacaoStatus || "—")}</div>
+  <div><b>Criado em</b>${fmtBR(sc.criadoEm || sc.createdAt)}</div>
+</div>
+<table>
+  <thead><tr><th style="width:30px">#</th><th>Descrição</th><th style="width:80px">Qtd</th><th style="width:60px">Un.</th><th style="width:110px">Preço meta</th><th style="width:200px">Observações</th></tr></thead>
+  <tbody>${itensHtml || `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px">Sem itens</td></tr>`}</tbody>
+</table>
+${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.observacoes)}</div>` : ""}
+<div class="footer"><span>FC Engenharia · ERP RH/DP</span><span>Impresso em ${new Date().toLocaleString("pt-BR")}</span></div>
+<script>setTimeout(function(){window.print()},250);</script>
+</body></html>`;
+      const w = window.open("", "_blank", "width=900,height=1200");
+      if (!w) { toast.error("Bloqueador de pop-up impediu abrir o PDF. Permita pop-ups e tente novamente."); return; }
+      w.document.open(); w.document.write(html); w.document.close();
+    } catch (err: any) {
+      toast.error("Falha ao gerar PDF: " + (err?.message || "erro desconhecido"));
+    }
+  };
   const desaprovar = trpc.compras.desaprovarSolicitacao.useMutation({
     onSuccess: (data) => {
       const msg = data.cotacoesExcluidas > 0
@@ -2521,6 +2593,13 @@ export default function Solicitacoes() {
                         onClick={(e) => { e.stopPropagation(); duplicar.mutate({ id: sc.id, companyId, userId: user?.id, userName: user?.name }); }}
                       >
                         <Copy className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        title="Gerar PDF da SC"
+                        className="p-1 rounded hover:bg-emerald-100 text-gray-400 hover:text-emerald-600 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); gerarPdfSC(sc.id); }}
+                      >
+                        <FileDown className="h-3.5 w-3.5" />
                       </button>
                       <button
                         title="Excluir SC"
@@ -4978,6 +5057,11 @@ export default function Solicitacoes() {
                   disabled={duplicar.isPending}
                   className="border-gray-300 text-gray-600 hover:bg-gray-50 text-xs gap-1">
                   <Copy className="h-3 w-3" /> Duplicar
+                </Button>
+                <Button size="sm" variant="outline"
+                  onClick={() => gerarPdfSC(detalhe.id)}
+                  className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-xs gap-1">
+                  <FileDown className="h-3 w-3" /> Gerar PDF
                 </Button>
                 {!["cancelado", "aprovado"].includes(detalhe.status) && (
                   <Button size="sm" variant="outline"

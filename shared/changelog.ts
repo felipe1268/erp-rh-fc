@@ -12271,4 +12271,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-12 08:15:00",
   },
+  {
+    version: 1743,
+    titulo: "Compras · SC — Bug de números duplicados resolvido (UNIQUE INDEX + gerador robusto) + atalho 'Gerar PDF' por SC",
+    descricao: "Reportado pelo usuário (screenshot iPad 13/05/2026): tabela de Solicitações de Compra mostrava SC-2026-0176 e SC-2026-0175 aparecendo 2x cada (linhas duplicadas com mesmo número, IDs diferentes) e pediu também atalho pra gerar PDF a partir da solicitação. **Causa raiz**: `criarSolicitacao` (server/routers/compras.ts L2528) e `duplicarSolicitacao` (L10522) geravam número via `COUNT(*)+1` da tabela — duas falhas: (a) race condition em criação simultânea (dois usuários no mesmo segundo recebiam mesmo COUNT); (b) ao excluir uma SC antiga, o COUNT diminui e a próxima nova colide com SC existente. Schema (drizzle/schema.ts L5737 `comprasSolicitacoes`) NÃO tinha unique constraint em (companyId, numeroSc), então o Postgres aceitava as duplicatas silenciosamente. **Fix em 4 camadas**: (1) **Helper `gerarProximoNumeroSc(db, companyId, offset)` em compras.ts** — calcula MAX(suffix) do ano corrente filtrado por companyId via regex `^SC-YYYY-\d+$`, retorna prefixo + (max+1+offset) padded 4. (2) **`criarSolicitacao` e `duplicarSolicitacao` agora usam loop com retry de 8 tentativas** — cada iteração incrementa offset; em caso de unique-violation (`23505`/`uq_compras_solicitacoes_numero`) tenta o próximo número, qualquer outro erro propaga. (3) **ColFix em server/_core/index.ts** — DO block PL/pgSQL idempotente que renumera duplicatas existentes (ROW_NUMBER>1 por company_id+numero_sc) para o próximo suffix livre do mesmo ano, com `RAISE NOTICE` por SC renumerada; em seguida `CREATE UNIQUE INDEX IF NOT EXISTS uq_compras_solicitacoes_numero ON compras_solicitacoes (company_id, numero_sc)`. (4) **Atalho PDF na UI** — `client/src/pages/compras/Solicitacoes.tsx` ganha função `gerarPdfSC(scId)` que usa `trpcCtx.compras.getSolicitacao.fetch({id})`, monta HTML standalone (cabeçalho com numeroSc/obra/solicitante/data/status + tabela de itens com qty/un/observação) e dispara `window.open()` + `print()` (no iOS o usuário escolhe 'Salvar em PDF'). Ícone novo `FileDown` adicionado no import lucide-react. Botão pequeno cinza-claro entre Duplicar e Excluir em cada linha da tabela + botão grande 'Gerar PDF' no footer do modal de detalhe ao lado de 'Duplicar'.",
+    tipo: "bugfix",
+    modulos: "Compras",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 08:30:00",
+  },
 ];

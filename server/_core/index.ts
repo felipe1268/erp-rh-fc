@@ -503,6 +503,46 @@ Regras:
           console.log(`[SyncSchema+] Colunas data_*_real + responsavel_lotus + previsto/realizado_msp_pct garantidas em planejamento_atividades.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_atividades datas reais:`, e?.message || e); }
 
+        // Rev. 1743 — UNIQUE INDEX em compras_solicitacoes (company_id, numero_sc).
+        // FORA do ColFix com version guard porque, em DBs onde a versão já estava aplicada,
+        // o guard pula o bloco e duplicatas continuariam sendo criadas. Idempotente: cleanup
+        // renumera duplicatas existentes ANTES de criar o índice.
+        try {
+          await db.execute(sql`
+            DO $body$
+            DECLARE
+              dup RECORD;
+              v_year TEXT;
+              v_max INT;
+              v_new TEXT;
+            BEGIN
+              FOR dup IN
+                SELECT id, company_id, numero_sc
+                FROM (
+                  SELECT id, company_id, numero_sc,
+                         ROW_NUMBER() OVER (PARTITION BY company_id, numero_sc ORDER BY id) AS rn
+                  FROM compras_solicitacoes
+                  WHERE numero_sc ~ '^SC-\\d{4}-\\d+$'
+                ) t WHERE rn > 1
+                ORDER BY id
+              LOOP
+                v_year := SUBSTRING(dup.numero_sc FROM 4 FOR 4);
+                SELECT COALESCE(MAX(CAST(SUBSTRING(numero_sc FROM 9) AS INTEGER)), 0)
+                  INTO v_max
+                  FROM compras_solicitacoes
+                  WHERE company_id = dup.company_id
+                    AND numero_sc LIKE 'SC-' || v_year || '-%'
+                    AND numero_sc ~ ('^SC-' || v_year || '-\\d+$');
+                v_new := 'SC-' || v_year || '-' || LPAD((v_max + 1)::TEXT, 4, '0');
+                UPDATE compras_solicitacoes SET numero_sc = v_new WHERE id = dup.id;
+                RAISE NOTICE 'Rev1743: renumerado SC id=% company=% : % -> %', dup.id, dup.company_id, dup.numero_sc, v_new;
+              END LOOP;
+            END $body$;
+          `);
+          await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uq_compras_solicitacoes_numero ON compras_solicitacoes (company_id, numero_sc)`);
+          console.log(`[SyncSchema+] Rev. 1743: duplicatas em compras_solicitacoes renumeradas + UNIQUE INDEX (company_id, numero_sc) garantido.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.1743 unique compras_solicitacoes:`, e?.message || e); }
+
         try {
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_escritorio INTEGER`);
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_faturamento INTEGER`);
@@ -1070,6 +1110,39 @@ Regras:
             CREATE INDEX IF NOT EXISTS crs_status ON compras_reservas_saldo (status);
             CREATE INDEX IF NOT EXISTS crs_responsavel ON compras_reservas_saldo (responsavel_original_id);
             CREATE UNIQUE INDEX IF NOT EXISTS uq_crs_cotacao_ativa ON compras_reservas_saldo (cotacao_id) WHERE status = 'ativa';
+
+            -- Rev. 1743 — UNIQUE constraint em (company_id, numero_sc) para impedir SCs duplicadas (race + colisão pós-exclusão).
+            -- Cleanup idempotente ANTES de criar índice: renumera duplicatas existentes para próximos suffixes livres do mesmo ano.
+            DO $body$
+            DECLARE
+              dup RECORD;
+              v_year TEXT;
+              v_max INT;
+              v_new TEXT;
+            BEGIN
+              FOR dup IN
+                SELECT id, company_id, numero_sc
+                FROM (
+                  SELECT id, company_id, numero_sc,
+                         ROW_NUMBER() OVER (PARTITION BY company_id, numero_sc ORDER BY id) AS rn
+                  FROM compras_solicitacoes
+                  WHERE numero_sc ~ '^SC-\d{4}-\d+$'
+                ) t WHERE rn > 1
+                ORDER BY id
+              LOOP
+                v_year := SUBSTRING(dup.numero_sc FROM 4 FOR 4);
+                SELECT COALESCE(MAX(CAST(SUBSTRING(numero_sc FROM 9) AS INTEGER)), 0)
+                  INTO v_max
+                  FROM compras_solicitacoes
+                  WHERE company_id = dup.company_id
+                    AND numero_sc LIKE 'SC-' || v_year || '-%'
+                    AND numero_sc ~ ('^SC-' || v_year || '-\d+$');
+                v_new := 'SC-' || v_year || '-' || LPAD((v_max + 1)::TEXT, 4, '0');
+                UPDATE compras_solicitacoes SET numero_sc = v_new WHERE id = dup.id;
+                RAISE NOTICE 'Rev1743: renumerado SC id=% company=% : % -> %', dup.id, dup.company_id, dup.numero_sc, v_new;
+              END LOOP;
+            END $body$;
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_compras_solicitacoes_numero ON compras_solicitacoes (company_id, numero_sc);
 
             CREATE TABLE IF NOT EXISTS compras_reservas_log (
               id SERIAL PRIMARY KEY,

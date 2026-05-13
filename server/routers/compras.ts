@@ -854,6 +854,25 @@ function _isPerfilCompras(role?: string | null): boolean {
   return PERFIS_COMPRAS.has(role);
 }
 
+// Rev. 1743 — Gerador de número de SC à prova de race condition + colisão pós-exclusão.
+// Estratégia: pega MAX(suffix) das SCs do ANO CORRENTE para a empresa, soma 1 + offset (retry).
+// O offset é incrementado pelo loop chamador em caso de unique-violation (`uq_compras_solicitacoes_numero`).
+async function gerarProximoNumeroSc(db: any, companyId: number, offset: number = 0): Promise<string> {
+  const ano = new Date().getFullYear();
+  const prefixo = `SC-${ano}-`;
+  const rows = await db.execute(sql`
+    SELECT COALESCE(MAX(CAST(SUBSTRING(numero_sc FROM ${prefixo.length + 1}) AS INTEGER)), 0) AS max_seq
+    FROM compras_solicitacoes
+    WHERE company_id = ${companyId}
+      AND numero_sc LIKE ${prefixo + '%'}
+      AND numero_sc ~ ${'^' + prefixo.replace(/-/g, '\\-') + '\\d+$'}
+  `);
+  const r = (rows as any).rows || rows;
+  const maxSeq = parseInt(String(r?.[0]?.max_seq ?? 0)) || 0;
+  const proximo = maxSeq + 1 + offset;
+  return `${prefixo}${String(proximo).padStart(4, "0")}`;
+}
+
 export const comprasRouter = router({
 
   // ══════════════════════════════════════════════════════════════
@@ -2523,31 +2542,48 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const vr = (vRows as any).rows || vRows;
         if (!vr || vr.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Veículo não encontrado ou não pertence a esta empresa." });
       }
-      const count = await db.select({ c: sql<number>`count(*)` }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId));
-      const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
-      const numeroSc = `SC-${new Date().getFullYear()}-${seq}`;
+      // Rev. 1743 — geração de número à prova de race condition + colisão com itens excluídos.
+      // ANTES: COUNT(*)+1 colidia ao excluir SCs antigas (sequência caía) e em criação simultânea.
+      // AGORA: MAX(suffix) do ano corrente + retry com unique index.
       const tipoSC = input.tipo ?? "material";
-      const [sc] = await db.insert(comprasSolicitacoes).values({
-        companyId: input.companyId,
-        numeroSc,
-        obraId: input.obraId ?? null,
-        projetoId: input.projetoId ?? null,
-        solicitanteId: input.solicitanteId ?? null,
-        vehicleId: input.vehicleId ?? null,
-        departamento: input.departamento,
-        titulo: normalizarTexto(input.titulo),
-        prioridade: input.prioridade ?? "normal",
-        dataNecessidade: input.dataNecessidade,
-        observacoes: input.observacoes,
-        imagemReferenciaUrl: input.imagemReferenciaUrl ?? null,
-        anexos: input.anexos || [],
-        tipo: tipoSC,
-        incluirEquipamentos: input.incluirEquipamentos ?? false,
-        status: "pendente",
-        aprovacaoStatus: "aguardando",
-        criadoPorId: input.userId ?? null,
-        criadoPorNome: input.userName ?? null,
-      } as any).returning();
+      let sc: any = null;
+      let lastErr: any = null;
+      for (let tentativa = 0; tentativa < 8; tentativa++) {
+        const numeroSc = await gerarProximoNumeroSc(db, input.companyId, tentativa);
+        try {
+          const inserted = await db.insert(comprasSolicitacoes).values({
+            companyId: input.companyId,
+            numeroSc,
+            obraId: input.obraId ?? null,
+            projetoId: input.projetoId ?? null,
+            solicitanteId: input.solicitanteId ?? null,
+            vehicleId: input.vehicleId ?? null,
+            departamento: input.departamento,
+            titulo: normalizarTexto(input.titulo),
+            prioridade: input.prioridade ?? "normal",
+            dataNecessidade: input.dataNecessidade,
+            observacoes: input.observacoes,
+            imagemReferenciaUrl: input.imagemReferenciaUrl ?? null,
+            anexos: input.anexos || [],
+            tipo: tipoSC,
+            incluirEquipamentos: input.incluirEquipamentos ?? false,
+            status: "pendente",
+            aprovacaoStatus: "aguardando",
+            criadoPorId: input.userId ?? null,
+            criadoPorNome: input.userName ?? null,
+          } as any).returning();
+          sc = inserted[0];
+          break;
+        } catch (e: any) {
+          lastErr = e;
+          const msg = String(e?.message || e?.code || "");
+          if (msg.includes("duplicate key") || msg.includes("23505") || msg.includes("uq_compras_solicitacoes_numero")) {
+            continue;
+          }
+          throw e;
+        }
+      }
+      if (!sc) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao gerar número único de SC após 8 tentativas: ${lastErr?.message ?? "desconhecido"}` });
       if (input.itens.length > 0) {
         await db.insert(comprasSolicitacoesItens).values(
           input.itens.map(it => ({
@@ -10502,27 +10538,39 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
       const scItens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
 
-      const count = await db.select({ c: sql<number>`count(*)` }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId));
-      const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
-      const numeroSc = `SC-${new Date().getFullYear()}-${seq}`;
-
-      const [novaSc] = await db.insert(comprasSolicitacoes).values({
-        companyId: sc.companyId,
-        numeroSc,
-        obraId: sc.obraId,
-        projetoId: sc.projetoId,
-        solicitanteId: sc.solicitanteId,
-        departamento: sc.departamento,
-        titulo: sc.titulo ? `${sc.titulo} (cópia)` : undefined,
-        prioridade: sc.prioridade ?? "normal",
-        dataNecessidade: null,
-        observacoes: sc.observacoes,
-        imagemReferenciaUrl: sc.imagemReferenciaUrl,
-        status: "pendente",
-        aprovacaoStatus: "aguardando",
-        criadoPorId: input.userId ?? null,
-        criadoPorNome: input.userName ?? null,
-      } as any).returning();
+      // Rev. 1743 — usa gerador robusto (MAX+offset) com retry contra unique violation.
+      let novaSc: any = null;
+      let lastErrDup: any = null;
+      for (let tentativa = 0; tentativa < 8; tentativa++) {
+        const numeroSc = await gerarProximoNumeroSc(db, input.companyId, tentativa);
+        try {
+          const inserted = await db.insert(comprasSolicitacoes).values({
+            companyId: sc.companyId,
+            numeroSc,
+            obraId: sc.obraId,
+            projetoId: sc.projetoId,
+            solicitanteId: sc.solicitanteId,
+            departamento: sc.departamento,
+            titulo: sc.titulo ? `${sc.titulo} (cópia)` : undefined,
+            prioridade: sc.prioridade ?? "normal",
+            dataNecessidade: null,
+            observacoes: sc.observacoes,
+            imagemReferenciaUrl: sc.imagemReferenciaUrl,
+            status: "pendente",
+            aprovacaoStatus: "aguardando",
+            criadoPorId: input.userId ?? null,
+            criadoPorNome: input.userName ?? null,
+          } as any).returning();
+          novaSc = inserted[0];
+          break;
+        } catch (e: any) {
+          lastErrDup = e;
+          const msg = String(e?.message || e?.code || "");
+          if (msg.includes("duplicate key") || msg.includes("23505") || msg.includes("uq_compras_solicitacoes_numero")) continue;
+          throw e;
+        }
+      }
+      if (!novaSc) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao gerar número único de SC após 8 tentativas: ${lastErrDup?.message ?? "desconhecido"}` });
 
       if (scItens.length > 0) {
         await db.insert(comprasSolicitacoesItens).values(
