@@ -638,25 +638,37 @@ export default function DDSGuia() {
             </>
           )}
           {/* Barra de progresso da geração em massa */}
-          {bulkIA.ativo && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200">
-              <Loader2 className="h-4 w-4 animate-spin text-blue-700" />
-              <div className="text-xs">
-                <div className="font-semibold text-blue-900">
-                  Gerando com IA — {bulkIA.idx}/{bulkIA.total}
-                  {bulkIA.falhas > 0 && <span className="text-red-700 ml-1">({bulkIA.falhas} falhas)</span>}
+          {bulkIA.ativo && (() => {
+            const pct = Math.round((bulkIA.idx / Math.max(1, bulkIA.total)) * 100);
+            const restantes = Math.max(0, bulkIA.total - bulkIA.idx);
+            const segRestantes = restantes * 5; // ~5s por tema
+            const min = Math.floor(segRestantes / 60);
+            const seg = segRestantes % 60;
+            const eta = restantes === 0 ? "finalizando..." : (min > 0 ? `~${min}m ${seg}s restantes` : `~${seg}s restantes`);
+            return (
+              <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 min-w-[340px]">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-700 shrink-0" />
+                <div className="flex-1 text-xs">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-semibold text-blue-900">
+                      Gerando com IA — {bulkIA.idx}/{bulkIA.total}
+                      {bulkIA.falhas > 0 && <span className="text-red-700 ml-1">({bulkIA.falhas} falhas)</span>}
+                    </span>
+                    <span className="font-bold text-blue-900 tabular-nums text-sm">{pct}%</span>
+                  </div>
+                  <div className="w-full bg-blue-200 h-2 rounded-full overflow-hidden">
+                    <div className="bg-blue-700 h-full transition-all duration-300"
+                      style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="text-[10px] text-blue-700/80 mt-0.5">{eta}</div>
                 </div>
-                <div className="w-48 bg-blue-200 h-1.5 rounded-full overflow-hidden mt-0.5">
-                  <div className="bg-blue-700 h-full transition-all"
-                    style={{ width: `${Math.round((bulkIA.idx / Math.max(1, bulkIA.total)) * 100)}%` }} />
-                </div>
+                <Button size="sm" variant="outline" onClick={() => setBulkIA(p => ({ ...p, cancelar: true }))}
+                  className="text-red-600 border-red-200 hover:bg-red-50 h-7 text-xs shrink-0">
+                  Cancelar
+                </Button>
               </div>
-              <Button size="sm" variant="outline" onClick={() => setBulkIA(p => ({ ...p, cancelar: true }))}
-                className="text-red-600 border-red-200 hover:bg-red-50 h-7 text-xs">
-                Cancelar
-              </Button>
-            </div>
-          )}
+            );
+          })()}
           <Button onClick={() => abrirNovaSessao()}>
             <Plus className="h-4 w-4 mr-1" /> Nova Sessão DDS
           </Button>

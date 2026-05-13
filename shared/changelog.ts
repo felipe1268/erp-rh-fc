@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1750,
+    titulo: "DDS · Biblioteca — Barra de progresso da geração bulk com % numérico + ETA estimado",
+    descricao: "Pedido do usuário (screenshot do header DDS com botão 'Enriquecendo...' + 'Gerar todos os roteiros com IA' + 'Regerar tudo'): a barra de progresso da Rev. 1747 já existia mas só mostrava 'X/Y' sem dar ideia de quanto falta. **Fix em `client/src/pages/sst/DDSGuia.tsx`**: bloco da barra reescrito como IIFE pra calcular `pct = round((idx/total)*100)`, `restantes = total - idx` e `eta = restantes * 5s` formatado como `~Mm Ss restantes` (ou `~Ns restantes` quando <60s, ou 'finalizando...' no último). Layout reorganizado: container `min-w-[340px]`, header da barra ganha `pct%` em negrito tabular-nums no canto direito ao lado de 'Gerando com IA — X/Y', barra ficou mais grossa (`h-2`) e ocupa largura total do container, ETA aparece em texto pequeno azul claro abaixo. Botão Cancelar mantido. Sem schema/server change.",
+    tipo: "melhoria",
+    modulos: "SST, DDS",
+    criadoPor: "main",
+    dataPublicacao: "2026-05-13 14:45:00",
+  },
+  {
     version: 1749,
     titulo: "Configurações > Critérios do Sistema — Toggle 'Alerta de Reservas Preventivas' movido pra cá (era aba dentro de Compras)",
     descricao: "Pedido do usuário (screenshots iPad): a Rev. 1745 criou uma aba 'Alertas' dentro de /compras/configuracoes só pra ligar/desligar o pop-up + banner de Reservas Preventivas. Como existe a tela 'Comando Central' de Configurações > Critérios do Sistema (`/configuracoes` aba 'Critérios do Sistema') que já consolida critérios de TODOS os módulos por categoria, o toggle deve viver lá — não escondido dentro do módulo Compras. **Fix em 2 arquivos, sem schema/server change**: (1) **`client/src/pages/configuracoes/ComprasConfigSection.tsx`**: adicionada 4ª sub-seção 'Alerta de Reservas Preventivas' (ícone Bell rose, badge verde 'Ligado' / cinza 'Desligado' no header) entre 'Comissão de Compradores' e 'Regras de Aprovação'. Reaproveita `getConfigCompras`/`salvarConfigOC` (mesma config do banco, mesmo campo `alertaReservasAtivo`) — quem ligar/desligar aqui afeta o ReservasAlertModal global imediatamente (invalidate de getConfigCompras incluído no onSuccess). (2) **`client/src/pages/compras/Configuracoes.tsx`**: aba 'Alertas' (TabsTrigger + TabsContent), state `alertaReservasAtivo`, useEffect setter e import de `Switch`/`Bell` removidos. Restam 3 abas em Compras: Numeração de OC, Regras de Aprovação, Serviços/Contratos.",
