@@ -1053,7 +1053,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1745-2026-05-13-alerta-reservas-ativo";
+    const COLFIX_VERSION = "v1746-2026-05-13-dds-assinatura-img";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -1843,6 +1843,7 @@ Regras:
             ALTER TABLE obras ADD COLUMN IF NOT EXISTS percentual_gerenciamento_material NUMERIC(5,2) DEFAULT 0;
             ALTER TABLE obras ADD COLUMN IF NOT EXISTS percentual_adm NUMERIC(5,2) DEFAULT 0;
             ALTER TABLE oc_number_config ADD COLUMN IF NOT EXISTS alerta_reservas_ativo SMALLINT DEFAULT 1;
+            ALTER TABLE dds_sessao_funcionarios ADD COLUMN IF NOT EXISTS assinatura_img TEXT;
           EXCEPTION WHEN OTHERS THEN NULL;
           END $$
         `);

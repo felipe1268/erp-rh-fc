@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -12,8 +12,175 @@ import { toast } from "sonner";
 import {
   CalendarDays, BookOpen, Megaphone, Plus, Trash2, Pencil, Users, FileSignature,
   ClipboardCheck, Check, X as XIcon, ChevronRight, Sparkles, MapPin, UserCheck,
-  ChevronDown, ChevronUp, Search, Wand2, Loader2,
+  ChevronDown, ChevronUp, Search, Wand2, Loader2, PenLine, Eraser,
 } from "lucide-react";
+// Rev. 1746 — Pad de assinatura digital (canvas) usado no DDS.
+// Funciona com touch (iPad/celular) e mouse. Salva como PNG dataURL.
+function AssinaturaPad({
+  open, onOpenChange, funcionarioNome, funcionarioId, sessaoId, companyId,
+  imgInicial, salvarMut, removerMut, podeEditar,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  funcionarioNome: string;
+  funcionarioId: number;
+  sessaoId: number;
+  companyId: number;
+  imgInicial?: string | null;
+  salvarMut: any;
+  removerMut: any;
+  podeEditar: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingRef = useRef(false);
+  const lastRef = useRef<{ x: number; y: number } | null>(null);
+  const [vazio, setVazio] = useState(true);
+
+  // Inicializa canvas: limpa e (se houver imagem prévia) renderiza ela
+  useEffect(() => {
+    if (!open) return;
+    const c = canvasRef.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    if (!ctx) return;
+    // hi-DPI: dimensiona o backing buffer pelo devicePixelRatio
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = c.clientWidth;
+    const cssH = c.clientHeight;
+    c.width = Math.round(cssW * dpr);
+    c.height = Math.round(cssH * dpr);
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, cssW, cssH);
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#0f172a";
+    if (imgInicial) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, cssW, cssH);
+        setVazio(false);
+      };
+      img.src = imgInicial;
+    } else {
+      setVazio(true);
+    }
+  }, [open, imgInicial]);
+
+  const getPos = (ev: React.PointerEvent) => {
+    const c = canvasRef.current!;
+    const r = c.getBoundingClientRect();
+    return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+  };
+
+  const onPointerDown = (ev: React.PointerEvent) => {
+    if (!podeEditar) return;
+    ev.preventDefault();
+    (ev.target as Element).setPointerCapture(ev.pointerId);
+    drawingRef.current = true;
+    lastRef.current = getPos(ev);
+  };
+  const onPointerMove = (ev: React.PointerEvent) => {
+    if (!drawingRef.current) return;
+    const c = canvasRef.current!;
+    const ctx = c.getContext("2d")!;
+    const p = getPos(ev);
+    const last = lastRef.current!;
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    lastRef.current = p;
+    setVazio(false);
+  };
+  const onPointerUp = () => { drawingRef.current = false; lastRef.current = null; };
+
+  const limpar = () => {
+    const c = canvasRef.current;
+    if (!c) return;
+    const ctx = c.getContext("2d")!;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, c.clientWidth, c.clientHeight);
+    setVazio(true);
+  };
+
+  const salvar = async () => {
+    const c = canvasRef.current;
+    if (!c || vazio) { toast.error("Desenhe a assinatura antes de salvar."); return; }
+    const dataUrl = c.toDataURL("image/png");
+    try {
+      await salvarMut.mutateAsync({ companyId, sessaoId, funcionarioId, assinaturaImg: dataUrl });
+      toast.success("Assinatura registrada.");
+      onOpenChange(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Falha ao salvar assinatura.");
+    }
+  };
+
+  const remover = async () => {
+    if (!confirm("Remover assinatura deste funcionário?")) return;
+    try {
+      await removerMut.mutateAsync({ companyId, sessaoId, funcionarioId });
+      toast.success("Assinatura removida.");
+      onOpenChange(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Falha ao remover.");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <PenLine className="h-4 w-4" /> Assinatura — {funcionarioNome}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500">
+            {podeEditar
+              ? "Assine no quadro abaixo usando o dedo (iPad/celular) ou o mouse. A assinatura é salva como imagem na lista de presença."
+              : "Sessão finalizada — visualização apenas. Reabra a sessão pra alterar."}
+          </p>
+          <div className="rounded-lg border-2 border-dashed border-slate-300 bg-white touch-none select-none">
+            <canvas
+              ref={canvasRef}
+              className="w-full h-56 cursor-crosshair touch-none rounded-lg"
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              onPointerLeave={onPointerUp}
+            />
+          </div>
+          <div className="text-[10px] text-slate-400 text-center">— assine acima da linha —</div>
+        </div>
+        <DialogFooter className="flex-wrap gap-2">
+          {podeEditar && (
+            <Button variant="outline" size="sm" onClick={limpar}>
+              <Eraser className="h-3.5 w-3.5 mr-1" /> Limpar
+            </Button>
+          )}
+          {imgInicial && podeEditar && (
+            <Button variant="outline" size="sm" onClick={remover}
+              disabled={removerMut.isPending}
+              className="text-red-600 hover:bg-red-50 border-red-200">
+              <Trash2 className="h-3.5 w-3.5 mr-1" /> Remover assinatura
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Fechar</Button>
+          {podeEditar && (
+            <Button size="sm" onClick={salvar} disabled={salvarMut.isPending || vazio}>
+              {salvarMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Check className="h-3.5 w-3.5 mr-1" />}
+              Salvar assinatura
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 // Rev. 1740 — Renderer leve de markdown (## Header, **bold**, listas) pros roteiros
 // detalhados. Não usa biblioteca pra evitar peso — formato é controlado pelo seed/IA.
@@ -1453,6 +1620,17 @@ function SessaoDetalhe({
   const presentes = funcs.filter((f: any) => f.presente === 1).length;
   const assinados = funcs.filter((f: any) => !!f.assinadoEm).length;
 
+  // Rev. 1746 — Assinatura digital por funcionário (canvas)
+  const utilsTrpc = trpc.useUtils();
+  const [assinandoId, setAssinandoId] = useState<number | null>(null);
+  const salvarAssinaturaMut = trpc.dds.registrarAssinatura.useMutation({
+    onSuccess: () => utilsTrpc.dds.getSessao.invalidate({ companyId, id: sessao.id }),
+  });
+  const removerAssinaturaMut = trpc.dds.removerAssinatura.useMutation({
+    onSuccess: () => utilsTrpc.dds.getSessao.invalidate({ companyId, id: sessao.id }),
+  });
+  const funcSelecionado = funcs.find((f: any) => f.id === assinandoId);
+
   const handleAdicionar = () => {
     if (!addFuncId) return;
     const e = employees.find((x: any) => String(x.id) === addFuncId);
@@ -1646,10 +1824,28 @@ function SessaoDetalhe({
                     </button>
                   </td>
                   <td className="py-2 text-center">
-                    {f.assinadoEm ? (
+                    {f.assinaturaImg ? (
+                      <button
+                        onClick={() => setAssinandoId(f.id)}
+                        className="inline-flex items-center gap-2 px-2 py-1 rounded hover:bg-blue-50 transition group"
+                        title={sessao.status === "aberta" ? "Clique para visualizar / refazer" : "Clique para visualizar"}
+                      >
+                        <img src={f.assinaturaImg} alt="assinatura"
+                          className="h-7 w-16 object-contain bg-white border border-slate-200 rounded" />
+                        <span className="text-[10px] text-blue-700">
+                          ✓ {f.assinadoEm ? new Date(f.assinadoEm).toLocaleDateString("pt-BR") : ""}
+                        </span>
+                      </button>
+                    ) : f.assinadoEm ? (
                       <span className="text-xs text-blue-700">
                         ✓ {new Date(f.assinadoEm).toLocaleDateString("pt-BR")}
                       </span>
+                    ) : sessao.status === "aberta" ? (
+                      <Button size="sm" variant="outline"
+                        onClick={() => setAssinandoId(f.id)}
+                        className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50">
+                        <PenLine className="h-3 w-3 mr-1" /> Assinar
+                      </Button>
                     ) : (
                       <span className="text-xs text-slate-400 italic">pendente</span>
                     )}
@@ -1669,20 +1865,36 @@ function SessaoDetalhe({
         )}
       </div>
 
+      {/* Rev. 1746 — Assinatura digital por funcionário (canvas no próprio sistema) */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center gap-3 flex-wrap">
         <FileSignature className="h-6 w-6 text-blue-700 shrink-0" />
         <div className="flex-1 min-w-[240px]">
-          <h4 className="font-semibold text-blue-900 text-sm">Assinatura digital via FCsign</h4>
+          <h4 className="font-semibold text-blue-900 text-sm">Assinatura digital no próprio sistema</h4>
           <p className="text-xs text-blue-800">
-            Ao finalizar a sessão, gere o envelope FCsign com a ata e a lista de presentes.
-            Cada funcionário assina pelo link enviado por e-mail/SMS.
+            Cada funcionário assina diretamente na tela do iPad/celular (botão <strong>Assinar</strong> em cada linha
+            da lista acima). A assinatura fica salva como imagem na sessão e aparece no PDF da ata.
+            Integração com FCsign para envio por e-mail/SMS chega em breve.
           </p>
         </div>
-        <Button size="sm" variant="outline" disabled
-          title="Integração FCsign — disponível na próxima entrega">
-          Enviar para FCsign (em breve)
-        </Button>
+        <span className="text-xs font-medium text-emerald-700 bg-emerald-100 px-2 py-1 rounded">
+          {assinados}/{funcs.length} assinaram
+        </span>
       </div>
+
+      {funcSelecionado && (
+        <AssinaturaPad
+          open={!!assinandoId}
+          onOpenChange={(v) => { if (!v) setAssinandoId(null); }}
+          funcionarioNome={funcSelecionado.nome}
+          funcionarioId={funcSelecionado.id}
+          sessaoId={sessao.id}
+          companyId={companyId}
+          imgInicial={funcSelecionado.assinaturaImg}
+          salvarMut={salvarAssinaturaMut}
+          removerMut={removerAssinaturaMut}
+          podeEditar={sessao.status === "aberta"}
+        />
+      )}
 
       <div className="flex gap-2 justify-end flex-wrap">
         {sessao.status === "aberta" && (

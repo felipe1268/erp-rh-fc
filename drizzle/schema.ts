@@ -8184,8 +8184,9 @@ export const ddsSessaoFuncionarios = pgTable("dds_sessao_funcionarios", {
   cpf: varchar({ length: 14 }),
   funcao: varchar({ length: 120 }),
   presente: integer().default(1).notNull(),
-  assinaturaTipo: varchar("assinatura_tipo", { length: 20 }), // 'fcsign' | 'manual' | null
+  assinaturaTipo: varchar("assinatura_tipo", { length: 20 }), // 'fcsign' | 'manual' | 'desenhada' | null
   assinadoEm: timestamp("assinado_em", { mode: "string" }),
+  assinaturaImg: text("assinatura_img"), // PNG base64 dataURL (assinatura desenhada na tela — Rev. 1746)
   observacao: text(),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [

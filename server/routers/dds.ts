@@ -1590,4 +1590,61 @@ Gere o roteiro detalhado seguindo EXATAMENTE o formato exigido.`;
       }
       return { ok: true };
     }),
+
+  // Rev. 1746 — Registra assinatura desenhada na tela (canvas → PNG dataURL).
+  // Usado pelo modal de assinatura por funcionário (touch no iPad / mouse no desktop).
+  registrarAssinatura: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      sessaoId: z.number().int().positive(),
+      funcionarioId: z.number().int().positive(),
+      assinaturaImg: z.string().min(50).max(2_000_000), // dataURL base64 PNG (~limite 2MB)
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      // valida que a sessão pertence à empresa e está aberta
+      const [s] = await db.select({ id: ddsSessoes.id, status: ddsSessoes.status })
+        .from(ddsSessoes)
+        .where(and(eq(ddsSessoes.id, input.sessaoId), eq(ddsSessoes.companyId, input.companyId)));
+      if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "Sessão não encontrada" });
+      if (s.status !== "aberta") throw new TRPCError({ code: "BAD_REQUEST", message: "Sessão já finalizada — reabra para coletar assinaturas." });
+      // valida que o funcionário pertence à sessão
+      const [f] = await db.select({ id: ddsSessaoFuncionarios.id })
+        .from(ddsSessaoFuncionarios)
+        .where(and(eq(ddsSessaoFuncionarios.id, input.funcionarioId), eq(ddsSessaoFuncionarios.sessaoId, input.sessaoId)));
+      if (!f) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não está na lista da sessão" });
+      await db.update(ddsSessaoFuncionarios).set({
+        assinaturaImg: input.assinaturaImg,
+        assinaturaTipo: "desenhada",
+        assinadoEm: sql`NOW()` as any,
+        presente: 1, // assinatura implica presença
+      } as any).where(eq(ddsSessaoFuncionarios.id, input.funcionarioId));
+      return { ok: true };
+    }),
+
+  removerAssinatura: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      sessaoId: z.number().int().positive(),
+      funcionarioId: z.number().int().positive(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      const [s] = await db.select({ id: ddsSessoes.id, status: ddsSessoes.status })
+        .from(ddsSessoes)
+        .where(and(eq(ddsSessoes.id, input.sessaoId), eq(ddsSessoes.companyId, input.companyId)));
+      if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "Sessão não encontrada" });
+      if (s.status !== "aberta") throw new TRPCError({ code: "BAD_REQUEST", message: "Sessão já finalizada — reabra para alterar assinaturas." });
+      await db.update(ddsSessaoFuncionarios).set({
+        assinaturaImg: null,
+        assinaturaTipo: null,
+        assinadoEm: null,
+      } as any).where(and(
+        eq(ddsSessaoFuncionarios.id, input.funcionarioId),
+        eq(ddsSessaoFuncionarios.sessaoId, input.sessaoId),
+      ));
+      return { ok: true };
+    }),
 });
