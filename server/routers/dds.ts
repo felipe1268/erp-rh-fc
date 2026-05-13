@@ -1423,39 +1423,59 @@ Gere o roteiro detalhado seguindo EXATAMENTE o formato exigido.`;
   getSessao: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive(), id: z.number().int().positive() }))
     .query(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
-      const db = (await getDb())!;
-      const [s] = await db.select().from(ddsSessoes)
-        .where(and(eq(ddsSessoes.id, input.id), eq(ddsSessoes.companyId, input.companyId)));
-      if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "Sessão não encontrada" });
-      // Rev. 1748 — não retornamos `assinaturaImg` (PNG dataURL base64 até 2MB/linha).
-      // Com 10+ funcionários assinados o payload chega a 20+MB, derruba o batch tRPC
-      // ("Failed to execute 'json' on 'Response': Unexpected end of JSON input").
-      // A imagem é carregada sob demanda via `getAssinaturaImg`. Aqui devolvemos
-      // só uma flag `temAssinatura` (calculada via segunda query simples).
-      const funcs = await db.select({
-        id: ddsSessaoFuncionarios.id,
-        sessaoId: ddsSessaoFuncionarios.sessaoId,
-        employeeId: ddsSessaoFuncionarios.employeeId,
-        nome: ddsSessaoFuncionarios.nome,
-        cpf: ddsSessaoFuncionarios.cpf,
-        funcao: ddsSessaoFuncionarios.funcao,
-        presente: ddsSessaoFuncionarios.presente,
-        assinadoEm: ddsSessaoFuncionarios.assinadoEm,
-        assinaturaTipo: ddsSessaoFuncionarios.assinaturaTipo,
-        criadoEm: ddsSessaoFuncionarios.criadoEm,
-      }).from(ddsSessaoFuncionarios)
-        .where(eq(ddsSessaoFuncionarios.sessaoId, input.id))
-        .orderBy(ddsSessaoFuncionarios.nome);
-      // segunda query: só os IDs que TÊM assinatura (campo TEXT não-vazio)
-      const comAssinatura = await db.execute(
-        sql`SELECT id FROM dds_sessao_funcionarios WHERE sessao_id = ${input.id} AND assinatura_img IS NOT NULL AND length(assinatura_img) > 0`
-      );
-      const idsComAssinatura = new Set<number>(
-        ((comAssinatura as any).rows ?? comAssinatura ?? []).map((r: any) => Number(r.id))
-      );
-      const funcsComFlag = funcs.map((f: any) => ({ ...f, temAssinatura: idsComAssinatura.has(Number(f.id)) }));
-      return { ...s, funcionarios: funcsComFlag };
+      try {
+        assertCompanyAccess(ctx, input.companyId);
+        const db = (await getDb())!;
+        // Rev. 1753 — projeta colunas explícitas da sessão (igual aos funcionários).
+        // Antes usava `select()` que trazia TUDO; algum campo problemático no spread
+        // `{ ...s, ... }` causava "Cannot convert undefined or null to object" quando
+        // o driver devolvia metadados fora do padrão (ex.: getter null em coluna nova).
+        const [s] = await db.select({
+          id: ddsSessoes.id,
+          companyId: ddsSessoes.companyId,
+          obraId: ddsSessoes.obraId,
+          obraNome: ddsSessoes.obraNome,
+          data: ddsSessoes.data,
+          hora: ddsSessoes.hora,
+          temaId: ddsSessoes.temaId,
+          tituloTema: ddsSessoes.tituloTema,
+          conteudoMd: ddsSessoes.conteudoMd,
+          instrutor: ddsSessoes.instrutor,
+          instrutorCpf: ddsSessoes.instrutorCpf,
+          local: ddsSessoes.local,
+          observacoes: ddsSessoes.observacoes,
+          status: ddsSessoes.status,
+          finalizadaEm: ddsSessoes.finalizadaEm,
+          createdBy: ddsSessoes.createdBy,
+          criadoEm: ddsSessoes.criadoEm,
+          updatedAt: ddsSessoes.updatedAt,
+        }).from(ddsSessoes)
+          .where(and(eq(ddsSessoes.id, input.id), eq(ddsSessoes.companyId, input.companyId)));
+        if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "Sessão não encontrada" });
+        // Rev. 1748 — não retornamos `assinaturaImg` (PNG dataURL base64 até 2MB/linha).
+        // Com 10+ funcionários assinados o payload chega a 20+MB e derruba o batch tRPC.
+        // Devolvemos só `temAssinatura: boolean` calculado em SQL.
+        const funcs = await db.select({
+          id: ddsSessaoFuncionarios.id,
+          sessaoId: ddsSessaoFuncionarios.sessaoId,
+          employeeId: ddsSessaoFuncionarios.employeeId,
+          nome: ddsSessaoFuncionarios.nome,
+          cpf: ddsSessaoFuncionarios.cpf,
+          funcao: ddsSessaoFuncionarios.funcao,
+          presente: ddsSessaoFuncionarios.presente,
+          assinadoEm: ddsSessaoFuncionarios.assinadoEm,
+          assinaturaTipo: ddsSessaoFuncionarios.assinaturaTipo,
+          criadoEm: ddsSessaoFuncionarios.criadoEm,
+          temAssinatura: sql<boolean>`(${ddsSessaoFuncionarios.assinaturaImg} IS NOT NULL AND length(${ddsSessaoFuncionarios.assinaturaImg}) > 0)`,
+        }).from(ddsSessaoFuncionarios)
+          .where(eq(ddsSessaoFuncionarios.sessaoId, input.id))
+          .orderBy(ddsSessaoFuncionarios.nome);
+        return { ...s, funcionarios: funcs ?? [] };
+      } catch (e: any) {
+        if (e instanceof TRPCError) throw e;
+        console.error("[dds.getSessao] erro detalhado", { id: input.id, companyId: input.companyId, msg: e?.message, name: e?.name, stack: e?.stack });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "Erro ao carregar sessão" });
+      }
     }),
 
   // Rev. 1748 — endpoint sob demanda pra puxar a imagem da assinatura (PNG base64).
