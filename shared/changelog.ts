@@ -12523,4 +12523,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-13 14:30:00",
   },
+  {
+    version: 1770,
+    titulo: "Gestão de Documentos · Upload — 'arquivo não fica salvo' resolvido (verificação de resposta tRPC + fallback automático)",
+    descricao: "Reportado pelo usuário (screenshot 'Planta de implantação' com REVISÃO ATUAL=0, R00 no histórico mas card 'ARQUIVO ATUAL = Nenhum arquivo anexado'): após enviar o arquivo, a barra chegava a 100%, o toast de sucesso aparecia, mas o documento principal ficava sem `arquivoUrl` no banco — só a revisão R00 (vazia) era criada. **Causa raiz**: a Rev. 1767 reescreveu `uploadFileToDoc` para usar XMLHttpRequest direto no endpoint tRPC (`/api/trpc/gestaoDocumentos.uploadArquivoDocumento`) pra ter `xhr.upload.onprogress` real, mas o `xhr.onload` apenas checava `status >= 200 && < 300` e dava `resolve()` — em cenários onde o servidor responde 200 com envelope de erro tRPC (`{error: {...}}`) ou em formato não esperado pelo wire de single-call (sem `?batch=1`), o front considerava sucesso silenciosamente, invalidava o cache e prosseguia, mas o `db.update(gdDocumentos).set({arquivoUrl})` no servidor nunca era executado. **Fix sem schema/server change** em `client/src/pages/gestaodocumentos/index.tsx` L469-518: (1) `xhr.onload` agora faz `JSON.parse(responseText)` e VALIDA explicitamente que `result.data` existe E que `error` NÃO existe (cobre os 2 envelopes possíveis: single `{result:{data:...}}` e batch `[{result:{data:...}}]`); status 2xx sem `result.data` → tratado como falha. (2) Em qualquer falha (HTTP 4xx/5xx, parse inválido, erro tRPC em 200, network error, timeout), em vez de propagar erro pro usuário, faz **fallback automático** pra `uploadArquivo.mutateAsync(input)` — o mutation tRPC tradicional usado antes da Rev. 1767, que comprovadamente grava `arquivoUrl` no banco. (3) `console.warn` com mensagem + payload bruto pra diagnóstico futuro. (4) `utils.gestaoDocumentos.listDocumentos.invalidate()` movido pro fim, garantindo refresh único após sucesso real (XHR ou fallback). Resultado: barra de progresso real preservada quando o XHR funciona; quando não funciona, o usuário não vê nada — o sistema simplesmente cai pro caminho confiável e o arquivo aparece corretamente no card 'ARQUIVO ATUAL'.",
+    tipo: "bugfix",
+    modulos: "Gestão de Documentos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 15:00:00",
+  },
 ];

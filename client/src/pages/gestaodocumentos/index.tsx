@@ -463,7 +463,12 @@ export default function GestaoDocumentos() {
       fileSize: file.size,
     };
 
-    return new Promise<void>((resolve, reject) => {
+    // Rev. 1770 — XHR direto + verificação ROBUSTA da resposta tRPC + fallback
+    // pro mutation tradicional. Bug detectado: em alguns cenários o XHR retorna
+    // HTTP 200 mas com envelope de erro tRPC ({ error: {...} }) ou com formato
+    // não esperado, e a Rev. 1767 dava resolve() silenciosamente — o doc nunca
+    // tinha `arquivoUrl` atualizado mesmo com a barra chegando a 100%.
+    const xhrOk = await new Promise<boolean>((resolve) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/trpc/gestaoDocumentos.uploadArquivoDocumento");
       xhr.setRequestHeader("Content-Type", "application/json");
@@ -475,25 +480,39 @@ export default function GestaoDocumentos() {
         }
       };
       xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          // Garante 100% no final mesmo se onprogress não disparou.
+        let parsed: any = null;
+        try { parsed = JSON.parse(xhr.responseText); } catch {}
+        const hasError = parsed?.error || (Array.isArray(parsed) && parsed[0]?.error);
+        const hasData =
+          parsed?.result?.data !== undefined ||
+          (Array.isArray(parsed) && parsed[0]?.result?.data !== undefined);
+        if (xhr.status >= 200 && xhr.status < 300 && hasData && !hasError) {
           if (onProgress) onProgress(100, file.size, file.size);
-          // Invalida cache pra refletir igual ao mutation.
-          utils.gestaoDocumentos.listDocumentos.invalidate();
-          resolve();
+          resolve(true);
         } else {
-          let msg = `HTTP ${xhr.status}`;
-          try {
-            const r = JSON.parse(xhr.responseText);
-            msg = r?.error?.json?.message || r?.error?.message || msg;
-          } catch {}
-          reject(new Error(msg));
+          const msg =
+            parsed?.error?.json?.message ||
+            parsed?.error?.message ||
+            parsed?.[0]?.error?.json?.message ||
+            `HTTP ${xhr.status}`;
+          console.warn("[uploadFileToDoc] XHR direto falhou, tentando fallback via tRPC mutation:", msg, parsed);
+          resolve(false);
         }
       };
-      xhr.onerror = () => reject(new Error("Erro de rede no upload"));
-      xhr.ontimeout = () => reject(new Error("Tempo esgotado no upload"));
+      xhr.onerror = () => { console.warn("[uploadFileToDoc] Erro de rede no XHR — fallback"); resolve(false); };
+      xhr.ontimeout = () => { console.warn("[uploadFileToDoc] Timeout no XHR — fallback"); resolve(false); };
       xhr.send(JSON.stringify({ json: input }));
     });
+
+    // Fallback: se o XHR direto falhou OU retornou formato inesperado, refaz via
+    // mutation tradicional do tRPC client (sem barra de progresso real, mas
+    // GARANTE que doc.arquivoUrl é gravado no banco).
+    if (!xhrOk) {
+      await uploadArquivo.mutateAsync(input);
+      if (onProgress) onProgress(100, file.size, file.size);
+    }
+
+    utils.gestaoDocumentos.listDocumentos.invalidate();
   }
 
   function parseRevision(filename: string): { base: string; rev: number; revStr: string } {
