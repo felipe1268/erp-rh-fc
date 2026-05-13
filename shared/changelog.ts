@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1742,
+    titulo: "RH · Sidebar — 'Efetivo por Obra' agora aparece em Operacional (cadastro/edição), não só como Dashboard",
+    descricao: "Reportado pelo usuário (screenshot 13/05/2026): no módulo RH só aparecia 'Dashboard Efetivo por Obra' (`/dashboards/efetivo-obra`, somente leitura). O cadastro/edição/transferência de funcionários da página `/obras/efetivo` (componente `ObraEfetivo.tsx`) ficava acessível só pelo módulo de Cadastros, obrigando o usuário a trocar de módulo pra editar o efetivo e voltar pro RH. **Causa**: `menuSectionsRHDP` em `client/src/components/DashboardLayout.tsx` listava 'Efetivo por Obra' apenas no bloco 'Dashboards' (rota dashboard). O feature `efetivo-obra → /obras/efetivo` JÁ estava registrado em `shared/modules.ts` (L132) sob o módulo `rh-dp` e em `GruposUsuarios.tsx` (L30) — só faltava expor no sidebar visual. **Fix em 1 linha** em `DashboardLayout.tsx`: adicionado `{ icon: HardHat, label: 'Efetivo por Obra', path: '/obras/efetivo' }` como PRIMEIRO item do bloco 'Operacional' do menu RH (junto a Fechamento de Ponto, Folha, etc.). O Dashboard segue intacto no bloco 'Dashboards'. Sem schema/server change, sem mudança em ACL.",
+    tipo: "feature",
+    modulos: "RH",
+    criadoPor: "main",
+    dataPublicacao: "2026-05-13 09:00:00",
+  },
+  {
     version: 1741,
     titulo: "Proj./Doc. Técnicos · Modal Nova Pasta no iPad lançava 'The string did not match the expected pattern'",
     descricao: "Reportado pelo usuário (screenshot iPad 13/05/2026 08:15): ao tentar criar nova pasta 'Proposta técnica/PT' em ARQ — Arquitetura, o modal exibia toast 'The string did not match the expected pattern' e bloqueava a criação. **Causa**: `<input type=\"color\">` no Safari iOS é estrito quanto ao formato — exige hex EXATAMENTE `#rrggbb` lowercase. Os defaults do `newDiscForm.cor` (`#3B82F6`) e dos atalhos de disciplina (`#EF4444`, `#F59E0B`, `#06B6D4`...) usam letras MAIÚSCULAS, o que faz o WebKit lançar `DOMException: The string did not match the expected pattern` ao montar o input — o catch genérico do tRPC mostrava a mensagem como toast de erro. Chrome/Firefox aceitam ambos casos, por isso o bug só apareceu no iPad. **Fix mínimo em `client/src/pages/gestaodocumentos/index.tsx` (1 linha, sem schema change)**: o `<input type=\"color\">` do modal Nova Pasta passa a normalizar valor lido E gravado pra lowercase via `(newDiscForm.cor || '#3b82f6').toLowerCase()` no `value` e `e.target.value.toLowerCase()` no `onChange`. Defaults e atalhos hardcoded (que vão direto pro server, sem passar pelo input) seguem como estavam — não causam o erro.",

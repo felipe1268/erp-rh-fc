@@ -86,6 +86,7 @@ const menuSectionsRHDP: MenuSection[] = [
   {
     title: "Operacional",
     items: [
+      { icon: HardHat, label: "Efetivo por Obra", path: "/obras/efetivo" },
       { icon: Clock, label: "Fechamento de Ponto", path: "/fechamento-ponto" },
       { icon: FileText, label: "Espelho de Ponto", path: "/espelho-ponto" },
       { icon: Wallet, label: "Folha de Pagamento", path: "/folha-pagamento" },
