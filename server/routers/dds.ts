@@ -14,6 +14,35 @@ function assertCompanyAccess(ctx: any, companyId: number) {
   }
 }
 
+// Rev. 1735 — Expande obraIds para incluir TODAS as obras da empresa que compartilham
+// o mesmo nome canônico (trim+UPPER). Mesma regra do `getEfetivoPorObra` (server/db.ts L2336)
+// e do cadastro > aba "Efetivo por Obra". Resolve o caso de obras duplicadas com IDs diferentes
+// (ex.: REVTE-CIVIL aparece em listActive com 1 ID, mas o efetivo está vinculado a outro ID).
+async function expandObraIdsByCanonicalName(
+  db: any, companyId: number, obraIdsInput: number[]
+): Promise<number[]> {
+  if (obraIdsInput.length === 0) return [];
+  // 1. Pega os nomes canônicos das obras informadas (validando ownership)
+  const seedRows = await db.select({ id: obras.id, nome: obras.nome }).from(obras)
+    .where(and(inArray(obras.id, obraIdsInput), eq(obras.companyId, companyId)));
+  if (seedRows.length !== obraIdsInput.length) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Alguma obra não pertence a esta empresa." });
+  }
+  const canonicalNames = Array.from(new Set(
+    seedRows.map((r: any) => (r.nome || "").trim().toUpperCase()).filter(Boolean)
+  ));
+  if (canonicalNames.length === 0) return obraIdsInput;
+  // 2. Busca TODAS as obras da empresa (não-deletadas) e filtra por nome canônico
+  const allCompanyObras = await db.select({ id: obras.id, nome: obras.nome }).from(obras)
+    .where(and(eq(obras.companyId, companyId), isNull(obras.deletedAt)));
+  const expanded = new Set<number>(obraIdsInput);
+  for (const o of allCompanyObras) {
+    const k = (o.nome || "").trim().toUpperCase();
+    if (canonicalNames.includes(k)) expanded.add(o.id);
+  }
+  return Array.from(expanded);
+}
+
 // Rev. 1726 — Calendário oficial de campanhas governamentais brasileiras
 // (gov.br + portal Saúde). Usado pra semear ddsTemas categoria=CAMPANHA.
 const CAMPANHAS_GOV: Array<{
@@ -364,15 +393,13 @@ export const ddsRouter = router({
     .query(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
-      const ids = (input.obraIds && input.obraIds.length > 0)
+      const inputIds = (input.obraIds && input.obraIds.length > 0)
         ? input.obraIds
         : (input.obraId ? [input.obraId] : []);
-      if (ids.length === 0) return [];
-      const ownerRows = await db.select({ id: obras.id }).from(obras)
-        .where(and(inArray(obras.id, ids), eq(obras.companyId, input.companyId)));
-      if (ownerRows.length !== ids.length) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Alguma obra não pertence a esta empresa." });
-      }
+      if (inputIds.length === 0) return [];
+      // Rev. 1735 — expande pra TODAS as obras da empresa com mesmo nome canônico
+      // (alinha com a aba "Efetivo por Obra" do cadastro). Helper já valida ownership.
+      const ids = await expandObraIdsByCanonicalName(db, input.companyId, inputIds);
       const rows = await db.select({
         employeeId: employees.id,
         nome: employees.nome,
@@ -408,15 +435,12 @@ export const ddsRouter = router({
     .query(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
-      const ids = (input.obraIds && input.obraIds.length > 0)
+      const inputIds = (input.obraIds && input.obraIds.length > 0)
         ? input.obraIds
         : (input.obraId ? [input.obraId] : []);
-      if (ids.length === 0) return [];
-      const ownerRows = await db.select({ id: obras.id }).from(obras)
-        .where(and(inArray(obras.id, ids), eq(obras.companyId, input.companyId)));
-      if (ownerRows.length !== ids.length) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Alguma obra não pertence a esta empresa." });
-      }
+      if (inputIds.length === 0) return [];
+      // Rev. 1735 — expande pra TODAS as obras com mesmo nome canônico (cadastros duplicados)
+      const ids = await expandObraIdsByCanonicalName(db, input.companyId, inputIds);
       // Subquery: ids já vinculados ATIVOS em QUALQUER das obras consolidadas
       const jaNaObra = db.select({ id: obraFuncionarios.employeeId })
         .from(obraFuncionarios)
@@ -499,17 +523,13 @@ export const ddsRouter = router({
     .query(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
-      // Rev. 1733 — aceita obraIds[] consolidado (alinhado com sidebar do DDS)
-      const obraIdsConsolidados = (input.obraIds && input.obraIds.length > 0)
+      // Rev. 1733/1735 — aceita obraIds[] e expande pra todas as duplicatas com mesmo nome canônico
+      const inputObraIds = (input.obraIds && input.obraIds.length > 0)
         ? input.obraIds
         : (input.obraId ? [input.obraId] : []);
-      if (obraIdsConsolidados.length > 0) {
-        const ownerRows = await db.select({ id: obras.id }).from(obras)
-          .where(and(inArray(obras.id, obraIdsConsolidados), eq(obras.companyId, input.companyId)));
-        if (ownerRows.length !== obraIdsConsolidados.length) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Alguma obra não pertence a esta empresa." });
-        }
-      }
+      const obraIdsConsolidados = inputObraIds.length > 0
+        ? await expandObraIdsByCanonicalName(db, input.companyId, inputObraIds)
+        : [];
       // Rev. 1731 fix (architect): D-1 calculado em America/Sao_Paulo (regra legal brasileira) — robusto a TZ do servidor.
       const fmtSP = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
       const agora = new Date();
