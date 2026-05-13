@@ -54,6 +54,15 @@ export default function DDSGuia() {
     onError: (e) => toast.error(e.message),
   });
 
+  // Rev. 1729 — campanhas oficiais de vacinação PNI/MS 2026 (Lei 15.377/2026)
+  const seedVacMut = trpc.dds.seedVacinacaoPNI.useMutation({
+    onSuccess: (r) => {
+      toast.success(`${r.inseridos} campanha(s) de vacinação carregada(s)`);
+      utils.dds.listTemas.invalidate(); utils.dds.calendarioAnual.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   // ===== modal: tema
   const [showTema, setShowTema] = useState(false);
   const [editTema, setEditTema] = useState<any | null>(null);
@@ -194,6 +203,18 @@ export default function DDSGuia() {
               {seedMut.isPending ? "Carregando..." : "Carregar biblioteca padrão (12 campanhas + 13 NRs)"}
             </Button>
           )}
+          {/* Rev. 1729 — Lei 15.377/2026 (CLT art. 169-A): empresa deve divulgar campanhas de vacinação */}
+          {!temas.some((t: any) => t.categoria === "VACINACAO") && (
+            <Button
+              variant="outline"
+              onClick={() => seedVacMut.mutate({ companyId })}
+              disabled={seedVacMut.isPending}
+              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+            >
+              <Sparkles className="h-4 w-4 mr-1" />
+              {seedVacMut.isPending ? "Carregando..." : "💉 Carregar campanhas de vacinação (PNI/MS — Lei 15.377/2026)"}
+            </Button>
+          )}
           <Button onClick={() => abrirNovaSessao()}>
             <Plus className="h-4 w-4 mr-1" /> Nova Sessão DDS
           </Button>
@@ -271,6 +292,39 @@ export default function DDSGuia() {
                         Sem campanha cadastrada para este mês.
                       </p>
                     )}
+
+                    {/* Rev. 1729 — Sugestões de DDS de VACINAÇÃO (Lei 15.377/2026) */}
+                    {m.vacinacao?.length > 0 && (
+                      <div className="mt-3 pt-3 border-t-2 border-dashed border-emerald-300">
+                        <div className="flex items-center gap-1 mb-2">
+                          <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                            Sugerido pelo ERP — Vacinação
+                          </span>
+                        </div>
+                        {m.vacinacao.map((v: any) => (
+                          <div key={v.id} className="mb-2 bg-emerald-50/70 border border-emerald-200 rounded-lg p-2">
+                            <h4 className="font-semibold text-sm leading-tight text-emerald-900">{v.titulo}</h4>
+                            <p className="text-[11px] text-slate-700 mt-1 line-clamp-3">{v.descricao}</p>
+                            {v.normaReferencia && (
+                              <p className="text-[9px] text-slate-500 mt-1 italic">{v.normaReferencia}</p>
+                            )}
+                            <div className="mt-2 flex gap-1">
+                              <Button size="sm" variant="default" className="text-[11px] h-6 bg-emerald-600 hover:bg-emerald-700"
+                                onClick={() => abrirNovaSessao(v)}
+                              >
+                                <Plus className="h-3 w-3 mr-1" /> DDS desta vacinação
+                              </Button>
+                              <Button size="sm" variant="ghost" className="text-[11px] h-6"
+                                onClick={() => abrirEditTema(v)}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -284,19 +338,20 @@ export default function DDSGuia() {
             <p className="text-sm text-slate-600">{temas.length} tema(s) cadastrado(s).</p>
             <Button size="sm" onClick={abrirNovoTema}><Plus className="h-4 w-4 mr-1" /> Novo tema</Button>
           </div>
-          {["NR", "CAMPANHA", "LIVRE"].map(cat => {
+          {["NR", "CAMPANHA", "VACINACAO", "LIVRE"].map(cat => {
             const lista = temas.filter((t: any) => t.categoria === cat);
             if (lista.length === 0) return null;
             return (
               <div key={cat} className="mb-6">
                 <h3 className="font-semibold text-slate-700 mb-2 flex items-center gap-2">
                   {cat === "NR" ? "Normas Regulamentadoras (NRs)" :
-                   cat === "CAMPANHA" ? "Campanhas Governamentais" : "Temas Livres"}
+                   cat === "CAMPANHA" ? "Campanhas Governamentais" :
+                   cat === "VACINACAO" ? "💉 Campanhas de Vacinação (PNI/MS — Lei 15.377/2026)" : "Temas Livres"}
                   <span className="text-xs text-slate-400 font-normal">({lista.length})</span>
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {lista.map((t: any) => {
-                    const cor = cat === "CAMPANHA" ? corCfg(t.corCampanha) : { bg: "bg-white", text: "text-slate-800", border: "border-slate-200", chip: "bg-slate-200 text-slate-700" };
+                    const cor = (cat === "CAMPANHA" || cat === "VACINACAO") ? corCfg(t.corCampanha) : { bg: "bg-white", text: "text-slate-800", border: "border-slate-200", chip: "bg-slate-200 text-slate-700" };
                     return (
                       <div key={t.id} className={`rounded-xl border ${cor.border} ${cor.bg} p-3 shadow-sm flex flex-col`}>
                         <div className="flex items-start justify-between gap-2 mb-1">
@@ -423,6 +478,7 @@ export default function DDSGuia() {
                     <SelectItem value="LIVRE">Livre</SelectItem>
                     <SelectItem value="NR">NR</SelectItem>
                     <SelectItem value="CAMPANHA">Campanha</SelectItem>
+                    <SelectItem value="VACINACAO">💉 Vacinação (PNI/MS)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1729,
+    titulo: "DDS — Campanhas de Vacinação (Lei 15.377/2026, CLT art. 169-A) sugeridas no calendário",
+    descricao: "Solicitado: cumprir Lei 15.377/2026 (sancionada 06/04/2026) que inclui art. 169-A na CLT obrigando o empregador a divulgar campanhas de vacinação aos empregados. Implementação AUTOMÁTICA dentro do módulo DDS (Rev. 1726) com materiais oficiais MS/PNI pré-cadastrados. Entrega em 4 frentes SEM schema change (categoria já é texto livre): (1) Server `server/routers/dds.ts`: array `VACINACAO_PNI` com 8 campanhas oficiais do calendário PNI 2026 (COVID-19 reforço, HPV adolescentes, Influenza, NR-7 imunização ocupacional, Tétano/Difteria 10 anos, Hepatite B trabalhadores, Multivacinação, Febre Amarela), categoria 'VACINACAO' adicionada nos enums de `criarTema`/`atualizarTema`, mutation `seedVacinacaoPNI` idempotente. (2) `calendarioAnual` retorna agora `vacinacao` por mês ao lado de `campanhas` (mesma lógica de filtro por `mesCampanha`). (3) Client `DDSGuia.tsx`: novo botão verde '💉 Carregar campanhas de vacinação (PNI/MS — Lei 15.377/2026)' aparece quando ainda não há temas categoria=VACINACAO; cards mensais do Calendário Anual ganham seção tracejada verde 'Sugerido pelo ERP — Vacinação' com cards menores e botão 'DDS desta vacinação' (chama abrirNovaSessao com tema pré-selecionado); aba Biblioteca agrupa novo grupo '💉 Campanhas de Vacinação (PNI/MS — Lei 15.377/2026)' entre Campanhas e Livres. (4) Modal de tema ganha opção 'VACINACAO' no Select de Categoria pra cadastros manuais. Atende a obrigação de divulgação sem alterar fluxo de presença/assinatura — o registro vira DDS normal com lista de presença e FCsign. Sem schema change.",
+    tipo: 'feature',
+    modulos: 'SST, DDS',
+    criadoPor: 'Replit Agent',
+    dataPublicacao: '2026-05-13 03:00:00',
+  },
+  {
     version: 1728,
     titulo: "DDS — Fix companyId tipo string × number (tRPC ZodError ao 'Carregar biblioteca padrão')",
     descricao: "Reportado: ao clicar em 'Carregar biblioteca padrão' na tela DDS aparecia toast com erro Zod `[ { 'expected': 'number', 'code': 'invalid_type', 'path': [ 'companyId' ], 'message': 'Invalid input: expected number, received string' } ]` e nada era semeado. Causa em `client/src/pages/sst/DDSGuia.tsx` ~L36 (Rev. 1726): `const { selectedCompanyId } = useCompany(); const companyId = selectedCompanyId ?? 1;` — `selectedCompanyId` no `CompanyContext` é STRING, e o nullish coalescing mantinha string (`?? 1` só dispara em null/undefined). Todos os 12+ inputs do router DDS validam `companyId: z.number()`. Fix Rev. 1728: `const companyId = parseInt(selectedCompanyId || '0') || 0;` (mesmo pattern do `useCompany` hook em `client/src/hooks/useCompany.ts`). Aplicação imediata em todas as queries/mutations DDS (calendarioAnual, listTemas, listSessoes, criarTema, atualizarTema, excluirTema, seedTemasPadrao, criarSessao, marcarPresenca, finalizar, etc).",

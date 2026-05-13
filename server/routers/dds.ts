@@ -58,6 +58,42 @@ const CAMPANHAS_GOV: Array<{
     norma: "Lei 13.504/2017 + Lei 12.984/2014 (criminalização da discriminação)" },
 ];
 
+// Rev. 1729 — Calendário oficial PNI/MS 2026 (Programa Nacional de Imunizações).
+// Fontes: gov.br/saude/pt-br/assuntos/saude-de-a-a-z/c/calendario-nacional-de-vacinacao
+//          + portarias do Ministério da Saúde para Influenza/Multivacinação 2026.
+// Atende Lei 15.377/2026 (CLT art. 169-A): empregador deve divulgar campanhas
+// oficiais de vacinação aos trabalhadores. Categoria='VACINACAO', mesCampanha
+// = mês de PICO da campanha (descrição traz janela completa quando multi-mês).
+const VACINACAO_PNI: Array<{
+  mes: number; codigo: string; titulo: string; cor: string;
+  descricao: string; norma: string;
+}> = [
+  { mes: 3, codigo: "VAC-COVID-19-REFORCO", titulo: "💉 Reforço COVID-19 — Dose Anual", cor: "azul",
+    descricao: "Dose de reforço anual contra COVID-19 (vacina bivalente/atualizada). Recomendada a TODOS os trabalhadores conforme protocolo MS — especialmente >60 anos, gestantes, imunossuprimidos e trabalhadores de obra com aglomeração. Janela: rotina anual a partir de março.",
+    norma: "PNI/MS — Nota Técnica COVID-19 + Lei 15.377/2026 (CLT art. 169-A)" },
+  { mes: 3, codigo: "VAC-HPV-9-14", titulo: "💉 Vacinação HPV — Filhos(as) 9-14 anos", cor: "lilas",
+    descricao: "Vacina HPV gratuita no SUS para meninas e meninos de 9 a 14 anos. Esquema: 2 doses (0 e 6 meses). Previne câncer de colo do útero, vulva, ânus, pênis e orofaringe. Comunicar aos colaboradores que tenham filhos nessa faixa.",
+    norma: "PNI/MS — Calendário Nacional + Lei 15.377/2026 (CLT art. 169-A — orientação obrigatória sobre HPV)" },
+  { mes: 4, codigo: "VAC-INFLUENZA-2026", titulo: "💉 Campanha Nacional Influenza (Gripe) 2026", cor: "amarelo",
+    descricao: "Campanha Nacional de Vacinação contra a Influenza 2026 — janela tradicional ABRIL a JUNHO. Grupos prioritários: >60 anos, gestantes, puérperas, crianças 6m-6a, profissionais de saúde, comorbidades, trabalhadores da construção civil expostos. Vacina trivalente disponível em UBS.",
+    norma: "Portaria MS — Campanha Nacional Influenza 2026 + Lei 15.377/2026" },
+  { mes: 4, codigo: "VAC-TRABALHADOR-NR7", titulo: "💉 Vacinação do Trabalhador (NR-7/PCMSO)", cor: "verde",
+    descricao: "Vacinas obrigatórias por exposição ocupacional conforme PCMSO: Hepatite B (3 doses), Tétano/dT (reforço 10 anos), Febre Amarela (áreas endêmicas), Tríplice Viral. Empresa custeia se não disponível no SUS. Documentar no ASO.",
+    norma: "NR-07 (PCMSO) item 7.5 + Anexo I + Lei 15.377/2026" },
+  { mes: 6, codigo: "VAC-TETANO-DT", titulo: "💉 Tétano/dT — Reforço a cada 10 anos (obras)", cor: "vermelho",
+    descricao: "Reforço da vacina dT (dupla adulto — difteria/tétano) a cada 10 anos. CRÍTICO para trabalhadores de construção civil pelo risco constante de ferimentos com pregos, ferragens, terra e materiais cortantes (porta de entrada do tétano).",
+    norma: "PNI/MS — Calendário Adulto + NR-18 (Construção) + Lei 15.377/2026" },
+  { mes: 7, codigo: "VAC-HEPATITE-B", titulo: "💉 Hepatite B — 3 doses (risco biológico)", cor: "amarelo",
+    descricao: "Vacina Hepatite B (esquema 0-1-6 meses) gratuita no SUS para todas as idades. Trabalhadores expostos a sangue/fluidos corporais (acidentes em obra, primeiros socorros) devem completar esquema. Verificar comprovante de imunização anti-HBs.",
+    norma: "PNI/MS — Calendário + NR-32 (analogia risco biológico) + Lei 15.377/2026" },
+  { mes: 8, codigo: "VAC-MULTIVACINACAO-2026", titulo: "💉 Campanha Multivacinação Crianças/Adolescentes 2026", cor: "laranja",
+    descricao: "Campanha Nacional de Multivacinação — janela tradicional AGOSTO a SETEMBRO. Atualização da caderneta de vacinação de crianças <15 anos. Comunicar aos colaboradores que levem filhos à UBS para colocar em dia: BCG, Pólio, Tríplice Viral, HPV, Meningo, etc.",
+    norma: "Portaria MS — Multivacinação 2026 + Lei 15.377/2026" },
+  { mes: 4, codigo: "VAC-FEBRE-AMARELA", titulo: "💉 Febre Amarela — Áreas de risco e viajantes", cor: "amarelo",
+    descricao: "Vacina dose única (após 9 meses de idade). OBRIGATÓRIA para trabalhadores em obras de áreas com recomendação de vacinação (ACRV) e para qualquer pessoa que viaje para essas regiões. Validade: vitalícia (1 dose). Verificar antes de mobilizar equipe para nova obra.",
+    norma: "PNI/MS — Mapa ACRV atualizado + RSI/OMS + Lei 15.377/2026" },
+];
+
 // NRs mais aplicadas em construção civil (sugestões pro DDS).
 const NRS_CONSTRUCAO: Array<{ codigo: string; titulo: string; descricao: string; norma: string; }> = [
   { codigo: "NR-01", titulo: "NR-01 — Disposições Gerais e GRO/PGR", descricao: "Direitos e deveres em SST. Apresentação do PGR. Direito de recusa ao trabalho em risco grave e iminente.", norma: "NR-01 (Portaria MTP 6.730/2020)" },
@@ -108,7 +144,7 @@ export const ddsRouter = router({
       descricao: z.string().optional(),
       conteudoMd: z.string().optional(),
       normaReferencia: z.string().max(120).optional(),
-      categoria: z.enum(["NR", "CAMPANHA", "LIVRE"]).default("LIVRE"),
+      categoria: z.enum(["NR", "CAMPANHA", "VACINACAO", "LIVRE"]).default("LIVRE"),
       mesCampanha: z.number().int().min(1).max(12).optional(),
       corCampanha: z.string().max(30).optional(),
       duracaoMin: z.number().int().positive().optional(),
@@ -140,7 +176,7 @@ export const ddsRouter = router({
       descricao: z.string().optional(),
       conteudoMd: z.string().optional(),
       normaReferencia: z.string().max(120).optional(),
-      categoria: z.enum(["NR", "CAMPANHA", "LIVRE"]).optional(),
+      categoria: z.enum(["NR", "CAMPANHA", "VACINACAO", "LIVRE"]).optional(),
       mesCampanha: z.number().int().min(1).max(12).nullable().optional(),
       corCampanha: z.string().max(30).optional(),
       duracaoMin: z.number().int().positive().optional(),
@@ -212,6 +248,38 @@ export const ddsRouter = router({
       return { inseridos };
     }),
 
+  // Rev. 1729 — Semeia campanhas oficiais de vacinação PNI/MS 2026.
+  // Atende Lei 15.377/2026 (CLT art. 169-A). Idempotente — pula códigos
+  // já existentes. Atualiza CALENDÁRIO ANUAL automaticamente (categoria=VACINACAO).
+  seedVacinacaoPNI: protectedProcedure
+    .input(z.object({ companyId: z.number().int().positive() }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      const existentes = await db.select({ codigo: ddsTemas.codigo })
+        .from(ddsTemas)
+        .where(and(eq(ddsTemas.companyId, input.companyId), isNull(ddsTemas.deletedAt)));
+      const codigosExistentes = new Set(existentes.map((r: any) => r.codigo).filter(Boolean));
+      let inseridos = 0;
+      for (const v of VACINACAO_PNI) {
+        if (codigosExistentes.has(v.codigo)) continue;
+        await db.insert(ddsTemas).values({
+          companyId: input.companyId,
+          codigo: v.codigo,
+          titulo: v.titulo,
+          descricao: v.descricao,
+          normaReferencia: v.norma,
+          categoria: "VACINACAO",
+          mesCampanha: v.mes,
+          corCampanha: v.cor,
+          duracaoMin: 15,
+          createdBy: (ctx.user as any)?.id ?? null,
+        } as any);
+        inseridos++;
+      }
+      return { inseridos };
+    }),
+
   // ================= CALENDÁRIO ANUAL =================
   // Retorna estrutura pronta para a aba "Calendário": 12 meses com a
   // campanha governamental do mês + temas (NR/livres) sugeridos.
@@ -225,6 +293,8 @@ export const ddsRouter = router({
       const meses = [];
       for (let m = 1; m <= 12; m++) {
         const campanhas = todos.filter((t: any) => t.categoria === "CAMPANHA" && t.mesCampanha === m);
+        // Rev. 1729 — vacinação PNI/MS (Lei 15.377/2026)
+        const vacinacao = todos.filter((t: any) => t.categoria === "VACINACAO" && t.mesCampanha === m);
         const sessoesQtd = await db.select({ c: sql<number>`COUNT(*)` }).from(ddsSessoes)
           .where(and(
             eq(ddsSessoes.companyId, input.companyId),
@@ -235,6 +305,7 @@ export const ddsRouter = router({
         meses.push({
           mes: m,
           campanhas,
+          vacinacao,
           sessoesNoMes: Number(sessoesQtd?.[0]?.c ?? 0),
         });
       }
