@@ -1097,6 +1097,8 @@ export default function Solicitacoes() {
 
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
+  // Rev. 1734 — Filtro derivado do card "Status das Solicitações" (9 mini-blocos clicáveis)
+  const [filtroBreakdown, setFiltroBreakdown] = useState<string | null>(null);
   const [filtroObra, setFiltroObra] = useState("todas");
   const [filtroClassificacao, setFiltroClassificacao] = useState("todas");
   const [showNova, setShowNova] = useState(false);
@@ -2153,7 +2155,7 @@ export default function Solicitacoes() {
     : filtroStatus === "pendente_entrega"
     ? listaFiltradaObraBase.filter((r: any) => r._hasOC === true && !scEntregueTotal(r))
     : listaFiltradaObraBase;
-  const listaFiltradaObra = filtroClassificacao === "todas"
+  const listaFiltradaObraSemBreakdown = filtroClassificacao === "todas"
     ? listaFiltradaObraStatus
     : listaFiltradaObraStatus.filter((r: any) => {
         const tipo = r.tipo || "material";
@@ -2164,6 +2166,22 @@ export default function Solicitacoes() {
         if (filtroClassificacao === "manutencao") return tipo === "manutencao" || tipo === "pecas_veiculo" || !!r.vehicleId;
         return true;
       });
+  // Rev. 1734 — Predicados dos 9 mini-blocos do card "Status das Solicitações"
+  // (mesma lógica do useMemo statusBreakdown, agora exposta como filtro clicável)
+  const breakdownPredicates: Record<string, (r: any) => boolean> = {
+    aguardandoAprov: (r) => (r.aprovacaoStatus ?? "aguardando") === "aguardando" && !["aprovado", "recusado", "cancelado"].includes(r.status),
+    aprovadasSemOC: (r) => ["aprovada", "aprovado"].includes(r.aprovacaoStatus ?? "") && !r._hasOC && !["aprovado", "recusado", "cancelado"].includes(r.status),
+    pendente: (r) => r.status === "pendente",
+    emCotacao: (r) => r.status === "cotacao",
+    emAndamento: (r) => r.status === "em_andamento",
+    entreguesParcial: (r) => r._hasOC === true && r._ocsEntregues !== true && !scEntregueTotal(r),
+    concluidas: (r) => r.status === "aprovado" || scEntregueTotal(r),
+    recusadas: (r) => r.status === "recusado" || ["recusada", "recusado"].includes(r.aprovacaoStatus ?? ""),
+    canceladas: (r) => r.status === "cancelado",
+  };
+  const listaFiltradaObra = filtroBreakdown && breakdownPredicates[filtroBreakdown]
+    ? listaFiltradaObraSemBreakdown.filter(breakdownPredicates[filtroBreakdown])
+    : listaFiltradaObraSemBreakdown;
   const todasSCs = filtroStatus !== "todos" ? (qTodas.data ?? lista) : lista;
   const urgentesAtivos = useMemo(() => todasSCs.filter((r: any) => r.prioridade === "urgente" && !["aprovado", "cancelado", "recusado"].includes(r.status) && !r._hasOC), [todasSCs]);
   // KPIs sempre calculados a partir do total sem filtro de status (apenas filtro de obra aplicado)
@@ -2239,25 +2257,51 @@ export default function Solicitacoes() {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 divide-x divide-slate-100">
           {[
-            { label: "Aguardando aprovação",  count: statusBreakdown.aguardandoAprov, color: "text-amber-700",   bar: "bg-amber-400"   },
-            { label: "Aprovadas (sem OC)",    count: statusBreakdown.aprovadasSemOC,  color: "text-emerald-700", bar: "bg-emerald-400" },
-            { label: "Pendente",              count: statusBreakdown.pendente,        color: "text-slate-700",   bar: "bg-slate-400"   },
-            { label: "Em cotação",            count: statusBreakdown.emCotacao,       color: "text-sky-700",     bar: "bg-sky-400"     },
-            { label: "Em andamento",          count: statusBreakdown.emAndamento,     color: "text-indigo-700",  bar: "bg-indigo-400"  },
-            { label: "Entrega parcial",       count: statusBreakdown.entreguesParcial, color: "text-orange-700", bar: "bg-orange-400"  },
-            { label: "Concluídas",            count: statusBreakdown.concluidas,      color: "text-green-700",   bar: "bg-green-400"   },
-            { label: "Recusadas",             count: statusBreakdown.recusadas,       color: "text-red-700",     bar: "bg-red-400"     },
-            { label: "Canceladas",            count: statusBreakdown.canceladas,      color: "text-zinc-600",    bar: "bg-zinc-400"    },
-          ].map((s) => (
-            <div key={s.label} className="px-3 py-3 flex flex-col items-start gap-1">
-              <div className="flex items-baseline gap-1.5">
-                <span className={`text-2xl font-extrabold tabular-nums ${s.color}`}>{s.count}</span>
-                <span className={`h-1.5 w-1.5 rounded-full ${s.bar} ${s.count > 0 ? "" : "opacity-30"}`} />
-              </div>
-              <span className="text-[11px] text-slate-600 leading-tight">{s.label}</span>
-            </div>
-          ))}
+            { key: "aguardandoAprov",  label: "Aguardando aprovação",  count: statusBreakdown.aguardandoAprov, color: "text-amber-700",   bar: "bg-amber-400",   ring: "ring-amber-400"   },
+            { key: "aprovadasSemOC",   label: "Aprovadas (sem OC)",    count: statusBreakdown.aprovadasSemOC,  color: "text-emerald-700", bar: "bg-emerald-400", ring: "ring-emerald-400" },
+            { key: "pendente",         label: "Pendente",              count: statusBreakdown.pendente,        color: "text-slate-700",   bar: "bg-slate-400",   ring: "ring-slate-400"   },
+            { key: "emCotacao",        label: "Em cotação",            count: statusBreakdown.emCotacao,       color: "text-sky-700",     bar: "bg-sky-400",     ring: "ring-sky-400"     },
+            { key: "emAndamento",      label: "Em andamento",          count: statusBreakdown.emAndamento,     color: "text-indigo-700",  bar: "bg-indigo-400",  ring: "ring-indigo-400"  },
+            { key: "entreguesParcial", label: "Entrega parcial",       count: statusBreakdown.entreguesParcial, color: "text-orange-700", bar: "bg-orange-400", ring: "ring-orange-400"  },
+            { key: "concluidas",       label: "Concluídas",            count: statusBreakdown.concluidas,      color: "text-green-700",   bar: "bg-green-400",   ring: "ring-green-400"   },
+            { key: "recusadas",        label: "Recusadas",             count: statusBreakdown.recusadas,       color: "text-red-700",     bar: "bg-red-400",     ring: "ring-red-400"     },
+            { key: "canceladas",       label: "Canceladas",            count: statusBreakdown.canceladas,      color: "text-zinc-600",    bar: "bg-zinc-400",    ring: "ring-zinc-400"    },
+          ].map((s) => {
+            const ativo = filtroBreakdown === s.key;
+            return (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => {
+                  // Rev. 1734 — clicar filtra a tabela. Toggle no mesmo bloco limpa o filtro.
+                  setFiltroBreakdown(ativo ? null : s.key);
+                  // Garante que o filtro de macro-status (KPI badges abaixo) seja "todos" pra não conflitar
+                  if (!ativo) setFiltroStatus("todos");
+                }}
+                className={`px-3 py-3 flex flex-col items-start gap-1 text-left transition-all hover:bg-slate-50 ${ativo ? `ring-2 ring-inset ${s.ring} bg-slate-100/60` : ""}`}
+                title={ativo ? "Clique novamente para limpar o filtro" : `Filtrar tabela por: ${s.label}`}
+              >
+                <div className="flex items-baseline gap-1.5">
+                  <span className={`text-2xl font-extrabold tabular-nums ${s.color}`}>{s.count}</span>
+                  <span className={`h-1.5 w-1.5 rounded-full ${s.bar} ${s.count > 0 ? "" : "opacity-30"}`} />
+                </div>
+                <span className="text-[11px] text-slate-600 leading-tight">{s.label}</span>
+              </button>
+            );
+          })}
         </div>
+        {filtroBreakdown && (
+          <div className="px-5 py-2 border-t border-slate-100 bg-amber-50/40 flex items-center justify-between text-xs">
+            <span className="text-amber-900">
+              <span className="font-semibold">Filtro ativo:</span>{" "}
+              tabela exibindo apenas <strong>{listaFiltradaObra.length}</strong> solicitação(ões) que casam com este status.
+            </span>
+            <button type="button" onClick={() => setFiltroBreakdown(null)}
+              className="text-amber-700 font-semibold hover:underline">
+              Limpar filtro ✕
+            </button>
+          </div>
+        )}
       </div>
 
       {/* KPI badges */}
