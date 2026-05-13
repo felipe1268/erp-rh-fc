@@ -778,15 +778,15 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                     <button
                       type="button"
                       onClick={() => setFotoAmpliada(true)}
-                      className="w-16 h-16 sm:w-24 sm:h-24 rounded-full overflow-hidden border-4 border-blue-300 shadow-md bg-blue-100 flex items-center justify-center cursor-zoom-in hover:border-blue-500 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 p-0"
+                      className="w-28 h-28 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 border-blue-300 shadow-md bg-blue-100 flex items-center justify-center cursor-zoom-in hover:border-blue-500 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 p-0"
                       title="Clique para ampliar a foto"
                       aria-label="Ampliar foto do colaborador"
                     >
                       <img src={emp.fotoUrl} alt="Foto do colaborador" className="w-full h-full object-cover object-top" />
                     </button>
                   ) : (
-                    <div className="w-16 h-16 sm:w-24 sm:h-24 rounded-full overflow-hidden border-4 border-blue-300 shadow-md bg-blue-100 flex items-center justify-center">
-                      <span className="text-xl sm:text-3xl font-bold text-blue-400">{emp.nomeCompleto?.charAt(0)}{emp.nomeCompleto?.split(' ').pop()?.charAt(0)}</span>
+                    <div className="w-28 h-28 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 border-blue-300 shadow-md bg-blue-100 flex items-center justify-center">
+                      <span className="text-3xl sm:text-5xl font-bold text-blue-400">{emp.nomeCompleto?.charAt(0)}{emp.nomeCompleto?.split(' ').pop()?.charAt(0)}</span>
                     </div>
                   )}
                 </div>

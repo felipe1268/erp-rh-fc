@@ -12397,4 +12397,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-13 09:30:00",
   },
+  {
+    version: 1756,
+    titulo: "Raio-X do Funcionário · Foto do colaborador maior no header",
+    descricao: "Pedido do usuário (screenshot do RAIO-X DO FUNCIONÁRIO de Douglas de Souza Rocha): a foto circular ao lado do nome estava pequena demais. Fix em `client/src/components/RaioXFuncionario.tsx` ~L781,788,789 (sem schema/server change): tamanho da foto (e do placeholder com iniciais) sobe de `w-16 h-16 sm:w-24 sm:h-24` (64px mobile / 96px desktop) para `w-28 h-28 sm:w-40 sm:h-40` (112px mobile / 160px desktop). Iniciais do placeholder acompanham com `text-3xl sm:text-5xl`. Borda azul, sombra, cursor-zoom-in e botão de ampliar (lightbox em `fotoAmpliada`) preservados.",
+    tipo: "melhoria",
+    modulos: "RH-DP",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 09:55:00",
+  },
 ];
