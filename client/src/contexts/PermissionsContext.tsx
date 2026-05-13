@@ -333,8 +333,14 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       }
 
       // Verifica qual módulo "dono" desta rota
+      // Rev. 1763: compara também strippando query string das features cadastradas
+      // (ex.: feature.route='/programas-sst?tab=PGR' precisa casar com basePath
+      // '/programas-sst' quando o RouteGuard chama sem o ?tab=...).
       const mod = MODULE_DEFINITIONS.find(m =>
-        m.features.some(f => f.route === route || f.route === basePath)
+        m.features.some(f => {
+          const fBase = (f.route || "").split("?")[0];
+          return f.route === route || f.route === basePath || fBase === basePath;
+        })
       );
       if (!mod) return false;
 
@@ -353,6 +359,16 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       // — query-tabs precisam de granularidade por aba quando registradas no mapa.
       const pageId = moduleRouteMap[route] ?? moduleRouteMap[basePath];
       if (!pageId) {
+        // Rev. 1763: Se a rota base não tem entrada direta mas EXISTEM entradas de
+        // tab pra ela (ex.: /programas-sst só está mapeado como ?tab=PGR/PCMSO/LTCAT),
+        // libera quando QUALQUER aba dessa base estiver granted. Sem isso o
+        // RouteGuard de /programas-sst nega tudo pra usuários custom.
+        const tabPageIds = Object.entries(moduleRouteMap)
+          .filter(([k]) => k.split("?")[0] === basePath && k.includes("?"))
+          .map(([, v]) => v);
+        if (tabPageIds.length > 0) {
+          return tabPageIds.some(pid => perm.pages?.[pid]?.view === true);
+        }
         // Rota dentro do módulo sem mapeamento de página específico → nega por segurança
         return false;
       }
