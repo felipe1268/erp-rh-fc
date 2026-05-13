@@ -12433,4 +12433,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-13 13:10:00",
   },
+  {
+    version: 1760,
+    titulo: "SST · Permissões — módulo expandido com TODAS as áreas (Painel, ASOs, Acidentes, PGR/PCMSO/LTCAT, Integração) — antes só tinha 3 entradas",
+    descricao: "Reportado pelo usuário (screenshot do grupo do Rodinei): tela de permissões SST mostrava apenas 3 páginas (Controle de EPIs, CIPA, Dashboards SST), bem aquém do que o módulo realmente gerencia. **Causa**: `shared/modulePages.ts` mapeava só essas 3 e `ROUTE_TO_PAGEID.sst` apontava várias rotas pra mesma chave 'epi' (ASOs, Acidentes), impedindo permissões granulares. **Fix sem schema change** em 2 arquivos: (1) `shared/modulePages.ts` MODULE_PAGE_CONFIG.sst.pages agora tem 11 entradas: `painel_sst` (view), `epi` (consolida Estoque/Entregas/Checklists/Descontos/Transferências/Config), `cipa`, `aso_documentos` (NOVO — separado de epi), `acidentes` (NOVO — separado de epi), `dds`, `pgr` (NOVO), `pcmso` (NOVO), `ltcat` (NOVO), `integracao_sst` (NOVO), `dashboards`. (2) `ROUTE_TO_PAGEID.sst` ampliado pra 18 rotas com mapeamento granular: cada sub-aba de EPI (entregas, estoque_obra, checklist, descontos, transferencias, config) → 'epi'; `/painel/sst` → 'painel_sst'; `/controle-documentos` → 'aso_documentos' (era 'epi'); `/sst/acidentes` → 'acidentes' (era 'epi'); cada programa legal (PGR/PCMSO/LTCAT) com sua própria chave; `/sst/integracao` → 'integracao_sst'. (3) `shared/modules.ts` features do módulo SST aumentadas de 11 pra 17 entradas (adicionados Painel SST, Entrega/Estoque por Obra de EPI, PGR, PCMSO, LTCAT, Integração SST). **Impacto em usuários existentes**: Admin Master continua vendo tudo. Usuários `admin`/`viewer` no SST veem todas automaticamente. Usuários `custom`: ATENÇÃO — quem antes tinha permissão em `epi` para `/sst/acidentes` ou `/controle-documentos` precisará re-marcar essas páginas (`acidentes` e `aso_documentos`) na tela de permissões em Usuários > Permissões > SST. As demais páginas novas (Painel, PGR, PCMSO, LTCAT, Integração) também ficam ocultas até o admin liberá-las explicitamente — comportamento esperado/seguro.",
+    tipo: "melhoria",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 13:50:00",
+  },
 ];

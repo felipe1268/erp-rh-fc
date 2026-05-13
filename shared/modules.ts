@@ -188,16 +188,27 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
     color: "green",
     icon: "Shield",
     features: [
+      // === Painel ===
+      { key: "painel-sst", label: "Painel SST", route: "/painel/sst", icon: "LayoutDashboard" },
       // === Segurança do Trabalho ===
       { key: "epis", label: "EPIs", route: "/epis", icon: "HardHat" },
+      { key: "epis-entregas", label: "Entrega de EPI", route: "/epis?tab=entregas", icon: "PackageCheck" },
+      { key: "epis-estoque-obra", label: "Estoque por Obra", route: "/epis?tab=estoque_obra", icon: "Warehouse" },
       { key: "epis-checklist", label: "Checklists EPI", route: "/epis?tab=checklist", icon: "ClipboardList" },
       { key: "epis-descontos", label: "Descontos EPI", route: "/epis?tab=descontos", icon: "Ban" },
       { key: "epis-transferencias", label: "Transferências EPI", route: "/epis?tab=transferencias", icon: "ArrowLeftRight" },
       { key: "epis-config", label: "Config EPI", route: "/epis?tab=config", icon: "Settings2" },
       { key: "cipa", label: "CIPA", route: "/cipa", icon: "ShieldCheck" },
       { key: "controle-documentos-sst", label: "ASOs / Documentos", route: "/controle-documentos", icon: "HeartPulse" },
+      // === Incidentes & Acidentes ===
       { key: "registro-acidentes", label: "Registro de Acidentes", route: "/sst/acidentes", icon: "AlertTriangle" },
+      // === Programas Legais ===
+      { key: "pgr", label: "PGR", route: "/programas-sst?tab=PGR", icon: "FileText" },
+      { key: "pcmso", label: "PCMSO", route: "/programas-sst?tab=PCMSO", icon: "FileText" },
+      { key: "ltcat", label: "LTCAT", route: "/programas-sst?tab=LTCAT", icon: "FileText" },
       { key: "dds", label: "DDS — Diálogo Diário", route: "/sst/dds", icon: "ClipboardCheck" },
+      // === Integração ===
+      { key: "integracao-sst", label: "Integração SST", route: "/sst/integracao", icon: "GraduationCap" },
       // === Dashboards SST ===
       { key: "dashboard-epis", label: "Dashboard EPIs", route: "/dashboards/epis", icon: "HardHat" },
       { key: "dashboard-atestados-acidentes", label: "Atestados & Acidentes", route: "/sst/dashboard-atestados-acidentes", icon: "HeartPulse" },
