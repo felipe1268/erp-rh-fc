@@ -1017,11 +1017,15 @@ export const purchaseRouter = router({
       diaCorte: z.number().optional(),
       prazoAprovacaoDias: z.number().optional(),
       diaPagamento: z.number().optional(),
+      alertaReservasAtivo: z.boolean().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
-      const { companyId, ...rest } = input;
+      const { companyId, alertaReservasAtivo, ...rest } = input;
       const vals: any = { ...rest, updatedAt: new Date().toISOString() };
+      if (alertaReservasAtivo !== undefined) {
+        vals.alertaReservasAtivo = alertaReservasAtivo ? 1 : 0;
+      }
       if (vals.comissaoPercentual !== undefined) {
         vals.comissaoPercentual = String(vals.comissaoPercentual);
       }

@@ -6835,6 +6835,7 @@ export const ocNumberConfig = pgTable("oc_number_config", {
   diaPagamento: integer("dia_pagamento").default(10),
   prefixoOs: varchar("prefixo_os", { length: 20 }).default("OS"),
   proximoNumeroOs: integer("proximo_numero_os").default(1),
+  alertaReservasAtivo: smallint("alerta_reservas_ativo").default(1),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 }, (t) => [index("idx_onc_company").on(t.companyId)]);
 

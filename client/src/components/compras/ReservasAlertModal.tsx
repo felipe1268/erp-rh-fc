@@ -30,16 +30,25 @@ export function ReservasAlertModal() {
   const role = (user as any)?.role as string | undefined;
   const isCompras = role && PERFIS_COMPRAS.has(role);
 
+  // Rev. 1745 — flag "Alerta de Reservas Preventivas" controlada em
+  // Compras > Configurações > Alertas. Default = 1 (ligado). Quando 0, o
+  // modal global E o banner ficam totalmente desabilitados (sem query).
+  const { data: cfg } = trpc.purchase.getConfigCompras.useQuery(
+    { companyId },
+    { enabled: !!companyId && !!isCompras },
+  );
+  const alertaAtivo = (cfg?.config as any)?.alertaReservasAtivo !== 0;
+
   const [aberto, setAberto] = useState(false);
   const [jaMostrado, setJaMostrado] = useState(false);
 
   const { data } = trpc.compras.verificarTravamentoCompras.useQuery(
     { companyId },
-    { enabled: !!companyId && !!isCompras, refetchInterval: 5 * 60_000 },
+    { enabled: !!companyId && !!isCompras && alertaAtivo, refetchInterval: 5 * 60_000 },
   );
 
   useEffect(() => {
-    if (!data || jaMostrado || !isCompras) return;
+    if (!data || jaMostrado || !isCompras || !alertaAtivo) return;
     const reservas = data.reservasAtivas ?? [];
     if (reservas.length === 0) return;
     // Mostra a partir do dia 5 (ou se já está vencida).
@@ -48,9 +57,9 @@ export function ReservasAlertModal() {
       setAberto(true);
       setJaMostrado(true);
     }
-  }, [data, jaMostrado, isCompras]);
+  }, [data, jaMostrado, isCompras, alertaAtivo]);
 
-  if (!isCompras || !data) return null;
+  if (!isCompras || !alertaAtivo || !data) return null;
   const reservas = data.reservasAtivas ?? [];
   const travado = data.travado;
 
@@ -149,12 +158,19 @@ export function ReservasBanner() {
   const role = (user as any)?.role as string | undefined;
   const isCompras = role && PERFIS_COMPRAS.has(role);
 
+  // Rev. 1745 — respeita o mesmo critério configurável do modal global.
+  const { data: cfg } = trpc.purchase.getConfigCompras.useQuery(
+    { companyId },
+    { enabled: !!companyId && !!isCompras },
+  );
+  const alertaAtivo = (cfg?.config as any)?.alertaReservasAtivo !== 0;
+
   const { data } = trpc.compras.verificarTravamentoCompras.useQuery(
     { companyId },
-    { enabled: !!companyId && !!isCompras, refetchInterval: 5 * 60_000 },
+    { enabled: !!companyId && !!isCompras && alertaAtivo, refetchInterval: 5 * 60_000 },
   );
 
-  if (!isCompras || !data) return null;
+  if (!isCompras || !alertaAtivo || !data) return null;
   const reservas = data.reservasAtivas ?? [];
   if (reservas.length === 0) return null;
   const travado = data.travado;
