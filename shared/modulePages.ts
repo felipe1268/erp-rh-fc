@@ -29,6 +29,7 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
   // ══════════════════════════════════════════════════════
   "rh-dp": {
     pages: [
+      { id: "painel_rh",           label: "Painel RH (visão consolidada)",        actions: ["view"] },
       { id: "colaboradores",       label: "Colaboradores / Funcionários",        actions: ["view","create","edit","delete"] },
       { id: "efetivo_obra",        label: "Efetivo por Obra",                     actions: ["view"] },
       { id: "ferias",              label: "Férias e Afastamentos",                actions: ["view","create","edit","delete"] },
@@ -58,6 +59,9 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "relatorios_folha",        label: "Relatório: Folha de Pagamento",        actions: ["view"] },
       { id: "relatorios_divergencias", label: "Relatório: Divergências",              actions: ["view"] },
       { id: "relatorios_custo_obra",   label: "Relatório: Custo por Obra",            actions: ["view"] },
+      { id: "relatorios_habilidades",  label: "Relatório: Habilidades por Obra",      actions: ["view"] },
+      { id: "comunicados",         label: "Comunicados Internos",                 actions: ["view","create","edit","delete"] },
+      { id: "curriculos",          label: "Currículos (Banco de talentos)",       actions: ["view","create","edit","delete"] },
       { id: "dashboards",          label: "Dashboards RH",                        actions: ["view"] },
     ],
     sensitiveFlags: [
@@ -94,9 +98,15 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
   // ══════════════════════════════════════════════════════
   "juridico": {
     pages: [
-      { id: "processos",    label: "Processos Trabalhistas",                      actions: ["view","create","edit","delete"] },
-      { id: "convencoes",   label: "Convenções Coletivas",                        actions: ["view","create","edit","delete"] },
-      { id: "dashboards",   label: "Dashboards Jurídico",                         actions: ["view"] },
+      { id: "painel_juridico",      label: "Painel Jurídico (visão geral)",          actions: ["view"] },
+      { id: "painel_trabalhista",   label: "Painel Trabalhista",                     actions: ["view"] },
+      { id: "painel_tributario",    label: "Painel Tributário",                      actions: ["view"] },
+      { id: "painel_civil",         label: "Painel Civil",                           actions: ["view"] },
+      { id: "processos",            label: "Processos Trabalhistas",                 actions: ["view","create","edit","delete"] },
+      { id: "processos_tributarios",label: "Processos Tributários",                  actions: ["view","create","edit","delete"] },
+      { id: "processos_civis",      label: "Processos Cíveis",                       actions: ["view","create","edit","delete"] },
+      { id: "convencoes",           label: "Convenções Coletivas",                   actions: ["view","create","edit","delete"] },
+      { id: "dashboards",           label: "Dashboards Jurídico (Trab/Trib/Civil)",  actions: ["view"] },
     ],
     sensitiveFlags: [
       { id: "valores_acordos",        label: "Valores de indenizações e acordos trabalhistas" },
@@ -138,9 +148,16 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
   // ══════════════════════════════════════════════════════
   "avaliacao": {
     pages: [
-      { id: "avaliacoes",   label: "Avaliações de Desempenho",                    actions: ["view","create","edit","delete"] },
-      { id: "habilidades",  label: "Habilidades e Competências",                  actions: ["view","create","edit","delete"] },
-      { id: "dashboards",   label: "Dashboards de Competências e Habilidades",    actions: ["view"] },
+      { id: "avaliacoes",        label: "Avaliações de Desempenho (Dashboard)",       actions: ["view","create","edit","delete"] },
+      { id: "avaliar",           label: "Avaliar Funcionário (formulário)",            actions: ["view","create","edit"] },
+      { id: "avaliacoes_realizadas", label: "Avaliações Realizadas (histórico)",       actions: ["view","edit","delete"] },
+      { id: "raio_x_avaliacao",  label: "Raio-X do Funcionário (Avaliação)",          actions: ["view"] },
+      { id: "avaliadores",       label: "Avaliadores (cadastro/permissões)",          actions: ["view","create","edit","delete"] },
+      { id: "criterios",         label: "Critérios de Avaliação",                     actions: ["view","create","edit","delete"] },
+      { id: "pesquisas",         label: "Pesquisas Customizadas",                     actions: ["view","create","edit","delete"] },
+      { id: "clima",             label: "Clima Organizacional",                       actions: ["view","create","edit","delete"] },
+      { id: "habilidades",       label: "Habilidades e Competências",                 actions: ["view","create","edit","delete"] },
+      { id: "dashboards",        label: "Dashboards de Competências e Habilidades",   actions: ["view"] },
     ],
   },
 
@@ -162,6 +179,11 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "contratos_pj",   label: "Contratos PJ e Medições PJ",                actions: ["view","create","edit","delete"] },
       { id: "pj_conformidade", label: "Conformidade PJ (DAS/NF/CND/Seguro/CNPJ)", actions: ["view","create","edit","delete"] },
       { id: "pj_dashboard_conformidade", label: "Dashboard Conformidade PJ (visão consolidada)", actions: ["view"] },
+      { id: "template_contrato", label: "Template de Contrato (modelos)",            actions: ["view","create","edit","delete"] },
+      { id: "integrasign",    label: "IntegraSign (assinatura eletrônica)",          actions: ["view","create","edit","delete"] },
+      { id: "portal_terceiros", label: "Portal Externo de Terceiros",                actions: ["view"] },
+      { id: "advertencias",   label: "Advertências de Terceiros",                    actions: ["view","create","edit","delete"] },
+      { id: "crachas_terceiros", label: "Crachás de Terceiros",                      actions: ["view","create","edit","delete"] },
     ],
     sensitiveFlags: [
       { id: "valores_contratos", label: "Valores de contratos de serviço" },
@@ -173,11 +195,14 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
   // ══════════════════════════════════════════════════════
   "parceiros": {
     pages: [
+      { id: "painel",         label: "Painel Parceiros (visão consolidada)",      actions: ["view"] },
       { id: "cadastro",       label: "Parceiros Conveniados (cadastro)",          actions: ["view","create","edit","delete"] },
       { id: "lancamentos",    label: "Lançamentos de Parceiros",                  actions: ["view","create","edit","delete"] },
       { id: "aprovacoes",     label: "Aprovações RH",                             actions: ["view","create","edit","delete"] },
       { id: "pagamentos",     label: "Pagamentos a Parceiros",                    actions: ["view","create","edit","delete"] },
+      { id: "portal",         label: "Portal Externo de Parceiros",               actions: ["view"] },
       { id: "guia_descontos", label: "Guia de Descontos",                         actions: ["view"] },
+      { id: "dashboards",     label: "Dashboards de Parceiros",                   actions: ["view"] },
     ],
     sensitiveFlags: [
       { id: "valores_comissoes", label: "Valores de comissões e descontos" },
@@ -189,6 +214,7 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
   // ══════════════════════════════════════════════════════
   "orcamento": {
     pages: [
+      { id: "painel",       label: "Painel Orçamento (visão consolidada)",        actions: ["view"] },
       { id: "lista",        label: "Lista de Orçamentos",                         actions: ["view","create","edit","delete"] },
       { id: "detalhe",      label: "EAP / Detalhe do Orçamento",                  actions: ["view","edit"] },
       { id: "importacao",   label: "Importação de Planilha",                      actions: ["view","create"] },
@@ -237,15 +263,22 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
   // ══════════════════════════════════════════════════════
   "cadastro": {
     pages: [
-      { id: "obras",        label: "Obras e Projetos",                            actions: ["view","create","edit","delete"] },
-      { id: "clientes",     label: "Clientes",                                    actions: ["view","create","edit","delete"] },
-      { id: "empresas",     label: "Empresas",                                    actions: ["view","create","edit","delete"] },
-      { id: "colaboradores",label: "Colaboradores",                               actions: ["view","create","edit","delete"] },
-      { id: "departamentos",label: "Setores / Departamentos",                     actions: ["view","create","edit","delete"] },
-      { id: "cargos",       label: "Funções / Cargos",                            actions: ["view","create","edit","delete"] },
-      { id: "convencoes",   label: "Convenções Coletivas",                        actions: ["view","create","edit","delete"] },
-      { id: "habilidades",  label: "Habilidades",                                 actions: ["view","create","edit","delete"] },
-      { id: "relogios",     label: "Relógios de Ponto",                           actions: ["view","create","edit","delete"] },
+      { id: "obras",         label: "Obras e Projetos",                            actions: ["view","create","edit","delete"] },
+      { id: "clientes",      label: "Clientes",                                    actions: ["view","create","edit","delete"] },
+      { id: "empresas",      label: "Empresas",                                    actions: ["view","create","edit","delete"] },
+      { id: "colaboradores", label: "Colaboradores",                               actions: ["view","create","edit","delete"] },
+      { id: "departamentos", label: "Setores / Departamentos",                     actions: ["view","create","edit","delete"] },
+      { id: "cargos",        label: "Funções / Cargos",                            actions: ["view","create","edit","delete"] },
+      { id: "convencoes",    label: "Convenções Coletivas",                        actions: ["view","create","edit","delete"] },
+      { id: "habilidades",   label: "Habilidades",                                 actions: ["view","create","edit","delete"] },
+      { id: "relogios",      label: "Relógios de Ponto",                           actions: ["view","create","edit","delete"] },
+      { id: "contas_bancarias", label: "Contas Bancárias",                         actions: ["view","create","edit","delete"] },
+      { id: "fornecedores",  label: "Fornecedores / Empresas Terceiras",           actions: ["view","create","edit","delete"] },
+      { id: "usuarios",      label: "Usuários e Permissões",                       actions: ["view","create","edit","delete"] },
+      { id: "configuracoes", label: "Configurações do Sistema",                    actions: ["view","edit"] },
+      { id: "auditoria",     label: "Auditoria do Sistema",                        actions: ["view"] },
+      { id: "lixeira",       label: "Lixeira (registros excluídos)",               actions: ["view","edit","delete"] },
+      { id: "revisoes",      label: "Revisões / Changelog",                        actions: ["view"] },
     ],
   },
 
@@ -254,15 +287,22 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
   // ══════════════════════════════════════════════════════
   "compras": {
     pages: [
-      { id: "solicitacoes", label: "Solicitações de Compra (SC)",                 actions: ["view","create","edit","delete"] },
-      { id: "cotacoes",     label: "Cotações",                                    actions: ["view","create","edit","delete"] },
-      { id: "ordens",       label: "Ordens de Compra (OC)",                       actions: ["view","create","edit","delete"] },
-      { id: "recebimentos", label: "Recebimentos",                                actions: ["view","create","edit","delete"] },
-      { id: "aprovacoes",   label: "Aprovações Pendentes",                        actions: ["view","edit"] },
-      { id: "emergencial",  label: "Compras Emergenciais",                        actions: ["view","create","edit","delete"] },
-      { id: "financeiro",   label: "Contas a Pagar (Compras)",                    actions: ["view"] },
-      { id: "realocacao",   label: "Realocação de Verba",                         actions: ["view","edit"] },
-      { id: "fornecedores", label: "Fornecedores",                                actions: ["view","create","edit","delete"] },
+      { id: "painel",         label: "Painel de Controle (visão consolidada)",     actions: ["view"] },
+      { id: "dashboard_obra", label: "Dashboard por Obra",                         actions: ["view"] },
+      { id: "painel_fd",      label: "Painel FD (Fundo de Despesas)",              actions: ["view"] },
+      { id: "solicitacoes",   label: "Solicitações de Compra (SC)",                actions: ["view","create","edit","delete"] },
+      { id: "cotacoes",       label: "Cotações",                                   actions: ["view","create","edit","delete"] },
+      { id: "ordens",         label: "Ordens de Compra (OC / OS)",                 actions: ["view","create","edit","delete"] },
+      { id: "recebimentos",   label: "Recebimentos",                               actions: ["view","create","edit","delete"] },
+      { id: "aprovacoes",     label: "Aprovações Pendentes",                       actions: ["view","edit"] },
+      { id: "emergencial",    label: "Compras Emergenciais",                       actions: ["view","create","edit","delete"] },
+      { id: "financeiro",     label: "Contas a Pagar (Compras)",                   actions: ["view"] },
+      { id: "realocacao",     label: "Realocação de Verba",                        actions: ["view","edit"] },
+      { id: "comissoes",      label: "Comissões de Compradores",                   actions: ["view","create","edit","delete"] },
+      { id: "databook",       label: "Databook de Obra",                           actions: ["view"] },
+      { id: "fornecedores",   label: "Fornecedores",                               actions: ["view","create","edit","delete"] },
+      { id: "configuracoes",  label: "Configurações de Compras",                   actions: ["view","edit"] },
+      { id: "integracoes",    label: "Integrações (Mas Controle ERP, etc)",        actions: ["view","edit"] },
     ],
     sensitiveFlags: [
       { id: "valores_compras", label: "Valores e preços de compras" },
@@ -289,10 +329,11 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
   // ══════════════════════════════════════════════════════
   "financeiro": {
     pages: [
-      { id: "lancamentos",       label: "Lançamentos Financeiros",               actions: ["view","create","edit","delete"] },
+      { id: "lancamentos",       label: "Lançamentos Financeiros (Dashboard)",   actions: ["view","create","edit","delete"] },
       { id: "receitas",          label: "Receitas de Obras",                     actions: ["view","create","edit","delete"] },
       { id: "contas_pagar",      label: "Contas a Pagar",                        actions: ["view","create","edit","delete"] },
       { id: "contas_receber",    label: "Contas a Receber",                      actions: ["view","create","edit","delete"] },
+      { id: "cronograma",        label: "Cronograma Financeiro",                 actions: ["view","create","edit","delete"] },
       { id: "fluxo_caixa",       label: "Fluxo de Caixa",                        actions: ["view"] },
       { id: "dre",               label: "DRE (Demonstração de Resultado)",       actions: ["view"] },
       { id: "obrigacoes_fiscais",label: "Obrigações Fiscais",                    actions: ["view","create","edit","delete"] },
@@ -300,6 +341,7 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
       { id: "centros_custo",     label: "Centros de Custo",                      actions: ["view","create","edit","delete"] },
       { id: "conciliacao",       label: "Conciliação Bancária",                  actions: ["view","create","edit","delete"] },
       { id: "recorrentes",       label: "Recorrentes",                           actions: ["view","create","edit","delete"] },
+      { id: "configuracoes",     label: "Configurações Financeiras",             actions: ["view","edit"] },
     ],
     sensitiveFlags: [
       { id: "saldos",             label: "Saldos bancários e financeiros" },
@@ -313,29 +355,59 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
   "operacional": {
     pages: [
       { id: "painel",                label: "Dashboard Operacional",           actions: ["view"] },
+      { id: "diario_obra",           label: "Diário de Obra (lista de obras)", actions: ["view","create","edit","delete"] },
       { id: "rdo",                   label: "RDO (Relatório Diário de Obra)",  actions: ["view","create","edit","delete"] },
-      { id: "checklists",           label: "Checklists de Qualidade",         actions: ["view","create","edit","delete"] },
-      { id: "concretagem",          label: "Concretagem",                     actions: ["view","create","edit","delete"] },
-      { id: "nao_conformidades",    label: "Não Conformidades (NCs)",         actions: ["view","create","edit","delete"] },
-      { id: "registro_fotografico", label: "Registro Fotográfico",            actions: ["view","create","edit","delete"] },
+      { id: "checklists",            label: "Checklists de Qualidade",         actions: ["view","create","edit","delete"] },
+      { id: "liberacao_servicos",    label: "Liberação de Serviços",           actions: ["view","create","edit","delete"] },
+      { id: "concretagem",           label: "Concretagem",                     actions: ["view","create","edit","delete"] },
+      { id: "nao_conformidades",     label: "Não Conformidades (NCs)",         actions: ["view","create","edit","delete"] },
+      { id: "registro_fotografico",  label: "Registro Fotográfico",            actions: ["view","create","edit","delete"] },
     ],
   },
   "gestao-documentos": {
     pages: [
-      { id: "documentos",  label: "Documentos Técnicos",  actions: ["view","create","edit","delete"] },
+      { id: "painel",         label: "Painel Geral",                                actions: ["view"] },
+      { id: "documentos",     label: "Documentos Técnicos (revisões/disciplinas)",  actions: ["view","create","edit","delete"] },
+      { id: "arts",           label: "ARTs / RRTs",                                 actions: ["view","create","edit","delete"] },
+      { id: "configuracoes",  label: "Configurações (disciplinas/pastas)",          actions: ["view","edit"] },
     ],
   },
   "frotas": {
     pages: [
-      { id: "painel",         label: "Dashboard Frotas",   actions: ["view"] },
-      { id: "veiculos",       label: "Veículos",           actions: ["view","create","edit","delete"] },
-      { id: "manutencoes",    label: "Manutenções",        actions: ["view","create","edit","delete"] },
-      { id: "combustivel",    label: "Combustível",        actions: ["view","create","edit","delete"] },
-      { id: "multas",         label: "Multas",             actions: ["view","create","edit","delete"] },
-      { id: "ipva",           label: "IPVA",               actions: ["view","create","edit","delete"] },
-      { id: "licenciamento",  label: "Licenciamento",      actions: ["view","create","edit","delete"] },
-      { id: "seguros",        label: "Seguros",            actions: ["view","create","edit","delete"] },
-      { id: "rastreamento",   label: "Rastreamento",       actions: ["view"] },
+      { id: "painel",                  label: "Dashboard Frotas",                actions: ["view"] },
+      { id: "analitico",               label: "Analítico (KPIs e indicadores)",  actions: ["view"] },
+      { id: "manutencoes_dashboard",   label: "Dashboard de Manutenções",        actions: ["view"] },
+      { id: "veiculos",                label: "Veículos",                        actions: ["view","create","edit","delete"] },
+      { id: "raio_x_veiculo",          label: "Raio-X do Veículo",               actions: ["view"] },
+      { id: "manutencoes",             label: "Manutenções",                     actions: ["view","create","edit","delete"] },
+      { id: "checklist_veicular",      label: "Checklist Veicular",              actions: ["view","create","edit","delete"] },
+      { id: "combustivel",             label: "Combustível (abastecimentos)",    actions: ["view","create","edit","delete"] },
+      { id: "precos_combustivel",      label: "Preços de Combustível",           actions: ["view","create","edit","delete"] },
+      { id: "pedagios",                label: "Pedágios",                        actions: ["view","create","edit","delete"] },
+      { id: "multas",                  label: "Multas",                          actions: ["view","create","edit","delete"] },
+      { id: "ipva",                    label: "IPVA",                            actions: ["view","create","edit","delete"] },
+      { id: "licenciamento",           label: "Licenciamento",                   actions: ["view","create","edit","delete"] },
+      { id: "seguros",                 label: "Seguros",                         actions: ["view","create","edit","delete"] },
+      { id: "rastreamento",            label: "Rastreamento (mapa/trajetos)",    actions: ["view"] },
+      { id: "controle_km",             label: "Controle de Quilometragem",       actions: ["view","create","edit","delete"] },
+    ],
+  },
+  "medicao": {
+    pages: [
+      { id: "contratos",  label: "Contratos de Medição (BMs/Faturamento)", actions: ["view","create","edit","delete"] },
+    ],
+    sensitiveFlags: [
+      { id: "valores_medicao", label: "Valores de medição e faturamento" },
+    ],
+  },
+  "comunicados-internos": {
+    pages: [
+      { id: "comunicados",  label: "Comunicados Internos",  actions: ["view","create","edit","delete"] },
+    ],
+  },
+  "curriculos": {
+    pages: [
+      { id: "curriculos",  label: "Banco de Currículos",  actions: ["view","create","edit","delete"] },
     ],
   },
 };
