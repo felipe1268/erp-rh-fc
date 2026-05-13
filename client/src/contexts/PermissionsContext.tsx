@@ -349,8 +349,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         // Módulo sem mapeamento de rotas: permitir se o módulo estiver liberado
         return true;
       }
-      // Tenta o basePath primeiro, depois a rota completa (com query string)
-      const pageId = moduleRouteMap[basePath] ?? moduleRouteMap[route];
+      // Tenta a rota completa (com query string) primeiro, depois o basePath
+      // — query-tabs precisam de granularidade por aba quando registradas no mapa.
+      const pageId = moduleRouteMap[route] ?? moduleRouteMap[basePath];
       if (!pageId) {
         // Rota dentro do módulo sem mapeamento de página específico → nega por segurança
         return false;
