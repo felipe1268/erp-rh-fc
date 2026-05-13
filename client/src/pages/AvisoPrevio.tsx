@@ -121,7 +121,14 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   const filteredAllForStats = useMemo(() => modeFilter(allAvisosForStats as any[]), [allAvisosForStats, modeFilter]);
 
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
-  const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => e.status === "Ativo" && !e.deletedAt), [empList]);
+  // Rev. 1727: incluir todos os colaboradores não-desligados (Ativo, Ferias, Afastado, Licenca, Recluso)
+  // pra permitir simulação de aviso prévio em qualquer cenário. Só corta Desligado/Lista_Negra e soft-deleted.
+  const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => {
+    if (e.deletedAt) return false;
+    if (e.status === "Desligado" || e.status === "Lista_Negra" || e.status === "ListaNegra") return false;
+    if (e.listaNegra === 1 || e.listaNegra === true) return false;
+    return true;
+  }), [empList]);
 
   const cipaCheckQ = trpc.cipa.checkEstabilidade.useQuery(
     { employeeId: form.employeeId! },
@@ -1839,6 +1846,19 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   <span className="text-xs text-gray-400 font-mono">{formatCPF(e.cpf)}</span>
+                                  {/* Rev. 1727: badge de status pra identificar Férias/Afastado/Licença/Recluso */}
+                                  {e.status === 'Ferias' && (
+                                    <Badge variant="outline" className="text-[10px] border-blue-300 text-blue-700 bg-blue-50">Férias</Badge>
+                                  )}
+                                  {e.status === 'Afastado' && (
+                                    <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-700 bg-amber-50">Afastado</Badge>
+                                  )}
+                                  {e.status === 'Licenca' && (
+                                    <Badge variant="outline" className="text-[10px] border-violet-300 text-violet-700 bg-violet-50">Licença</Badge>
+                                  )}
+                                  {e.status === 'Recluso' && (
+                                    <Badge variant="outline" className="text-[10px] border-red-300 text-red-700 bg-red-50">Recluso</Badge>
+                                  )}
                                   {(filteredAvisos as any[]).some((a: any) => a.employeeId === e.id && a.status === 'em_andamento') && !editingItem && (
                                     <Badge variant="outline" className="text-[10px] border-orange-300 text-orange-600 bg-orange-50">Aviso ativo</Badge>
                                   )}
