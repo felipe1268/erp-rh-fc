@@ -624,6 +624,53 @@ Regras:
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_sst_integ_reg_status ON sst_integracao_registros(status)`);
         console.log(`[SyncSchema+] Tabelas SST Integração garantidas.`);
 
+        // Rev. 1726 — DDS (Diálogo Diário de Segurança).
+        // Idempotente — garante 3 tabelas no startup mesmo sem rodar drizzle migrate.
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS dds_temas (
+          id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL,
+          codigo VARCHAR(30), titulo VARCHAR(255) NOT NULL,
+          descricao TEXT, conteudo_md TEXT, norma_referencia VARCHAR(120),
+          categoria VARCHAR(30) NOT NULL DEFAULT 'LIVRE',
+          mes_campanha INTEGER, cor_campanha VARCHAR(30),
+          duracao_min INTEGER DEFAULT 15, ativo INTEGER NOT NULL DEFAULT 1,
+          created_by INTEGER,
+          created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+          updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+          deleted_at TIMESTAMP
+        )`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dds_temas_company ON dds_temas(company_id)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dds_temas_categoria ON dds_temas(categoria)`);
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS dds_sessoes (
+          id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL,
+          obra_id INTEGER, obra_nome VARCHAR(255),
+          data DATE NOT NULL, hora VARCHAR(8),
+          tema_id INTEGER, titulo_tema VARCHAR(255) NOT NULL,
+          conteudo_md TEXT, instrutor VARCHAR(255), instrutor_cpf VARCHAR(14),
+          local VARCHAR(255), observacoes TEXT,
+          status VARCHAR(20) NOT NULL DEFAULT 'aberta',
+          envelope_id INTEGER, created_by INTEGER,
+          finalizada_em TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+          updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+          deleted_at TIMESTAMP
+        )`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dds_sessoes_company ON dds_sessoes(company_id)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dds_sessoes_obra ON dds_sessoes(obra_id)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dds_sessoes_data ON dds_sessoes(data)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dds_sessoes_status ON dds_sessoes(status)`);
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS dds_sessao_funcionarios (
+          id SERIAL PRIMARY KEY, sessao_id INTEGER NOT NULL,
+          employee_id INTEGER, nome VARCHAR(255) NOT NULL,
+          cpf VARCHAR(14), funcao VARCHAR(120),
+          presente INTEGER NOT NULL DEFAULT 1,
+          assinatura_tipo VARCHAR(20), assinado_em TIMESTAMP,
+          observacao TEXT,
+          created_at TIMESTAMP DEFAULT NOW() NOT NULL
+        )`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dds_sf_sessao ON dds_sessao_funcionarios(sessao_id)`);
+        await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dds_sf_emp ON dds_sessao_funcionarios(employee_id)`);
+        console.log(`[SyncSchema+] Tabelas DDS (dds_temas/dds_sessoes/dds_sessao_funcionarios) garantidas.`);
+
         // Tabelas do Portal do Cliente (comentários cliente↔FC e avaliações NPS)
         // Garantidas idempotentemente em todo startup pois o ColFix pode ser pulado
         // quando "Versão ok" — sem isso a tela de Comentários quebra com FK violation.

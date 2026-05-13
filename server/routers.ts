@@ -119,6 +119,7 @@ import { gestaoDocumentosRouter } from "./routers/gestaodocumentos";
 import { telemetriaRouter } from "./routers/telemetria";
 import { portalServicoRouter } from "./routers/portalServico";
 import { integrasignRouter } from "./routers/integrasign";
+import { ddsRouter } from "./routers/dds";
 import { databookRouter } from "./routers/databook";
 import { operacionalRouter } from "./routers/operacional";
 import { frotasRouter } from "./routers/frotas";
@@ -181,6 +182,7 @@ export const appRouter = router({
   telemetria: telemetriaRouter,
   portalServico: portalServicoRouter,
   integrasign: integrasignRouter,
+  dds: ddsRouter,
   databook: databookRouter,
   operacional: operacionalRouter,
   portalExterno: portalExternoRouter,

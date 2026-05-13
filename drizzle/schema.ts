@@ -8119,3 +8119,75 @@ export const sstIntegracaoSessoes = pgTable("sst_integracao_sessoes", {
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
 });
+
+// ===================== DDS — Diálogo Diário de Segurança (Rev. 1726) =====================
+// Módulo de Diálogos Diários de Segurança (NR-1 / NR-18). Cobre:
+//  - Biblioteca de temas (NRs + campanhas governamentais mensais)
+//  - Sessões DDS (vinculadas a obra ou avulsas)
+//  - Lista de presença (funcionários + assinatura via FCsign)
+export const ddsTemas = pgTable("dds_temas", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  codigo: varchar({ length: 30 }),                    // ex.: NR-35, MAIO-AMARELO, LIVRE-001
+  titulo: varchar({ length: 255 }).notNull(),
+  descricao: text(),                                  // resumo curto pro card
+  conteudoMd: text("conteudo_md"),                    // texto completo do DDS (markdown)
+  normaReferencia: varchar("norma_referencia", { length: 120 }),
+  categoria: varchar({ length: 30 }).default("LIVRE").notNull(), // 'NR' | 'CAMPANHA' | 'LIVRE'
+  mesCampanha: integer("mes_campanha"),               // 1..12 quando categoria='CAMPANHA'
+  corCampanha: varchar("cor_campanha", { length: 30 }), // ex.: amarelo, rosa, azul
+  duracaoMin: integer("duracao_min").default(15),
+  ativo: integer().default(1).notNull(),
+  createdBy: integer("created_by"),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at", { mode: "string" }),
+}, (t) => [
+  index("idx_dds_temas_company").on(t.companyId),
+  index("idx_dds_temas_categoria").on(t.categoria),
+]);
+
+export const ddsSessoes = pgTable("dds_sessoes", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  obraId: integer("obra_id"),                         // null = avulsa/escritório
+  obraNome: varchar("obra_nome", { length: 255 }),
+  data: date({ mode: "string" }).notNull(),
+  hora: varchar({ length: 8 }),                       // HH:MM
+  temaId: integer("tema_id"),                         // FK opcional p/ ddsTemas
+  tituloTema: varchar("titulo_tema", { length: 255 }).notNull(),
+  conteudoMd: text("conteudo_md"),                    // snapshot do tema na hora da sessão
+  instrutor: varchar({ length: 255 }),
+  instrutorCpf: varchar("instrutor_cpf", { length: 14 }),
+  local: varchar({ length: 255 }),
+  observacoes: text(),
+  status: varchar({ length: 20 }).default("aberta").notNull(), // 'aberta' | 'finalizada' | 'cancelada'
+  envelopeId: integer("envelope_id"),                 // FCsign envelope quando enviado para assinatura
+  createdBy: integer("created_by"),
+  finalizadaEm: timestamp("finalizada_em", { mode: "string" }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at", { mode: "string" }),
+}, (t) => [
+  index("idx_dds_sessoes_company").on(t.companyId),
+  index("idx_dds_sessoes_obra").on(t.obraId),
+  index("idx_dds_sessoes_data").on(t.data),
+  index("idx_dds_sessoes_status").on(t.status),
+]);
+
+export const ddsSessaoFuncionarios = pgTable("dds_sessao_funcionarios", {
+  id: serial().primaryKey(),
+  sessaoId: integer("sessao_id").notNull(),
+  employeeId: integer("employee_id"),                 // null = funcionário avulso
+  nome: varchar({ length: 255 }).notNull(),
+  cpf: varchar({ length: 14 }),
+  funcao: varchar({ length: 120 }),
+  presente: integer().default(1).notNull(),
+  assinaturaTipo: varchar("assinatura_tipo", { length: 20 }), // 'fcsign' | 'manual' | null
+  assinadoEm: timestamp("assinado_em", { mode: "string" }),
+  observacao: text(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_dds_sf_sessao").on(t.sessaoId),
+  index("idx_dds_sf_emp").on(t.employeeId),
+]);
