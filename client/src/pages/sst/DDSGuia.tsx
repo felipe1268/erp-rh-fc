@@ -1,6 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,8 +11,30 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   CalendarDays, BookOpen, Megaphone, Plus, Trash2, Pencil, Users, FileSignature,
-  ClipboardCheck, Check, X as XIcon, ChevronRight, Sparkles,
+  ClipboardCheck, Check, X as XIcon, ChevronRight, Sparkles, MapPin, UserCheck,
+  ChevronDown, ChevronUp, Search,
 } from "lucide-react";
+
+// Rev. 1730 — máscara CPF no input do instrutor
+function maskCpf(v: string): string {
+  const d = (v || "").replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
+// Rev. 1730 — histórico de locais usados (até 8) por empresa
+const LOCAIS_LS_KEY = (cid: number) => `dds:recentLocais:${cid}`;
+function getRecentLocais(cid: number): string[] {
+  try { return JSON.parse(localStorage.getItem(LOCAIS_LS_KEY(cid)) || "[]"); } catch { return []; }
+}
+function pushRecentLocal(cid: number, local: string) {
+  if (!local || local.trim().length < 2) return;
+  const cur = getRecentLocais(cid).filter(l => l.toLowerCase() !== local.toLowerCase());
+  cur.unshift(local.trim());
+  localStorage.setItem(LOCAIS_LS_KEY(cid), JSON.stringify(cur.slice(0, 8)));
+}
 
 const MESES_PT = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -37,6 +60,8 @@ export default function DDSGuia() {
   const { selectedCompanyId } = useCompany();
   const companyId = parseInt(selectedCompanyId || "0") || 0;
   const utils = trpc.useUtils();
+  // Rev. 1730 — usuário logado para auto-fill do instrutor
+  const { user } = useAuth() as any;
 
   const [tab, setTab] = useState<"calendario" | "biblioteca" | "sessoes">("calendario");
 
@@ -115,14 +140,27 @@ export default function DDSGuia() {
     instrutor: "", instrutorCpf: "", local: "", observacoes: "",
     funcionarioIds: [] as number[],
   });
+  // Rev. 1730 — abrir modal já preenchendo instrutor (usuário logado), data hoje, hora 07:30
+  // Se nenhum tema vier, sugere o tema do mês atual (campanha ou vacinação) automaticamente.
   const abrirNovaSessao = (temaPre?: any) => {
+    let temaEscolhido = temaPre;
+    if (!temaEscolhido) {
+      const mesAtual = new Date().getMonth() + 1;
+      const sugerido = (temas as any[]).find((t: any) =>
+        (t.categoria === "CAMPANHA" || t.categoria === "VACINACAO") && t.mesCampanha === mesAtual
+      );
+      if (sugerido) temaEscolhido = sugerido;
+    }
     setSessaoForm({
       obraId: "", data: new Date().toISOString().slice(0, 10), hora: "07:30",
-      temaId: temaPre?.id ? String(temaPre.id) : "",
-      tituloTema: temaPre?.titulo ?? "",
-      conteudoMd: temaPre?.conteudoMd ?? temaPre?.descricao ?? "",
-      instrutor: "", instrutorCpf: "", local: "", observacoes: "",
-      funcionarioIds: [],
+      temaId: temaEscolhido?.id ? String(temaEscolhido.id) : "",
+      tituloTema: temaEscolhido?.titulo ?? "",
+      conteudoMd: temaEscolhido?.conteudoMd ?? temaEscolhido?.descricao ?? "",
+      instrutor: user?.nome ?? user?.name ?? user?.loginName ?? user?.email ?? "",
+      instrutorCpf: user?.cpf ? maskCpf(String(user.cpf)) : "",
+      local: "",
+      observacoes: "",
+      funcionarioIds: [] as number[],
     });
     setShowSessao(true);
   };
@@ -130,9 +168,21 @@ export default function DDSGuia() {
     onSuccess: (s) => { toast.success("Sessão criada"); utils.dds.listSessoes.invalidate(); utils.dds.calendarioAnual.invalidate(); setShowSessao(false); setSelectedSessaoId(s.id); setTab("sessoes"); },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 1730 — equipe ativa da obra selecionada (pré-seleção em massa)
+  const funcsObraQ = trpc.dds.funcionariosDaObra.useQuery(
+    { companyId, obraId: Number(sessaoForm.obraId) },
+    { enabled: !!companyId && !!sessaoForm.obraId && showSessao }
+  );
+  const [showRoteiro, setShowRoteiro] = useState(false);
+  const [buscaFunc, setBuscaFunc] = useState("");
+  // Reseta busca/roteiro ao reabrir
+  useEffect(() => { if (showSessao) { setShowRoteiro(false); setBuscaFunc(""); } }, [showSessao]);
+
   const handleSalvarSessao = () => {
     if (!sessaoForm.tituloTema || sessaoForm.tituloTema.length < 3) { toast.error("Informe o título do tema"); return; }
     if (!sessaoForm.data) { toast.error("Informe a data"); return; }
+    // Rev. 1730 — guarda local no histórico pra autocomplete futuro
+    if (sessaoForm.local) pushRecentLocal(companyId, sessaoForm.local);
     criarSessaoMut.mutate({
       companyId,
       obraId: sessaoForm.obraId ? Number(sessaoForm.obraId) : undefined,
@@ -520,88 +570,317 @@ export default function DDSGuia() {
         </DialogContent>
       </Dialog>
 
-      {/* ===== MODAL: NOVA SESSÃO ===== */}
+      {/* ===== MODAL: NOVA SESSÃO (Rev. 1730 — redesign com automação) ===== */}
       <Dialog open={showSessao} onOpenChange={setShowSessao}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Nova Sessão DDS</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="text-xs font-medium text-slate-600">Data *</label>
-                <Input type="date" value={sessaoForm.data} onChange={e => setSessaoForm({ ...sessaoForm, data: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-600">Hora</label>
-                <Input type="time" value={sessaoForm.hora} onChange={e => setSessaoForm({ ...sessaoForm, hora: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-600">Obra</label>
-                <Select value={sessaoForm.obraId || "_avulsa"} onValueChange={v => setSessaoForm({ ...sessaoForm, obraId: v === "_avulsa" ? "" : v })}>
-                  <SelectTrigger><SelectValue placeholder="Avulsa/Escritório" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_avulsa">Avulsa / Escritório</SelectItem>
-                    {((obrasQ.data as any[]) ?? []).map((o: any) => (
-                      <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600">Tema</label>
-              <Select value={sessaoForm.temaId || "_livre"} onValueChange={v => {
-                if (v === "_livre") { setSessaoForm({ ...sessaoForm, temaId: "" }); return; }
-                const t = temas.find((x: any) => String(x.id) === v);
-                setSessaoForm({
-                  ...sessaoForm, temaId: v,
-                  tituloTema: t?.titulo ?? sessaoForm.tituloTema,
-                  conteudoMd: t?.conteudoMd ?? t?.descricao ?? sessaoForm.conteudoMd,
-                });
-              }}>
-                <SelectTrigger><SelectValue placeholder="Selecione (ou deixe livre)" /></SelectTrigger>
-                <SelectContent className="max-h-72">
-                  <SelectItem value="_livre">Tema livre (sem vínculo à biblioteca)</SelectItem>
-                  {temas.map((t: any) => (
-                    <SelectItem key={t.id} value={String(t.id)}>
-                      {t.codigo ? `[${t.codigo}] ` : ""}{t.titulo}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600">Título do tema *</label>
-              <Input value={sessaoForm.tituloTema} onChange={e => setSessaoForm({ ...sessaoForm, tituloTema: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600">Conteúdo / roteiro</label>
-              <Textarea rows={4} value={sessaoForm.conteudoMd} onChange={e => setSessaoForm({ ...sessaoForm, conteudoMd: e.target.value })} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-slate-600">Instrutor</label>
-                <Input value={sessaoForm.instrutor} onChange={e => setSessaoForm({ ...sessaoForm, instrutor: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-600">CPF do instrutor</label>
-                <Input value={sessaoForm.instrutorCpf} onChange={e => setSessaoForm({ ...sessaoForm, instrutorCpf: e.target.value })} />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600">Local</label>
-              <Input value={sessaoForm.local} onChange={e => setSessaoForm({ ...sessaoForm, local: e.target.value })}
-                placeholder="ex.: Refeitório / Pátio / Sala de treinamento" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600">Observações</label>
-              <Textarea rows={2} value={sessaoForm.observacoes} onChange={e => setSessaoForm({ ...sessaoForm, observacoes: e.target.value })} />
-            </div>
-            <p className="text-xs text-slate-500 italic">
-              Você poderá adicionar a lista de presença depois de criar a sessão.
-            </p>
-          </div>
+        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto p-0">
+          {(() => {
+            const temaSel = temas.find((t: any) => String(t.id) === String(sessaoForm.temaId));
+            const corBanner = temaSel?.corCampanha ? corCfg(temaSel.corCampanha) : null;
+            const hoje = new Date().toISOString().slice(0, 10);
+            const ontem = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
+            const recentLocais = getRecentLocais(companyId);
+            const equipeObra = (funcsObraQ.data as any[]) ?? [];
+            const todosSelecionados = equipeObra.length > 0 && equipeObra.every((e: any) =>
+              sessaoForm.funcionarioIds.includes(e.employeeId)
+            );
+            const equipeFiltrada = buscaFunc
+              ? equipeObra.filter((e: any) =>
+                  e.nome?.toLowerCase().includes(buscaFunc.toLowerCase()) ||
+                  e.funcao?.toLowerCase().includes(buscaFunc.toLowerCase())
+                )
+              : equipeObra;
+            return (
+              <>
+                {/* HEADER colorido (cor da campanha quando há tema selecionado) */}
+                <div className={`px-6 pt-5 pb-4 rounded-t-lg ${corBanner ? `${corBanner.bg} border-b-4 ${corBanner.border}` : "bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-200"}`}>
+                  <DialogHeader>
+                    <DialogTitle className={`flex items-center gap-2 text-lg ${corBanner ? corBanner.text : "text-emerald-900"}`}>
+                      <ClipboardCheck className="h-5 w-5" />
+                      Nova Sessão DDS
+                      {temaSel?.codigo && (
+                        <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold ${corBanner?.chip ?? "bg-emerald-500 text-white"}`}>
+                          {temaSel.codigo}
+                        </span>
+                      )}
+                    </DialogTitle>
+                    {temaSel && (
+                      <p className={`text-sm font-semibold ${corBanner?.text ?? "text-emerald-800"} mt-1`}>
+                        {temaSel.titulo}
+                      </p>
+                    )}
+                  </DialogHeader>
+                </div>
+
+                <div className="px-6 py-5 space-y-5">
+                  {/* BLOCO 1 — QUANDO + ONDE */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                    <div className="md:col-span-4">
+                      <label className="text-xs font-medium text-slate-600 flex items-center gap-1">
+                        <CalendarDays className="h-3 w-3" /> Data *
+                      </label>
+                      <Input type="date" value={sessaoForm.data} onChange={e => setSessaoForm({ ...sessaoForm, data: e.target.value })} />
+                      <div className="flex gap-1 mt-1">
+                        <button type="button"
+                          onClick={() => setSessaoForm({ ...sessaoForm, data: hoje })}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${sessaoForm.data === hoje ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>
+                          Hoje
+                        </button>
+                        <button type="button"
+                          onClick={() => setSessaoForm({ ...sessaoForm, data: ontem })}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${sessaoForm.data === ontem ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>
+                          Ontem
+                        </button>
+                      </div>
+                    </div>
+                    <div className="md:col-span-3">
+                      <label className="text-xs font-medium text-slate-600">Hora</label>
+                      <Input type="time" value={sessaoForm.hora} onChange={e => setSessaoForm({ ...sessaoForm, hora: e.target.value })} />
+                      <div className="flex gap-1 mt-1">
+                        {["07:00", "07:30", "12:00", "13:00"].map(h => (
+                          <button key={h} type="button"
+                            onClick={() => setSessaoForm({ ...sessaoForm, hora: h })}
+                            className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold border ${sessaoForm.hora === h ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"}`}>
+                            {h}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="md:col-span-5">
+                      <label className="text-xs font-medium text-slate-600 flex items-center gap-1">
+                        <MapPin className="h-3 w-3" /> Obra
+                      </label>
+                      <Select value={sessaoForm.obraId || "_avulsa"}
+                        onValueChange={v => setSessaoForm({ ...sessaoForm, obraId: v === "_avulsa" ? "" : v, funcionarioIds: [] })}>
+                        <SelectTrigger><SelectValue placeholder="Avulsa/Escritório" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_avulsa">Avulsa / Escritório</SelectItem>
+                          {((obrasQ.data as any[]) ?? []).map((o: any) => (
+                            <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* BLOCO 2 — TEMA (com sugestão automática + categorias) */}
+                  <div>
+                    <label className="text-xs font-medium text-slate-600 flex items-center gap-1">
+                      <BookOpen className="h-3 w-3" /> Tema da biblioteca
+                      <span className="text-[10px] text-emerald-600 font-normal italic ml-1">
+                        (✨ sugerido automaticamente o tema do mês)
+                      </span>
+                    </label>
+                    <Select value={sessaoForm.temaId || "_livre"} onValueChange={v => {
+                      if (v === "_livre") { setSessaoForm({ ...sessaoForm, temaId: "", tituloTema: "", conteudoMd: "" }); return; }
+                      const t = temas.find((x: any) => String(x.id) === v);
+                      setSessaoForm({
+                        ...sessaoForm, temaId: v,
+                        tituloTema: t?.titulo ?? sessaoForm.tituloTema,
+                        conteudoMd: t?.conteudoMd ?? t?.descricao ?? sessaoForm.conteudoMd,
+                      });
+                    }}>
+                      <SelectTrigger><SelectValue placeholder="Selecione um tema (ou crie um livre)" /></SelectTrigger>
+                      <SelectContent className="max-h-80">
+                        <SelectItem value="_livre">📝 Tema livre (sem vínculo à biblioteca)</SelectItem>
+                        {["VACINACAO", "CAMPANHA", "NR", "LIVRE"].flatMap(cat => {
+                          const lista = temas.filter((t: any) => t.categoria === cat);
+                          if (lista.length === 0) return [];
+                          const labelCat = cat === "VACINACAO" ? "💉 VACINAÇÃO" : cat === "CAMPANHA" ? "📢 CAMPANHAS" : cat === "NR" ? "⚠️ NRs" : "📋 LIVRES";
+                          return [
+                            <div key={`h-${cat}`} className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50">
+                              {labelCat}
+                            </div>,
+                            ...lista.map((t: any) => (
+                              <SelectItem key={t.id} value={String(t.id)}>
+                                {t.codigo ? `[${t.codigo}] ` : ""}{t.titulo}
+                              </SelectItem>
+                            )),
+                          ];
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* BLOCO 3 — TÍTULO + ROTEIRO COLAPSÁVEL */}
+                  <div>
+                    <label className="text-xs font-medium text-slate-600">Título do tema *</label>
+                    <Input value={sessaoForm.tituloTema} onChange={e => setSessaoForm({ ...sessaoForm, tituloTema: e.target.value })}
+                      placeholder="Ex.: Uso correto de EPI em altura" />
+                  </div>
+                  <div>
+                    <button type="button"
+                      onClick={() => setShowRoteiro(s => !s)}
+                      className="text-xs font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1"
+                    >
+                      {showRoteiro ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      Conteúdo / roteiro {sessaoForm.conteudoMd ? `(${sessaoForm.conteudoMd.length} caracteres)` : "(opcional)"}
+                    </button>
+                    {showRoteiro && (
+                      <Textarea rows={4} value={sessaoForm.conteudoMd}
+                        onChange={e => setSessaoForm({ ...sessaoForm, conteudoMd: e.target.value })}
+                        className="mt-1"
+                        placeholder="Roteiro / pontos abordados na sessão..." />
+                    )}
+                    {!showRoteiro && sessaoForm.conteudoMd && (
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-2 italic bg-slate-50 rounded px-2 py-1 border border-slate-200">
+                        {sessaoForm.conteudoMd.slice(0, 200)}{sessaoForm.conteudoMd.length > 200 ? "..." : ""}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* BLOCO 4 — INSTRUTOR (auto-fill + máscara CPF) */}
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                        <UserCheck className="h-3 w-3" /> Instrutor
+                      </label>
+                      {(() => {
+                        const nomeUser = (user as any)?.nome ?? (user as any)?.name ?? (user as any)?.loginName ?? (user as any)?.email;
+                        if (!nomeUser || sessaoForm.instrutor === nomeUser) return null;
+                        return (
+                          <button type="button"
+                            onClick={() => setSessaoForm({ ...sessaoForm, instrutor: nomeUser, instrutorCpf: (user as any)?.cpf ? maskCpf(String((user as any).cpf)) : sessaoForm.instrutorCpf })}
+                            className="text-[10px] text-emerald-700 font-semibold hover:underline">
+                            ✓ Sou eu ({nomeUser})
+                          </button>
+                        );
+                      })()}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+                      <div className="md:col-span-7">
+                        <Input value={sessaoForm.instrutor}
+                          onChange={e => setSessaoForm({ ...sessaoForm, instrutor: e.target.value })}
+                          placeholder="Nome do instrutor" />
+                      </div>
+                      <div className="md:col-span-5">
+                        <Input value={sessaoForm.instrutorCpf}
+                          onChange={e => setSessaoForm({ ...sessaoForm, instrutorCpf: maskCpf(e.target.value) })}
+                          placeholder="CPF (000.000.000-00)" inputMode="numeric" maxLength={14} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* BLOCO 5 — LOCAL (com histórico) */}
+                  <div>
+                    <label className="text-xs font-medium text-slate-600 flex items-center gap-1">
+                      <MapPin className="h-3 w-3" /> Local
+                    </label>
+                    <Input value={sessaoForm.local}
+                      onChange={e => setSessaoForm({ ...sessaoForm, local: e.target.value })}
+                      placeholder="ex.: Refeitório / Pátio / Sala de treinamento"
+                      list="dds-locais-recentes" />
+                    {recentLocais.length > 0 && (
+                      <>
+                        <datalist id="dds-locais-recentes">
+                          {recentLocais.map(l => <option key={l} value={l} />)}
+                        </datalist>
+                        <div className="flex gap-1 mt-1 flex-wrap">
+                          {recentLocais.slice(0, 5).map(l => (
+                            <button key={l} type="button"
+                              onClick={() => setSessaoForm({ ...sessaoForm, local: l })}
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${sessaoForm.local === l ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-600 border-slate-300 hover:bg-emerald-50 hover:border-emerald-300"}`}>
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* BLOCO 6 — EQUIPE DA OBRA (pré-seleção em massa) */}
+                  {sessaoForm.obraId && (
+                    <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/40 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-bold text-emerald-900 flex items-center gap-1">
+                          <Users className="h-3 w-3" /> Equipe da obra
+                          {funcsObraQ.isLoading && <span className="text-[10px] font-normal text-slate-500 italic">(carregando...)</span>}
+                          {!funcsObraQ.isLoading && (
+                            <span className="text-[10px] font-normal text-slate-600">
+                              ({sessaoForm.funcionarioIds.length} de {equipeObra.length} selecionado(s))
+                            </span>
+                          )}
+                        </label>
+                        {equipeObra.length > 0 && (
+                          <button type="button"
+                            onClick={() => {
+                              if (todosSelecionados) {
+                                setSessaoForm({ ...sessaoForm, funcionarioIds: [] });
+                              } else {
+                                setSessaoForm({ ...sessaoForm, funcionarioIds: equipeObra.map((e: any) => e.employeeId) });
+                              }
+                            }}
+                            className="text-[11px] font-semibold text-emerald-700 hover:underline">
+                            {todosSelecionados ? "Desmarcar todos" : `✓ Selecionar todos (${equipeObra.length})`}
+                          </button>
+                        )}
+                      </div>
+                      {equipeObra.length === 0 && !funcsObraQ.isLoading && (
+                        <p className="text-xs text-slate-500 italic">
+                          Nenhum colaborador ativo vinculado a esta obra. Você poderá adicionar manualmente após criar a sessão.
+                        </p>
+                      )}
+                      {equipeObra.length > 0 && (
+                        <>
+                          <div className="relative mb-2">
+                            <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-slate-400" />
+                            <Input value={buscaFunc} onChange={e => setBuscaFunc(e.target.value)}
+                              placeholder="Buscar por nome ou função..." className="h-8 pl-7 text-xs" />
+                          </div>
+                          <div className="max-h-44 overflow-y-auto bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+                            {equipeFiltrada.map((e: any) => {
+                              const sel = sessaoForm.funcionarioIds.includes(e.employeeId);
+                              return (
+                                <label key={e.employeeId}
+                                  className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-emerald-50 ${sel ? "bg-emerald-50" : ""}`}>
+                                  <input type="checkbox" checked={sel}
+                                    onChange={() => {
+                                      const ids = sessaoForm.funcionarioIds;
+                                      setSessaoForm({
+                                        ...sessaoForm,
+                                        funcionarioIds: sel
+                                          ? ids.filter((x: number) => x !== e.employeeId)
+                                          : [...ids, e.employeeId],
+                                      });
+                                    }}
+                                    className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-medium text-slate-800 truncate">{e.nome}</div>
+                                    <div className="text-[10px] text-slate-500 truncate">
+                                      {e.funcaoNaObra ?? e.funcao ?? "—"}
+                                      {e.status && e.status !== "Ativo" && (
+                                        <span className="ml-1 px-1 rounded bg-amber-100 text-amber-800 font-semibold">{e.status}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                            {equipeFiltrada.length === 0 && (
+                              <p className="text-xs text-slate-400 italic text-center py-3">Nenhum resultado para "{buscaFunc}"</p>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* BLOCO 7 — OBSERVAÇÕES (compacto) */}
+                  <div>
+                    <label className="text-xs font-medium text-slate-600">Observações (opcional)</label>
+                    <Textarea rows={2} value={sessaoForm.observacoes}
+                      onChange={e => setSessaoForm({ ...sessaoForm, observacoes: e.target.value })}
+                      placeholder="Notas adicionais sobre esta sessão..." />
+                  </div>
+
+                  {!sessaoForm.obraId && (
+                    <p className="text-xs text-slate-500 italic bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      💡 Selecione uma obra acima para pré-carregar a equipe automaticamente. Caso contrário, a presença pode ser adicionada após criar a sessão.
+                    </p>
+                  )}
+                </div>
+              </>
+            );
+          })()}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSessao(false)}>Cancelar</Button>
             <Button onClick={handleSalvarSessao} disabled={criarSessaoMut.isPending}>

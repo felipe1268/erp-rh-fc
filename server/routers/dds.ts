@@ -5,7 +5,7 @@ import {
   ddsTemas, ddsSessoes, ddsSessaoFuncionarios,
   employees, obras,
 } from "../../drizzle/schema";
-import { eq, and, sql, desc, isNull, inArray } from "drizzle-orm";
+import { eq, and, sql, desc, isNull, inArray, notInArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 function assertCompanyAccess(ctx: any, companyId: number) {
@@ -352,6 +352,35 @@ export const ddsRouter = router({
       }));
     }),
 
+  // Rev. 1730 — Lista colaboradores ATIVOS vinculados a uma obra (obra_funcionarios.isActive=1)
+  // Usado pelo modal "Nova Sessão DDS" para pré-selecionar a equipe da obra.
+  funcionariosDaObra: protectedProcedure
+    .input(z.object({ companyId: z.number().int().positive(), obraId: z.number().int().positive() }))
+    .query(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      // Import dinâmico via require pra evitar circular — obraFuncionarios já existe no schema
+      const { obraFuncionarios } = await import("../../drizzle/schema");
+      const rows = await db.select({
+        employeeId: employees.id,
+        nome: employees.nome,
+        cpf: employees.cpf,
+        funcao: employees.funcao,
+        funcaoNaObra: obraFuncionarios.funcaoNaObra,
+        status: employees.status,
+      }).from(obraFuncionarios)
+        .innerJoin(employees, eq(employees.id, obraFuncionarios.employeeId))
+        .where(and(
+          eq(obraFuncionarios.companyId, input.companyId),
+          eq(obraFuncionarios.obraId, input.obraId),
+          eq(obraFuncionarios.isActive, 1),
+          isNull(employees.deletedAt),
+        ))
+        .orderBy(employees.nome);
+      // Filtra apenas Ativo/Férias/Licença/Afastado (corta Desligado)
+      return rows.filter((r: any) => !["Desligado", "Lista_Negra", "ListaNegra"].includes(r.status));
+    }),
+
   getSessao: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive(), id: z.number().int().positive() }))
     .query(async ({ input, ctx }) => {
@@ -406,10 +435,18 @@ export const ddsRouter = router({
         createdBy: (ctx.user as any)?.id ?? null,
       } as any).returning();
       // pré-carrega funcionários se vieram ids
+      // Rev. 1730 — hardening de authz: força mesma companyId, exclui soft-deleted
+      // e bloqueia status terminais (Desligado/Lista_Negra). Dedupe via Set.
       if (input.funcionarioIds && input.funcionarioIds.length > 0) {
+        const idsUnicos = Array.from(new Set(input.funcionarioIds));
         const emps = await db.select({
           id: employees.id, nome: employees.nome, cpf: employees.cpf, funcao: employees.funcao,
-        }).from(employees).where(inArray(employees.id, input.funcionarioIds));
+        }).from(employees).where(and(
+          inArray(employees.id, idsUnicos),
+          eq(employees.companyId, input.companyId),
+          isNull(employees.deletedAt),
+          notInArray(employees.status, ["Desligado", "Lista_Negra", "ListaNegra"] as any),
+        ));
         if (emps.length > 0) {
           await db.insert(ddsSessaoFuncionarios).values(
             emps.map((e: any) => ({
