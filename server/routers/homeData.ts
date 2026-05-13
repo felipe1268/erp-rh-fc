@@ -537,8 +537,24 @@ export const homeDataRouter = router({
       const avisosPrevios = avisosAtivos.map(a => {
         const emp = allEmps.find(e => e.id === a.employeeId);
         const dataFimStr = toDateStr(a.dataFim!);
+        const dataInicioStr = toDateStr(a.dataInicio!);
         const dataFim = new Date(dataFimStr + 'T00:00:00');
         const diasRestantes = Math.ceil((dataFim.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+        // Rev. 1764 — Último dia trabalhado:
+        //   • tipo "trabalhado": funcionário cumpre o aviso, último dia = dataFim
+        //   • tipo "indenizado": não cumpre o aviso, último dia = véspera do início
+        //     (dia da comunicação). Se houver dataDesligamentoEfetiva no employee, prefere ela.
+        const isIndenizado = (a.tipo || '').includes('indenizado');
+        let ultimoDiaTrabalhadoStr: string | null = null;
+        if (emp?.dataDesligamentoEfetiva) {
+          ultimoDiaTrabalhadoStr = toDateStr(emp.dataDesligamentoEfetiva);
+        } else if (isIndenizado) {
+          const d = new Date(dataInicioStr + 'T00:00:00');
+          d.setDate(d.getDate() - 1);
+          ultimoDiaTrabalhadoStr = d.toISOString().slice(0, 10);
+        } else {
+          ultimoDiaTrabalhadoStr = dataFimStr;
+        }
         const aguardando = a.status === 'aguardando_pagamento';
         const baixaR = parseFloat(String((a as any).baixaRescisaoValor ?? '0')) || 0;
         const baixaF = parseFloat(String((a as any).baixaFgtsValor ?? '0')) || 0;
@@ -555,6 +571,7 @@ export const homeDataRouter = router({
           tipo: a.tipo,
           dataInicio: toDateStr(a.dataInicio!),
           dataFim: dataFimStr,
+          ultimoDiaTrabalhado: ultimoDiaTrabalhadoStr,
           diasRestantes,
           valorEstimado: a.valorEstimadoTotal,
           valorPago: valorPago.toFixed(2),
