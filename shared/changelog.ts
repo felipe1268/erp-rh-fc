@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1751,
+    titulo: "ModuleHub — Módulos desabilitados nas Configurações sumem totalmente da home (não aparecem mais como 'Em breve')",
+    descricao: "Reportado pelo usuário (screenshots da home `/` + Configurações > Módulos do Sistema mostrando Avaliação/Comunicados Internos/Currículos/Oráculo desabilitados): módulos desligados nas Configurações estavam sendo concatenados na seção 'Em Desenvolvimento' da home como cards 'Em breve'. Causa: `client/src/pages/ModuleHub.tsx` L540 montava `futureModules = [...nãoLançados, ...desabilitadosPorConfig]` — qualquer módulo desligado pelo admin via Critérios do Sistema reaparecia ali. Quebrava a regra de ouro 'desabilitado = oculto em TODA tela'. **Fix em 1 lugar, sem schema/server change**: `futureModules` agora filtra `MODULES.filter(m => !m.active && isModuleEnabled(m.id))` — só lista módulos com `active: false` (ainda em roadmap, ex: Pós-Obras) E que estejam habilitados nas Configurações. Desabilitados por config são totalmente ocultados — nem na grid principal, nem em 'Em Desenvolvimento'. Sidebar (DashboardLayout) já respeitava via `isModEnabled` (L1510-1530), então a paridade fica completa: home + sidebar + rotas todos respeitando o toggle.",
+    tipo: "fix",
+    modulos: "Configurações, ModuleHub",
+    criadoPor: "main",
+    dataPublicacao: "2026-05-13 15:00:00",
+  },
+  {
     version: 1750,
     titulo: "DDS · Biblioteca — Barra de progresso da geração bulk com % numérico + ETA estimado",
     descricao: "Pedido do usuário (screenshot do header DDS com botão 'Enriquecendo...' + 'Gerar todos os roteiros com IA' + 'Regerar tudo'): a barra de progresso da Rev. 1747 já existia mas só mostrava 'X/Y' sem dar ideia de quanto falta. **Fix em `client/src/pages/sst/DDSGuia.tsx`**: bloco da barra reescrito como IIFE pra calcular `pct = round((idx/total)*100)`, `restantes = total - idx` e `eta = restantes * 5s` formatado como `~Mm Ss restantes` (ou `~Ns restantes` quando <60s, ou 'finalizando...' no último). Layout reorganizado: container `min-w-[340px]`, header da barra ganha `pct%` em negrito tabular-nums no canto direito ao lado de 'Gerando com IA — X/Y', barra ficou mais grossa (`h-2`) e ocupa largura total do container, ETA aparece em texto pequeno azul claro abaixo. Botão Cancelar mantido. Sem schema/server change.",

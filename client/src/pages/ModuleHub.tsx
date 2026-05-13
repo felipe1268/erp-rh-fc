@@ -529,15 +529,18 @@ export default function ModuleHub() {
     touchStartPos.current = null;
   }
 
-  const disabledModules = MODULES.filter(m => {
-    if (!m.active) return false;
+  // Rev. 1751 — módulos desabilitados nas Configurações (Critérios do Sistema) NÃO aparecem
+  // em lugar nenhum: nem como card ativo, nem como "Em breve". Regra de ouro: o ERP respeita
+  // sempre os critérios do usuário. "Em Desenvolvimento" lista APENAS módulos com active=false
+  // (ainda não lançados) — desabilitados por config são totalmente ocultados.
+  const futureModules = MODULES.filter(m => {
+    if (m.active) return false;
     const configKey = hubToConfigKey[m.id] ?? m.id;
-    const enabled = m.id === "juridico"
+    const modEnabled = m.id === "juridico"
       ? (isModuleEnabled("juridico") || isModuleEnabled("juridico-trabalhista") || isModuleEnabled("juridico-tributario") || isModuleEnabled("juridico-civil"))
       : isModuleEnabled(configKey);
-    return !enabled;
+    return modEnabled;
   });
-  const futureModules = [...MODULES.filter(m => !m.active), ...disabledModules.map(m => ({ ...m, active: false }))];
 
   return (
     <>
