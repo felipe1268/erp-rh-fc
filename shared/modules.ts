@@ -197,6 +197,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "cipa", label: "CIPA", route: "/cipa", icon: "ShieldCheck" },
       { key: "controle-documentos-sst", label: "ASOs / Documentos", route: "/controle-documentos", icon: "HeartPulse" },
       { key: "registro-acidentes", label: "Registro de Acidentes", route: "/sst/acidentes", icon: "AlertTriangle" },
+      { key: "dds", label: "DDS — Diálogo Diário", route: "/sst/dds", icon: "ClipboardCheck" },
       // === Dashboards SST ===
       { key: "dashboard-epis", label: "Dashboard EPIs", route: "/dashboards/epis", icon: "HardHat" },
       { key: "dashboard-atestados-acidentes", label: "Atestados & Acidentes", route: "/sst/dashboard-atestados-acidentes", icon: "HeartPulse" },

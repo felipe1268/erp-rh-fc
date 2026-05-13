@@ -74,6 +74,7 @@ export const MODULE_PAGE_CONFIG: Record<string, ModulePageConfig> = {
     pages: [
       { id: "epi",            label: "Controle de EPIs (Estoque, Checklists, Descontos, Transferências)", actions: ["view","create","edit","delete"] },
       { id: "cipa",           label: "CIPA",                                      actions: ["view","create","edit","delete"] },
+      { id: "dds",            label: "DDS — Diálogo Diário de Segurança",         actions: ["view","create","edit","delete"] },
       { id: "dashboards",     label: "Dashboards SST",                            actions: ["view"] },
     ],
     sensitiveFlags: [
@@ -386,6 +387,7 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/epis":             "epi",
     "/cipa":             "cipa",
     "/sst/acidentes":    "epi",
+    "/sst/dds":          "dds",
     "/dashboards/epis":  "dashboards",
     "/sst/dashboard-atestados-acidentes": "dashboards",
     "/controle-documentos": "epi",

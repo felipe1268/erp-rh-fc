@@ -12424,4 +12424,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-13 12:35:00",
   },
+  {
+    version: 1759,
+    titulo: "DDS · Permissões — feature DDS registrada no módulo SST (estava invisível pra todo usuário não-admin)",
+    descricao: "Reportado pelo usuário (screenshot do sidebar SST do Rodinei): item 'DDS — Diálogo Diário' não aparecia, mesmo com a página existindo desde a Rev. 1726. **Causa raiz**: o DDS foi adicionado ao sidebar (`DashboardLayout.tsx` L198) e às rotas (`App.tsx` L382) mas NUNCA foi registrado em `shared/modules.ts` (lista de features do módulo SST) nem em `shared/modulePages.ts` (mapeamento ROUTE_TO_PAGEID). Resultado: pra qualquer usuário não-admin com grupo no novo sistema de permissões, ao acessar `/sst/dds`, `groupCanAccessRoute` (PermissionsContext.tsx L336-357) procurava o módulo dono da rota → não encontrava em `MODULE_DEFINITIONS` → retornava `false` (regra 'rota dentro do módulo sem mapeamento → nega por segurança'). O sidebar aplicava o mesmo filtro e escondia o item. Admin Master (Felipe) via porque tem bypass total. **Fix sem schema change**: (1) `shared/modules.ts` L203 — adicionada feature `{ key: 'dds', label: 'DDS — Diálogo Diário', route: '/sst/dds', icon: 'ClipboardCheck' }` no módulo SST entre 'Registro de Acidentes' e 'Dashboards SST'. (2) `shared/modulePages.ts` L80 — nova `page { id: 'dds', label: 'DDS — Diálogo Diário de Segurança', actions: ['view','create','edit','delete'] }` em SST.pages. (3) `shared/modulePages.ts` L393 — `'/sst/dds': 'dds'` em `ROUTE_TO_PAGEID.sst`. **Importante pra próximo passo**: usuários com nível `admin` ou `viewer` no SST já passam a ver o DDS automaticamente. Usuários com nível `custom` precisarão que o admin marque o checkbox 'DDS' nas permissões em Usuários > Permissões > SST.",
+    tipo: "bugfix",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 13:10:00",
+  },
 ];
