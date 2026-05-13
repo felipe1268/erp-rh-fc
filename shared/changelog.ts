@@ -12532,4 +12532,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-13 15:00:00",
   },
+  {
+    version: 1771,
+    titulo: "Raio-X do Funcionário · 'Ocorreu um erro inesperado' resolvido (violação de Rules of Hooks introduzida pela Rev. 1769)",
+    descricao: "Reportado pelo usuário (screenshot iPad — ErrorBoundary com stack `updateWorkInProgressHook → updateReducer → useState → RaioXFuncionario`): qualquer abertura do modal Raio-X estourava com 'Ocorreu um erro inesperado'. **Causa raiz**: a Rev. 1769 (modal DDS clicável) adicionou em `client/src/components/RaioXFuncionario.tsx` 3 hooks novos — `useState ddsDetalhe` (L292), 2 `useQuery` (L293-300, dds.getSessao + dds.getAssinaturaImg) e 1 `useCallback gerarPdfDds` (L301-354) — TODOS posicionados DEPOIS do early return `if (!open || !employeeId) return null;` (L265). Clássica violação das Rules of Hooks: quando o modal está fechado o componente retorna cedo e os 4 hooks novos não são chamados; quando abre, eles são chamados e a contagem total de hooks aumenta — React detecta a divergência e crasha a árvore inteira. **Fix sem schema/server change** em `RaioXFuncionario.tsx`: (1) o early return foi REMOVIDO de L265 (substituído por comentário explicando o porquê) e (2) RECOLOCADO logo após o `useCallback gerarPdfDds` (~L361), garantindo que TODOS os hooks (incluindo os 4 novos do DDS) sejam chamados em toda renderização, em ordem estável. As `useQuery` já tinham guards `enabled` baseados em `ddsDetalhe?.sessaoId` + `selectedCompany?.id`, então não disparam request inútil quando o modal está fechado. Comportamento visual idêntico ao da Rev. 1769; só a ordem de declaração foi corrigida.",
+    tipo: "bugfix",
+    modulos: "RH-DP",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 15:30:00",
+  },
 ];

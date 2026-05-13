@@ -262,7 +262,9 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
     },
   });
 
-  if (!open || !employeeId) return null;
+  // Rev. 1770 — early return MOVIDO pra depois de TODOS os hooks (estava aqui
+  // antes da Rev. 1769 introduzir useState/useQuery/useCallback do detalhe DDS,
+  // o que violava a ordem de hooks do React quando o modal abria/fechava).
 
   const emp = raioX?.funcionario;
   const funcaoDetalhes = raioX?.funcaoDetalhes;
@@ -352,6 +354,11 @@ ${sessao.observacoes ? `<h2>Observações</h2><div>${escapeHtml(sessao.observaco
     if (!w) { toast.error('Popup bloqueado. Permita pop-ups pra gerar o PDF.'); return; }
     w.document.open(); w.document.write(html); w.document.close();
   }, [ddsDetalheQuery.data, ddsAssinaturaQuery.data, ddsDetalhe, emp]);
+
+  // Rev. 1770 — early return colocado AQUI (após todos os hooks: useState,
+  // useQuery, useCallback) pra cumprir as Rules of Hooks.
+  if (!open || !employeeId) return null;
+
   const pjContratos = (raioX as any)?.pjContratos || [];
   const pjPagamentos = (raioX as any)?.pjPagamentos || [];
   const pjConformidade = (raioX as any)?.pjConformidade || null;
