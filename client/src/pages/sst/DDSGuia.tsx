@@ -334,6 +334,55 @@ export default function DDSGuia() {
   const [expandedTemaId, setExpandedTemaId] = useState<number | null>(null);
   const [gerandoTemaId, setGerandoTemaId] = useState<number | null>(null);
 
+  // Rev. 1747 — geração em massa com IA (todos os temas sem roteiro de uma vez)
+  const [bulkIA, setBulkIA] = useState<{ ativo: boolean; idx: number; total: number; falhas: number; cancelar: boolean }>({
+    ativo: false, idx: 0, total: 0, falhas: 0, cancelar: false,
+  });
+  const gerarTodosComIA = async (modo: "faltantes" | "todos") => {
+    const lista = ((temasQ.data as any[]) ?? []);
+    const alvos = lista.filter((t: any) =>
+      modo === "todos" ? true : !((t.conteudoMd ?? "").trim().length >= 80)
+    );
+    if (alvos.length === 0) {
+      toast.info(modo === "faltantes"
+        ? "Todos os temas já têm roteiro detalhado."
+        : "Não há temas na biblioteca.");
+      return;
+    }
+    const aviso = modo === "todos"
+      ? `Vai gerar/regerar com IA o roteiro de TODOS os ${alvos.length} temas (sobrescreve os existentes). Pode demorar ~${Math.ceil(alvos.length * 5 / 60)} min. Continuar?`
+      : `Vai gerar com IA o roteiro de ${alvos.length} tema(s) sem conteúdo detalhado. Pode demorar ~${Math.ceil(alvos.length * 5 / 60)} min. Continuar?`;
+    if (!confirm(aviso)) return;
+    setBulkIA({ ativo: true, idx: 0, total: alvos.length, falhas: 0, cancelar: false });
+    let ok = 0; let fail = 0;
+    for (let i = 0; i < alvos.length; i++) {
+      // checa cancelamento via ref de state — usa setState callback pra ler valor atual
+      let cancelado = false;
+      setBulkIA(prev => { cancelado = prev.cancelar; return { ...prev, idx: i + 1 }; });
+      if (cancelado) break;
+      const t = alvos[i];
+      try {
+        const r = await gerarIAMut.mutateAsync({
+          companyId,
+          titulo: t.titulo,
+          descricao: t.descricao ?? undefined,
+          normaReferencia: t.normaReferencia ?? undefined,
+          categoria: t.categoria ?? undefined,
+        });
+        await atualizarTemaMut.mutateAsync({ companyId, id: t.id, conteudoMd: r.conteudoMd } as any);
+        ok++;
+      } catch (e: any) {
+        fail++;
+        setBulkIA(prev => ({ ...prev, falhas: prev.falhas + 1 }));
+        console.warn(`[BulkIA] Falhou no tema ${t.id} (${t.titulo}):`, e?.message);
+      }
+    }
+    setBulkIA({ ativo: false, idx: 0, total: 0, falhas: 0, cancelar: false });
+    utils.dds.listTemas.invalidate();
+    if (fail === 0) toast.success(`${ok} roteiro(s) gerado(s) com IA.`);
+    else toast.warning(`${ok} gerado(s), ${fail} falha(s). Tente novamente nos que falharam.`);
+  };
+
   // ===== modal: tema
   const [showTema, setShowTema] = useState(false);
   const [editTema, setEditTema] = useState<any | null>(null);
@@ -548,13 +597,58 @@ export default function DDSGuia() {
             <Button
               variant="outline"
               onClick={() => enriquecerMut.mutate({ companyId, sobrescrever: false })}
-              disabled={enriquecerMut.isPending}
+              disabled={enriquecerMut.isPending || bulkIA.ativo}
               className="border-violet-300 text-violet-700 hover:bg-violet-50"
-              title="Preenche o roteiro detalhado dos temas padrão (NRs, Campanhas, Vacinação) que ainda estão sem conteúdo"
+              title="Preenche o roteiro detalhado dos temas padrão (NRs, Campanhas, Vacinação) que ainda estão sem conteúdo — usa textos pré-prontos do banco (rápido, sem IA)"
             >
               <Wand2 className="h-4 w-4 mr-1" />
               {enriquecerMut.isPending ? "Enriquecendo..." : "✨ Enriquecer roteiros dos temas padrão"}
             </Button>
+          )}
+          {/* Rev. 1747 — Gerar TODOS os roteiros com IA (sem roteiro ou todos) */}
+          {temas.length > 0 && !bulkIA.ativo && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => gerarTodosComIA("faltantes")}
+                disabled={enriquecerMut.isPending}
+                className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                title="Gera com IA o roteiro detalhado de TODOS os temas que ainda não têm roteiro — contextualiza por título/norma/categoria"
+              >
+                <Sparkles className="h-4 w-4 mr-1" />
+                🤖 Gerar todos os roteiros com IA
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => gerarTodosComIA("todos")}
+                disabled={enriquecerMut.isPending}
+                className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                title="Regera com IA o roteiro de TODOS os temas (incluindo os que já têm conteúdo)"
+              >
+                <Wand2 className="h-4 w-4 mr-1" />
+                Regerar tudo
+              </Button>
+            </>
+          )}
+          {/* Barra de progresso da geração em massa */}
+          {bulkIA.ativo && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200">
+              <Loader2 className="h-4 w-4 animate-spin text-blue-700" />
+              <div className="text-xs">
+                <div className="font-semibold text-blue-900">
+                  Gerando com IA — {bulkIA.idx}/{bulkIA.total}
+                  {bulkIA.falhas > 0 && <span className="text-red-700 ml-1">({bulkIA.falhas} falhas)</span>}
+                </div>
+                <div className="w-48 bg-blue-200 h-1.5 rounded-full overflow-hidden mt-0.5">
+                  <div className="bg-blue-700 h-full transition-all"
+                    style={{ width: `${Math.round((bulkIA.idx / Math.max(1, bulkIA.total)) * 100)}%` }} />
+                </div>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => setBulkIA(p => ({ ...p, cancelar: true }))}
+                className="text-red-600 border-red-200 hover:bg-red-50 h-7 text-xs">
+                Cancelar
+              </Button>
+            </div>
           )}
           <Button onClick={() => abrirNovaSessao()}>
             <Plus className="h-4 w-4 mr-1" /> Nova Sessão DDS
