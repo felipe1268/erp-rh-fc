@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1767,
+    titulo: "Gestão de Documentos · Barra de progresso REAL (0-100%) com velocidade e ETA no upload",
+    descricao: "Pedido pelo usuário (screenshot upload travado em 'Enviando 1 de 1...' sem porcentagem): 'coloca barra de evolução de 0 a 100%, quero saber por que tá demorando'. **Causa**: `tRPC httpBatchLink` não expõe `xhr.upload.onprogress` — só dava pra mostrar 'arquivo X de Y' (granularidade do lote), nunca o byte-a-byte do arquivo atual. **Fix sem schema** em `client/src/pages/gestaodocumentos/index.tsx`: (1) `uploadFileToDoc` reescrita pra falar direto com o endpoint tRPC via `XMLHttpRequest` (formato single-call superjson: `POST /api/trpc/gestaoDocumentos.uploadArquivoDocumento` body `{json: input}`, `xhr.upload.onprogress` captura `loaded/total/lengthComputable`). Aceita callback `onProgress(pct, loaded, total)`. (2) Novos states: `uploadPct`, `uploadBytes {loaded,total}`, `uploadSpeedKBs`, `uploadEtaSec`, `uploadFileName`, `uploadStartRef`. Resetados por arquivo em `handleConfirmUpload`. (3) Painel de progresso reformulado: card branco com sombra + nome do arquivo + '%' grande no canto direito (texto-2xl bold tabular-nums) + barra principal h-3 com gradiente azul + linha de stats (MB enviados/total · velocidade KB-MB/s · ETA segundos ou minutos) + barra fininha verde do lote total quando >1 arquivo. (4) Botão header também mostra '· {pct}%' durante envio. Erro do servidor é parseado de `result.error.json.message` e propagado como Error legível.",
+    tipo: "feature",
+    modulos: "Projetos/Documentos Técnicos",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-13 20:25:00",
+  },
+  {
     version: 1766,
     titulo: "DDS · AssinaturaPad — 'Ocorreu um erro inesperado' resolvido (ReferenceError: imgInicial is not defined)",
     descricao: "Reportado pelo usuário (screenshot iPad com tela vermelha de ErrorBoundary, topo do stack: `AssinaturaPad@.../DDSGuia.tsx:221:17`): abrir o pad de assinatura crashava a página inteira. **Causa raiz**: resíduo da refatoração da Rev. 1748 — quando a imagem deixou de vir no `getSessao` e passou a ser buscada sob demanda via `getAssinaturaImg`, a variável `imgInicial` foi movida pra dentro do `useEffect` (L65, escopo do callback) mas a JSX em L172 ainda referenciava ela (`{imgInicial && podeEditar && (...)}` no botão Remover). React encontrava ReferenceError ao montar o componente, ErrorBoundary capturava. **Fix de 1 linha em `client/src/pages/sst/DDSGuia.tsx` L172**: troca `imgInicial` por `temAssinaturaPrevia` — prop booleana já existente que vem do server flag (`length(assinatura_img)>0`), permite mostrar o botão Remover desde que se sabe que existe assinatura, sem esperar o download da imagem. Sem schema/server change.",

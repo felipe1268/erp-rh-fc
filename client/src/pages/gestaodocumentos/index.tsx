@@ -420,6 +420,13 @@ export default function GestaoDocumentos() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [batchUploading, setBatchUploading] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+  // Rev. 1767 — progresso real (0-100%) do upload do arquivo atual via XHR.
+  const [uploadPct, setUploadPct] = useState(0);
+  const [uploadBytes, setUploadBytes] = useState({ loaded: 0, total: 0 });
+  const uploadStartRef = useRef<number>(0);
+  const [uploadSpeedKBs, setUploadSpeedKBs] = useState(0);
+  const [uploadEtaSec, setUploadEtaSec] = useState(0);
+  const [uploadFileName, setUploadFileName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const batchFileInputRef = useRef<HTMLInputElement>(null);
   const uploadArquivo = trpc.gestaoDocumentos.uploadArquivoDocumento.useMutation({
@@ -429,25 +436,63 @@ export default function GestaoDocumentos() {
     onError: (e) => toast.error("Erro no upload: " + e.message),
   });
 
-  async function uploadFileToDoc(docId: number, file: File) {
-    const reader = new FileReader();
-    return new Promise<void>((resolve, reject) => {
-      reader.onload = async () => {
-        try {
-          const base64 = (reader.result as string).split(",")[1];
-          await uploadArquivo.mutateAsync({
-            documentoId: docId,
-            companyId,
-            fileName: file.name,
-            fileBase64: base64,
-            contentType: file.type || "application/octet-stream",
-            fileSize: file.size,
-          });
-          resolve();
-        } catch (e) { reject(e); }
-      };
-      reader.onerror = reject;
+  // Rev. 1767 — Upload via XMLHttpRequest pra ter progresso real (0-100%).
+  // tRPC httpBatchLink não expõe upload.onprogress; aqui falamos direto com o
+  // endpoint tRPC (formato single-call com superjson: body { json: input }).
+  async function uploadFileToDoc(
+    docId: number,
+    file: File,
+    onProgress?: (pct: number, loaded: number, total: number) => void,
+  ) {
+    // 1) Lê o arquivo como dataURL (base64). Pra arquivos enormes essa parte
+    //    consome memória, mas é o que o endpoint atual aceita.
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(",")[1]);
+      reader.onerror = () => reject(reader.error || new Error("Falha ao ler arquivo"));
       reader.readAsDataURL(file);
+    });
+
+    // 2) Envia via XHR pra capturar upload.onprogress.
+    const input = {
+      documentoId: docId,
+      companyId,
+      fileName: file.name,
+      fileBase64: base64,
+      contentType: file.type || "application/octet-stream",
+      fileSize: file.size,
+    };
+
+    return new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/trpc/gestaoDocumentos.uploadArquivoDocumento");
+      xhr.setRequestHeader("Content-Type", "application/json");
+      xhr.withCredentials = true;
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          onProgress(pct, e.loaded, e.total);
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          // Garante 100% no final mesmo se onprogress não disparou.
+          if (onProgress) onProgress(100, file.size, file.size);
+          // Invalida cache pra refletir igual ao mutation.
+          utils.gestaoDocumentos.listDocumentos.invalidate();
+          resolve();
+        } else {
+          let msg = `HTTP ${xhr.status}`;
+          try {
+            const r = JSON.parse(xhr.responseText);
+            msg = r?.error?.json?.message || r?.error?.message || msg;
+          } catch {}
+          reject(new Error(msg));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Erro de rede no upload"));
+      xhr.ontimeout = () => reject(new Error("Tempo esgotado no upload"));
+      xhr.send(JSON.stringify({ json: input }));
     });
   }
 
@@ -537,9 +582,27 @@ export default function GestaoDocumentos() {
 
     const currentDocs: any[] = documentos.data || [];
 
+    // Rev. 1767 — callback que atualiza % + velocidade + ETA durante o upload.
+    const onProg = (pct: number, loaded: number, total: number) => {
+      setUploadPct(pct);
+      setUploadBytes({ loaded, total });
+      const elapsedSec = Math.max(0.1, (Date.now() - uploadStartRef.current) / 1000);
+      const speedKBs = loaded / 1024 / elapsedSec;
+      setUploadSpeedKBs(speedKBs);
+      const remainingBytes = Math.max(0, total - loaded);
+      setUploadEtaSec(speedKBs > 0 ? Math.round(remainingBytes / 1024 / speedKBs) : 0);
+    };
+
     for (let i = 0; i < pendingFiles.length; i++) {
       const pf = pendingFiles[i];
       setBatchProgress({ current: i + 1, total: pendingFiles.length });
+      // Reset por arquivo
+      setUploadPct(0);
+      setUploadBytes({ loaded: 0, total: pf.file.size });
+      setUploadSpeedKBs(0);
+      setUploadEtaSec(0);
+      setUploadFileName(pf.file.name);
+      uploadStartRef.current = Date.now();
       const discId = selectedDiscId || undefined;
       const { rev, revStr } = parseRevision(pf.codigo);
 
@@ -559,7 +622,7 @@ export default function GestaoDocumentos() {
               arquivoTamanho: existingDoc.arquivoTamanho || undefined,
               motivoRevisao: `Substituído por revisão R${revStr}`,
             });
-            await uploadFileToDoc(existingDoc.id, pf.file);
+            await uploadFileToDoc(existingDoc.id, pf.file, onProg);
             await updateDoc.mutateAsync({
               id: existingDoc.id,
               companyId,
@@ -588,7 +651,7 @@ export default function GestaoDocumentos() {
             dataEmissao: new Date().toISOString().split("T")[0],
           });
           if (doc?.id) {
-            await uploadFileToDoc(doc.id, pf.file);
+            await uploadFileToDoc(doc.id, pf.file, onProg);
           }
           ok++;
         }
@@ -599,6 +662,11 @@ export default function GestaoDocumentos() {
     isBatchRef.current = false;
     setBatchUploading(false);
     setBatchProgress({ current: 0, total: 0 });
+    setUploadPct(0);
+    setUploadBytes({ loaded: 0, total: 0 });
+    setUploadSpeedKBs(0);
+    setUploadEtaSec(0);
+    setUploadFileName("");
     setPendingFiles([]);
     utils.gestaoDocumentos.listDocumentos.invalidate();
     if (fail === 0) {
@@ -1661,7 +1729,7 @@ export default function GestaoDocumentos() {
                   )}
                   <Button size="sm" onClick={() => batchFileInputRef.current?.click()} className="bg-blue-600 text-white hover:bg-blue-700 h-8" disabled={batchUploading}>
                     {batchUploading ? (
-                      <><span className="animate-spin mr-1">⏳</span> Enviando {batchProgress.current}/{batchProgress.total}</>
+                      <><span className="animate-spin mr-1">⏳</span> Enviando {batchProgress.current}/{batchProgress.total} · {uploadPct}%</>
                     ) : (
                       <><Upload className="w-4 h-4 mr-1" /> Enviar Documentos</>
                     )}
@@ -1701,15 +1769,65 @@ export default function GestaoDocumentos() {
                 )}
                 <div className="flex-1 overflow-y-auto relative">
                   {batchUploading && (
-                    <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
-                      <div className="text-center">
-                        <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-full text-sm font-medium mb-3">
-                          <span className="animate-spin">⏳</span>
-                          Enviando {batchProgress.current} de {batchProgress.total}...
+                    <div className="absolute inset-0 bg-white/85 backdrop-blur-sm z-10 flex flex-col items-center justify-center px-6">
+                      {/* Rev. 1767 — Painel de progresso real (0-100%) com velocidade e ETA */}
+                      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-blue-100 p-5">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="animate-spin text-blue-600">⏳</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-blue-900 truncate" title={uploadFileName || "Arquivo"}>
+                              {uploadFileName || "Preparando..."}
+                            </p>
+                            <p className="text-[11px] text-blue-600 tabular-nums">
+                              Arquivo {batchProgress.current} de {batchProgress.total}
+                            </p>
+                          </div>
+                          <span className="text-2xl font-bold text-blue-700 tabular-nums">{uploadPct}%</span>
                         </div>
-                        <div className="w-48 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                          <div className="h-full bg-blue-600 transition-all duration-300 rounded-full" style={{ width: `${batchProgress.total > 0 ? (batchProgress.current / batchProgress.total) * 100 : 0}%` }} />
+                        {/* Barra do arquivo atual */}
+                        <div className="w-full h-3 bg-blue-100 rounded-full overflow-hidden mb-2">
+                          <div
+                            className="h-full bg-gradient-to-r from-blue-500 to-blue-700 transition-all duration-150 rounded-full"
+                            style={{ width: `${uploadPct}%` }}
+                          />
                         </div>
+                        {/* Stats: bytes / velocidade / ETA */}
+                        <div className="flex items-center justify-between text-[11px] text-slate-600 tabular-nums">
+                          <span>
+                            {uploadBytes.total > 0
+                              ? `${(uploadBytes.loaded / 1024 / 1024).toFixed(2)} / ${(uploadBytes.total / 1024 / 1024).toFixed(2)} MB`
+                              : "—"}
+                          </span>
+                          <span>
+                            {uploadSpeedKBs > 1024
+                              ? `${(uploadSpeedKBs / 1024).toFixed(2)} MB/s`
+                              : `${uploadSpeedKBs.toFixed(0)} KB/s`}
+                          </span>
+                          <span>
+                            {uploadEtaSec > 0
+                              ? uploadEtaSec > 60
+                                ? `~${Math.floor(uploadEtaSec / 60)}m ${uploadEtaSec % 60}s restantes`
+                                : `~${uploadEtaSec}s restantes`
+                              : uploadPct >= 100 ? "Finalizando..." : "calculando..."}
+                          </span>
+                        </div>
+                        {/* Barra do lote (quantos arquivos já foram) */}
+                        {batchProgress.total > 1 && (
+                          <>
+                            <div className="mt-3 pt-3 border-t border-blue-100">
+                              <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1 uppercase tracking-wide">
+                                <span>Progresso geral do lote</span>
+                                <span className="tabular-nums">{batchProgress.current}/{batchProgress.total}</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-emerald-500 transition-all duration-300 rounded-full"
+                                  style={{ width: `${batchProgress.total > 0 ? ((batchProgress.current - 1) / batchProgress.total) * 100 + (uploadPct / 100) * (100 / batchProgress.total) : 0}%` }}
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
