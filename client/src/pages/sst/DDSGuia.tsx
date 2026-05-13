@@ -1256,7 +1256,7 @@ function SessaoDetalhe({
     if (!e) return;
     presencaMut.mutate({
       companyId, sessaoId: sessao.id,
-      adicionar: [{ employeeId: e.id, nome: e.nome, cpf: e.cpf, funcao: e.funcao, presente: 1 }],
+      adicionar: [{ employeeId: e.id, nome: e.nomeCompleto ?? e.nome, cpf: e.cpf, funcao: e.funcao, presente: 1 }],
     });
     setAddFuncId("");
   };
@@ -1308,7 +1308,7 @@ function SessaoDetalhe({
                 </SelectTrigger>
                 <SelectContent className="max-h-72">
                   {employees.filter((e: any) => !idsJaNaSessao.has(e.id)).map((e: any) => (
-                    <SelectItem key={e.id} value={String(e.id)}>{e.nome}{e.funcao ? ` — ${e.funcao}` : ""}</SelectItem>
+                    <SelectItem key={e.id} value={String(e.id)}>{e.nomeCompleto ?? e.nome}{e.funcao ? ` — ${e.funcao}` : ""}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
