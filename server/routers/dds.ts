@@ -1447,7 +1447,7 @@ Gere o roteiro detalhado seguindo EXATAMENTE o formato exigido.`;
           status: ddsSessoes.status,
           finalizadaEm: ddsSessoes.finalizadaEm,
           createdBy: ddsSessoes.createdBy,
-          criadoEm: ddsSessoes.criadoEm,
+          createdAt: ddsSessoes.createdAt,
           updatedAt: ddsSessoes.updatedAt,
         }).from(ddsSessoes)
           .where(and(eq(ddsSessoes.id, input.id), eq(ddsSessoes.companyId, input.companyId)));
@@ -1465,7 +1465,7 @@ Gere o roteiro detalhado seguindo EXATAMENTE o formato exigido.`;
           presente: ddsSessaoFuncionarios.presente,
           assinadoEm: ddsSessaoFuncionarios.assinadoEm,
           assinaturaTipo: ddsSessaoFuncionarios.assinaturaTipo,
-          criadoEm: ddsSessaoFuncionarios.criadoEm,
+          createdAt: ddsSessaoFuncionarios.createdAt,
           temAssinatura: sql<boolean>`(${ddsSessaoFuncionarios.assinaturaImg} IS NOT NULL AND length(${ddsSessaoFuncionarios.assinaturaImg}) > 0)`,
         }).from(ddsSessaoFuncionarios)
           .where(eq(ddsSessaoFuncionarios.sessaoId, input.id))

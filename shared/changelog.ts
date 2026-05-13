@@ -12406,4 +12406,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-13 09:55:00",
   },
+  {
+    version: 1757,
+    titulo: "DDS · getSessao — 'Cannot convert undefined or null to object' resolvido DE VERDADE (colunas inexistentes na projeção)",
+    descricao: "O erro persistia mesmo após Rev. 1753. Stack trace exposto pelo try/catch da própria 1753 mostrou: `TypeError at Function.entries at orderSelectedFields (drizzle-orm/utils.ts:78)` — drizzle quebra quando UMA das chaves do objeto `select({...})` aponta pra coluna `undefined`. **Causa raiz**: a projeção explícita introduzida na Rev. 1753 referenciava `ddsSessoes.criadoEm` (L1451) e `ddsSessaoFuncionarios.criadoEm` (L1468), mas no `drizzle/schema.ts` as colunas se chamam **`createdAt`** (L8169 e L8191), não `criadoEm`. As referências viravam `undefined`, drizzle iterava com `Object.entries(undefined)` e estourava — toda chamada a `dds.getSessao` falhava com 500 e o cliente exibia o card vermelho 'Não foi possível abrir esta sessão'. **Fix mínimo, sem schema/server change adicional**: 2 linhas em `server/routers/dds.ts` — `criadoEm: ddsSessoes.criadoEm` → `createdAt: ddsSessoes.createdAt` (L1453) e `criadoEm: ddsSessaoFuncionarios.criadoEm` → `createdAt: ddsSessaoFuncionarios.createdAt` (L1468). Cliente (`DDSGuia.tsx`) não consumia esses campos, então sem mudança no front.",
+    tipo: "bugfix",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 10:10:00",
+  },
 ];
