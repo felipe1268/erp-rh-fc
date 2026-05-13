@@ -2027,7 +2027,7 @@ export default function GestaoDocumentos() {
             <div>
               <Label className="text-gray-500">Cor</Label>
               <div className="flex items-center gap-2 mt-1">
-                <input type="color" value={newDiscForm.cor} onChange={(e) => setNewDiscForm({ ...newDiscForm, cor: e.target.value })} className="w-8 h-8 rounded cursor-pointer border border-gray-300" />
+                <input type="color" value={(newDiscForm.cor || "#3b82f6").toLowerCase()} onChange={(e) => setNewDiscForm({ ...newDiscForm, cor: e.target.value.toLowerCase() })} className="w-8 h-8 rounded cursor-pointer border border-gray-300" />
                 <span className="text-xs text-gray-400">{newDiscForm.cor}</span>
               </div>
             </div>
