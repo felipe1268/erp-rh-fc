@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1765,
+    titulo: "Gestão de Documentos · Upload sem limite de tamanho (era 30MB, bloqueava DWG/RVT/IFC grandes)",
+    descricao: "Reportado pelo usuário (screenshot REVTE-CIVIL/ROHR/DWG, toast '004-Planta_Implant_Nave_Norte.dwg: muito grande (máx 30MB)'): pedido explícito 'Não pode ter limite de tamanho de arquivo para fazer upload, quero ilimitado'. **Fix sem schema change** em 2 frentes. **Server (`server/_core/index.ts` L55-56)**: body parser do Express subiu de `limit:'50mb'` pra `limit:'2gb'` (json + urlencoded) — teto técnico alto pra evitar OOM no container, mas na prática libera qualquer arquivo de obra. **Client (`client/src/pages/gestaodocumentos/index.tsx`)**: removidas as 3 checagens `if (f.size > 30 * 1024 * 1024)` (handleBatchUpload L466, drop handler L1736, file input handler L2177). Hint visual no botão de upload (L2215) atualizado de 'até 30MB' pra 'sem limite de tamanho'. As demais validações (extensão por sub-pasta) seguem intactas.",
+    tipo: "feature",
+    modulos: "Projetos/Documentos Técnicos",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-13 19:55:00",
+  },
+  {
     version: 1764,
     titulo: "Painel RH · Card Aviso Prévio — exibe 'Último dia trabalhado' por funcionário",
     descricao: "Pedido pelo usuário (screenshot do card 'Avisos Prévios em Andamento' no Painel RH): além de Término / Prazo pgto, mostrar também a data do último dia trabalhado de cada colaborador. **Fix sem schema change** em 2 arquivos. **Server (`server/routers/homeData.ts` ~L540-560)**: cada item de `avisosPrevios` ganha o campo `ultimoDiaTrabalhado` com a regra: (1) se o employee tem `dataDesligamentoEfetiva` preenchida, usa ela (fonte de verdade quando o RH efetivou o desligamento); (2) senão, se `tipo` contém 'indenizado' (aviso indenizado: o funcionário NÃO trabalha o aviso), último dia = `dataInicio - 1` (véspera do início do aviso = dia da comunicação); (3) caso contrário (aviso trabalhado), último dia = `dataFim` (cumpriu o aviso até o fim). **Client (`client/src/pages/PainelRH.tsx` ~L388)**: nova linha 'Último dia trab.: dd/MM/aaaa' (text-[10px] slate-700, data em font-semibold) entre 'Término' e 'Prazo pgto'. Renderizada com defensivo `{a.ultimoDiaTrabalhado && (...)}` pra não quebrar se o backend ainda não retornou o campo (rollout). Sem mudança de outros consumidores de homeData.",

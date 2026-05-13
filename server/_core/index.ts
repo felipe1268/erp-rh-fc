@@ -52,8 +52,12 @@ async function startServer() {
   // Security headers (XSS, clickjacking, MIME sniffing, HSTS)
   app.use(securityHeaders());
   // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // Rev. 1765 — limites de upload removidos a pedido do usuário ('quero ilimitado').
+  // Mantemos um teto técnico alto pra evitar OOM no container (2GB), mas na prática
+  // libera qualquer arquivo de obra (DWG/RVT/IFC/PDF). Body parser do Express opera
+  // sobre payload base64 dentro do JSON do tRPC.
+  app.use(express.json({ limit: "2gb" }));
+  app.use(express.urlencoded({ limit: "2gb", extended: true }));
   // Rate limiting para autenticação (mais restritivo: 20 req/min)
   app.use("/api/oauth", authRateLimit);
   // Rate limiting para API (200 req/min por IP+path)

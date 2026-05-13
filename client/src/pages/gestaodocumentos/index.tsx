@@ -463,7 +463,7 @@ export default function GestaoDocumentos() {
   function handleBatchUpload(files: FileList) {
     if (!selectedObraId) { toast.error("Selecione uma obra primeiro"); return; }
     const validFiles = Array.from(files).filter(f => {
-      if (f.size > 30 * 1024 * 1024) { toast.error(`${f.name}: muito grande (máx 30MB)`); return false; }
+      // Rev. 1765 — limite de tamanho removido a pedido do usuário ('quero ilimitado').
       if (!isExtensionAllowed(f.name, selectedSubpasta)) {
         const allowed = SUBPASTA_EXTENSIONS[selectedSubpasta?.toUpperCase() || ""]?.join(", ") || "";
         toast.error(`${f.name}: extensão não permitida na pasta ${selectedSubpasta}. Aceito: ${allowed}`);
@@ -1733,7 +1733,7 @@ export default function GestaoDocumentos() {
                           handleBatchUpload(files);
                         } else if (files.length === 1) {
                           const f = files[0];
-                          if (f.size > 30 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 30MB)"); return; }
+                          // Rev. 1765 — limite removido (upload ilimitado).
                           if (!isExtensionAllowed(f.name, selectedSubpasta)) {
                             const allowed = SUBPASTA_EXTENSIONS[selectedSubpasta?.toUpperCase() || ""]?.join(", ") || "";
                             toast.error(`Extensão não permitida na pasta ${selectedSubpasta}. Aceito: ${allowed}`);
@@ -2174,7 +2174,7 @@ export default function GestaoDocumentos() {
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (f) {
-                    if (f.size > 30 * 1024 * 1024) { toast.error("Arquivo muito grande (máx 30MB)"); return; }
+                    // Rev. 1765 — limite removido (upload ilimitado).
                     if (!isExtensionAllowed(f.name, selectedSubpasta)) {
                       const allowed = SUBPASTA_EXTENSIONS[selectedSubpasta?.toUpperCase() || ""]?.join(", ") || "";
                       toast.error(`Extensão não permitida na pasta ${selectedSubpasta}. Aceito: ${allowed}`);
@@ -2212,7 +2212,7 @@ export default function GestaoDocumentos() {
                 >
                   <Upload className="w-5 h-5 mx-auto text-gray-300 group-hover:text-blue-500 mb-1" />
                   <p className="text-xs text-gray-400 group-hover:text-blue-600">Clique para anexar arquivo</p>
-                  <p className="text-[10px] text-gray-300">PDF, DWG, DXF, DOC, XLS, RVT, IFC — até 30MB</p>
+                  <p className="text-[10px] text-gray-300">PDF, DWG, DXF, DOC, XLS, RVT, IFC — sem limite de tamanho</p>
                 </button>
               )}
             </div>
