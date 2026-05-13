@@ -131,7 +131,8 @@ export default function DDSGuia() {
   };
 
   // ===== modal: nova sessão
-  const obrasQ = trpc.obras.listar.useQuery({ companyId } as any, { enabled: !!companyId });
+  // Rev. 1731 fix: usa listActive (respeita allowedObras do usuário) + filtra status='Em_Andamento' no client
+  const obrasQ = trpc.obras.listActive.useQuery({ companyId } as any, { enabled: !!companyId });
   const employeesQ = trpc.employees.list.useQuery({ companyId } as any, { enabled: !!companyId });
   const [showSessao, setShowSessao] = useState(false);
   const [sessaoForm, setSessaoForm] = useState<any>({
@@ -619,7 +620,8 @@ export default function DDSGuia() {
                   e.funcao?.toLowerCase().includes(buscaFunc.toLowerCase())
                 )
               : equipeObra;
-            const obrasList = (obrasQ.data as any[]) ?? [];
+            // Rev. 1731 fix: só obras Em_Andamento (já vêm com permissão de allowedObras aplicada pelo listActive)
+            const obrasList = ((obrasQ.data as any[]) ?? []).filter((o: any) => !o.status || o.status === "Em_Andamento");
             const obrasFiltradas = buscaObra
               ? obrasList.filter((o: any) => o.nome?.toLowerCase().includes(buscaObra.toLowerCase()))
               : obrasList;
