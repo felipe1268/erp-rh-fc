@@ -169,7 +169,7 @@ function AssinaturaPad({
               <Eraser className="h-3.5 w-3.5 mr-1" /> Limpar
             </Button>
           )}
-          {imgInicial && podeEditar && (
+          {temAssinaturaPrevia && podeEditar && (
             <Button variant="outline" size="sm" onClick={remover}
               disabled={removerMut.isPending}
               className="text-red-600 hover:bg-red-50 border-red-200">

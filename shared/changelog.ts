@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1766,
+    titulo: "DDS · AssinaturaPad — 'Ocorreu um erro inesperado' resolvido (ReferenceError: imgInicial is not defined)",
+    descricao: "Reportado pelo usuário (screenshot iPad com tela vermelha de ErrorBoundary, topo do stack: `AssinaturaPad@.../DDSGuia.tsx:221:17`): abrir o pad de assinatura crashava a página inteira. **Causa raiz**: resíduo da refatoração da Rev. 1748 — quando a imagem deixou de vir no `getSessao` e passou a ser buscada sob demanda via `getAssinaturaImg`, a variável `imgInicial` foi movida pra dentro do `useEffect` (L65, escopo do callback) mas a JSX em L172 ainda referenciava ela (`{imgInicial && podeEditar && (...)}` no botão Remover). React encontrava ReferenceError ao montar o componente, ErrorBoundary capturava. **Fix de 1 linha em `client/src/pages/sst/DDSGuia.tsx` L172**: troca `imgInicial` por `temAssinaturaPrevia` — prop booleana já existente que vem do server flag (`length(assinatura_img)>0`), permite mostrar o botão Remover desde que se sabe que existe assinatura, sem esperar o download da imagem. Sem schema/server change.",
+    tipo: "bugfix",
+    modulos: "SST",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-13 20:20:00",
+  },
+  {
     version: 1765,
     titulo: "Gestão de Documentos · Upload sem limite de tamanho (era 30MB, bloqueava DWG/RVT/IFC grandes)",
     descricao: "Reportado pelo usuário (screenshot REVTE-CIVIL/ROHR/DWG, toast '004-Planta_Implant_Nave_Norte.dwg: muito grande (máx 30MB)'): pedido explícito 'Não pode ter limite de tamanho de arquivo para fazer upload, quero ilimitado'. **Fix sem schema change** em 2 frentes. **Server (`server/_core/index.ts` L55-56)**: body parser do Express subiu de `limit:'50mb'` pra `limit:'2gb'` (json + urlencoded) — teto técnico alto pra evitar OOM no container, mas na prática libera qualquer arquivo de obra. **Client (`client/src/pages/gestaodocumentos/index.tsx`)**: removidas as 3 checagens `if (f.size > 30 * 1024 * 1024)` (handleBatchUpload L466, drop handler L1736, file input handler L2177). Hint visual no botão de upload (L2215) atualizado de 'até 30MB' pra 'sem limite de tamanho'. As demais validações (extensão por sub-pasta) seguem intactas.",
