@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb, getCompaniesForUser, getEffectiveAllowedObraIds } from "../db";
+import { getDb, getCompaniesForUser, getEffectiveAllowedObraIds, getUserCompanyLinks } from "../db";
 import { triggerFinancialSync } from "../services/financialEventTrigger";
 import { criarParcelasFinanceiras } from "../services/purchaseFinancialBridge";
 import { getTipoPagamentoInfo } from "../../shared/paymentConditions";
@@ -684,12 +684,30 @@ async function _registrarLogReserva(opts: {
   }
 }
 
-/** Garante que o usuário tem acesso à companyId solicitada. */
+/**
+ * Garante que o usuário tem acesso à companyId solicitada.
+ *
+ * Rev. 1744 — Helper estava QUEBRADO desde sempre: comparava `companyId`
+ * (number) contra `getCompaniesForUser(...)` que retorna ARRAY DE OBJETOS
+ * Company (não IDs). `allowed.includes(companyId)` era SEMPRE false → toda
+ * chamada caía em "Sem acesso a esta empresa." inclusive para admin_master.
+ * O sintoma que estourava era o `verificarTravamentoCompras` disparado pelo
+ * `ReservasAlertModal` no DashboardLayout sempre que a empresa selecionada
+ * mudava (especialmente após cadastrar uma empresa nova).
+ *
+ * Fix replicando a regra robusta de `terceiros.ts` (Rev. 1702):
+ *  - admin / admin_master → libera (paridade com getCompaniesForUser L197).
+ *  - Usuário com vínculos em `user_companies` → enforça membership real.
+ *  - Usuário SEM nenhum vínculo (controle por grupo/módulo) → libera.
+ */
 async function _assertCompanyAccess(ctxUser: any, companyId: number) {
   if (!ctxUser?.id) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida." });
-  const allowed = await getCompaniesForUser(ctxUser.id, ctxUser.role);
-  if (!allowed.includes(companyId)) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
+  if (ctxUser.role === "admin" || ctxUser.role === "admin_master") return;
+  const links = await getUserCompanyLinks(ctxUser.id);
+  const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
+  if (allowedIds.length === 0) return;
+  if (!allowedIds.includes(companyId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: `Sem acesso a esta empresa. (user=${ctxUser.id} role=${ctxUser.role} req=${companyId})` });
   }
 }
 
