@@ -64,6 +64,12 @@ export default function DDSGuia() {
   const { user } = useAuth() as any;
 
   const [tab, setTab] = useState<"calendario" | "biblioteca" | "sessoes">("calendario");
+  // Rev. 1736 — Calendário por ano: padrão = ano atual mostrando só os meses pendentes (mês atual em diante).
+  // Próximos anos abrem com TODOS os meses. Toggle "Ver todas" mostra os 12 meses do ano selecionado.
+  const anoAtual = new Date().getFullYear();
+  const mesAtualNum = new Date().getMonth() + 1;
+  const [calendarioAno, setCalendarioAno] = useState<number>(anoAtual);
+  const [verTodasCampanhas, setVerTodasCampanhas] = useState<boolean>(false);
 
   // ===== queries
   const calendarioQ = trpc.dds.calendarioAnual.useQuery({ companyId }, { enabled: !!companyId });
@@ -313,6 +319,44 @@ export default function DDSGuia() {
 
         {/* =================== CALENDÁRIO =================== */}
         <TabsContent value="calendario" className="mt-4">
+          {/* Rev. 1736 — Toolbar: seletor de ano + toggle "ver todas" */}
+          {temas.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mb-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500 mr-1">Ano:</span>
+              {[anoAtual, anoAtual + 1, anoAtual + 2].map((y) => (
+                <button key={y} type="button"
+                  onClick={() => { setCalendarioAno(y); setVerTodasCampanhas(false); }}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border transition ${
+                    calendarioAno === y
+                      ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                      : "bg-white text-slate-600 border-slate-300 hover:bg-slate-100"
+                  }`}>
+                  {y}{y === anoAtual ? " (atual)" : ""}
+                </button>
+              ))}
+              <div className="flex-1" />
+              {calendarioAno === anoAtual && (
+                <button type="button"
+                  onClick={() => setVerTodasCampanhas(v => !v)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border transition ${
+                    verTodasCampanhas
+                      ? "bg-amber-500 text-white border-amber-500"
+                      : "bg-white text-amber-700 border-amber-300 hover:bg-amber-50"
+                  }`}>
+                  {verTodasCampanhas
+                    ? `✓ Mostrando os 12 meses de ${anoAtual}`
+                    : `Ver todas as campanhas de ${anoAtual}`}
+                </button>
+              )}
+              <span className="text-[11px] text-slate-500 italic ml-1">
+                {calendarioAno === anoAtual && !verTodasCampanhas
+                  ? `Exibindo só meses pendentes (${MESES_PT[mesAtualNum - 1]} → Dezembro)`
+                  : calendarioAno > anoAtual
+                    ? `Planejamento ${calendarioAno} — todos os meses`
+                    : `Visão completa de ${calendarioAno}`}
+              </span>
+            </div>
+          )}
           {temas.length === 0 ? (
             <div className="bg-amber-50 border border-amber-300 rounded-2xl p-6 text-center">
               <Megaphone className="h-10 w-10 text-amber-600 mx-auto mb-2" />
@@ -329,10 +373,18 @@ export default function DDSGuia() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {camp.map((m: any) => {
+              {(camp as any[])
+                .filter((m: any) => {
+                  // Rev. 1736 — ano atual sem "ver todas": só meses pendentes (>= mês atual).
+                  // Próximos anos: todos os meses. Toggle ativo no ano atual: todos os 12.
+                  if (calendarioAno > anoAtual) return true;
+                  if (verTodasCampanhas) return true;
+                  return m.mes >= mesAtualNum;
+                })
+                .map((m: any) => {
                 const c0 = m.campanhas?.[0];
                 const cor = corCfg(c0?.corCampanha);
-                const mesAtual = m.mes === new Date().getMonth() + 1;
+                const mesAtual = calendarioAno === anoAtual && m.mes === mesAtualNum;
                 return (
                   <div key={m.mes}
                     className={`rounded-2xl border-2 ${cor.border} ${cor.bg} p-4 shadow-sm ${mesAtual ? "ring-2 ring-emerald-400 ring-offset-2" : ""}`}
@@ -342,7 +394,9 @@ export default function DDSGuia() {
                         {String(m.mes).padStart(2, "0")} • {MESES_PT[m.mes - 1]}
                       </div>
                       <span className="text-xs text-slate-500">
-                        {m.sessoesNoMes} sessão(ões) este ano
+                        {calendarioAno === anoAtual
+                          ? `${m.sessoesNoMes} sessão(ões) este ano`
+                          : `Planejado para ${calendarioAno}`}
                       </span>
                     </div>
                     {m.campanhas?.length ? m.campanhas.map((c: any) => (
