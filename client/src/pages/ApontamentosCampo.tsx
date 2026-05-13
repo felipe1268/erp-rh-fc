@@ -813,103 +813,203 @@ export default function ApontamentosCampo() {
         </Dialog>
 
         {/* Dialog: Detalhes */}
+        {/* Rev. 1755 — modal redesenhado: header com identidade destacada, chips coloridos
+            de Status/Tipo/Prioridade, grid visual de batidas de ponto, descrição em card e
+            footer com ações primárias (verde/azul) separadas das destrutivas (Excluir). */}
         <Dialog open={showDetalhesDialog} onOpenChange={setShowDetalhesDialog}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Detalhes do Apontamento #{selectedNote?.id}</DialogTitle>
-              <DialogDescription>Informações completas da ocorrência</DialogDescription>
-            </DialogHeader>
-            {selectedNote && (
-              <div className="space-y-3 text-sm">
-                <div className="grid grid-cols-2 gap-3">
-                  <div><span className="text-muted-foreground">Funcionário:</span><br /><span className="font-medium">{selectedNote.nomeFunc}</span></div>
-                  <div><span className="text-muted-foreground">Função:</span><br /><span>{selectedNote.funcaoFunc || "—"}</span></div>
-                  <div><span className="text-muted-foreground">Data:</span><br /><span>{selectedNote.data ? new Date(selectedNote.data + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</span></div>
-                  <div><span className="text-muted-foreground">Obra:</span><br /><span>{selectedNote.obraNome || "—"}</span></div>
-                  <div className="col-span-2"><span className="text-muted-foreground">Horário do ponto:</span><br />
-                    {(selectedNote.entrada1 || selectedNote.saida1 || selectedNote.entrada2 || selectedNote.saida2) ? (
-                      <span className="font-mono text-xs">
-                        Entrada 1: <b>{selectedNote.entrada1 || "—"}</b> · Saída 1: <b>{selectedNote.saida1 || "—"}</b> · Entrada 2: <b>{selectedNote.entrada2 || "—"}</b> · Saída 2: <b>{selectedNote.saida2 || "—"}</b>
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground italic text-xs">Sem batidas registradas para esta data</span>
-                    )}
-                  </div>
-                  <div><span className="text-muted-foreground">Tipo:</span><br /><Badge className={TIPO_LABELS[selectedNote.tipoOcorrencia]?.color}>{TIPO_LABELS[selectedNote.tipoOcorrencia]?.label}</Badge></div>
-                  <div><span className="text-muted-foreground">Prioridade:</span><br /><span className={PRIORIDADE_LABELS[selectedNote.prioridade]?.color}>{PRIORIDADE_LABELS[selectedNote.prioridade]?.label}</span></div>
-                  <div><span className="text-muted-foreground">Status:</span><br /><Badge variant="outline" className={STATUS_LABELS[selectedNote.status]?.color}>{STATUS_LABELS[selectedNote.status]?.label}</Badge></div>
-                  <div><span className="text-muted-foreground">Registrado por:</span><br /><span>{selectedNote.solicitanteNome}</span></div>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Descrição:</span>
-                  <p className="mt-1 bg-gray-50 rounded p-3">{selectedNote.descricao}</p>
-                </div>
-                {selectedNote.respostaRH && (
-                  <div className="bg-green-50 border border-green-200 rounded p-3">
-                    <span className="font-semibold text-green-700">Resposta RH:</span>
-                    <p className="mt-1">{selectedNote.respostaRH}</p>
-                    {selectedNote.acaoTomada && selectedNote.acaoTomada !== 'nenhuma' && (
-                      <p className="mt-1 text-green-600">Ação: {ACAO_LABELS[selectedNote.acaoTomada]}</p>
-                    )}
-                    {selectedNote.resolvidoPor && (
-                      <p className="mt-1 text-xs text-muted-foreground">Resolvido por: {selectedNote.resolvidoPor}</p>
-                    )}
-                  </div>
-                )}
-                <div className="text-xs text-muted-foreground">
-                  Criado em: {selectedNote.createdAt ? new Date(selectedNote.createdAt).toLocaleString("pt-BR") : "—"}
-                </div>
-              </div>
-            )}
-            <DialogFooter className="flex-wrap gap-2">
-              {selectedNote && (selectedNote.status === 'pendente' || selectedNote.status === 'em_analise') && (
+          <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto p-0 gap-0">
+            {selectedNote && (() => {
+              const isPendente = selectedNote.status === 'pendente' || selectedNote.status === 'em_analise';
+              const isResolvido = selectedNote.status === 'resolvido' || selectedNote.status === 'arquivado';
+              const iniciais = (selectedNote.nomeFunc || "?").split(" ").filter(Boolean).slice(0, 2).map((s: string) => s[0]).join("").toUpperCase();
+              const dataFmt = selectedNote.data ? new Date(selectedNote.data + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }) : "—";
+              const temBatidas = selectedNote.entrada1 || selectedNote.saida1 || selectedNote.entrada2 || selectedNote.saida2;
+              const statusInfo = STATUS_LABELS[selectedNote.status] || { label: selectedNote.status, color: "" };
+              const tipoInfo = TIPO_LABELS[selectedNote.tipoOcorrencia] || { label: selectedNote.tipoOcorrencia, color: "" };
+              const prioInfo = PRIORIDADE_LABELS[selectedNote.prioridade] || { label: selectedNote.prioridade, color: "" };
+              const headerBg = isResolvido
+                ? "from-emerald-50 via-emerald-50 to-white"
+                : isPendente
+                ? "from-amber-50 via-amber-50 to-white"
+                : "from-slate-50 via-slate-50 to-white";
+              return (
                 <>
-                  <Button variant="outline" size="sm" className="text-amber-600 border-amber-300"
-                    onClick={() => {
-                      setShowDetalhesDialog(false);
-                      setEditTipo(selectedNote.tipoOcorrencia);
-                      setEditPrioridade(selectedNote.prioridade);
-                      setEditDescricao(selectedNote.descricao);
-                      setEditData(selectedNote.data || "");
-                      setEditObraId(selectedNote.obraId || null);
-                      setShowEditDialog(true);
-                    }}>
-                    <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
-                  </Button>
-                  <Button className="bg-green-600 hover:bg-green-700" size="sm"
-                    onClick={() => {
-                      setShowDetalhesDialog(false);
-                      setResolverResposta("");
-                      setResolverAcao("nenhuma");
-                      setResolverEntrada1(selectedNote?.entrada1 || "");
-                      setResolverSaida1(selectedNote?.saida1 || "");
-                      setResolverEntrada2(selectedNote?.entrada2 || "");
-                      setResolverSaida2(selectedNote?.saida2 || "");
-                      setShowResolverDialog(true);
-                    }}>
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Resolver
-                  </Button>
+                  {/* Header com gradiente, identidade do funcionário e chips de status */}
+                  <div className={`bg-gradient-to-br ${headerBg} px-6 pt-6 pb-5 border-b`}>
+                    <div className="flex items-start justify-between gap-3 mb-4">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-0.5">
+                          Apontamento #{selectedNote.id}
+                        </div>
+                        <DialogTitle className="text-xl font-bold text-slate-900">Detalhes da ocorrência</DialogTitle>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[#1B2A4A] to-[#2C3E6A] text-white flex items-center justify-center font-bold text-sm shrink-0 shadow">
+                        {iniciais}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-slate-900 leading-tight truncate">{selectedNote.nomeFunc}</div>
+                        <div className="text-xs text-slate-600 mt-0.5 flex items-center gap-2 flex-wrap">
+                          {selectedNote.funcaoFunc && <span className="inline-flex items-center gap-1"><User className="h-3 w-3" />{selectedNote.funcaoFunc}</span>}
+                          {selectedNote.obraNome && <span className="inline-flex items-center gap-1"><Building2 className="h-3 w-3" />{selectedNote.obraNome}</span>}
+                          <span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" />{dataFmt}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Chips: Status / Tipo / Prioridade */}
+                    <div className="flex flex-wrap gap-1.5 mt-4">
+                      <Badge variant="outline" className={`${statusInfo.color} font-semibold`}>
+                        Status: {statusInfo.label}
+                      </Badge>
+                      <Badge className={tipoInfo.color}>
+                        Tipo: {tipoInfo.label}
+                      </Badge>
+                      <Badge variant="outline" className={prioInfo.color}>
+                        Prioridade: {prioInfo.label}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {/* Body */}
+                  <div className="px-6 py-5 space-y-4 text-sm">
+                    {/* Horário do ponto — grid visual 2x2 */}
+                    <div>
+                      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+                        <Clock className="h-3.5 w-3.5" /> Horário do ponto
+                      </div>
+                      {temBatidas ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {[
+                            { label: "Entrada 1", val: selectedNote.entrada1, on: "border-emerald-200 bg-emerald-50", txt: "text-emerald-700" },
+                            { label: "Saída 1", val: selectedNote.saida1, on: "border-rose-200 bg-rose-50", txt: "text-rose-700" },
+                            { label: "Entrada 2", val: selectedNote.entrada2, on: "border-emerald-200 bg-emerald-50", txt: "text-emerald-700" },
+                            { label: "Saída 2", val: selectedNote.saida2, on: "border-rose-200 bg-rose-50", txt: "text-rose-700" },
+                          ].map((b) => (
+                            <div key={b.label} className={`rounded-lg border-2 ${b.val ? b.on : "border-slate-200 bg-slate-50"} px-3 py-2 text-center`}>
+                              <div className="text-[10px] font-semibold uppercase text-slate-500 tracking-wider">{b.label}</div>
+                              <div className={`font-mono text-base font-bold mt-0.5 ${b.val ? b.txt : "text-slate-300"}`}>{b.val || "—:—"}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-400 italic bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-center">
+                          Sem batidas registradas para esta data
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Descrição */}
+                    <div>
+                      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+                        <FileText className="h-3.5 w-3.5" /> Descrição da ocorrência
+                      </div>
+                      <p className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-700 leading-relaxed whitespace-pre-wrap">
+                        {selectedNote.descricao}
+                      </p>
+                    </div>
+
+                    {/* Resposta do RH (quando houver) */}
+                    {selectedNote.respostaRH && (
+                      <div>
+                        <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-2">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Resposta do RH
+                        </div>
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-1.5">
+                          <p className="text-emerald-900 leading-relaxed whitespace-pre-wrap">{selectedNote.respostaRH}</p>
+                          {selectedNote.acaoTomada && selectedNote.acaoTomada !== 'nenhuma' && (
+                            <div className="flex items-center gap-1.5 text-xs text-emerald-700 pt-1.5 border-t border-emerald-200">
+                              <Zap className="h-3 w-3" /> Ação tomada: <strong>{ACAO_LABELS[selectedNote.acaoTomada]}</strong>
+                            </div>
+                          )}
+                          {selectedNote.resolvidoPor && (
+                            <div className="text-xs text-emerald-600/80">
+                              Resolvido por: <strong>{selectedNote.resolvidoPor}</strong>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Metadados em rodapé do body */}
+                    <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-slate-500">
+                      <span className="inline-flex items-center gap-1">
+                        <User className="h-3 w-3" /> Registrado por: <strong className="text-slate-700">{selectedNote.solicitanteNome}</strong>
+                      </span>
+                      <span>
+                        {selectedNote.createdAt ? new Date(selectedNote.createdAt).toLocaleString("pt-BR") : "—"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Footer — ações primárias (esquerda) separadas de Excluir/Fechar (direita) */}
+                  <DialogFooter className="px-6 py-4 bg-slate-50 border-t flex-row flex-wrap items-center justify-between gap-2 sm:gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {isPendente && (
+                        <>
+                          <Button
+                            className="bg-emerald-600 hover:bg-emerald-700 shadow"
+                            onClick={() => {
+                              setShowDetalhesDialog(false);
+                              setResolverResposta("");
+                              setResolverAcao("nenhuma");
+                              setResolverEntrada1(selectedNote?.entrada1 || "");
+                              setResolverSaida1(selectedNote?.saida1 || "");
+                              setResolverEntrada2(selectedNote?.entrada2 || "");
+                              setResolverSaida2(selectedNote?.saida2 || "");
+                              setShowResolverDialog(true);
+                            }}
+                          >
+                            <CheckCircle2 className="h-4 w-4 mr-1.5" /> Resolver
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="text-amber-700 border-amber-300 hover:bg-amber-50 hover:text-amber-800"
+                            onClick={() => {
+                              setShowDetalhesDialog(false);
+                              setEditTipo(selectedNote.tipoOcorrencia);
+                              setEditPrioridade(selectedNote.prioridade);
+                              setEditDescricao(selectedNote.descricao);
+                              setEditData(selectedNote.data || "");
+                              setEditObraId(selectedNote.obraId || null);
+                              setShowEditDialog(true);
+                            }}
+                          >
+                            <Pencil className="h-4 w-4 mr-1.5" /> Editar
+                          </Button>
+                        </>
+                      )}
+                      {isResolvido && (
+                        <Button
+                          variant="outline"
+                          className="text-orange-700 border-orange-300 hover:bg-orange-50 hover:text-orange-800"
+                          onClick={() => {
+                            if (confirm(`Reabrir apontamento #${selectedNote.id}? O status voltará para Pendente.`)) {
+                              reopenMut.mutate({ id: selectedNote.id });
+                            }
+                          }}
+                        >
+                          <RotateCcw className="h-4 w-4 mr-1.5" /> Reabrir
+                        </Button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Button
+                        variant="ghost"
+                        className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                        onClick={() => {
+                          setShowDetalhesDialog(false);
+                          setShowDeleteConfirm(true);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1.5" /> Excluir
+                      </Button>
+                      <Button variant="outline" onClick={() => setShowDetalhesDialog(false)}>Fechar</Button>
+                    </div>
+                  </DialogFooter>
                 </>
-              )}
-              {selectedNote && (selectedNote.status === 'resolvido' || selectedNote.status === 'arquivado') && (
-                <Button variant="outline" size="sm" className="text-orange-600 border-orange-300"
-                  onClick={() => {
-                    if (confirm(`Reabrir apontamento #${selectedNote.id}? O status voltará para Pendente.`)) {
-                      reopenMut.mutate({ id: selectedNote.id });
-                    }
-                  }}>
-                  <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reabrir
-                </Button>
-              )}
-              <Button variant="outline" size="sm" className="text-red-600 border-red-300"
-                onClick={() => {
-                  setShowDetalhesDialog(false);
-                  setShowDeleteConfirm(true);
-                }}>
-                <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
-              </Button>
-              <Button variant="outline" onClick={() => setShowDetalhesDialog(false)}>Fechar</Button>
-            </DialogFooter>
+              );
+            })()}
           </DialogContent>
         </Dialog>
 

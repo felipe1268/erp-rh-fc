@@ -12388,4 +12388,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-13 08:30:00",
   },
+  {
+    version: 1755,
+    titulo: "Apontamentos de Campo · Modal Detalhes redesenhado (header de identidade + chips + grid de batidas)",
+    descricao: "Reportado pelo usuário (screenshot iPad do modal 'Detalhes do Apontamento #28'): layout antigo era denso, com scroll horizontal, hierarquia visual fraca (todos os campos com mesmo peso) e botões apertados em linha única. Refatoração em `client/src/pages/ApontamentosCampo.tsx` (bloco `showDetalhesDialog` ~L816) sem schema/server change: (1) **DialogContent** vira `max-w-2xl max-h-[92vh] overflow-y-auto p-0 gap-0` — fim do scroll horizontal, mais respiro lateral. (2) **Header com gradiente** colorido por status (emerald se resolvido, amber se pendente, slate caso contrário) contendo: badge '#ID' pequeno, título 'Detalhes da ocorrência', avatar circular azul-marinho com iniciais do funcionário (2 letras), nome do funcionário em destaque + linha sub com ícones (User=função, Building2=obra, Calendar=data formatada `seg, 13 mai 2026`), e linha de 3 chips coloridos abaixo (Status / Tipo / Prioridade) reaproveitando os `*_LABELS.color` existentes. (3) **Body** estruturado em seções com mini-cabeçalhos uppercase: 'Horário do ponto' agora é grid responsivo 2x4 com 4 cards (Entrada1/Saída1/Entrada2/Saída2) — entradas em emerald, saídas em rose, slots vazios em slate-50 com `—:—`; classes estáticas (`border-emerald-200 bg-emerald-50` etc.) em vez de interpolação dinâmica para garantir Tailwind JIT. 'Descrição' em card slate destacado com `whitespace-pre-wrap`. 'Resposta do RH' em card emerald estruturado quando preenchida (texto + ação tomada com ícone Zap + 'Resolvido por'). (4) **Metadados** (registrado por + criado em) em rodapé do body, separados por borda fina. (5) **Footer** dividido em duas zonas: à esquerda ações primárias do fluxo (Resolver verde grande / Editar âmbar quando pendente, ou Reabrir laranja quando resolvido); à direita ações secundárias (Excluir como ghost vermelho + Fechar outline). Todos os botões com ícones lucide e tamanho consistente (h-4 w-4 mr-1.5). Comportamento dos handlers (mutations, transições de status) preservado integralmente.",
+    tipo: "melhoria",
+    modulos: "Apontamentos de Campo",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 09:30:00",
+  },
 ];
