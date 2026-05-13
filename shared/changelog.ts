@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1754,
+    titulo: "ModuleHub — Tile ORÁCULO agora respeita o toggle das Configurações (estava hardcoded)",
+    descricao: "Reportado pelo usuário (screenshots: home com card roxo ORÁCULO ativo + Configurações > Módulos do Sistema mostrando Oráculo 'Desabilitado'): mesmo após a Rev. 1751 que ocultou os módulos desabilitados da seção 'Em Desenvolvimento', o tile ORÁCULO continuava aparecendo ATIVO no grid principal. **Causa**: `client/src/pages/ModuleHub.tsx` L798 renderizava o tile do Oráculo HARDCODED — fora do loop `activeModules.map(...)` — com condição apenas `{isAdminMaster && (...)}`. Não passava por nenhum filtro de configuração. Quebrava a regra de ouro 'desabilitado = oculto em TODA tela' para esse módulo específico. **Fix em 1 linha, sem schema/server change**: condição vira `{isAdminMaster && isModuleEnabled('oraculo') && (...)}` — usa o mesmo helper já no escopo (Rev. 1751). Quando o admin desabilita Oráculo nas Configurações, o tile some imediatamente da home para todos os usuários, inclusive admin_master.",
+    tipo: "fix",
+    modulos: "Configurações, ModuleHub",
+    criadoPor: "main",
+    dataPublicacao: "2026-05-13 16:00:00",
+  },
+  {
     version: 1753,
     titulo: "DDS · getSessao — 'Cannot convert undefined or null to object' resolvido (projeção explícita + fim do raw SQL)",
     descricao: "Reportado pelo usuário (screenshot Rev. 1752 com card vermelho 'Não foi possível abrir esta sessão · Cannot convert undefined or null to object'): o card de erro adicionado na Rev. 1752 expôs o erro REAL que estava acontecendo silenciosamente desde a Rev. 1748 — clicar em qualquer sessão DDS resultava em payload vazio. Logs do servidor confirmaram `[tRPC Error] dds.getSessao: Cannot convert undefined or null to object` repetindo a cada click. **Causa**: (a) `db.select().from(ddsSessoes)` sem projetar colunas + spread `{ ...s, funcionarios }` — quando o driver Postgres devolvia metadados/getters fora do padrão para alguma coluna, o spread topava `Object.keys(undefined)`. (b) `db.execute(sql\\`SELECT id FROM ...\\`)` retornava formato dependente do driver (`.rows` em alguns, array direto em outros) — o fallback `(.rows ?? raw ?? [])` falhava silenciosamente em casos extremos. **Fix em `server/routers/dds.ts`**: (1) `getSessao` agora projeta TODAS as 18 colunas explicitamente em `db.select({ id, companyId, obraId, ..., updatedAt }).from(ddsSessoes)` — sem mais 'tudo via select()'. (2) Cálculo de `temAssinatura` migrado pra dentro do mesmo `select` dos funcionários via `sql<boolean>\\`(assinatura_img IS NOT NULL AND length(assinatura_img) > 0)\\`` — uma só query, sem raw `db.execute`, sem `Set` intermediário. (3) Try/catch em volta de toda a procedure com `console.error` detalhado (id, companyId, msg, name, stack) pra rastrear qualquer falha futura. (4) `funcionarios: funcs ?? []` defensivo. Sem schema change.",

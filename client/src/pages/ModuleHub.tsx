@@ -794,8 +794,8 @@ export default function ModuleHub() {
                   );
                 })}
 
-                {/* ── ORÁCULO tile — admin_master only ── */}
-                {isAdminMaster && (
+                {/* ── ORÁCULO tile — admin_master only + respeita toggle das Configurações (Rev. 1754) ── */}
+                {isAdminMaster && isModuleEnabled("oraculo") && (
                   <div
                     onClick={() => navigate("/oraculo")}
                     className={`group relative flex flex-col items-center justify-center text-center rounded-2xl p-3 cursor-pointer ${mounted ? 'hub-animate-up' : 'opacity-0'} transition-all duration-200 hover:scale-[1.04] select-none`}
