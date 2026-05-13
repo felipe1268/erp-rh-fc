@@ -191,6 +191,8 @@ export default function Colaboradores() {
   const [desligAte, setDesligAte] = useState("");
   const [idadeFilter, setIdadeFilter] = useState<string>("Todas");
   const [funcaoFilter, setFuncaoFilter] = useState<string>("Todas");
+  // Rev. 1725 — filtro por presença de foto (Todas / Com foto / Sem foto)
+  const [fotoFilter, setFotoFilter] = useState<string>("Todas");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -312,8 +314,15 @@ export default function Colaboradores() {
     if (funcaoFilter && funcaoFilter !== "Todas") {
       list = list.filter(e => (e as any).funcao === funcaoFilter);
     }
+    // Rev. 1725 — filtro por foto: considera "sem foto" quando fotoUrl
+    // está vazio/null/data-URL incompleto (mesma checagem usada no render).
+    if (fotoFilter === "ComFoto") {
+      list = list.filter(e => !!(e as any).fotoUrl && String((e as any).fotoUrl).trim() !== "");
+    } else if (fotoFilter === "SemFoto") {
+      list = list.filter(e => !((e as any).fotoUrl && String((e as any).fotoUrl).trim() !== ""));
+    }
     return list;
-  }, [employees, skillEmployeeIds, statusFilter, desligDe, desligAte, idadeFilter, funcaoFilter]);
+  }, [employees, skillEmployeeIds, statusFilter, desligDe, desligAte, idadeFilter, funcaoFilter, fotoFilter]);
 
   const createMut = trpc.employees.create.useMutation({
     onSuccess: (result: any) => {
@@ -823,6 +832,17 @@ export default function Colaboradores() {
               <SelectItem value="51-60">51 a 60 anos</SelectItem>
               <SelectItem value="60+">60 anos ou mais</SelectItem>
               <SelectItem value="Sem data">Sem data de nasc.</SelectItem>
+            </SelectContent>
+          </Select>
+          {/* Rev. 1725 — filtro por foto (auxilia a localizar quem ainda não tem foto cadastrada) */}
+          <Select value={fotoFilter} onValueChange={setFotoFilter}>
+            <SelectTrigger className="w-full sm:w-36 bg-card border-border" title="Filtrar por foto">
+              <SelectValue placeholder="Foto" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Todas">Todas (foto)</SelectItem>
+              <SelectItem value="ComFoto">Com foto</SelectItem>
+              <SelectItem value="SemFoto">Sem foto</SelectItem>
             </SelectContent>
           </Select>
           <SkillFilterDropdown value={skillFilter} onChange={setSkillFilter} companyId={queryCompanyId} companyIds={isConstrutoras ? queryCompanyIds : undefined} />

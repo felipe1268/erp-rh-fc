@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1725,
+    titulo: "Colaboradores — Filtro 'Foto' (Todas / Com foto / Sem foto)",
+    descricao: "Solicitado: facilitar localizar colaboradores que ainda não têm foto cadastrada (precisava conferir um por um). Fix Rev. 1725 SEM schema change, SEM mudança de servidor: (1) novo state `fotoFilter` em `client/src/pages/Colaboradores.tsx` ~L194 (default 'Todas'). (2) novo `<Select>` na barra de filtros ao lado do dropdown de habilidades (~L828) com 3 opções: 'Todas (foto)', 'Com foto' e 'Sem foto'. (3) filtragem aplicada no `useMemo displayEmployees` (~L312): 'ComFoto' mantém quem tem `fotoUrl` não-vazio; 'SemFoto' mantém quem NÃO tem `fotoUrl` (null, undefined ou string vazia) — mesma checagem usada no render do avatar (~L897). (4) `fotoFilter` adicionado ao array de dependências do useMemo. Combina com os filtros existentes (status / função / idade / habilidades / busca).",
+    tipo: 'feature',
+    modulos: 'Colaboradores',
+    criadoPor: 'Replit Agent',
+    dataPublicacao: '2026-05-13 00:35:00',
+  },
+  {
     version: 1724,
     titulo: "Currículos — Botão 'Mesclar selecionadas' + dedupe alias-aware (AUX. ADMINISTRATIVO ↔ AUXILIAR ADMINISTRATIVO)",
     descricao: "Reportado: na tela Currículos apareciam DUAS funções praticamente iguais — 'AUX. ADMINISTRATIVO' e 'AUXILIAR ADMINISTRATIVO'. Causa: (1) `FUNCOES_PADRAO` semeia 'AUX. ADMINISTRATIVO' (com abreviação+ponto) mas a IA do 'Upload com IA' detecta 'AUXILIAR ADMINISTRATIVO' (palavra completa) — o match em `processarArquivosIA` usa `includes()` puro, que não casa por causa do ponto, então a IA criava nova função. `criarFuncao` também só comparava UPPER exato, deixando passar duplicata. Fix Rev. 1724 em 3 frentes: (1) novo helper `normalizeFuncaoNome()` no server: UPPERCASE + sem acentos + sem pontuação + colapsa espaços + expande abreviações comuns (AUX→AUXILIAR, ADM→ADMINISTRATIVO, ENC→ENCARREGADO, AJ→AJUDANTE, OP→OPERADOR, MEC→MECANICO, ELET→ELETRICISTA, MOT→MOTORISTA, ENG→ENGENHEIRO). `criarFuncao` e o match da IA agora usam essa chave canônica — não dá mais pra criar duplicata por alias. (2) Nova mutation `mesclarFuncoes` (server): recebe `destinoId` + `origemIds[]`, move TODOS os currículos das origens para o destino (atualiza `funcaoId` + `funcaoNome`) e soft-deleta as funções de origem em uma transação. Reusa `ensureFuncaoOwnership` para checar companyId. (3) Cliente `Curriculos.tsx`: quando o usuário marca ≥2 funções via checkbox na sidebar, aparece o botão azul '🔗 Mesclar selecionadas'. Pergunta qual deve ser MANTIDA (numerada), pede confirmação e chama a mutation. Toast confirma quantos currículos foram movidos e quantas funções removidas. Sem schema change.",
