@@ -26,7 +26,8 @@ async function expandObraIdsByCanonicalName(
   const seedRows = await db.select({ id: obras.id, nome: obras.nome }).from(obras)
     .where(and(inArray(obras.id, obraIdsInput), eq(obras.companyId, companyId)));
   if (seedRows.length !== obraIdsInput.length) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Alguma obra não pertence a esta empresa." });
+    console.error("[DDS expand] Ownership mismatch", { companyId, obraIdsInput, seedFound: seedRows.map((r:any)=>r.id) });
+    throw new TRPCError({ code: "FORBIDDEN", message: `Obra(s) não pertence(m) à empresa ${companyId}. Inputs=${JSON.stringify(obraIdsInput)} encontrados=${JSON.stringify(seedRows.map((r:any)=>r.id))}` });
   }
   const canonicalNames = Array.from(new Set(
     seedRows.map((r: any) => (r.nome || "").trim().toUpperCase()).filter(Boolean)
@@ -391,38 +392,43 @@ export const ddsRouter = router({
       obraIds: z.array(z.number().int().positive()).optional(),
     }))
     .query(async ({ input, ctx }) => {
-      assertCompanyAccess(ctx, input.companyId);
-      const db = (await getDb())!;
-      const inputIds = (input.obraIds && input.obraIds.length > 0)
-        ? input.obraIds
-        : (input.obraId ? [input.obraId] : []);
-      if (inputIds.length === 0) return [];
-      // Rev. 1735 — expande pra TODAS as obras da empresa com mesmo nome canônico
-      // (alinha com a aba "Efetivo por Obra" do cadastro). Helper já valida ownership.
-      const ids = await expandObraIdsByCanonicalName(db, input.companyId, inputIds);
-      const rows = await db.select({
-        employeeId: employees.id,
-        nome: employees.nome,
-        cpf: employees.cpf,
-        funcao: employees.funcao,
-        funcaoNaObra: obraFuncionarios.funcaoNaObra,
-        status: employees.status,
-      }).from(obraFuncionarios)
-        .innerJoin(employees, eq(employees.id, obraFuncionarios.employeeId))
-        .where(and(
-          eq(obraFuncionarios.companyId, input.companyId),
-          inArray(obraFuncionarios.obraId, ids),
-          eq(obraFuncionarios.isActive, 1),
-          isNull(employees.deletedAt),
-        ))
-        .orderBy(employees.nome);
-      const seen = new Set<number>();
-      const dedup = rows.filter((r: any) => {
-        if (seen.has(r.employeeId)) return false;
-        seen.add(r.employeeId);
-        return true;
-      });
-      return dedup.filter((r: any) => !["Desligado", "Lista_Negra", "ListaNegra"].includes(r.status));
+      try {
+        assertCompanyAccess(ctx, input.companyId);
+        const db = (await getDb())!;
+        const inputIds = (input.obraIds && input.obraIds.length > 0)
+          ? input.obraIds
+          : (input.obraId ? [input.obraId] : []);
+        if (inputIds.length === 0) return [];
+        const ids = await expandObraIdsByCanonicalName(db, input.companyId, inputIds);
+        console.log("[DDS funcionariosDaObra] companyId=", input.companyId, "inputIds=", inputIds, "expandedIds=", ids);
+        const rows = await db.select({
+          employeeId: employees.id,
+          nome: employees.nome,
+          cpf: employees.cpf,
+          funcao: employees.funcao,
+          funcaoNaObra: obraFuncionarios.funcaoNaObra,
+          status: employees.status,
+        }).from(obraFuncionarios)
+          .innerJoin(employees, eq(employees.id, obraFuncionarios.employeeId))
+          .where(and(
+            eq(obraFuncionarios.companyId, input.companyId),
+            inArray(obraFuncionarios.obraId, ids),
+            eq(obraFuncionarios.isActive, 1),
+            isNull(employees.deletedAt),
+          ))
+          .orderBy(employees.nome);
+        console.log("[DDS funcionariosDaObra] rows.length=", rows.length);
+        const seen = new Set<number>();
+        const dedup = rows.filter((r: any) => {
+          if (seen.has(r.employeeId)) return false;
+          seen.add(r.employeeId);
+          return true;
+        });
+        return dedup.filter((r: any) => !["Desligado", "Lista_Negra", "ListaNegra"].includes(r.status));
+      } catch (e: any) {
+        console.error("[DDS funcionariosDaObra] FAIL", { input, msg: e?.message, stack: e?.stack });
+        throw e;
+      }
     }),
 
   // Rev. 1731/1733 — Lista colaboradores ativos da empresa que NÃO estão em nenhuma das obras informadas.
@@ -521,6 +527,7 @@ export const ddsRouter = router({
       diasJanela: z.number().int().positive().default(7),
     }))
     .query(async ({ input, ctx }) => {
+      try {
       assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       // Rev. 1733/1735 — aceita obraIds[] e expande pra todas as duplicatas com mesmo nome canônico
@@ -530,6 +537,7 @@ export const ddsRouter = router({
       const obraIdsConsolidados = inputObraIds.length > 0
         ? await expandObraIdsByCanonicalName(db, input.companyId, inputObraIds)
         : [];
+      console.log("[DDS acidentesRecentes] companyId=", input.companyId, "inputObraIds=", inputObraIds, "expanded=", obraIdsConsolidados);
       // Rev. 1731 fix (architect): D-1 calculado em America/Sao_Paulo (regra legal brasileira) — robusto a TZ do servidor.
       const fmtSP = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
       const agora = new Date();
@@ -570,6 +578,10 @@ export const ddsRouter = router({
         ...r,
         obrigatorio: r.dataAcidente === ontemIso, // D-1 → DDS obrigatório no dia seguinte
       }));
+      } catch (e: any) {
+        console.error("[DDS acidentesRecentes] FAIL", { input, msg: e?.message, stack: e?.stack });
+        throw e;
+      }
     }),
 
   getSessao: protectedProcedure
