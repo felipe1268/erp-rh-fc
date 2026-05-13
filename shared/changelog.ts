@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1728,
+    titulo: "DDS — Fix companyId tipo string × number (tRPC ZodError ao 'Carregar biblioteca padrão')",
+    descricao: "Reportado: ao clicar em 'Carregar biblioteca padrão' na tela DDS aparecia toast com erro Zod `[ { 'expected': 'number', 'code': 'invalid_type', 'path': [ 'companyId' ], 'message': 'Invalid input: expected number, received string' } ]` e nada era semeado. Causa em `client/src/pages/sst/DDSGuia.tsx` ~L36 (Rev. 1726): `const { selectedCompanyId } = useCompany(); const companyId = selectedCompanyId ?? 1;` — `selectedCompanyId` no `CompanyContext` é STRING, e o nullish coalescing mantinha string (`?? 1` só dispara em null/undefined). Todos os 12+ inputs do router DDS validam `companyId: z.number()`. Fix Rev. 1728: `const companyId = parseInt(selectedCompanyId || '0') || 0;` (mesmo pattern do `useCompany` hook em `client/src/hooks/useCompany.ts`). Aplicação imediata em todas as queries/mutations DDS (calendarioAnual, listTemas, listSessoes, criarTema, atualizarTema, excluirTema, seedTemasPadrao, criarSessao, marcarPresenca, finalizar, etc).",
+    tipo: 'bugfix',
+    modulos: 'SST, DDS',
+    criadoPor: 'Replit Agent',
+    dataPublicacao: '2026-05-13 02:00:00',
+  },
+  {
     version: 1727,
     titulo: "Aviso Prévio — Seletor de colaborador inclui Férias/Afastado/Licença/Recluso (só corta desligados)",
     descricao: "Reportado: no diálogo 'Novo Aviso Prévio' o seletor de colaborador só listava status='Ativo' — escondia quem está em Férias, Afastado, Licença ou Recluso, impossibilitando simular aviso prévio nesses cenários (ex.: rescisão durante afastamento). Causa em `client/src/pages/AvisoPrevio.tsx` ~L124: `activeEmployees = empList.filter(e => e.status === 'Ativo' && !e.deletedAt)` — filtro estrito demais. Fix Rev. 1727: filtro afrouxado pra excluir APENAS Desligado / Lista_Negra / ListaNegra / listaNegra=1 / soft-deleted (deletedAt). Todos os demais status entram. Bonus UX: badge de status ao lado do CPF na linha do dropdown — Férias (azul), Afastado (âmbar), Licença (violeta), Recluso (vermelho) — pra identificar visualmente sem confundir com 'Aviso ativo' (laranja). Sem schema change, sem mudança de servidor.",

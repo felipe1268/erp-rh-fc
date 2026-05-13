@@ -33,8 +33,9 @@ function corCfg(c?: string | null) {
 }
 
 export default function DDSGuia() {
+  // Rev. 1728: useCompany().selectedCompanyId é STRING — converter pra number antes de mandar pro tRPC
   const { selectedCompanyId } = useCompany();
-  const companyId = selectedCompanyId ?? 1;
+  const companyId = parseInt(selectedCompanyId || "0") || 0;
   const utils = trpc.useUtils();
 
   const [tab, setTab] = useState<"calendario" | "biblioteca" | "sessoes">("calendario");
