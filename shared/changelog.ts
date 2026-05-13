@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1722,
+    titulo: "Portal do Cliente — Curva S Financeira (Faturamento Acumulado R$) OCULTA (informação financeira sensível)",
+    descricao: "Solicitado: a Curva S Financeira — Faturamento Acumulado (R$) (Contrato Total / Faturamento Previsto / Faturamento Realizado / Desvio R$) NÃO deve aparecer no portal do cliente — é informação financeira interna. Aparecia em 2 lugares no `client/src/pages/portal/PortalPlanejamentoCliente.tsx`: (1) aba 'Curva S Financeira' do switcher (~L2222) com KPIs e gráfico em R$. (2) BLOCO 3B do REFIS (~L3512) — gráfico financeiro acumulado. Fix Rev. 1722: (1) removida a entrada `{ id: 'financeira', ... }` do array de tabs do switcher — agora só aparece 'Curva S de Trabalho' (físico). Como `curvaTipo` default é 'trabalho' e não há mais como mudar, o gate `curvaTipo === 'financeira'` (~L2346) nunca dispara. (2) BLOCO 3B do REFIS gateado com `false &&` (preservado código pra reativação futura via flag, se quiserem versionar por cliente). Aba 'Curva S de Trabalho' (físico, %) e tudo do REFIS (avanço físico, KPIs %) seguem visíveis. App interno (`PlanejamentoDetalhe.tsx`) intocado — engenharia continua vendo R$. Sem schema change, sem mudança de servidor.",
+    tipo: 'seguranca',
+    modulos: 'Portal do Cliente, Planejamento',
+    criadoPor: 'Replit Agent',
+    dataPublicacao: '2026-05-12 23:55:00',
+  },
+  {
     version: 1721,
     titulo: "Proj./Doc. Técnicos — Atalhos de 'Nova Pasta' agora derivam do catálogo central de Disciplinas (Configurações)",
     descricao: "Reportado: o modal 'Nova Pasta' (criar disciplina dentro do projeto) mostrava uma lista FIXA hardcoded de atalhos (Estrutural / Elétrica / Hidrossanitário / HVAC / Incêndio / Fundações / Topografia / Paisagismo / Geotecnia / Telecom / Automação) — faltavam disciplinas que o usuário cadastrou em Configurações (ex.: DOC—Documento, COM—Comunicação/Dados) e sobrava 'Telecom/Dados (TEL)' que nem existia no catálogo. Causa em `client/src/pages/gestaodocumentos/index.tsx` ~L964: array literal `DISCIPLINA_SHORTCUTS` definido manualmente. Fix Rev. 1721: a lista agora é um `useMemo` derivado de `disciplinas.data` (query `gestaoDocumentos.listDisciplinas` — catálogo central por companyId, mesmo que alimenta a tela 'Configurações > Disciplinas'). Mantido o array hardcoded como FALLBACK para os primeiros milisegundos antes da query carregar (evita modal vazio). Resultado: usuário vê EXATAMENTE as disciplinas que cadastrou em Configurações como atalhos no momento de criar pasta no projeto. Filtro de 'já criadas no ficheiro' continua funcionando (~L1965). Sem schema change, sem mudança de servidor.",

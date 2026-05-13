@@ -2215,11 +2215,12 @@ function AbaCurvaS({ curvaData, kpis, projeto, curvaMedicoes = [] }: any) {
         />
       </div>
 
-      {/* Switcher Trabalho / Financeira (Financeira desabilitada no portal) */}
+      {/* Switcher Trabalho / Financeira — Rev. 1722: aba "Curva S Financeira"
+          REMOVIDA do portal do cliente (informação financeira sensível, fica
+          só no app interno). Mantemos só "Curva S de Trabalho" (físico). */}
       <div className="flex bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
         {[
           { id: "trabalho",   label: "Curva S de Trabalho",  icon: "📐", disabled: false },
-          { id: "financeira", label: "Curva S Financeira",   icon: "💰", disabled: false },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -3509,8 +3510,10 @@ function AbaRefis({ refisLista, atividades, curvaData, curvaMedicoes, obra, proj
         </div>
       )}
 
-      {/* ══════ BLOCO 3B — Curva S Financeira ══════ */}
-      {curvaFinanceiraFull.length > 1 && totalContrato > 0 && (() => {
+      {/* ══════ BLOCO 3B — Curva S Financeira (REFIS) ══════
+          Rev. 1722: OCULTO no portal do cliente (informação financeira
+          sensível). Mantido só no app interno (PlanejamentoDetalhe.tsx). */}
+      {false && curvaFinanceiraFull.length > 1 && totalContrato > 0 && (() => {
         const prevAcumFin = totalContrato * avancoPrevisto / 100;
         const realAcumFin = totalContrato * avancoRealAtual / 100;
         const desvioFin = realAcumFin - prevAcumFin;
