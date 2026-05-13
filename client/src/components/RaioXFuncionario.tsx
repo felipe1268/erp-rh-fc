@@ -288,6 +288,70 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const ferias = (raioX as any)?.ferias || [];
   const cipa = (raioX as any)?.cipa || [];
   const dds = (raioX as any)?.dds || [];
+  // Rev. 1769 — modal de detalhe do DDS clicado (roteiro completo + assinatura + PDF)
+  const [ddsDetalhe, setDdsDetalhe] = useState<{ sessaoId: number; sfId: number } | null>(null);
+  const ddsDetalheQuery = trpc.dds.getSessao.useQuery(
+    { companyId: selectedCompany?.id || 0, id: ddsDetalhe?.sessaoId || 0 },
+    { enabled: !!ddsDetalhe?.sessaoId && !!selectedCompany?.id }
+  );
+  const ddsAssinaturaQuery = trpc.dds.getAssinaturaImg.useQuery(
+    { companyId: selectedCompany?.id || 0, sessaoId: ddsDetalhe?.sessaoId || 0, funcionarioId: ddsDetalhe?.sfId || 0 },
+    { enabled: !!ddsDetalhe?.sessaoId && !!ddsDetalhe?.sfId && !!selectedCompany?.id }
+  );
+  const gerarPdfDds = useCallback(() => {
+    const sessao: any = ddsDetalheQuery.data;
+    if (!sessao) return;
+    const meuFunc: any = (sessao.funcionarios || []).find((f: any) => f.id === ddsDetalhe?.sfId);
+    const assImg = ddsAssinaturaQuery.data?.assinaturaImg || null;
+    const fmt = (d?: string | null) => d ? String(d).split('-').reverse().join('/') : '';
+    const presentes = (sessao.funcionarios || []).filter((f: any) => Number(f.presente) === 1);
+    const escapeHtml = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as any)[c]);
+    const conteudoHtml = sessao.conteudoMd ? `<pre style="white-space:pre-wrap;font-family:inherit;font-size:11pt;line-height:1.5;margin:0;">${escapeHtml(sessao.conteudoMd)}</pre>` : '<em style="color:#999">Sem roteiro registrado.</em>';
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>DDS — ${escapeHtml(sessao.tituloTema || '')}</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: #111; font-size: 11pt; }
+  h1 { font-size: 16pt; margin: 0 0 4px 0; }
+  h2 { font-size: 12pt; margin: 16px 0 6px 0; padding-bottom: 4px; border-bottom: 1px solid #ccc; color: #234; }
+  .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; font-size: 10pt; color: #333; margin-bottom: 8px; }
+  .meta b { color: #111; }
+  .ass-box { border: 1px solid #999; border-radius: 6px; padding: 12px; margin-top: 8px; }
+  .ass-img { max-height: 110px; max-width: 100%; display: block; margin-top: 6px; border: 1px dashed #bbb; padding: 4px; background: #fafafa; }
+  table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+  th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; }
+  th { background: #f0f4f8; }
+  .small { font-size: 9pt; color: #555; }
+</style></head><body>
+<h1>Diálogo Diário de Segurança (DDS)</h1>
+<div class="small">Documento gerado em ${new Date().toLocaleString('pt-BR')}</div>
+<h2>Identificação da Sessão</h2>
+<div class="meta">
+  <div><b>Tema:</b> ${escapeHtml(sessao.tituloTema || '-')}</div>
+  <div><b>Data / Hora:</b> ${fmt(sessao.data)}${sessao.hora ? ' ' + escapeHtml(sessao.hora) : ''}</div>
+  <div><b>Obra / Local:</b> ${escapeHtml(sessao.obraNome || sessao.local || '-')}</div>
+  <div><b>Instrutor:</b> ${escapeHtml(sessao.instrutor || '-')}</div>
+  <div><b>Status:</b> ${escapeHtml(sessao.status || '-')}</div>
+  <div><b>Presentes:</b> ${presentes.length} de ${(sessao.funcionarios || []).length}</div>
+</div>
+<h2>Roteiro do DDS</h2>
+${conteudoHtml}
+<h2>Assinatura — ${escapeHtml(meuFunc?.nome || emp?.name || '')}</h2>
+<div class="ass-box">
+  <div><b>CPF:</b> ${escapeHtml(meuFunc?.cpf || emp?.cpf || '-')} &nbsp;&nbsp; <b>Função:</b> ${escapeHtml(meuFunc?.funcao || emp?.funcao || '-')}</div>
+  <div style="margin-top:4px;"><b>Presença:</b> ${Number(meuFunc?.presente) === 1 ? 'Presente' : 'Ausente'} &nbsp;&nbsp; <b>Assinatura:</b> ${meuFunc?.assinaturaTipo ? `${meuFunc.assinaturaTipo} em ${meuFunc.assinadoEm ? new Date(meuFunc.assinadoEm).toLocaleString('pt-BR') : '-'}` : 'Pendente'}</div>
+  ${assImg ? `<img class="ass-img" src="${assImg}" alt="Assinatura" />` : '<div class="small" style="margin-top:8px;color:#a00">Assinatura não registrada.</div>'}
+</div>
+<h2>Lista de Presença Completa</h2>
+<table><thead><tr><th>Nome</th><th>CPF</th><th>Função</th><th>Presença</th><th>Assinatura</th></tr></thead><tbody>
+${(sessao.funcionarios || []).map((f: any) => `<tr><td>${escapeHtml(f.nome || '')}</td><td>${escapeHtml(f.cpf || '')}</td><td>${escapeHtml(f.funcao || '')}</td><td>${Number(f.presente) === 1 ? 'Presente' : 'Ausente'}</td><td>${f.temAssinatura || f.assinaturaTipo === 'fcsign' ? 'Assinada' : 'Pendente'}</td></tr>`).join('')}
+</tbody></table>
+${sessao.observacoes ? `<h2>Observações</h2><div>${escapeHtml(sessao.observacoes)}</div>` : ''}
+<script>window.onload = () => { setTimeout(() => window.print(), 300); };</script>
+</body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { toast.error('Popup bloqueado. Permita pop-ups pra gerar o PDF.'); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+  }, [ddsDetalheQuery.data, ddsAssinaturaQuery.data, ddsDetalhe, emp]);
   const pjContratos = (raioX as any)?.pjContratos || [];
   const pjPagamentos = (raioX as any)?.pjPagamentos || [];
   const pjConformidade = (raioX as any)?.pjConformidade || null;
@@ -2276,7 +2340,12 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                                           : d.assinaturaTipo === 'fcsign' ? 'FCsign'
                                           : d.assinaturaTipo === 'manual' ? 'Manual' : '';
                             return (
-                              <tr key={d.sfId} className="border-b last:border-0 align-top">
+                              <tr
+                                key={d.sfId}
+                                className="border-b last:border-0 align-top hover:bg-blue-50 cursor-pointer transition-colors"
+                                onClick={() => setDdsDetalhe({ sessaoId: d.sessaoId, sfId: d.sfId })}
+                                title="Clique para ver o roteiro completo e a assinatura"
+                              >
                                 <td className="p-2 whitespace-nowrap font-mono text-xs">
                                   {formatDate(d.data)}{d.hora ? <div className="text-[10px] text-muted-foreground">{d.hora}</div> : null}
                                 </td>
@@ -3318,6 +3387,92 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
           </div>
         )}
       </div>
+
+      {/* ============ MODAL — DETALHE DO DDS (Rev. 1769) ============ */}
+      <Dialog open={!!ddsDetalhe} onOpenChange={(o) => !o && setDdsDetalhe(null)}>
+        <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-blue-600" />
+              {ddsDetalheQuery.data ? `DDS — ${ddsDetalheQuery.data.tituloTema}` : 'Carregando DDS...'}
+            </DialogTitle>
+          </DialogHeader>
+          {ddsDetalheQuery.isLoading && (
+            <div className="py-12 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" /><div className="text-sm text-muted-foreground mt-3">Carregando detalhes da sessão...</div></div>
+          )}
+          {ddsDetalheQuery.isError && (
+            <div className="py-8 text-center"><div className="text-red-600 font-medium">Erro ao carregar a sessão</div><div className="text-xs text-muted-foreground mt-2">{(ddsDetalheQuery.error as any)?.message}</div></div>
+          )}
+          {ddsDetalheQuery.data && (() => {
+            const s: any = ddsDetalheQuery.data;
+            const meu: any = (s.funcionarios || []).find((f: any) => f.id === ddsDetalhe?.sfId);
+            const presenteOk = Number(meu?.presente || 0) === 1;
+            const tipoAss = meu?.assinaturaTipo === 'desenhada' ? 'Digital'
+                          : meu?.assinaturaTipo === 'fcsign' ? 'FCsign'
+                          : meu?.assinaturaTipo === 'manual' ? 'Manual' : '';
+            return (
+              <div className="space-y-4">
+                {/* Identificação */}
+                <div className="bg-slate-50 rounded-lg border p-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                  <div><span className="text-muted-foreground">Data/Hora:</span> <b>{formatDate(s.data)}{s.hora ? ` ${s.hora}` : ''}</b></div>
+                  <div><span className="text-muted-foreground">Status:</span> <Badge variant={s.status === 'finalizada' ? 'default' : s.status === 'cancelada' ? 'destructive' : 'secondary'}>{s.status}</Badge></div>
+                  <div><span className="text-muted-foreground">Obra/Local:</span> <b>{s.obraNome || s.local || '—'}</b></div>
+                  <div><span className="text-muted-foreground">Instrutor:</span> <b>{s.instrutor || '—'}</b></div>
+                  <div className="col-span-2"><span className="text-muted-foreground">Presença total:</span> <b>{(s.funcionarios || []).filter((f: any) => Number(f.presente) === 1).length} de {(s.funcionarios || []).length}</b></div>
+                </div>
+
+                {/* Roteiro */}
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-blue-700 mb-2">Roteiro do DDS</h4>
+                  <div className="bg-white border rounded-lg p-4 max-h-[40vh] overflow-y-auto">
+                    {s.conteudoMd
+                      ? <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-800">{s.conteudoMd}</pre>
+                      : <div className="text-sm text-muted-foreground italic">Sem roteiro registrado pra esta sessão.</div>}
+                  </div>
+                </div>
+
+                {/* Participação do funcionário + assinatura */}
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-700 mb-2">Participação de {meu?.nome || emp?.name}</h4>
+                  <div className="bg-white border rounded-lg p-4">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mb-3">
+                      <div><span className="text-muted-foreground">CPF:</span> <b>{meu?.cpf ? formatCPF(meu.cpf) : '—'}</b></div>
+                      <div><span className="text-muted-foreground">Função:</span> <b>{meu?.funcao || '—'}</b></div>
+                      <div><span className="text-muted-foreground">Presença:</span> {presenteOk ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300">Presente</Badge> : <Badge variant="destructive">Ausente</Badge>}</div>
+                      <div><span className="text-muted-foreground">Assinatura:</span> {meu?.temAssinatura || meu?.assinaturaTipo === 'fcsign' ? <Badge className="bg-blue-100 text-blue-700 border-blue-300">{tipoAss || 'Assinada'}</Badge> : <span className="text-amber-600 text-xs">Pendente</span>}</div>
+                      {meu?.assinadoEm && <div className="col-span-2 text-xs text-muted-foreground">Assinado em {new Date(meu.assinadoEm).toLocaleString('pt-BR')}</div>}
+                    </div>
+                    <div className="border-t pt-3">
+                      <div className="text-xs text-muted-foreground mb-1.5">Assinatura digital:</div>
+                      {ddsAssinaturaQuery.isLoading && <div className="py-4 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-blue-500" /></div>}
+                      {ddsAssinaturaQuery.data?.assinaturaImg
+                        ? <img src={ddsAssinaturaQuery.data.assinaturaImg} alt="Assinatura" className="max-h-32 max-w-full border-2 border-dashed border-gray-300 rounded bg-white p-2" />
+                        : !ddsAssinaturaQuery.isLoading && <div className="text-sm text-muted-foreground italic">Nenhuma assinatura digital registrada.</div>}
+                    </div>
+                  </div>
+                </div>
+
+                {s.observacoes && (
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">Observações</h4>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm whitespace-pre-wrap">{s.observacoes}</div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setDdsDetalhe(null)}>Fechar</Button>
+            <Button
+              onClick={gerarPdfDds}
+              disabled={!ddsDetalheQuery.data || ddsAssinaturaQuery.isLoading}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <FileDown className="h-4 w-4 mr-1.5" /> Gerar PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ============ MODAL — MARCAR COMO PERDIDO ============ */}
       {descontoModal && (
