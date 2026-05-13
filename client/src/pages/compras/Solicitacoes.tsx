@@ -2175,6 +2175,25 @@ export default function Solicitacoes() {
     recusado: listaKpisBase.filter((r: any) => r.status === "recusado").length,
   }), [listaKpisBase]);
 
+  // Rev. 1732 — Status detalhado das solicitações (card superior)
+  const statusBreakdown = useMemo(() => {
+    const ativas = listaKpisBase.filter((r: any) => !["aprovado", "recusado", "cancelado"].includes(r.status) && !scEntregueTotal(r));
+    return {
+      total: listaKpisBase.length,
+      ativas: ativas.length,
+      aguardandoAprov: listaKpisBase.filter((r: any) => (r.aprovacaoStatus ?? "aguardando") === "aguardando" && !["aprovado", "recusado", "cancelado"].includes(r.status)).length,
+      aprovadasSemOC: listaKpisBase.filter((r: any) => ["aprovada", "aprovado"].includes(r.aprovacaoStatus ?? "") && !r._hasOC && !["aprovado", "recusado", "cancelado"].includes(r.status)).length,
+      emCotacao: listaKpisBase.filter((r: any) => r.status === "cotacao").length,
+      emAndamento: listaKpisBase.filter((r: any) => r.status === "em_andamento").length,
+      pendente: listaKpisBase.filter((r: any) => r.status === "pendente").length,
+      entreguesParcial: listaKpisBase.filter((r: any) => r._hasOC === true && r._ocsEntregues !== true && !scEntregueTotal(r)).length,
+      concluidas: listaKpisBase.filter((r: any) => r.status === "aprovado" || scEntregueTotal(r)).length,
+      recusadas: listaKpisBase.filter((r: any) => r.status === "recusado" || ["recusada", "recusado"].includes(r.aprovacaoStatus ?? "")).length,
+      canceladas: listaKpisBase.filter((r: any) => r.status === "cancelado").length,
+      urgentes: listaKpisBase.filter((r: any) => r.prioridade === "urgente" && !["aprovado", "recusado", "cancelado"].includes(r.status) && !r._hasOC).length,
+    };
+  }, [listaKpisBase]);
+
   function nomeObra(id: number | null | undefined) {
     if (!id) return null;
     return obras.find((o: any) => o.id === id)?.nome ?? null;
@@ -2197,6 +2216,48 @@ export default function Solicitacoes() {
         <DraggableCommandBar barId="solicitacoes-compra" items={[
           { id: "nova-sc", node: <Button onClick={() => setShowNova(true)} className="bg-amber-600 hover:bg-amber-500 text-white gap-2"><Plus className="h-4 w-4" /> Nova SC</Button> },
         ]} />
+      </div>
+
+      {/* Rev. 1732 — Card superior: status detalhado das solicitações */}
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-amber-600" />
+              Status das Solicitações
+              <span className="text-[10px] font-semibold text-slate-500">
+                ({statusBreakdown.total} no total · {statusBreakdown.ativas} ativas)
+              </span>
+            </h2>
+            <p className="text-[11px] text-slate-500">Visão consolidada por estado de aprovação, cotação e entrega{filtroObra !== "todas" ? " (obra filtrada)" : ""}.</p>
+          </div>
+          {statusBreakdown.urgentes > 0 && (
+            <span className="px-3 py-1 rounded-full bg-red-50 border border-red-300 text-red-700 text-xs font-bold animate-pulse">
+              ⚠️ {statusBreakdown.urgentes} URGENTE{statusBreakdown.urgentes > 1 ? "S" : ""}
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 divide-x divide-slate-100">
+          {[
+            { label: "Aguardando aprovação",  count: statusBreakdown.aguardandoAprov, color: "text-amber-700",   bar: "bg-amber-400"   },
+            { label: "Aprovadas (sem OC)",    count: statusBreakdown.aprovadasSemOC,  color: "text-emerald-700", bar: "bg-emerald-400" },
+            { label: "Pendente",              count: statusBreakdown.pendente,        color: "text-slate-700",   bar: "bg-slate-400"   },
+            { label: "Em cotação",            count: statusBreakdown.emCotacao,       color: "text-sky-700",     bar: "bg-sky-400"     },
+            { label: "Em andamento",          count: statusBreakdown.emAndamento,     color: "text-indigo-700",  bar: "bg-indigo-400"  },
+            { label: "Entrega parcial",       count: statusBreakdown.entreguesParcial, color: "text-orange-700", bar: "bg-orange-400"  },
+            { label: "Concluídas",            count: statusBreakdown.concluidas,      color: "text-green-700",   bar: "bg-green-400"   },
+            { label: "Recusadas",             count: statusBreakdown.recusadas,       color: "text-red-700",     bar: "bg-red-400"     },
+            { label: "Canceladas",            count: statusBreakdown.canceladas,      color: "text-zinc-600",    bar: "bg-zinc-400"    },
+          ].map((s) => (
+            <div key={s.label} className="px-3 py-3 flex flex-col items-start gap-1">
+              <div className="flex items-baseline gap-1.5">
+                <span className={`text-2xl font-extrabold tabular-nums ${s.color}`}>{s.count}</span>
+                <span className={`h-1.5 w-1.5 rounded-full ${s.bar} ${s.count > 0 ? "" : "opacity-30"}`} />
+              </div>
+              <span className="text-[11px] text-slate-600 leading-tight">{s.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* KPI badges */}
