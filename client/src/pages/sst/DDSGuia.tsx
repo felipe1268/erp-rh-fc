@@ -18,7 +18,7 @@ import {
 // Funciona com touch (iPad/celular) e mouse. Salva como PNG dataURL.
 function AssinaturaPad({
   open, onOpenChange, funcionarioNome, funcionarioId, sessaoId, companyId,
-  imgInicial, salvarMut, removerMut, podeEditar,
+  temAssinaturaPrevia, salvarMut, removerMut, podeEditar,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -26,7 +26,7 @@ function AssinaturaPad({
   funcionarioId: number;
   sessaoId: number;
   companyId: number;
-  imgInicial?: string | null;
+  temAssinaturaPrevia: boolean;
   salvarMut: any;
   removerMut: any;
   podeEditar: boolean;
@@ -35,6 +35,12 @@ function AssinaturaPad({
   const drawingRef = useRef(false);
   const lastRef = useRef<{ x: number; y: number } | null>(null);
   const [vazio, setVazio] = useState(true);
+
+  // Rev. 1748 — busca a imagem da assinatura sob demanda (não vem mais no getSessao)
+  const imgQ = trpc.dds.getAssinaturaImg.useQuery(
+    { companyId, sessaoId, funcionarioId },
+    { enabled: open && temAssinaturaPrevia, staleTime: 0 },
+  );
 
   // Inicializa canvas: limpa e (se houver imagem prévia) renderiza ela
   useEffect(() => {
@@ -56,6 +62,7 @@ function AssinaturaPad({
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.strokeStyle = "#0f172a";
+    const imgInicial = imgQ.data?.assinaturaImg;
     if (imgInicial) {
       const img = new Image();
       img.onload = () => {
@@ -66,7 +73,7 @@ function AssinaturaPad({
     } else {
       setVazio(true);
     }
-  }, [open, imgInicial]);
+  }, [open, imgQ.data?.assinaturaImg]);
 
   const getPos = (ev: React.PointerEvent) => {
     const c = canvasRef.current!;
@@ -1918,16 +1925,15 @@ function SessaoDetalhe({
                     </button>
                   </td>
                   <td className="py-2 text-center">
-                    {f.assinaturaImg ? (
+                    {f.temAssinatura ? (
                       <button
                         onClick={() => setAssinandoId(f.id)}
-                        className="inline-flex items-center gap-2 px-2 py-1 rounded hover:bg-blue-50 transition group"
+                        className="inline-flex items-center gap-2 px-2 py-1 rounded border border-blue-200 bg-blue-50 hover:bg-blue-100 transition"
                         title={sessao.status === "aberta" ? "Clique para visualizar / refazer" : "Clique para visualizar"}
                       >
-                        <img src={f.assinaturaImg} alt="assinatura"
-                          className="h-7 w-16 object-contain bg-white border border-slate-200 rounded" />
-                        <span className="text-[10px] text-blue-700">
-                          ✓ {f.assinadoEm ? new Date(f.assinadoEm).toLocaleDateString("pt-BR") : ""}
+                        <Check className="h-3.5 w-3.5 text-blue-700" />
+                        <span className="text-[11px] font-medium text-blue-800">
+                          Assinada {f.assinadoEm ? "· " + new Date(f.assinadoEm).toLocaleDateString("pt-BR") : ""}
                         </span>
                       </button>
                     ) : f.assinadoEm ? (
@@ -1983,7 +1989,7 @@ function SessaoDetalhe({
           funcionarioId={funcSelecionado.id}
           sessaoId={sessao.id}
           companyId={companyId}
-          imgInicial={funcSelecionado.assinaturaImg}
+          temAssinaturaPrevia={!!funcSelecionado.temAssinatura}
           salvarMut={salvarAssinaturaMut}
           removerMut={removerAssinaturaMut}
           podeEditar={sessao.status === "aberta"}
@@ -2001,9 +2007,23 @@ function SessaoDetalhe({
             Reabrir
           </Button>
         )}
-        <Button variant="outline" className="text-red-600 hover:bg-red-50"
-          onClick={() => confirm("Excluir esta sessão? Não há volta.") && excluirMut.mutate({ companyId, id: sessao.id })}>
-          <Trash2 className="h-4 w-4 mr-1" /> Excluir
+        <Button
+          variant="outline"
+          className="text-red-600 hover:bg-red-50"
+          disabled={excluirMut.isPending}
+          onClick={async () => {
+            if (!confirm("Excluir esta sessão? Não há volta.")) return;
+            try {
+              await excluirMut.mutateAsync({ companyId, id: sessao.id });
+              voltar?.();
+            } catch (e: any) {
+              // toast já é exibido pelo onError do mutation; aqui só logamos
+              console.error("[DDS excluir] falhou:", e?.message ?? e);
+            }
+          }}
+        >
+          <Trash2 className="h-4 w-4 mr-1" />
+          {excluirMut.isPending ? "Excluindo..." : "Excluir"}
         </Button>
       </div>
     </div>
