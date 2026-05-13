@@ -8,8 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch";
-import { Settings, Save, Hash, ShieldCheck, Loader2, Wrench, Bell } from "lucide-react";
+import { Settings, Save, Hash, ShieldCheck, Loader2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ComprasConfiguracoes() {
@@ -26,7 +25,6 @@ export default function ComprasConfiguracoes() {
   const [diaCorte, setDiaCorte] = useState("25");
   const [prazoAprovacao, setPrazoAprovacao] = useState("5");
   const [diaPagamento, setDiaPagamento] = useState("10");
-  const [alertaReservasAtivo, setAlertaReservasAtivo] = useState(true);
 
   const { data, isLoading } = trpc.purchase.getConfigCompras.useQuery(
     { companyId },
@@ -44,7 +42,6 @@ export default function ComprasConfiguracoes() {
       setDiaCorte(String((data.config as any).diaCorte ?? 25));
       setPrazoAprovacao(String((data.config as any).prazoAprovacaoDias ?? 5));
       setDiaPagamento(String((data.config as any).diaPagamento ?? 10));
-      setAlertaReservasAtivo(((data.config as any).alertaReservasAtivo ?? 1) !== 0);
     }
   }, [data]);
 
@@ -93,9 +90,6 @@ export default function ComprasConfiguracoes() {
             </TabsTrigger>
             <TabsTrigger value="servicos" className="flex items-center gap-2">
               <Wrench className="h-4 w-4" />Serviços / Contratos
-            </TabsTrigger>
-            <TabsTrigger value="alertas" className="flex items-center gap-2">
-              <Bell className="h-4 w-4" />Alertas
             </TabsTrigger>
           </TabsList>
 
@@ -240,56 +234,6 @@ export default function ComprasConfiguracoes() {
                   } as any)}>
                   {salvarConfigMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
                   <Save className="h-4 w-4 mr-2" />Salvar Configurações de Serviços
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="alertas" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Critérios de Alertas</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
-                  <p className="text-sm text-amber-800">
-                    Habilite ou desabilite alertas globais do módulo de Compras. Quando desligado,
-                    o pop-up e o banner deixam de aparecer para todos os usuários da empresa.
-                  </p>
-                </div>
-
-                <div className="flex items-start justify-between gap-4 p-4 border rounded-lg">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Bell className="h-4 w-4 text-amber-600" />
-                      <Label className="text-base font-medium cursor-pointer">
-                        Alerta de Reservas Preventivas
-                      </Label>
-                    </div>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Mostra um pop-up e um banner em todas as telas avisando sobre reservas
-                      preventivas próximas do vencimento ou já vencidas. Quando desligado, o
-                      sistema continua criando reservas, mas <strong>não exibe avisos visuais</strong>
-                      &nbsp;— a equipe de Compras passa a acompanhar pela tela
-                      <em> /compras/realocacao</em>.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={alertaReservasAtivo}
-                    onCheckedChange={setAlertaReservasAtivo}
-                  />
-                </div>
-
-                <Button
-                  className="bg-amber-600 hover:bg-amber-700"
-                  disabled={salvarConfigMut.isPending}
-                  onClick={() => salvarConfigMut.mutate({
-                    companyId,
-                    alertaReservasAtivo,
-                  } as any)}
-                >
-                  {salvarConfigMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
-                  <Save className="h-4 w-4 mr-2" />Salvar Critérios de Alertas
                 </Button>
               </CardContent>
             </Card>

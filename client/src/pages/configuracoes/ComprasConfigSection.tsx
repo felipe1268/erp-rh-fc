@@ -5,20 +5,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save, ChevronRight, ShoppingCart, Hash, ShieldCheck, Percent } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Save, ChevronRight, ShoppingCart, Hash, ShieldCheck, Percent, Bell } from "lucide-react";
 import { toast } from "sonner";
 
 export function ComprasConfigSection() {
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
 
-  const [expanded, setExpanded] = useState<"numeracao" | "aprovacao" | "comissao" | null>(null);
+  const [expanded, setExpanded] = useState<"numeracao" | "aprovacao" | "comissao" | "alertas" | null>(null);
 
   const [prefixo, setPrefixo] = useState("OC");
   const [separador, setSeparador] = useState("-");
   const [formatoAno, setFormatoAno] = useState("4dig");
   const [digitos, setDigitos] = useState("3");
   const [comissaoPercentual, setComissaoPercentual] = useState("10");
+  const [alertaReservasAtivo, setAlertaReservasAtivo] = useState(true);
 
   const { data } = trpc.purchase.getConfigCompras.useQuery(
     { companyId },
@@ -32,11 +34,16 @@ export function ComprasConfigSection() {
       setFormatoAno(data.config.formatoAno || "4dig");
       setDigitos(String(data.config.digitosSequencial || 3));
       setComissaoPercentual(String(data.config.comissaoPercentual ?? "10"));
+      setAlertaReservasAtivo(((data.config as any).alertaReservasAtivo ?? 1) !== 0);
     }
   }, [data]);
 
+  const utils = trpc.useUtils();
   const salvarMut = trpc.purchase.salvarConfigOC.useMutation({
-    onSuccess: () => toast.success("Configuração de Compras salva!"),
+    onSuccess: () => {
+      toast.success("Configuração de Compras salva!");
+      utils.purchase.getConfigCompras.invalidate({ companyId });
+    },
     onError: () => toast.error("Erro ao salvar configuração de Compras"),
   });
 
@@ -181,6 +188,54 @@ export function ComprasConfigSection() {
                 className="bg-rose-600 hover:bg-rose-700 text-white"
                 disabled={salvarMut.isPending}
                 onClick={() => salvarMut.mutate({ companyId, comissaoPercentual: parseFloat(comissaoPercentual || "10") })}
+              >
+                <Save className="w-3.5 h-3.5 mr-1" />
+                {salvarMut.isPending ? "Salvando..." : "Salvar"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Sub-seção: Alerta de Reservas Preventivas */}
+      <div className="border-b border-rose-100">
+        <button
+          onClick={() => setExpanded(expanded === "alertas" ? null : "alertas")}
+          className="w-full flex items-center justify-between px-4 py-3 bg-white hover:bg-rose-50/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <Bell className="w-4 h-4 text-rose-500" />
+            <span className="font-medium text-gray-800 text-sm">Alerta de Reservas Preventivas</span>
+            <span className={`px-2 py-0.5 rounded text-xs font-medium ${alertaReservasAtivo ? "bg-emerald-100 text-emerald-700" : "bg-gray-200 text-gray-600"}`}>
+              {alertaReservasAtivo ? "Ligado" : "Desligado"}
+            </span>
+          </div>
+          <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${expanded === "alertas" ? "rotate-90" : ""}`} />
+        </button>
+
+        {expanded === "alertas" && (
+          <div className="px-4 pb-4 bg-white space-y-4">
+            <div className="flex items-start justify-between gap-4 p-4 border rounded-lg bg-amber-50/30 border-amber-100">
+              <div className="flex-1">
+                <p className="text-sm text-gray-600">
+                  Mostra um pop-up e um banner em todas as telas avisando sobre reservas
+                  preventivas próximas do vencimento ou já vencidas. Quando desligado, o
+                  sistema continua criando reservas, mas <strong>não exibe avisos visuais</strong>
+                  &nbsp;— a equipe de Compras passa a acompanhar pela tela
+                  <em> /compras/realocacao</em>.
+                </p>
+              </div>
+              <Switch
+                checked={alertaReservasAtivo}
+                onCheckedChange={setAlertaReservasAtivo}
+              />
+            </div>
+            <div className="flex justify-end pt-2 border-t">
+              <Button
+                size="sm"
+                className="bg-rose-600 hover:bg-rose-700 text-white"
+                disabled={salvarMut.isPending}
+                onClick={() => salvarMut.mutate({ companyId, alertaReservasAtivo } as any)}
               >
                 <Save className="w-3.5 h-3.5 mr-1" />
                 {salvarMut.isPending ? "Salvando..." : "Salvar"}
