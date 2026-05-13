@@ -352,13 +352,27 @@ export const ddsRouter = router({
       }));
     }),
 
-  // Rev. 1730 — Lista colaboradores ATIVOS vinculados a uma obra (obra_funcionarios.isActive=1)
-  // Usado pelo modal "Nova Sessão DDS" para pré-selecionar a equipe da obra.
+  // Rev. 1733 — Lista colaboradores ATIVOS vinculados às obras informadas.
+  // Aceita obraId (legado) OU obraIds[] (novo — consolida duplicatas com mesmo nome,
+  // alinhado com getEfetivoPorObra/cadastro > aba Efetivo).
   funcionariosDaObra: protectedProcedure
-    .input(z.object({ companyId: z.number().int().positive(), obraId: z.number().int().positive() }))
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      obraId: z.number().int().positive().optional(),
+      obraIds: z.array(z.number().int().positive()).optional(),
+    }))
     .query(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
+      const ids = (input.obraIds && input.obraIds.length > 0)
+        ? input.obraIds
+        : (input.obraId ? [input.obraId] : []);
+      if (ids.length === 0) return [];
+      const ownerRows = await db.select({ id: obras.id }).from(obras)
+        .where(and(inArray(obras.id, ids), eq(obras.companyId, input.companyId)));
+      if (ownerRows.length !== ids.length) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Alguma obra não pertence a esta empresa." });
+      }
       const rows = await db.select({
         employeeId: employees.id,
         nome: employees.nome,
@@ -370,31 +384,45 @@ export const ddsRouter = router({
         .innerJoin(employees, eq(employees.id, obraFuncionarios.employeeId))
         .where(and(
           eq(obraFuncionarios.companyId, input.companyId),
-          eq(obraFuncionarios.obraId, input.obraId),
+          inArray(obraFuncionarios.obraId, ids),
           eq(obraFuncionarios.isActive, 1),
           isNull(employees.deletedAt),
         ))
         .orderBy(employees.nome);
-      // Filtra apenas Ativo/Férias/Licença/Afastado (corta Desligado)
-      return rows.filter((r: any) => !["Desligado", "Lista_Negra", "ListaNegra"].includes(r.status));
+      const seen = new Set<number>();
+      const dedup = rows.filter((r: any) => {
+        if (seen.has(r.employeeId)) return false;
+        seen.add(r.employeeId);
+        return true;
+      });
+      return dedup.filter((r: any) => !["Desligado", "Lista_Negra", "ListaNegra"].includes(r.status));
     }),
 
-  // Rev. 1731 — Lista colaboradores ativos da empresa que NÃO estão na obra (para transferência inline).
+  // Rev. 1731/1733 — Lista colaboradores ativos da empresa que NÃO estão em nenhuma das obras informadas.
   colaboradoresParaTransferir: protectedProcedure
-    .input(z.object({ companyId: z.number().int().positive(), obraId: z.number().int().positive() }))
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      obraId: z.number().int().positive().optional(),
+      obraIds: z.array(z.number().int().positive()).optional(),
+    }))
     .query(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
-      // Rev. 1731 fix (architect): valida ownership da obra (id + companyId)
-      const [obraOk] = await db.select({ id: obras.id }).from(obras)
-        .where(and(eq(obras.id, input.obraId), eq(obras.companyId, input.companyId))).limit(1);
-      if (!obraOk) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não pertence a esta empresa." });
-      // Subquery: ids já vinculados ATIVOS nesta obra
+      const ids = (input.obraIds && input.obraIds.length > 0)
+        ? input.obraIds
+        : (input.obraId ? [input.obraId] : []);
+      if (ids.length === 0) return [];
+      const ownerRows = await db.select({ id: obras.id }).from(obras)
+        .where(and(inArray(obras.id, ids), eq(obras.companyId, input.companyId)));
+      if (ownerRows.length !== ids.length) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Alguma obra não pertence a esta empresa." });
+      }
+      // Subquery: ids já vinculados ATIVOS em QUALQUER das obras consolidadas
       const jaNaObra = db.select({ id: obraFuncionarios.employeeId })
         .from(obraFuncionarios)
         .where(and(
           eq(obraFuncionarios.companyId, input.companyId),
-          eq(obraFuncionarios.obraId, input.obraId),
+          inArray(obraFuncionarios.obraId, ids),
           eq(obraFuncionarios.isActive, 1),
         ));
       const rows = await db.select({
@@ -465,16 +493,22 @@ export const ddsRouter = router({
     .input(z.object({
       companyId: z.number().int().positive(),
       obraId: z.number().int().positive().optional(),
+      obraIds: z.array(z.number().int().positive()).optional(),
       diasJanela: z.number().int().positive().default(7),
     }))
     .query(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
-      // Rev. 1731 fix (architect): obraId opcional → também valida ownership quando informado
-      if (input.obraId) {
-        const [obraOk] = await db.select({ id: obras.id }).from(obras)
-          .where(and(eq(obras.id, input.obraId), eq(obras.companyId, input.companyId))).limit(1);
-        if (!obraOk) throw new TRPCError({ code: "FORBIDDEN", message: "Obra não pertence a esta empresa." });
+      // Rev. 1733 — aceita obraIds[] consolidado (alinhado com sidebar do DDS)
+      const obraIdsConsolidados = (input.obraIds && input.obraIds.length > 0)
+        ? input.obraIds
+        : (input.obraId ? [input.obraId] : []);
+      if (obraIdsConsolidados.length > 0) {
+        const ownerRows = await db.select({ id: obras.id }).from(obras)
+          .where(and(inArray(obras.id, obraIdsConsolidados), eq(obras.companyId, input.companyId)));
+        if (ownerRows.length !== obraIdsConsolidados.length) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Alguma obra não pertence a esta empresa." });
+        }
       }
       // Rev. 1731 fix (architect): D-1 calculado em America/Sao_Paulo (regra legal brasileira) — robusto a TZ do servidor.
       const fmtSP = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
@@ -488,7 +522,9 @@ export const ddsRouter = router({
         gte(accidents.dataAcidente, inicioIso),
         lte(accidents.dataAcidente, hojeIso), // sem acidentes no futuro
       ];
-      if (input.obraId) conds.push(or(eq(accidents.obraId, input.obraId), isNull(accidents.obraId)));
+      if (obraIdsConsolidados.length > 0) {
+        conds.push(or(inArray(accidents.obraId, obraIdsConsolidados), isNull(accidents.obraId)));
+      }
       const rows = await db.select({
         id: accidents.id,
         dataAcidente: accidents.dataAcidente,

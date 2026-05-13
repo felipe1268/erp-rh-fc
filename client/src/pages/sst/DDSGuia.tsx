@@ -136,7 +136,7 @@ export default function DDSGuia() {
   const employeesQ = trpc.employees.list.useQuery({ companyId } as any, { enabled: !!companyId });
   const [showSessao, setShowSessao] = useState(false);
   const [sessaoForm, setSessaoForm] = useState<any>({
-    obraId: "", data: new Date().toISOString().slice(0, 10), hora: "07:30",
+    obraId: "", obraIds: [] as number[], data: new Date().toISOString().slice(0, 10), hora: "07:30",
     temaId: "", tituloTema: "", conteudoMd: "",
     instrutor: "", instrutorCpf: "", local: "", observacoes: "",
     funcionarioIds: [] as number[],
@@ -153,7 +153,7 @@ export default function DDSGuia() {
       if (sugerido) temaEscolhido = sugerido;
     }
     setSessaoForm({
-      obraId: "", data: new Date().toISOString().slice(0, 10), hora: "07:30",
+      obraId: "", obraIds: [] as number[], data: new Date().toISOString().slice(0, 10), hora: "07:30",
       temaId: temaEscolhido?.id ? String(temaEscolhido.id) : "",
       tituloTema: temaEscolhido?.titulo ?? "",
       conteudoMd: temaEscolhido?.conteudoMd ?? temaEscolhido?.descricao ?? "",
@@ -169,10 +169,12 @@ export default function DDSGuia() {
     onSuccess: (s) => { toast.success("Sessão criada"); utils.dds.listSessoes.invalidate(); utils.dds.calendarioAnual.invalidate(); setShowSessao(false); setSelectedSessaoId(s.id); setTab("sessoes"); },
     onError: (e) => toast.error(e.message),
   });
-  // Rev. 1730 — equipe ativa da obra selecionada (pré-seleção em massa)
+  // Rev. 1733 — equipe ativa consolidada por NOME (alinhado com cadastro > aba Efetivo / getEfetivoPorObra).
+  // Quando há obras duplicadas (mesmo nome, IDs diferentes), unifica o efetivo de TODAS as duplicatas.
+  const obrasIdsSel: number[] = Array.isArray(sessaoForm.obraIds) ? sessaoForm.obraIds : [];
   const funcsObraQ = trpc.dds.funcionariosDaObra.useQuery(
-    { companyId, obraId: Number(sessaoForm.obraId) },
-    { enabled: !!companyId && !!sessaoForm.obraId && showSessao }
+    { companyId, obraIds: obrasIdsSel } as any,
+    { enabled: !!companyId && obrasIdsSel.length > 0 && showSessao }
   );
   const [showRoteiro, setShowRoteiro] = useState(false);
   const [buscaFunc, setBuscaFunc] = useState("");
@@ -181,19 +183,19 @@ export default function DDSGuia() {
   const [showTransferir, setShowTransferir] = useState(false);
   const [buscaTransferir, setBuscaTransferir] = useState("");
   const candidatosTransferQ = trpc.dds.colaboradoresParaTransferir.useQuery(
-    { companyId, obraId: Number(sessaoForm.obraId) },
-    { enabled: !!companyId && !!sessaoForm.obraId && showTransferir }
+    { companyId, obraIds: obrasIdsSel } as any,
+    { enabled: !!companyId && obrasIdsSel.length > 0 && showTransferir }
   );
   const transferirMut = trpc.dds.transferirParaObra.useMutation({
     onSuccess: (_d, vars) => {
       toast.success("Colaborador transferido para a obra");
-      // Rev. 1731 fix (architect): usa vars.obraId (não fechamento sessaoForm.obraId)
-      // pra evitar invalidação na obra errada se o usuário trocou de obra durante o request.
-      utils.dds.funcionariosDaObra.invalidate({ companyId, obraId: vars.obraId });
-      utils.dds.colaboradoresParaTransferir.invalidate({ companyId, obraId: vars.obraId });
-      // Auto-marca como presente APENAS se a obra alvo do form continua sendo a mesma da transferência
+      // Rev. 1733 — invalida pelo conjunto consolidado da obra alvo.
+      utils.dds.funcionariosDaObra.invalidate();
+      utils.dds.colaboradoresParaTransferir.invalidate();
+      // Auto-marca como presente APENAS se a obra continua selecionada
       setSessaoForm((s: any) => {
-        if (Number(s.obraId) !== vars.obraId) return s;
+        const ids: number[] = Array.isArray(s.obraIds) ? s.obraIds : [];
+        if (!ids.includes(vars.obraId)) return s;
         if (s.funcionarioIds.includes(vars.employeeId)) return s;
         return { ...s, funcionarioIds: [...s.funcionarioIds, vars.employeeId] };
       });
@@ -202,7 +204,7 @@ export default function DDSGuia() {
   });
   // Acidentes recentes (últimos 7 dias) — D-1 vira alerta vermelho obrigatório
   const acidentesQ = trpc.dds.acidentesRecentes.useQuery(
-    { companyId, obraId: sessaoForm.obraId ? Number(sessaoForm.obraId) : undefined, diasJanela: 7 },
+    { companyId, obraIds: obrasIdsSel.length > 0 ? obrasIdsSel : undefined, diasJanela: 7 } as any,
     { enabled: !!companyId && showSessao }
   );
   // Reseta busca/roteiro ao reabrir
@@ -621,11 +623,25 @@ export default function DDSGuia() {
                 )
               : equipeObra;
             // Rev. 1731 fix: só obras Em_Andamento (já vêm com permissão de allowedObras aplicada pelo listActive)
+            // Rev. 1733 — Consolida obras por NOME canônico (mesma regra do getEfetivoPorObra/cadastro > Efetivo).
+            // Quando há duplicatas (mesmo nome, IDs diferentes), unifica numa entrada só com obraIds=[...].
             const obrasList = ((obrasQ.data as any[]) ?? []).filter((o: any) => !o.status || o.status === "Em_Andamento");
+            const consolidadasMap = new Map<string, { idCanonico: number; ids: number[]; nome: string; cidade: string | null; uf: string | null }>();
+            for (const o of obrasList) {
+              const key = (o.nome || "").trim().toUpperCase();
+              if (!key) continue;
+              const ent = consolidadasMap.get(key);
+              if (ent) {
+                if (!ent.ids.includes(o.id)) ent.ids.push(o.id);
+              } else {
+                consolidadasMap.set(key, { idCanonico: o.id, ids: [o.id], nome: o.nome, cidade: o.cidade ?? null, uf: o.uf ?? null });
+              }
+            }
+            const obrasConsolidadas = Array.from(consolidadasMap.values()).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
             const obrasFiltradas = buscaObra
-              ? obrasList.filter((o: any) => o.nome?.toLowerCase().includes(buscaObra.toLowerCase()))
-              : obrasList;
-            const obraSelObj = obrasList.find((o: any) => String(o.id) === String(sessaoForm.obraId));
+              ? obrasConsolidadas.filter((o) => o.nome?.toLowerCase().includes(buscaObra.toLowerCase()))
+              : obrasConsolidadas;
+            const obraSelObj = obrasConsolidadas.find((o) => obrasIdsSel.length > 0 && o.ids.some((id) => obrasIdsSel.includes(id))) || null;
             const acidentesAll = (acidentesQ.data as any[]) ?? [];
             const acidentesObrigatorios = acidentesAll.filter((a: any) => a.obrigatorio);
             const fmtData = (iso: string) => {
@@ -693,7 +709,7 @@ export default function DDSGuia() {
                   <aside className="col-span-12 lg:col-span-3 border-r border-slate-200 bg-slate-50/60 overflow-y-auto p-3 space-y-2">
                     <div className="sticky top-0 bg-slate-50/95 backdrop-blur pb-2 -mt-3 -mx-3 px-3 pt-3 border-b border-slate-200 z-10">
                       <div className="text-[10px] font-bold uppercase text-slate-500 tracking-wider mb-1">
-                        Obras ({obrasList.length})
+                        Obras ({obrasConsolidadas.length})
                       </div>
                       <div className="relative">
                         <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-slate-400" />
@@ -703,27 +719,30 @@ export default function DDSGuia() {
                     </div>
                     {/* Card "Avulsa/Escritório" */}
                     <button type="button"
-                      onClick={() => setSessaoForm({ ...sessaoForm, obraId: "", funcionarioIds: [] })}
-                      className={`w-full text-left rounded-lg border-2 px-3 py-2 transition ${!sessaoForm.obraId ? "border-emerald-500 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                      onClick={() => setSessaoForm({ ...sessaoForm, obraId: "", obraIds: [], funcionarioIds: [] })}
+                      className={`w-full text-left rounded-lg border-2 px-3 py-2 transition ${obrasIdsSel.length === 0 ? "border-emerald-500 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}`}>
                       <div className="flex items-center gap-2">
                         <MapPin className="h-3.5 w-3.5 text-slate-500" />
                         <span className="text-sm font-semibold text-slate-700">Avulsa / Escritório</span>
                       </div>
                       <div className="text-[10px] text-slate-500 mt-0.5">Sem vínculo a obra</div>
                     </button>
-                    {/* Lista de obras */}
-                    {obrasFiltradas.map((o: any) => {
-                      const sel = String(o.id) === String(sessaoForm.obraId);
-                      const acidObra = acidentesAll.filter((a: any) => a.obraId === o.id && a.obrigatorio).length;
+                    {/* Lista de obras (consolidadas por nome) */}
+                    {obrasFiltradas.map((o) => {
+                      const sel = obrasIdsSel.length > 0 && o.ids.some((id) => obrasIdsSel.includes(id));
+                      const acidObra = acidentesAll.filter((a: any) => o.ids.includes(a.obraId) && a.obrigatorio).length;
                       return (
-                        <button key={o.id} type="button"
-                          onClick={() => setSessaoForm({ ...sessaoForm, obraId: String(o.id), funcionarioIds: [] })}
+                        <button key={o.idCanonico} type="button"
+                          onClick={() => setSessaoForm({ ...sessaoForm, obraId: String(o.idCanonico), obraIds: o.ids, funcionarioIds: [] })}
                           className={`w-full text-left rounded-lg border-2 px-3 py-2 transition ${sel ? "border-emerald-500 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}`}>
                           <div className="flex items-start gap-2">
                             <div className={`h-2 w-2 rounded-full mt-1.5 flex-shrink-0 ${sel ? "bg-emerald-500" : "bg-slate-300"}`} />
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-semibold text-slate-800 truncate">{o.nome}</div>
                               {o.cidade && <div className="text-[10px] text-slate-500 truncate">{o.cidade}{o.uf ? `/${o.uf}` : ""}</div>}
+                              {o.ids.length > 1 && (
+                                <div className="text-[9px] text-slate-400 italic">{o.ids.length} cadastros consolidados</div>
+                              )}
                             </div>
                             {acidObra > 0 && (
                               <span title="Acidente recente — DDS obrigatório" className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold animate-pulse">
@@ -752,7 +771,7 @@ export default function DDSGuia() {
                           {obraSelObj ? obraSelObj.nome : "Avulsa / Escritório"}
                         </div>
                       </div>
-                      {sessaoForm.obraId && (
+                      {obrasIdsSel.length > 0 && (
                         <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
                           {equipeObra.length} colaborador(es) na equipe
                         </span>
@@ -806,7 +825,7 @@ export default function DDSGuia() {
                     {acidentesAll.filter((a: any) => !a.obrigatorio).length > 0 && acidentesObrigatorios.length === 0 && (
                       <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs">
                         <div className="font-semibold text-amber-900 mb-1">
-                          ℹ️ {acidentesAll.length} acidente(s) nos últimos 7 dias{sessaoForm.obraId ? " (nesta obra/empresa)" : " na empresa"}
+                          ℹ️ {acidentesAll.length} acidente(s) nos últimos 7 dias{obrasIdsSel.length > 0 ? " (nesta obra/empresa)" : " na empresa"}
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {acidentesAll.slice(0, 3).map((a: any) => (
@@ -981,7 +1000,7 @@ export default function DDSGuia() {
                   </div>
 
                     {/* BLOCO 6 — EQUIPE DA OBRA (pré-seleção em massa + transferir colaborador) */}
-                    {sessaoForm.obraId && (
+                    {obrasIdsSel.length > 0 && (
                       <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50/40 p-4">
                         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                           <label className="text-sm font-bold text-emerald-900 flex items-center gap-1.5">
@@ -1145,9 +1164,12 @@ export default function DDSGuia() {
                         </div>
                       </div>
                       <Button size="sm" variant="outline"
-                        onClick={() => transferirMut.mutate({
-                          companyId, obraId: Number(sessaoForm.obraId), employeeId: c.id,
-                        })}
+                        onClick={() => {
+                          // Rev. 1733 — transfere para o ID canônico (primeiro da lista consolidada)
+                          const target = obrasIdsSel[0];
+                          if (!target) { toast.error("Selecione uma obra"); return; }
+                          transferirMut.mutate({ companyId, obraId: target, employeeId: c.id });
+                        }}
                         disabled={transferirMut.isPending}>
                         Transferir →
                       </Button>
