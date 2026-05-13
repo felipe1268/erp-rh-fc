@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1724,
+    titulo: "Currículos — Botão 'Mesclar selecionadas' + dedupe alias-aware (AUX. ADMINISTRATIVO ↔ AUXILIAR ADMINISTRATIVO)",
+    descricao: "Reportado: na tela Currículos apareciam DUAS funções praticamente iguais — 'AUX. ADMINISTRATIVO' e 'AUXILIAR ADMINISTRATIVO'. Causa: (1) `FUNCOES_PADRAO` semeia 'AUX. ADMINISTRATIVO' (com abreviação+ponto) mas a IA do 'Upload com IA' detecta 'AUXILIAR ADMINISTRATIVO' (palavra completa) — o match em `processarArquivosIA` usa `includes()` puro, que não casa por causa do ponto, então a IA criava nova função. `criarFuncao` também só comparava UPPER exato, deixando passar duplicata. Fix Rev. 1724 em 3 frentes: (1) novo helper `normalizeFuncaoNome()` no server: UPPERCASE + sem acentos + sem pontuação + colapsa espaços + expande abreviações comuns (AUX→AUXILIAR, ADM→ADMINISTRATIVO, ENC→ENCARREGADO, AJ→AJUDANTE, OP→OPERADOR, MEC→MECANICO, ELET→ELETRICISTA, MOT→MOTORISTA, ENG→ENGENHEIRO). `criarFuncao` e o match da IA agora usam essa chave canônica — não dá mais pra criar duplicata por alias. (2) Nova mutation `mesclarFuncoes` (server): recebe `destinoId` + `origemIds[]`, move TODOS os currículos das origens para o destino (atualiza `funcaoId` + `funcaoNome`) e soft-deleta as funções de origem em uma transação. Reusa `ensureFuncaoOwnership` para checar companyId. (3) Cliente `Curriculos.tsx`: quando o usuário marca ≥2 funções via checkbox na sidebar, aparece o botão azul '🔗 Mesclar selecionadas'. Pergunta qual deve ser MANTIDA (numerada), pede confirmação e chama a mutation. Toast confirma quantos currículos foram movidos e quantas funções removidas. Sem schema change.",
+    tipo: 'feature',
+    modulos: 'Currículos',
+    criadoPor: 'Replit Agent',
+    dataPublicacao: '2026-05-13 00:25:00',
+  },
+  {
     version: 1723,
     titulo: "Portal do Cliente (Efetivo) — Integração SST agora bate com o módulo Integração SST (mesma tabela do Planejamento)",
     descricao: "Reportado: na aba Efetivo do Portal do Cliente, o bloco 'Integração SST' do colaborador mostrava 'Sem integração registrada' mesmo quando o módulo Integração SST tinha o registro ativo do mesmo funcionário (mesma divergência que o Planejamento tinha antes da Rev. 1714). Causa em `server/routers/portalExterno.ts` ~L2614 (Rev. 1590): consultava `sst_integracao_registros` filtrando `status='aprovado'`, mas o módulo Integração SST (`server/routers/integracoes.ts`) grava em OUTRA tabela: `employee_integrations` — schema diferente (`dataVencimento` em vez de `dataValidade`, sem coluna `status`, status calculado em runtime pelo vencimento). As duas tabelas convivem por legado e ficaram desconectadas no portal. Fix Rev. 1723: fonte do `integRows` trocada para `employeeIntegrations`, mesmo critério da Rev. 1714 (Planejamento). `temPdf` agora deriva de `evidencia`. Status vigente/vencido segue calculado no servidor pelo vencimento. Sem schema change. Resultado: cards do Efetivo no portal espelham EXATAMENTE o módulo Integração SST e a aba Efetivo do Planejamento.",

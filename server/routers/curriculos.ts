@@ -62,6 +62,35 @@ function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, "").replace(/^0+/, "");
 }
 
+// Rev. 1724 — chave canônica para comparar nomes de função e detectar
+// duplicatas com abreviações (ex.: "AUX. ADMINISTRATIVO" vs
+// "AUXILIAR ADMINISTRATIVO"). Aplica:
+//  - UPPERCASE + remove acentos
+//  - troca pontuação por espaço, colapsa espaços
+//  - expande abreviações comuns (AUX → AUXILIAR, ADM → ADMINISTRATIVO,
+//    ENC → ENCARREGADO, AJ → AJUDANTE, OP → OPERADOR, MEC → MECANICO,
+//    ELET → ELETRICISTA, MOT → MOTORISTA, MO → MAO DE OBRA)
+const FUNC_ALIASES: Record<string, string> = {
+  AUX: "AUXILIAR",
+  ADM: "ADMINISTRATIVO",
+  ENC: "ENCARREGADO",
+  AJ: "AJUDANTE",
+  OP: "OPERADOR",
+  MEC: "MECANICO",
+  ELET: "ELETRICISTA",
+  MOT: "MOTORISTA",
+  ENG: "ENGENHEIRO",
+};
+function normalizeFuncaoNome(s: string): string {
+  let n = (s || "").toUpperCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\wÀ-ÿ\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const tokens = n.split(" ").map(t => FUNC_ALIASES[t] ?? t);
+  return tokens.join(" ");
+}
+
 export const curriculosRouter = router({
   listarFuncoes: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive() }))
@@ -83,17 +112,57 @@ export const curriculosRouter = router({
       assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const nome = input.nome.trim().toUpperCase();
-      const existing = await db.select({ id: curriculoFuncoes.id }).from(curriculoFuncoes)
+      // Rev. 1724 — comparação canônica (alias + sem pontuação) evita
+      // duplicar "AUX. ADMINISTRATIVO" vs "AUXILIAR ADMINISTRATIVO" etc.
+      const chave = normalizeFuncaoNome(nome);
+      const todasAtivas = await db.select({ id: curriculoFuncoes.id, nome: curriculoFuncoes.nome })
+        .from(curriculoFuncoes)
         .where(and(
           eq(curriculoFuncoes.companyId, input.companyId),
-          sql`UPPER(${curriculoFuncoes.nome}) = ${nome}`,
           isNull(curriculoFuncoes.deletedAt),
         ));
-      if (existing.length > 0) return existing[0];
+      const dup = todasAtivas.find((r: any) => normalizeFuncaoNome(r.nome) === chave);
+      if (dup) return dup;
       const [row] = await db.insert(curriculoFuncoes).values({
         companyId: input.companyId, nome, ativo: 1,
       }).returning();
       return row;
+    }),
+
+  // Rev. 1724 — Mescla várias funções em uma só. Move todos os currículos
+  // das funções de origem para a função de destino e soft-deleta as origens.
+  // Usado pelo botão "Mesclar selecionadas" da sidebar.
+  mesclarFuncoes: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      destinoId: z.number().int().positive(),
+      origemIds: z.array(z.number().int().positive()).min(1),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      await ensureFuncaoOwnership(db, input.destinoId, input.companyId);
+      const origens = input.origemIds.filter(id => id !== input.destinoId);
+      if (origens.length === 0) return { moved: 0, removed: 0 };
+      for (const oid of origens) await ensureFuncaoOwnership(db, oid, input.companyId);
+      const [destino] = await db.select({ nome: curriculoFuncoes.nome })
+        .from(curriculoFuncoes).where(eq(curriculoFuncoes.id, input.destinoId));
+      const destinoNome = destino?.nome || "Sem função";
+      const moved = await db.update(curriculos).set({
+        funcaoId: input.destinoId,
+        funcaoNome: destinoNome,
+        updatedAt: sql`NOW()`,
+      } as any).where(and(
+        eq(curriculos.companyId, input.companyId),
+        sql`${curriculos.funcaoId} IN (${sql.join(origens.map(id => sql`${id}`), sql`, `)})`,
+        isNull(curriculos.deletedAt),
+      )).returning({ id: curriculos.id });
+      await db.update(curriculoFuncoes).set({ deletedAt: sql`NOW()` } as any)
+        .where(and(
+          eq(curriculoFuncoes.companyId, input.companyId),
+          sql`${curriculoFuncoes.id} IN (${sql.join(origens.map(id => sql`${id}`), sql`, `)})`,
+        ));
+      return { moved: moved.length, removed: origens.length, destinoNome };
     }),
 
   excluirFuncao: protectedProcedure
@@ -610,9 +679,15 @@ IMPORTANTE: Retorne APENAS o JSON, sem nenhum texto adicional.`;
           let funcaoNome: string | null = null;
 
           if (funcaoDetectada) {
+            // Rev. 1724 — match por chave canônica (alias-aware) para
+            // evitar criar "AUXILIAR ADMINISTRATIVO" quando já existe
+            // "AUX. ADMINISTRATIVO" (ou vice-versa).
+            const chaveDet = normalizeFuncaoNome(funcaoDetectada);
             const match = funcoesDb.find((f: any) => {
               const fn = f.nome.toUpperCase();
-              return fn === funcaoDetectada || funcaoDetectada.includes(fn) || fn.includes(funcaoDetectada);
+              if (fn === funcaoDetectada) return true;
+              if (normalizeFuncaoNome(f.nome) === chaveDet) return true;
+              return funcaoDetectada.includes(fn) || fn.includes(funcaoDetectada);
             });
             if (match) {
               funcaoId = (match as any).id;

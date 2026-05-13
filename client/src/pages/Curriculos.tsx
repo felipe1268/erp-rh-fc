@@ -111,6 +111,18 @@ export default function Curriculos() {
     onSuccess: (_, vars) => { utils.curriculos.listarFuncoes.invalidate(); utils.curriculos.listar.invalidate(); toast.success("Função excluída"); setFuncoesSelecionadas(prev => prev.filter(id => id !== vars.id)); },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 1724 — mescla funções selecionadas em uma só (move currículos
+  // das origens para o destino e soft-deleta as origens).
+  const mesclarFuncoesMut = trpc.curriculos.mesclarFuncoes.useMutation({
+    onSuccess: (res: any) => {
+      utils.curriculos.listarFuncoes.invalidate();
+      utils.curriculos.listar.invalidate();
+      utils.curriculos.contagens.invalidate();
+      toast.success(`${res?.moved ?? 0} currículo(s) movido(s) para "${res?.destinoNome ?? ""}". ${res?.removed ?? 0} função(ões) removida(s).`);
+      setFuncoesSelecionadas([]);
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const criarMut = trpc.curriculos.criar.useMutation({
     onSuccess: async (row) => {
       if (pendingFile && row?.id) {
@@ -674,8 +686,34 @@ export default function Curriculos() {
                   );
                 })}
                 {funcoesSelecionadas.length > 1 && (
-                  <div className="pt-2 border-t mt-2">
+                  <div className="pt-2 border-t mt-2 space-y-2">
                     <p className="text-xs text-slate-500 px-3">{funcoesSelecionadas.length} funções selecionadas</p>
+                    {/* Rev. 1724 — mesclar funções selecionadas em uma só */}
+                    <button
+                      onClick={() => {
+                        const sel = funcoes.filter((f: any) => funcoesSelecionadas.includes(f.id));
+                        if (sel.length < 2) return;
+                        const lista = sel.map((f: any, i: number) => `${i + 1}. ${f.nome}`).join("\n");
+                        const escolha = window.prompt(
+                          `Mesclar ${sel.length} funções em uma só.\n\nQual deve ser MANTIDA? (digite o número)\n\n${lista}\n\nAs outras serão removidas e seus currículos passam para a mantida.`,
+                          "1",
+                        );
+                        if (!escolha) return;
+                        const idx = parseInt(escolha, 10) - 1;
+                        if (isNaN(idx) || idx < 0 || idx >= sel.length) {
+                          toast.error("Número inválido");
+                          return;
+                        }
+                        const destino = sel[idx];
+                        const origens = sel.filter((_: any, i: number) => i !== idx).map((f: any) => f.id);
+                        if (!confirm(`Mesclar ${origens.length} função(ões) em "${destino.nome}"? Esta ação não pode ser desfeita.`)) return;
+                        mesclarFuncoesMut.mutate({ companyId, destinoId: destino.id, origemIds: origens });
+                      }}
+                      disabled={mesclarFuncoesMut.isPending}
+                      className="w-full text-left px-3 py-2 rounded-md text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium border border-blue-200 disabled:opacity-50"
+                    >
+                      {mesclarFuncoesMut.isPending ? "Mesclando..." : "🔗 Mesclar selecionadas"}
+                    </button>
                   </div>
                 )}
               </div>
