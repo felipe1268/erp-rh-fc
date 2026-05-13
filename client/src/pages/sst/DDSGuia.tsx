@@ -602,7 +602,7 @@ export default function DDSGuia() {
 
       {/* ===== MODAL: NOVA SESSÃO (Rev. 1731 — full-screen + sidebar de obras + alerta acidente D-1 + transferir colaborador) ===== */}
       <Dialog open={showSessao} onOpenChange={setShowSessao}>
-        <DialogContent className="!max-w-[98vw] w-[98vw] h-[95vh] p-0 flex flex-col gap-0 overflow-hidden">
+        <DialogContent className="!max-w-none !w-screen !h-screen !top-0 !left-0 !translate-x-0 !translate-y-0 !rounded-none !border-0 p-0 flex flex-col gap-0 overflow-hidden sm:!max-w-none">
           {(() => {
             const temaSel = temas.find((t: any) => String(t.id) === String(sessaoForm.temaId));
             const corBanner = temaSel?.corCampanha ? corCfg(temaSel.corCampanha) : null;
