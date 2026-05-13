@@ -400,10 +400,9 @@ export const ddsRouter = router({
           : (input.obraId ? [input.obraId] : []);
         if (inputIds.length === 0) return [];
         const ids = await expandObraIdsByCanonicalName(db, input.companyId, inputIds);
-        console.log("[DDS funcionariosDaObra] companyId=", input.companyId, "inputIds=", inputIds, "expandedIds=", ids);
         const rows = await db.select({
           employeeId: employees.id,
-          nome: employees.nome,
+          nome: employees.nomeCompleto,
           cpf: employees.cpf,
           funcao: employees.funcao,
           funcaoNaObra: obraFuncionarios.funcaoNaObra,
@@ -416,7 +415,7 @@ export const ddsRouter = router({
             eq(obraFuncionarios.isActive, 1),
             isNull(employees.deletedAt),
           ))
-          .orderBy(employees.nome);
+          .orderBy(employees.nomeCompleto);
         console.log("[DDS funcionariosDaObra] rows.length=", rows.length);
         const seen = new Set<number>();
         const dedup = rows.filter((r: any) => {
@@ -445,7 +444,7 @@ export const ddsRouter = router({
         ? input.obraIds
         : (input.obraId ? [input.obraId] : []);
       if (inputIds.length === 0) return [];
-      // Rev. 1735 — expande pra TODAS as obras com mesmo nome canônico (cadastros duplicados)
+      // Rev. 1735 — expande pra TODAS as obras com mesmo nome canônico
       const ids = await expandObraIdsByCanonicalName(db, input.companyId, inputIds);
       // Subquery: ids já vinculados ATIVOS em QUALQUER das obras consolidadas
       const jaNaObra = db.select({ id: obraFuncionarios.employeeId })
@@ -456,14 +455,14 @@ export const ddsRouter = router({
           eq(obraFuncionarios.isActive, 1),
         ));
       const rows = await db.select({
-        id: employees.id, nome: employees.nome, cpf: employees.cpf,
+        id: employees.id, nome: employees.nomeCompleto, cpf: employees.cpf,
         funcao: employees.funcao, status: employees.status,
       }).from(employees).where(and(
         eq(employees.companyId, input.companyId),
         isNull(employees.deletedAt),
         notInArray(employees.id, jaNaObra),
         notInArray(employees.status, ["Desligado", "Lista_Negra", "ListaNegra"] as any),
-      )).orderBy(employees.nome);
+      )).orderBy(employees.nomeCompleto);
       return rows;
     }),
 
@@ -537,7 +536,6 @@ export const ddsRouter = router({
       const obraIdsConsolidados = inputObraIds.length > 0
         ? await expandObraIdsByCanonicalName(db, input.companyId, inputObraIds)
         : [];
-      console.log("[DDS acidentesRecentes] companyId=", input.companyId, "inputObraIds=", inputObraIds, "expanded=", obraIdsConsolidados);
       // Rev. 1731 fix (architect): D-1 calculado em America/Sao_Paulo (regra legal brasileira) — robusto a TZ do servidor.
       const fmtSP = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
       const agora = new Date();
@@ -566,7 +564,7 @@ export const ddsRouter = router({
         acaoCorretiva: accidents.acaoCorretiva,
         diasAfastamento: accidents.diasAfastamento,
         employeeId: accidents.employeeId,
-        empNome: employees.nome,
+        empNome: employees.nomeCompleto,
         obraId: accidents.obraId,
         obraNome: obras.nome,
       }).from(accidents)
@@ -643,7 +641,7 @@ export const ddsRouter = router({
       if (input.funcionarioIds && input.funcionarioIds.length > 0) {
         const idsUnicos = Array.from(new Set(input.funcionarioIds));
         const emps = await db.select({
-          id: employees.id, nome: employees.nome, cpf: employees.cpf, funcao: employees.funcao,
+          id: employees.id, nome: employees.nomeCompleto, cpf: employees.cpf, funcao: employees.funcao,
         }).from(employees).where(and(
           inArray(employees.id, idsUnicos),
           eq(employees.companyId, input.companyId),
