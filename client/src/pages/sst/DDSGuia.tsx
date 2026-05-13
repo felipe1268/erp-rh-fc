@@ -12,8 +12,60 @@ import { toast } from "sonner";
 import {
   CalendarDays, BookOpen, Megaphone, Plus, Trash2, Pencil, Users, FileSignature,
   ClipboardCheck, Check, X as XIcon, ChevronRight, Sparkles, MapPin, UserCheck,
-  ChevronDown, ChevronUp, Search,
+  ChevronDown, ChevronUp, Search, Wand2, Loader2,
 } from "lucide-react";
+
+// Rev. 1740 — Renderer leve de markdown (## Header, **bold**, listas) pros roteiros
+// detalhados. Não usa biblioteca pra evitar peso — formato é controlado pelo seed/IA.
+function RoteiroMd({ md, className = "" }: { md: string; className?: string }) {
+  const lines = md.split("\n");
+  const blocks: React.ReactNode[] = [];
+  let curList: string[] | null = null;
+  let listType: "ul" | "ol" | null = null;
+
+  const inline = (s: string) => {
+    const parts = s.split(/(\*\*[^*]+\*\*)/g);
+    return parts.map((p, i) => p.startsWith("**") && p.endsWith("**")
+      ? <strong key={i} className="text-slate-900 font-semibold">{p.slice(2, -2)}</strong>
+      : <span key={i}>{p}</span>);
+  };
+
+  const flushList = () => {
+    if (!curList) return;
+    const Tag = listType === "ol" ? "ol" : "ul";
+    blocks.push(
+      <Tag key={`l-${blocks.length}`} className={`${listType === "ol" ? "list-decimal" : "list-disc"} pl-5 space-y-1 mb-2`}>
+        {curList.map((it, i) => <li key={i}>{inline(it)}</li>)}
+      </Tag>
+    );
+    curList = null; listType = null;
+  };
+
+  for (const raw of lines) {
+    const ln = raw.trimEnd();
+    const h = ln.match(/^##\s+(.+)$/);
+    const bul = ln.match(/^[-•]\s+(.+)$/);
+    const ord = ln.match(/^\d+\.\s+(.+)$/);
+    if (h) {
+      flushList();
+      blocks.push(<h4 key={`h-${blocks.length}`} className="font-bold text-slate-800 text-sm mt-3 first:mt-0 mb-1 uppercase tracking-wide">{inline(h[1])}</h4>);
+    } else if (bul) {
+      if (listType !== "ul") { flushList(); listType = "ul"; curList = []; }
+      curList!.push(bul[1]);
+    } else if (ord) {
+      if (listType !== "ol") { flushList(); listType = "ol"; curList = []; }
+      curList!.push(ord[1]);
+    } else if (ln.trim() === "") {
+      flushList();
+    } else {
+      flushList();
+      blocks.push(<p key={`p-${blocks.length}`} className="mb-2 leading-relaxed">{inline(ln)}</p>);
+    }
+  }
+  flushList();
+
+  return <div className={`text-sm text-slate-700 ${className}`}>{blocks}</div>;
+}
 
 // Rev. 1730 — máscara CPF no input do instrutor
 function maskCpf(v: string): string {
@@ -93,6 +145,27 @@ export default function DDSGuia() {
     },
     onError: (e) => toast.error(e.message),
   });
+
+  // Rev. 1740 — enriquecer roteiros detalhados nos temas padrão já cadastrados
+  const enriquecerMut = trpc.dds.enriquecerTemasPadrao.useMutation({
+    onSuccess: (r) => {
+      if (r.atualizados === 0) toast.info("Todos os temas já tinham roteiro detalhado.");
+      else toast.success(`${r.atualizados} tema(s) enriquecido(s) com roteiro detalhado.`);
+      utils.dds.listTemas.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Rev. 1740 — gerar roteiro com IA (usado em Biblioteca, Nova Sessão modal e Detalhe da Sessão)
+  const gerarIAMut = trpc.dds.gerarRoteiroComIA.useMutation();
+  const atualizarSessaoMut = trpc.dds.atualizarSessao.useMutation({
+    onSuccess: () => { utils.dds.getSessao?.invalidate?.(); utils.dds.listSessoes.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Rev. 1740 — estado de UI dos roteiros detalhados (expandir card + qual está gerando)
+  const [expandedTemaId, setExpandedTemaId] = useState<number | null>(null);
+  const [gerandoTemaId, setGerandoTemaId] = useState<number | null>(null);
 
   // ===== modal: tema
   const [showTema, setShowTema] = useState(false);
@@ -304,6 +377,18 @@ export default function DDSGuia() {
               {seedVacMut.isPending ? "Carregando..." : "💉 Carregar campanhas de vacinação (PNI/MS — Lei 15.377/2026)"}
             </Button>
           )}
+          {temas.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => enriquecerMut.mutate({ companyId, sobrescrever: false })}
+              disabled={enriquecerMut.isPending}
+              className="border-violet-300 text-violet-700 hover:bg-violet-50"
+              title="Preenche o roteiro detalhado dos temas padrão (NRs, Campanhas, Vacinação) que ainda estão sem conteúdo"
+            >
+              <Wand2 className="h-4 w-4 mr-1" />
+              {enriquecerMut.isPending ? "Enriquecendo..." : "✨ Enriquecer roteiros dos temas padrão"}
+            </Button>
+          )}
           <Button onClick={() => abrirNovaSessao()}>
             <Plus className="h-4 w-4 mr-1" /> Nova Sessão DDS
           </Button>
@@ -489,6 +574,9 @@ export default function DDSGuia() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {lista.map((t: any) => {
                     const cor = (cat === "CAMPANHA" || cat === "VACINACAO") ? corCfg(t.corCampanha) : { bg: "bg-white", text: "text-slate-800", border: "border-slate-200", chip: "bg-slate-200 text-slate-700" };
+                    const expandido = expandedTemaId === t.id;
+                    const temRoteiro = (t.conteudoMd ?? "").trim().length >= 80;
+                    const gerandoEsta = gerandoTemaId === t.id;
                     return (
                       <div key={t.id} className={`rounded-xl border ${cor.border} ${cor.bg} p-3 shadow-sm flex flex-col`}>
                         <div className="flex items-start justify-between gap-2 mb-1">
@@ -508,6 +596,68 @@ export default function DDSGuia() {
                         <h4 className={`font-semibold text-sm leading-tight ${cor.text}`}>{t.titulo}</h4>
                         {t.descricao && <p className="text-xs text-slate-600 mt-1 line-clamp-3">{t.descricao}</p>}
                         {t.normaReferencia && <p className="text-[10px] text-slate-500 italic mt-1">{t.normaReferencia}</p>}
+
+                        {/* Rev. 1740 — toggle de roteiro detalhado + ação de IA */}
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedTemaId(expandido ? null : t.id)}
+                            className={`text-[11px] font-semibold flex items-center gap-1 px-2 py-1 rounded-md border transition ${
+                              temRoteiro
+                                ? "border-emerald-300 text-emerald-700 bg-white hover:bg-emerald-50"
+                                : "border-slate-300 text-slate-500 bg-white hover:bg-slate-50"
+                            }`}
+                            title={temRoteiro ? "Ver roteiro detalhado" : "Sem roteiro — gere com IA"}
+                          >
+                            {expandido ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                            {temRoteiro ? "Ver roteiro" : "Sem roteiro"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={gerandoEsta}
+                            onClick={async () => {
+                              setGerandoTemaId(t.id);
+                              try {
+                                const r = await gerarIAMut.mutateAsync({
+                                  companyId,
+                                  titulo: t.titulo,
+                                  descricao: t.descricao ?? undefined,
+                                  normaReferencia: t.normaReferencia ?? undefined,
+                                  categoria: t.categoria ?? undefined,
+                                });
+                                await atualizarTemaMut.mutateAsync({
+                                  companyId, id: t.id,
+                                  titulo: t.titulo,
+                                  descricao: t.descricao ?? "",
+                                  conteudoMd: r.conteudoMd,
+                                  normaReferencia: t.normaReferencia ?? "",
+                                  categoria: t.categoria ?? "LIVRE",
+                                  codigo: t.codigo ?? "",
+                                  duracaoMin: t.duracaoMin ?? 15,
+                                } as any);
+                                toast.success("Roteiro gerado com IA e salvo no tema.");
+                                setExpandedTemaId(t.id);
+                              } catch (e: any) {
+                                toast.error(e?.message ?? "Falha ao gerar com IA");
+                              } finally {
+                                setGerandoTemaId(null);
+                              }
+                            }}
+                            className="text-[11px] font-semibold flex items-center gap-1 px-2 py-1 rounded-md border border-violet-300 text-violet-700 bg-white hover:bg-violet-50 disabled:opacity-50"
+                            title={temRoteiro ? "Regenerar roteiro com IA (sobrescreve)" : "Gerar roteiro com IA"}
+                          >
+                            {gerandoEsta ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />}
+                            {gerandoEsta ? "Gerando..." : (temRoteiro ? "Regerar com IA" : "Gerar com IA")}
+                          </button>
+                        </div>
+                        {expandido && (
+                          <div className="mt-2 p-2 rounded-lg bg-white/80 border border-slate-200 max-h-64 overflow-auto">
+                            {temRoteiro
+                              ? <RoteiroMd md={t.conteudoMd} />
+                              : <p className="text-xs text-slate-500 italic">Este tema ainda não tem roteiro detalhado. Clique em "Gerar com IA" pra criar um, ou em "✨ Enriquecer roteiros dos temas padrão" no topo da página pra puxar o roteiro padrão (NRs/Campanhas/Vacinação).</p>}
+                          </div>
+                        )}
+
                         <Button size="sm" className="mt-3 text-xs h-7" onClick={() => abrirNovaSessao(t)}>
                           <Plus className="h-3 w-3 mr-1" /> Iniciar sessão com este tema
                         </Button>
@@ -538,6 +688,8 @@ export default function DDSGuia() {
               presencaMut={presencaMut}
               finalizarMut={finalizarSessaoMut}
               excluirMut={excluirSessaoMut}
+              gerarIAMut={gerarIAMut}
+              atualizarSessaoMut={atualizarSessaoMut}
               voltar={() => setSelectedSessaoId(null)}
             />
           ) : (
@@ -982,15 +1134,60 @@ export default function DDSGuia() {
                       Conteúdo / roteiro {sessaoForm.conteudoMd ? `(${sessaoForm.conteudoMd.length} caracteres)` : "(opcional)"}
                     </button>
                     {showRoteiro && (
-                      <Textarea rows={4} value={sessaoForm.conteudoMd}
-                        onChange={e => setSessaoForm({ ...sessaoForm, conteudoMd: e.target.value })}
-                        className="mt-1"
-                        placeholder="Roteiro / pontos abordados na sessão..." />
+                      <>
+                        {/* Rev. 1740 — botão Gerar com IA dentro da Nova Sessão */}
+                        <div className="flex items-center gap-2 mt-1 mb-1 flex-wrap">
+                          <Button
+                            type="button" size="sm" variant="outline"
+                            disabled={gerarIAMut.isPending || !sessaoForm.tituloTema?.trim()}
+                            onClick={async () => {
+                              try {
+                                // funções da equipe pré-selecionada na obra (bloco 6)
+                                const selSet = new Set<number>(sessaoForm.funcionarioIds ?? []);
+                                const funcoes = (funcsObraQ.data ?? [])
+                                  .filter((f: any) => selSet.has(f.employeeId))
+                                  .map((f: any) => f.funcao)
+                                  .filter(Boolean);
+                                const obraNomeAtual = obrasConsolidadas
+                                  .find((o: any) => String(o.idCanonico) === String(sessaoForm.obraId))?.nome;
+                                const r = await gerarIAMut.mutateAsync({
+                                  companyId,
+                                  titulo: sessaoForm.tituloTema,
+                                  obraNome: obraNomeAtual,
+                                  funcoesPresentes: funcoes,
+                                });
+                                setSessaoForm((s: any) => ({ ...s, conteudoMd: r.conteudoMd }));
+                                toast.success("Roteiro gerado com IA.");
+                              } catch (e: any) {
+                                toast.error(e?.message ?? "Falha ao gerar com IA");
+                              }
+                            }}
+                            className="border-violet-300 text-violet-700 hover:bg-violet-50 h-7 text-xs"
+                          >
+                            {gerarIAMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Wand2 className="h-3 w-3 mr-1" />}
+                            {gerarIAMut.isPending ? "Gerando..." : (sessaoForm.conteudoMd ? "Regerar com IA" : "Gerar com IA")}
+                          </Button>
+                          {sessaoForm.conteudoMd && (
+                            <span className="text-[10px] text-slate-500 italic">A geração considera obra e funções da equipe pré-selecionada.</span>
+                          )}
+                        </div>
+                        <Textarea rows={6} value={sessaoForm.conteudoMd}
+                          onChange={e => setSessaoForm({ ...sessaoForm, conteudoMd: e.target.value })}
+                          className="mt-1 font-mono text-xs"
+                          placeholder="Roteiro / pontos abordados na sessão (markdown: ## Cabeçalho, **negrito**, listas)..." />
+                        {sessaoForm.conteudoMd && (
+                          <div className="mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200 max-h-72 overflow-auto">
+                            <p className="text-[10px] uppercase tracking-wide font-bold text-slate-500 mb-1">Pré-visualização</p>
+                            <RoteiroMd md={sessaoForm.conteudoMd} />
+                          </div>
+                        )}
+                      </>
                     )}
                     {!showRoteiro && sessaoForm.conteudoMd && (
-                      <p className="text-xs text-slate-500 mt-1 line-clamp-2 italic bg-slate-50 rounded px-2 py-1 border border-slate-200">
-                        {sessaoForm.conteudoMd.slice(0, 200)}{sessaoForm.conteudoMd.length > 200 ? "..." : ""}
-                      </p>
+                      <div className="mt-1 bg-slate-50 rounded-lg px-3 py-2 border border-slate-200 max-h-32 overflow-hidden relative">
+                        <RoteiroMd md={sessaoForm.conteudoMd} className="text-xs" />
+                        <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none" />
+                      </div>
                     )}
                   </div>
 
@@ -1244,8 +1441,14 @@ export default function DDSGuia() {
 
 function SessaoDetalhe({
   companyId, sessao, employees, idsJaNaSessao, addFuncId, setAddFuncId,
-  presencaMut, finalizarMut, excluirMut, voltar,
+  presencaMut, finalizarMut, excluirMut, gerarIAMut, atualizarSessaoMut, voltar,
 }: any) {
+  // Rev. 1740 — edição inline do roteiro detalhado da sessão
+  const [editandoRoteiro, setEditandoRoteiro] = useState(false);
+  const [roteiroBuf, setRoteiroBuf] = useState<string>(sessao.conteudoMd ?? "");
+  useEffect(() => { setRoteiroBuf(sessao.conteudoMd ?? ""); }, [sessao.id, sessao.conteudoMd]);
+  const sessaoEditavel = sessao.status !== "finalizada" && sessao.status !== "cancelada";
+  const temRoteiroSessao = (sessao.conteudoMd ?? "").trim().length >= 80;
   const funcs = sessao.funcionarios ?? [];
   const presentes = funcs.filter((f: any) => f.presente === 1).length;
   const assinados = funcs.filter((f: any) => !!f.assinadoEm).length;
@@ -1282,11 +1485,102 @@ function SessaoDetalhe({
             </div>
           </div>
         </div>
-        {sessao.conteudoMd && (
-          <div className="mt-3 p-3 bg-slate-50 rounded-lg text-sm text-slate-700 whitespace-pre-wrap">
-            {sessao.conteudoMd}
+        {/* Rev. 1740 — Roteiro detalhado da sessão (visualizar/editar/gerar com IA) */}
+        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+            <h4 className="text-xs font-bold uppercase tracking-wide text-slate-600 flex items-center gap-1">
+              <BookOpen className="h-3.5 w-3.5" /> Roteiro do DDS
+              {!temRoteiroSessao && <span className="ml-2 text-[10px] font-normal italic text-slate-500">(sem roteiro detalhado)</span>}
+            </h4>
+            {sessaoEditavel && (
+              <div className="flex items-center gap-1 flex-wrap">
+                <Button
+                  type="button" size="sm" variant="outline"
+                  disabled={gerarIAMut?.isPending}
+                  onClick={async () => {
+                    try {
+                      const funcoes = (sessao.funcionarios ?? [])
+                        .filter((f: any) => !!f.funcao)
+                        .map((f: any) => f.funcao);
+                      const r = await gerarIAMut.mutateAsync({
+                        companyId,
+                        titulo: sessao.tituloTema,
+                        obraNome: sessao.obraNome ?? undefined,
+                        funcoesPresentes: funcoes,
+                      });
+                      await atualizarSessaoMut.mutateAsync({
+                        companyId, id: sessao.id, conteudoMd: r.conteudoMd,
+                      });
+                      setRoteiroBuf(r.conteudoMd);
+                      setEditandoRoteiro(false);
+                      toast.success("Roteiro gerado pela IA e salvo na sessão.");
+                    } catch (e: any) {
+                      toast.error(e?.message ?? "Falha ao gerar com IA");
+                    }
+                  }}
+                  className="border-violet-300 text-violet-700 hover:bg-violet-50 h-7 text-xs"
+                >
+                  {gerarIAMut?.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Wand2 className="h-3 w-3 mr-1" />}
+                  {gerarIAMut?.isPending ? "Gerando..." : (temRoteiroSessao ? "Regerar com IA" : "Gerar com IA")}
+                </Button>
+                {!editandoRoteiro ? (
+                  <Button type="button" size="sm" variant="outline"
+                    onClick={() => setEditandoRoteiro(true)}
+                    className="h-7 text-xs">
+                    <Pencil className="h-3 w-3 mr-1" /> Editar
+                  </Button>
+                ) : (
+                  <>
+                    <Button type="button" size="sm"
+                      disabled={atualizarSessaoMut?.isPending}
+                      onClick={async () => {
+                        try {
+                          await atualizarSessaoMut.mutateAsync({
+                            companyId, id: sessao.id, conteudoMd: roteiroBuf,
+                          });
+                          setEditandoRoteiro(false);
+                          toast.success("Roteiro salvo.");
+                        } catch (e: any) {
+                          toast.error(e?.message ?? "Falha ao salvar");
+                        }
+                      }}
+                      className="h-7 text-xs">
+                      <Check className="h-3 w-3 mr-1" /> Salvar
+                    </Button>
+                    <Button type="button" size="sm" variant="outline"
+                      onClick={() => { setRoteiroBuf(sessao.conteudoMd ?? ""); setEditandoRoteiro(false); }}
+                      className="h-7 text-xs">
+                      <XIcon className="h-3 w-3 mr-1" /> Cancelar
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
-        )}
+          {editandoRoteiro ? (
+            <>
+              <Textarea rows={10} value={roteiroBuf} onChange={e => setRoteiroBuf(e.target.value)}
+                className="font-mono text-xs"
+                placeholder="Roteiro em markdown: ## Cabeçalho, **negrito**, listas..." />
+              {roteiroBuf && (
+                <div className="mt-2 p-3 bg-white rounded border border-slate-200 max-h-72 overflow-auto">
+                  <p className="text-[10px] uppercase tracking-wide font-bold text-slate-500 mb-1">Pré-visualização</p>
+                  <RoteiroMd md={roteiroBuf} />
+                </div>
+              )}
+            </>
+          ) : sessao.conteudoMd ? (
+            <div className="bg-white rounded p-3 border border-slate-200">
+              <RoteiroMd md={sessao.conteudoMd} />
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 italic">
+              Sem roteiro detalhado nesta sessão. {sessaoEditavel
+                ? "Clique em \"Gerar com IA\" pra criar um roteiro contextualizado pra esta obra e funções da equipe."
+                : "Sessão fechada — não pode mais ser editada."}
+            </p>
+          )}
+        </div>
         {sessao.observacoes && (
           <p className="text-xs text-slate-500 italic mt-2">Obs.: {sessao.observacoes}</p>
         )}
