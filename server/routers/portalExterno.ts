@@ -4,7 +4,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getDb, getEquipeObra } from "../db";
-import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalClienteConfig, clientePerguntasExtras, clienteRespostasExtras, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos, sstIntegracaoRegistros } from "../../drizzle/schema";
+import { portalCredentials, funcionariosTerceiros, empresasTerceiras, parceirosConveniados, lancamentosParceiros, employees, employeeAptidao, companies, clientes, obras, clienteComentarios, clienteAvaliacoes, portalClienteConfig, clientePerguntasExtras, clienteRespostasExtras, portalPasswordResets, planejamentoProjetos, planejamentoRevisoes, planejamentoAtividades, planejamentoAvancos, planejamentoRefis, planejamentoCustosMo, planejamentoMedicoes, asos, atestados, trainings, warnings, obraFuncionarios, gdDocumentos, gdRevisoes, gdTiposDocumento, gdDisciplinas, jobFunctions, orcamentos, sstIntegracaoRegistros, employeeIntegrations } from "../../drizzle/schema";
 import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -2611,22 +2611,23 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
           arr.push(r); trainMap.set(r.employeeId, arr);
         }
 
-        // Rev. 1590 — Integração SST: pega o último registro APROVADO por
-        // funcionário (mais recente). No portal do cliente só exibimos a
-        // data de validade — alerta de 30 dias é só pra engenheiro.
+        // Rev. 1722 — Integração SST: fonte trocada de `sst_integracao_registros`
+        // (legado, sempre vazio para muitas obras) para `employee_integrations`,
+        // mesma tabela usada pelo módulo Integração SST e pelo Planejamento
+        // (Rev. 1714). Schema tem `dataVencimento` (não `dataValidade`), `evidencia`
+        // (não `certificadoUrl`) e NÃO tem coluna `status` — vigência é calculada
+        // em runtime pelo vencimento. Mantém o mapa por employeeId pegando o
+        // registro mais recente.
         const integRows = await db.select({
-          id: sstIntegracaoRegistros.id,
-          employeeId: sstIntegracaoRegistros.employeeId,
-          dataRealizacao: sstIntegracaoRegistros.dataRealizacao,
-          dataValidade: sstIntegracaoRegistros.dataValidade,
-          status: sstIntegracaoRegistros.status,
-          certificadoUrl: sstIntegracaoRegistros.certificadoUrl,
-        }).from(sstIntegracaoRegistros).where(and(
-          eq(sstIntegracaoRegistros.companyId, decoded.companyId),
-          inArray(sstIntegracaoRegistros.employeeId, empIds),
-          eq(sstIntegracaoRegistros.status, "aprovado"),
-          isNull(sstIntegracaoRegistros.deletedAt),
-        )).orderBy(desc(sstIntegracaoRegistros.dataRealizacao));
+          id: employeeIntegrations.id,
+          employeeId: employeeIntegrations.employeeId,
+          dataRealizacao: employeeIntegrations.dataRealizacao,
+          dataValidade: employeeIntegrations.dataVencimento,
+          evidencia: employeeIntegrations.evidencia,
+        }).from(employeeIntegrations).where(and(
+          eq(employeeIntegrations.companyId, decoded.companyId),
+          inArray(employeeIntegrations.employeeId, empIds),
+        )).orderBy(desc(employeeIntegrations.dataRealizacao));
         for (const r of integRows) if (!integMap.has(r.employeeId)) integMap.set(r.employeeId, r);
       }
 
@@ -2680,7 +2681,7 @@ Refine o texto da pergunta e a ajuda. Mantenha a INTENÇÃO original.`;
             dataRealizacao: integ.dataRealizacao ? String(integ.dataRealizacao).slice(0, 10) : null,
             dataValidade: integ.dataValidade ? String(integ.dataValidade).slice(0, 10) : null,
             status: (integ.dataValidade && String(integ.dataValidade).slice(0, 10) < today) ? "vencido" : "vigente",
-            temPdf: !!integ.certificadoUrl,
+            temPdf: !!integ.evidencia,
           } : null,
         };
       });

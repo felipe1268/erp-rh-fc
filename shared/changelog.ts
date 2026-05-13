@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1723,
+    titulo: "Portal do Cliente (Efetivo) — Integração SST agora bate com o módulo Integração SST (mesma tabela do Planejamento)",
+    descricao: "Reportado: na aba Efetivo do Portal do Cliente, o bloco 'Integração SST' do colaborador mostrava 'Sem integração registrada' mesmo quando o módulo Integração SST tinha o registro ativo do mesmo funcionário (mesma divergência que o Planejamento tinha antes da Rev. 1714). Causa em `server/routers/portalExterno.ts` ~L2614 (Rev. 1590): consultava `sst_integracao_registros` filtrando `status='aprovado'`, mas o módulo Integração SST (`server/routers/integracoes.ts`) grava em OUTRA tabela: `employee_integrations` — schema diferente (`dataVencimento` em vez de `dataValidade`, sem coluna `status`, status calculado em runtime pelo vencimento). As duas tabelas convivem por legado e ficaram desconectadas no portal. Fix Rev. 1723: fonte do `integRows` trocada para `employeeIntegrations`, mesmo critério da Rev. 1714 (Planejamento). `temPdf` agora deriva de `evidencia`. Status vigente/vencido segue calculado no servidor pelo vencimento. Sem schema change. Resultado: cards do Efetivo no portal espelham EXATAMENTE o módulo Integração SST e a aba Efetivo do Planejamento.",
+    tipo: 'bugfix',
+    modulos: 'Portal do Cliente, SST',
+    criadoPor: 'Replit Agent',
+    dataPublicacao: '2026-05-13 00:05:00',
+  },
+  {
     version: 1722,
     titulo: "Portal do Cliente — Curva S Financeira (Faturamento Acumulado R$) OCULTA (informação financeira sensível)",
     descricao: "Solicitado: a Curva S Financeira — Faturamento Acumulado (R$) (Contrato Total / Faturamento Previsto / Faturamento Realizado / Desvio R$) NÃO deve aparecer no portal do cliente — é informação financeira interna. Aparecia em 2 lugares no `client/src/pages/portal/PortalPlanejamentoCliente.tsx`: (1) aba 'Curva S Financeira' do switcher (~L2222) com KPIs e gráfico em R$. (2) BLOCO 3B do REFIS (~L3512) — gráfico financeiro acumulado. Fix Rev. 1722: (1) removida a entrada `{ id: 'financeira', ... }` do array de tabs do switcher — agora só aparece 'Curva S de Trabalho' (físico). Como `curvaTipo` default é 'trabalho' e não há mais como mudar, o gate `curvaTipo === 'financeira'` (~L2346) nunca dispara. (2) BLOCO 3B do REFIS gateado com `false &&` (preservado código pra reativação futura via flag, se quiserem versionar por cliente). Aba 'Curva S de Trabalho' (físico, %) e tudo do REFIS (avanço físico, KPIs %) seguem visíveis. App interno (`PlanejamentoDetalhe.tsx`) intocado — engenharia continua vendo R$. Sem schema change, sem mudança de servidor.",
