@@ -15,7 +15,7 @@ import {
   History, Zap, Scale, Car, TrendingUp, ChevronRight, Activity,
   Palmtree, Shield, FileSignature, Ban, Star, Eye, ScrollText, Wrench,
   Package, PackageX, CheckCircle, XCircle, ShoppingCart,
-  Trash2, Camera, Video, ImageIcon, Upload, ShieldCheck, Plus, Loader2, Pencil, RotateCcw, UserCheck, Handshake, Receipt, ExternalLink
+  Trash2, Camera, Video, ImageIcon, Upload, ShieldCheck, Plus, Loader2, Pencil, RotateCcw, UserCheck, Handshake, Receipt, ExternalLink, MessageSquare
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "wouter";
@@ -287,6 +287,7 @@ export default function RaioXFuncionario({ employeeId, open, onClose }: RaioXPro
   const avisosPrevios = (raioX as any)?.avisosPrevios || [];
   const ferias = (raioX as any)?.ferias || [];
   const cipa = (raioX as any)?.cipa || [];
+  const dds = (raioX as any)?.dds || [];
   const pjContratos = (raioX as any)?.pjContratos || [];
   const pjPagamentos = (raioX as any)?.pjPagamentos || [];
   const pjConformidade = (raioX as any)?.pjConformidade || null;
@@ -1062,6 +1063,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                       { value: "epis", label: "EPIs", icon: HardHat, count: episEntregas.length },
                       { value: "acidentes", label: "Acidentes", icon: AlertTriangle, count: acidentes.length },
                       { value: "cipa", label: "CIPA", icon: Shield, count: cipa.length },
+                      { value: "dds", label: "DDS", icon: MessageSquare, count: dds.length },
                       { value: "integracoes", label: "Integrações", icon: ShieldCheck, count: integracoes.length + integracoesSST.length },
                     ],
                   },
@@ -2239,6 +2241,85 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* ============ DDS — Diálogos Diários (Rev. 1768) ============ */}
+              <TabsContent value="dds" className="mt-4">
+                {dds.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">Nenhum DDS registrado para este funcionário</div>
+                ) : (
+                  <div className="bg-white rounded-xl border p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                      <MessageSquare className="h-5 w-5 text-blue-600" /> DDS — {dds.length} sessão(ões)
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/30">
+                            <th className="p-2 text-left">Data</th>
+                            <th className="p-2 text-left">Tema</th>
+                            <th className="p-2 text-left">Obra / Local</th>
+                            <th className="p-2 text-left">Instrutor</th>
+                            <th className="p-2 text-center">Presença</th>
+                            <th className="p-2 text-center">Assinatura</th>
+                            <th className="p-2 text-center">Sessão</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dds.map((d: any) => {
+                            const presenteOk = Number(d.presente || 0) === 1;
+                            const assinou = !!d.temAssinatura || d.assinaturaTipo === 'fcsign';
+                            const tipoAss = d.assinaturaTipo === 'desenhada' ? 'Digital'
+                                          : d.assinaturaTipo === 'fcsign' ? 'FCsign'
+                                          : d.assinaturaTipo === 'manual' ? 'Manual' : '';
+                            return (
+                              <tr key={d.sfId} className="border-b last:border-0 align-top">
+                                <td className="p-2 whitespace-nowrap font-mono text-xs">
+                                  {formatDate(d.data)}{d.hora ? <div className="text-[10px] text-muted-foreground">{d.hora}</div> : null}
+                                </td>
+                                <td className="p-2 font-medium">{d.tituloTema}</td>
+                                <td className="p-2 text-xs">
+                                  {d.obraNome || <span className="text-muted-foreground italic">—</span>}
+                                  {d.local && <div className="text-[10px] text-muted-foreground">{d.local}</div>}
+                                </td>
+                                <td className="p-2 text-xs">{d.instrutor || <span className="text-muted-foreground italic">—</span>}</td>
+                                <td className="p-2 text-center">
+                                  {presenteOk
+                                    ? <Badge variant="default" className="bg-emerald-100 text-emerald-700 border-emerald-300">Presente</Badge>
+                                    : <Badge variant="destructive">Ausente</Badge>}
+                                </td>
+                                <td className="p-2 text-center">
+                                  {assinou ? (
+                                    <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+                                      Assinada{tipoAss ? ` · ${tipoAss}` : ''}
+                                    </Badge>
+                                  ) : presenteOk ? (
+                                    <span className="text-xs text-amber-600">Pendente</span>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  )}
+                                  {d.assinadoEm && (
+                                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                                      {formatDate(String(d.assinadoEm).slice(0, 10))}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="p-2 text-center">
+                                  <Badge variant={d.status === 'finalizada' ? 'default' : d.status === 'cancelada' ? 'destructive' : 'secondary'}>
+                                    {d.status}
+                                  </Badge>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="mt-3 text-[11px] text-muted-foreground">
+                      Inclui todas as sessões de DDS em que o funcionário foi adicionado à lista de presença, com o status atualizado de presença e assinatura digital.
                     </div>
                   </div>
                 )}

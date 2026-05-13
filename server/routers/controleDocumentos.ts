@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados } from "../../drizzle/schema";
+import { asos, atestados, trainings, warnings, employees, timeRecords, payroll, epiDeliveries, epis, vrBenefits, advances, obraHorasRateio, obras, documentTemplates, extraPayments, employeeHistory, accidents, processosTrabalhistas, processosAndamentos, jobFunctions, terminationNotices, vacationPeriods, cipaMeetings, cipaMembers, cipaElections, pjContracts, pjPayments, epiDiscountAlerts, customExams, obraFuncionarios, warehouseLoans, almoxarifadoDescontoFolha, almoxarifadoSaidasInsumo, heSolicitacaoConfirmacoes, heSolicitacoes, pontoDescontos, notificationLogs, notificationRecipients, lancamentosParceiros, parceirosConveniados, ddsSessoes, ddsSessaoFuncionarios } from "../../drizzle/schema";
 import { eq, and, desc, sql, ne, isNull, inArray, gte, lte } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { storagePut } from "../storage";
@@ -1580,6 +1580,32 @@ export const controleDocumentosRouter = router({
         .leftJoin(cipaElections, eq(cipaMembers.electionId, cipaElections.id))
         .where(eq(cipaMembers.employeeId, input.employeeId));
 
+      // ===== DDS — Diálogos Diários de Segurança que o funcionário participou (Rev. 1768) =====
+      const empDdsRows = await db.select({
+        sfId: ddsSessaoFuncionarios.id,
+        sessaoId: ddsSessoes.id,
+        data: ddsSessoes.data,
+        hora: ddsSessoes.hora,
+        tituloTema: ddsSessoes.tituloTema,
+        instrutor: ddsSessoes.instrutor,
+        local: ddsSessoes.local,
+        obraId: ddsSessoes.obraId,
+        obraNome: ddsSessoes.obraNome,
+        status: ddsSessoes.status,
+        presente: ddsSessaoFuncionarios.presente,
+        assinaturaTipo: ddsSessaoFuncionarios.assinaturaTipo,
+        assinadoEm: ddsSessaoFuncionarios.assinadoEm,
+        temAssinatura: sql<boolean>`(${ddsSessaoFuncionarios.assinaturaImg} IS NOT NULL AND length(${ddsSessaoFuncionarios.assinaturaImg}) > 0)`,
+      })
+        .from(ddsSessaoFuncionarios)
+        .innerJoin(ddsSessoes, eq(ddsSessoes.id, ddsSessaoFuncionarios.sessaoId))
+        .where(and(
+          eq(ddsSessaoFuncionarios.employeeId, input.employeeId),
+          eq(ddsSessoes.companyId, emp.companyId),
+          isNull(ddsSessoes.deletedAt),
+        ))
+        .orderBy(desc(ddsSessoes.data));
+
       // PJ CONTRATOS
       const empPjContratos = await db.select().from(pjContracts)
         .where(and(eq(pjContracts.employeeId, input.employeeId), isNull(pjContracts.deletedAt)))
@@ -1689,6 +1715,36 @@ export const controleDocumentosRouter = router({
           timeline.push({ data: f.dataInicio, tipo: 'Férias', descricao: desc, cor: 'cyan', icone: 'palmtree' });
         }
       });
+      // DDS na timeline (Rev. 1768) — 1 evento por sessão
+      empDdsRows.forEach((d: any) => {
+        if (!d.data) return;
+        const obra = d.obraNome ? ` · ${d.obraNome}` : '';
+        const horaTxt = d.hora ? ` ${d.hora}` : '';
+        const presenteOk = Number(d.presente || 0) === 1;
+        const assinou = !!d.temAssinatura || d.assinaturaTipo === 'fcsign';
+        const statusBits: string[] = [];
+        statusBits.push(presenteOk ? 'Presente' : 'Ausente');
+        if (assinou) {
+          statusBits.push(d.assinaturaTipo === 'desenhada' ? 'Assinou (digital)'
+                        : d.assinaturaTipo === 'fcsign' ? 'Assinou (FCsign)'
+                        : 'Assinou');
+        } else if (presenteOk) {
+          statusBits.push('Sem assinatura');
+        }
+        if (d.status === 'cancelada') statusBits.push('Sessão cancelada');
+        const cor = d.status === 'cancelada' ? 'gray'
+                  : (presenteOk && assinou) ? 'emerald'
+                  : presenteOk ? 'amber'
+                  : 'red';
+        timeline.push({
+          data: d.data,
+          tipo: 'DDS',
+          descricao: `${d.tituloTema}${horaTxt}${obra}${d.instrutor ? ` — Instrutor: ${d.instrutor}` : ''} (${statusBits.join(' · ')})`,
+          cor,
+          icone: 'message-square',
+        });
+      });
+
       // CIPA - participação
       empCipa.forEach(c => {
         if (c.mandatoInicio) {
@@ -1821,6 +1877,7 @@ export const controleDocumentosRouter = router({
         avisosPrevios: empAvisosPrevios,
         ferias: empFerias,
         cipa: empCipa,
+        dds: empDdsRows,
         pjContratos: empPjContratos,
         pjPagamentos: empPjPagamentos,
         pjConformidade: empPjConformidade,
