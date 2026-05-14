@@ -813,19 +813,20 @@ export default function ProgramacaoSemanalLotus(props: Props) {
 
       // 5. Helper: substitui os 3 logos preservando o RANGE NATIVO (TwoCellAnchor
       //    com EMU offsets exatos) das imagens originais do template — garante
-      //    paridade absoluta de posição/tamanho com o REVTE-PSEM-FC. Antes
-      //    chutávamos posições com `col: 1.9999` (= quase fim da célula),
-      //    o que empurrava os logos pra próxima coluna e os distorcia.
-      // Ordem das imagens no template (verificada via inspeção do .xlsx):
-      //   index 0 → gerenciadora (LOTUS, cols B-D)
-      //   index 1 → construtora/proponente (FC, cols N-P)
-      //   index 2 → cliente (Santuário, cols I-L)
-      // Captura os 3 ranges UMA vez do template antes de qualquer mutação.
+      //    paridade absoluta de posição/tamanho com o REVTE-PSEM-FC.
+      // Rev. 1802 — Posições no template (verificadas pelo screenshot do user
+      // 14/05/2026, comparando PLANILHA MODELO × export atual):
+      //   index 0 → POSIÇÃO ESQUERDA (cols B-D)   — modelo: CLIENTE (Santuário)
+      //   index 1 → POSIÇÃO DIREITA (cols N-P)    — modelo: GERENCIADORA (LOTUS)
+      //   index 2 → POSIÇÃO CENTRO (cols I-L)     — modelo: EMPRESA (FC)
+      // (Antes da Rev. 1802 a atribuição estava trocada: a esquerda recebia
+      //  Lotus, o centro recebia Santuário e a direita recebia FC, gerando
+      //  layout invertido frente ao padrão do cliente.)
       const tplMedia: any[] = Array.isArray((tplWs as any)._media) ? (tplWs as any)._media.slice() : [];
       const tplImgs = tplMedia.filter((m) => m?.type === "image");
-      const RANGE_GER = safeCloneRange(tplImgs[0]?.range);
-      const RANGE_EMP = safeCloneRange(tplImgs[1]?.range);
-      const RANGE_CLI = safeCloneRange(tplImgs[2]?.range);
+      const POS_ESQUERDA = safeCloneRange(tplImgs[0]?.range);
+      const POS_DIREITA  = safeCloneRange(tplImgs[1]?.range);
+      const POS_CENTRO   = safeCloneRange(tplImgs[2]?.range);
 
       const insertLogos = (ws: any) => {
         // Remove SOMENTE as imagens da aba (preserva qualquer outro tipo de media)
@@ -843,9 +844,10 @@ export default function ProgramacaoSemanalLotus(props: Props) {
           // Re-anexa no RANGE NATIVO original (cópia profunda — addImage muta)
           ws.addImage(id, safeCloneRange(range));
         };
-        addImg(imgGer, RANGE_GER);
-        addImg(imgEmp, RANGE_EMP);
-        addImg(imgCli, RANGE_CLI);
+        // Conforme planilha modelo do cliente:
+        addImg(imgCli, POS_ESQUERDA);  // Santuário (cliente) à esquerda
+        addImg(imgEmp, POS_CENTRO);    // FC (empresa) ao centro
+        addImg(imgGer, POS_DIREITA);   // LOTUS (gerenciadora) à direita
       };
 
       // 6. Cores oficiais extraídas do tema do template (#4472C4 = Accent1).
