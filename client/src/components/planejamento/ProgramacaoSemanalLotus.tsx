@@ -675,187 +675,478 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     return `${antPrefix}${a.nome}\nMeta semanal: ${fmtPct1(m.metaPct)}\nRealizado na semana: ${fmtPct1(m.realPct)}\nAderência: ${aderTxt}\nAcumulado: ${fmtPct1(m.acumPct)}`;
   };
 
+  // Rev. 1791 — Exportação Excel cumulativa, padrão visual LOTUS (template-fill).
+  // Carrega o template oficial da Lotus (`/templates/programacao_semanal_lotus.xlsx`,
+  // capturado da entrega real do cliente — REVTE-PSEM-FC), preserva 100% do styling
+  // (fontes Manrope/Blinker, larguras, alturas, merges, page setup A4 landscape
+  // fit-to-width, bordas, theme colors), apaga os dados de exemplo e clona a aba
+  // "SEMANA 01- FC" para cada semana do projeto até a SELECIONADA, gerando UM
+  // arquivo cumulativo com abas "SEMANA 01 - FC", "SEMANA 02 - FC"... até "SEMANA NN - FC".
+  // Os 3 logos (gerenciadora · cliente · construtora) vêm do CADASTRO da obra/empresa,
+  // nunca hardcoded — re-renderizam automaticamente quando trocados no cadastro.
   const handleExportExcel = async () => {
     try {
       const ExcelJS = (await import("exceljs")).default;
-      const wb = new ExcelJS.Workbook();
-      const ws = wb.addWorksheet("Programação Semanal");
 
-      // Helper: número de coluna → letra Excel ("A","B"..."AA"...)
-      const colLetter = (n: number): string => {
-        let s = "";
-        while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
-        return s;
-      };
-      // Estrutura (Rev. 1664):
-      //   ITEM(1) TAREFA(2) PrevIni(3) PrevFim(4) RealIni(5) RealFim(6)
-      //   MetaPrev(7) MetaReal(8) MetaΔ(9) RESP(10) Dias(11..10+N) STATUS(11+N)
-      const totalCols = 11 + dias.length;
-      const lastCol = colLetter(totalCols);
-
-      // Header (3 linhas)
-      ws.mergeCells(`A1:${lastCol}1`);
-      const titleCell = ws.getCell("A1");
-      titleCell.value = `PROGRAMAÇÃO SEMANAL - ${nomeProjeto.toUpperCase()} - ${semana.numero}ª SEMANA - ${periodoStr}`;
-      titleCell.font = { bold: true, size: 14 };
-      titleCell.alignment = { horizontal: "center", vertical: "middle" };
-      ws.getRow(1).height = 28;
-
-      // Linha de cabeçalhos
-      const headerRow = 3;
-      ws.getRow(headerRow).values = [
-        "ITEM", "TAREFA",
-        "Previsto Início", "Previsto Fim",
-        "Real Início", "Real Fim",
-        "META SEM. PREV. %", "META SEM. REAL %", "META SEM. Δ pp",
-        "RESPONSÁVEL",
-        ...dias.map((d) => `${abrevDia(d)} ${fmtDiaMes(d)}`),
-        "STATUS",
-      ];
-      const hr = ws.getRow(headerRow);
-      hr.font = { bold: true };
-      hr.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-      hr.eachCell((c) => {
-        c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE5E7EB" } };
-        c.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
-      });
-
-      // Dados
-      const corHex: Record<string, string> = {
-        "bg-blue-800":   "FF1E40AF",
-        "bg-green-500":  "FF22C55E",
-        "bg-yellow-400": "FFFACC15",
-        "bg-orange-400": "FFFB923C",
-        "bg-red-500":    "FFEF4444",
-      };
-      // Rev. 1664 — META SEMANAL agora ocupa 3 colunas (Prev/Real/Δ).
-      // ITEM(1) TAREFA(2) PrevIni(3) PrevFim(4) RealIni(5) RealFim(6)
-      // MetaPrev(7) MetaReal(8) MetaΔ(9) RESP(10) Dias(11..10+N) STATUS(11+N)
-      const diasColStart = 11;
-      const statusCol = 11 + dias.length;
-      let r = headerRow + 1;
-      linhas.forEach((l) => {
-        if (l.tipo === "grupo") {
-          ws.getRow(r).values = [l.eap, l.nome.toUpperCase()];
-          ws.getRow(r).font = { bold: true, color: { argb: "FFB91C1C" } };
-          ws.getRow(r).alignment = { vertical: "middle" };
-        } else {
-          const a = l.ativ;
-          const m = metricas.get(a.id);
-          const ant = isAntecipada(a);
-          const st = statusLabel(m, ant);
-          const metaPrevTxt = m && m.metaPct > 0 ? fmtPct1(m.metaPct) : "—";
-          const metaRealTxt = m && (m.realPct > 0 || m.metaPct > 0) ? fmtPct1(m.realPct) : "—";
-          const metaDeltaTxt = (() => {
-            if (!m || (m.metaPct <= 0 && m.realPct <= 0)) return "—";
-            const d = m.realPct - m.metaPct;
-            return `${d > 0 ? "+" : ""}${fmtPct1(d)}`;
-          })();
-          ws.getRow(r).values = [
-            a.eapCodigo, a.nome,
-            fmtBR(a.dataInicio), fmtBR(a.dataFim),
-            fmtBR(a.dataInicioReal), fmtBR(a.dataFimReal),
-            metaPrevTxt, metaRealTxt, metaDeltaTxt,
-            (a.responsavelLotus ?? engenheiroResponsavel) || "—",
-            ...dias.map(() => ""),
-            st.txt,
-          ];
-          // Cor do Δ: verde ≥0, vermelho <0
-          if (m && (m.metaPct > 0 || m.realPct > 0)) {
-            const d = m.realPct - m.metaPct;
-            ws.getCell(r, 9).font = { bold: true, color: { argb: d >= 0 ? "FF065F46" : "FF991B1B" } };
-          }
-          const temAvSemX = !!m && m.somaSemanal > 0;
-          const acumAteSemX = m?.acumPct ?? 0;
-          dias.forEach((d, idx) => {
-            const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSemX, acumAteSemX, inicioSemanaCorrente);
-            // Excel não suporta faixas internas — prioriza realizado (faixa de
-            // baixo). Se só houver previsto, usa a cor do previsto.
-            const cor = f.bottom || f.top;
-            if (cor) {
-              const cell = ws.getCell(r, diasColStart + idx);
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: corHex[cor] || "FF999999" } };
-            }
-          });
-          // Cor de fundo da célula Status conforme classificação
-          if (st.txt === "No prazo" || st.txt === "Concluída") {
-            ws.getCell(r, statusCol).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD1FAE5" } };
-            ws.getCell(r, statusCol).font = { bold: true, color: { argb: "FF065F46" } };
-          } else if (st.txt === "Atrasado" || st.txt === "Não exec.") {
-            ws.getCell(r, statusCol).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEE2E2" } };
-            ws.getCell(r, statusCol).font = { bold: true, color: { argb: "FF991B1B" } };
-          }
-        }
-        ws.getRow(r).eachCell({ includeEmpty: true }, (c) => {
-          c.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
-        });
-        r++;
-      });
-
-      // Rev. 1681 — Linha de totalização ACUMULADA (Prev / Real / Δ) no Excel.
-      // Paridade absoluta com o Avanço Físico Semanal (cards grandes do FC).
-      if (linhas.some((l) => l.tipo === "ativ")) {
-        const prevTxt = fmtPct1(totaisSemana.prevAcumOficial);
-        const realTxt = fmtPct1(totaisSemana.realAcumOficial);
-        const deltaTxt = `${totaisSemana.deltaOficial > 0 ? "+" : ""}${fmtPct1(totaisSemana.deltaOficial)}`;
-        const labelData = totaisSemana.refFimAcum ? fmtBR(totaisSemana.refFimAcum) : "";
-        ws.getRow(r).values = [
-          `ACUMULADO DO PROJETO ATÉ ${labelData}`, "", "", "", "", "",
-          prevTxt, realTxt, deltaTxt,
-          "", ...dias.map(() => ""), "",
-        ];
-        ws.getRow(r).font = { bold: true };
-        ws.getRow(r).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
-        ws.mergeCells(r, 1, r, 6);
-        ws.getCell(r, 1).alignment = { horizontal: "right", vertical: "middle" };
-        ws.getCell(r, 8).font = { bold: true, color: { argb: "FF065F46" } };
-        ws.getCell(r, 9).font = {
-          bold: true,
-          color: { argb: totaisSemana.deltaOficial >= 0 ? "FF065F46" : "FF991B1B" },
-        };
-        ws.getRow(r).eachCell({ includeEmpty: true }, (c) => {
-          c.border = { top: { style: "medium" }, bottom: { style: "medium" }, left: { style: "thin" }, right: { style: "thin" } };
-        });
-        r++;
+      // 1. Buscar empresaLogoUrl (FC/proponente) via getProjetoById — lazy fetch.
+      //    (clienteLogoUrl + gerenciadoraLogoUrl já chegam por props.)
+      //    No Portal Cliente o componente é montado com projetoId=0/companyId=0
+      //    (avancosOverride sinaliza esse modo) e getProjetoById é protectedProcedure
+      //    — então o fetch é GATED para evitar 401 quebrando o export inteiro. No
+      //    portal, o logo da construtora simplesmente não é renderizado (logos da
+      //    gerenciadora e do cliente seguem aparecendo via props).
+      let empresaLogoUrl: string | null = null;
+      const isPortalMode = !!avancosOverride || projetoId <= 0 || companyId <= 0;
+      if (!isPortalMode) {
+        try {
+          const projeto = await utils.planejamento.getProjetoById.fetch({ id: projetoId, companyId });
+          empresaLogoUrl = ((projeto as any)?.obra?.empresaLogoUrl ?? null) as string | null;
+        } catch { /* fetch falhou — segue sem logo da construtora */ }
       }
 
-      // Larguras
-      ws.getColumn(1).width = 8;
-      ws.getColumn(2).width = 50;
-      [3, 4, 5, 6].forEach((i) => (ws.getColumn(i).width = 12));
-      ws.getColumn(7).width = 14;  // META SEM. PREV. %
-      ws.getColumn(8).width = 14;  // META SEM. REAL %
-      ws.getColumn(9).width = 12;  // META SEM. Δ pp
-      ws.getColumn(10).width = 18; // RESPONSÁVEL
-      for (let i = 0; i < dias.length; i++) ws.getColumn(diasColStart + i).width = 9;
-      ws.getColumn(statusCol).width = 13;
+      // 2. Carregar template do servidor (Vite serve client/public/ na raiz)
+      const tplResp = await fetch("/templates/programacao_semanal_lotus.xlsx");
+      if (!tplResp.ok) throw new Error("Template Lotus não encontrado em /templates/programacao_semanal_lotus.xlsx");
+      const tplBuf = await tplResp.arrayBuffer();
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(tplBuf);
+      const tplWs = wb.worksheets[0]; // "SEMANA 01- FC"
 
-      // Legenda
-      r += 2;
-      ws.getCell(`A${r}`).value = "LEGENDA:";
-      ws.getCell(`A${r}`).font = { bold: true };
-      const legenda = [
-        ["PREVISTO", "FF1E40AF"],
-        ["REALIZADO", "FF22C55E"],
-        ["SERVIÇO NÃO PROGRAMADO EXECUTADO", "FFFACC15"],
-        ["SERVIÇO EXECUTADO ANTECIPADAMENTE", "FFFB923C"],
-        ["ATRASADO / NÃO EXECUTADO", "FFEF4444"],
-      ];
-      legenda.forEach(([txt, hex], i) => {
-        const row = r + 1 + i;
-        ws.getCell(`A${row}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: hex } };
-        ws.getCell(`B${row}`).value = txt;
-      });
+      // 3. Pré-carrega logos do cadastro como ArrayBuffer + extensão correta
+      const fetchImg = async (url: string | null | undefined): Promise<{ buf: ArrayBuffer; ext: "png" | "jpeg" } | null> => {
+        if (!url) return null;
+        try {
+          const r = await fetch(url);
+          if (!r.ok) return null;
+          const buf = await r.arrayBuffer();
+          const ct = (r.headers.get("content-type") || "").toLowerCase();
+          const isJpg = ct.includes("jpeg") || ct.includes("jpg") || /\.jpe?g(\?|$)/i.test(url);
+          return { buf, ext: isJpg ? "jpeg" : "png" };
+        } catch { return null; }
+      };
+      const [imgEmp, imgCli, imgGer] = await Promise.all([
+        fetchImg(empresaLogoUrl),
+        fetchImg(clienteLogoUrl),
+        fetchImg(gerenciadoraLogoUrl),
+      ]);
 
+      // 4. Helper: clone profundo da aba template (cells+styles, merges, columns,
+      //    rows, pageSetup, views). ExcelJS não tem clone nativo entre worksheets
+      //    do mesmo workbook — esta função suprime a lacuna.
+      const cloneSheetFromTemplate = (newName: string) => {
+        const newWs = wb.addWorksheet(newName, {
+          pageSetup: { ...tplWs.pageSetup },
+          properties: { ...(tplWs as any).properties } as any,
+          views: tplWs.views?.map(v => ({ ...v })),
+        });
+        // Larguras das colunas (1..19)
+        for (let i = 1; i <= 19; i++) {
+          const src = tplWs.getColumn(i);
+          const dst = newWs.getColumn(i);
+          if (src.width != null) dst.width = src.width;
+          if ((src as any).hidden) dst.hidden = true;
+        }
+        // Cells (value + style) e alturas de linha
+        tplWs.eachRow({ includeEmpty: true }, (row, rIdx) => {
+          const newRow = newWs.getRow(rIdx);
+          if (row.height != null) newRow.height = row.height;
+          row.eachCell({ includeEmpty: true }, (cell, cIdx) => {
+            const newCell = newRow.getCell(cIdx);
+            newCell.value = cell.value;
+            if (cell.style) newCell.style = JSON.parse(JSON.stringify(cell.style));
+          });
+        });
+        // Merges (model.merges é array de strings tipo "B10:C13")
+        const mergesArr: string[] = (tplWs as any).model?.merges ?? [];
+        mergesArr.forEach((m) => { try { newWs.mergeCells(m); } catch { /* já mesclado */ } });
+        return newWs;
+      };
+
+      // 5. Helper: limpa imagens existentes da aba e adiciona os 3 logos do cadastro
+      //    nas MESMAS posições (TwoCellAnchor) do template original.
+      // Posições extraídas do template REVTE-PSEM-FC original:
+      //   • Img0 — gerenciadora (LOTUS): cols B-C / rows 2-5
+      //   • Img2 — cliente (Santuário): cols I-K / rows 2-4
+      //   • Img1 — construtora (FC/proponente): cols N-P / rows 2-5
+      const POS_GER = { tl: { col: 1.9999, row: 1.2988 }, br: { col: 3.2851, row: 4.9999 } } as any;
+      const POS_CLI = { tl: { col: 8.9999, row: 1.9676 }, br: { col: 11.9999, row: 3.9999 } } as any;
+      const POS_EMP = { tl: { col: 13.9999, row: 1.2116 }, br: { col: 15.9999, row: 4.9430 } } as any;
+      const insertLogos = (ws: any) => {
+        // Limpa imagens herdadas do template (logos do exemplo Santuário/Lotus/FC)
+        try {
+          if (Array.isArray((ws as any)._media)) {
+            (ws as any)._media = (ws as any)._media.filter((m: any) => m?.type !== "image");
+          }
+        } catch { /* noop */ }
+        const addImg = (img: { buf: ArrayBuffer; ext: "png" | "jpeg" } | null, pos: any) => {
+          if (!img) return;
+          const id = wb.addImage({ buffer: img.buf as any, extension: img.ext });
+          ws.addImage(id, pos);
+        };
+        addImg(imgGer, POS_GER);
+        addImg(imgCli, POS_CLI);
+        addImg(imgEmp, POS_EMP);
+      };
+
+      // 6. Cores oficiais extraídas do tema do template (#4472C4 = Accent1).
+      //    Padronização do ERP daqui pra frente — bate com a paleta Office padrão
+      //    e com a expectativa visual da Lotus (Rev. 1791).
+      const COR_PREVISTO  = "FF4472C4"; // azul Accent1
+      const COR_REALIZADO = "FF00B050"; // verde positivo
+      const COR_ATRASADO  = "FFFF0000"; // vermelho
+      const COR_ANTECIP   = "FFED7D31"; // laranja Accent2
+      const COR_NAO_PROG  = "FFFFC000"; // amarelo Accent4
+      const corClassToHex = (cls: string | null): string | null => {
+        if (cls === "bg-blue-800")   return COR_PREVISTO;
+        if (cls === "bg-green-500")  return COR_REALIZADO;
+        if (cls === "bg-red-500")    return COR_ATRASADO;
+        if (cls === "bg-orange-400") return COR_ANTECIP;
+        if (cls === "bg-yellow-400") return COR_NAO_PROG;
+        return null;
+      };
+
+      // 7. Helper: calcula dados de UMA semana específica (replica metricas +
+      //    atividadesDaSemana — mesma fórmula do componente, sem useMemo pois
+      //    rodamos N vezes em loop).
+      type DadosSemana = {
+        sem: { numero: number; ini: Date; fim: Date };
+        dias: Date[];
+        ats: Atividade[];
+        mts: Map<number, { metaPct: number; realPct: number; aderenciaPct: number | null; acumPct: number; somaSemanal: number }>;
+        semIni: string;
+        semFim: string;
+        temAvSem: Set<number>;
+      };
+      const calcSemana = (sem: { numero: number; ini: Date; fim: Date }): DadosSemana => {
+        // Clip da PRIMEIRA semana ao projetoStart (mesma regra do hook `dias` L237-249)
+        let iniDate = sem.ini;
+        if (projetoStart) {
+          const ps = parseDate(projetoStart.slice(0, 10));
+          if (ps.getTime() > iniDate.getTime() && ps.getTime() <= sem.fim.getTime()) iniDate = ps;
+        }
+        const dias = diasDaSemana(iniDate, sem.fim);
+        const semIni = dias.length ? dateStr(dias[0]) : "";
+        const semFim = dias.length ? dateStr(dias[dias.length - 1]) : "";
+
+        const temAvSem = new Set<number>();
+        for (const av of (avancosLista as any[])) {
+          const s = String(av.semana ?? "").slice(0, 10);
+          if (s >= semIni && s <= semFim) {
+            const pct = parseFloat(String(av.percentualSemanal ?? "0")) || 0;
+            if (pct > 0) temAvSem.add(av.atividadeId);
+          }
+        }
+
+        const ats = atividades.filter((a) => {
+          if (a.isGrupo) return false;
+          const tocaPrev = a.dataInicio && a.dataFim && !(a.dataFim < semIni || a.dataInicio > semFim);
+          const tocaReal = a.dataInicioReal && a.dataFimReal && !(a.dataFimReal < semIni || a.dataInicioReal > semFim);
+          const ant = !!a.dataInicio && a.dataInicio > semFim && temAvSem.has(a.id);
+          return tocaPrev || tocaReal || ant;
+        });
+
+        const hojeStr = dateStr(hoje);
+        const semContemHoje = semIni <= hojeStr && hojeStr <= semFim;
+        const cutoffStr = semContemHoje ? hojeStr : semFim;
+
+        const mts = new Map<number, any>();
+        for (const a of ats) {
+          const peso = parseFloat(String(a.pesoFinanceiro ?? "0")) || 0;
+          const ini = a.dataInicio?.slice(0, 10);
+          const fim = a.dataFim?.slice(0, 10);
+          let metaPct = 0;
+          if (ini && fim && peso > 0) {
+            const duEnv = diasUteisEntre(ini, fim, calMSP);
+            if (duEnv > 0) {
+              const janIni = semIni > ini ? semIni : ini;
+              const janFim = cutoffStr < fim ? cutoffStr : fim;
+              if (janIni <= janFim) {
+                const duJan = diasUteisEntre(janIni, janFim, calMSP);
+                metaPct = peso * (duJan / duEnv);
+              }
+            }
+          }
+          const avs = avancosPorAtv.get(a.id) ?? [];
+          let somaSemanal = 0, acumPct = 0;
+          for (const av of avs) {
+            const s2 = av.semana as string;
+            if (s2 >= semIni && s2 <= semFim) somaSemanal += parseFloat(String(av.percentualSemanal ?? "0")) || 0;
+            if (s2 <= semFim) {
+              const acu = parseFloat(String(av.percentualAcumulado ?? "0")) || 0;
+              if (acu > acumPct) acumPct = acu;
+            }
+          }
+          const realPct = peso * (somaSemanal / 100);
+          const aderenciaPct = metaPct > 0 ? (realPct / metaPct) * 100 : null;
+          mts.set(a.id, { metaPct, realPct, aderenciaPct, acumPct, somaSemanal });
+        }
+        return { sem, dias, ats, mts, semIni, semFim, temAvSem };
+      };
+
+      // 8. Helper: monta lista de linhas (grupos + atividades) na ordem hierárquica
+      const grupoMap = new Map<string, Atividade>();
+      atividades.forEach((a) => { if (a.isGrupo && a.eapCodigo) grupoMap.set(a.eapCodigo, a); });
+      const eapPrefixos = (eap: string): string[] => {
+        const partes = eap.split(".");
+        const out: string[] = [];
+        for (let i = 1; i < partes.length; i++) out.push(partes.slice(0, i).join("."));
+        return out;
+      };
+      type LinhaExp = { tipo: "grupo"; eap: string; nome: string } | { tipo: "ativ"; ativ: Atividade };
+      const buildLinhas = (ats: Atividade[]): LinhaExp[] => {
+        const out: LinhaExp[] = [];
+        const emit = new Set<string>();
+        ats.forEach((a) => {
+          eapPrefixos(a.eapCodigo || "").forEach((p) => {
+            if (!emit.has(p)) {
+              const g = grupoMap.get(p);
+              if (g) { out.push({ tipo: "grupo", eap: p, nome: g.nome }); emit.add(p); }
+            }
+          });
+          out.push({ tipo: "ativ", ativ: a });
+        });
+        return out;
+      };
+
+      // 9. Constantes do template
+      const FIRST_TASK_ROW = 10;
+      const ROWS_PER_TASK = 4;
+      const TEMPLATE_TASK_SLOTS = 13; // Linhas 10-61 = 13 blocos de 4
+      const fmtBRDate = (d: Date) => `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+
+      // 10. Helper: preenche UMA aba (já clonada do template) com dados de uma semana
+      const preencherAba = (ws: any, dados: DadosSemana) => {
+        const { sem, dias, ats, mts } = dados;
+
+        // 10a. Cabeçalho (D2 é a âncora do merge D2:K5) — mantém formatação do template
+        const tituloCell = ws.getCell("D2");
+        const periodo = `${fmtBRDate(sem.ini)} a ${fmtBRDate(sem.fim)}`;
+        tituloCell.value = `${(nomeCliente || nomeProjeto).toUpperCase()}\nPROGRAMAÇÃO SEMANAL DE ATIVIDADES\nSEMANA ${String(sem.numero).padStart(2,"0")} · ${periodo}`;
+
+        // 10b. Faixa "PERÍODO" (J7:P7 merged) e datas dos dias (L9 J:P)
+        ws.getCell("J7").value = `PERÍODO: ${fmtBRDate(sem.ini)} a ${fmtBRDate(sem.fim)}`;
+        for (let i = 0; i < 7; i++) {
+          const d = dias[i];
+          ws.getCell(9, 10 + i).value = d ? fmtBRDate(d).slice(0, 5) : "";
+        }
+
+        // 10c. Limpa as 13 slots de tarefas do template (mantém styling)
+        for (let slot = 0; slot < TEMPLATE_TASK_SLOTS; slot++) {
+          const r0 = FIRST_TASK_ROW + slot * ROWS_PER_TASK;
+          ws.getCell(r0, 2).value = "";
+          ws.getCell(r0, 4).value = "";
+          for (let c = 5; c <= 8; c++) ws.getCell(r0, c).value = "";
+          ws.getCell(r0, 9).value = "";
+          for (let dr = 0; dr < ROWS_PER_TASK; dr++) {
+            for (let c = 10; c <= 16; c++) {
+              const cell = ws.getCell(r0 + dr, c);
+              cell.value = "";
+              cell.fill = { type: "pattern", pattern: "none" } as any;
+            }
+          }
+          // Garante linha visível (caso tenha sido escondida em export anterior)
+          ws.getRow(r0).hidden = false;
+          for (let dr = 1; dr < ROWS_PER_TASK; dr++) ws.getRow(r0 + dr).hidden = false;
+        }
+
+        const linhasExp = buildLinhas(ats);
+
+        // 10d. Expande linhas além das 13 slots se necessário (clona último bloco).
+        //      A legenda do template ocupa L65-L71 (slot 14 começaria em L62 e
+        //      sobrescreveria a legenda). Pra resolver, INSERIMOS linhas em L62
+        //      via `spliceRows` — isso EMPURRA a legenda e tudo abaixo pra baixo
+        //      no número certo de linhas, e ainda atualiza merges/imagens conforme
+        //      o ExcelJS suporta. Em seguida re-ancoramos os novos blocos copiando
+        //      estilos+merges do bloco-modelo (último slot original L58-61, agora
+        //      deslocado pelo splice — por isso capturamos antes do splice).
+        if (linhasExp.length > TEMPLATE_TASK_SLOTS) {
+          const slotsExtras = linhasExp.length - TEMPLATE_TASK_SLOTS;
+          const novasLinhas = slotsExtras * ROWS_PER_TASK;
+          const insertAt = FIRST_TASK_ROW + TEMPLATE_TASK_SLOTS * ROWS_PER_TASK; // 62
+          const baseRow0Orig = FIRST_TASK_ROW + (TEMPLATE_TASK_SLOTS - 1) * ROWS_PER_TASK; // 58 (modelo)
+
+          // Captura estilos+heights do bloco-modelo ANTES do splice (após splice
+          // os indices não mudam pra L≤61, mas pra robustez capturamos primeiro)
+          const blocoModelo: Array<{ height: number | undefined; cells: Array<any | null> }> = [];
+          for (let dr = 0; dr < ROWS_PER_TASK; dr++) {
+            const srcRow = ws.getRow(baseRow0Orig + dr);
+            const cells: Array<any | null> = [null];
+            for (let c = 1; c <= 17; c++) {
+              const sc = ws.getCell(baseRow0Orig + dr, c);
+              cells.push(sc.style ? JSON.parse(JSON.stringify(sc.style)) : null);
+            }
+            blocoModelo.push({ height: srcRow.height, cells });
+          }
+
+          // Insere `novasLinhas` linhas vazias em L62 — empurra legenda pra baixo.
+          // ATENÇÃO: `spliceRows` do ExcelJS NÃO desloca merges existentes (apenas
+          // values/styles). Se não tratarmos, os merges antigos da legenda (ex.
+          // E65:F65, S65:S68) ficam parados nas linhas 62..64 conflitando com os
+          // novos slots extras (gera "Cannot merge already merged cells" silencioso
+          // → blocos corrompidos). Solução: extrair os merges com row ≥ 62 ANTES
+          // do splice, removê-los, fazer o splice e reaplicá-los deslocados em
+          // (row + novasLinhas).
+          const mergesAntes: string[] = (() => {
+            try { return ((ws as any).model?.merges ?? []).slice(); } catch { return []; }
+          })();
+          const mergesDeslocar: string[] = [];
+          for (const rng of mergesAntes) {
+            const m = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(rng);
+            if (!m) continue;
+            const r1 = parseInt(m[2], 10);
+            if (r1 >= insertAt) {
+              mergesDeslocar.push(rng);
+              try { ws.unMergeCells(rng); } catch {}
+            }
+          }
+          try {
+            const blanks = Array.from({ length: novasLinhas }, () => []);
+            ws.spliceRows(insertAt, 0, ...blanks);
+          } catch { /* worksheets sem suporte caem aqui — segue mesmo assim */ }
+          // Reaplica os merges deslocados (row1+novasLinhas .. row2+novasLinhas)
+          for (const rng of mergesDeslocar) {
+            const m = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(rng)!;
+            const novoRng = `${m[1]}${parseInt(m[2],10)+novasLinhas}:${m[3]}${parseInt(m[4],10)+novasLinhas}`;
+            try { ws.mergeCells(novoRng); } catch {}
+          }
+
+          // Preenche os novos slots (L62 .. L62+novasLinhas-1) com estilo+merges do modelo
+          for (let s = 0; s < slotsExtras; s++) {
+            const targetRow0 = insertAt + s * ROWS_PER_TASK;
+            for (let dr = 0; dr < ROWS_PER_TASK; dr++) {
+              const dstRow = ws.getRow(targetRow0 + dr);
+              if (blocoModelo[dr].height != null) dstRow.height = blocoModelo[dr].height;
+              for (let c = 1; c <= 17; c++) {
+                const dc = ws.getCell(targetRow0 + dr, c);
+                const sty = blocoModelo[dr].cells[c];
+                if (sty) dc.style = JSON.parse(JSON.stringify(sty));
+                dc.value = "";
+              }
+            }
+            // Replica merges do bloco-modelo: B-C × 4 + D/E/F/G/H/I × 4
+            try { ws.mergeCells(`B${targetRow0}:C${targetRow0 + 3}`); } catch {}
+            ["D","E","F","G","H","I"].forEach((col) => {
+              try { ws.mergeCells(`${col}${targetRow0}:${col}${targetRow0 + 3}`); } catch {}
+            });
+          }
+
+          // Atualiza printArea para incluir TODA a região deslocada (legenda + folga)
+          try {
+            const novaUltimaLinha = 73 + novasLinhas; // printArea original ia até 73
+            (ws.pageSetup as any).printArea = `A1:Q${novaUltimaLinha}`;
+          } catch {}
+        } else if (linhasExp.length < TEMPLATE_TASK_SLOTS) {
+          // Esconde slots não utilizados
+          for (let slot = linhasExp.length; slot < TEMPLATE_TASK_SLOTS; slot++) {
+            const r0 = FIRST_TASK_ROW + slot * ROWS_PER_TASK;
+            for (let dr = 0; dr < ROWS_PER_TASK; dr++) ws.getRow(r0 + dr).hidden = true;
+          }
+        }
+
+        // 10e. Preenche cada linha (grupo ou atividade)
+        linhasExp.forEach((l, idx) => {
+          const r0 = FIRST_TASK_ROW + idx * ROWS_PER_TASK;
+          if (l.tipo === "grupo") {
+            ws.getCell(r0, 2).value = l.eap;
+            ws.getCell(r0, 4).value = l.nome.toUpperCase();
+            // Fundo cinza claro para destacar o grupo (mesmo cinza do tema E7E6E6)
+            for (let dr = 0; dr < ROWS_PER_TASK; dr++) {
+              for (let c = 2; c <= 16; c++) {
+                const cell = ws.getCell(r0 + dr, c);
+                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE7E6E6" } } as any;
+              }
+            }
+            // Fonte negrito no nome
+            const fontDst = ws.getCell(r0, 4).font || {};
+            ws.getCell(r0, 4).font = { ...fontDst, bold: true };
+          } else {
+            const a = l.ativ;
+            ws.getCell(r0, 2).value = a.eapCodigo ?? "";
+            ws.getCell(r0, 4).value = a.nome;
+            ws.getCell(r0, 5).value = a.dataInicio ? fmtBR(a.dataInicio) : "";
+            ws.getCell(r0, 6).value = a.dataFim ? fmtBR(a.dataFim) : "";
+            ws.getCell(r0, 7).value = a.dataInicioReal ? fmtBR(a.dataInicioReal) : "";
+            ws.getCell(r0, 8).value = a.dataFimReal ? fmtBR(a.dataFimReal) : "";
+            ws.getCell(r0, 9).value = a.responsavelLotus ?? engenheiroResponsavel ?? "";
+
+            // Pinta as barras dos dias (J-P) — esquema 4-linhas-por-tarefa do Lotus:
+            // r0   = margem branca (topo)
+            // r0+1 = faixa Previsto (azul)
+            // r0+2 = faixa Realizado (verde/vermelho/laranja/amarelo)
+            // r0+3 = margem branca (base)
+            const m = mts.get(a.id);
+            const temAvSemX = !!m && m.somaSemanal > 0;
+            const acumAteSemX = m?.acumPct ?? 0;
+            dias.forEach((d, di) => {
+              const cIdx = 10 + di; // J=10
+              const f = faixasCelula(
+                d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP,
+                m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSemX, acumAteSemX, inicioSemanaCorrente,
+              );
+              const corTop = corClassToHex(f.top);
+              const corBot = corClassToHex(f.bottom);
+              if (corTop) {
+                ws.getCell(r0 + 1, cIdx).fill = { type: "pattern", pattern: "solid", fgColor: { argb: corTop } } as any;
+              }
+              if (corBot) {
+                ws.getCell(r0 + 2, cIdx).fill = { type: "pattern", pattern: "solid", fgColor: { argb: corBot } } as any;
+              }
+              // Se só tem uma das faixas, espelha pra ocupar as 2 linhas (barra cheia)
+              if (corTop && !corBot) {
+                ws.getCell(r0 + 2, cIdx).fill = { type: "pattern", pattern: "solid", fgColor: { argb: corTop } } as any;
+              } else if (!corTop && corBot) {
+                ws.getCell(r0 + 1, cIdx).fill = { type: "pattern", pattern: "solid", fgColor: { argb: corBot } } as any;
+              }
+            });
+          }
+        });
+
+        // 10f. Insere os 3 logos do cadastro
+        insertLogos(ws);
+      };
+
+      // 11. Cumulativo: gera abas da semana 1 até a semana SELECIONADA, na ordem.
+      //     ORDEM CRÍTICA: pré-clonar TODAS as N-1 abas adicionais ANTES de
+      //     preencher qualquer uma. Se preenchêssemos `tplWs` primeiro e depois
+      //     clonássemos a partir dela, as abas 2..N herdariam dados/estilos da
+      //     semana 1 (cabeçalho, valores nas células, slots extras criados
+      //     dinamicamente). Clonando do `tplWs` puro garantimos que cada aba
+      //     parte do TEMPLATE PRISTINO.
+      const semanasParaExportar = semanas.slice(0, semanaIdx + 1);
+      if (semanasParaExportar.length === 0) throw new Error("Nenhuma semana disponível para exportar");
+
+      const abasParaPreencher: Array<{ ws: any; sem: { numero: number; ini: Date; fim: Date } }> = [];
+      // Primeira semana usa a aba template diretamente (preenchida POR ÚLTIMO,
+      // depois que todos os clones já foram tirados dela).
+      abasParaPreencher.push({ ws: tplWs, sem: semanasParaExportar[0] });
+      // Demais semanas: clona do template pristino ANTES de preencher tplWs
+      for (let i = 1; i < semanasParaExportar.length; i++) {
+        const sem = semanasParaExportar[i];
+        const numStr = String(sem.numero).padStart(2, "0");
+        const newWs = cloneSheetFromTemplate(`SEMANA ${numStr} - FC`);
+        abasParaPreencher.push({ ws: newWs, sem });
+      }
+      // Renomeia a aba da primeira semana e preenche todas (na ordem cronológica)
+      const numStr0 = String(semanasParaExportar[0].numero).padStart(2, "0");
+      tplWs.name = `SEMANA ${numStr0} - FC`;
+      for (const { ws, sem } of abasParaPreencher) {
+        preencherAba(ws, calcSemana(sem));
+      }
+
+      // 12. Salva e dispara download (naming padrão Lotus: REVTE-PSEM-FC-AA-MM-DD.xlsx)
       const buf = await wb.xlsx.writeBuffer();
       const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
+      const today = new Date();
+      const yy = String(today.getFullYear()).slice(-2);
+      const mm = String(today.getMonth() + 1).padStart(2, "0");
+      const dd = String(today.getDate()).padStart(2, "0");
       const a = document.createElement("a");
       a.href = url;
-      a.download = `Programacao_Semanal_${nomeProjeto.replace(/\s+/g, "_")}_S${semana.numero}_${periodoStr.replace(/[\/\s]/g, "")}.xlsx`;
+      a.download = `REVTE-PSEM-FC-${yy}-${mm}-${dd}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
-      toast({ title: "Excel exportado", description: a.download });
+      toast({ title: "Excel exportado", description: `${semanasParaExportar.length} semana(s) — ${a.download}` });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Erro ao exportar Excel", description: e.message });
     }

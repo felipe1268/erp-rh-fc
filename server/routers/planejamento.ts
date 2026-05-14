@@ -25,6 +25,7 @@ import {
   heSolicitacaoFuncionarios,
   employees,
   obras,
+  companies,
   financialRevenue,
 } from "../../drizzle/schema";
 
@@ -318,13 +319,19 @@ export const planejamentoRouter = router({
           : Promise.resolve(null),
         // Rev. 1662 — Obra vinculada (logos da gerenciadora/cliente + engenheiro responsável)
         // são lidos do cadastro da obra para alimentar a Visão LOTUS sem duplicar dados.
+        // Rev. 1791 — empresaLogoUrl (logo da CONSTRUTORA / proponente, ex: FC Engenharia) é
+        // lido via LEFT JOIN com `companies.logoUrl` para alimentar a exportação Excel
+        // padrão LOTUS (3 logos no cabeçalho: gerenciadora · cliente · construtora).
         projeto.obraId
           ? db.select({
               gerenciadoraNome:    obras.gerenciadoraNome,
               gerenciadoraLogoUrl: obras.gerenciadoraLogoUrl,
               clienteLogoUrl:      obras.clienteLogoUrl,
+              empresaLogoUrl:      companies.logoUrl,
               engenheiroResponsavel: obras.responsavel,
-            }).from(obras).where(eq(obras.id, projeto.obraId)).then(r => r[0] ?? null)
+            }).from(obras)
+              .leftJoin(companies, eq(companies.id, obras.companyId))
+              .where(eq(obras.id, projeto.obraId)).then(r => r[0] ?? null)
           : Promise.resolve(null),
       ]);
 
