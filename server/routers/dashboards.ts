@@ -453,6 +453,26 @@ async function getDashCartaoPonto(companyId: number, mesRef?: string, companyIds
   };
 }
 
+// Rev. 1777 — Comparativo do ano corrente do Cartão de Ponto.
+// Retorna o resumo de Janeiro até o mês de referência (do mesmo ano) para a
+// tabela "Tendência mês-a-mês — ano corrente" no dashboard.
+async function getDashCartaoPontoComparativo(companyId: number, mesRef?: string, companyIds?: number[]) {
+  const ref = mesRef || new Date().toISOString().slice(0, 7);
+  const [refY, refM] = ref.split("-").map(Number);
+  const meses: string[] = [];
+  for (let m = 1; m <= refM; m++) {
+    meses.push(`${refY}-${String(m).padStart(2, "0")}`);
+  }
+  const resultados = await Promise.all(meses.map(m => getDashCartaoPonto(companyId, m, companyIds)));
+  return {
+    ano: refY,
+    meses: resultados.map((r, i) => ({
+      mes: meses[i],
+      resumo: r?.resumo ?? null,
+    })),
+  };
+}
+
 // ============================================================
 // 3. DASHBOARD FOLHA DE PAGAMENTO
 // ============================================================
@@ -3503,6 +3523,7 @@ export const dashboardsRouter = router({
   }),
   drillDown: protectedProcedure.input(z.object({ companyId: z.number(), filterType: z.string(), filterValue: z.string(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDrillDown(input.companyId, input.filterType, input.filterValue, input.companyIds)),
   cartaoPonto: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashCartaoPonto(input.companyId, input.mesReferencia, input.companyIds)),
+  cartaoPontoComparativo: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashCartaoPontoComparativo(input.companyId, input.mesReferencia, input.companyIds)),
   folhaPagamento: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFolhaPagamento(input.companyId, input.mesReferencia, input.companyIds)),
   horasExtras: protectedProcedure.input(z.object({
     companyId: z.number(),

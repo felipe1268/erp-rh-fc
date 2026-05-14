@@ -10,7 +10,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Clock, Users, Timer, CalendarOff, TrendingDown, UserX, ExternalLink, Info, ArrowLeft, X, CalendarX2 } from "lucide-react";
+import { Clock, Users, Timer, CalendarOff, TrendingDown, TrendingUp, Minus, UserX, ExternalLink, Info, ArrowLeft, X, CalendarX2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Loader2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useMemo } from "react";
@@ -87,6 +87,198 @@ function FaltasDetalheModal({ entry, onClose }: { entry: any; onClose: () => voi
   );
 }
 
+// ── Tabela comparativa mês-a-mês (Rev. 1777) ──────────────────────────────────
+type CompMes = { mes: string; resumo: any | null };
+
+function fmtMesCurto(m: string) {
+  const [y, mo] = m.split("-");
+  return `${MESES_PT[parseInt(mo) - 1]}/${y.slice(2)}`;
+}
+function pct(a: number, b: number) {
+  if (!b) return a > 0 ? 100 : 0;
+  return Math.round(((a - b) / b) * 1000) / 10;
+}
+
+// "lowerIsBetter" = métricas em que SUBIR é ruim (faltas, atrasos, % HE, sem registro)
+type LinhaInd = {
+  chave: string;
+  label: string;
+  unidade?: string;
+  lowerIsBetter: boolean;
+  pegar: (r: any) => number;
+  format: (v: number) => string;
+  // limite para acionar atenção (delta % vs mês anterior). null = sempre alerta quando piora.
+  alertaPct?: number;
+  // valor absoluto que sempre sinaliza atenção, mesmo sem alta
+  alertaAbsoluto?: (v: number, ref?: any) => boolean;
+  hint?: string;
+};
+
+const INDICADORES: LinhaInd[] = [
+  { chave: "horasTrab", label: "Horas Trabalhadas", lowerIsBetter: false,
+    pegar: r => r.totalHorasTrab, format: v => `${v.toLocaleString("pt-BR")}h`,
+    alertaPct: 15, hint: "Queda forte pode indicar perda de produtividade ou apontamento incompleto." },
+  { chave: "horasExtras", label: "Horas Extras", unidade: "h", lowerIsBetter: true,
+    pegar: r => r.totalHorasExtras, format: v => `${v.toLocaleString("pt-BR")}h`,
+    alertaPct: 20, hint: "Alta de HE eleva custo de folha — revisar escalas e dimensionamento." },
+  { chave: "percHE", label: "% HE / Horas Normais", lowerIsBetter: true,
+    pegar: r => r.percentualHE, format: v => `${v.toFixed(1)}%`,
+    alertaAbsoluto: v => v > 5,
+    hint: "Acima de 5% sugere déficit estrutural de pessoal (recomendação interna RH/DP)." },
+  { chave: "faltas", label: "Faltas (dias)", lowerIsBetter: true,
+    pegar: r => r.totalFaltasDias, format: v => `${v.toLocaleString("pt-BR")} d`,
+    alertaPct: 25, hint: "Pico de faltas → checar surto, clima, pagamentos, transporte." },
+  { chave: "atrasos", label: "Atrasos (min)", lowerIsBetter: true,
+    pegar: r => r.totalAtrasosMinutos ?? 0,
+    format: v => { const h = Math.floor(v / 60); const m = v % 60; return h > 0 ? `${h}h${m ? String(m).padStart(2, "0") : ""}` : `${m}min`; },
+    alertaPct: 30, hint: "Já considera tolerância CLT de 10min/dia. Subindo? Reforçar disciplina." },
+  { chave: "ativos", label: "Funcionários Ativos", lowerIsBetter: false,
+    pegar: r => r.totalFuncionariosAtivos, format: v => `${v}`,
+    alertaPct: 10, hint: "Quedas grandes podem refletir desligamentos em massa." },
+  { chave: "comReg", label: "Com Registro", lowerIsBetter: false,
+    pegar: r => r.funcionariosComRegistro, format: v => `${v}`,
+    alertaPct: 15, hint: "Cobertura caindo → possível falha na importação Dixi/iPonto." },
+  { chave: "semReg", label: "Sem Registro", lowerIsBetter: true,
+    pegar: r => r.funcionariosSemRegistro, format: v => `${v}`,
+    alertaPct: 20,
+    alertaAbsoluto: (v, ref) => ref?.totalFuncionariosAtivos > 0 && (v / ref.totalFuncionariosAtivos) > 0.3,
+    hint: "Acima de 30% do quadro sem batida → falta de relógio, perda de dados ou férias coletivas." },
+  { chave: "cobertura", label: "Cobertura (%)", lowerIsBetter: false,
+    pegar: r => r.totalFuncionariosAtivos > 0 ? Math.round((r.funcionariosComRegistro / r.totalFuncionariosAtivos) * 1000) / 10 : 0,
+    format: v => `${v.toFixed(1)}%`,
+    alertaAbsoluto: v => v < 70,
+    hint: "Abaixo de 70% indica baixa adesão / falha na coleta." },
+];
+
+function TabelaComparativa({ data, isLoading, mesAtual }: { data: { meses: CompMes[] } | null | undefined; isLoading: boolean; mesAtual: string }) {
+  if (isLoading) return (
+    <Card>
+      <CardHeader className="pb-2"><CardTitle className="text-sm">Tendência mês-a-mês</CardTitle></CardHeader>
+      <CardContent className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></CardContent>
+    </Card>
+  );
+  if (!data || !data.meses.length) return null;
+
+  const meses = data.meses;
+  const atualIdx = meses.length - 1;
+  const anteriorIdx = atualIdx - 1;
+
+  // calcular linhas com deltas e flags de atenção
+  const linhas = INDICADORES.map(ind => {
+    const valores = meses.map(m => m.resumo ? ind.pegar(m.resumo) : null);
+    const atual = valores[atualIdx];
+    const ant = anteriorIdx >= 0 ? valores[anteriorIdx] : null;
+    const delta = (atual != null && ant != null) ? pct(atual, ant) : null;
+
+    const piorou = (delta != null) && (
+      ind.lowerIsBetter ? delta > 0 : delta < 0
+    );
+    const alertaPct = piorou && ind.alertaPct != null && Math.abs(delta!) >= ind.alertaPct;
+    const alertaAbs = atual != null && ind.alertaAbsoluto?.(atual, meses[atualIdx].resumo);
+    const atencao = !!(alertaPct || alertaAbs);
+
+    return { ind, valores, atual, delta, piorou, atencao };
+  });
+
+  const corDelta = (l: typeof linhas[0]) => {
+    if (l.delta == null || l.delta === 0) return "text-slate-500";
+    return l.piorou ? "text-red-600" : "text-emerald-600";
+  };
+  const IconDelta = ({ d, piorou }: { d: number | null; piorou: boolean }) => {
+    if (d == null) return <Minus className="h-3.5 w-3.5 text-slate-400" />;
+    if (Math.abs(d) < 0.1) return <Minus className="h-3.5 w-3.5 text-slate-400" />;
+    if (d > 0) return piorou ? <TrendingUp className="h-3.5 w-3.5 text-red-600" /> : <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />;
+    return piorou ? <TrendingDown className="h-3.5 w-3.5 text-red-600" /> : <TrendingDown className="h-3.5 w-3.5 text-emerald-600" />;
+  };
+
+  const totalAtencao = linhas.filter(l => l.atencao).length;
+
+  return (
+    <Card className="border-slate-200">
+      <CardHeader className="pb-3 bg-gradient-to-r from-slate-50 to-blue-50/40 border-b">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-blue-600" />
+          Tendência mês-a-mês — Janeiro a {fmtMesCurto(meses[atualIdx].mes)}
+          {totalAtencao > 0 && (
+            <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5">
+              <AlertTriangle className="h-3 w-3" />
+              {totalAtencao} indicador{totalAtencao > 1 ? "es" : ""} para observar
+            </span>
+          )}
+          {totalAtencao === 0 && (
+            <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-100 border border-emerald-300 rounded-full px-2 py-0.5">
+              <CheckCircle2 className="h-3 w-3" />
+              Tudo dentro do esperado
+            </span>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 border-b text-slate-700">
+              <tr>
+                <th className="text-left px-3 py-2 font-semibold sticky left-0 bg-slate-50 z-10 min-w-[180px]">Indicador</th>
+                {meses.map((m, i) => (
+                  <th key={m.mes} className={`text-right px-3 py-2 font-semibold whitespace-nowrap ${i === atualIdx ? "bg-blue-100 text-blue-900" : ""}`}>
+                    {fmtMesCurto(m.mes)}
+                    {i === atualIdx && <div className="text-[9px] font-normal text-blue-700">atual</div>}
+                  </th>
+                ))}
+                <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">Δ vs mês ant.</th>
+                <th className="text-center px-3 py-2 font-semibold whitespace-nowrap">Atenção</th>
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map(l => (
+                <tr key={l.ind.chave} className={`border-b last:border-0 hover:bg-slate-50/60 ${l.atencao ? "bg-amber-50/40" : ""}`}>
+                  <td className="px-3 py-2 sticky left-0 bg-white z-10 font-medium text-slate-800">
+                    <div className="flex items-center gap-1.5">
+                      {l.ind.label}
+                      {l.ind.hint && (
+                        <span title={l.ind.hint}>
+                          <Info className="h-3 w-3 text-slate-400 hover:text-slate-600 cursor-help" />
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  {l.valores.map((v, i) => (
+                    <td key={i} className={`px-3 py-2 text-right tabular-nums whitespace-nowrap ${i === atualIdx ? "bg-blue-50/60 font-bold text-blue-900" : "text-slate-700"}`}>
+                      {v == null ? <span className="text-slate-300">—</span> : l.ind.format(v)}
+                    </td>
+                  ))}
+                  <td className={`px-3 py-2 text-right whitespace-nowrap font-semibold ${corDelta(l)}`}>
+                    <span className="inline-flex items-center gap-1 justify-end">
+                      <IconDelta d={l.delta} piorou={l.piorou} />
+                      {l.delta == null ? "—" : `${l.delta > 0 ? "+" : ""}${l.delta.toFixed(1)}%`}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {l.atencao ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5" title={l.ind.hint}>
+                        <AlertTriangle className="h-3 w-3" /> Observar
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+                        <CheckCircle2 className="h-3 w-3" /> OK
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {totalAtencao > 0 && (
+          <div className="px-3 py-2 bg-amber-50 border-t border-amber-200 text-[11px] text-amber-900">
+            <strong>Como ler:</strong> linhas em destaque (amarelo) merecem investigação — passe o cursor no <Info className="inline h-3 w-3" /> para ver causas comuns. Δ é a variação % vs. {fmtMesCurto(meses[anteriorIdx]?.mes || mesAtual)}.
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 export default function DashCartaoPonto() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
@@ -96,6 +288,11 @@ export default function DashCartaoPonto() {
   const [mesRef] = useState(() => new Date().toISOString().slice(0, 7));
   const [mes, setMes] = useState(mesRef);
   const { data, isLoading } = trpc.dashboards.cartaoPonto.useQuery(
+    { companyId: queryCompanyId, mesReferencia: mes, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+  );
+  // Rev. 1777 — comparativo do ano corrente (Jan → mês atual)
+  const { data: compData, isLoading: compLoading } = trpc.dashboards.cartaoPontoComparativo.useQuery(
     { companyId: queryCompanyId, mesReferencia: mes, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
@@ -311,6 +508,9 @@ export default function DashCartaoPonto() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Tabela comparativa mês-a-mês (Rev. 1777) */}
+            <TabelaComparativa data={compData as any} isLoading={compLoading} mesAtual={mes} />
 
             {/* Nota legal */}
             <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-800">
