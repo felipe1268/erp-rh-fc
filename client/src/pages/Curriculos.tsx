@@ -111,6 +111,16 @@ export default function Curriculos() {
     onSuccess: (_, vars) => { utils.curriculos.listarFuncoes.invalidate(); utils.curriculos.listar.invalidate(); toast.success("Função excluída"); setFuncoesSelecionadas(prev => prev.filter(id => id !== vars.id)); },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 1776 — renomear função existente
+  const editarFuncaoMut = trpc.curriculos.editarFuncao.useMutation({
+    onSuccess: (res: any) => {
+      utils.curriculos.listarFuncoes.invalidate();
+      utils.curriculos.listar.invalidate();
+      utils.curriculos.contagens.invalidate();
+      toast.success(`Função renomeada para "${res?.nome ?? ""}"`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
   // Rev. 1724 — mescla funções selecionadas em uma só (move currículos
   // das origens para o destino e soft-deleta as origens).
   const mesclarFuncoesMut = trpc.curriculos.mesclarFuncoes.useMutation({
@@ -678,7 +688,19 @@ export default function Curriculos() {
                         {f.nome}
                         {contagens?.porFuncao?.[f.id] > 0 && <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-1.5 py-0.5 min-w-[20px] text-center ml-auto">{contagens.porFuncao[f.id]}</span>}
                       </button>
-                      <button onClick={() => { if (confirm(`Excluir função "${f.nome}"? Os currículos não serão excluídos.`)) excluirFuncaoMut.mutate({ id: f.id, companyId }); }}
+                      <button
+                        title="Renomear função"
+                        onClick={() => {
+                          const novo = window.prompt(`Renomear função\n\nAtual: ${f.nome}\n\nDigite o novo nome:`, f.nome);
+                          if (!novo || !novo.trim() || novo.trim().toUpperCase() === f.nome.toUpperCase()) return;
+                          editarFuncaoMut.mutate({ id: f.id, companyId, nome: novo.trim() });
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-blue-600 hover:bg-blue-50 rounded">
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button
+                        title="Excluir função"
+                        onClick={() => { if (confirm(`Excluir função "${f.nome}"? Os currículos não serão excluídos.`)) excluirFuncaoMut.mutate({ id: f.id, companyId }); }}
                         className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:bg-red-50 rounded">
                         <Trash2 className="h-3 w-3" />
                       </button>

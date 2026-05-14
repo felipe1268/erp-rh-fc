@@ -176,6 +176,41 @@ export const curriculosRouter = router({
       return { success: true };
     }),
 
+  // Rev. 1776 — Renomeia uma função. Atualiza o nome canônico (UPPERCASE) e
+  // propaga `funcaoNome` em todos os currículos vinculados. Bloqueia se o novo
+  // nome (canônico) já existe em outra função ativa da mesma empresa.
+  editarFuncao: protectedProcedure
+    .input(z.object({
+      id: z.number().int().positive(),
+      companyId: z.number().int().positive(),
+      nome: z.string().min(1).max(120),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      await ensureFuncaoOwnership(db, input.id, input.companyId);
+      const novoNome = input.nome.trim().toUpperCase();
+      if (!novoNome) throw new TRPCError({ code: "BAD_REQUEST", message: "Nome obrigatório" });
+      const chave = normalizeFuncaoNome(novoNome);
+      const todasAtivas = await db.select({ id: curriculoFuncoes.id, nome: curriculoFuncoes.nome })
+        .from(curriculoFuncoes)
+        .where(and(
+          eq(curriculoFuncoes.companyId, input.companyId),
+          isNull(curriculoFuncoes.deletedAt),
+        ));
+      const dup = todasAtivas.find((r: any) => r.id !== input.id && normalizeFuncaoNome(r.nome) === chave);
+      if (dup) throw new TRPCError({ code: "CONFLICT", message: `Já existe uma função equivalente: "${dup.nome}". Use "Mesclar selecionadas" para unificar.` });
+      await db.update(curriculoFuncoes).set({ nome: novoNome } as any)
+        .where(eq(curriculoFuncoes.id, input.id));
+      await db.update(curriculos).set({ funcaoNome: novoNome, updatedAt: sql`NOW()` } as any)
+        .where(and(
+          eq(curriculos.companyId, input.companyId),
+          eq(curriculos.funcaoId, input.id),
+          isNull(curriculos.deletedAt),
+        ));
+      return { id: input.id, nome: novoNome };
+    }),
+
   listar: protectedProcedure
     .input(z.object({
       companyId: z.number().int().positive(),
