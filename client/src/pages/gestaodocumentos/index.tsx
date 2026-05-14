@@ -3266,7 +3266,7 @@ function CategoriasAdminConfigSection({ companyId }: { companyId: number }) {
     }
     // Rev. 1776 — Chave auto-derivada da sigla (apenas a-z0-9_), sem expor pro usuário.
     const chaveAuto = novo.sigla.toLowerCase().trim().replace(/[^a-z0-9_]/g, "_") || `cat_${Date.now()}`;
-    criar.mutate({ ...novo, chave: chaveAuto }, {
+    criar.mutate({ ...novo, companyId, chave: chaveAuto }, {
       onSuccess: () => { setShowAdd(false); setNovo({ chave: "", sigla: "", nome: "", cor: "#64748b", ordem: 100 }); },
     });
   }
