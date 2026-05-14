@@ -23,10 +23,37 @@ export default function DiagnosticoEapOrcCron({ projetoId, revisaoId, trigger }:
   const [open, setOpen] = useState(false);
   const [aba, setAba] = useState<Aba>("soNoOrcamento");
   const [busca, setBusca] = useState("");
+  const [autoSyncFeito, setAutoSyncFeito] = useState<{ atualizadas: number } | null>(null);
+  const utils = trpc.useUtils();
+
   const { data, isLoading, error } = trpc.planejamento.diagnosticoEapOrcVsCron.useQuery(
     { projetoId, revisaoId: revisaoId ?? 0 },
     { enabled: open && !!revisaoId },
   );
+
+  // Rev. 1798 / R-013 — Auto-sync silencioso ao abrir o diagnóstico:
+  // Se houver EAPs casados com nome divergente, corrige no banco automaticamente
+  // (sem botão, sem confirmação). Roda UMA vez por abertura do modal.
+  const autoSyncMutation = trpc.planejamento.autoSincronizarNomesComOrcamento.useMutation({
+    onSuccess: (res) => {
+      if (res.atualizadas > 0) {
+        setAutoSyncFeito({ atualizadas: res.atualizadas });
+        utils.planejamento.diagnosticoEapOrcVsCron.invalidate();
+        utils.planejamento.listarAtividades.invalidate();
+      }
+    },
+  });
+
+  const descDivergeData = data?.descDiverge ?? 0;
+  React.useEffect(() => {
+    if (open && revisaoId && descDivergeData > 0 && !autoSyncMutation.isPending && !autoSyncFeito) {
+      autoSyncMutation.mutate({ projetoId, revisaoId });
+    }
+  }, [open, revisaoId, descDivergeData, projetoId, autoSyncFeito]);
+
+  React.useEffect(() => {
+    if (!open) setAutoSyncFeito(null);
+  }, [open]);
 
   const casados = data?.casados ?? [];
   const soNoOrcamento = data?.soNoOrcamento ?? [];
@@ -202,14 +229,29 @@ export default function DiagnosticoEapOrcCron({ projetoId, revisaoId, trigger }:
                   />
                 </div>
 
-                {/* Alerta de descrição divergente — auto-sync no próximo import */}
-                {descDiverge > 0 && (
+                {/* Banner de auto-sync (Rev. 1798) — confirma que já corrigiu */}
+                {autoSyncFeito && autoSyncFeito.atualizadas > 0 && (
+                  <div className="mx-4 sm:mx-6 mb-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-emerald-900 flex items-start gap-2 text-sm">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>
+                      <b>{autoSyncFeito.atualizadas} nome(s) sincronizado(s) automaticamente</b> com o orçamento (R-013).
+                      Os nomes do cronograma agora batem 100% com a descrição do orçamento — sem botão, sem perguntar.
+                    </span>
+                  </div>
+                )}
+                {/* Alerta de descrição divergente — só aparece enquanto auto-sync ainda não rodou */}
+                {descDiverge > 0 && !autoSyncFeito && (
                   <div className="mx-4 sm:mx-6 mb-3 rounded-lg border border-orange-300 bg-orange-50 p-3 text-orange-900 flex items-start gap-2 text-sm">
-                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                    {autoSyncMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 shrink-0 mt-0.5 animate-spin" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                    )}
                     <span>
                       <b>{descDiverge} EAPs casados têm DESCRIÇÃO divergente</b> entre orçamento e cronograma.
-                      Estes nomes serão <b>corrigidos automaticamente</b> para bater 100% com a descrição do orçamento (R-013)
-                      na próxima vez que o cronograma for salvo ou reimportado — sem perguntar, sem renumeração.
+                      {autoSyncMutation.isPending
+                        ? " Corrigindo automaticamente agora…"
+                        : " Serão corrigidos automaticamente em instantes (R-013) — sem perguntar, sem renumeração."}
                     </span>
                   </div>
                 )}

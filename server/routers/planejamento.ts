@@ -3679,6 +3679,101 @@ export const planejamentoRouter = router({
       };
     }),
 
+  // ── Rev. 1798 / R-013 — Auto-sincroniza nomes do cronograma com o orçamento
+  // (chamado automaticamente quando o usuário abre o Diagnóstico EAP) ──────────
+  // Para os EAPs casados (existem nos dois lados) com DESCRIÇÃO divergente,
+  // sobrescreve o nome da atividade no cronograma com a descrição EXATA do
+  // orçamento. Determinístico (chave estável = eapCodigo), sem fuzzy match,
+  // sem confirmação. Idempotente: rodar de novo não muda nada.
+  autoSincronizarNomesComOrcamento: protectedProcedure
+    .input(z.object({ projetoId: z.number(), revisaoId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+
+      const [proj] = await db.select({
+        id: planejamentoProjetos.id,
+        companyId: planejamentoProjetos.companyId,
+        orcamentoId: planejamentoProjetos.orcamentoId,
+      }).from(planejamentoProjetos)
+        .where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
+      if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
+      const isAdminDg = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdminDg && String(proj.companyId) !== String(ctx.user.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+      }
+      if (!proj.orcamentoId) return { atualizadas: 0 };
+
+      const [rev] = await db.select({ id: planejamentoRevisoes.id })
+        .from(planejamentoRevisoes)
+        .where(and(
+          eq(planejamentoRevisoes.id, input.revisaoId),
+          eq(planejamentoRevisoes.projetoId, input.projetoId),
+        )).limit(1);
+      if (!rev) throw new TRPCError({ code: "NOT_FOUND", message: "Revisão não pertence ao projeto." });
+
+      const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
+        .from(orcamentos).where(eq(orcamentos.id, proj.orcamentoId)).limit(1);
+      if (!orc || (!isAdminDg && String(orc.companyId) !== String(ctx.user.companyId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para o orçamento vinculado." });
+      }
+
+      const [itensOrc, ativs] = await Promise.all([
+        db.select({
+          eapCodigo: orcamentoItens.eapCodigo,
+          descricao: orcamentoItens.descricao,
+        }).from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, proj.orcamentoId)),
+        db.select({
+          id: planejamentoAtividades.id,
+          eapCodigo: planejamentoAtividades.eapCodigo,
+          nome: planejamentoAtividades.nome,
+          isGrupo: planejamentoAtividades.isGrupo,
+          isMarco: planejamentoAtividades.isMarco,
+          isIndireta: planejamentoAtividades.isIndireta,
+          isExterna: planejamentoAtividades.isExterna,
+          disabled: planejamentoAtividades.disabled,
+        }).from(planejamentoAtividades)
+          .where(eq(planejamentoAtividades.revisaoId, input.revisaoId)),
+      ]);
+
+      const norm = (s: string | null | undefined) =>
+        (s ?? '').toString().toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/\s+/g, ' ').trim();
+
+      const orcByEap = new Map<string, string>();
+      for (const it of itensOrc) {
+        const k = (it.eapCodigo ?? '').trim();
+        if (k && (it.descricao ?? '').trim().length > 0) {
+          orcByEap.set(k, it.descricao!);
+        }
+      }
+
+      const mudancas: Array<{ id: number; nomeNovo: string }> = [];
+      for (const a of ativs) {
+        if (a.isGrupo || a.isMarco || a.isIndireta || a.isExterna || a.disabled) continue;
+        const eap = (a.eapCodigo ?? '').trim();
+        if (!eap) continue;
+        const descOrc = orcByEap.get(eap);
+        if (!descOrc) continue;
+        if (a.nome !== descOrc) {
+          mudancas.push({ id: a.id, nomeNovo: descOrc });
+        }
+      }
+
+      if (mudancas.length === 0) return { atualizadas: 0 };
+
+      await db.transaction(async (tx) => {
+        for (const m of mudancas) {
+          await tx.update(planejamentoAtividades)
+            .set({ nome: m.nomeNovo })
+            .where(eq(planejamentoAtividades.id, m.id));
+        }
+      });
+
+      console.log(`[autoSincronizarNomes] R-013: ${mudancas.length} nome(s) corrigido(s) no projeto ${input.projetoId}.`);
+      return { atualizadas: mudancas.length };
+    }),
+
   // ── Atividades por Obra (para seleção no formulário de HE) ─────────────────
   getAtividadesForObra: protectedProcedure
     .input(z.object({ obraId: z.number() }))
