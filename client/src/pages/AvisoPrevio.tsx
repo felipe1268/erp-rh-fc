@@ -476,10 +476,13 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
       const diff = dtAviso.getTime() - new Date(emp.dataAdmissao + "T00:00:00").getTime();
       return Math.max(0, Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000)));
     })();
-    // Empregador trabalhado/indenizado: 30 + 3*anosServico, max 90.
-    // Empregado (pedido demissão): sempre 30.
-    const isEmpregadoTipo = tipo.startsWith("empregado_");
-    const diasAviso = isEmpregadoTipo ? 30 : Math.min(30 + anosServico * 3, 90);
+    // Rev.1805 (correção do user 14/05/2026): no AVISO PRÉVIO TRABALHADO, o
+    // colaborador trabalha SEMPRE 30 dias — a regra dos +3 dias/ano (Lei 12.506)
+    // só vale como valor MONETÁRIO na rescisão (avisoPrevioIndenizado adicional),
+    // não como dias úteis trabalhando. Para o INDENIZADO o campo nem é exibido
+    // no texto, então manter 30 fixo também é seguro. Fica 30 para todos os tipos.
+    const diasAviso = 30;
+    void anosServico; // mantido só para compat (não usado no texto, era usado p/ cálculo proporcional)
 
     const dtInicio = new Date(dtAviso); dtInicio.setDate(dtInicio.getDate() + 1);
     const dtFim = new Date(dtInicio); dtFim.setDate(dtFim.getDate() + diasAviso - 1);
@@ -528,6 +531,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     const empCtps = emp.ctps || "";
     const empSerie = emp.serieCtps || "";
     const empFuncao = (emp.cargo || emp.funcao || "").toUpperCase();
+    const logoUrl = empresa.logoUrl || "";
 
     const w = window.open("", "_blank", "width=820,height=1100");
     if (!w) { toast.error("Popup bloqueado. Permita popups para gerar o documento."); return; }
@@ -538,9 +542,17 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     if (isTrabalhado) {
       const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Aviso Prévio Trabalhado — ${escapeHtml(empNome)}</title>
 <style>
-  @media print { body { margin: 0; } @page { margin: 20mm; size: A4; } .no-print { display: none !important; } }
-  body { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; padding: 32px; max-width: 760px; margin: 0 auto; line-height: 1.5; }
-  h1 { text-align: center; font-size: 14pt; margin: 0 0 28px 0; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+  @media print { body { margin: 0; } @page { margin: 0 0 20mm 0; size: A4; } .no-print { display: none !important; } }
+  body { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; margin: 0; line-height: 1.5; }
+  .doc { max-width: 760px; margin: 0 auto; padding: 0 32px 32px 32px; }
+  /* Cabeçalho azul padrão dos demais documentos do ERP */
+  .doc-header { background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: #fff; padding: 18px 32px; display: flex; align-items: center; gap: 18px; margin-bottom: 28px; border-bottom: 4px solid #fbbf24; }
+  .doc-header .logo-wrap { background: #fff; border-radius: 8px; padding: 6px 10px; display: flex; align-items: center; justify-content: center; min-width: 90px; min-height: 56px; }
+  .doc-header .logo-wrap img { max-height: 50px; max-width: 140px; object-fit: contain; }
+  .doc-header .titles { flex: 1; }
+  .doc-header h1 { font-family: Arial, Helvetica, sans-serif; font-size: 16pt; margin: 0 0 4px 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #fff; }
+  .doc-header .empresa-nome { font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; font-weight: 600; opacity: 0.95; }
+  .doc-header .empresa-cnpj { font-family: Arial, Helvetica, sans-serif; font-size: 9pt; opacity: 0.85; }
   .bloco { margin-bottom: 18px; }
   .bloco .rotulo { font-weight: bold; }
   .corpo { text-align: justify; margin: 22px 0; }
@@ -557,7 +569,15 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   .no-print button { padding: 8px 24px; font-size: 13px; cursor: pointer; background: #d97706; color: white; border: none; border-radius: 4px; font-weight: 600; }
 </style></head><body>
 <div class="no-print"><button onclick="window.print()">Imprimir / Salvar PDF</button></div>
-<h1>AVISO PRÉVIO DO EMPREGADOR</h1>
+<div class="doc-header">
+  <div class="logo-wrap">${logoUrl ? `<img src="${escapeHtml(logoUrl)}" alt="Logo">` : `<span style="color:#1e3a8a;font-weight:700;font-size:11pt;font-family:Arial,sans-serif;">${escapeHtml((empresaNome || "").slice(0, 14))}</span>`}</div>
+  <div class="titles">
+    <h1>Aviso Prévio do Empregador</h1>
+    <div class="empresa-nome">${escapeHtml(empresaNome)}</div>
+    ${empresaCnpj ? `<div class="empresa-cnpj">CNPJ: ${escapeHtml(empresaCnpj)}</div>` : ""}
+  </div>
+</div>
+<div class="doc">
 
 <div class="bloco">
   <p class="rotulo">De</p>
@@ -601,6 +621,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   <div class="col">Assinatura do responsável se empregado menor de idade</div>
 </div>
 
+</div>
 </body></html>`;
       w.document.write(html);
       w.document.close();
@@ -611,9 +632,17 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     // ============================== INDENIZADO ==============================
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Aviso Prévio Indenizado — ${escapeHtml(empNome)}</title>
 <style>
-  @media print { body { margin: 0; } @page { margin: 22mm; size: A4; } .no-print { display: none !important; } }
-  body { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; padding: 32px; max-width: 760px; margin: 0 auto; line-height: 1.6; }
-  h1 { text-align: center; font-size: 14pt; margin: 0 0 36px 0; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+  @media print { body { margin: 0; } @page { margin: 0 0 22mm 0; size: A4; } .no-print { display: none !important; } }
+  body { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; margin: 0; line-height: 1.6; }
+  .doc { max-width: 760px; margin: 0 auto; padding: 0 32px 32px 32px; }
+  /* Cabeçalho azul padrão dos demais documentos do ERP */
+  .doc-header { background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: #fff; padding: 18px 32px; display: flex; align-items: center; gap: 18px; margin-bottom: 32px; border-bottom: 4px solid #fbbf24; }
+  .doc-header .logo-wrap { background: #fff; border-radius: 8px; padding: 6px 10px; display: flex; align-items: center; justify-content: center; min-width: 90px; min-height: 56px; }
+  .doc-header .logo-wrap img { max-height: 50px; max-width: 140px; object-fit: contain; }
+  .doc-header .titles { flex: 1; }
+  .doc-header h1 { font-family: Arial, Helvetica, sans-serif; font-size: 16pt; margin: 0 0 4px 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #fff; }
+  .doc-header .empresa-nome { font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; font-weight: 600; opacity: 0.95; }
+  .doc-header .empresa-cnpj { font-family: Arial, Helvetica, sans-serif; font-size: 9pt; opacity: 0.85; }
   .dados { margin: 18px 0 28px 0; }
   .dados p { margin: 6px 0; }
   .corpo { text-align: justify; margin: 18px 0; }
@@ -626,7 +655,15 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   .no-print button { padding: 8px 24px; font-size: 13px; cursor: pointer; background: #d97706; color: white; border: none; border-radius: 4px; font-weight: 600; }
 </style></head><body>
 <div class="no-print"><button onclick="window.print()">Imprimir / Salvar PDF</button></div>
-<h1>AVISO PRÉVIO INDENIZADO DO EMPREGADO</h1>
+<div class="doc-header">
+  <div class="logo-wrap">${logoUrl ? `<img src="${escapeHtml(logoUrl)}" alt="Logo">` : `<span style="color:#1e3a8a;font-weight:700;font-size:11pt;font-family:Arial,sans-serif;">${escapeHtml((empresaNome || "").slice(0, 14))}</span>`}</div>
+  <div class="titles">
+    <h1>Aviso Prévio Indenizado do Empregado</h1>
+    <div class="empresa-nome">${escapeHtml(empresaNome)}</div>
+    ${empresaCnpj ? `<div class="empresa-cnpj">CNPJ: ${escapeHtml(empresaCnpj)}</div>` : ""}
+  </div>
+</div>
+<div class="doc">
 
 <div class="dados">
   <p>Ao Sr(a). ${escapeHtml(empNome)}</p>
