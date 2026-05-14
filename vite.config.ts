@@ -27,7 +27,21 @@ export default defineConfig({
     cssMinify: 'esbuild',
     reportCompressedSize: false,
     cssCodeSplit: true,
-    rollupOptions: {},
+    rollupOptions: {
+      output: {
+        // Rev. 1777 — separa libs pesadas em vendor chunks próprios pra
+        // (a) reduzir o bundle do BimViewer (~4MB → ~1MB)
+        // (b) permitir cache compartilhado entre rotas que usem THREE/web-ifc
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("/three/")) return "vendor-three";
+            if (id.includes("/web-ifc")) return "vendor-webifc";
+            if (id.includes("/exceljs/") || id.includes("/xlsx/")) return "vendor-xlsx";
+            if (id.includes("/recharts/") || id.includes("/d3-")) return "vendor-charts";
+          }
+        },
+      },
+    },
     chunkSizeWarningLimit: 3000,
   },
   optimizeDeps: {
