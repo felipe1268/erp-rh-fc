@@ -730,6 +730,55 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         fetchImg(gerenciadoraLogoUrl),
       ]);
 
+      // Rev. 1800 — Helpers de clone SEGURO para evitar "Converting circular structure to JSON".
+      // ExcelJS internamente cria instâncias (Anchor, Style, etc.) que mantêm refs ao Workbook
+      // (`_workbook`, `worksheets[N]`) — JSON.parse(JSON.stringify(...)) sobre essas instâncias
+      // estoura `TypeError: Converting circular structure to JSON --> _workbook --> worksheets --> Array`
+      // visto pelo user em 14/05/2026 ao exportar Programação Semanal. Solução: extrair APENAS
+      // os campos conhecidos (DTOs puros), sem tocar nas instâncias internas do ExcelJS.
+      const safeCloneAnchor = (a: any): any => a == null ? null : {
+        nativeCol: a.nativeCol, nativeColOff: a.nativeColOff,
+        nativeRow: a.nativeRow, nativeRowOff: a.nativeRowOff,
+        col: a.col, row: a.row,
+      };
+      const safeCloneRange = (r: any): any => {
+        if (!r) return null;
+        return {
+          tl: safeCloneAnchor(r.tl),
+          br: safeCloneAnchor(r.br),
+          ext: r.ext ? { width: r.ext.width, height: r.ext.height } : undefined,
+          editAs: r.editAs,
+        };
+      };
+      const safeCloneStyle = (s: any): any => {
+        if (!s) return s;
+        // Cell.style é um getter que retorna {font, alignment, border, fill, numFmt, protection}.
+        // Esses sub-objetos são plain DTOs em ExcelJS — JSON.stringify costuma funcionar, mas
+        // já flagramos casos onde border.diagonal/fill.gradients viraram refs ciclícas. Aqui
+        // tentamos JSON.stringify dentro de try/catch e caímos em pick explícito se falhar.
+        try {
+          return JSON.parse(JSON.stringify(s));
+        } catch {
+          return {
+            font: s.font ? { ...s.font, color: s.font.color ? { ...s.font.color } : undefined } : undefined,
+            alignment: s.alignment ? { ...s.alignment } : undefined,
+            border: s.border ? {
+              top: s.border.top ? { style: s.border.top.style, color: s.border.top.color ? { ...s.border.top.color } : undefined } : undefined,
+              left: s.border.left ? { style: s.border.left.style, color: s.border.left.color ? { ...s.border.left.color } : undefined } : undefined,
+              bottom: s.border.bottom ? { style: s.border.bottom.style, color: s.border.bottom.color ? { ...s.border.bottom.color } : undefined } : undefined,
+              right: s.border.right ? { style: s.border.right.style, color: s.border.right.color ? { ...s.border.right.color } : undefined } : undefined,
+            } : undefined,
+            fill: s.fill ? {
+              type: s.fill.type, pattern: s.fill.pattern,
+              fgColor: s.fill.fgColor ? { ...s.fill.fgColor } : undefined,
+              bgColor: s.fill.bgColor ? { ...s.fill.bgColor } : undefined,
+            } : undefined,
+            numFmt: s.numFmt,
+            protection: s.protection ? { ...s.protection } : undefined,
+          };
+        }
+      };
+
       // 4. Helper: clone profundo da aba template (cells+styles, merges, columns,
       //    rows, pageSetup, views). ExcelJS não tem clone nativo entre worksheets
       //    do mesmo workbook — esta função suprime a lacuna.
@@ -753,7 +802,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
           row.eachCell({ includeEmpty: true }, (cell, cIdx) => {
             const newCell = newRow.getCell(cIdx);
             newCell.value = cell.value;
-            if (cell.style) newCell.style = JSON.parse(JSON.stringify(cell.style));
+            if (cell.style) newCell.style = safeCloneStyle(cell.style);
           });
         });
         // Merges (model.merges é array de strings tipo "B10:C13")
@@ -774,9 +823,9 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       // Captura os 3 ranges UMA vez do template antes de qualquer mutação.
       const tplMedia: any[] = Array.isArray((tplWs as any)._media) ? (tplWs as any)._media.slice() : [];
       const tplImgs = tplMedia.filter((m) => m?.type === "image");
-      const RANGE_GER = tplImgs[0]?.range ? JSON.parse(JSON.stringify(tplImgs[0].range)) : null;
-      const RANGE_EMP = tplImgs[1]?.range ? JSON.parse(JSON.stringify(tplImgs[1].range)) : null;
-      const RANGE_CLI = tplImgs[2]?.range ? JSON.parse(JSON.stringify(tplImgs[2].range)) : null;
+      const RANGE_GER = safeCloneRange(tplImgs[0]?.range);
+      const RANGE_EMP = safeCloneRange(tplImgs[1]?.range);
+      const RANGE_CLI = safeCloneRange(tplImgs[2]?.range);
 
       const insertLogos = (ws: any) => {
         // Remove SOMENTE as imagens da aba (preserva qualquer outro tipo de media)
@@ -792,7 +841,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
           if (!img || !range) return;
           const id = wb.addImage({ buffer: img.buf as any, extension: img.ext });
           // Re-anexa no RANGE NATIVO original (cópia profunda — addImage muta)
-          ws.addImage(id, JSON.parse(JSON.stringify(range)));
+          ws.addImage(id, safeCloneRange(range));
         };
         addImg(imgGer, RANGE_GER);
         addImg(imgEmp, RANGE_EMP);
@@ -984,7 +1033,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
             const cells: Array<any | null> = [null];
             for (let c = 1; c <= 17; c++) {
               const sc = ws.getCell(baseRow0Orig + dr, c);
-              cells.push(sc.style ? JSON.parse(JSON.stringify(sc.style)) : null);
+              cells.push(sc.style ? safeCloneStyle(sc.style) : null);
             }
             blocoModelo.push({ height: srcRow.height, cells });
           }
@@ -1030,7 +1079,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
               for (let c = 1; c <= 17; c++) {
                 const dc = ws.getCell(targetRow0 + dr, c);
                 const sty = blocoModelo[dr].cells[c];
-                if (sty) dc.style = JSON.parse(JSON.stringify(sty));
+                if (sty) dc.style = safeCloneStyle(sty);
                 dc.value = "";
               }
             }
