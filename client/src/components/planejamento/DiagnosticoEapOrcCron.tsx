@@ -23,7 +23,6 @@ export default function DiagnosticoEapOrcCron({ projetoId, revisaoId, trigger }:
   const [open, setOpen] = useState(false);
   const [aba, setAba] = useState<Aba>("soNoOrcamento");
   const [busca, setBusca] = useState("");
-
   const { data, isLoading, error } = trpc.planejamento.diagnosticoEapOrcVsCron.useQuery(
     { projetoId, revisaoId: revisaoId ?? 0 },
     { enabled: open && !!revisaoId },
@@ -203,13 +202,14 @@ export default function DiagnosticoEapOrcCron({ projetoId, revisaoId, trigger }:
                   />
                 </div>
 
-                {/* Alerta de descrição divergente */}
+                {/* Alerta de descrição divergente — auto-sync no próximo import */}
                 {descDiverge > 0 && (
                   <div className="mx-4 sm:mx-6 mb-3 rounded-lg border border-orange-300 bg-orange-50 p-3 text-orange-900 flex items-start gap-2 text-sm">
                     <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                     <span>
-                      <b>{descDiverge} EAPs casados têm DESCRIÇÃO divergente</b> entre orçamento e cronograma. EAP idêntico mas nome diferente sugere
-                      itens trocados acidentalmente — confira na aba "Casados".
+                      <b>{descDiverge} EAPs casados têm DESCRIÇÃO divergente</b> entre orçamento e cronograma.
+                      Estes nomes serão <b>corrigidos automaticamente</b> para bater 100% com a descrição do orçamento (R-013)
+                      na próxima vez que o cronograma for salvo ou reimportado — sem perguntar, sem renumeração.
                     </span>
                   </div>
                 )}

@@ -963,6 +963,88 @@ export const planejamentoRouter = router({
         };
       });
 
+      // ── Rev. 1798 / R-013 — VALIDAÇÃO ESTRITA EAP+NOME contra orçamento ───
+      // Se o projeto tem orçamento vinculado, TODA atividade-folha direta
+      // (não-grupo, não-marco, não-indireta, não-externa, não-disabled) precisa
+      // ter eapCodigo que existe no orçamento E nome IDÊNTICO ao item do orçamento
+      // (case-insensitive, whitespace normalizado, acentos ignorados). Sem isso
+      // a importação ABORTA com lista de divergências — usuário corrige no MSP
+      // ou no orçamento e reimporta. Nunca renumeração silenciosa.
+      try {
+        const [projVal] = await db.select({ orcamentoId: planejamentoProjetos.orcamentoId })
+          .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
+        if (projVal?.orcamentoId) {
+          const itensOrcVal = await db.select({
+            eapCodigo: orcamentoItens.eapCodigo,
+            descricao: orcamentoItens.descricao,
+            tipo: orcamentoItens.tipo,
+          }).from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, projVal.orcamentoId));
+
+          const normTxt = (s: string | null | undefined) =>
+            (s ?? '').toString().toLowerCase()
+              .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+              .replace(/\s+/g, ' ').trim();
+
+          // Mapa do orçamento por EAP normalizado → { descricao, tipo }
+          const orcByEap = new Map<string, { descricao: string; tipo: string | null }>();
+          for (const it of itensOrcVal) {
+            const k = (it.eapCodigo ?? '').trim();
+            if (k) orcByEap.set(k, { descricao: it.descricao ?? '', tipo: it.tipo ?? null });
+          }
+
+          const erros: Array<{ eap: string; nomeAtividade: string }> = [];
+          let nomesAutoSincronizados = 0;
+
+          for (const r of rows) {
+            // Folhas diretas que devem casar com orçamento
+            if (r.isGrupo || r.isMarco || r.isIndireta || r.isExterna || r.disabled) continue;
+            const eap = (r.eapCodigo ?? '').trim();
+            if (!eap) {
+              erros.push({ eap: '(vazio)', nomeAtividade: r.nome });
+              continue;
+            }
+            const orcIt = orcByEap.get(eap);
+            if (!orcIt) {
+              erros.push({ eap, nomeAtividade: r.nome });
+              continue;
+            }
+            // ✨ AUTO-SINCRONIZA o nome com a descrição do orçamento.
+            // EAP é a chave estável (R-013 imutável), portanto sempre que o EAP
+            // bater, o nome do cronograma passa a ser EXATAMENTE a descrição
+            // do orçamento — sem perguntar, sem botão, determinístico.
+            if (normTxt(r.nome) !== normTxt(orcIt.descricao) && (orcIt.descricao ?? '').trim().length > 0) {
+              r.nome = orcIt.descricao;
+              nomesAutoSincronizados++;
+            } else if (r.nome !== orcIt.descricao && (orcIt.descricao ?? '').trim().length > 0) {
+              // Mesmo nome semanticamente, mas com diferença de caixa/acento/espaço:
+              // força o textual EXATO do orçamento (paridade 100%).
+              r.nome = orcIt.descricao;
+              nomesAutoSincronizados++;
+            }
+          }
+
+          if (nomesAutoSincronizados > 0) {
+            console.log(`[salvarAtividades] R-013: ${nomesAutoSincronizados} nome(s) auto-sincronizado(s) com o orçamento (projeto ${input.projetoId}).`);
+          }
+
+          if (erros.length > 0) {
+            const linhas: string[] = [];
+            linhas.push(`R-013: a importação foi BLOQUEADA porque ${erros.length} atividade(s) têm EAP que NÃO existe no orçamento vinculado. Corrija no MS Project (use o EAP exato do orçamento) ou cadastre o item no orçamento, e reimporte. Não há renumeração silenciosa.`);
+            linhas.push('');
+            linhas.push(`❌ EAP(s) não encontrados no orçamento:`);
+            for (const e of erros.slice(0, 20)) {
+              linhas.push(`  • EAP "${e.eap}" — atividade "${(e.nomeAtividade ?? '').substring(0, 80)}"`);
+            }
+            if (erros.length > 20) linhas.push(`  … e mais ${erros.length - 20} item(ns).`);
+            throw new TRPCError({ code: 'BAD_REQUEST', message: linhas.join('\n') });
+          }
+        }
+      } catch (e: any) {
+        if (e instanceof TRPCError) throw e;
+        // Falha de leitura do orçamento: não bloqueia importação (degrada graciosamente)
+        console.error('[salvarAtividades] Falha na validação R-013:', e?.message ?? e);
+      }
+
       const allPesosZero = rows.every(r => parseFloat(r.pesoFinanceiro) === 0 || r.isGrupo);
       if (allPesosZero) {
         let pesoCalculado = false;
