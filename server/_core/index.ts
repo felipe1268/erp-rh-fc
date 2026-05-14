@@ -609,6 +609,13 @@ Regras:
           console.log(`[SyncSchema+] Colunas tipo_controle (IA) garantidas em almoxarifado_itens.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA almoxarifado_itens tipo_controle:`, e?.message || e); }
 
+        // Rev. 1806 — Anexo do AVISO ASSINADO pelo colaborador no termination_notices
+        try {
+          await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS aviso_assinado_url TEXT`);
+          await db.execute(sql`ALTER TABLE termination_notices ADD COLUMN IF NOT EXISTS aviso_assinado_enviado_em TIMESTAMP WITHOUT TIME ZONE`);
+          console.log(`[SyncSchema+] Rev. 1806: colunas aviso_assinado_url/enviado_em garantidas em termination_notices.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.1806 aviso_assinado:`, e?.message || e); }
+
         // Data prevista de pagamento das medições PJ (forecast por contrato)
         try {
           await db.execute(sql`ALTER TABLE pj_payments ADD COLUMN IF NOT EXISTS data_prevista DATE`);

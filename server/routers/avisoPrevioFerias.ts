@@ -340,6 +340,8 @@ export const avisoPrevioFeriasRouter = router({
           descontarAvisoNaoCumprido: terminationNotices.descontarAvisoNaoCumprido,
           novoEmpregoComunicadoEm: terminationNotices.novoEmpregoComunicadoEm,
           novoEmpregoCartaUrl: terminationNotices.novoEmpregoCartaUrl,
+          avisoAssinadoUrl: terminationNotices.avisoAssinadoUrl,
+          avisoAssinadoEnviadoEm: terminationNotices.avisoAssinadoEnviadoEm,
           baixaRescisaoValor: terminationNotices.baixaRescisaoValor,
           baixaRescisaoData: terminationNotices.baixaRescisaoData,
           baixaRescisaoPor: terminationNotices.baixaRescisaoPor,
@@ -2067,6 +2069,79 @@ export const avisoPrevioFeriasRouter = router({
           details: `Carta/comprovante de novo emprego enviada por ${ctx.user.name} — arquivo: ${input.fileName}`,
         });
         return { success: true, url };
+      }),
+
+    /** Rev. 1806 — Upload do AVISO ASSINADO pelo colaborador (PDF/JPG/PNG, máx 10MB) */
+    uploadAvisoAssinado: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        fileBase64: z.string(),
+        mimeType: z.enum(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png']),
+        fileName: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [aviso] = await db.select({ id: terminationNotices.id, companyId: terminationNotices.companyId })
+          .from(terminationNotices)
+          .where(and(eq(terminationNotices.id, input.id), isNull(terminationNotices.deletedAt)));
+        if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
+
+        const ext = input.mimeType === 'application/pdf' ? 'pdf'
+          : input.mimeType === 'image/png' ? 'png' : 'jpg';
+        const randomSuffix = Math.random().toString(36).substring(2, 10);
+        const fileKey = `aviso-previo/${aviso.companyId}/${input.id}/aviso-assinado-${randomSuffix}.${ext}`;
+
+        const buffer = Buffer.from(input.fileBase64, 'base64');
+        const { url } = await storagePut(fileKey, buffer, input.mimeType);
+
+        await db.execute(sql`
+          UPDATE termination_notices SET
+            "aviso_assinado_url" = ${url},
+            "aviso_assinado_enviado_em" = NOW(),
+            "updatedAt" = NOW()
+          WHERE id = ${input.id}
+        `);
+
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? 'Sistema',
+          action: 'UPLOAD_AVISO_ASSINADO',
+          module: 'aviso_previo',
+          entityType: 'terminationNotices',
+          entityId: input.id,
+          details: `Aviso assinado pelo colaborador enviado por ${ctx.user.name} — arquivo: ${input.fileName}`,
+        });
+        return { success: true, url };
+      }),
+
+    /** Rev. 1806 — Remover anexo do Aviso Assinado */
+    removerAvisoAssinado: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [aviso] = await db.select().from(terminationNotices).where(
+          and(eq(terminationNotices.id, input.id), isNull(terminationNotices.deletedAt))
+        );
+        if (!aviso) throw new TRPCError({ code: 'NOT_FOUND', message: 'Aviso prévio não encontrado' });
+
+        await db.execute(sql`
+          UPDATE termination_notices SET
+            "aviso_assinado_url" = NULL,
+            "aviso_assinado_enviado_em" = NULL,
+            "updatedAt" = NOW()
+          WHERE id = ${input.id}
+        `);
+
+        await createAuditLog({
+          userId: ctx.user.id,
+          userName: ctx.user.name ?? 'Sistema',
+          action: 'REMOVER_AVISO_ASSINADO',
+          module: 'aviso_previo',
+          entityType: 'terminationNotices',
+          entityId: input.id,
+          details: `Anexo de aviso assinado removido por ${ctx.user.name}`,
+        });
+        return { success: true };
       }),
 
     /** Gerar dados para PDF do Aviso Prévio */

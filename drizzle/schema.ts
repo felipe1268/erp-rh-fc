@@ -2851,6 +2851,10 @@ export const terminationNotices = pgTable("termination_notices", {
         novoEmpregoAtivo: smallint().default(0),
         novoEmpregoComunicadoEm: date({ mode: 'string' }),
         novoEmpregoCartaUrl: text(),
+        // Rev. 1806 — Anexo do AVISO ASSINADO pelo colaborador (PDF/JPG/PNG).
+        // Não confundir com novoEmpregoCartaUrl (Súmula 276 / cenário diferente).
+        avisoAssinadoUrl: text("aviso_assinado_url"),
+        avisoAssinadoEnviadoEm: timestamp("aviso_assinado_enviado_em", { mode: 'string' }),
         mediaInsalubridade: varchar("media_insalubridade", { length: 20 }).default('0'),
         mediaHorasExtras: varchar("media_horas_extras", { length: 20 }).default('0'),
         descontarAvisoNaoCumprido: smallint().default(0),

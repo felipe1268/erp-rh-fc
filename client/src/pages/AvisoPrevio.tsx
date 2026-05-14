@@ -218,6 +218,9 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   const [savingNovoEmprego, setSavingNovoEmprego] = useState(false);
   const [uploadingCarta, setUploadingCarta] = useState(false);
   const cartaFileRef = useRef<HTMLInputElement>(null);
+  // Rev. 1806 — Anexo do AVISO ASSINADO pelo colaborador
+  const [uploadingAvisoAssinado, setUploadingAvisoAssinado] = useState(false);
+  const avisoAssinadoFileRef = useRef<HTMLInputElement>(null);
 
   const refreshSelectedItem = async (id: number) => {
     try {
@@ -278,6 +281,41 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     },
     onError: (e: any) => { toast.error(e.message || 'Erro ao enviar arquivo'); setUploadingCarta(false); },
   });
+
+  // Rev. 1806 — Mutations Aviso Assinado pelo colaborador
+  const uploadAvisoAssinadoMutation = trpc.avisoPrevio.avisoPrevio.uploadAvisoAssinado.useMutation({
+    onSuccess: async () => {
+      toast.success('Aviso assinado anexado com sucesso!');
+      setUploadingAvisoAssinado(false);
+      if (selectedItem?.id) { refetch(); await refreshSelectedItem(selectedItem.id); }
+    },
+    onError: (e: any) => { toast.error(e.message || 'Erro ao enviar aviso assinado'); setUploadingAvisoAssinado(false); },
+  });
+  const removerAvisoAssinadoMutation = trpc.avisoPrevio.avisoPrevio.removerAvisoAssinado.useMutation({
+    onSuccess: async () => {
+      toast.success('Anexo removido.');
+      if (selectedItem?.id) { refetch(); await refreshSelectedItem(selectedItem.id); }
+    },
+    onError: (e: any) => toast.error(e.message || 'Erro ao remover anexo'),
+  });
+  const handleAvisoAssinadoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedItem?.id) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error('Arquivo muito grande. Máximo 10MB.'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(',')[1];
+      setUploadingAvisoAssinado(true);
+      uploadAvisoAssinadoMutation.mutate({
+        id: selectedItem.id,
+        fileBase64: base64,
+        mimeType: file.type as any,
+        fileName: file.name,
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   const handleCartaFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1832,6 +1870,77 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                   </Button>
                 </div>
               </div>
+
+              {/* Rev. 1806 — Anexo do Aviso Assinado pelo colaborador (PDF/JPG/PNG, máx 10MB).
+                  Oculto para Pedido de Demissão (não há aviso do empregador a ser assinado nesse fluxo). */}
+              {!isPedidoDemissao && (
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+                  <p className="text-xs text-blue-700 uppercase font-semibold mb-3 flex items-center gap-1">
+                    <FileCheck className="h-4 w-4" /> Aviso Assinado pelo Colaborador
+                  </p>
+                  {(selectedItem as any).avisoAssinadoUrl ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <a
+                        href={(selectedItem as any).avisoAssinadoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium"
+                      >
+                        <FileText className="h-4 w-4" /> Abrir documento
+                      </a>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                        disabled={uploadingAvisoAssinado}
+                        onClick={() => avisoAssinadoFileRef.current?.click()}
+                      >
+                        {uploadingAvisoAssinado ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Upload className="h-3.5 w-3.5 mr-1" />}
+                        Substituir
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="border-red-300 text-red-700 hover:bg-red-50"
+                        onClick={() => {
+                          if (confirm('Remover o anexo do aviso assinado?')) {
+                            removerAvisoAssinadoMutation.mutate({ id: selectedItem.id });
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Remover
+                      </Button>
+                      {(selectedItem as any).avisoAssinadoEnviadoEm && (
+                        <span className="text-xs text-blue-600 ml-auto">
+                          Enviado em {new Date((selectedItem as any).avisoAssinadoEnviadoEm).toLocaleString('pt-BR')}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <Button
+                        type="button"
+                        className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                        disabled={uploadingAvisoAssinado}
+                        onClick={() => avisoAssinadoFileRef.current?.click()}
+                      >
+                        {uploadingAvisoAssinado ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                        {uploadingAvisoAssinado ? 'Enviando...' : 'Anexar Aviso Assinado'}
+                      </Button>
+                      <span className="text-xs text-blue-600">PDF, JPG ou PNG · máx. 10MB</span>
+                    </div>
+                  )}
+                  <input
+                    ref={avisoAssinadoFileRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                    onChange={handleAvisoAssinadoChange}
+                  />
+                </div>
+              )}
 
               {selectedItem.observacoes && (
                 <div className="bg-muted/30 rounded-lg p-4">
