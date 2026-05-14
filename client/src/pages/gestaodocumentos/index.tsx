@@ -3261,10 +3261,12 @@ function CategoriasAdminConfigSection({ companyId }: { companyId: number }) {
   const ativos = itens.filter((c: any) => c.ativo);
 
   function submitNovo() {
-    if (!novo.chave.trim() || !novo.sigla.trim() || !novo.nome.trim()) {
-      toast.error("Preencha chave, sigla e nome"); return;
+    if (!novo.sigla.trim() || !novo.nome.trim()) {
+      toast.error("Preencha sigla e nome"); return;
     }
-    criar.mutate({ ...novo, chave: novo.chave.toLowerCase().trim() }, {
+    // Rev. 1776 — Chave auto-derivada da sigla (apenas a-z0-9_), sem expor pro usuário.
+    const chaveAuto = novo.sigla.toLowerCase().trim().replace(/[^a-z0-9_]/g, "_") || `cat_${Date.now()}`;
+    criar.mutate({ ...novo, chave: chaveAuto }, {
       onSuccess: () => { setShowAdd(false); setNovo({ chave: "", sigla: "", nome: "", cor: "#64748b", ordem: 100 }); },
     });
   }
@@ -3295,14 +3297,10 @@ function CategoriasAdminConfigSection({ companyId }: { companyId: number }) {
       {showAdd && (
         <div className="mt-3 p-3 rounded-md bg-blue-50/50 border border-blue-200 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
           <div className="md:col-span-3">
-            <label className="text-[11px] text-gray-600 font-medium">Chave (id)</label>
-            <Input value={novo.chave} onChange={(e) => setNovo({ ...novo, chave: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })} placeholder="ex: notas_fiscais" className="h-8 text-xs" />
-          </div>
-          <div className="md:col-span-2">
             <label className="text-[11px] text-gray-600 font-medium">Sigla</label>
             <Input value={novo.sigla} onChange={(e) => setNovo({ ...novo, sigla: e.target.value.toUpperCase().slice(0, 10) })} placeholder="NF" className="h-8 text-xs uppercase" />
           </div>
-          <div className="md:col-span-4">
+          <div className="md:col-span-6">
             <label className="text-[11px] text-gray-600 font-medium">Nome</label>
             <Input value={novo.nome} onChange={(e) => setNovo({ ...novo, nome: e.target.value })} placeholder="Notas Fiscais" className="h-8 text-xs" />
           </div>
