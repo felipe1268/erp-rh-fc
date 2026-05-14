@@ -12550,4 +12550,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-13 16:00:00",
   },
+  {
+    version: 1773,
+    titulo: "DDS · Confirm bonito — fim do pop-up nativo do navegador ('erp-gestao-integrada.replit.app diz')",
+    descricao: "Pedido do usuário (screenshot iPad — pop-up cinza padrão do Safari com 'erp-gestao-integrada.replit.app diz: Excluir 1 sessão(ões)?'): 'arrume a mensagem de erro' — substituir o `confirm()` nativo, feio e fora do tema do app, por um diálogo estilizado. **Solução**: novo hook reutilizável `client/src/hooks/useConfirm.tsx` que retorna `{confirm, ConfirmDialog}`. `confirm({title, description, tone, confirmText, cancelText})` é assíncrono e retorna `Promise<boolean>`; `ConfirmDialog` é renderizado no JSX do componente. Suporta 4 tons (`destructive` vermelho/Trash2, `warning` âmbar/AlertTriangle, `info` azul/Sparkles, `default` cinza/HelpCircle), cada um com ícone num círculo colorido à esquerda + título bold + descrição multiline + footer com fundo slate-50 e botões customizados. Construído sobre o `AlertDialog` do shadcn (radix-ui), respeita o portal `radix-portal` do app. **Aplicado em `client/src/pages/sst/DDSGuia.tsx`**: substituídos TODOS os 6 `confirm()` nativos remanescentes — (1) AssinaturaPad: 'Remover assinatura?' (destructive); (2) Bulk IA: 'Regerar TODOS' / 'Gerar faltantes' (info); (3) Biblioteca: 'Excluir tema?' (destructive); (4) Lista de sessões — bulk: 'Excluir N sessões?' (destructive); (5) Lista de sessões — linha: 'Excluir sessão DDS?' (destructive); (6) SessaoDetalhe: 'Excluir esta sessão?' (destructive). Hook adicionado em `AssinaturaPad`, `DDSGuia` e `SessaoDetalhe`; `{ConfirmDialog}` renderizado em cada um. Sem schema/server change.",
+    tipo: "melhoria",
+    modulos: "SST",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 21:30:00",
+  },
 ];

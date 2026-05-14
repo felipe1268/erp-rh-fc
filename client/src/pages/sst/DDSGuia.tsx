@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useConfirm } from "@/hooks/useConfirm";
 import { toast } from "sonner";
 import {
   CalendarDays, BookOpen, Megaphone, Plus, Trash2, Pencil, Users, FileSignature,
@@ -35,6 +36,7 @@ function AssinaturaPad({
   const drawingRef = useRef(false);
   const lastRef = useRef<{ x: number; y: number } | null>(null);
   const [vazio, setVazio] = useState(true);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   // Rev. 1748 — busca a imagem da assinatura sob demanda (não vem mais no getSessao)
   const imgQ = trpc.dds.getAssinaturaImg.useQuery(
@@ -126,7 +128,12 @@ function AssinaturaPad({
   };
 
   const remover = async () => {
-    if (!confirm("Remover assinatura deste funcionário?")) return;
+    if (!(await confirm({
+      title: "Remover assinatura?",
+      description: `A assinatura digital de ${funcionarioNome} será apagada da sessão. Você pode coletar uma nova depois.`,
+      tone: "destructive",
+      confirmText: "Remover",
+    }))) return;
     try {
       await removerMut.mutateAsync({ companyId, sessaoId, funcionarioId });
       toast.success("Assinatura removida.");
@@ -137,6 +144,8 @@ function AssinaturaPad({
   };
 
   return (
+    <>
+    {ConfirmDialog}
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
@@ -288,6 +297,8 @@ export default function DDSGuia() {
   const utils = trpc.useUtils();
   // Rev. 1730 — usuário logado para auto-fill do instrutor
   const { user } = useAuth() as any;
+  // Rev. 1773 — confirm bonito (sem confirm() nativo do navegador)
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const [tab, setTab] = useState<"calendario" | "biblioteca" | "sessoes">("calendario");
   // Rev. 1736 — Calendário por ano: padrão = ano atual mostrando só os meses pendentes (mês atual em diante).
@@ -359,7 +370,13 @@ export default function DDSGuia() {
     const aviso = modo === "todos"
       ? `Vai gerar/regerar com IA o roteiro de TODOS os ${alvos.length} temas (sobrescreve os existentes). Pode demorar ~${Math.ceil(alvos.length * 5 / 60)} min. Continuar?`
       : `Vai gerar com IA o roteiro de ${alvos.length} tema(s) sem conteúdo detalhado. Pode demorar ~${Math.ceil(alvos.length * 5 / 60)} min. Continuar?`;
-    if (!confirm(aviso)) return;
+    const okBulk = await confirm({
+      title: modo === "todos" ? "Regerar TODOS os roteiros com IA?" : "Gerar roteiros faltantes com IA?",
+      description: aviso.replace(/^.+?\? /, ""),
+      tone: "info",
+      confirmText: "Gerar com IA",
+    });
+    if (!okBulk) return;
     setBulkIA({ ativo: true, idx: 0, total: alvos.length, falhas: 0, cancelar: false });
     let ok = 0; let fail = 0;
     for (let i = 0; i < alvos.length; i++) {
@@ -575,6 +592,7 @@ export default function DDSGuia() {
 
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-4">
+      {ConfirmDialog}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -876,7 +894,15 @@ export default function DDSGuia() {
                             <button onClick={() => abrirEditTema(t)} className="text-slate-400 hover:text-slate-700" title="Editar">
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
-                            <button onClick={() => confirm(`Excluir "${t.titulo}"?`) && excluirTemaMut.mutate({ companyId, id: t.id })}
+                            <button onClick={async () => {
+                              const ok = await confirm({
+                                title: "Excluir tema da biblioteca?",
+                                description: `O tema "${t.titulo}" será removido. As sessões já criadas com este tema continuam existindo.`,
+                                tone: "destructive",
+                                confirmText: "Excluir",
+                              });
+                              if (ok) excluirTemaMut.mutate({ companyId, id: t.id });
+                            }}
                               className="text-slate-400 hover:text-red-600" title="Excluir">
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
@@ -1007,8 +1033,14 @@ export default function DDSGuia() {
                       size="sm"
                       variant="destructive"
                       disabled={excluirSessoesMut.isPending}
-                      onClick={() => {
-                        if (!confirm(`Excluir ${selecionadasIds.size} sessão(ões)? Esta ação não pode ser desfeita.`)) return;
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: `Excluir ${selecionadasIds.size} sessão${selecionadasIds.size > 1 ? "ões" : ""}?`,
+                          description: "As sessões selecionadas e seus registros de presença/assinaturas serão removidos. Esta ação não pode ser desfeita.",
+                          tone: "destructive",
+                          confirmText: "Excluir tudo",
+                        });
+                        if (!ok) return;
                         excluirSessoesMut.mutate({ companyId, ids: Array.from(selecionadasIds) });
                       }}
                     >
@@ -1096,7 +1128,13 @@ export default function DDSGuia() {
                               disabled={excluirSessaoMut.isPending}
                               onClick={async (e) => {
                                 e.stopPropagation();
-                                if (!confirm(`Excluir a sessão "${s.tituloTema}" de ${s.data ? new Date(s.data + "T12:00:00").toLocaleDateString("pt-BR") : ""}?`)) return;
+                                const ok = await confirm({
+                                  title: "Excluir sessão DDS?",
+                                  description: `Sessão "${s.tituloTema}"${s.data ? ` de ${new Date(s.data + "T12:00:00").toLocaleDateString("pt-BR")}` : ""}.\nLista de presença e assinaturas serão removidas. Não há volta.`,
+                                  tone: "destructive",
+                                  confirmText: "Excluir sessão",
+                                });
+                                if (!ok) return;
                                 try { await excluirSessaoMut.mutateAsync({ companyId, id: s.id }); }
                                 catch (_) { /* toast já mostrado */ }
                               }}
@@ -1811,6 +1849,8 @@ function SessaoDetalhe({
   // Rev. 1740 — edição inline do roteiro detalhado da sessão
   const [editandoRoteiro, setEditandoRoteiro] = useState(false);
   const [roteiroBuf, setRoteiroBuf] = useState<string>(sessao.conteudoMd ?? "");
+  // Rev. 1773 — confirm bonito (substitui confirm() nativo)
+  const { confirm, ConfirmDialog } = useConfirm();
   useEffect(() => { setRoteiroBuf(sessao.conteudoMd ?? ""); }, [sessao.id, sessao.conteudoMd]);
   const sessaoEditavel = sessao.status !== "finalizada" && sessao.status !== "cancelada";
   const temRoteiroSessao = (sessao.conteudoMd ?? "").trim().length >= 80;
@@ -1842,6 +1882,7 @@ function SessaoDetalhe({
 
   return (
     <div className="space-y-4">
+      {ConfirmDialog}
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={voltar}>← Voltar para a lista</Button>
         <span className="text-sm text-slate-500">/</span>
@@ -2109,7 +2150,13 @@ function SessaoDetalhe({
           className="text-red-600 hover:bg-red-50"
           disabled={excluirMut.isPending}
           onClick={async () => {
-            if (!confirm("Excluir esta sessão? Não há volta.")) return;
+            const ok = await confirm({
+              title: "Excluir esta sessão?",
+              description: "Lista de presença, assinaturas digitais e o roteiro associado serão removidos definitivamente. Não há volta.",
+              tone: "destructive",
+              confirmText: "Excluir sessão",
+            });
+            if (!ok) return;
             try {
               await excluirMut.mutateAsync({ companyId, id: sessao.id });
               voltar?.();
