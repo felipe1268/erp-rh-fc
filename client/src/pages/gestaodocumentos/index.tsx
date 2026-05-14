@@ -398,6 +398,14 @@ export default function GestaoDocumentos() {
     },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 1776 — criar sub-pasta nova dentro de uma disciplina existente
+  const createPasta = trpc.gestaoDocumentos.createPasta.useMutation({
+    onSuccess: () => {
+      toast.success("Sub-pasta criada");
+      utils.gestaoDocumentos.getFicheiroDetail.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const renamePasta = trpc.gestaoDocumentos.updatePasta.useMutation({
     onSuccess: (_d, vars) => {
       toast.success("Sub-pasta renomeada");
@@ -1682,6 +1690,24 @@ export default function GestaoDocumentos() {
                             disabled={downloading}
                           >
                             <FolderDown className="w-3 h-3" />
+                          </button>
+                          {/* Rev. 1776 — criar nova sub-pasta dentro desta disciplina */}
+                          <button
+                            onClick={() => {
+                              const novo = window.prompt(`Nome da nova sub-pasta em "${disc.sigla} — ${disc.nome}":`, "");
+                              if (novo === null) return;
+                              const nome = novo.trim().toUpperCase();
+                              if (!nome) { toast.error("Nome não pode ficar vazio."); return; }
+                              createPasta.mutate({ companyId, disciplinaId: disc.id, nome }, {
+                                onSuccess: () => {
+                                  if (!expandedDiscs.has(disc.id)) setExpandedDiscs(new Set([...expandedDiscs, disc.id]));
+                                },
+                              });
+                            }}
+                            className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-gray-400 hover:text-emerald-600 transition-all"
+                            title="Nova sub-pasta"
+                          >
+                            <FolderPlus className="w-3 h-3" />
                           </button>
                           {/* Rev. 1717 — Renomear pasta principal (Disciplina) direto da árvore.
                               Pede sigla (até 10 chars, vira maiúscula) e nome. Reaproveita

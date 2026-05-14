@@ -474,6 +474,38 @@ export const gestaoDocumentosRouter = router({
       return { success: true };
     }),
 
+  // Rev. 1776 — Cria uma sub-pasta nova dentro de uma disciplina existente.
+  // Usado pelo botão "+ Nova" na árvore. Bloqueia colisão por (disciplinaId, nome).
+  createPasta: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      disciplinaId: z.number(),
+      nome: z.string().min(1).max(50),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [disc] = await db.select({ ficheiroId: gdDisciplinas.ficheiroId }).from(gdDisciplinas)
+        .where(and(eq(gdDisciplinas.id, input.disciplinaId), eq(gdDisciplinas.companyId, input.companyId)));
+      if (!disc) throw new TRPCError({ code: "NOT_FOUND", message: "Disciplina não encontrada" });
+      if (disc.ficheiroId) await assertFicheiroAccess(ctx, db, disc.ficheiroId, input.companyId);
+      const novoNome = input.nome.trim().toUpperCase();
+      const [conflict] = await db.select({ id: gdPastas.id }).from(gdPastas)
+        .where(and(
+          eq(gdPastas.companyId, input.companyId),
+          eq(gdPastas.disciplinaId, input.disciplinaId),
+          eq(gdPastas.nome, novoNome),
+        ));
+      if (conflict) throw new TRPCError({ code: "CONFLICT", message: `Já existe uma sub-pasta "${novoNome}" nesta disciplina.` });
+      const [row] = await db.insert(gdPastas).values({
+        companyId: input.companyId,
+        ficheiroId: disc.ficheiroId,
+        disciplinaId: input.disciplinaId,
+        nome: novoNome,
+      }).returning();
+      return row;
+    }),
+
   deletePasta: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
