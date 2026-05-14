@@ -12541,4 +12541,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-13 15:30:00",
   },
+  {
+    version: 1772,
+    titulo: "Raio-X · Modal de detalhe do DDS — layout redesenhado (mais largo, header com gradiente, métricas, cards polidos)",
+    descricao: "Pedido do usuário (screenshot iPad do modal antigo): 'melhore o tamanho da tela e refaça o layout, este não ficou bom, quero mais apresentável'. Redesign completo no JSX do modal `Dialog open={!!ddsDetalhe}` em `client/src/components/RaioXFuncionario.tsx` (sem schema/server change, sem mudança de queries). **O que mudou**: (1) DialogContent passa de `max-w-3xl` para `w-[96vw] max-w-[980px] max-h-[94vh] p-0 gap-0 flex flex-col` — modal MUITO mais largo e estruturado em 3 zonas (header fixo / body scrollável / footer fixo). (2) Header novo com `bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700`, ícone `MessageSquare` em quadrado `bg-white/20 backdrop-blur`, eyebrow 'DIÁLOGO DIÁRIO DE SEGURANÇA', título do tema em 2xl bold, linha de meta-info com ícones (Calendar/Building2/User) — data, obra, instrutor — tudo em uma só área visualmente coesa, eliminando a duplicação que existia. Botão de fechar circular (`X`) no canto superior direito sobre o gradiente. (3) Body com `bg-slate-50` e padding generoso. Logo no topo, novo grid de 4 cards de métricas (Status / Presença total + % / Sua presença / Sua assinatura) — leitura instantânea sem precisar correr os olhos pelo bloco. (4) Card 'Roteiro do DDS' com header em gradiente azul-claro (`from-blue-50 to-indigo-50`) + ícone FileText, conteúdo em `<pre>` com `text-[13.5px] leading-[1.65]` (era `text-sm leading-relaxed` — agora respira mais), max-height `42vh`. (5) Card 'Participação' agora em grid 2 colunas no desktop: esquerda com pares label/valor em formato 'flex justify-between' (CPF, Função, Presença, Tipo de assinatura, Assinado em), direita com a IMAGEM da assinatura num retângulo `min-h-[140px] border-2 border-dashed`. Header em gradiente verde (UserCheck). (6) Card 'Observações' (quando existem) ganhou header gradiente âmbar com ícone AlertTriangle. (7) Footer fixo com botões Fechar (outline) + Gerar PDF (azul com sombra), `Sessão #ID` à esquerda em texto suave. Comportamento funcional 100% preservado — só estética.",
+    tipo: "melhoria",
+    modulos: "RH-DP",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-13 16:00:00",
+  },
 ];

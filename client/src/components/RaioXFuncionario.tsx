@@ -3395,89 +3395,193 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
         )}
       </div>
 
-      {/* ============ MODAL — DETALHE DO DDS (Rev. 1769) ============ */}
+      {/* ============ MODAL — DETALHE DO DDS (Rev. 1772 — layout redesenhado) ============ */}
       <Dialog open={!!ddsDetalhe} onOpenChange={(o) => !o && setDdsDetalhe(null)}>
-        <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-blue-600" />
-              {ddsDetalheQuery.data ? `DDS — ${ddsDetalheQuery.data.tituloTema}` : 'Carregando DDS...'}
-            </DialogTitle>
-          </DialogHeader>
-          {ddsDetalheQuery.isLoading && (
-            <div className="py-12 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" /><div className="text-sm text-muted-foreground mt-3">Carregando detalhes da sessão...</div></div>
-          )}
-          {ddsDetalheQuery.isError && (
-            <div className="py-8 text-center"><div className="text-red-600 font-medium">Erro ao carregar a sessão</div><div className="text-xs text-muted-foreground mt-2">{(ddsDetalheQuery.error as any)?.message}</div></div>
-          )}
-          {ddsDetalheQuery.data && (() => {
-            const s: any = ddsDetalheQuery.data;
-            const meu: any = (s.funcionarios || []).find((f: any) => f.id === ddsDetalhe?.sfId);
-            const presenteOk = Number(meu?.presente || 0) === 1;
-            const tipoAss = meu?.assinaturaTipo === 'desenhada' ? 'Digital'
-                          : meu?.assinaturaTipo === 'fcsign' ? 'FCsign'
-                          : meu?.assinaturaTipo === 'manual' ? 'Manual' : '';
-            return (
-              <div className="space-y-4">
-                {/* Identificação */}
-                <div className="bg-slate-50 rounded-lg border p-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                  <div><span className="text-muted-foreground">Data/Hora:</span> <b>{formatDate(s.data)}{s.hora ? ` ${s.hora}` : ''}</b></div>
-                  <div><span className="text-muted-foreground">Status:</span> <Badge variant={s.status === 'finalizada' ? 'default' : s.status === 'cancelada' ? 'destructive' : 'secondary'}>{s.status}</Badge></div>
-                  <div><span className="text-muted-foreground">Obra/Local:</span> <b>{s.obraNome || s.local || '—'}</b></div>
-                  <div><span className="text-muted-foreground">Instrutor:</span> <b>{s.instrutor || '—'}</b></div>
-                  <div className="col-span-2"><span className="text-muted-foreground">Presença total:</span> <b>{(s.funcionarios || []).filter((f: any) => Number(f.presente) === 1).length} de {(s.funcionarios || []).length}</b></div>
-                </div>
-
-                {/* Roteiro */}
-                <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-blue-700 mb-2">Roteiro do DDS</h4>
-                  <div className="bg-white border rounded-lg p-4 max-h-[40vh] overflow-y-auto">
-                    {s.conteudoMd
-                      ? <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-gray-800">{s.conteudoMd}</pre>
-                      : <div className="text-sm text-muted-foreground italic">Sem roteiro registrado pra esta sessão.</div>}
-                  </div>
-                </div>
-
-                {/* Participação do funcionário + assinatura */}
-                <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-700 mb-2">Participação de {meu?.nome || emp?.name}</h4>
-                  <div className="bg-white border rounded-lg p-4">
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mb-3">
-                      <div><span className="text-muted-foreground">CPF:</span> <b>{meu?.cpf ? formatCPF(meu.cpf) : '—'}</b></div>
-                      <div><span className="text-muted-foreground">Função:</span> <b>{meu?.funcao || '—'}</b></div>
-                      <div><span className="text-muted-foreground">Presença:</span> {presenteOk ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300">Presente</Badge> : <Badge variant="destructive">Ausente</Badge>}</div>
-                      <div><span className="text-muted-foreground">Assinatura:</span> {meu?.temAssinatura || meu?.assinaturaTipo === 'fcsign' ? <Badge className="bg-blue-100 text-blue-700 border-blue-300">{tipoAss || 'Assinada'}</Badge> : <span className="text-amber-600 text-xs">Pendente</span>}</div>
-                      {meu?.assinadoEm && <div className="col-span-2 text-xs text-muted-foreground">Assinado em {new Date(meu.assinadoEm).toLocaleString('pt-BR')}</div>}
-                    </div>
-                    <div className="border-t pt-3">
-                      <div className="text-xs text-muted-foreground mb-1.5">Assinatura digital:</div>
-                      {ddsAssinaturaQuery.isLoading && <div className="py-4 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-blue-500" /></div>}
-                      {ddsAssinaturaQuery.data?.assinaturaImg
-                        ? <img src={ddsAssinaturaQuery.data.assinaturaImg} alt="Assinatura" className="max-h-32 max-w-full border-2 border-dashed border-gray-300 rounded bg-white p-2" />
-                        : !ddsAssinaturaQuery.isLoading && <div className="text-sm text-muted-foreground italic">Nenhuma assinatura digital registrada.</div>}
-                    </div>
-                  </div>
-                </div>
-
-                {s.observacoes && (
-                  <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">Observações</h4>
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm whitespace-pre-wrap">{s.observacoes}</div>
+        <DialogContent
+          resizable={false}
+          className="w-[96vw] max-w-[980px] max-h-[94vh] p-0 gap-0 overflow-hidden flex flex-col bg-white border-slate-200"
+        >
+          {/* Header com gradiente */}
+          <div className="relative shrink-0 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 px-6 py-5 text-white">
+            <button
+              onClick={() => setDdsDetalhe(null)}
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors"
+              aria-label="Fechar"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 w-12 h-12 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center">
+                <MessageSquare className="w-6 h-6" />
+              </div>
+              <div className="min-w-0 flex-1 pr-8">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-blue-100/90">Diálogo Diário de Segurança</div>
+                <h2 className="text-xl sm:text-2xl font-bold leading-tight mt-0.5 truncate">
+                  {ddsDetalheQuery.data?.tituloTema || (ddsDetalheQuery.isLoading ? 'Carregando…' : 'DDS')}
+                </h2>
+                {ddsDetalheQuery.data && (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-blue-50">
+                    <div className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />{formatDate(ddsDetalheQuery.data.data)}{ddsDetalheQuery.data.hora ? ` · ${ddsDetalheQuery.data.hora}` : ''}</div>
+                    {ddsDetalheQuery.data.obraNome && <div className="flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5" />{ddsDetalheQuery.data.obraNome}</div>}
+                    {ddsDetalheQuery.data.instrutor && <div className="flex items-center gap-1.5"><User className="w-3.5 h-3.5" />{ddsDetalheQuery.data.instrutor}</div>}
                   </div>
                 )}
               </div>
-            );
-          })()}
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setDdsDetalhe(null)}>Fechar</Button>
-            <Button
-              onClick={gerarPdfDds}
-              disabled={!ddsDetalheQuery.data || ddsAssinaturaQuery.isLoading}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <FileDown className="h-4 w-4 mr-1.5" /> Gerar PDF
-            </Button>
-          </DialogFooter>
+            </div>
+          </div>
+
+          {/* Body scrollável */}
+          <div className="flex-1 overflow-y-auto bg-slate-50">
+            {ddsDetalheQuery.isLoading && (
+              <div className="py-16 text-center">
+                <Loader2 className="h-10 w-10 animate-spin mx-auto text-blue-600" />
+                <div className="text-sm text-slate-500 mt-4">Carregando detalhes da sessão…</div>
+              </div>
+            )}
+            {ddsDetalheQuery.isError && (
+              <div className="py-12 px-6 text-center">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mb-3">
+                  <AlertTriangle className="w-6 h-6 text-red-600" />
+                </div>
+                <div className="text-red-700 font-semibold">Erro ao carregar a sessão</div>
+                <div className="text-xs text-slate-500 mt-2">{(ddsDetalheQuery.error as any)?.message}</div>
+              </div>
+            )}
+            {ddsDetalheQuery.data && (() => {
+              const s: any = ddsDetalheQuery.data;
+              const meu: any = (s.funcionarios || []).find((f: any) => f.id === ddsDetalhe?.sfId);
+              const presenteOk = Number(meu?.presente || 0) === 1;
+              const tipoAss = meu?.assinaturaTipo === 'desenhada' ? 'Digital'
+                            : meu?.assinaturaTipo === 'fcsign' ? 'FCsign'
+                            : meu?.assinaturaTipo === 'manual' ? 'Manual' : '';
+              const presentes = (s.funcionarios || []).filter((f: any) => Number(f.presente) === 1).length;
+              const total = (s.funcionarios || []).length;
+              const pctPres = total > 0 ? Math.round((presentes / total) * 100) : 0;
+              const statusColor = s.status === 'finalizada' ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                                : s.status === 'cancelada' ? 'bg-red-100 text-red-700 border-red-300'
+                                : 'bg-amber-100 text-amber-700 border-amber-300';
+              return (
+                <div className="px-6 py-5 space-y-5">
+                  {/* Métricas rápidas */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-sm">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Status</div>
+                      <div className="mt-1.5"><Badge className={`${statusColor} font-semibold`}>{s.status}</Badge></div>
+                    </div>
+                    <div className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-sm">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Presença</div>
+                      <div className="text-lg font-bold text-slate-800 mt-1">{presentes}<span className="text-slate-400 font-normal">/{total}</span> <span className="text-xs font-normal text-slate-500">({pctPres}%)</span></div>
+                    </div>
+                    <div className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-sm">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Sua presença</div>
+                      <div className="mt-1.5">{presenteOk
+                        ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 font-semibold">Presente</Badge>
+                        : <Badge variant="destructive">Ausente</Badge>}</div>
+                    </div>
+                    <div className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-sm">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Assinatura</div>
+                      <div className="mt-1.5">{meu?.temAssinatura || meu?.assinaturaTipo === 'fcsign'
+                        ? <Badge className="bg-blue-100 text-blue-700 border-blue-300 font-semibold">{tipoAss || 'Assinada'}</Badge>
+                        : <Badge className="bg-amber-100 text-amber-700 border-amber-300 font-semibold">Pendente</Badge>}</div>
+                    </div>
+                  </div>
+
+                  {/* Roteiro */}
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-slate-200">
+                      <FileText className="w-4 h-4 text-blue-700" />
+                      <h4 className="text-sm font-bold text-blue-900">Roteiro do DDS</h4>
+                    </div>
+                    <div className="p-5 max-h-[42vh] overflow-y-auto">
+                      {s.conteudoMd
+                        ? <pre className="whitespace-pre-wrap font-sans text-[13.5px] leading-[1.65] text-slate-700">{s.conteudoMd}</pre>
+                        : <div className="text-sm text-slate-400 italic text-center py-6">Sem roteiro registrado pra esta sessão.</div>}
+                    </div>
+                  </div>
+
+                  {/* Participação + Assinatura — 2 colunas em desktop */}
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-slate-200">
+                      <UserCheck className="w-4 h-4 text-emerald-700" />
+                      <h4 className="text-sm font-bold text-emerald-900">Participação de {meu?.nome || emp?.name}</h4>
+                    </div>
+                    <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+                      {/* Coluna esquerda — dados */}
+                      <div className="space-y-2.5 text-sm">
+                        <div className="flex justify-between gap-3">
+                          <span className="text-slate-500">CPF</span>
+                          <b className="text-slate-800 tabular-nums">{meu?.cpf ? formatCPF(meu.cpf) : '—'}</b>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <span className="text-slate-500">Função</span>
+                          <b className="text-slate-800 text-right">{meu?.funcao || '—'}</b>
+                        </div>
+                        <div className="flex justify-between gap-3 items-center">
+                          <span className="text-slate-500">Presença</span>
+                          {presenteOk
+                            ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300">Presente</Badge>
+                            : <Badge variant="destructive">Ausente</Badge>}
+                        </div>
+                        <div className="flex justify-between gap-3 items-center">
+                          <span className="text-slate-500">Tipo de assinatura</span>
+                          {meu?.temAssinatura || meu?.assinaturaTipo === 'fcsign'
+                            ? <Badge className="bg-blue-100 text-blue-700 border-blue-300">{tipoAss || 'Assinada'}</Badge>
+                            : <Badge className="bg-amber-100 text-amber-700 border-amber-300">Pendente</Badge>}
+                        </div>
+                        {meu?.assinadoEm && (
+                          <div className="flex justify-between gap-3 pt-2 border-t border-slate-100">
+                            <span className="text-slate-500 text-xs">Assinado em</span>
+                            <span className="text-xs text-slate-600 font-medium">{new Date(meu.assinadoEm).toLocaleString('pt-BR')}</span>
+                          </div>
+                        )}
+                      </div>
+                      {/* Coluna direita — imagem assinatura */}
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Assinatura digital</div>
+                        <div className="rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 min-h-[140px] flex items-center justify-center p-3">
+                          {ddsAssinaturaQuery.isLoading && <Loader2 className="h-6 w-6 animate-spin text-blue-500" />}
+                          {!ddsAssinaturaQuery.isLoading && ddsAssinaturaQuery.data?.assinaturaImg && (
+                            <img src={ddsAssinaturaQuery.data.assinaturaImg} alt="Assinatura" className="max-h-32 max-w-full object-contain" />
+                          )}
+                          {!ddsAssinaturaQuery.isLoading && !ddsAssinaturaQuery.data?.assinaturaImg && (
+                            <div className="text-xs text-slate-400 italic text-center">Nenhuma assinatura<br/>digital registrada.</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Observações (opcional) */}
+                  {s.observacoes && (
+                    <div className="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden">
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200">
+                        <AlertTriangle className="w-4 h-4 text-amber-700" />
+                        <h4 className="text-sm font-bold text-amber-900">Observações</h4>
+                      </div>
+                      <div className="p-4 text-sm whitespace-pre-wrap text-slate-700 leading-relaxed">{s.observacoes}</div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Footer fixo */}
+          <div className="shrink-0 px-6 py-3 bg-white border-t border-slate-200 flex items-center justify-between gap-2">
+            <div className="text-xs text-slate-400 hidden sm:block">
+              {ddsDetalheQuery.data && `Sessão #${ddsDetalheQuery.data.id}`}
+            </div>
+            <div className="flex items-center gap-2 ml-auto">
+              <Button variant="outline" onClick={() => setDdsDetalhe(null)} className="border-slate-300">Fechar</Button>
+              <Button
+                onClick={gerarPdfDds}
+                disabled={!ddsDetalheQuery.data || ddsAssinaturaQuery.isLoading}
+                className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+              >
+                <FileDown className="h-4 w-4 mr-1.5" /> Gerar PDF
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
