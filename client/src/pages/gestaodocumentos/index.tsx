@@ -3253,7 +3253,7 @@ function CategoriasAdminConfigSection({ companyId }: { companyId: number }) {
   });
 
   const [showAdd, setShowAdd] = useState(false);
-  const [novo, setNovo] = useState({ chave: "", sigla: "", nome: "", cor: "#64748B", ordem: 100 });
+  const [novo, setNovo] = useState({ chave: "", sigla: "", nome: "", cor: "#64748b", ordem: 100 });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ nome: "", sigla: "", cor: "" });
 
@@ -3265,7 +3265,7 @@ function CategoriasAdminConfigSection({ companyId }: { companyId: number }) {
       toast.error("Preencha chave, sigla e nome"); return;
     }
     criar.mutate({ ...novo, chave: novo.chave.toLowerCase().trim() }, {
-      onSuccess: () => { setShowAdd(false); setNovo({ chave: "", sigla: "", nome: "", cor: "#64748B", ordem: 100 }); },
+      onSuccess: () => { setShowAdd(false); setNovo({ chave: "", sigla: "", nome: "", cor: "#64748b", ordem: 100 }); },
     });
   }
 
@@ -3308,7 +3308,7 @@ function CategoriasAdminConfigSection({ companyId }: { companyId: number }) {
           </div>
           <div className="md:col-span-1">
             <label className="text-[11px] text-gray-600 font-medium">Cor</label>
-            <Input type="color" value={novo.cor} onChange={(e) => setNovo({ ...novo, cor: e.target.value })} className="h-8 p-0.5 cursor-pointer" />
+            <Input type="color" value={(novo.cor || "#64748b").toLowerCase()} onChange={(e) => setNovo({ ...novo, cor: e.target.value.toLowerCase() })} className="h-8 p-0.5 cursor-pointer" />
           </div>
           <div className="md:col-span-1">
             <label className="text-[11px] text-gray-600 font-medium">Ordem</label>
@@ -3338,7 +3338,7 @@ function CategoriasAdminConfigSection({ companyId }: { companyId: number }) {
                 <>
                   <Input value={editForm.sigla} onChange={(e) => setEditForm({ ...editForm, sigla: e.target.value.toUpperCase().slice(0, 10) })} className="h-7 text-xs w-20 uppercase" />
                   <Input value={editForm.nome} onChange={(e) => setEditForm({ ...editForm, nome: e.target.value })} className="h-7 text-xs flex-1" />
-                  <Input type="color" value={editForm.cor || c.cor || "#64748B"} onChange={(e) => setEditForm({ ...editForm, cor: e.target.value })} className="h-7 w-10 p-0.5 cursor-pointer" />
+                  <Input type="color" value={(editForm.cor || c.cor || "#64748b").toLowerCase()} onChange={(e) => setEditForm({ ...editForm, cor: e.target.value.toLowerCase() })} className="h-7 w-10 p-0.5 cursor-pointer" />
                   <button
                     onClick={() => {
                       editar.mutate({ id: c.id, companyId, nome: editForm.nome, sigla: editForm.sigla, cor: editForm.cor }, {
@@ -3358,7 +3358,7 @@ function CategoriasAdminConfigSection({ companyId }: { companyId: number }) {
                   {c.ativo && (
                     <>
                       <button
-                        onClick={() => { setEditingId(c.id); setEditForm({ nome: c.nome, sigla: c.sigla, cor: c.cor || "#64748B" }); }}
+                        onClick={() => { setEditingId(c.id); setEditForm({ nome: c.nome, sigla: c.sigla, cor: (c.cor || "#64748b").toLowerCase() }); }}
                         className="text-gray-400 hover:text-blue-600 p-1"
                         title="Editar"
                       ><Pencil className="w-3.5 h-3.5" /></button>
