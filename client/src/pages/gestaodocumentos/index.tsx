@@ -184,6 +184,36 @@ export default function GestaoDocumentos() {
   const [selectedDiscId, setSelectedDiscId] = useState<number | null>(null);
   const [selectedSubpasta, setSelectedSubpasta] = useState<string | null>(null);
   const [expandedDiscs, setExpandedDiscs] = useState<Set<number>>(new Set());
+  // Rev. 1776 — Largura ajustável do painel esquerdo (árvore de pastas).
+  // Persistida em localStorage; min 200px / max 600px; pointer events
+  // funcionam em mouse + touch (iPad).
+  const [leftPanelWidth, setLeftPanelWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return 288;
+    const saved = Number(localStorage.getItem("gd:leftPanelWidth"));
+    return Number.isFinite(saved) && saved >= 200 && saved <= 600 ? saved : 288;
+  });
+  const splitterDragRef = useRef<{ startX: number; startW: number } | null>(null);
+  const onSplitterPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    splitterDragRef.current = { startX: e.clientX, startW: leftPanelWidth };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+  const onSplitterPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!splitterDragRef.current) return;
+    const dx = e.clientX - splitterDragRef.current.startX;
+    const next = Math.max(200, Math.min(600, splitterDragRef.current.startW + dx));
+    setLeftPanelWidth(next);
+  };
+  const onSplitterPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!splitterDragRef.current) return;
+    splitterDragRef.current = null;
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    try { localStorage.setItem("gd:leftPanelWidth", String(leftPanelWidth)); } catch {}
+  };
   // Rev. 1774 — Acervo ativo dentro de uma obra: 'projeto' (Projetos Técnicos,
   // disciplinas técnicas como ARQ/EST/ROHR) ou 'documento' (Documentos da
   // Obra: contratos, propostas, atas, seguros, ARTs/RRTs, licenças…).
@@ -1593,8 +1623,11 @@ export default function GestaoDocumentos() {
 
             {/* Layout duas colunas: árvore + documentos */}
             <div className="flex gap-0 flex-1 overflow-hidden">
-              {/* Painel esquerdo — Árvore de Pastas */}
-              <div className="w-72 shrink-0 bg-white border-r border-gray-200 overflow-hidden flex flex-col">
+              {/* Painel esquerdo — Árvore de Pastas (largura ajustável Rev. 1776) */}
+              <div
+                style={{ width: `${leftPanelWidth}px` }}
+                className="shrink-0 bg-white border-r border-gray-200 overflow-hidden flex flex-col"
+              >
                 {/* Rev. 1774b — Abas de acervo redesenhadas: cards visuais com
                     ícone, indicador colorido em cima e contagem de itens. */}
                 {(() => {
@@ -1831,8 +1864,24 @@ export default function GestaoDocumentos() {
                 </div>
               </div>
 
+              {/* Rev. 1776 — Divisor arrastável entre os dois painéis (mouse + touch).
+                  Hit area de 8px com indicador visual de 1px no centro; hover/active
+                  pinta de azul. Use Pointer Events pra funcionar igual no iPad. */}
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                onPointerDown={onSplitterPointerDown}
+                onPointerMove={onSplitterPointerMove}
+                onPointerUp={onSplitterPointerUp}
+                onPointerCancel={onSplitterPointerUp}
+                className="w-2 shrink-0 cursor-col-resize bg-transparent hover:bg-blue-100 active:bg-blue-200 group flex items-center justify-center touch-none"
+                title="Arraste para ajustar a largura"
+              >
+                <div className="w-px h-10 bg-gray-300 group-hover:bg-blue-500 group-active:bg-blue-600 rounded-full transition-colors" />
+              </div>
+
               {/* Painel direito — Documentos */}
-              <div className="flex-1 bg-white overflow-hidden flex flex-col">
+              <div className="flex-1 bg-white overflow-hidden flex flex-col min-w-0">
                 <div className="p-3 border-b border-gray-200 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 flex-1">
                     <div className="relative flex-1 max-w-sm">
