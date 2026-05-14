@@ -259,7 +259,76 @@ img, video {
     margin: 10mm 8mm 18mm 8mm;
   }
 
-  /* Ocultar sidebar, header, botões de ação e elementos de UI */
+  /* ============================================================ */
+  /* R-012 · NUNCA PÁGINAS EM BRANCO / VAZIAS                     */
+  /* ------------------------------------------------------------ */
+  /* Causa raiz das páginas em branco: containers com altura      */
+  /* fixa de viewport (h-screen, min-h-screen, h-[100vh],         */
+  /* h-[100dvh]) que o navegador interpreta como página inteira   */
+  /* mesmo sem conteúdo dentro; overlays Radix/portais que viram  */
+  /* "fundo cinza inteiro"; e overflow-hidden em html/body que    */
+  /* cortam conteúdo. Aqui resetamos TUDO isso de forma global.   */
+  /* ============================================================ */
+
+  /* 1. Reset agressivo de altura/overflow no documento e na     */
+  /*    raiz da SPA — evita "página em branco" trailing.          */
+  html, body, #root, #__next {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* 2. Anula min-h-screen / h-screen / h-dvh que o Tailwind      */
+  /*    aplica em layouts de app — esses são os principais        */
+  /*    causadores de páginas em branco no final do PDF.          */
+  .min-h-screen, .h-screen, .h-dvh, .h-svh, .h-lvh,
+  [class*="min-h-["], [class*="h-[100vh]"], [class*="h-[100dvh]"],
+  [class*="h-[calc(100vh"], [class*="h-[calc(100dvh"] {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  /* 3. Libera todos os scrollers — ninguém imprime barra de      */
+  /*    rolagem; conteúdo cortado por overflow some no PDF.       */
+  .overflow-auto, .overflow-y-auto, .overflow-x-auto,
+  .overflow-scroll, .overflow-y-scroll, .overflow-x-scroll,
+  .overflow-hidden, .overflow-y-hidden, .overflow-x-hidden {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  /* 4. Esconder overlays/portais Radix (Dialog/Sheet/Popover)    */
+  /*    quando NÃO marcados como conteúdo imprimível. O backdrop  */
+  /*    cinza translúcido vira página inteira preta no PDF se     */
+  /*    não for escondido. Para imprimir CONTEÚDO de modal, marcar*/
+  /*    o portal/conteúdo com `.print-keep` ou usar `.print-only` */
+  /*    dentro dele (preservamos portais que contenham qualquer   */
+  /*    um dos dois marcadores).                                  */
+  [data-radix-popper-content-wrapper]:not(.print-keep):not(:has(.print-keep)):not(:has(.print-only)),
+  [data-state="open"][data-radix-dialog-overlay]:not(.print-keep):not(:has(.print-only)),
+  [data-radix-portal]:not(:has(.print-keep)):not(:has(.print-only)) {
+    display: none !important;
+  }
+
+  /* 5. Quando o usuário marca uma área como `.print-only`,       */
+  /*    escondemos TODO o resto da árvore (não só filhos diretos  */
+  /*    do body — em SPA o `#root` é o único filho direto, então  */
+  /*    precisamos descer recursivamente). Os 3 :not() preservam: */
+  /*    a) o próprio elemento `.print-only`,                      */
+  /*    b) seus descendentes (`.print-only *`),                   */
+  /*    c) seus ancestrais (`:has(.print-only)`).                 */
+  /*    Os IRMÃOS e não-relacionados são escondidos.              */
+  body:has(.print-only) *:not(.print-only):not(.print-only *):not(:has(.print-only)) {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+    page-break-inside: auto;
+  }
+
+  /* 6. Ocultar sidebar, header, botões de ação e elementos de UI */
   [data-sidebar],
   .sidebar-wrapper,
   nav,
@@ -272,7 +341,16 @@ img, video {
     display: none !important;
   }
 
-  /* Mostrar apenas o conteúdo principal */
+  /* 7. Último filho do body sem margem/padding — impede que      */
+  /*    espaço residual gere página em branco no fim do PDF.      */
+  body > *:last-child,
+  main > *:last-child,
+  [role="main"] > *:last-child {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* 8. Mostrar apenas o conteúdo principal */
   body {
     margin: 0 !important;
     padding: 0 !important;

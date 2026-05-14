@@ -122,6 +122,55 @@
 
 ---
 
+## R-012 · Tela de impressão SEM páginas em branco / vazias (NÃO NEGOCIÁVEL)
+
+**Toda tela do sistema precisa imprimir limpa, sem nenhuma página em branco no fim, sem páginas vazias no meio, sem corte de conteúdo.**
+
+### Causa raiz dos problemas mais comuns
+
+- ❌ **Containers com `min-h-screen` / `h-[100dvh]` / `h-[calc(100vh-...)]`** — o navegador interpreta como página inteira mesmo se o conteúdo dentro for pequeno → gera 1 página em branco no fim.
+- ❌ **Overlays Radix (Dialog backdrop, Sheet overlay)** — viram fundo cinza ocupando página inteira no PDF.
+- ❌ **`overflow: hidden` em `html` / `body` / containers SPA** — corta o conteúdo no PDF (a impressão respeita overflow).
+- ❌ **`overflow-y-auto` em scrollers** — só imprime o que está visível, o resto some.
+- ❌ **Cards/sections com `min-h-[...]` grande** quando vazios — geram páginas em branco.
+- ❌ **Modais full-screen abertos** (R-001) — quando o usuário imprime com modal aberto, vira altura enorme + backdrop preto.
+
+### O que JÁ está resolvido globalmente em `client/src/index.css` (`@media print`)
+
+1. **Reset de altura**: `html, body, #root` ganham `height: auto !important; min-height: 0 !important; overflow: visible !important;`.
+2. **Reset Tailwind viewport**: classes `.min-h-screen`, `.h-screen`, `.h-dvh`, `.h-[100vh]`, `.h-[100dvh]`, `.h-[calc(100vh-…)]`, `.h-[calc(100dvh-…)]` viram `height: auto`.
+3. **Liberação de scrollers**: todos os `.overflow-*` viram `overflow: visible !important; max-height: none !important;`.
+4. **Esconde overlays Radix**: `[data-radix-portal]`, `[data-radix-dialog-overlay]`, `[data-radix-popper-content-wrapper]` somem (a menos que marcados com `.print-keep`).
+5. **Modo `.print-only`**: marcar uma área com a classe `print-only` faz o CSS esconder TODO o resto da árvore (recursivo, não só filhos diretos do body) via `body:has(.print-only) *:not(.print-only):not(.print-only *):not(:has(.print-only)) { display:none }` — preserva ancestrais, descendentes e o próprio `.print-only`. Portais Radix que contenham `.print-only` também são preservados (mesma exceção via `:not(:has(.print-only))`).
+6. **Esconde último filho com padding/margin** que gera página em branco trailing.
+
+### Checklist da tela ANTES de aprovar PR
+
+- [ ] Abrir a tela em produção e dar Ctrl+P (Cmd+P no Mac).
+- [ ] Confirmar que a **última página tem conteúdo** (sem branco no fim).
+- [ ] Confirmar que **não há páginas vazias no meio** (verificar `page-break-before/after` em modais e seções).
+- [ ] Confirmar que **tabelas grandes** repetem cabeçalho em cada página (já vem do `thead { display: table-header-group }` global).
+- [ ] Confirmar que **sidebar/header/botões** estão escondidos (vem do CSS global, mas use `print-hidden` ou `print:hidden` em qualquer botão flutuante novo).
+- [ ] Para **imprimir só uma região** (ex: o conteúdo de um modal aberto, sem o resto da tela atrás), envolver essa região com `<div className="print-only">…</div>` e o resto some automaticamente.
+
+### Quando criar uma área específica de impressão
+
+```tsx
+// Toda a árvore do app some na impressão exceto este bloco:
+<div className="print-only">
+  <PrintHeader title="Relatório XYZ" userName={...} />
+  {/* conteúdo do PDF/print */}
+</div>
+```
+
+### NUNCA faça
+
+- ❌ Adicionar `@media print` específico que sobrescreve as regras globais (consulte primeiro o que já existe em `index.css` L256-).
+- ❌ Usar `position: fixed` em rodapé sem `.print-keep` (some na impressão).
+- ❌ Usar `display: flex` com `height: 100vh` em wrapper de página — quebra impressão e gera página em branco.
+
+---
+
 ## R-011 · Indiretas/LoE NÃO compõem o caminho crítico (PMBOK §6.4.2 / DCMA #6)
 
 **Atividades sinalizadas como `isIndireta=true` (Level of Effort) ou `isExterna=true` (executadas por terceiros) NUNCA podem aparecer como CRÍTICA / QUASE CRÍTICA em telas de planejamento.**
