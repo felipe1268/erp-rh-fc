@@ -436,12 +436,11 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   //   curto + data de pagamento das verbas (Art. 477 §6º CLT — até 10 dias).
   // Funciona ANTES de salvar a aviso (somente leitura de form + emp + empresa).
   // ======================================================================
-  const handleGerarDocumento = () => {
-    if (!form.employeeId || !form.tipo || !form.dataDesligamento) {
-      toast.error("Preencha Colaborador, Tipo de Aviso e Data do Aviso para gerar o documento.");
-      return;
-    }
-    const emp = selectedEmp;
+  // Rev.1804: extraído como função reutilizável para poder ser chamada também
+  // do modal de Detalhes (após o aviso já ter sido salvo). Aceita um objeto
+  // `emp` mínimo (nomeCompleto, cpf, ctps, serieCtps, cargo/funcao, dataAdmissao),
+  // o `tipo` do aviso e a `dataAvisoStr` (YYYY-MM-DD).
+  const gerarDocumentoCore = (emp: any, tipo: string, dataAvisoStr: string) => {
     const empresa: any = selectedCompany || {};
     if (!emp) { toast.error("Colaborador não encontrado."); return; }
     if (!empresa?.razaoSocial && !empresa?.nomeFantasia) {
@@ -458,7 +457,6 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
       toast.warning(`Atenção: empresa sem ${camposFaltando.join(" / ")}. O documento será gerado com esses campos em branco — preencha o cadastro da empresa para sair completo.`);
     }
 
-    const tipo = form.tipo as string;
     const isIndenizado = tipo.endsWith("_indenizado");
     const isTrabalhado = tipo.endsWith("_trabalhado");
     if (!isIndenizado && !isTrabalhado) {
@@ -467,7 +465,6 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     }
 
     // === Datas ===
-    const dataAvisoStr = form.dataDesligamento as string; // YYYY-MM-DD
     const dtAviso = new Date(dataAvisoStr + "T00:00:00");
     const fmtBR = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
     const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -658,6 +655,43 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     w.document.write(html);
     w.document.close();
     toast.success("Documento de Aviso Prévio Indenizado gerado!");
+  };
+
+  // Wrapper para o botão do modal de CRIAÇÃO (usa form + selectedEmp)
+  const handleGerarDocumento = () => {
+    if (!form.employeeId || !form.tipo || !form.dataDesligamento) {
+      toast.error("Preencha Colaborador, Tipo de Aviso e Data do Aviso para gerar o documento.");
+      return;
+    }
+    gerarDocumentoCore(selectedEmp, form.tipo as string, form.dataDesligamento as string);
+  };
+
+  // Wrapper para o botão do modal de DETALHES (usa selectedItem já salvo).
+  // Reconstrói a `dataDesligamento` (Data do Aviso = dia anterior ao dataInicio) e
+  // monta o objeto `emp` a partir dos campos employeeCtps/employeeSerieCtps/
+  // employeeDataAdmissao retornados pelo getById (Rev.1804).
+  const handleGerarDocumentoFromDetail = () => {
+    if (!selectedItem) return;
+    const item: any = selectedItem;
+    if (!item.dataInicio) { toast.error("Aviso sem data de início."); return; }
+    // dataAviso = dataInicio - 1 (mesma lógica do handleEdit)
+    const dt = new Date(item.dataInicio + "T00:00:00");
+    dt.setDate(dt.getDate() - 1);
+    const dataAvisoStr = dt.toISOString().split("T")[0];
+    // Tenta achar o empregado completo na lista; se não tiver (terminado/filtrado),
+    // monta um emp mínimo a partir dos campos do detalhe.
+    const empFromList = activeEmployees.find((e: any) => e.id === item.employeeId);
+    const emp = empFromList || {
+      id: item.employeeId,
+      nomeCompleto: item.employeeName || item.funcionarioNome || "",
+      cpf: item.employeeCpf || "",
+      ctps: item.employeeCtps || "",
+      serieCtps: item.employeeSerieCtps || "",
+      cargo: item.employeeCargo || "",
+      funcao: item.employeeCargo || "",
+      dataAdmissao: item.employeeDataAdmissao || "",
+    };
+    gerarDocumentoCore(emp, item.tipo, dataAvisoStr);
   };
 
   const handleEdit = (item: any) => {
@@ -1769,7 +1803,21 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                 </div>
               )}
               {/* Botão Exportar PDF/TRCT */}
-              <div className="flex gap-3 justify-center pt-4 border-t">
+              <div className="flex gap-3 justify-center flex-wrap pt-4 border-t">
+                {/* Rev.1804: Gerar Documento de Aviso (Trabalhado/Indenizado) — disponível
+                    também após salvar. Oculto para Pedido de Demissão (não há aviso
+                    formal a emitir pelo empregador nesse fluxo). */}
+                {!isPedidoDemissao && (
+                  <Button
+                    variant="outline"
+                    className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50"
+                    onClick={handleGerarDocumentoFromDetail}
+                    title="Gera o documento de Aviso Prévio (Trabalhado ou Indenizado) para impressão / PDF."
+                  >
+                    <FileText className="h-4 w-4" />
+                    Gerar Documento de Aviso
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   className="gap-2 border-green-300 text-green-700 hover:bg-green-50"

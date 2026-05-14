@@ -566,6 +566,10 @@ export const avisoPrevioFeriasRouter = router({
               employeeName: emp.nomeCompleto || 'Funcionário',
               employeeCpf: emp.cpf || '-',
               employeeCargo: emp.cargo || emp.funcao || '-',
+              // Rev.1804: campos extras para gerar Documento de Aviso a partir do detalhe (após salvar)
+              employeeCtps: emp.ctps || '',
+              employeeSerieCtps: emp.serieCtps || '',
+              employeeDataAdmissao: emp.dataAdmissao || '',
               previsaoRescisao: JSON.stringify({ ...previsao, ...(descontosLegaisView || {}), dataAdmissao }),
               previsaoRescisaoComplementar: previsaoComplementarById ? JSON.stringify(previsaoComplementarById) : null,
             };
