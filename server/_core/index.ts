@@ -1057,7 +1057,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1775-2026-05-14-gd-disc-tipoacervo-backfill";
+    const COLFIX_VERSION = "v1775c-2026-05-14-gd-isolated-block";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -1848,11 +1848,28 @@ Regras:
             ALTER TABLE obras ADD COLUMN IF NOT EXISTS percentual_adm NUMERIC(5,2) DEFAULT 0;
             ALTER TABLE oc_number_config ADD COLUMN IF NOT EXISTS alerta_reservas_ativo SMALLINT DEFAULT 1;
             ALTER TABLE dds_sessao_funcionarios ADD COLUMN IF NOT EXISTS assinatura_img TEXT;
-            -- Rev. 1774: Acervo "Documentos da Obra" (admin) ao lado dos Projetos Técnicos
-            ALTER TABLE gd_disciplinas ADD COLUMN IF NOT EXISTS tipo_acervo VARCHAR(20) DEFAULT 'projeto';
-            ALTER TABLE gd_disciplinas ADD COLUMN IF NOT EXISTS categoria_chave VARCHAR(50);
-            ALTER TABLE gd_disciplinas ADD COLUMN IF NOT EXISTS ordem INTEGER DEFAULT 0;
-            CREATE TABLE IF NOT EXISTS gd_categorias_admin_padrao (
+          EXCEPTION WHEN OTHERS THEN NULL;
+          END $$
+        `);
+        console.log("[ColFix] EPI/warnings/obras/orcamento/terceiros/cargoConfianca cols OK");
+      } catch (e: any) { console.warn("[ColFix] Bloco2:", e?.message ?? e); }
+    });
+
+    // Bloco2b — Gestão de Documentos (Rev. 1774/1775/1775c): ISOLADO em statements
+    // separados (sem DO/EXCEPTION) E SEM version guard (sempre roda). Todos os
+    // statements são idempotentes (IF NOT EXISTS / UPDATE…WHERE NULL), então o
+    // custo é desprezível e garantimos que a coluna apareça mesmo se o
+    // startup_cache do Neon estiver com versão "presa".
+    import("../db").then(async ({ getDb }) => {
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        const statements: { label: string; sql: any }[] = [
+          { label: "gd_disciplinas.tipo_acervo", sql: sql`ALTER TABLE gd_disciplinas ADD COLUMN IF NOT EXISTS tipo_acervo VARCHAR(20) DEFAULT 'projeto'` },
+          { label: "gd_disciplinas.categoria_chave", sql: sql`ALTER TABLE gd_disciplinas ADD COLUMN IF NOT EXISTS categoria_chave VARCHAR(50)` },
+          { label: "gd_disciplinas.ordem", sql: sql`ALTER TABLE gd_disciplinas ADD COLUMN IF NOT EXISTS ordem INTEGER DEFAULT 0` },
+          { label: "gd_categorias_admin_padrao(table)", sql: sql`CREATE TABLE IF NOT EXISTS gd_categorias_admin_padrao (
               id SERIAL PRIMARY KEY,
               company_id INTEGER NOT NULL,
               chave VARCHAR(50) NOT NULL,
@@ -1862,32 +1879,21 @@ Regras:
               ordem INTEGER DEFAULT 0,
               ativo BOOLEAN DEFAULT TRUE,
               criado_em TIMESTAMP DEFAULT NOW()
-            );
-            CREATE INDEX IF NOT EXISTS idx_gd_cat_adm_company ON gd_categorias_admin_padrao (company_id);
-            CREATE UNIQUE INDEX IF NOT EXISTS uniq_gd_cat_adm_company_chave ON gd_categorias_admin_padrao (company_id, chave);
-            -- Rev. 1774b — UNIQUE PARCIAL em (ficheiro_id, categoria_chave) só pra
-            -- linhas com categoria_chave preenchida (i.e. disciplinas administrativas).
-            -- Garante idempotência REAL no ensureDisciplinasAdminNoFicheiro: se 2
-            -- requests concorrentes da mesma obra rodarem o seed simultaneamente,
-            -- o INSERT segundo falha em vez de duplicar a pasta. Disciplinas
-            -- técnicas (categoria_chave NULL) não são afetadas.
-            CREATE UNIQUE INDEX IF NOT EXISTS uniq_gd_disc_ficheiro_cat_chave
-              ON gd_disciplinas (ficheiro_id, categoria_chave)
-              WHERE categoria_chave IS NOT NULL AND deleted_at IS NULL;
-            -- Rev. 1775 — Backfill defensivo: todas as disciplinas antigas (criadas
-            -- ANTES da Rev. 1774, quando a coluna não existia) precisam ter
-            -- tipo_acervo='projeto' explícito. O DEFAULT do ALTER ADD COLUMN faz isso
-            -- em PG 11+, mas se o ALTER falhou no meio (quem sabe rollback parcial)
-            -- ou rodou em PG <11, podemos ter NULLs órfãs que sumiriam do filtro
-            -- client-side. Esse UPDATE fecha o gap: NULL → 'projeto', preservando
-            -- 'documento' onde já estiver setado.
-            UPDATE gd_disciplinas SET tipo_acervo = 'projeto'
-              WHERE tipo_acervo IS NULL OR tipo_acervo = '';
-          EXCEPTION WHEN OTHERS THEN NULL;
-          END $$
-        `);
-        console.log("[ColFix] EPI/warnings/obras/orcamento/terceiros/cargoConfianca/gdCategoriasAdmin cols OK");
-      } catch (e: any) { console.warn("[ColFix] Bloco2:", e?.message ?? e); }
+            )` },
+          { label: "idx_gd_cat_adm_company", sql: sql`CREATE INDEX IF NOT EXISTS idx_gd_cat_adm_company ON gd_categorias_admin_padrao (company_id)` },
+          { label: "uniq_gd_cat_adm_company_chave", sql: sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_gd_cat_adm_company_chave ON gd_categorias_admin_padrao (company_id, chave)` },
+          { label: "uniq_gd_disc_ficheiro_cat_chave", sql: sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_gd_disc_ficheiro_cat_chave ON gd_disciplinas (ficheiro_id, categoria_chave) WHERE categoria_chave IS NOT NULL AND deleted_at IS NULL` },
+          { label: "backfill tipo_acervo NULL→projeto", sql: sql`UPDATE gd_disciplinas SET tipo_acervo='projeto' WHERE tipo_acervo IS NULL OR tipo_acervo=''` },
+        ];
+        for (const s of statements) {
+          try {
+            await db.execute(s.sql);
+          } catch (e: any) {
+            console.error(`[ColFix-GD] FAIL ${s.label}:`, e?.message ?? e);
+          }
+        }
+        console.log("[ColFix-GD] Migrations Gestão de Documentos OK");
+      } catch (e: any) { console.warn("[ColFix-GD]:", e?.message ?? e); }
     });
     import("../db").then(async ({ getDb }) => {
       if (await colFixSkipPromise) return;
