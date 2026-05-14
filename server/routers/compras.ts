@@ -899,7 +899,12 @@ async function gerarProximoNumeroSc(db: any, companyId: number, offset: number =
 // empresa+ano: o segundo writer espera o primeiro fazer COMMIT antes de calcular MAX+1.
 // Lock é liberado automaticamente no fim da transação (XACT) — sem risco de leak.
 const SC_LOCK_NAMESPACE = 871234; // identificador arbitrário do domínio "geração de SC"
-async function lockEGerarNumeroSc(tx: any, companyId: number): Promise<string> {
+// Rev. 1795 — exportado para que outros módulos (epis.ts, frotas.ts) que também
+// inserem em compras_solicitacoes usem o MESMO advisory lock + MAX(seq)+1.
+// Antes esses módulos usavam COUNT(*)+1 sem lock — colidiam com SCs manuais
+// criadas em paralelo e estouravam uq_compras_solicitacoes_numero mesmo com
+// o lock do criarSolicitacao funcionando perfeitamente.
+export async function lockEGerarNumeroSc(tx: any, companyId: number): Promise<string> {
   const ano = new Date().getFullYear();
   // Chave int4: (companyId << 16) | (ano - 2000) — cabe até companyId 65535 e ano 2000-2099.
   const lockKey = (companyId << 16) | (ano - 2000);

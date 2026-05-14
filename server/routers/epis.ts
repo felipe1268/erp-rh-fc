@@ -8,6 +8,7 @@ import { storagePut } from "../storage";
 import { invokeLLM } from "../_core/llm";
 import { buscarFotoParaItem } from "../_core/autoFoto";
 import { generateEpiFichaPdf } from "../utils/generateEpiFichaPdf";
+import { lockEGerarNumeroSc } from "./compras";
 
 export const episRouter = router({
   // ============================================================
@@ -498,32 +499,33 @@ export const episRouter = router({
               const deficit = minConfig.quantidadeMinima - estoqueAtual;
               const descItem = `${epiAtual.nome}${epiAtual.ca ? ` (CA ${epiAtual.ca})` : ''}${epiAtual.tamanho ? ` - Tam. ${epiAtual.tamanho}` : ''}`;
 
-              const countSC = await db.select({ c: sql<number>`count(*)` }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId));
-              const seq = (parseInt(String(countSC[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
-              const numeroSc = `SC-${new Date().getFullYear()}-${seq}`;
-
-              const [sc] = await db.insert(comprasSolicitacoes).values({
-                companyId: input.companyId,
-                numeroSc,
-                departamento: "SST / Almoxarifado",
-                titulo: `Reposição automática de EPI — ${epiAtual.nome} (estoque: ${estoqueAtual})`,
-                prioridade: "alta",
-                tipo: "material",
-                status: "pendente",
-                aprovacaoStatus: "aguardando",
-                observacoes: `SC gerada automaticamente. Estoque atual: ${estoqueAtual}, mínimo configurado: ${minConfig.quantidadeMinima}.`,
-                criadoPorNome: "Sistema (Auto)",
-              } as any).returning();
-
-              await db.insert(comprasSolicitacoesItens).values({
-                solicitacaoId: sc.id,
-                descricao: descItem,
-                unidade: "un",
-                quantidade: String(deficit),
-                statusItem: "pendente",
+              // Rev. 1795 — advisory lock + MAX(seq)+1 + INSERTs SC e itens TODOS dentro
+              // da mesma transaction (consistência: nunca SC sem itens em caso de falha).
+              const sc = await db.transaction(async (tx: any) => {
+                const numeroSc = await lockEGerarNumeroSc(tx, input.companyId);
+                const [row] = await tx.insert(comprasSolicitacoes).values({
+                  companyId: input.companyId,
+                  numeroSc,
+                  departamento: "SST / Almoxarifado",
+                  titulo: `Reposição automática de EPI — ${epiAtual.nome} (estoque: ${estoqueAtual})`,
+                  prioridade: "alta",
+                  tipo: "material",
+                  status: "pendente",
+                  aprovacaoStatus: "aguardando",
+                  observacoes: `SC gerada automaticamente. Estoque atual: ${estoqueAtual}, mínimo configurado: ${minConfig.quantidadeMinima}.`,
+                  criadoPorNome: "Sistema (Auto)",
+                } as any).returning();
+                await tx.insert(comprasSolicitacoesItens).values({
+                  solicitacaoId: row.id,
+                  descricao: descItem,
+                  unidade: "un",
+                  quantidade: String(deficit),
+                  statusItem: "pendente",
+                });
+                return row;
               });
 
-              console.log(`[EPI-AutoSC] SC ${numeroSc} criada para ${epiAtual.nome} (estoque ${estoqueAtual} < mínimo ${minConfig.quantidadeMinima})`);
+              console.log(`[EPI-AutoSC] SC ${sc.numeroSc} criada para ${epiAtual.nome} (estoque ${estoqueAtual} < mínimo ${minConfig.quantidadeMinima})`);
             }
           }
         } catch (err) {
@@ -1942,40 +1944,41 @@ Exemplos de referência:
         return { ok: false, mensagem: "Nenhum item abaixo do estoque mínimo encontrado." };
       }
 
-      const count = await db.select({ c: sql<number>`count(*)` }).from(comprasSolicitacoes).where(eq(comprasSolicitacoes.companyId, input.companyId));
-      const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
-      const numeroSc = `SC-${new Date().getFullYear()}-${seq}`;
-
-      const [sc] = await db.insert(comprasSolicitacoes).values({
-        companyId: input.companyId,
-        numeroSc,
-        departamento: "SST / Almoxarifado",
-        titulo: `Reposição automática de EPIs — Estoque mínimo (${itensSC.length} ${itensSC.length === 1 ? 'item' : 'itens'})`,
-        prioridade: "alta",
-        tipo: "material",
-        status: "pendente",
-        aprovacaoStatus: "aguardando",
-        observacoes: `SC gerada automaticamente pelo sistema de controle de estoque mínimo de EPIs em ${new Date().toLocaleDateString("pt-BR")}.`,
-        criadoPorId: input.userId ?? null,
-        criadoPorNome: input.userName ?? "Sistema",
-      } as any).returning();
-
-      await db.insert(comprasSolicitacoesItens).values(
-        itensSC.map(it => ({
-          solicitacaoId: sc.id,
-          descricao: it.descricao,
-          unidade: it.unidade,
-          quantidade: String(it.quantidade),
-          statusItem: "pendente",
-        }))
-      );
+      // Rev. 1795 — advisory lock + MAX(seq)+1 + INSERTs SC e itens TODOS dentro
+      // da mesma transaction (consistência: nunca SC sem itens em caso de falha).
+      const sc = await db.transaction(async (tx: any) => {
+        const numeroSc = await lockEGerarNumeroSc(tx, input.companyId);
+        const [row] = await tx.insert(comprasSolicitacoes).values({
+          companyId: input.companyId,
+          numeroSc,
+          departamento: "SST / Almoxarifado",
+          titulo: `Reposição automática de EPIs — Estoque mínimo (${itensSC.length} ${itensSC.length === 1 ? 'item' : 'itens'})`,
+          prioridade: "alta",
+          tipo: "material",
+          status: "pendente",
+          aprovacaoStatus: "aguardando",
+          observacoes: `SC gerada automaticamente pelo sistema de controle de estoque mínimo de EPIs em ${new Date().toLocaleDateString("pt-BR")}.`,
+          criadoPorId: input.userId ?? null,
+          criadoPorNome: input.userName ?? "Sistema",
+        } as any).returning();
+        await tx.insert(comprasSolicitacoesItens).values(
+          itensSC.map(it => ({
+            solicitacaoId: row.id,
+            descricao: it.descricao,
+            unidade: it.unidade,
+            quantidade: String(it.quantidade),
+            statusItem: "pendente",
+          }))
+        );
+        return row;
+      });
 
       return {
         ok: true,
         scId: sc.id,
-        numeroSc,
+        numeroSc: sc.numeroSc,
         totalItens: itensSC.length,
-        mensagem: `SC ${numeroSc} criada com ${itensSC.length} ${itensSC.length === 1 ? 'item' : 'itens'} para reposição.`,
+        mensagem: `SC ${sc.numeroSc} criada com ${itensSC.length} ${itensSC.length === 1 ? 'item' : 'itens'} para reposição.`,
       };
     }),
 });

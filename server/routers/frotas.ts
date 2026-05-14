@@ -13,6 +13,7 @@ import {
 } from "../../drizzle/schema";
 import { invokeLLM, invokeAnthropicVision } from "../_core/llm";
 import { storagePut } from "../storage";
+import { lockEGerarNumeroSc } from "./compras";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
 
@@ -4517,10 +4518,6 @@ IMPORTANTE:
       `);
       const items = (itemsRes as any).rows || itemsRes;
 
-      const countRes = await db.execute(sql`SELECT count(*)::int as c FROM compras_solicitacoes WHERE company_id = ${companyId}`);
-      const seq = (parseInt(((countRes as any).rows || countRes)[0]?.c ?? 0) + 1).toString().padStart(4, "0");
-      const numeroSc = `SC-${new Date().getFullYear()}-${seq}`;
-
       const titulo = `Manutenção ${maint.tipo === 'preventiva' ? 'Preventiva' : 'Corretiva'} — ${maint.placa || 'Veículo'} ${maint.modelo || ''}`.trim();
       const obs = [
         `Origem: Módulo Frotas — Manutenção #${maintenanceId}`,
@@ -4531,31 +4528,49 @@ IMPORTANTE:
         input.observacoes || '',
       ].filter(Boolean).join('\n');
 
-      const scRes = await db.execute(sql`
-        INSERT INTO compras_solicitacoes (company_id, numero_sc, obra_id, titulo, prioridade, observacoes, status, aprovacao_status, tipo, vehicle_id, maintenance_id, origem_modulo, created_at, updated_at)
-        VALUES (${companyId}, ${numeroSc}, ${input.obraId ?? null}, ${titulo}, ${input.prioridade || 'alta'}, ${obs}, 'pendente', 'aguardando', 'servico', ${maint.vehicle_id}, ${maintenanceId}, 'frotas', NOW(), NOW())
-        RETURNING id, numero_sc
-      `);
-      const sc = ((scRes as any).rows || scRes)[0];
+      // Rev. 1795 — advisory lock + MAX(seq)+1 + SELECT FOR UPDATE da manutenção +
+      // INSERTs SC/itens + UPDATE fleet_maintenances.sc_id TUDO numa única transaction.
+      // Sem isso: 2 calls concorrentes leem maint.sc_id=null, ambas criam SCs, último
+      // UPDATE vence e a 1ª SC fica órfã (lock só serializa o número, não o vínculo).
+      const sc = await db.transaction(async (tx: any) => {
+        // Re-lê a manutenção COM lock pra impedir double-create do vínculo.
+        const lockedRes = await tx.execute(sql`
+          SELECT sc_id, sc_numero FROM fleet_maintenances WHERE id = ${maintenanceId} FOR UPDATE
+        `);
+        const locked = ((lockedRes as any).rows || lockedRes)[0];
+        if (locked?.sc_id) {
+          throw new TRPCError({ code: "CONFLICT", message: `Esta manutenção já possui SC vinculada (SC #${locked.sc_numero || locked.sc_id}).` });
+        }
 
-      if (items.length > 0) {
-        for (const it of items) {
-          const desc = `${it.categoria === 'peca' ? '[Peça]' : '[Serviço]'} ${it.nome}`;
-          await db.execute(sql`
+        const numeroSc = await lockEGerarNumeroSc(tx, companyId);
+        const scRes = await tx.execute(sql`
+          INSERT INTO compras_solicitacoes (company_id, numero_sc, obra_id, titulo, prioridade, observacoes, status, aprovacao_status, tipo, vehicle_id, maintenance_id, origem_modulo, created_at, updated_at)
+          VALUES (${companyId}, ${numeroSc}, ${input.obraId ?? null}, ${titulo}, ${input.prioridade || 'alta'}, ${obs}, 'pendente', 'aguardando', 'servico', ${maint.vehicle_id}, ${maintenanceId}, 'frotas', NOW(), NOW())
+          RETURNING id, numero_sc
+        `);
+        const scRow = ((scRes as any).rows || scRes)[0];
+
+        if (items.length > 0) {
+          for (const it of items) {
+            const desc = `${it.categoria === 'peca' ? '[Peça]' : '[Serviço]'} ${it.nome}`;
+            await tx.execute(sql`
+              INSERT INTO compras_solicitacoes_itens (solicitacao_id, descricao, unidade, quantidade, observacoes, status_item)
+              VALUES (${scRow.id}, ${desc}, 'un', ${String(it.quantidade || 1)}, ${`Valor unitário ref.: R$ ${parseFloat(it.valor_unitario || 0).toFixed(2)}`}, 'pendente')
+            `);
+          }
+        } else {
+          await tx.execute(sql`
             INSERT INTO compras_solicitacoes_itens (solicitacao_id, descricao, unidade, quantidade, observacoes, status_item)
-            VALUES (${sc.id}, ${desc}, 'un', ${String(it.quantidade || 1)}, ${`Valor unitário ref.: R$ ${parseFloat(it.valor_unitario || 0).toFixed(2)}`}, 'pendente')
+            VALUES (${scRow.id}, ${titulo}, 'sv', '1', ${`Custo estimado: R$ ${parseFloat(maint.custo || 0).toFixed(2)}`}, 'pendente')
           `);
         }
-      } else {
-        await db.execute(sql`
-          INSERT INTO compras_solicitacoes_itens (solicitacao_id, descricao, unidade, quantidade, observacoes, status_item)
-          VALUES (${sc.id}, ${titulo}, 'sv', '1', ${`Custo estimado: R$ ${parseFloat(maint.custo || 0).toFixed(2)}`}, 'pendente')
-        `);
-      }
 
-      await db.execute(sql`
-        UPDATE fleet_maintenances SET sc_id = ${sc.id}, sc_numero = ${sc.numero_sc} WHERE id = ${maintenanceId}
-      `);
+        await tx.execute(sql`
+          UPDATE fleet_maintenances SET sc_id = ${scRow.id}, sc_numero = ${scRow.numero_sc} WHERE id = ${maintenanceId}
+        `);
+
+        return scRow;
+      });
 
       return { scId: sc.id, numeroSc: sc.numero_sc, titulo, qtdItens: items.length || 1 };
     }),
