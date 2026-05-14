@@ -10,6 +10,7 @@ import PrintHeader from "@/components/PrintHeader";
 import PlanejamentoPrintHeader from "@/components/PlanejamentoPrintHeader";
 import PrintActions from "@/components/PrintActions";
 import ImportarCronograma, { parseMSProjectXML, parseMSProjectXLSX, TarefaImportada } from "./ImportarCronograma";
+import DiagnosticoEapOrcCron from "@/components/planejamento/DiagnosticoEapOrcCron";
 import { parseCalendarioJson, fracaoDecorridaMs } from "../../../../shared/diasUteis";
 import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
 import { DiagramaRede } from "./DiagramaRede";
@@ -3267,6 +3268,13 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                   orcamentoId={orcamentoId}
                   utils={utils}
                   onImportado={() => utils.planejamento.listarAtividades.invalidate()}
+                />
+              )}
+              {/* Rev. 1797 — Diagnóstico EAP Orçamento ↔ Cronograma (R-013) */}
+              {revisaoAtiva && (
+                <DiagnosticoEapOrcCron
+                  projetoId={projetoId}
+                  revisaoId={revisaoAtiva.id}
                 />
               )}
               {/* Excluir — oculto quando consolidado */}

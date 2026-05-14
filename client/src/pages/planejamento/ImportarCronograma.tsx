@@ -435,6 +435,15 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     // Pula a tarefa de nível 0 (cabeçalho do projeto)
     if (uid === "0" || name === "" || level === 0) continue;
 
+    // Rev. 1797 / R-013 — EAP do orçamento é IMUTÁVEL: toda tarefa real
+    // (não-cabeçalho) DEVE ter <WBS> preenchido no XML. Sem fallback silencioso.
+    if (!wbs) {
+      throw new Error(
+        `Tarefa "${name.substring(0, 60)}" (nível ${level}) SEM código WBS no XML do MS Project. ` +
+        `Toda atividade deve ter EAP — ative a coluna WBS no MSP antes de exportar (R-013).`
+      );
+    }
+
     result.push({
       wbs, nome: name, nivel: level, inicio: start, fim: fin,
       durDias: parseDuration(durRaw), pred, recurso: res,
@@ -495,11 +504,30 @@ export async function parseMSProjectXLSX(buffer: ArrayBuffer): Promise<TarefaImp
     throw new Error(`Coluna de nome da tarefa não encontrada. Colunas detectadas: ${cols}. Exporte do MS Project com cabeçalhos em inglês ou português.`);
   }
 
+  // ── Rev. 1797 / R-013 — EAP do Orçamento é IMUTÁVEL ─────────────────────
+  // Bloqueia importação sem coluna WBS/EAP — exige numeração explícita do MSP
+  // pra evitar renumeração silenciosa (1, 2, 3...) que quebra o vínculo com
+  // o orçamento. Antes era fallback `String(i + 1)`, agora falha com mensagem
+  // clara orientando o usuário a exportar do MSP com WBS habilitado.
+  if (!kWbs) {
+    const cols = headers.slice(0, 12).join(", ");
+    throw new Error(
+      `Planilha SEM coluna de EAP/WBS — exporte do MS Project com a coluna "WBS" habilitada para preservar a numeração do contrato (R-013). ` +
+      `Colunas detectadas: ${cols}. Aceito: WBS, EAP, Código WBS, Code, Codigo.`
+    );
+  }
+
   const parsed = rows
     .filter((r: any) => r[kNome!]?.toString().trim())
     .map((r: any, i: number) => {
       const nome  = r[kNome!]?.toString().trim() ?? "";
-      const wbs   = kWbs ? (r[kWbs]?.toString().trim() || String(i + 1)) : String(i + 1);
+      // R-013: kWbs já validado acima; se a célula vier vazia o item é descartado
+      const wbs   = r[kWbs!]?.toString().trim() ?? "";
+      if (!wbs) {
+        throw new Error(
+          `Linha ${i + 2}: tarefa "${nome.substring(0, 40)}" SEM código WBS/EAP. Toda atividade deve ter EAP no MSP — corrija na planilha e reenvie (R-013).`
+        );
+      }
       const ini   = fmtDate(kIni ? r[kIni] : "");
       const fim   = fmtDate(kFim ? r[kFim] : "");
       const durRaw= kDur ? r[kDur]?.toString() ?? "" : "";

@@ -190,6 +190,29 @@
 
 ---
 
+## R-013 · EAP do Orçamento é IMUTÁVEL — fonte da verdade do rastreio
+
+**O `eapCodigo` (item) do Orçamento é a CHAVE PRIMÁRIA de rastreio entre orçamento, cronograma, medições, SCs, contratos e financeiro. NUNCA pode ser renumerado, gerado automaticamente ou sobrescrito sem ação explícita do usuário.**
+
+**Regras inegociáveis**:
+
+- ✅ Parser do orçamento (`server/routers/orcamento.ts:657`) lê `eapCodigo` EXATAMENTE da coluna "Item" da planilha — preservar.
+- ✅ Reimportação (`orcamento.ts:2342`) deleta+reinsere mas mantém o `eapCodigo` que vem do parser — preservar.
+- ✅ Importação MS Project XML lê `<WBS>` do MSP — preservar.
+- ❌ **PROIBIDO**: gerar EAP sequencial (`String(i + 1)`, `1, 2, 3...`) como fallback quando a coluna WBS está ausente — falhar a importação com mensagem clara.
+- ❌ **PROIBIDO**: sobrescrever silenciosamente o `eapCodigo` da atividade pelo `eapCodigo` do orçamento sem mostrar a divergência ao usuário.
+- ✅ **OBRIGATÓRIO**: tela de Diagnóstico EAP Orçamento ↔ Cronograma (`DiagnosticoEapOrcCron.tsx`) acessível na PlanejamentoDetalhe com 3 listas: casados, só no orçamento, só no cronograma — usuário corrige a fonte (planilha de orçamento ou MPP), nunca o ERP "adivinha".
+
+**Locais que aplicam a regra** (verificar em qualquer alteração):
+- `server/routers/orcamento.ts` (parser + reimportar) — preservar `eapCodigo` do upload
+- `server/routers/planejamento.ts` (`gerarCronogramaDoOrcamento`, `criarRevisao`, `salvarAtividades`) — propagar `eapCodigo` sem alterar
+- `client/src/pages/planejamento/ImportarCronograma.tsx` (`parseMSProjectXLSX`, `parseMSProjectXML`) — falhar se WBS ausente
+- `client/src/components/planejamento/DiagnosticoEapOrcCron.tsx` — única tela autorizada a comparar e expor divergências
+
+**Justificativa**: o `eapCodigo` é a chave de JOIN entre todas as tabelas do projeto (curva S financeira via orçamento, medições por EAP, SCs vinculadas ao item do orçamento, contratos com terceiros). Renumeração silenciosa quebra rastreio e gera divergência R$ no realizado vs previsto sem origem identificável.
+
+---
+
 ## Checklist obrigatório antes de marcar uma tarefa como pronta
 
 - [ ] Modal/tela é full-screen (R-001)?
@@ -203,3 +226,4 @@
 - [ ] Sem exposição de secrets (R-009)?
 - [ ] SQL com aspas em camelCase + soft-delete + companyId (R-010)?
 - [ ] Tela de planejamento exclui `isIndireta`/`isExterna` do CPM (R-011)?
+- [ ] Importação preserva `eapCodigo` do orçamento sem renumerar (R-013)?

@@ -3454,6 +3454,149 @@ export const planejamentoRouter = router({
       return { ok, semOrcamento, semCronograma };
     }),
 
+  // ── Rev. 1797 — Diagnóstico EAP Orçamento ↔ Cronograma ──────────────────
+  // Compara TODOS os eapCodigo do orçamento vinculado ao projeto contra
+  // TODOS os eapCodigo das atividades-folha da revisão. Retorna 3 listas
+  // ricas (com descrição, custo e nome) para a tela de diagnóstico.
+  // Garantia da R-013: o EAP do orçamento é fonte da verdade — divergências
+  // são EXIBIDAS para o usuário corrigir, NUNCA renumeradas silenciosamente.
+  diagnosticoEapOrcVsCron: protectedProcedure
+    .input(z.object({ projetoId: z.number(), revisaoId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+
+      const [proj] = await db.select({
+        id: planejamentoProjetos.id,
+        companyId: planejamentoProjetos.companyId,
+        orcamentoId: planejamentoProjetos.orcamentoId,
+      }).from(planejamentoProjetos)
+        .where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
+
+      if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
+      const isAdminDg = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdminDg && String(proj.companyId) !== String(ctx.user.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+      }
+
+      // R-013 / segurança — valida que a revisão pertence ao projeto informado
+      // (impede que um usuário vaze atividades de outro projeto/tenant via revisaoId).
+      const [rev] = await db.select({ id: planejamentoRevisoes.id })
+        .from(planejamentoRevisoes)
+        .where(and(
+          eq(planejamentoRevisoes.id, input.revisaoId),
+          eq(planejamentoRevisoes.projetoId, input.projetoId),
+        )).limit(1);
+      if (!rev) throw new TRPCError({ code: "NOT_FOUND", message: "Revisão não encontrada para este projeto." });
+
+      if (!proj.orcamentoId) {
+        return {
+          status: "sem_orcamento" as const,
+          orcamentoId: null,
+          totalOrcamento: 0,
+          totalCronograma: 0,
+          casados: [] as Array<{ eapCodigo: string; descricaoOrc: string; nomeCron: string; custoTotal: number; descBate: boolean }>,
+          soNoOrcamento: [] as Array<{ eapCodigo: string; descricao: string; custoTotal: number; nivel: number }>,
+          soNoCronograma: [] as Array<{ eapCodigo: string; nome: string; isGrupo: boolean; isMarco: boolean }>,
+        };
+      }
+
+      // Defesa em profundidade: valida orçamento pertence ao mesmo tenant antes de listar itens
+      const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
+        .from(orcamentos).where(eq(orcamentos.id, proj.orcamentoId)).limit(1);
+      if (!orc) throw new TRPCError({ code: "NOT_FOUND", message: "Orçamento vinculado não encontrado." });
+      if (!isAdminDg && String(orc.companyId) !== String(ctx.user.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para o orçamento vinculado." });
+      }
+
+      const [itensOrc, ativs] = await Promise.all([
+        db.select({
+          eapCodigo: orcamentoItens.eapCodigo,
+          descricao: orcamentoItens.descricao,
+          custoTotal: orcamentoItens.custoTotal,
+          nivel: orcamentoItens.nivel,
+          tipo: orcamentoItens.tipo,
+        }).from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, proj.orcamentoId)),
+        db.select({
+          eapCodigo: planejamentoAtividades.eapCodigo,
+          nome: planejamentoAtividades.nome,
+          isGrupo: planejamentoAtividades.isGrupo,
+          isMarco: planejamentoAtividades.isMarco,
+        }).from(planejamentoAtividades)
+          .where(eq(planejamentoAtividades.revisaoId, input.revisaoId)),
+      ]);
+
+      // Filtra orçamento: só folhas (tipo != Etapa/Subetapa) com custo > 0
+      const folhasOrc = itensOrc.filter(i => i.tipo !== 'Etapa/Subetapa' && parseFloat(String(i.custoTotal || 0)) > 0);
+      const orcMap = new Map(folhasOrc.map(i => [(i.eapCodigo ?? '').trim(), i]));
+
+      // Filtra cronograma: só folhas reais (não grupo, não marco)
+      const folhasCron = ativs.filter(a => !a.isGrupo && !a.isMarco && a.eapCodigo);
+      const cronMap = new Map(folhasCron.map(a => [(a.eapCodigo ?? '').trim(), a]));
+
+      const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+
+      const casados: Array<{ eapCodigo: string; descricaoOrc: string; nomeCron: string; custoTotal: number; descBate: boolean }> = [];
+      const soNoOrcamento: Array<{ eapCodigo: string; descricao: string; custoTotal: number; nivel: number }> = [];
+      const soNoCronograma: Array<{ eapCodigo: string; nome: string; isGrupo: boolean; isMarco: boolean }> = [];
+
+      for (const [eap, orcIt] of orcMap) {
+        const cronIt = cronMap.get(eap);
+        if (cronIt) {
+          const dOrc = norm(orcIt.descricao ?? '');
+          const dCron = norm(cronIt.nome ?? '');
+          const descBate = dOrc === dCron || dOrc.includes(dCron.substring(0, 20)) || dCron.includes(dOrc.substring(0, 20));
+          casados.push({
+            eapCodigo: eap,
+            descricaoOrc: orcIt.descricao ?? '',
+            nomeCron: cronIt.nome ?? '',
+            custoTotal: parseFloat(String(orcIt.custoTotal || 0)),
+            descBate,
+          });
+        } else {
+          soNoOrcamento.push({
+            eapCodigo: eap,
+            descricao: orcIt.descricao ?? '',
+            custoTotal: parseFloat(String(orcIt.custoTotal || 0)),
+            nivel: orcIt.nivel ?? 0,
+          });
+        }
+      }
+      for (const [eap, cronIt] of cronMap) {
+        if (!orcMap.has(eap)) {
+          soNoCronograma.push({
+            eapCodigo: eap,
+            nome: cronIt.nome ?? '',
+            isGrupo: !!cronIt.isGrupo,
+            isMarco: !!cronIt.isMarco,
+          });
+        }
+      }
+
+      // Ordenação natural por EAP (1.2 antes de 1.10)
+      const cmpEap = (a: string, b: string) => {
+        const pa = a.split('.').map(n => parseInt(n) || 0);
+        const pb = b.split('.').map(n => parseInt(n) || 0);
+        for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+          const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+          if (d !== 0) return d;
+        }
+        return 0;
+      };
+      casados.sort((a, b) => cmpEap(a.eapCodigo, b.eapCodigo));
+      soNoOrcamento.sort((a, b) => cmpEap(a.eapCodigo, b.eapCodigo));
+      soNoCronograma.sort((a, b) => cmpEap(a.eapCodigo, b.eapCodigo));
+
+      return {
+        status: "ok" as const,
+        orcamentoId: proj.orcamentoId,
+        totalOrcamento: orcMap.size,
+        totalCronograma: cronMap.size,
+        casados,
+        soNoOrcamento,
+        soNoCronograma,
+      };
+    }),
+
   // ── Atividades por Obra (para seleção no formulário de HE) ─────────────────
   getAtividadesForObra: protectedProcedure
     .input(z.object({ obraId: z.number() }))
