@@ -5891,10 +5891,23 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       )}
 
       {/* ── Painel Previsto × Realizado ─────────────────────────────────────── */}
+      {/* Rev. 1796 — Cada card ganhou ícone Info + tooltip detalhado (title)
+          explicando o que o número significa, como é calculado e o que esperar. */}
       <div className="grid grid-cols-3 gap-3">
         {/* Previsto */}
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex flex-col gap-1">
-          <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Previsto (semana)</p>
+        <div
+          className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex flex-col gap-1 cursor-help"
+          title={
+            `PREVISTO (SEMANA) = ${previsto.toFixed(2)}%\n\n` +
+            `O que é: avanço físico que o cronograma DIZ que deveria estar concluído até o fim da semana selecionada (${semanaAtual}).\n\n` +
+            `Como é calculado: para cada atividade, mede a fração do prazo já decorrida (entre Início e Fim do cronograma) e multiplica pelo Peso% financeiro. A soma de todas as atividades dá este número.\n\n` +
+            `Para que serve: é a META do baseline. Comparando com o "Realizado", você sabe se a obra está adiantada, no prazo ou atrasada.`
+          }
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Previsto (semana)</p>
+            <Info className="h-3 w-3 text-slate-300" />
+          </div>
           <p className="text-2xl font-bold text-orange-600">{previsto.toFixed(2)}%</p>
           <div className="w-full bg-slate-100 rounded-full h-2 mt-1 overflow-hidden">
             <div className="h-full rounded-full bg-orange-400" style={{ width: `${Math.min(100, previsto)}%` }} />
@@ -5903,8 +5916,20 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         </div>
 
         {/* Realizado */}
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex flex-col gap-1">
-          <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Realizado (acum.)</p>
+        <div
+          className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex flex-col gap-1 cursor-help"
+          title={
+            `REALIZADO (ACUMULADO) = ${realizadoAcum.toFixed(2)}%\n\n` +
+            `O que é: avanço físico real EXECUTADO na obra até a data de corte (Live = hoje, Oficial = última quinta fechada).\n\n` +
+            `Como é calculado: soma do % lançado em cada atividade × Peso% financeiro da atividade. É o EV (Earned Value) do PMBOK.\n\n` +
+            `Onde os números entram: nos lançamentos de "Avanço Semanal" abaixo (campo % Realizado por atividade) e/ou no "Diário de Obra".\n\n` +
+            `É acumulado: inclui TUDO que já foi feito desde o início da obra.`
+          }
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Realizado (acum.)</p>
+            <Info className="h-3 w-3 text-slate-300" />
+          </div>
           <p className="text-2xl font-bold text-emerald-600">{realizadoAcum.toFixed(2)}%</p>
           <div className="w-full bg-slate-100 rounded-full h-2 mt-1 overflow-hidden">
             <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, realizadoAcum)}%` }} />
@@ -5913,8 +5938,23 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         </div>
 
         {/* Delta */}
-        <div className={`rounded-xl border shadow-sm p-4 flex flex-col gap-1 ${delta >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
-          <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Variação (Real − Prev.)</p>
+        <div
+          className={`rounded-xl border shadow-sm p-4 flex flex-col gap-1 cursor-help ${delta >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}
+          title={
+            `VARIAÇÃO (REAL − PREVISTO) = ${delta >= 0 ? "+" : ""}${delta.toFixed(2)}%\n\n` +
+            `O que é: a diferença entre o que foi EXECUTADO e o que o cronograma PEDIA para esta semana.\n\n` +
+            `Como é calculado: Realizado (Acum.) − Previsto (Semana) = ${realizadoAcum.toFixed(2)}% − ${previsto.toFixed(2)}% = ${delta >= 0 ? "+" : ""}${delta.toFixed(2)}%.\n\n` +
+            `Como ler o sinal:\n` +
+            `  • Positivo (verde) = obra ADIANTADA em relação ao baseline.\n` +
+            `  • Negativo (vermelho) = obra ATRASADA em relação ao baseline.\n` +
+            `  • Próximo de zero (±0,1%) = obra no PRAZO.\n\n` +
+            `Equivale ao SV% (Schedule Variance) do PMBOK/EVM.`
+          }
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Variação (Real − Prev.)</p>
+            <Info className="h-3 w-3 text-slate-400" />
+          </div>
           <p className={`text-2xl font-bold ${delta >= 0 ? "text-emerald-700" : "text-red-700"}`}>
             {delta >= 0 ? "+" : ""}{delta.toFixed(2)}%
           </p>
@@ -6126,14 +6166,14 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
               </span>
             </div>
             <span className="text-slate-300">|</span>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-slate-600">Aderência:</span>
-              <span className={`text-sm font-bold tabular-nums ${previstoRealizadoSemana.aderencia == null ? "text-slate-400" : previstoRealizadoSemana.aderencia >= 95 ? "text-emerald-600" : "text-red-600"}`}>
+            <div className="flex items-center gap-2" title={`ADERÊNCIA = Realizado (Acum.) ÷ Previsto (Acum.) × 100\n\nO que é: o quanto a obra está cumprindo o cronograma. É o SPI% (Schedule Performance Index) do PMBOK/EVM.\n\nComo ler:\n  • ≥ 95% (verde) = obra aderente ao plano (no prazo).\n  • < 95% (vermelho) = obra atrasada — quanto menor, pior.\n  • — = sem previsto na semana (atividade nova ou já concluída).\n\nExemplo: 50% significa que se executou METADE do que o cronograma previa para esta semana.`}>
+              <span className="text-[11px] text-slate-600 cursor-help">Aderência:</span>
+              <span className={`text-sm font-bold tabular-nums cursor-help ${previstoRealizadoSemana.aderencia == null ? "text-slate-400" : previstoRealizadoSemana.aderencia >= 95 ? "text-emerald-600" : "text-red-600"}`}>
                 {previstoRealizadoSemana.aderencia == null ? "—" : `${previstoRealizadoSemana.aderencia.toFixed(0)}%`}
               </span>
             </div>
             <span className="text-slate-300">|</span>
-            <div className="text-[11px] text-slate-600">
+            <div className="text-[11px] text-slate-600 cursor-help" title={`ATIVIDADES DIRETAS = ${folhasNaSemana.length}\n\nO que é: quantidade de atividades-folha do cronograma que estão ATIVAS na semana selecionada — ou seja, atividades cuja janela [Início, Fim] cruza a semana.\n\nNão inclui:\n  • Pacotes/grupos de EAP (apenas folhas).\n  • Atividades indiretas (canteiro, mob/desmob) — essas aparecem no painel "Avanço Global".\n  • Atividades já 100% concluídas antes da semana.\n  • Atividades que só começam depois da semana.`}>
               <span className="font-medium">{folhasNaSemana.length}</span> atividades diretas
             </div>
             {atividades.some((a: any) => a.isIndireta) && (
