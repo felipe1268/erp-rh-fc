@@ -24,6 +24,7 @@ export default function DiagnosticoEapOrcCron({ projetoId, revisaoId, trigger }:
   const [aba, setAba] = useState<Aba>("soNoOrcamento");
   const [busca, setBusca] = useState("");
   const [autoSyncFeito, setAutoSyncFeito] = useState<{ atualizadas: number } | null>(null);
+  const [autoSyncCodFeito, setAutoSyncCodFeito] = useState<{ atualizadas: number; predecessorasAtualizadas: number; dependentesAtualizadas: number; ambiguos: number } | null>(null);
   const utils = trpc.useUtils();
 
   const { data, isLoading, error } = trpc.planejamento.diagnosticoEapOrcVsCron.useQuery(
@@ -44,15 +45,54 @@ export default function DiagnosticoEapOrcCron({ projetoId, revisaoId, trigger }:
     },
   });
 
+  // Rev. 1801 / R-013 — Auto-sync silencioso de CÓDIGOS (eapCodigo) ao abrir o
+  // diagnóstico. Quando há descrições que batem 1-para-1 mas com código divergente,
+  // alinha o código do cronograma ao do orçamento e remapeia predecessoras e tabelas
+  // dependentes. Roda UMA vez por abertura, antes do auto-sync de nomes.
+  const autoSyncCodMutation = trpc.planejamento.autoSincronizarCodigosEapComOrcamento.useMutation({
+    onSuccess: (res) => {
+      if (res.atualizadas > 0) {
+        setAutoSyncCodFeito(res);
+        utils.planejamento.diagnosticoEapOrcVsCron.invalidate();
+        utils.planejamento.listarAtividades.invalidate();
+      }
+    },
+  });
+
   const descDivergeData = data?.descDiverge ?? 0;
+  const soNoCronData = data?.soNoCronograma?.length ?? 0;
+  const soNoOrcData = data?.soNoOrcamento?.length ?? 0;
+
+  // Estados do pipeline sequencial: códigos PRIMEIRO, nomes DEPOIS.
+  // - codTentado: já chamou (mesmo que não tenha mudado nada) — libera fase de nomes
+  // - codSettled: mutation de códigos resolveu (sucesso ou erro), o refetch invalidate
+  //   já disparou e os dados chegaram — só aí podemos confiar em descDivergeData
+  const [codTentado, setCodTentado] = useState(false);
+  const codSettled = !autoSyncCodMutation.isPending && (codTentado || (soNoCronData === 0 && soNoOrcData === 0));
+
+  // 1º) Sincroniza CÓDIGOS (quando há divergência por código mas descrição bate)
   React.useEffect(() => {
-    if (open && revisaoId && descDivergeData > 0 && !autoSyncMutation.isPending && !autoSyncFeito) {
+    if (open && revisaoId && (soNoCronData > 0 || soNoOrcData > 0) && !autoSyncCodMutation.isPending && !codTentado) {
+      autoSyncCodMutation.mutate({ projetoId, revisaoId }, {
+        onSettled: () => setCodTentado(true),
+      });
+    }
+  }, [open, revisaoId, soNoCronData, soNoOrcData, projetoId, codTentado]);
+
+  // 2º) Depois sincroniza NOMES — só dispara após a fase de códigos ter resolvido,
+  // garantindo que descDivergeData reflete o estado pós-sync de códigos.
+  React.useEffect(() => {
+    if (open && revisaoId && codSettled && descDivergeData > 0 && !autoSyncMutation.isPending && !autoSyncFeito) {
       autoSyncMutation.mutate({ projetoId, revisaoId });
     }
-  }, [open, revisaoId, descDivergeData, projetoId, autoSyncFeito]);
+  }, [open, revisaoId, codSettled, descDivergeData, projetoId, autoSyncFeito]);
 
   React.useEffect(() => {
-    if (!open) setAutoSyncFeito(null);
+    if (!open) {
+      setAutoSyncFeito(null);
+      setAutoSyncCodFeito(null);
+      setCodTentado(false);
+    }
   }, [open]);
 
   const casados = data?.casados ?? [];
@@ -84,7 +124,7 @@ export default function DiagnosticoEapOrcCron({ projetoId, revisaoId, trigger }:
   function exportarCSV() {
     const esc = (s: any) => `"${String(s ?? '').replace(/"/g, '""')}"`;
     const linhas: string[] = [];
-    linhas.push(['Categoria','EAP','Descrição (Orçamento)','Nome (Cronograma)','Custo R$','Observação'].map(esc).join(','));
+    linhas.push(['Categoria','Item','Descrição (Orçamento)','Nome (Cronograma)','Custo R$','Observação'].map(esc).join(','));
     for (const c of casados) {
       linhas.push(['CASADO', c.eapCodigo, c.descricaoOrc, c.nomeCron, c.custoTotal.toFixed(2), c.descBate ? 'OK' : 'Descrição diverge'].map(esc).join(','));
     }
@@ -125,10 +165,10 @@ export default function DiagnosticoEapOrcCron({ projetoId, revisaoId, trigger }:
           className="gap-1.5 border-violet-300 text-violet-700 hover:bg-violet-50"
           onClick={() => setOpen(true)}
           disabled={!revisaoId}
-          title="Diagnóstico EAP Orçamento ↔ Cronograma (R-013)"
+          title="Diagnóstico Item Orçamento ↔ Cronograma (R-013)"
         >
           <GitCompareArrows className="h-3.5 w-3.5" />
-          Diagnóstico EAP
+          Diagnóstico Item
         </Button>
       )}
 
@@ -145,7 +185,7 @@ export default function DiagnosticoEapOrcCron({ projetoId, revisaoId, trigger }:
               <GitCompareArrows className="h-6 w-6" />
             </div>
             <div className="flex-1 min-w-0">
-              <h2 className="text-lg sm:text-xl font-bold leading-tight">Diagnóstico EAP — Orçamento ↔ Cronograma</h2>
+              <h2 className="text-lg sm:text-xl font-bold leading-tight">Diagnóstico Item — Orçamento ↔ Cronograma</h2>
               <p className="text-violet-100 text-xs sm:text-sm mt-0.5">
                 Auditoria do rastreio entre itens do orçamento e atividades do cronograma (R-013).
                 {data && (
@@ -186,7 +226,7 @@ export default function DiagnosticoEapOrcCron({ projetoId, revisaoId, trigger }:
                 <FileWarning className="h-6 w-6 shrink-0" />
                 <div>
                   <p className="font-semibold">Projeto sem orçamento vinculado</p>
-                  <p className="text-sm mt-1">Vincule um orçamento na aba "Configurações" do projeto para usar o diagnóstico de rastreio EAP.</p>
+                  <p className="text-sm mt-1">Vincule um orçamento na aba "Configurações" do projeto para usar o diagnóstico de rastreio Item.</p>
                 </div>
               </div>
             )}
@@ -198,7 +238,7 @@ export default function DiagnosticoEapOrcCron({ projetoId, revisaoId, trigger }:
                   <KpiCard
                     icon={<CheckCircle2 className="h-5 w-5" />}
                     cor="emerald"
-                    label="EAPs casados"
+                    label="Itens casados"
                     valor={`${casados.length}`}
                     sub={`de ${data.totalOrcamento} (${pctCasadoQtd.toFixed(1)}%)`}
                     title="Itens do orçamento que têm atividade-folha correspondente no cronograma com o MESMO eapCodigo."
@@ -229,6 +269,18 @@ export default function DiagnosticoEapOrcCron({ projetoId, revisaoId, trigger }:
                   />
                 </div>
 
+                {/* Banner de auto-sync de CÓDIGOS (Rev. 1801) */}
+                {autoSyncCodFeito && autoSyncCodFeito.atualizadas > 0 && (
+                  <div className="mx-4 sm:mx-6 mb-3 rounded-lg border border-violet-300 bg-violet-50 p-3 text-violet-900 flex items-start gap-2 text-sm">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>
+                      <b>{autoSyncCodFeito.atualizadas} código(s) de Item sincronizado(s) automaticamente</b> com o orçamento (R-013).
+                      {autoSyncCodFeito.predecessorasAtualizadas > 0 && <> {autoSyncCodFeito.predecessorasAtualizadas} predecessora(s) remapeada(s).</>}
+                      {autoSyncCodFeito.dependentesAtualizadas > 0 && <> {autoSyncCodFeito.dependentesAtualizadas} linha(s) em medições/SMO/contratos atualizadas em cascata.</>}
+                      {autoSyncCodFeito.ambiguos > 0 && <> <span className="text-violet-700">({autoSyncCodFeito.ambiguos} ambíguo(s) ignorado(s) — descrição duplicada)</span></>}
+                    </span>
+                  </div>
+                )}
                 {/* Banner de auto-sync (Rev. 1798) — confirma que já corrigiu */}
                 {autoSyncFeito && autoSyncFeito.atualizadas > 0 && (
                   <div className="mx-4 sm:mx-6 mb-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-emerald-900 flex items-start gap-2 text-sm">
@@ -248,7 +300,7 @@ export default function DiagnosticoEapOrcCron({ projetoId, revisaoId, trigger }:
                       <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                     )}
                     <span>
-                      <b>{descDiverge} EAPs casados têm DESCRIÇÃO divergente</b> entre orçamento e cronograma.
+                      <b>{descDiverge} Itens casados têm DESCRIÇÃO divergente</b> entre orçamento e cronograma.
                       {autoSyncMutation.isPending
                         ? " Corrigindo automaticamente agora…"
                         : " Serão corrigidos automaticamente em instantes (R-013) — sem perguntar, sem renumeração."}
@@ -283,7 +335,7 @@ export default function DiagnosticoEapOrcCron({ projetoId, revisaoId, trigger }:
                       <div className="relative">
                         <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         <Input
-                          placeholder="Filtrar por EAP ou descrição…"
+                          placeholder="Filtrar por Item ou descrição…"
                           value={busca}
                           onChange={e => setBusca(e.target.value)}
                           className="pl-8 h-9 w-56 sm:w-72 bg-white"
@@ -426,7 +478,7 @@ function Lista({ itens, vazioMsg, cor, explicacao }: {
           <table className="w-full hidden md:table">
             <thead className="bg-slate-100">
               <tr className="text-left text-xs font-semibold text-slate-600 uppercase">
-                <th className="py-2 px-3 w-32">EAP</th>
+                <th className="py-2 px-3 w-32">Item</th>
                 <th className="py-2 px-3">Descrição</th>
                 <th className="py-2 px-3 text-right w-44">{itens[0].valorLabel}</th>
               </tr>

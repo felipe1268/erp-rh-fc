@@ -1398,7 +1398,7 @@ export function ProgramacaoSemanal({
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-slate-100 bg-slate-50/40 text-left text-[11px] font-semibold text-slate-500">
-                      <th className="py-2 px-3 w-16">EAP</th>
+                      <th className="py-2 px-3 w-16">Item</th>
                       <th className="py-2 px-3">Atividade</th>
                       <th className="py-2 px-3 w-24">Início</th>
                       <th className="py-2 px-3 w-24">Fim</th>
@@ -1640,7 +1640,7 @@ export function ProgramacaoSemanal({
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-blue-100 bg-blue-50/40 text-left text-[11px] font-semibold text-blue-700">
-                      <th className="py-2 px-3 w-16">EAP</th>
+                      <th className="py-2 px-3 w-16">Item</th>
                       <th className="py-2 px-3">Atividade</th>
                       <th className="py-2 px-3 w-32" title="Quando esta atividade deveria começar pelo cronograma">Programada para</th>
                       <th className="py-2 px-3 w-24 text-right" title="Peso da atividade no projeto">Peso projeto</th>
@@ -1728,7 +1728,7 @@ export function ProgramacaoSemanal({
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-amber-100 bg-amber-50/40 text-left text-[11px] font-semibold text-amber-700">
-                      <th className="py-2 px-3 w-16">EAP</th>
+                      <th className="py-2 px-3 w-16">Item</th>
                       <th className="py-2 px-3">Atividade</th>
                       <th className="py-2 px-3 w-32" title="Data de fim original do cronograma">Devia terminar em</th>
                       <th className="py-2 px-3 w-24 text-right">Peso projeto</th>

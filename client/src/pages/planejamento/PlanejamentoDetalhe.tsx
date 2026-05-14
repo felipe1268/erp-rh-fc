@@ -3519,7 +3519,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
           <thead>
             <tr className="bg-slate-700 text-white">
               {modoSelecao && !editando && <th className="py-2 px-2 w-8 text-center text-[11px]">✓</th>}
-              <th className="py-2 px-2 text-left text-[11px]">EAP</th>
+              <th className="py-2 px-2 text-left text-[11px]">Item</th>
               <th className="py-2 px-2 text-left text-[11px]">
                 {editando ? "☑ Atividade / Grupo" : "Atividade"}
               </th>
@@ -4068,7 +4068,7 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
           <div style={{ width: LEFT_W, minWidth: LEFT_W, height: HEADER_H }}
             className="bg-slate-700 text-white text-[11px] font-semibold flex items-center px-3 gap-1.5 border-r border-slate-600 shrink-0 sticky left-0 z-30">
             <CalendarCheck className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-            <span>Atividade / EAP</span>
+            <span>Atividade / Item</span>
           </div>
           {/* Timeline header */}
           <div style={{ width: totalWidth, minWidth: totalWidth, height: HEADER_H, position: "relative" }}
@@ -6241,7 +6241,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         <table className="w-full text-xs">
           <thead>
             <tr className={filtroAtivo === "pendentes" ? "bg-amber-700 text-white" : "bg-slate-700 text-white"}>
-              <th className="py-2 px-3 text-left w-20">EAP</th>
+              <th className="py-2 px-3 text-left w-20">Item</th>
               <th className="py-2 px-3 text-left">
                 Atividade
                 {filtroAtivo === "pendentes" && (
@@ -10276,7 +10276,7 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
                 <tr className="bg-slate-50 border-b border-slate-100">
                   <th className="py-2 px-3 text-center w-10">Cl.</th>
                   <th className="py-2 px-3 text-left">#</th>
-                  <th className="py-2 px-3 text-left">Item / EAP</th>
+                  <th className="py-2 px-3 text-left">Item</th>
                   <th className="py-2 px-3 text-right">Custo Total</th>
                   <th className="py-2 px-3 text-right">% Item</th>
                   <th className="py-2 px-3 text-right">Acum.%</th>
@@ -10328,7 +10328,7 @@ function Compras({ projetoId, proj, utils, fmt, revisoes: revisoesAgendamento }:
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-100">
                       <th className="py-2 px-3 text-left w-4" title="Fonte" />
-                      <th className="py-2 px-3 text-left">Item / EAP</th>
+                      <th className="py-2 px-3 text-left">Item</th>
                       <th className="py-2 px-3 text-right w-16">Qtd</th>
                       <th className="py-2 px-3 text-left w-12">Un</th>
                       <th className="py-2 px-3 text-right w-28">Custo Unit.</th>
@@ -16499,7 +16499,7 @@ function SimuladorCronograma({ proj, revisaoAtiva, atividades, projetoId, utils,
                   <table className="w-full text-[11px] border-collapse min-w-[900px]">
                     <thead>
                       <tr className="bg-slate-100 text-slate-600 font-semibold">
-                        <th className="text-left px-3 py-2 border-b border-slate-200 w-[80px]">EAP</th>
+                        <th className="text-left px-3 py-2 border-b border-slate-200 w-[80px]">Item</th>
                         <th className="text-left px-3 py-2 border-b border-slate-200">Tarefa</th>
                         <th className="text-center px-2 py-2 border-b border-slate-200 w-[50px]">Dur.</th>
                         <th className="text-center px-2 py-2 border-b border-slate-200 w-[72px]">Início</th>

@@ -636,7 +636,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
               {contrato.itens.length > 0 && contrato.itens.some((it: any) => !it.eapCodigo) && (
                 <Button variant="outline" size="sm" className="gap-2 text-orange-600 border-orange-200 hover:bg-orange-50" disabled={relinkEapMut.isPending}
                   onClick={() => relinkEapMut.mutate({ contratoId: id })}>
-                  <RefreshCw className={`w-4 h-4 ${relinkEapMut.isPending ? "animate-spin" : ""}`} /> Vincular EAP
+                  <RefreshCw className={`w-4 h-4 ${relinkEapMut.isPending ? "animate-spin" : ""}`} /> Vincular Item
                 </Button>
               )}
               <Button variant="outline" size="sm" className="gap-2" onClick={() => setShowAddItem(!showAddItem)}>
@@ -649,7 +649,7 @@ function ContratoDetalheInner({ routeId }: { routeId: number }) {
                 <p className="text-sm font-semibold text-blue-800">Novo Item do Contrato</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="col-span-2"><Label className="text-xs">Descrição *</Label><Input className="mt-1 text-sm" placeholder="Ex: Forro de gesso térreo" value={newItem.descricao} onChange={e => setNewItem(f => ({ ...f, descricao: e.target.value }))} /></div>
-                  <div><Label className="text-xs">Cód. EAP (Planejamento)</Label><Input className="mt-1 text-sm font-mono" placeholder="Ex: 1.2.3" value={newItem.eapCodigo} onChange={e => setNewItem(f => ({ ...f, eapCodigo: e.target.value }))} /></div>
+                  <div><Label className="text-xs">Cód. Item (Planejamento)</Label><Input className="mt-1 text-sm font-mono" placeholder="Ex: 1.2.3" value={newItem.eapCodigo} onChange={e => setNewItem(f => ({ ...f, eapCodigo: e.target.value }))} /></div>
                   <div><Label className="text-xs">Unidade</Label><Input className="mt-1 text-sm" value={newItem.unidade} onChange={e => setNewItem(f => ({ ...f, unidade: e.target.value }))} /></div>
                   <div><Label className="text-xs">Quantidade</Label><Input type="number" className="mt-1 text-sm" value={newItem.quantidade} onChange={e => setNewItem(f => ({ ...f, quantidade: e.target.value }))} /></div>
                   <div><Label className="text-xs">Valor Unitário (R$)</Label><Input type="number" className="mt-1 text-sm" value={newItem.valorUnitario} onChange={e => setNewItem(f => ({ ...f, valorUnitario: e.target.value }))} /></div>
@@ -1661,7 +1661,7 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
                 <table className="w-full text-xs min-w-[900px]">
                   <thead>
                     <tr className="bg-gray-50 text-gray-500">
-                      <th className="px-3 py-2 text-left w-[80px]">EAP</th>
+                      <th className="px-3 py-2 text-left w-[80px]">Item</th>
                       <th className="px-3 py-2 text-left">Atividade</th>
                       <th className="px-2 py-2 text-center w-[45px]">Unid.</th>
                       <th className="px-2 py-2 text-right w-[55px]">Qtd.</th>
@@ -1861,13 +1861,13 @@ function MedicoesTab({ contrato, id, aprovarMut, rejeitarMut, cancelarAprovacaoM
             </div>
             {recalcResult.naoVinculados > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-                <p className="text-xs font-semibold text-amber-700 mb-1">Itens não vinculados (sem EAP correspondente):</p>
+                <p className="text-xs font-semibold text-amber-700 mb-1">Itens não vinculados (sem Item correspondente):</p>
                 <ul className="text-xs text-amber-600 space-y-0.5">
                   {recalcResult.itens.filter((i: any) => !i.vinculado).map((i: any, idx: number) => (
-                    <li key={idx}>• {i.descricao} {i.eapCodigo ? `(EAP: ${i.eapCodigo})` : "(sem código EAP)"}</li>
+                    <li key={idx}>• {i.descricao} {i.eapCodigo ? `(Item: ${i.eapCodigo})` : "(sem código Item)"}</li>
                   ))}
                 </ul>
-                <p className="text-xs text-amber-500 mt-2">Vincule esses itens ao cronograma na aba "Itens" usando o botão "Vincular EAP" para que os avanços sejam puxados automaticamente.</p>
+                <p className="text-xs text-amber-500 mt-2">Vincule esses itens ao cronograma na aba "Itens" usando o botão "Vincular Item" para que os avanços sejam puxados automaticamente.</p>
               </div>
             )}
             <div className="flex justify-end">

@@ -427,7 +427,7 @@ export default function MedicaoDetalhe() {
                   <div className="flex items-center gap-3 flex-wrap">
                     <div className="relative flex-1 max-w-xs min-w-[200px]">
                       <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-                      <Input placeholder="Filtrar por EAP ou descrição..." className="pl-9" value={filtroPlanilha} onChange={e => setFiltroPlanilha(e.target.value)} />
+                      <Input placeholder="Filtrar por Item ou descrição..." className="pl-9" value={filtroPlanilha} onChange={e => setFiltroPlanilha(e.target.value)} />
                     </div>
                     <Button variant="outline" size="sm" onClick={() => setCollapsedEap(new Set(Object.keys(childMap)))} className="text-xs">
                       Recolher tudo
@@ -461,7 +461,7 @@ export default function MedicaoDetalhe() {
                       <table className="w-full text-xs table-fixed border-collapse">
                         <thead>
                           <tr className="bg-gray-50 sticky top-0 z-10 border-b text-left">
-                            <th className="w-[7%] px-2 py-1.5 font-semibold text-gray-600">EAP</th>
+                            <th className="w-[7%] px-2 py-1.5 font-semibold text-gray-600">Item</th>
                             <th className="px-2 py-1.5 font-semibold text-gray-600">Descrição</th>
                             <th className="w-[3.5%] px-1 py-1.5 font-semibold text-gray-600 text-center">Und</th>
                             <th className="w-[5%] px-1 py-1.5 font-semibold text-gray-600 text-right">Qtd</th>
@@ -994,7 +994,7 @@ export default function MedicaoDetalhe() {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-gray-50 text-xs">
-                          <TableHead className="w-20">EAP</TableHead>
+                          <TableHead className="w-20">Item</TableHead>
                           <TableHead>Descrição</TableHead>
                           <TableHead className="text-right w-28">Valor Contratual</TableHead>
                           <TableHead className="text-right w-24">% Ant.</TableHead>
@@ -1053,7 +1053,7 @@ export default function MedicaoDetalhe() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-gray-50 text-xs sticky top-0 z-10">
-                        <TableHead className="w-20">EAP</TableHead>
+                        <TableHead className="w-20">Item</TableHead>
                         <TableHead>Descrição</TableHead>
                         <TableHead className="text-right w-28">V. Contratual</TableHead>
                         <TableHead className="text-center w-24">% Ant.</TableHead>

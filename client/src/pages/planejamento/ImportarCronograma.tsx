@@ -939,7 +939,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                 <p className="font-medium text-slate-700">Como exportar do MS Project:</p>
                 <p>• <strong>XML</strong>: Arquivo → Salvar Como → <em>XML do Project (*.xml)</em></p>
                 <p>• <strong>Excel</strong>: Arquivo → Salvar Como → <em>Pasta de Trabalho do Excel (*.xlsx)</em></p>
-                <p>As atividades serão vinculadas automaticamente à EAP do orçamento (se disponível).</p>
+                <p>As atividades serão vinculadas automaticamente ao Item do orçamento (se disponível).</p>
                 <p className="text-blue-600 font-medium mt-1">O campo <strong>% Concluído</strong> de cada tarefa será importado automaticamente e registrado como Avanço Realizado da semana atual — mantendo o sistema alinhado com o Project.</p>
                 <p className="text-emerald-600 font-medium mt-1">As <strong>Predecessoras</strong> (links FS/SS/FF/SF do MS Project) serão lidas e convertidas para códigos EAP — habilitando o modo <strong>Rede de Precedências (CPM)</strong> com setas reais de dependência no Diagrama de Rede.</p>
               </div>
@@ -1072,7 +1072,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                 <table className="w-full text-[11px]">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-slate-700 text-white">
-                      <th className="py-2 px-2 text-left w-28">EAP / WBS</th>
+                      <th className="py-2 px-2 text-left w-28">Item / WBS</th>
                       <th className="py-2 px-2 text-left">Nome da Atividade</th>
                       <th className="py-2 px-2 text-center w-7">Grupo</th>
                       <th className="py-2 px-2 text-center w-7">Marco</th>
@@ -1085,7 +1085,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                       <th className="py-2 px-2 text-right w-16 text-blue-200" title="% Concluído (0-100). Editável. Será gravado como avanço da semana atual.">% Conc.</th>
                       <th className="py-2 px-2 text-left w-28">Recurso</th>
                       <th className="py-2 px-2 text-left w-28">Predecessora</th>
-                      {orcamentoId && <th className="py-2 px-2 text-center w-8">EAP</th>}
+                      {orcamentoId && <th className="py-2 px-2 text-center w-8">Item</th>}
                     </tr>
                   </thead>
                   <tbody>

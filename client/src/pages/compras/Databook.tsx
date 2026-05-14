@@ -1040,7 +1040,7 @@ export default function Databook() {
                         <div className="mt-1"><StatusBadge status={fichaDialog.status} /></div>
                       </div>
                       <div>
-                        <Label className="text-xs text-gray-500">EAP</Label>
+                        <Label className="text-xs text-gray-500">Item</Label>
                         <p className="text-sm font-mono">{fichaDialog.eap_codigo || "—"}</p>
                       </div>
                     </div>

@@ -27,6 +27,9 @@ import {
   obras,
   companies,
   financialRevenue,
+  medicaoBoletimItens,
+  smoAtividadesEap,
+  terceiroContratoItens,
 } from "../../drizzle/schema";
 
 const n = (v: any) => parseFloat(v || "0") || 0;
@@ -3772,6 +3775,226 @@ export const planejamentoRouter = router({
 
       console.log(`[autoSincronizarNomes] R-013: ${mudancas.length} nome(s) corrigido(s) no projeto ${input.projetoId}.`);
       return { atualizadas: mudancas.length };
+    }),
+
+  // ── Rev. 1801 / R-013 — Auto-sincroniza CÓDIGOS (eapCodigo) do cronograma com o orçamento
+  // Ao contrário do auto-sync de NOMES (que casa por eapCodigo), este aqui faz o caminho
+  // inverso: para itens cuja DESCRIÇÃO bate de forma 1-para-1 entre orçamento e cronograma
+  // mas cujo eapCodigo está divergente (ex.: orçamento "03.02.10" / cronograma "3.1.0.1"),
+  // sobrescreve o eapCodigo do cronograma com o do orçamento. Cascata segura:
+  //   1) planejamento_atividades.eap_codigo
+  //   2) planejamento_atividades.predecessora (string com tokens separados por ; ou ,)
+  //   3) medicao_boletim_itens.eap_codigo (FK direta atividade_id)
+  //   4) smo_atividades_eap.eap_codigo (FK direta atividade_id)
+  //   5) terceiro_contrato_itens.eap_codigo (FK direta planejamento_atividade_id)
+  // Match estrito: descrição UNIQUE em ambos os lados (se aparecer 2+ vezes em qualquer
+  // lado, é ambíguo e PULA — registro é exibido pro user resolver manual no Diagnóstico).
+  // Idempotente. Tudo numa única transaction.
+  autoSincronizarCodigosEapComOrcamento: protectedProcedure
+    .input(z.object({ projetoId: z.number(), revisaoId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+
+      const [proj] = await db.select({
+        id: planejamentoProjetos.id,
+        companyId: planejamentoProjetos.companyId,
+        orcamentoId: planejamentoProjetos.orcamentoId,
+      }).from(planejamentoProjetos)
+        .where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
+      if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
+      const isAdminDg = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdminDg && String(proj.companyId) !== String(ctx.user.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+      }
+      if (!proj.orcamentoId) {
+        return { atualizadas: 0, predecessorasAtualizadas: 0, dependentesAtualizadas: 0, ambiguos: 0 };
+      }
+
+      const [rev] = await db.select({ id: planejamentoRevisoes.id })
+        .from(planejamentoRevisoes)
+        .where(and(
+          eq(planejamentoRevisoes.id, input.revisaoId),
+          eq(planejamentoRevisoes.projetoId, input.projetoId),
+        )).limit(1);
+      if (!rev) throw new TRPCError({ code: "NOT_FOUND", message: "Revisão não pertence ao projeto." });
+
+      const [orc] = await db.select({ id: orcamentos.id, companyId: orcamentos.companyId })
+        .from(orcamentos).where(eq(orcamentos.id, proj.orcamentoId)).limit(1);
+      if (!orc || (!isAdminDg && String(orc.companyId) !== String(ctx.user.companyId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para o orçamento vinculado." });
+      }
+
+      const [itensOrc, ativs] = await Promise.all([
+        db.select({
+          eapCodigo: orcamentoItens.eapCodigo,
+          descricao: orcamentoItens.descricao,
+          tipo: orcamentoItens.tipo,
+          custoTotal: orcamentoItens.custoTotal,
+        }).from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, proj.orcamentoId)),
+        db.select({
+          id: planejamentoAtividades.id,
+          eapCodigo: planejamentoAtividades.eapCodigo,
+          nome: planejamentoAtividades.nome,
+          predecessora: planejamentoAtividades.predecessora,
+          isGrupo: planejamentoAtividades.isGrupo,
+          isMarco: planejamentoAtividades.isMarco,
+          isIndireta: planejamentoAtividades.isIndireta,
+          isExterna: planejamentoAtividades.isExterna,
+          disabled: planejamentoAtividades.disabled,
+        }).from(planejamentoAtividades)
+          .where(eq(planejamentoAtividades.revisaoId, input.revisaoId)),
+      ]);
+
+      const norm = (s: string | null | undefined) =>
+        (s ?? '').toString().toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/\s+/g, ' ').trim();
+
+      // Filtra orçamento como o diagnóstico faz (L3613-3615): só folhas reais
+      // (tipo != 'Etapa/Subetapa') com custoTotal > 0. Evita remapear atividade-folha
+      // do cronograma para um código de grupo/etapa do orçamento.
+      const folhasOrc = itensOrc.filter(i =>
+        i.tipo !== 'Etapa/Subetapa' && parseFloat(String(i.custoTotal || 0)) > 0
+      );
+
+      // Constrói índice de descrições UNIQUE no orçamento (folhas) → eapCodigo
+      const orcCount = new Map<string, number>();
+      const orcByDesc = new Map<string, string>(); // descNorm → eapCodigoOrc
+      for (const it of folhasOrc) {
+        const d = norm(it.descricao);
+        if (!d) continue;
+        orcCount.set(d, (orcCount.get(d) ?? 0) + 1);
+        orcByDesc.set(d, (it.eapCodigo ?? '').trim());
+      }
+
+      // Constrói índice de descrições UNIQUE no cronograma (apenas folhas reais)
+      const cronCount = new Map<string, number>();
+      type AtivFolha = (typeof ativs)[number];
+      const cronByDesc = new Map<string, AtivFolha>();
+      for (const a of ativs) {
+        if (a.isGrupo || a.isMarco || a.isIndireta || a.isExterna || a.disabled) continue;
+        const d = norm(a.nome);
+        if (!d) continue;
+        cronCount.set(d, (cronCount.get(d) ?? 0) + 1);
+        cronByDesc.set(d, a);
+      }
+
+      // 1ª passada: candidatos a remap (descrição UNIQUE em ambos + código divergente)
+      type Cand = { id: number; codAntigo: string; codNovo: string };
+      const candidatos: Cand[] = [];
+      let ambiguos = 0;
+      for (const [descNorm, atv] of cronByDesc.entries()) {
+        const codCron = (atv.eapCodigo ?? '').trim();
+        const codOrc = orcByDesc.get(descNorm);
+        if (!codOrc) continue;
+        if ((cronCount.get(descNorm) ?? 0) > 1 || (orcCount.get(descNorm) ?? 0) > 1) {
+          ambiguos++;
+          continue;
+        }
+        if (codCron === codOrc) continue;
+        if (!codCron) continue;
+        candidatos.push({ id: atv.id, codAntigo: codCron, codNovo: codOrc });
+      }
+
+      // Anti-colisão A: codAntigo aparece em 2+ candidatos (2 atividades-folha
+      // compartilham eapCodigo antigo e remapeariam para destinos diferentes).
+      const codAntigoCount = new Map<string, number>();
+      for (const c of candidatos) codAntigoCount.set(c.codAntigo, (codAntigoCount.get(c.codAntigo) ?? 0) + 1);
+
+      // Anti-colisão B: codNovo aparece em 2+ candidatos (2 atividades-folha distintas
+      // mapeariam para o mesmo código de orçamento → ambíguo).
+      const codNovoCount = new Map<string, number>();
+      for (const c of candidatos) codNovoCount.set(c.codNovo, (codNovoCount.get(c.codNovo) ?? 0) + 1);
+
+      // Anti-colisão C: codNovo já é usado por outra atividade da revisão que NÃO
+      // está sendo remapeada (qualquer atividade, inclusive grupo/marco/indireta/externa
+      // — a unicidade de eapCodigo dentro da revisão deve ser preservada para
+      // predecessoras e diagnóstico funcionarem).
+      const idsCandidatos = new Set(candidatos.map(c => c.id));
+      const codigosOcupadosPorOutros = new Set<string>();
+      for (const a of ativs) {
+        if (idsCandidatos.has(a.id)) continue;
+        const c = (a.eapCodigo ?? '').trim();
+        if (c) codigosOcupadosPorOutros.add(c);
+      }
+
+      const ativsParaAtualizar: Cand[] = [];
+      const remap = new Map<string, string>();
+      for (const c of candidatos) {
+        if ((codAntigoCount.get(c.codAntigo) ?? 0) > 1) { ambiguos++; continue; }
+        if ((codNovoCount.get(c.codNovo) ?? 0) > 1) { ambiguos++; continue; }
+        if (codigosOcupadosPorOutros.has(c.codNovo)) { ambiguos++; continue; }
+        remap.set(c.codAntigo, c.codNovo);
+        ativsParaAtualizar.push(c);
+      }
+
+      if (ativsParaAtualizar.length === 0) {
+        return { atualizadas: 0, predecessorasAtualizadas: 0, dependentesAtualizadas: 0, ambiguos };
+      }
+
+      // Identifica predecessoras que precisam ser remapeadas (split por ; ou ,)
+      const splitPred = (s: string) => s.split(/[;,]/).map(t => t.trim()).filter(Boolean);
+      const predecessorasParaAtualizar: { id: number; predNova: string }[] = [];
+      for (const a of ativs) {
+        const pred = (a.predecessora ?? '').trim();
+        if (!pred) continue;
+        const tokens = splitPred(pred);
+        let mudou = false;
+        const novos = tokens.map(t => {
+          // token pode vir como "1.2.3" puro ou "1.2.3FS+5d" (lag) — preserva sufixo
+          const m = t.match(/^([0-9.]+)(.*)$/);
+          if (!m) return t;
+          const codigo = m[1];
+          const sufixo = m[2] ?? '';
+          const novo = remap.get(codigo);
+          if (novo && novo !== codigo) {
+            mudou = true;
+            return novo + sufixo;
+          }
+          return t;
+        });
+        if (mudou) predecessorasParaAtualizar.push({ id: a.id, predNova: novos.join(';') });
+      }
+
+      const idsAtividadesRemapeadas = ativsParaAtualizar.map(x => x.id);
+      let depAtualizadas = 0;
+
+      await db.transaction(async (tx) => {
+        // 1) eapCodigo do cronograma
+        for (const m of ativsParaAtualizar) {
+          await tx.update(planejamentoAtividades)
+            .set({ eapCodigo: m.codNovo })
+            .where(eq(planejamentoAtividades.id, m.id));
+        }
+        // 2) predecessoras
+        for (const p of predecessorasParaAtualizar) {
+          await tx.update(planejamentoAtividades)
+            .set({ predecessora: p.predNova })
+            .where(eq(planejamentoAtividades.id, p.id));
+        }
+        // 3) cascade nas tabelas dependentes que têm FK direta pra atividadeId
+        // (medicao_boletim_itens, smo_atividades_eap, terceiro_contrato_itens)
+        for (const m of ativsParaAtualizar) {
+          const r1 = await tx.update(medicaoBoletimItens)
+            .set({ eapCodigo: m.codNovo })
+            .where(eq(medicaoBoletimItens.atividadeId, m.id));
+          const r2 = await tx.update(smoAtividadesEap)
+            .set({ eapCodigo: m.codNovo })
+            .where(eq(smoAtividadesEap.atividadeId, m.id));
+          const r3 = await tx.update(terceiroContratoItens)
+            .set({ eapCodigo: m.codNovo })
+            .where(eq(terceiroContratoItens.planejamentoAtividadeId, m.id));
+          depAtualizadas += (r1.rowCount ?? 0) + (r2.rowCount ?? 0) + (r3.rowCount ?? 0);
+        }
+      });
+
+      console.log(`[autoSincronizarCodigosEap] R-013: projeto ${input.projetoId} — ${ativsParaAtualizar.length} código(s) corrigido(s), ${predecessorasParaAtualizar.length} predecessora(s) remapeada(s), ${depAtualizadas} linha(s) em tabelas dependentes, ${ambiguos} ambíguo(s) ignorado(s).`);
+      return {
+        atualizadas: ativsParaAtualizar.length,
+        predecessorasAtualizadas: predecessorasParaAtualizar.length,
+        dependentesAtualizadas: depAtualizadas,
+        ambiguos,
+      };
     }),
 
   // ── Atividades por Obra (para seleção no formulário de HE) ─────────────────

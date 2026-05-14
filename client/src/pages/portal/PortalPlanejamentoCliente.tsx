@@ -1673,7 +1673,7 @@ function AbaCronograma({ atividades }: { atividades: any[] }) {
         <div className="w-px h-4 bg-slate-200 mx-0.5" />
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-          <input type="text" placeholder="Buscar EAP ou atividade..." value={busca} onChange={e => setBusca(e.target.value)}
+          <input type="text" placeholder="Buscar Item ou atividade..." value={busca} onChange={e => setBusca(e.target.value)}
             className="h-7 w-56 pl-7 pr-7 text-[11px] border border-slate-200 rounded-md bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors" />
           {busca && (
             <button onClick={() => setBusca("")}
@@ -1713,7 +1713,7 @@ function AbaCronograma({ atividades }: { atividades: any[] }) {
         <table className="text-xs w-full">
           <thead>
             <tr className="bg-slate-700 text-white">
-              <th className="py-2 px-2 text-left text-[11px]">EAP</th>
+              <th className="py-2 px-2 text-left text-[11px]">Item</th>
               <th className="py-2 px-2 text-left text-[11px]">Atividade</th>
               <th className="py-2 px-2 text-left text-[11px] whitespace-nowrap">Início</th>
               <th className="py-2 px-2 text-left text-[11px] whitespace-nowrap">Fim</th>
@@ -2768,7 +2768,7 @@ function AbaGantt({ atividades }: { atividades: any[] }) {
           <div style={{ width: LEFT_W, minWidth: LEFT_W, height: HEADER_H }}
             className="bg-slate-700 text-white text-[11px] font-semibold flex items-center px-3 gap-1.5 border-r border-slate-600 shrink-0 sticky left-0 z-30">
             <CalendarCheck className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-            <span>Atividade / EAP</span>
+            <span>Atividade / Item</span>
           </div>
           <div style={{ width: totalWidth, minWidth: totalWidth, height: HEADER_H, position: "relative" }}
             className="bg-slate-700 shrink-0">
@@ -4900,7 +4900,7 @@ function SecaoAtividades({ titulo, vazio, itens, cor, cutoffOficial }: { titulo:
           <table className="w-full text-xs">
             <thead>
               <tr className="text-slate-500 border-b border-slate-100">
-                <th className="text-left px-3 py-2 font-medium">EAP</th>
+                <th className="text-left px-3 py-2 font-medium">Item</th>
                 <th className="text-left px-3 py-2 font-medium">Atividade</th>
                 <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Início</th>
                 <th className="text-left px-3 py-2 font-medium whitespace-nowrap">Fim</th>
