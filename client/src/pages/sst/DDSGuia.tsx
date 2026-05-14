@@ -195,6 +195,7 @@ function AssinaturaPad({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
 
