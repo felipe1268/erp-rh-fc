@@ -72,6 +72,44 @@ async function ensureCategoriasAdminCatalogo(db: any, companyId: number) {
   );
 }
 
+// Rev. 1775b — Auto-clone das disciplinas TEMPLATE da empresa (criadas
+// historicamente em "Configurações > Disciplinas Padrão" com ficheiroId=NULL)
+// pra dentro do ficheiro na PRIMEIRA abertura. Idempotente: só clona se o
+// ficheiro tem ZERO disciplinas tipo 'projeto'. Replica também as 4 sub-pastas
+// padrão (DWG/PDF/IFC/DOC). Sem isso, obras criadas após a Rev. 1774 abriam
+// vazias mesmo a empresa tendo o template populado.
+async function ensureDisciplinasProjetoNoFicheiro(db: any, companyId: number, ficheiroId: number) {
+  const jaTem = await db.select({ id: gdDisciplinas.id }).from(gdDisciplinas)
+    .where(and(
+      eq(gdDisciplinas.companyId, companyId),
+      eq(gdDisciplinas.ficheiroId, ficheiroId),
+      sql`(${gdDisciplinas.tipoAcervo} = 'projeto' OR ${gdDisciplinas.tipoAcervo} IS NULL)`,
+    ))
+    .limit(1);
+  if (jaTem.length > 0) return; // ficheiro já tem disciplinas técnicas
+  const templates = await db.select().from(gdDisciplinas)
+    .where(and(
+      eq(gdDisciplinas.companyId, companyId),
+      isNull(gdDisciplinas.ficheiroId),
+      eq(gdDisciplinas.ativo, true),
+    ));
+  if (templates.length === 0) return; // empresa não tem template
+  const novas = templates.map((t: any) => ({
+    companyId,
+    ficheiroId,
+    nome: t.nome,
+    sigla: t.sigla,
+    cor: t.cor,
+    tipoAcervo: "projeto" as const,
+    ordem: t.ordem ?? 0,
+  }));
+  const inseridas = await db.insert(gdDisciplinas).values(novas).returning();
+  const pastasValues = inseridas.flatMap((d: any) =>
+    PASTAS_PADRAO.map(nome => ({ companyId, ficheiroId, disciplinaId: d.id, nome }))
+  );
+  if (pastasValues.length > 0) await db.insert(gdPastas).values(pastasValues);
+}
+
 // Rev. 1774 — Garante que as categorias administrativas ATIVAS do catálogo
 // estão criadas como "disciplinas" tipoAcervo='documento' DENTRO do ficheiro.
 // Idempotente por (ficheiroId, categoriaChave). Roda automaticamente em
@@ -314,8 +352,17 @@ export const gestaoDocumentosRouter = router({
         cliente: obras.cliente,
         status: obras.status,
       }).from(obras).where(and(eq(obras.id, ficheiro.obraId), eq(obras.companyId, input.companyId)));
-      // Rev. 1774 — Auto-seed silencioso das categorias admin (Documentos da Obra)
-      // ao abrir a obra. Idempotente. Falhas não bloqueiam — log rico pra diag.
+      // Rev. 1775b — Auto-clone das disciplinas TEMPLATE da empresa pra dentro
+      // do ficheiro (recupera ARQ/EST/ROHR… que ficavam só no template). Roda
+      // ANTES do auto-seed das categorias admin pra garantir ordem visual.
+      try { await ensureDisciplinasProjetoNoFicheiro(db, input.companyId, input.id); }
+      catch (e: any) {
+        console.error("[GD] ensureDisciplinasProjetoNoFicheiro FAIL", {
+          companyId: input.companyId, ficheiroId: input.id,
+          code: e?.code, message: e?.message,
+        });
+      }
+      // Rev. 1774 — Auto-seed silencioso das categorias admin (Documentos da Obra).
       try { await ensureDisciplinasAdminNoFicheiro(db, input.companyId, input.id); }
       catch (e: any) {
         console.error("[GD] ensureDisciplinasAdminNoFicheiro FAIL", {
