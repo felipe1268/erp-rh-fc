@@ -7,7 +7,7 @@ import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import TabelaComparativaAnual, { type LinhaInd } from "@/components/TabelaComparativaAnual";
-import { UserMinus, CheckCircle2, Clock as ClockIcon, DollarSign as DollarIcon } from "lucide-react";
+import { UserMinus, Clock as ClockIcon, DollarSign as DollarIcon } from "lucide-react";
 
 const AP_INDICADORES: LinhaInd[] = [
   { chave: "iniciados", label: "Avisos Iniciados no mês", icone: UserMinus, cor: "red", lowerIsBetter: true,
