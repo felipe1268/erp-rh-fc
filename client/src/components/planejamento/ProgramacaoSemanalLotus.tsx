@@ -421,9 +421,15 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   const metricas = useMemo(() => {
     const out = new Map<number, { metaPct: number; realPct: number; aderenciaPct: number | null; acumPct: number; somaSemanal: number }>();
     if (!semIniStr) return out;
-    // Cutoff = mínimo entre semFim e hoje (semana corrente não cobra dias futuros).
+    // Rev. 1787 — Cutoff só se aplica na SEMANA CORRENTE (que contém hoje).
+    // Para semanas FUTURAS o cutoff deve ser semFim (cobra meta planejada cheia
+    // — essência do look-ahead do Last Planner). Para semanas PASSADAS idem
+    // (semana já fechou; PPC = meta cheia × realizado).
+    // Antes: `cutoffStr = min(hoje, semFim)` — fazia toda semana futura ficar
+    // "Sem meta" porque janFim virava < janIni para atividades começando após hoje.
     const hojeStr = dateStr(hoje);
-    const cutoffStr = hojeStr < semFimStr ? hojeStr : semFimStr;
+    const semanaContemHoje = semIniStr <= hojeStr && hojeStr <= semFimStr;
+    const cutoffStr = semanaContemHoje ? hojeStr : semFimStr;
     for (const a of atividadesDaSemana) {
       const peso = parseFloat(String(a.pesoFinanceiro ?? "0")) || 0;
       const ini = a.dataInicio?.slice(0, 10);
