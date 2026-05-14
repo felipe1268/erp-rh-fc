@@ -1896,12 +1896,14 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
     }
     case 'admissaoMes': {
       // filterValue = "2025-03"
-      whereClause = and(whereClause, sql`TO_CHAR(dataAdmissao, 'YYYY-MM') = ${filterValue}`);
+      // Rev. 1777 — colunas camelCase precisam de aspas duplas no Postgres
+      whereClause = and(whereClause, sql`TO_CHAR("dataAdmissao", 'YYYY-MM') = ${filterValue}`);
       break;
     }
     case 'demissaoMes': {
       // filterValue = "2025-03"
-      whereClause = and(whereClause, sql`TO_CHAR(dataDemissao, 'YYYY-MM') = ${filterValue}`);
+      // Rev. 1777 — colunas camelCase precisam de aspas duplas no Postgres
+      whereClause = and(whereClause, sql`TO_CHAR("dataDemissao", 'YYYY-MM') = ${filterValue}`);
       break;
     }
     default:
