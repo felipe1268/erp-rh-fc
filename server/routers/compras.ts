@@ -891,6 +891,22 @@ async function gerarProximoNumeroSc(db: any, companyId: number, offset: number =
   return `${prefixo}${String(proximo).padStart(4, "0")}`;
 }
 
+// Rev. 1790 — Advisory lock transacional para serializar a geração de número de SC
+// por (empresa, ano). Antes a estratégia era só MAX+1 com 8 retries, mas N usuários
+// simultâneos ainda colidiam: todos liam o mesmo MAX, todos tentavam offsets 0..7 em
+// paralelo e empatavam — daí o erro "esgotaram 8 tentativas" (uq_compras_solicitacoes_numero).
+// Com `pg_advisory_xact_lock(ns, key)` o Postgres serializa criadores concorrentes da MESMA
+// empresa+ano: o segundo writer espera o primeiro fazer COMMIT antes de calcular MAX+1.
+// Lock é liberado automaticamente no fim da transação (XACT) — sem risco de leak.
+const SC_LOCK_NAMESPACE = 871234; // identificador arbitrário do domínio "geração de SC"
+async function lockEGerarNumeroSc(tx: any, companyId: number): Promise<string> {
+  const ano = new Date().getFullYear();
+  // Chave int4: (companyId << 16) | (ano - 2000) — cabe até companyId 65535 e ano 2000-2099.
+  const lockKey = (companyId << 16) | (ano - 2000);
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(${SC_LOCK_NAMESPACE}, ${lockKey})`);
+  return await gerarProximoNumeroSc(tx, companyId, 0);
+}
+
 export const comprasRouter = router({
 
   // ══════════════════════════════════════════════════════════════
@@ -2560,39 +2576,45 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         const vr = (vRows as any).rows || vRows;
         if (!vr || vr.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Veículo não encontrado ou não pertence a esta empresa." });
       }
-      // Rev. 1743 — geração de número à prova de race condition + colisão com itens excluídos.
-      // ANTES: COUNT(*)+1 colidia ao excluir SCs antigas (sequência caía) e em criação simultânea.
-      // AGORA: MAX(suffix) do ano corrente + retry com unique index.
+      // Rev. 1790 — geração de número de SC com advisory lock transacional.
+      // ANTES (Rev. 1743): MAX(suffix)+1+offset com 8 retries — N usuários simultâneos liam o
+      // mesmo MAX e empatavam todos os 8 offsets em paralelo → "esgotaram 8 tentativas".
+      // AGORA: lockEGerarNumeroSc serializa por (empresa, ano) via pg_advisory_xact_lock.
       const tipoSC = input.tipo ?? "material";
       let sc: any = null;
       let lastErr: any = null;
       let lastDupConstraint = "";
       const tentativasLog: Array<{ tentativa: number; numeroSc: string; code?: string; constraint?: string; detail?: string }> = [];
-      for (let tentativa = 0; tentativa < 8; tentativa++) {
-        const numeroSc = await gerarProximoNumeroSc(db, input.companyId, tentativa);
+      // 3 tentativas é suficiência: lock garante serialização. Retry só protege contra
+      // deadlock raro / connection drop / SC criada fora do lock (legacy).
+      for (let tentativa = 0; tentativa < 3; tentativa++) {
+        let numeroSc = "";
         try {
-          const inserted = await db.insert(comprasSolicitacoes).values({
-            companyId: input.companyId,
-            numeroSc,
-            obraId: input.obraId ?? null,
-            projetoId: input.projetoId ?? null,
-            solicitanteId: input.solicitanteId ?? null,
-            vehicleId: input.vehicleId ?? null,
-            departamento: input.departamento,
-            titulo: normalizarTexto(input.titulo),
-            prioridade: input.prioridade ?? "normal",
-            dataNecessidade: input.dataNecessidade,
-            observacoes: input.observacoes,
-            imagemReferenciaUrl: input.imagemReferenciaUrl ?? null,
-            anexos: input.anexos || [],
-            tipo: tipoSC,
-            incluirEquipamentos: input.incluirEquipamentos ?? false,
-            status: "pendente",
-            aprovacaoStatus: "aguardando",
-            criadoPorId: input.userId ?? null,
-            criadoPorNome: input.userName ?? null,
-          } as any).returning();
-          sc = inserted[0];
+          sc = await db.transaction(async (tx: any) => {
+            numeroSc = await lockEGerarNumeroSc(tx, input.companyId);
+            const inserted = await tx.insert(comprasSolicitacoes).values({
+              companyId: input.companyId,
+              numeroSc,
+              obraId: input.obraId ?? null,
+              projetoId: input.projetoId ?? null,
+              solicitanteId: input.solicitanteId ?? null,
+              vehicleId: input.vehicleId ?? null,
+              departamento: input.departamento,
+              titulo: normalizarTexto(input.titulo),
+              prioridade: input.prioridade ?? "normal",
+              dataNecessidade: input.dataNecessidade,
+              observacoes: input.observacoes,
+              imagemReferenciaUrl: input.imagemReferenciaUrl ?? null,
+              anexos: input.anexos || [],
+              tipo: tipoSC,
+              incluirEquipamentos: input.incluirEquipamentos ?? false,
+              status: "pendente",
+              aprovacaoStatus: "aguardando",
+              criadoPorId: input.userId ?? null,
+              criadoPorNome: input.userName ?? null,
+            } as any).returning();
+            return inserted[0];
+          });
           break;
         } catch (e: any) {
           lastErr = e;
@@ -2635,7 +2657,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         }
       }
       if (!sc) {
-        console.error("[compras.criarSolicitacao] esgotaram 8 tentativas de número único", {
+        console.error("[compras.criarSolicitacao] esgotaram 3 tentativas de número único (mesmo com advisory lock)", {
           companyId: input.companyId,
           lastErr: { code: lastErr?.code, message: lastErr?.message, constraint: lastErr?.constraint, detail: lastErr?.detail },
           lastDupConstraint,
@@ -2649,7 +2671,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           : "duplicidade não identificada";
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Não foi possível criar a SC após 8 tentativas — ${constraintHint}. Aguarde alguns segundos e tente novamente. Se persistir, contate o suporte com este código: ${lastErr?.code ?? "?"} / ${lastDupConstraint || "?"}.`,
+          message: `Não foi possível criar a SC após 3 tentativas — ${constraintHint}. Tente novamente em alguns segundos. Se persistir, contate o suporte (código: ${lastErr?.code ?? "?"} / ${lastDupConstraint || "?"}).`,
         });
       }
       if (input.itens.length > 0) {
@@ -10606,32 +10628,35 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
       const scItens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
 
-      // Rev. 1743 — usa gerador robusto (MAX+offset) com retry contra unique violation.
+      // Rev. 1790 — usa lockEGerarNumeroSc + transaction (advisory lock por empresa+ano).
       let novaSc: any = null;
       let lastErrDup: any = null;
       let lastDupConstraintDup = "";
       const tentativasLogDup: Array<{ tentativa: number; numeroSc: string; code?: string; constraint?: string; detail?: string }> = [];
-      for (let tentativa = 0; tentativa < 8; tentativa++) {
-        const numeroSc = await gerarProximoNumeroSc(db, input.companyId, tentativa);
+      for (let tentativa = 0; tentativa < 3; tentativa++) {
+        let numeroSc = "";
         try {
-          const inserted = await db.insert(comprasSolicitacoes).values({
-            companyId: sc.companyId,
-            numeroSc,
-            obraId: sc.obraId,
-            projetoId: sc.projetoId,
-            solicitanteId: sc.solicitanteId,
-            departamento: sc.departamento,
-            titulo: sc.titulo ? `${sc.titulo} (cópia)` : undefined,
-            prioridade: sc.prioridade ?? "normal",
-            dataNecessidade: null,
-            observacoes: sc.observacoes,
-            imagemReferenciaUrl: sc.imagemReferenciaUrl,
-            status: "pendente",
-            aprovacaoStatus: "aguardando",
-            criadoPorId: input.userId ?? null,
-            criadoPorNome: input.userName ?? null,
-          } as any).returning();
-          novaSc = inserted[0];
+          novaSc = await db.transaction(async (tx: any) => {
+            numeroSc = await lockEGerarNumeroSc(tx, input.companyId);
+            const inserted = await tx.insert(comprasSolicitacoes).values({
+              companyId: sc.companyId,
+              numeroSc,
+              obraId: sc.obraId,
+              projetoId: sc.projetoId,
+              solicitanteId: sc.solicitanteId,
+              departamento: sc.departamento,
+              titulo: sc.titulo ? `${sc.titulo} (cópia)` : undefined,
+              prioridade: sc.prioridade ?? "normal",
+              dataNecessidade: null,
+              observacoes: sc.observacoes,
+              imagemReferenciaUrl: sc.imagemReferenciaUrl,
+              status: "pendente",
+              aprovacaoStatus: "aguardando",
+              criadoPorId: input.userId ?? null,
+              criadoPorNome: input.userName ?? null,
+            } as any).returning();
+            return inserted[0];
+          });
           break;
         } catch (e: any) {
           lastErrDup = e;
@@ -10649,7 +10674,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         }
       }
       if (!novaSc) {
-        console.error("[compras.duplicarSolicitacao] esgotaram 8 tentativas de número único", {
+        console.error("[compras.duplicarSolicitacao] esgotaram 3 tentativas de número único (mesmo com advisory lock)", {
           companyId: input.companyId,
           lastErr: { code: lastErrDup?.code, message: lastErrDup?.message, constraint: lastErrDup?.constraint, detail: lastErrDup?.detail },
           lastDupConstraintDup,
@@ -10662,7 +10687,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           : "duplicidade não identificada";
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Não foi possível duplicar a SC após 8 tentativas — ${constraintHint}. Aguarde alguns segundos e tente novamente. Código: ${lastErrDup?.code ?? "?"} / ${lastDupConstraintDup || "?"}.`,
+          message: `Não foi possível duplicar a SC após 3 tentativas — ${constraintHint}. Tente novamente em alguns segundos. Código: ${lastErrDup?.code ?? "?"} / ${lastDupConstraintDup || "?"}.`,
         });
       }
 
