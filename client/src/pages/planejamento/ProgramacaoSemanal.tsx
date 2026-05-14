@@ -711,9 +711,16 @@ export function ProgramacaoSemanal({
     const contribById  = new Map<number, number>(enriched.map(x => [x.id, x.contribSemana]));
     const maiorContribVal = top3[0]?.contribSemana ?? 0;
 
-    // Críticas / quase críticas (zero ou pouca folga até o fim do projeto)
-    const criticasIds      = new Set<number>(enriched.filter(x => x.float <= 0).map(x => x.id));
-    const quaseCriticasIds = new Set<number>(enriched.filter(x => x.float > 0 && x.float <= 14).map(x => x.id));
+    // Críticas / quase críticas (zero ou pouca folga até o fim do projeto).
+    // Rev. 1786 — Atividades INDIRETAS (LoE) e EXTERNAS NÃO entram no caminho
+    // crítico (PMBOK §6.4.2 LoE / DCMA #6 — overhead não consome float).
+    const indById = new Map<number, any>(atividadesSemAtual.map((a: any) => [a.id, a]));
+    const elegivel = (id: number) => {
+      const a = indById.get(id);
+      return a && !a.isIndireta && !a.isExterna;
+    };
+    const criticasIds      = new Set<number>(enriched.filter(x => x.float <= 0 && elegivel(x.id)).map(x => x.id));
+    const quaseCriticasIds = new Set<number>(enriched.filter(x => x.float > 0 && x.float <= 14 && elegivel(x.id)).map(x => x.id));
 
     return {
       somaSemana, pctSemana,
@@ -1519,6 +1526,15 @@ export function ProgramacaoSemanal({
                                   className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[9px] font-bold shrink-0 ring-1 ring-amber-200"
                                 >
                                   QUASE CRÍTICA
+                                </span>
+                              )}
+                              {/* Rev. 1786 — Badge LoE/Indireta (PMBOK §6.4.2 / DCMA #6) */}
+                              {(a as any).isIndireta && (
+                                <span
+                                  title="Indireta / Level of Effort (LoE) — atividade de apoio que NÃO compõe o caminho crítico (PMBOK §6.4.2 / DCMA #6)."
+                                  className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[9px] font-bold shrink-0 ring-1 ring-slate-300"
+                                >
+                                  INDIRETA (LoE)
                                 </span>
                               )}
                               {isMaiorPeso && (

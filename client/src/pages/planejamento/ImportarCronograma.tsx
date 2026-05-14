@@ -24,6 +24,12 @@ export interface TarefaImportada {
   recurso:          string;
   isGrupo:          boolean;
   isMarco:          boolean;
+  // Rev. 1786 — Atividade indireta (Level of Effort): horas/recursos de apoio
+  // que duram quase a obra inteira (ex.: Administração de Obra, Mob/Desmob,
+  // Vigilância). NÃO compõem o caminho crítico (PMBOK §6.4.2 LoE / DCMA #6).
+  // Pré-marcada por heurística no import (duração ≥90% do projeto) e
+  // confirmada pelo usuário no checkbox da tabela de preview.
+  isIndireta?:      boolean;
   // pós-vinculação
   eapCodigo:        string;
   pesoFin:          number;
@@ -744,7 +750,33 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
 
       if (!parsed.length) throw new Error("Nenhuma tarefa encontrada no arquivo");
 
-      const vinculados = vincularComOrcamento(parsed);
+      // Rev. 1786 — Heurística LoE/Indireta (PMBOK §6.4.2 / DCMA #6):
+      // atividades cuja duração cobre ≥90% do projeto são tipicamente
+      // overhead (Administração, Mob/Desmob, Vigilância). Pré-marca como
+      // indireta pra usuário CONFIRMAR (não impõe). Sem grupos/marcos.
+      const folhasParaProjeto = parsed.filter(t => !t.isGrupo && !t.isMarco && t.inicio && t.fim);
+      const inicioProjMs = folhasParaProjeto
+        .map(t => new Date(t.inicio + "T12:00:00").getTime())
+        .filter(n => !isNaN(n))
+        .reduce((a, b) => Math.min(a, b), Infinity);
+      const fimProjMs = folhasParaProjeto
+        .map(t => new Date(t.fim + "T12:00:00").getTime())
+        .filter(n => !isNaN(n))
+        .reduce((a, b) => Math.max(a, b), -Infinity);
+      const duracaoProjDias = (isFinite(inicioProjMs) && isFinite(fimProjMs))
+        ? Math.max(1, Math.round((fimProjMs - inicioProjMs) / 86400000) + 1)
+        : 0;
+      const sugeridos = parsed.map(t => {
+        if (t.isGrupo || t.isMarco || !t.inicio || !t.fim || duracaoProjDias === 0) return t;
+        const ini = new Date(t.inicio + "T12:00:00").getTime();
+        const fim = new Date(t.fim + "T12:00:00").getTime();
+        if (isNaN(ini) || isNaN(fim)) return t;
+        const dur = Math.max(1, Math.round((fim - ini) / 86400000) + 1);
+        const cobertura = dur / duracaoProjDias;
+        return cobertura >= 0.9 ? { ...t, isIndireta: true } : t;
+      });
+
+      const vinculados = vincularComOrcamento(sugeridos);
       setTarefas(vinculados);
       setAlertas(validarTarefas(vinculados));
       setStep("preview");
@@ -795,6 +827,8 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
       recursoPrincipal:    t.recurso || undefined,
       isGrupo:             t.isGrupo,
       isMarco:             t.isMarco,
+      // Rev. 1786 — flag LoE/Indireta vinda da heurística + confirmação do usuário
+      isIndireta:          !!t.isIndireta,
       ordem:               i,
       percentConcluido:    t.percentConcluido ?? 0,
       // Rev. 1670 — snapshot por atividade vindo do XML MSP
@@ -824,6 +858,8 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
           ordem:            a.ordem,
           isGrupo:          a.isGrupo,
           isMarco:          a.isMarco,
+          // Rev. 1786 — propaga sugestão LoE/Indireta também no modo mesclar (só se aplica a atividades NOVAS)
+          isIndireta:       a.isIndireta,
           // Rev. 1670 — snapshot Texto10/Texto7 também no modo mesclar
           previstoMspPct:   a.previstoMspPct,
           realizadoMspPct:  a.realizadoMspPct,
@@ -1012,6 +1048,8 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                       <th className="py-2 px-2 text-left">Nome da Atividade</th>
                       <th className="py-2 px-2 text-center w-7">Grupo</th>
                       <th className="py-2 px-2 text-center w-7">Marco</th>
+                      {/* Rev. 1786 — Coluna LoE/Indireta com sugestão automática (≥90% projeto) */}
+                      <th className="py-2 px-2 text-center w-9" title="LoE/Indireta — atividades de apoio que NÃO compõem o caminho crítico (PMBOK §6.4.2 / DCMA #6). Pré-marcadas quando duração ≥90% do projeto.">Indir.</th>
                       <th className="py-2 px-2 text-left w-24">Início</th>
                       <th className="py-2 px-2 text-left w-24">Fim</th>
                       <th className="py-2 px-2 text-right w-14">Dias</th>
@@ -1057,6 +1095,21 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                               className="h-3 w-3 cursor-pointer"
                               style={{accentColor:"#9333ea"}}
                             />
+                          </td>
+                          {/* Rev. 1786 — checkbox Indireta (LoE) — pré-marcada por heurística ≥90% projeto */}
+                          <td className="px-2 py-1 text-center">
+                            {t.isGrupo || t.isMarco ? (
+                              <span className="text-[10px] text-slate-300">—</span>
+                            ) : (
+                              <input
+                                type="checkbox"
+                                checked={!!t.isIndireta}
+                                onChange={e => updateTarefa(idx, "isIndireta", e.target.checked)}
+                                className="h-3 w-3 cursor-pointer"
+                                style={{accentColor:"#475569"}}
+                                title={t.isIndireta ? "Pré-marcada como Indireta/LoE (duração cobre quase a obra inteira). Não entra no caminho crítico. Desmarque se for direta." : "Marque se esta atividade for de apoio (LoE) — administração, mob/desmob, vigilância. Não entra no caminho crítico."}
+                              />
+                            )}
                           </td>
                           <td className="px-2 py-1">
                             <Input

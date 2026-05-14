@@ -122,6 +122,25 @@
 
 ---
 
+## R-011 · Indiretas/LoE NÃO compõem o caminho crítico (PMBOK §6.4.2 / DCMA #6)
+
+**Atividades sinalizadas como `isIndireta=true` (Level of Effort) ou `isExterna=true` (executadas por terceiros) NUNCA podem aparecer como CRÍTICA / QUASE CRÍTICA em telas de planejamento.**
+
+- ❌ Errado: `criticasIds = atividades.filter(a => float === 0).map(a => a.id)` — pinta Administração de Obra de vermelho a obra inteira, gerando ansiedade falsa
+- ✅ Certo: `criticasIds = atividades.filter(a => float === 0 && !a.isIndireta && !a.isExterna).map(a => a.id)`
+- ✅ Indiretas recebem badge próprio cinza/slate **`INDIRETA (LoE)`** com tooltip citando PMBOK §6.4.2 / DCMA #6
+- ✅ Heurística no import de cronograma: atividades com duração ≥90% do projeto são pré-marcadas como indiretas (usuário confirma no checkbox)
+
+**Justificativa técnica**: PMBOK §6.4.2 classifica atividades de apoio (admin, vigilância, mob/desmob) como **Level of Effort** — esforço que cresce linearmente com o projeto, não consome float e portanto não pertence ao Critical Path Method. DCMA Assessment #6 ("Critical Path Test") explicitamente desconta LoE da contagem de atividades críticas em qualquer auditoria de cronograma.
+
+**Locais que aplicam o filtro** (verificar em qualquer nova tela CPM):
+- `client/src/pages/planejamento/ProgramacaoSemanal.tsx` (`pesoSemana.criticasIds`)
+- `client/src/components/planejamento/ProgramacaoSemanalLotus.tsx` (`analiseSemana.criticasIds`)
+- `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` (KPI atrasadas + aba Caminho Crítico)
+- `client/src/pages/planejamento/ImportarCronograma.tsx` (sugestão automática + checkbox)
+
+---
+
 ## Checklist obrigatório antes de marcar uma tarefa como pronta
 
 - [ ] Modal/tela é full-screen (R-001)?
@@ -134,3 +153,4 @@
 - [ ] Version bumped + changelog + replit.md atualizados (R-008)?
 - [ ] Sem exposição de secrets (R-009)?
 - [ ] SQL com aspas em camelCase + soft-delete + companyId (R-010)?
+- [ ] Tela de planejamento exclui `isIndireta`/`isExterna` do CPM (R-011)?

@@ -488,8 +488,11 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       const float = (projectEndMs && fimMs)
         ? Math.round((projectEndMs - fimMs) / 86400000)
         : 999;
-      if (float <= 0) criticasIds.add(a.id);
-      else if (float <= 14) quaseCriticasIds.add(a.id);
+      // Rev. 1786 — LoE/Indireta NÃO compõe caminho crítico (PMBOK §6.4.2 / DCMA #6).
+      // Externas também são excluídas (já são tratadas como alerta visual em separado).
+      const elegivel = !a.isIndireta && !(a as any).isExterna;
+      if (elegivel && float <= 0) criticasIds.add(a.id);
+      else if (elegivel && float <= 14) quaseCriticasIds.add(a.id);
       const m = metricas.get(a.id);
       if (m && m.metaPct > 0) contribById.set(a.id, m.metaPct);
     }
@@ -1044,6 +1047,18 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                             QUASE CRÍTICA
                           </span>
                         )}
+                        {/* Rev. 1786 — Badge LoE/Indireta. Substitui o vermelho "CRÍTICA" para
+                            atividades de apoio (admin, mob/desmob, vigilância). PMBOK §6.4.2
+                            classifica esse tipo como Level of Effort (LoE) — não consome float
+                            e portanto não compõe o caminho crítico. DCMA Assessment #6 reforça. */}
+                        {a.isIndireta && (
+                          <span
+                            title="Indireta / Level of Effort (LoE) — atividade de apoio que NÃO compõe o caminho crítico (PMBOK §6.4.2 / DCMA #6)."
+                            className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[9px] font-bold ring-1 ring-slate-300"
+                          >
+                            INDIRETA (LoE)
+                          </span>
+                        )}
                         {isMaiorPeso && (
                           <span
                             title={`Top ${topRank} da semana por contribuição ao Previsto: ${contribPp.toFixed(2)}pp (peso financeiro × fração da janela semanal).`}
@@ -1192,6 +1207,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
             {/* Rev. 1680 — Tags do nome da atividade. */}
             <div className="flex items-center gap-1.5" title="Caminho crítico: zero folga até o fim do projeto."><span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[9px] font-bold ring-1 ring-red-200">CRÍTICA</span>sem folga (atraso = atrasa entrega)</div>
             <div className="flex items-center gap-1.5" title="Quase crítica: folga ≤ 14 dias."><span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold ring-1 ring-amber-200">QUASE CRÍTICA</span>folga ≤ 14 dias</div>
+            <div className="flex items-center gap-1.5" title="Indireta / Level of Effort (PMBOK §6.4.2 / DCMA #6) — não compõe caminho crítico."><span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[9px] font-bold ring-1 ring-slate-300">INDIRETA (LoE)</span>apoio (não entra no caminho crítico)</div>
             <div className="flex items-center gap-1.5" title="Top 3 da semana por contribuição ao Previsto."><span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[9px] font-bold ring-1 ring-orange-200">TOP N · X,XXpp</span>maior peso da semana (Top 3)</div>
             <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-blue-800 rounded-sm border border-slate-400" />PREVISTO</div>
             <div className="flex items-center gap-1.5"><div className="w-5 h-3 bg-green-500 rounded-sm border border-slate-400" />REALIZADO (aderência ≥ {ADERENCIA_THRESHOLD}%)</div>

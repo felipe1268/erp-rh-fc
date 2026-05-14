@@ -1203,6 +1203,11 @@ export const planejamentoRouter = router({
         ordem:            z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
         isGrupo:          z.boolean().optional(),
         isMarco:          z.boolean().optional(),
+        // Rev. 1786 — flag LoE/Indireta vinda da heurística do import (≥90% projeto)
+        // ou marcação manual do usuário no checkbox da tabela de preview.
+        // Só usada quando inserimos atividade NOVA no modo "mesclar" — para
+        // atividades existentes a flag é preservada (usuário pode ter ajustado manualmente).
+        isIndireta:       z.boolean().optional(),
         percentConcluido: z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
         // Rev. 1670 — Snapshot Texto10/Texto7 por atividade
         previstoMspPct:   z.preprocess(v => v == null ? null : Number(v), z.number().min(0).max(100).nullish()),
@@ -1293,7 +1298,10 @@ export const planejamentoRouter = router({
                 ordem:          a.ordem ?? i,
                 isGrupo:        a.isGrupo ?? false,
                 isMarco:        a.isMarco ?? false,
-                isIndireta:     false,
+                // Rev. 1786 — propaga a sugestão de Indireta da heurística do import
+                // (≥90% do projeto) ao inserir novas atividades. Usuário já confirmou
+                // no checkbox da tabela de preview antes de chegar aqui.
+                isIndireta:     a.isIndireta ?? false,
                 isExterna:      false,
                 externaResponsavel: null,
                 disabled:       false,

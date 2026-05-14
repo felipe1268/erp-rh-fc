@@ -1790,9 +1790,11 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
     return Math.round(((agora - inicio) / (fim - inicio)) * 100);
   }
 
-  // Atividades em atraso: prazo vencido mas não 100%, OU progresso atual < esperado hoje
+  // Atividades em atraso: prazo vencido mas não 100%, OU progresso atual < esperado hoje.
+  // Rev. 1786 — Indiretas/Externas (LoE) NÃO entram em "atraso crítico" — são overhead
+  // que cresce linearmente; PMBOK §6.4.2 LoE / DCMA #6 (caminho crítico ignora LoE).
   const criticas = atividades.filter((a: any) => {
-    if (a.isGrupo || a.disabled) return false;
+    if (a.isGrupo || a.disabled || a.isIndireta || a.isExterna) return false;
     const real = avMap[a.id] ?? 0;
     if (real >= 100) return false;
     const esperado = progressoEsperadoHoje(a);
@@ -9750,9 +9752,11 @@ function CaminhoCritico({ proj, atividades, avancos }: any) {
     }).sort((a: any, b: any) => a.float - b.float);
   }, [folhas, projectEnd, avMap]);
 
-  const criticas    = atividadesComFloat.filter((a: any) => a.float === 0);
-  const quaseCrit   = atividadesComFloat.filter((a: any) => a.float > 0 && a.float <= 14);
-  const comFolga    = atividadesComFloat.filter((a: any) => a.float > 14);
+  // Rev. 1786 — Caminho crítico exclui LoE/Indiretas e Externas (PMBOK §6.4.2 / DCMA #6).
+  const elegivelCpm = (a: any) => !a.isIndireta && !a.isExterna;
+  const criticas    = atividadesComFloat.filter((a: any) => a.float === 0 && elegivelCpm(a));
+  const quaseCrit   = atividadesComFloat.filter((a: any) => a.float > 0 && a.float <= 14 && elegivelCpm(a));
+  const comFolga    = atividadesComFloat.filter((a: any) => a.float > 14 && elegivelCpm(a));
 
   const hoje = new Date().toISOString().split("T")[0];
 
