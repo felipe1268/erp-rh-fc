@@ -2212,6 +2212,9 @@ function AbaCurvaS({ curvaData, kpis, projeto, curvaMedicoes = [] }: any) {
           icon={<AlertTriangle className={`w-5 h-5 ${kpis.desvio < 0 ? "text-red-600" : "text-emerald-600"}`} />}
           accent={kpis.desvio < 0 ? "bg-gradient-to-br from-red-50/50 to-white" : "bg-gradient-to-br from-emerald-50/50 to-white"}
           sub={kpis.desvio < 0 ? "atrasado" : kpis.desvio > 0 ? "adiantado" : "no prazo"}
+          // Rev. 1788 — destaque vermelho para atraso (desvio negativo), verde para adiantado.
+          valueClassName={kpis.desvio < 0 ? "text-red-600" : kpis.desvio > 0 ? "text-emerald-600" : "text-slate-900"}
+          subClassName={kpis.desvio < 0 ? "text-red-600 font-semibold" : kpis.desvio > 0 ? "text-emerald-700 font-semibold" : "text-slate-500"}
         />
       </div>
 
@@ -2579,15 +2582,16 @@ function AbaRevisoes({ revisoes }: { revisoes: any[] }) {
   );
 }
 
-function KpiCard({ label, value, icon, sub, accent }: { label: string; value: string; icon: React.ReactNode; sub?: string; accent?: string }) {
+function KpiCard({ label, value, icon, sub, accent, valueClassName, subClassName }: { label: string; value: string; icon: React.ReactNode; sub?: string; accent?: string; valueClassName?: string; subClassName?: string }) {
   return (
     <div className={`relative border border-slate-200/70 rounded-2xl p-4 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.06)] hover:shadow-[0_4px_20px_-6px_rgba(15,23,42,0.10)] transition-shadow ${accent || "bg-white"} overflow-hidden`}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</span>
         <div className="w-9 h-9 rounded-lg bg-slate-50 flex items-center justify-center">{icon}</div>
       </div>
-      <div className="text-2xl font-bold text-slate-900 tabular-nums">{value}</div>
-      {sub && <p className="text-[11px] font-medium text-slate-500 mt-0.5 capitalize">{sub}</p>}
+      {/* Rev. 1788 — `valueClassName` permite cor explícita (ex: vermelho para desvios negativos / atrasos). */}
+      <div className={`text-2xl font-bold tabular-nums ${valueClassName || "text-slate-900"}`}>{value}</div>
+      {sub && <p className={`text-[11px] font-medium mt-0.5 capitalize ${subClassName || "text-slate-500"}`}>{sub}</p>}
     </div>
   );
 }
