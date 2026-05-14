@@ -64,7 +64,7 @@ export type AvisoPrevioMode = "aviso_previo" | "pedido_demissao";
 
 export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPrevioMode }) {
   const isPedidoDemissao = mode === "pedido_demissao";
-  const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery} = useCompany();
+  const { selectedCompanyId, selectedCompany, isConstrutoras, getCompanyIdsForQuery} = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const { user } = useAuth();
@@ -423,6 +423,214 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
         descontarAvisoNaoCumprido: !!form.descontarAvisoNaoCumprido,
       });
     }
+  };
+
+  // ======================================================================
+  // GERAR DOCUMENTO DE AVISO PRÉVIO (Trabalhado segue PDF, Indenizado segue DOCX)
+  // - Trabalhado: cabeçalho "AVISO PRÉVIO DO EMPREGADOR" + corpo CLT + bloco
+  //   final "Declaro-me ciente, exercendo a opção por:" com 2 checkboxes EM
+  //   BRANCO (a redução é decisão do colaborador, conforme pedido do user em
+  //   14/05/2026: "preciso ter a opção de apenas gerar o documento, sem
+  //   preencher se será com redução de 2hs ou de 7 dias").
+  // - Indenizado: cabeçalho "AVISO PRÉVIO INDENIZADO DO EMPREGADO" + corpo
+  //   curto + data de pagamento das verbas (Art. 477 §6º CLT — até 10 dias).
+  // Funciona ANTES de salvar a aviso (somente leitura de form + emp + empresa).
+  // ======================================================================
+  const handleGerarDocumento = () => {
+    if (!form.employeeId || !form.tipo || !form.dataDesligamento) {
+      toast.error("Preencha Colaborador, Tipo de Aviso e Data do Aviso para gerar o documento.");
+      return;
+    }
+    const emp = selectedEmp;
+    const empresa: any = selectedCompany || {};
+    if (!emp) { toast.error("Colaborador não encontrado."); return; }
+    if (!empresa?.razaoSocial && !empresa?.nomeFantasia) {
+      toast.error("Empresa selecionada não tem dados cadastrais (razão social/CNPJ).");
+      return;
+    }
+    // Aviso (Rev.1803): documento oficial — alerta se faltar CNPJ/endereço/cidade,
+    // mas não bloqueia (o user pode imprimir e completar à mão se preferir).
+    const camposFaltando: string[] = [];
+    if (!empresa.cnpj) camposFaltando.push("CNPJ");
+    if (!empresa.endereco) camposFaltando.push("Endereço");
+    if (!empresa.cidade) camposFaltando.push("Cidade");
+    if (camposFaltando.length > 0) {
+      toast.warning(`Atenção: empresa sem ${camposFaltando.join(" / ")}. O documento será gerado com esses campos em branco — preencha o cadastro da empresa para sair completo.`);
+    }
+
+    const tipo = form.tipo as string;
+    const isIndenizado = tipo.endsWith("_indenizado");
+    const isTrabalhado = tipo.endsWith("_trabalhado");
+    if (!isIndenizado && !isTrabalhado) {
+      toast.error("Tipo de aviso inválido para gerar documento.");
+      return;
+    }
+
+    // === Datas ===
+    const dataAvisoStr = form.dataDesligamento as string; // YYYY-MM-DD
+    const dtAviso = new Date(dataAvisoStr + "T00:00:00");
+    const fmtBR = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+    const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    const fmtExtenso = (d: Date) => `${String(d.getDate()).padStart(2, "0")} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
+
+    // Trabalhado: dataInicio = dia seguinte ao aviso; dataFim = dataInicio + (diasAviso-1)
+    const anosServico = (() => {
+      if (!emp.dataAdmissao) return 0;
+      const diff = dtAviso.getTime() - new Date(emp.dataAdmissao + "T00:00:00").getTime();
+      return Math.max(0, Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000)));
+    })();
+    // Empregador trabalhado/indenizado: 30 + 3*anosServico, max 90.
+    // Empregado (pedido demissão): sempre 30.
+    const isEmpregadoTipo = tipo.startsWith("empregado_");
+    const diasAviso = isEmpregadoTipo ? 30 : Math.min(30 + anosServico * 3, 90);
+
+    const dtInicio = new Date(dtAviso); dtInicio.setDate(dtInicio.getDate() + 1);
+    const dtFim = new Date(dtInicio); dtFim.setDate(dtFim.getDate() + diasAviso - 1);
+    const dt2hOpcao = new Date(dtFim);                                    // último dia se opção "2h diárias"
+    const dt7DiasUltimoTrab = new Date(dtFim); dt7DiasUltimoTrab.setDate(dt7DiasUltimoTrab.getDate() - 7); // último dia trabalhado se opção "7 dias corridos"
+    // Indenizado: pagamento das verbas em até 10 dias corridos (Art. 477 §6º CLT)
+    const dtPagamento = new Date(dtAviso); dtPagamento.setDate(dtPagamento.getDate() + 10);
+
+    // === Dados ===
+    const empresaNome = (empresa.razaoSocial || empresa.nomeFantasia || "").toUpperCase();
+    const empresaCnpj = empresa.cnpj || "";
+    const empresaEndereco = empresa.endereco || "";
+    const empresaCidade = empresa.cidade || "";
+    const empresaUf = empresa.estado || "";
+    const cidadeUf = [empresaCidade, empresaUf].filter(Boolean).join(" - ");
+
+    const empNome = (emp.nomeCompleto || "").toUpperCase();
+    const empCpf = emp.cpf || "";
+    const empCtps = emp.ctps || "";
+    const empSerie = emp.serieCtps || "";
+    const empFuncao = (emp.cargo || emp.funcao || "").toUpperCase();
+
+    const w = window.open("", "_blank", "width=820,height=1100");
+    if (!w) { toast.error("Popup bloqueado. Permita popups para gerar o documento."); return; }
+
+    const escapeHtml = (s: string) => String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" } as any)[c]);
+
+    // ============================== TRABALHADO ==============================
+    if (isTrabalhado) {
+      const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Aviso Prévio Trabalhado — ${escapeHtml(empNome)}</title>
+<style>
+  @media print { body { margin: 0; } @page { margin: 20mm; size: A4; } .no-print { display: none !important; } }
+  body { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; padding: 32px; max-width: 760px; margin: 0 auto; line-height: 1.5; }
+  h1 { text-align: center; font-size: 14pt; margin: 0 0 28px 0; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+  .bloco { margin-bottom: 18px; }
+  .bloco .rotulo { font-weight: bold; }
+  .corpo { text-align: justify; margin: 22px 0; }
+  .destaque-trab { text-align: center; font-weight: bold; margin: 18px 0; letter-spacing: 1px; }
+  .data-cidade { margin: 26px 0 18px 0; }
+  .assinatura { text-align: center; margin: 50px 0 12px 0; }
+  .assinatura .linha { display: inline-block; width: 60%; border-top: 1px solid #000; padding-top: 4px; }
+  .divisor { border-top: 1px solid #000; margin: 32px 0 18px 0; }
+  .opcoes p { margin: 8px 0; }
+  .opcoes .check { display: inline-block; width: 14px; height: 14px; border: 1px solid #000; vertical-align: middle; margin-right: 8px; }
+  .assinaturas-finais { display: flex; gap: 30px; margin-top: 60px; }
+  .assinaturas-finais .col { flex: 1; text-align: center; border-top: 1px solid #000; padding-top: 4px; font-size: 10pt; }
+  .no-print { text-align: center; margin-bottom: 16px; padding: 8px; background: #f3f4f6; border-radius: 6px; }
+  .no-print button { padding: 8px 24px; font-size: 13px; cursor: pointer; background: #d97706; color: white; border: none; border-radius: 4px; font-weight: 600; }
+</style></head><body>
+<div class="no-print"><button onclick="window.print()">Imprimir / Salvar PDF</button></div>
+<h1>AVISO PRÉVIO DO EMPREGADOR</h1>
+
+<div class="bloco">
+  <p class="rotulo">De</p>
+  <p>Empresa: ${escapeHtml(empresaNome)}<br>
+  CNPJ: ${escapeHtml(empresaCnpj)}<br>
+  Endereço: ${escapeHtml(empresaEndereco)}</p>
+</div>
+
+<div class="bloco">
+  <p class="rotulo">Para</p>
+  <p>Colaborador: ${escapeHtml(empNome)}<br>
+  CTPS: ${escapeHtml(empCtps)}${empSerie ? ` / ${escapeHtml(empSerie)}` : ""}</p>
+</div>
+
+<p class="corpo">Pelo presente notificamos que a ${diasAviso} dias contados de ${fmtBR(dtInicio)}, não mais serão utilizados os seus serviços pela nossa empresa, e por isso, vimos avisá-lo(a) nos termos e para os efeitos do disposto da lei em vigor, da CONSOLIDAÇÃO DAS LEIS DO TRABALHO, e acréscimos pela instrução normativa Srt nº. 15 de 14/07/2010 e lei nº 12.506 de 11/10/2011.</p>
+
+<p class="destaque-trab">O aviso prévio será TRABALHADO.</p>
+
+<p class="corpo">Pedimos a devolução da presente com o seu "CIENTE".</p>
+
+<p class="data-cidade">${escapeHtml(empresaCidade || "____________")}, ${fmtExtenso(dtAviso)}.</p>
+
+<p>Atenciosamente,</p>
+
+<div class="assinatura">
+  <div class="linha">${escapeHtml(empresaNome)}<br>CNPJ: ${escapeHtml(empresaCnpj)}</div>
+</div>
+
+<div class="divisor"></div>
+
+<div class="opcoes">
+  <p>Declaro-me ciente, exercendo a opção por :</p>
+  <p><span class="check"></span> Redução de 2 (duas) horas diárias, (${fmtBR(dt2hOpcao)}).</p>
+  <p><span class="check"></span> Falta de 7 (sete) dias corridos, (${fmtBR(dt7DiasUltimoTrab)}).</p>
+  <p>Em ambas as opções, não haverá redução do meu salário.</p>
+  <p>Declaro ter recebido da empresa uma das vias deste aviso.</p>
+</div>
+
+<div class="assinaturas-finais">
+  <div class="col">${escapeHtml(empNome)}<br>CPF: ${escapeHtml(formatCPF(empCpf))}</div>
+  <div class="col">Assinatura do responsável se empregado menor de idade</div>
+</div>
+
+</body></html>`;
+      w.document.write(html);
+      w.document.close();
+      toast.success("Documento de Aviso Prévio Trabalhado gerado!");
+      return;
+    }
+
+    // ============================== INDENIZADO ==============================
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Aviso Prévio Indenizado — ${escapeHtml(empNome)}</title>
+<style>
+  @media print { body { margin: 0; } @page { margin: 22mm; size: A4; } .no-print { display: none !important; } }
+  body { font-family: "Times New Roman", Times, serif; font-size: 12pt; color: #000; padding: 32px; max-width: 760px; margin: 0 auto; line-height: 1.6; }
+  h1 { text-align: center; font-size: 14pt; margin: 0 0 36px 0; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
+  .dados { margin: 18px 0 28px 0; }
+  .dados p { margin: 6px 0; }
+  .corpo { text-align: justify; margin: 18px 0; }
+  .data-cidade { margin: 30px 0 14px 0; }
+  .ciente { margin: 18px 0 50px 0; }
+  .assinaturas-finais { display: flex; gap: 40px; margin-top: 60px; }
+  .assinaturas-finais .col { flex: 1; text-align: center; border-top: 1px solid #000; padding-top: 4px; font-size: 11pt; font-weight: bold; }
+  .assinaturas-finais .col small { display: block; font-weight: normal; font-size: 10pt; margin-top: 2px; }
+  .no-print { text-align: center; margin-bottom: 16px; padding: 8px; background: #f3f4f6; border-radius: 6px; }
+  .no-print button { padding: 8px 24px; font-size: 13px; cursor: pointer; background: #d97706; color: white; border: none; border-radius: 4px; font-weight: 600; }
+</style></head><body>
+<div class="no-print"><button onclick="window.print()">Imprimir / Salvar PDF</button></div>
+<h1>AVISO PRÉVIO INDENIZADO DO EMPREGADO</h1>
+
+<div class="dados">
+  <p>Ao Sr(a). ${escapeHtml(empNome)}</p>
+  <p>CPF: ${escapeHtml(formatCPF(empCpf))}</p>
+  <p>Função: ${escapeHtml(empFuncao)}</p>
+</div>
+
+<p>Prezado Senhor(a):</p>
+
+<p class="corpo">Comunicamos que será rescindido seu contrato de trabalho nesta data ${fmtExtenso(dtAviso)}, encontrando-se vossa senhoria dispensado do cumprimento do aviso prévio, que lhe será pago de forma indenizatória junto às demais verbas rescisórias.</p>
+
+<p class="corpo">O recebimento das verbas rescisórias devidas e o cumprimento das formalidades legais exigidas para a Rescisão Contratual ocorrerá no dia ${fmtExtenso(dtPagamento)}.</p>
+
+<p class="corpo">Solicitamos a devolução da cópia deste, com o seu ciente.</p>
+
+<p class="data-cidade">${escapeHtml(cidadeUf || "____________")}, ${fmtExtenso(dtAviso)}.</p>
+
+<p class="ciente">Ciente: ______/_______/________</p>
+
+<div class="assinaturas-finais">
+  <div class="col">${escapeHtml(empNome)}<small>CPF: ${escapeHtml(formatCPF(empCpf))}</small></div>
+  <div class="col">${escapeHtml(empresaNome)}<small>CNPJ: ${escapeHtml(empresaCnpj)}</small></div>
+</div>
+
+</body></html>`;
+    w.document.write(html);
+    w.document.close();
+    toast.success("Documento de Aviso Prévio Indenizado gerado!");
   };
 
   const handleEdit = (item: any) => {
@@ -2057,6 +2265,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                           <SelectItem value="7_dias_corridos">7 dias corridos no final</SelectItem>
                         </SelectContent>
                       </Select>
+                      <p className="text-[10px] text-gray-400 mt-1">Opcional — escolha do colaborador (Art. 488 CLT). Pode ficar em branco e gerar o documento; o colaborador marca depois.</p>
                     </div>
                   )}
 
@@ -2524,8 +2733,19 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
               </div>
             )}
 
-            <div className="flex justify-end gap-3 mt-6 pt-4">
+            <div className="flex flex-wrap justify-end gap-3 mt-6 pt-4">
               <Button variant="outline" className="h-11 px-6" onClick={() => { setShowDialog(false); setForm({}); setCalculoPreview(null); }}>Cancelar</Button>
+              {!isPedidoDemissao && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 px-6 gap-2 border-blue-300 text-blue-700 hover:bg-blue-50 font-semibold"
+                  onClick={handleGerarDocumento}
+                  title="Gera o documento de Aviso Prévio (Trabalhado ou Indenizado) sem precisar salvar nem preencher a Redução de Jornada."
+                >
+                  <FileText className="h-4 w-4" /> Gerar Documento
+                </Button>
+              )}
               <Button className="h-11 px-8 bg-amber-600 hover:bg-amber-700 text-white font-semibold" onClick={handleSubmit} disabled={createAviso.isPending}>
                 {createAviso.isPending ? "Salvando..." : (isPedidoDemissao ? "Registrar Pedido de Demissão" : "Criar Aviso Prévio")}
               </Button>
