@@ -19,7 +19,7 @@ import {
   FileText, ShieldCheck, AlertTriangle, Clock, Users, Search,
   Stethoscope, GraduationCap, Car, FolderOpen, Filter, X,
   ArrowLeft, Loader2, ShieldAlert, CheckCircle2, XCircle,
-  TrendingUp, BarChart3, CalendarClock, UserX, Eye,
+  TrendingUp, BarChart3, CalendarClock, UserX, Eye, FileDown,
 } from "lucide-react";
 import { Link } from "wouter";
 import { matchSearch } from "@/lib/searchUtils";
@@ -336,6 +336,16 @@ export default function DashControleDocumentos() {
                     <X className="h-3.5 w-3.5 mr-1" /> Limpar
                   </Button>
                 )}
+                {/* Botão Gerar PDF — proeminente, para mandar nos grupos */}
+                <Button
+                  size="sm"
+                  className="h-9 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm print-hidden"
+                  onClick={() => window.print()}
+                  title="Gerar PDF da tabela atual para enviar nos grupos"
+                >
+                  <FileDown className="h-3.5 w-3.5" />
+                  Gerar PDF
+                </Button>
               </div>
             </div>
           </CardHeader>
