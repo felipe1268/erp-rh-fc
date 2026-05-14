@@ -296,7 +296,11 @@ function IndicadorDetalheModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="w-[98vw] max-w-[1280px] h-[95vh] max-h-[95vh] p-0 gap-0 overflow-hidden flex flex-col">
+      <DialogContent
+        resizable={false}
+        showCloseButton={false}
+        className="w-[100vw] sm:w-[98vw] max-w-none h-[100dvh] sm:h-[96dvh] max-h-[100dvh] sm:max-h-[96dvh] p-0 gap-0 overflow-hidden flex flex-col rounded-none sm:rounded-lg border-0 sm:border"
+      >
         {/* Header gradient */}
         <div className={`bg-gradient-to-r ${grad} text-white p-4 sm:p-6 flex items-center gap-4 shrink-0`}>
           <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
