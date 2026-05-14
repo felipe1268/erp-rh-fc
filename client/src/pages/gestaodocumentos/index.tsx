@@ -58,6 +58,7 @@ import {
   Trash2,
   FolderOpen,
   FolderPlus,
+  FolderTree,
   Shield,
   Settings,
   ChevronLeft,
@@ -1585,51 +1586,71 @@ export default function GestaoDocumentos() {
             {/* Layout duas colunas: árvore + documentos */}
             <div className="flex gap-0 flex-1 overflow-hidden">
               {/* Painel esquerdo — Árvore de Pastas */}
-              <div className="w-64 shrink-0 bg-white border-r border-gray-200 overflow-hidden flex flex-col">
-                {/* Rev. 1774 — Abas de acervo: separa Projetos Técnicos (status quo)
-                    de Documentos da Obra (categorias administrativas vindas do
-                    catálogo central). Trocar de aba reseta a seleção de pasta. */}
-                <div className="grid grid-cols-2 border-b border-gray-200 bg-gray-50">
-                  {([
-                    { key: "projeto" as const,   label: "Projetos",   sub: "Técnicos" },
-                    { key: "documento" as const, label: "Documentos", sub: "da Obra" },
-                  ]).map(t => {
-                    const ativo = acervoAtivo === t.key;
-                    return (
-                      <button
-                        key={t.key}
-                        onClick={() => {
-                          if (acervoAtivo === t.key) return;
-                          setAcervoAtivo(t.key);
-                          setSelectedDiscId(null);
-                          setSelectedSubpasta(null);
-                          setExpandedDiscs(new Set());
-                        }}
-                        className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${ativo
-                          ? "border-blue-600 text-blue-700 bg-white"
-                          : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-white/60"}`}
-                      >
-                        <div className="leading-tight">{t.label}</div>
-                        <div className={`text-[10px] font-normal ${ativo ? "text-blue-500" : "text-gray-400"}`}>{t.sub}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="p-3 border-b border-gray-200 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    {acervoAtivo === "projeto" ? "Pastas Técnicas" : "Categorias"}
+              <div className="w-72 shrink-0 bg-white border-r border-gray-200 overflow-hidden flex flex-col">
+                {/* Rev. 1774b — Abas de acervo redesenhadas: cards visuais com
+                    ícone, indicador colorido em cima e contagem de itens. */}
+                {(() => {
+                  const totalProj = (detail?.disciplinas || []).filter((d: any) => (d.tipoAcervo || "projeto") === "projeto").length;
+                  const totalDoc  = (detail?.disciplinas || []).filter((d: any) => d.tipoAcervo === "documento").length;
+                  const tabs = [
+                    { key: "projeto"   as const, label: "Projetos Técnicos", icon: FolderTree, count: totalProj, color: "blue"   },
+                    { key: "documento" as const, label: "Documentos da Obra", icon: FileText,   count: totalDoc,  color: "emerald" },
+                  ];
+                  return (
+                    <div className="flex flex-col bg-gradient-to-b from-slate-50 to-white border-b border-gray-200 p-2 gap-1.5">
+                      {tabs.map(t => {
+                        const ativo = acervoAtivo === t.key;
+                        const Icon = t.icon;
+                        const accent = t.color === "blue"
+                          ? { bg: "bg-blue-50",    border: "border-blue-300",    text: "text-blue-700",    iconBg: "bg-blue-100",    iconColor: "text-blue-600",    badgeBg: "bg-blue-600" }
+                          : { bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-700", iconBg: "bg-emerald-100", iconColor: "text-emerald-600", badgeBg: "bg-emerald-600" };
+                        return (
+                          <button
+                            key={t.key}
+                            onClick={() => {
+                              if (acervoAtivo === t.key) return;
+                              setAcervoAtivo(t.key);
+                              setSelectedDiscId(null);
+                              setSelectedSubpasta(null);
+                              setExpandedDiscs(new Set());
+                            }}
+                            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-left transition-all ${ativo
+                              ? `${accent.bg} ${accent.border} shadow-sm`
+                              : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50"}`}
+                          >
+                            <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${ativo ? accent.iconBg : "bg-gray-100"}`}>
+                              <Icon className={`w-4 h-4 ${ativo ? accent.iconColor : "text-gray-500"}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className={`text-[13px] font-semibold leading-tight truncate ${ativo ? accent.text : "text-gray-700"}`}>{t.label}</div>
+                              <div className="text-[11px] text-gray-400 mt-0.5">{t.count} {t.count === 1 ? "pasta" : "pastas"}</div>
+                            </div>
+                            {ativo && (
+                              <span className={`text-[10px] font-bold text-white ${accent.badgeBg} px-1.5 py-0.5 rounded`}>
+                                ATIVO
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+                <div className="px-3 py-2 border-b border-gray-100 flex items-center justify-between bg-white">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                    {acervoAtivo === "projeto" ? "Disciplinas" : "Categorias"}
                   </span>
                   {acervoAtivo === "projeto" ? (
-                    <button onClick={() => setShowNewDiscModal(true)} className="p-1 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600" title="Nova pasta técnica">
-                      <FolderPlus className="w-4 h-4" />
+                    <button onClick={() => setShowNewDiscModal(true)} className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-blue-600 hover:bg-blue-50 font-medium" title="Nova disciplina">
+                      <Plus className="w-3 h-3" /> Nova
                     </button>
                   ) : (
                     <button
                       onClick={() => { window.dispatchEvent(new CustomEvent("navParamsUpdated")); setViewMode("configuracoes"); }}
-                      className="p-1 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600"
-                      title="Gerenciar categorias em Configurações"
+                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-emerald-700 hover:bg-emerald-50 font-medium"
+                      title="Gerenciar catálogo central"
                     >
-                      <Settings className="w-4 h-4" />
+                      <Settings className="w-3 h-3" /> Catálogo
                     </button>
                   )}
                 </div>
@@ -1748,7 +1769,7 @@ export default function GestaoDocumentos() {
                     );
                   })}
 
-                  {/* Rev. 1774 — Empty state por acervo. */}
+                  {/* Rev. 1774b — Empty state por acervo (redesenhado). */}
                   {(() => {
                     const visiveis = (detail?.disciplinas || []).filter(
                       (d: any) => (d.tipoAcervo || "projeto") === acervoAtivo,
@@ -1756,20 +1777,27 @@ export default function GestaoDocumentos() {
                     if (!detail || visiveis.length > 0) return null;
                     if (acervoAtivo === "projeto") {
                       return (
-                        <div className="text-center py-6">
-                          <p className="text-xs text-gray-400 mb-2">Nenhuma pasta técnica criada</p>
-                          <Button size="sm" variant="outline" onClick={() => setShowNewDiscModal(true)} className="text-xs">
-                            <FolderPlus className="w-3 h-3 mr-1" /> Criar Pasta
+                        <div className="text-center py-10 px-3">
+                          <div className="w-12 h-12 mx-auto rounded-full bg-blue-50 flex items-center justify-center mb-3">
+                            <FolderTree className="w-6 h-6 text-blue-400" />
+                          </div>
+                          <p className="text-sm font-medium text-gray-700 mb-1">Nenhuma disciplina técnica</p>
+                          <p className="text-[11px] text-gray-400 mb-3">Crie pastas como ARQ, EST, ROHR…</p>
+                          <Button size="sm" onClick={() => setShowNewDiscModal(true)} className="bg-blue-600 text-white hover:bg-blue-700 text-xs">
+                            <Plus className="w-3 h-3 mr-1" /> Nova disciplina
                           </Button>
                         </div>
                       );
                     }
                     return (
-                      <div className="text-center py-6 px-2">
-                        <p className="text-xs text-gray-400 mb-2">Nenhuma categoria de documento</p>
-                        <p className="text-[11px] text-gray-400 mb-2">As categorias administrativas vêm do catálogo central.</p>
-                        <Button size="sm" variant="outline" onClick={() => setViewMode("configuracoes")} className="text-xs">
-                          <Settings className="w-3 h-3 mr-1" /> Abrir Configurações
+                      <div className="text-center py-10 px-3">
+                        <div className="w-12 h-12 mx-auto rounded-full bg-emerald-50 flex items-center justify-center mb-3">
+                          <FileText className="w-6 h-6 text-emerald-400" />
+                        </div>
+                        <p className="text-sm font-medium text-gray-700 mb-1">Catálogo vazio</p>
+                        <p className="text-[11px] text-gray-400 mb-3 leading-snug">As categorias (Contratos, Atas, Seguros…) ficam em Configurações.</p>
+                        <Button size="sm" onClick={() => setViewMode("configuracoes")} className="bg-emerald-600 text-white hover:bg-emerald-700 text-xs">
+                          <Settings className="w-3 h-3 mr-1" /> Abrir Catálogo
                         </Button>
                       </div>
                     );
@@ -1964,9 +1992,31 @@ export default function GestaoDocumentos() {
                         }
                       }}
                     >
-                      <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
-                      <p className="text-gray-500 text-sm mb-1">Nenhum documento nesta pasta</p>
-                      <p className="text-gray-400 text-xs">Clique em "Enviar Documentos" ou arraste arquivos aqui</p>
+                      {/* Rev. 1774b — empty state inteligente: muda quando nenhuma pasta está
+                          selecionada vs pasta selecionada mas vazia. */}
+                      {!selectedDiscId ? (
+                        <>
+                          <div className={`w-16 h-16 mx-auto rounded-full ${acervoAtivo === "documento" ? "bg-emerald-50" : "bg-blue-50"} flex items-center justify-center mb-4`}>
+                            {acervoAtivo === "documento"
+                              ? <FileText className="w-8 h-8 text-emerald-400" />
+                              : <FolderTree className="w-8 h-8 text-blue-400" />}
+                          </div>
+                          <p className="text-gray-700 text-sm font-medium mb-1">
+                            Selecione uma {acervoAtivo === "documento" ? "categoria" : "disciplina"} à esquerda
+                          </p>
+                          <p className="text-gray-400 text-xs">
+                            {acervoAtivo === "documento"
+                              ? "Pastas administrativas (Contratos, Atas, Seguros…) aparecem no painel ao lado."
+                              : "Disciplinas técnicas (ARQ, EST, ROHR…) aparecem no painel ao lado."}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+                          <p className="text-gray-500 text-sm mb-1">Nenhum documento nesta pasta</p>
+                          <p className="text-gray-400 text-xs">Clique em "Enviar Documentos" ou arraste arquivos aqui</p>
+                        </>
+                      )}
                     </div>
                   ) : (
                     <Table>

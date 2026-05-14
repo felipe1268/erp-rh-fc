@@ -12568,4 +12568,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Sistema",
     dataPublicacao: "2026-05-14 02:00:00",
   },
+  {
+    version: 1775,
+    titulo: "Gestão de Documentos · Explorador redesenhado — abas de acervo em cards visuais + empty states inteligentes",
+    descricao: "Pedido do usuário (screenshot iPad): 'ficou péssimo, layout muito bagunçado'. Redesenho puramente visual em `client/src/pages/gestaodocumentos/index.tsx` (sem schema/server change). (1) Painel esquerdo: largura 256→288px (`w-64`→`w-72`). (2) Abas de acervo (Projetos Técnicos / Documentos da Obra) saem do bloco gray-50 minúsculo e viram CARDS verticais empilhados em gradient `from-slate-50 to-white`: cada card tem ícone colorido em quadrado (FolderTree azul / FileText emerald), título 13px semibold, contagem de pastas em 11px e badge 'ATIVO' branco-em-cor quando selecionado. Borda colorida + shadow-sm no card ativo. (3) Header da seção: 'Pastas Técnicas'/'Categorias' vira 'Disciplinas'/'Categorias' em uppercase 11px tracking-wider; botão de ação ganha ícone Plus + label ('Nova'/'Catálogo') em vez do ícone solto. (4) Empty states do painel esquerdo redesenhados: círculo de fundo (azul/emerald) com ícone grande, título 14px medium, descrição 11px e botão de ação colorido (azul pra criar disciplina, emerald pra abrir catálogo). (5) Empty state do painel direito ganha bifurcação INTELIGENTE — quando `selectedDiscId` é null mostra 'Selecione uma categoria/disciplina à esquerda' (círculo colorido + ícone grande); quando uma pasta está selecionada mas vazia mantém a mensagem original 'Nenhum documento nesta pasta'. Adapta cor/texto pelo acervo ativo. Import `FolderTree` adicionado do lucide-react.",
+    tipo: "melhoria",
+    modulos: "Gestão de Documentos",
+    criadoPor: "Sistema",
+    dataPublicacao: "2026-05-14 04:50:00",
+  },
 ];
