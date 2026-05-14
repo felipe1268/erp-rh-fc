@@ -137,12 +137,24 @@ function faixasCelula(
   // LOTUS mostra tudo vermelho".
   temAvancoNaSemana: boolean = false,
   acumPctAteSemana: number = 0,
+  // Rev. 1785 — Início da SEMANA CORRENTE (a que contém `hoje`). A regra
+  // de "vermelho = previsto não executado" agora dispara apenas para dias
+  // de semanas FECHADAS (Last Planner System / PPC: o compromisso só é
+  // avaliado no fechamento da semana, não dia-a-dia dentro da semana
+  // aberta). Antes era `dia <= hoje`, o que pintava ter/qua de vermelho
+  // mesmo a semana ainda estando em curso (com cutoff na qui/sex).
+  inicioSemanaCorrente: Date | null = null,
 ): { top: string | null; bottom: string | null } {
   const ds = dateStr(dia);
   const ehUtil = cal ? ehDiaUtil(ds, cal) : (dia.getDay() !== 0 && dia.getDay() !== 6);
   const inPrev = ehUtil && !!(prevIni && prevFim && ds >= prevIni && ds <= prevFim);
   let inReal = !!(realIni && realFim && ds >= realIni && ds <= realFim);
-  const passou = dia.getTime() <= hoje.getTime();
+  // Rev. 1785 — `passou` agora = "dia pertence a uma semana JÁ FECHADA".
+  // Se `inicioSemanaCorrente` não foi informado (compatibilidade com chamadas
+  // antigas), cai no comportamento anterior (`dia ≤ hoje`).
+  const passou = inicioSemanaCorrente
+    ? dia.getTime() < inicioSemanaCorrente.getTime()
+    : dia.getTime() <= hoje.getTime();
   // Auto-derivação: sem datas reais explícitas, usa o avanço semanal do FC
   // como sinal de "executado". Cobre três cenários:
   //  • Avanço lançado nesta semana DENTRO do envelope previsto → dias
@@ -242,6 +254,16 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     return `${String(ini.getDate()).padStart(2, "0")}/${String(ini.getMonth() + 1).padStart(2, "0")}/${ini.getFullYear()} a ${String(fim.getDate()).padStart(2, "0")}/${String(fim.getMonth() + 1).padStart(2, "0")}/${fim.getFullYear()}`;
   }, [dias]);
   const hoje = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  // Rev. 1785 — Início da semana corrente (a que contém `hoje`). Usado pela
+  // regra de coloração "previsto não executado" (Last Planner / PPC):
+  // só pinta vermelho dias de semanas FECHADAS, mantendo a semana em curso
+  // toda azul até o cutoff. Se hoje cair fora do range do projeto (semanas
+  // não contêm hoje), fica null e a função preserva o comportamento antigo.
+  const inicioSemanaCorrente = useMemo(() => {
+    const hStr = dateStr(hoje);
+    const found = semanas.find((s) => dateStr(s.ini) <= hStr && dateStr(s.fim) >= hStr);
+    return found ? found.ini : null;
+  }, [semanas, hoje]);
 
   // Filtra atividades que tocam a semana (previsto OU real dentro do range)
   const semIniStr = dias.length ? dateStr(dias[0]) : "";
@@ -737,7 +759,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
           const temAvSemX = !!m && m.somaSemanal > 0;
           const acumAteSemX = m?.acumPct ?? 0;
           dias.forEach((d, idx) => {
-            const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSemX, acumAteSemX);
+            const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSemX, acumAteSemX, inicioSemanaCorrente);
             // Excel não suporta faixas internas — prioriza realizado (faixa de
             // baixo). Se só houver previsto, usa a cor do previsto.
             const cor = f.bottom || f.top;
@@ -1094,7 +1116,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                       const temAvSem = !!m && m.somaSemanal > 0;
                       const acumAteSem = m?.acumPct ?? 0;
                       return dias.map((d, idx) => {
-                        const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSem, acumAteSem);
+                        const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSem, acumAteSem, inicioSemanaCorrente);
                         return (
                           <td key={idx} className="border border-slate-300 p-0 h-6 align-middle" title={tip}>
                             <div className="flex flex-col gap-[2px] mx-0.5 my-1">
