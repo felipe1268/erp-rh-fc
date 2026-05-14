@@ -488,8 +488,35 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     const dtFim = new Date(dtInicio); dtFim.setDate(dtFim.getDate() + diasAviso - 1);
     const dt2hOpcao = new Date(dtFim);                                    // último dia se opção "2h diárias"
     const dt7DiasUltimoTrab = new Date(dtFim); dt7DiasUltimoTrab.setDate(dt7DiasUltimoTrab.getDate() - 7); // último dia trabalhado se opção "7 dias corridos"
-    // Indenizado: pagamento das verbas em até 10 dias corridos (Art. 477 §6º CLT)
+    // Indenizado: pagamento das verbas em até 10 dias corridos (Art. 477 §6º CLT).
+    // Regra do user (14/05/2026): se o 10º dia cair em sábado/domingo/feriado nacional,
+    // antecipa para o último dia útil anterior — exemplo do DOCX modelo:
+    // aviso 15/12/2025 → +10 = 25/12 (Natal, qui) → antecipa 24/12 (véspera, qua tratada como
+    // não-útil pela contabilidade) → 23/12 (ter). Implementação: lista enxuta de feriados
+    // nacionais fixos (CLT/Lei 9.093) + Natal/véspera + Ano Novo/véspera + Tiradentes +
+    // Independência + N.Sra. Aparecida + Finados + Proclamação + Trabalho + Confraternização.
+    // Páscoa, Carnaval e Corpus Christi são móveis e ficam de fora (variam por ano).
+    const isFeriadoFixoBR = (d: Date) => {
+      const m = d.getMonth() + 1;
+      const dia = d.getDate();
+      // 01/01, 21/04, 01/05, 07/09, 12/10, 02/11, 15/11, 24/12, 25/12, 31/12
+      const fixos: Array<[number, number]> = [
+        [1, 1], [4, 21], [5, 1], [9, 7], [10, 12], [11, 2], [11, 15],
+        [12, 24], [12, 25], [12, 31],
+      ];
+      return fixos.some(([fm, fd]) => fm === m && fd === dia);
+    };
+    const isDiaUtil = (d: Date) => {
+      const dow = d.getDay(); // 0=Dom, 6=Sab
+      if (dow === 0 || dow === 6) return false;
+      if (isFeriadoFixoBR(d)) return false;
+      return true;
+    };
     const dtPagamento = new Date(dtAviso); dtPagamento.setDate(dtPagamento.getDate() + 10);
+    // Antecipa enquanto cair em fim-de-semana ou feriado fixo
+    while (!isDiaUtil(dtPagamento)) {
+      dtPagamento.setDate(dtPagamento.getDate() - 1);
+    }
 
     // === Dados ===
     const empresaNome = (empresa.razaoSocial || empresa.nomeFantasia || "").toUpperCase();
