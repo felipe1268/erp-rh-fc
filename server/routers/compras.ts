@@ -2566,6 +2566,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       const tipoSC = input.tipo ?? "material";
       let sc: any = null;
       let lastErr: any = null;
+      let lastDupConstraint = "";
+      const tentativasLog: Array<{ tentativa: number; numeroSc: string; code?: string; constraint?: string; detail?: string }> = [];
       for (let tentativa = 0; tentativa < 8; tentativa++) {
         const numeroSc = await gerarProximoNumeroSc(db, input.companyId, tentativa);
         try {
@@ -2600,7 +2602,15 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           // logam tudo (code/constraint/detail/table/column) e propagam mensagem ÚTIL ao cliente.
           const code = e?.code || e?.cause?.code;
           const constraint = e?.constraint || e?.cause?.constraint || "";
+          const detail = e?.detail || e?.cause?.detail || "";
+          // Rev. 1782 — Sempre logar tentativas duplicadas e capturar a constraint exata.
+          // Antes o `continue` silencioso mascarava QUAL constraint estava estourando — se fosse
+          // outra unique (ex.: índice partial não documentado), o loop esgotava 8 tentativas
+          // sem deixar pista. Agora logamos cada retry e propagamos a constraint na msg final.
           if (code === "23505" || constraint.includes("uq_compras_solicitacoes_numero") || String(e?.message || "").toLowerCase().includes("duplicate key")) {
+            lastDupConstraint = constraint || lastDupConstraint;
+            tentativasLog.push({ tentativa, numeroSc, code, constraint, detail });
+            console.warn("[compras.criarSolicitacao] retry por unique violation", { tentativa, numeroSc, code, constraint, detail });
             continue;
           }
           console.error("[compras.criarSolicitacao] insert falhou", {
@@ -2627,9 +2637,20 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       if (!sc) {
         console.error("[compras.criarSolicitacao] esgotaram 8 tentativas de número único", {
           companyId: input.companyId,
-          lastErr: { code: lastErr?.code, message: lastErr?.message, constraint: lastErr?.constraint },
+          lastErr: { code: lastErr?.code, message: lastErr?.message, constraint: lastErr?.constraint, detail: lastErr?.detail },
+          lastDupConstraint,
+          tentativasLog,
         });
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao gerar número único de SC após 8 tentativas: ${lastErr?.message ?? "desconhecido"}` });
+        // Rev. 1782 — Mensagem amigável apontando a constraint real para diagnóstico do usuário.
+        const constraintHint = lastDupConstraint
+          ? (lastDupConstraint === "uq_compras_solicitacoes_numero"
+              ? "número da SC já existe (race condition entre solicitações simultâneas)"
+              : `índice único '${lastDupConstraint}' bloqueou a inserção`)
+          : "duplicidade não identificada";
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Não foi possível criar a SC após 8 tentativas — ${constraintHint}. Aguarde alguns segundos e tente novamente. Se persistir, contate o suporte com este código: ${lastErr?.code ?? "?"} / ${lastDupConstraint || "?"}.`,
+        });
       }
       if (input.itens.length > 0) {
         await db.insert(comprasSolicitacoesItens).values(
@@ -10588,6 +10609,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       // Rev. 1743 — usa gerador robusto (MAX+offset) com retry contra unique violation.
       let novaSc: any = null;
       let lastErrDup: any = null;
+      let lastDupConstraintDup = "";
+      const tentativasLogDup: Array<{ tentativa: number; numeroSc: string; code?: string; constraint?: string; detail?: string }> = [];
       for (let tentativa = 0; tentativa < 8; tentativa++) {
         const numeroSc = await gerarProximoNumeroSc(db, input.companyId, tentativa);
         try {
@@ -10612,12 +10635,36 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           break;
         } catch (e: any) {
           lastErrDup = e;
+          const code = e?.code || e?.cause?.code;
+          const constraint = e?.constraint || e?.cause?.constraint || "";
+          const detail = e?.detail || e?.cause?.detail || "";
           const msg = String(e?.message || e?.code || "");
-          if (msg.includes("duplicate key") || msg.includes("23505") || msg.includes("uq_compras_solicitacoes_numero")) continue;
+          if (code === "23505" || msg.includes("duplicate key") || msg.includes("23505") || constraint.includes("uq_compras_solicitacoes_numero")) {
+            lastDupConstraintDup = constraint || lastDupConstraintDup;
+            tentativasLogDup.push({ tentativa, numeroSc, code, constraint, detail });
+            console.warn("[compras.duplicarSolicitacao] retry por unique violation", { tentativa, numeroSc, code, constraint, detail });
+            continue;
+          }
           throw e;
         }
       }
-      if (!novaSc) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao gerar número único de SC após 8 tentativas: ${lastErrDup?.message ?? "desconhecido"}` });
+      if (!novaSc) {
+        console.error("[compras.duplicarSolicitacao] esgotaram 8 tentativas de número único", {
+          companyId: input.companyId,
+          lastErr: { code: lastErrDup?.code, message: lastErrDup?.message, constraint: lastErrDup?.constraint, detail: lastErrDup?.detail },
+          lastDupConstraintDup,
+          tentativasLogDup,
+        });
+        const constraintHint = lastDupConstraintDup
+          ? (lastDupConstraintDup === "uq_compras_solicitacoes_numero"
+              ? "número da SC já existe (race condition entre solicitações simultâneas)"
+              : `índice único '${lastDupConstraintDup}' bloqueou a inserção`)
+          : "duplicidade não identificada";
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Não foi possível duplicar a SC após 8 tentativas — ${constraintHint}. Aguarde alguns segundos e tente novamente. Código: ${lastErrDup?.code ?? "?"} / ${lastDupConstraintDup || "?"}.`,
+        });
+      }
 
       if (scItens.length > 0) {
         await db.insert(comprasSolicitacoesItens).values(
