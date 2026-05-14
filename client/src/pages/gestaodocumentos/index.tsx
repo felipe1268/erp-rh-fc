@@ -183,6 +183,13 @@ export default function GestaoDocumentos() {
   const [selectedDiscId, setSelectedDiscId] = useState<number | null>(null);
   const [selectedSubpasta, setSelectedSubpasta] = useState<string | null>(null);
   const [expandedDiscs, setExpandedDiscs] = useState<Set<number>>(new Set());
+  // Rev. 1774 — Acervo ativo dentro de uma obra: 'projeto' (Projetos Técnicos,
+  // disciplinas técnicas como ARQ/EST/ROHR) ou 'documento' (Documentos da
+  // Obra: contratos, propostas, atas, seguros, ARTs/RRTs, licenças…).
+  // Cada acervo filtra a árvore de pastas/disciplinas exibida no painel
+  // esquerdo. As pastas administrativas vêm do catálogo central
+  // (Configurações > Categorias da Obra) e são auto-seedadas no servidor.
+  const [acervoAtivo, setAcervoAtivo] = useState<"projeto" | "documento">("projeto");
 
   const [showDocModal, setShowDocModal] = useState(false);
   // Rev. 1720 — confirm modal in-app (substitui window.confirm nativo, que no
@@ -1579,14 +1586,57 @@ export default function GestaoDocumentos() {
             <div className="flex gap-0 flex-1 overflow-hidden">
               {/* Painel esquerdo — Árvore de Pastas */}
               <div className="w-64 shrink-0 bg-white border-r border-gray-200 overflow-hidden flex flex-col">
+                {/* Rev. 1774 — Abas de acervo: separa Projetos Técnicos (status quo)
+                    de Documentos da Obra (categorias administrativas vindas do
+                    catálogo central). Trocar de aba reseta a seleção de pasta. */}
+                <div className="grid grid-cols-2 border-b border-gray-200 bg-gray-50">
+                  {([
+                    { key: "projeto" as const,   label: "Projetos",   sub: "Técnicos" },
+                    { key: "documento" as const, label: "Documentos", sub: "da Obra" },
+                  ]).map(t => {
+                    const ativo = acervoAtivo === t.key;
+                    return (
+                      <button
+                        key={t.key}
+                        onClick={() => {
+                          if (acervoAtivo === t.key) return;
+                          setAcervoAtivo(t.key);
+                          setSelectedDiscId(null);
+                          setSelectedSubpasta(null);
+                          setExpandedDiscs(new Set());
+                        }}
+                        className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${ativo
+                          ? "border-blue-600 text-blue-700 bg-white"
+                          : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-white/60"}`}
+                      >
+                        <div className="leading-tight">{t.label}</div>
+                        <div className={`text-[10px] font-normal ${ativo ? "text-blue-500" : "text-gray-400"}`}>{t.sub}</div>
+                      </button>
+                    );
+                  })}
+                </div>
                 <div className="p-3 border-b border-gray-200 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pastas</span>
-                  <button onClick={() => setShowNewDiscModal(true)} className="p-1 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600" title="Nova pasta">
-                    <FolderPlus className="w-4 h-4" />
-                  </button>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    {acervoAtivo === "projeto" ? "Pastas Técnicas" : "Categorias"}
+                  </span>
+                  {acervoAtivo === "projeto" ? (
+                    <button onClick={() => setShowNewDiscModal(true)} className="p-1 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600" title="Nova pasta técnica">
+                      <FolderPlus className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => { window.dispatchEvent(new CustomEvent("navParamsUpdated")); setViewMode("configuracoes"); }}
+                      className="p-1 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600"
+                      title="Gerenciar categorias em Configurações"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-                  {(detail?.disciplinas || []).map((disc: any) => {
+                  {(detail?.disciplinas || [])
+                    .filter((d: any) => (d.tipoAcervo || "projeto") === acervoAtivo)
+                    .map((disc: any) => {
                     const isExpanded = expandedDiscs.has(disc.id);
                     const isSelected = selectedDiscId === disc.id && !selectedSubpasta;
                     const discPastas = (detail?.pastas || []).filter((p: any) => p.disciplinaId === disc.id);
@@ -1698,14 +1748,32 @@ export default function GestaoDocumentos() {
                     );
                   })}
 
-                  {(!detail || detail.disciplinas.length === 0) && (
-                    <div className="text-center py-6">
-                      <p className="text-xs text-gray-400 mb-2">Nenhuma pasta criada</p>
-                      <Button size="sm" variant="outline" onClick={() => setShowNewDiscModal(true)} className="text-xs">
-                        <FolderPlus className="w-3 h-3 mr-1" /> Criar Pasta
-                      </Button>
-                    </div>
-                  )}
+                  {/* Rev. 1774 — Empty state por acervo. */}
+                  {(() => {
+                    const visiveis = (detail?.disciplinas || []).filter(
+                      (d: any) => (d.tipoAcervo || "projeto") === acervoAtivo,
+                    );
+                    if (!detail || visiveis.length > 0) return null;
+                    if (acervoAtivo === "projeto") {
+                      return (
+                        <div className="text-center py-6">
+                          <p className="text-xs text-gray-400 mb-2">Nenhuma pasta técnica criada</p>
+                          <Button size="sm" variant="outline" onClick={() => setShowNewDiscModal(true)} className="text-xs">
+                            <FolderPlus className="w-3 h-3 mr-1" /> Criar Pasta
+                          </Button>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="text-center py-6 px-2">
+                        <p className="text-xs text-gray-400 mb-2">Nenhuma categoria de documento</p>
+                        <p className="text-[11px] text-gray-400 mb-2">As categorias administrativas vêm do catálogo central.</p>
+                        <Button size="sm" variant="outline" onClick={() => setViewMode("configuracoes")} className="text-xs">
+                          <Settings className="w-3 h-3 mr-1" /> Abrir Configurações
+                        </Button>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -3053,6 +3121,8 @@ function ConfiguracoesStandalone({ disciplinas, tipos, tiposSubpasta, companyId,
 }) {
   return (
     <div className="space-y-4">
+      {/* Rev. 1774 — Catálogo de Categorias Administrativas (Documentos da Obra) */}
+      <CategoriasAdminConfigSection companyId={companyId} />
       <ConfigSection
         title="Disciplinas" subtitle="Pastas de disciplinas disponíveis para suas obras."
         items={disciplinas.data || []}
@@ -3075,6 +3145,166 @@ function ConfiguracoesStandalone({ disciplinas, tipos, tiposSubpasta, companyId,
         onUpdate={(id, nome) => updateTipoSubpasta.mutate({ id, companyId, nome })}
         onDelete={(id) => { if (window.confirm("Excluir?")) deleteTipoSubpasta.mutate({ id, companyId }); }}
       />
+    </div>
+  );
+}
+
+// Rev. 1774 — Catálogo central de "Categorias da Obra" (Documentos
+// administrativos: contratos, propostas, atas, seguros, ARTs, licenças…).
+// Cada categoria vira automaticamente uma pasta dentro de cada obra ao
+// abrir o ficheiro. Editar aqui afeta NOVAS obras (e o botão "Aplicar a
+// todas" propaga retroativamente).
+function CategoriasAdminConfigSection({ companyId }: { companyId: number }) {
+  const utils = trpc.useUtils();
+  const lista = trpc.gestaoDocumentos.listCategoriasAdminPadrao.useQuery(
+    { companyId }, { enabled: companyId > 0 },
+  );
+  const criar = trpc.gestaoDocumentos.criarCategoriaAdminPadrao.useMutation({
+    onSuccess: () => { utils.gestaoDocumentos.listCategoriasAdminPadrao.invalidate(); toast.success("Categoria criada!"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const editar = trpc.gestaoDocumentos.editarCategoriaAdminPadrao.useMutation({
+    onSuccess: () => utils.gestaoDocumentos.listCategoriasAdminPadrao.invalidate(),
+    onError: (e) => toast.error(e.message),
+  });
+  const excluir = trpc.gestaoDocumentos.excluirCategoriaAdminPadrao.useMutation({
+    onSuccess: () => { utils.gestaoDocumentos.listCategoriasAdminPadrao.invalidate(); toast.success("Categoria desativada"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const aplicar = trpc.gestaoDocumentos.aplicarCategoriasATodasObras.useMutation({
+    onSuccess: (r) => { utils.gestaoDocumentos.getFicheiroDetail.invalidate(); toast.success(`Aplicado em ${r.processados}/${r.ficheiros} obra(s)`); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [novo, setNovo] = useState({ chave: "", sigla: "", nome: "", cor: "#64748B", ordem: 100 });
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ nome: "", sigla: "", cor: "" });
+
+  const itens = lista.data || [];
+  const ativos = itens.filter((c: any) => c.ativo);
+
+  function submitNovo() {
+    if (!novo.chave.trim() || !novo.sigla.trim() || !novo.nome.trim()) {
+      toast.error("Preencha chave, sigla e nome"); return;
+    }
+    criar.mutate({ ...novo, chave: novo.chave.toLowerCase().trim() }, {
+      onSuccess: () => { setShowAdd(false); setNovo({ chave: "", sigla: "", nome: "", cor: "#64748B", ordem: 100 }); },
+    });
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="flex items-center justify-between mb-1 gap-3 flex-wrap">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <FolderOpen className="w-5 h-5 text-blue-600" /> Categorias da Obra (Documentos)
+          </h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Pastas administrativas padrão que aparecem em <b>todas as obras</b> na aba "Documentos da Obra".
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{ativos.length} ativas</span>
+          <Button size="sm" variant="outline" onClick={() => { if (window.confirm("Aplicar TODAS as categorias ativas em TODAS as obras desta empresa?\n\nPastas que já existem serão preservadas — só as faltantes serão criadas.")) aplicar.mutate({ companyId }); }} disabled={aplicar.isPending} className="text-xs">
+            {aplicar.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <FolderPlus className="w-3 h-3 mr-1" />}
+            Aplicar a todas as obras
+          </Button>
+          <Button size="sm" onClick={() => setShowAdd(v => !v)} className="bg-blue-600 text-white hover:bg-blue-700 text-xs">
+            <Plus className="w-3 h-3 mr-1" /> Nova categoria
+          </Button>
+        </div>
+      </div>
+
+      {showAdd && (
+        <div className="mt-3 p-3 rounded-md bg-blue-50/50 border border-blue-200 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+          <div className="md:col-span-3">
+            <label className="text-[11px] text-gray-600 font-medium">Chave (id)</label>
+            <Input value={novo.chave} onChange={(e) => setNovo({ ...novo, chave: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })} placeholder="ex: notas_fiscais" className="h-8 text-xs" />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-[11px] text-gray-600 font-medium">Sigla</label>
+            <Input value={novo.sigla} onChange={(e) => setNovo({ ...novo, sigla: e.target.value.toUpperCase().slice(0, 10) })} placeholder="NF" className="h-8 text-xs uppercase" />
+          </div>
+          <div className="md:col-span-4">
+            <label className="text-[11px] text-gray-600 font-medium">Nome</label>
+            <Input value={novo.nome} onChange={(e) => setNovo({ ...novo, nome: e.target.value })} placeholder="Notas Fiscais" className="h-8 text-xs" />
+          </div>
+          <div className="md:col-span-1">
+            <label className="text-[11px] text-gray-600 font-medium">Cor</label>
+            <Input type="color" value={novo.cor} onChange={(e) => setNovo({ ...novo, cor: e.target.value })} className="h-8 p-0.5 cursor-pointer" />
+          </div>
+          <div className="md:col-span-1">
+            <label className="text-[11px] text-gray-600 font-medium">Ordem</label>
+            <Input type="number" value={novo.ordem} onChange={(e) => setNovo({ ...novo, ordem: Number(e.target.value) || 0 })} className="h-8 text-xs" />
+          </div>
+          <div className="md:col-span-1 flex gap-1">
+            <Button size="sm" onClick={submitNovo} disabled={criar.isPending} className="bg-green-600 text-white hover:bg-green-700 h-8 px-2">
+              {criar.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setShowAdd(false)} className="h-8 px-2">
+              <XCircle className="w-3 h-3" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3 space-y-1">
+        {itens.length === 0 && !lista.isLoading && (
+          <p className="text-xs text-gray-400 text-center py-6">Nenhuma categoria. O catálogo padrão será criado automaticamente ao abrir uma obra.</p>
+        )}
+        {itens.map((c: any) => {
+          const isEditing = editingId === c.id;
+          return (
+            <div key={c.id} className={`flex items-center gap-2 px-2 py-1.5 rounded border ${c.ativo ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50 opacity-60"}`}>
+              <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: c.cor || "#64748B" }} />
+              {isEditing ? (
+                <>
+                  <Input value={editForm.sigla} onChange={(e) => setEditForm({ ...editForm, sigla: e.target.value.toUpperCase().slice(0, 10) })} className="h-7 text-xs w-20 uppercase" />
+                  <Input value={editForm.nome} onChange={(e) => setEditForm({ ...editForm, nome: e.target.value })} className="h-7 text-xs flex-1" />
+                  <Input type="color" value={editForm.cor || c.cor || "#64748B"} onChange={(e) => setEditForm({ ...editForm, cor: e.target.value })} className="h-7 w-10 p-0.5 cursor-pointer" />
+                  <button
+                    onClick={() => {
+                      editar.mutate({ id: c.id, companyId, nome: editForm.nome, sigla: editForm.sigla, cor: editForm.cor }, {
+                        onSuccess: () => { setEditingId(null); toast.success("Categoria atualizada"); },
+                      });
+                    }}
+                    className="text-green-600 hover:text-green-700 p-1"
+                  ><CheckCircle className="w-4 h-4" /></button>
+                  <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-gray-600 p-1"><XCircle className="w-4 h-4" /></button>
+                </>
+              ) : (
+                <>
+                  <span className="font-mono text-xs font-bold text-gray-700 w-12">{c.sigla}</span>
+                  <span className="text-sm text-gray-800 flex-1 truncate">{c.nome}</span>
+                  <span className="text-[10px] text-gray-400 font-mono">{c.chave}</span>
+                  {!c.ativo && <span className="text-[10px] text-gray-400 px-1.5 py-0.5 bg-gray-200 rounded">desativada</span>}
+                  {c.ativo && (
+                    <>
+                      <button
+                        onClick={() => { setEditingId(c.id); setEditForm({ nome: c.nome, sigla: c.sigla, cor: c.cor || "#64748B" }); }}
+                        className="text-gray-400 hover:text-blue-600 p-1"
+                        title="Editar"
+                      ><Pencil className="w-3.5 h-3.5" /></button>
+                      <button
+                        onClick={() => { if (window.confirm(`Desativar "${c.nome}"?\n\nNovas obras NÃO receberão essa categoria. Pastas já existentes nas obras atuais ficam preservadas.`)) excluir.mutate({ id: c.id, companyId }); }}
+                        className="text-gray-400 hover:text-red-600 p-1"
+                        title="Desativar"
+                      ><Trash2 className="w-3.5 h-3.5" /></button>
+                    </>
+                  )}
+                  {!c.ativo && (
+                    <button
+                      onClick={() => editar.mutate({ id: c.id, companyId, ativo: true })}
+                      className="text-xs text-blue-600 hover:text-blue-700 px-2 py-0.5 rounded border border-blue-200 hover:bg-blue-50"
+                    >Reativar</button>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

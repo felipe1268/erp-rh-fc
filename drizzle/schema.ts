@@ -7265,18 +7265,44 @@ export const gdFicheirosObra = pgTable("gd_ficheiros_obra", {
   index("idx_gd_fich_obra").on(t.companyId, t.obraId),
 ]);
 
+// Rev. 1774 — `tipoAcervo` separa pastas técnicas (projetos) de pastas
+// administrativas (contratos, propostas, atas, seguros…). `categoriaChave`
+// vincula uma pasta administrativa à entrada do catálogo central
+// (gd_categorias_admin_padrao) — NULL para pastas tipo 'projeto' ou
+// pastas admin avulsas criadas manualmente. `ordem` controla ordenação
+// estável das pastas admin (catálogo numerado).
 export const gdDisciplinas = pgTable("gd_disciplinas", {
-  id:          serial("id").primaryKey(),
-  companyId:   integer("company_id").notNull(),
-  ficheiroId:  integer("ficheiro_id"),
-  nome:        varchar("nome", { length: 100 }).notNull(),
-  sigla:       varchar("sigla", { length: 10 }).notNull(),
-  cor:         varchar("cor", { length: 7 }).default("#3b82f6"),
-  ativo:       boolean("ativo").default(true),
-  criadoEm:    timestamp("criado_em").defaultNow(),
+  id:             serial("id").primaryKey(),
+  companyId:      integer("company_id").notNull(),
+  ficheiroId:     integer("ficheiro_id"),
+  nome:           varchar("nome", { length: 100 }).notNull(),
+  sigla:          varchar("sigla", { length: 10 }).notNull(),
+  cor:            varchar("cor", { length: 7 }).default("#3b82f6"),
+  ativo:          boolean("ativo").default(true),
+  tipoAcervo:     varchar("tipo_acervo", { length: 20 }).default("projeto"),
+  categoriaChave: varchar("categoria_chave", { length: 50 }),
+  ordem:          integer("ordem").default(0),
+  criadoEm:       timestamp("criado_em").defaultNow(),
 }, (t) => [
   index("idx_gd_disc_company").on(t.companyId),
   index("idx_gd_disc_ficheiro").on(t.ficheiroId),
+]);
+
+// Rev. 1774 — Catálogo central de categorias administrativas por empresa.
+// Cada obra ao ser aberta recebe um seed dessas categorias como disciplinas
+// tipoAcervo='documento'. Editável em Configurações > Gestão de Documentos.
+export const gdCategoriasAdminPadrao = pgTable("gd_categorias_admin_padrao", {
+  id:        serial("id").primaryKey(),
+  companyId: integer("company_id").notNull(),
+  chave:     varchar("chave", { length: 50 }).notNull(),
+  nome:      varchar("nome", { length: 150 }).notNull(),
+  sigla:     varchar("sigla", { length: 10 }).notNull(),
+  cor:       varchar("cor", { length: 7 }).default("#64748B"),
+  ordem:     integer("ordem").default(0),
+  ativo:     boolean("ativo").default(true),
+  criadoEm:  timestamp("criado_em").defaultNow(),
+}, (t) => [
+  index("idx_gd_cat_adm_company").on(t.companyId),
 ]);
 
 export const gdPastas = pgTable("gd_pastas", {

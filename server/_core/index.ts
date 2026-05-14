@@ -1057,7 +1057,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1746-2026-05-13-dds-assinatura-img";
+    const COLFIX_VERSION = "v1774b-2026-05-14-gd-disc-ficheiro-cat-uniq";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -1848,10 +1848,36 @@ Regras:
             ALTER TABLE obras ADD COLUMN IF NOT EXISTS percentual_adm NUMERIC(5,2) DEFAULT 0;
             ALTER TABLE oc_number_config ADD COLUMN IF NOT EXISTS alerta_reservas_ativo SMALLINT DEFAULT 1;
             ALTER TABLE dds_sessao_funcionarios ADD COLUMN IF NOT EXISTS assinatura_img TEXT;
+            -- Rev. 1774: Acervo "Documentos da Obra" (admin) ao lado dos Projetos Técnicos
+            ALTER TABLE gd_disciplinas ADD COLUMN IF NOT EXISTS tipo_acervo VARCHAR(20) DEFAULT 'projeto';
+            ALTER TABLE gd_disciplinas ADD COLUMN IF NOT EXISTS categoria_chave VARCHAR(50);
+            ALTER TABLE gd_disciplinas ADD COLUMN IF NOT EXISTS ordem INTEGER DEFAULT 0;
+            CREATE TABLE IF NOT EXISTS gd_categorias_admin_padrao (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              chave VARCHAR(50) NOT NULL,
+              nome VARCHAR(150) NOT NULL,
+              sigla VARCHAR(10) NOT NULL,
+              cor VARCHAR(7) DEFAULT '#64748B',
+              ordem INTEGER DEFAULT 0,
+              ativo BOOLEAN DEFAULT TRUE,
+              criado_em TIMESTAMP DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS idx_gd_cat_adm_company ON gd_categorias_admin_padrao (company_id);
+            CREATE UNIQUE INDEX IF NOT EXISTS uniq_gd_cat_adm_company_chave ON gd_categorias_admin_padrao (company_id, chave);
+            -- Rev. 1774b — UNIQUE PARCIAL em (ficheiro_id, categoria_chave) só pra
+            -- linhas com categoria_chave preenchida (i.e. disciplinas administrativas).
+            -- Garante idempotência REAL no ensureDisciplinasAdminNoFicheiro: se 2
+            -- requests concorrentes da mesma obra rodarem o seed simultaneamente,
+            -- o INSERT segundo falha em vez de duplicar a pasta. Disciplinas
+            -- técnicas (categoria_chave NULL) não são afetadas.
+            CREATE UNIQUE INDEX IF NOT EXISTS uniq_gd_disc_ficheiro_cat_chave
+              ON gd_disciplinas (ficheiro_id, categoria_chave)
+              WHERE categoria_chave IS NOT NULL AND deleted_at IS NULL;
           EXCEPTION WHEN OTHERS THEN NULL;
           END $$
         `);
-        console.log("[ColFix] EPI/warnings/obras/orcamento/terceiros/cargoConfianca cols OK");
+        console.log("[ColFix] EPI/warnings/obras/orcamento/terceiros/cargoConfianca/gdCategoriasAdmin cols OK");
       } catch (e: any) { console.warn("[ColFix] Bloco2:", e?.message ?? e); }
     });
     import("../db").then(async ({ getDb }) => {

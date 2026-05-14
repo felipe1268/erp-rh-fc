@@ -16,6 +16,7 @@ import {
   gdDownloadLog,
   gdArts,
   gdTiposSubpasta,
+  gdCategoriasAdminPadrao,
   obras,
 } from "../../drizzle/schema";
 
@@ -40,6 +41,81 @@ const DISCIPLINAS_PADRAO = [
 ];
 
 const SUBPASTAS_PADRAO_COMPLETAS = ["DWG", "PDF", "IFC", "DOC", "REVIT", "SKP", "XLS", "FOTOS", "BIM", "MEMORIAIS"];
+
+// Rev. 1774 — Catálogo padrão de categorias administrativas (Documentos da Obra).
+// Decisão fechada com o usuário (FC Engenharia): 9 categorias semente, com
+// botão pra adicionar mais nas Configurações. Cada categoria vira uma
+// "disciplina" tipoAcervo='documento' em cada obra, mantendo 100% das
+// features atuais (sub-pastas livres, upload, revisões, busca).
+const CATEGORIAS_ADMIN_PADRAO = [
+  { chave: "contratos",   sigla: "CTR", nome: "Contratos & Aditivos",        cor: "#2563EB", ordem: 10 },
+  { chave: "propostas",   sigla: "PRO", nome: "Propostas Comerciais",        cor: "#0EA5E9", ordem: 20 },
+  { chave: "atas",        sigla: "ATA", nome: "Atas de Reunião",             cor: "#8B5CF6", ordem: 30 },
+  { chave: "seguros",     sigla: "SEG", nome: "Seguros & Garantias",         cor: "#10B981", ordem: 40 },
+  { chave: "licencas",    sigla: "LIC", nome: "Licenças & Alvarás",          cor: "#F59E0B", ordem: 50 },
+  { chave: "arts",        sigla: "ART", nome: "ARTs / RRTs",                 cor: "#DC2626", ordem: 60 },
+  { chave: "comunicacoes",sigla: "COM", nome: "Comunicações Oficiais",       cor: "#6366F1", ordem: 70 },
+  { chave: "memoriais",   sigla: "MEM", nome: "Memoriais & Especificações",  cor: "#0891B2", ordem: 80 },
+  { chave: "diversos",    sigla: "DIV", nome: "Diversos",                    cor: "#64748B", ordem: 90 },
+];
+
+// Rev. 1774 — Garante o catálogo de categorias administrativas para a
+// empresa (lazy seed). Idempotente: só insere se vazio.
+async function ensureCategoriasAdminCatalogo(db: any, companyId: number) {
+  const existing = await db.select({ id: gdCategoriasAdminPadrao.id })
+    .from(gdCategoriasAdminPadrao)
+    .where(eq(gdCategoriasAdminPadrao.companyId, companyId))
+    .limit(1);
+  if (existing.length > 0) return;
+  await db.insert(gdCategoriasAdminPadrao).values(
+    CATEGORIAS_ADMIN_PADRAO.map(c => ({ ...c, companyId }))
+  );
+}
+
+// Rev. 1774 — Garante que as categorias administrativas ATIVAS do catálogo
+// estão criadas como "disciplinas" tipoAcervo='documento' DENTRO do ficheiro.
+// Idempotente por (ficheiroId, categoriaChave). Roda automaticamente em
+// getFicheiroDetail e pode ser disparada manualmente em "Aplicar a todas".
+async function ensureDisciplinasAdminNoFicheiro(db: any, companyId: number, ficheiroId: number) {
+  await ensureCategoriasAdminCatalogo(db, companyId);
+  const catalogo = await db.select().from(gdCategoriasAdminPadrao)
+    .where(and(
+      eq(gdCategoriasAdminPadrao.companyId, companyId),
+      eq(gdCategoriasAdminPadrao.ativo, true),
+    ));
+  if (catalogo.length === 0) return;
+  const existentes = await db.select({ chave: gdDisciplinas.categoriaChave })
+    .from(gdDisciplinas)
+    .where(and(
+      eq(gdDisciplinas.companyId, companyId),
+      eq(gdDisciplinas.ficheiroId, ficheiroId),
+      eq(gdDisciplinas.tipoAcervo, "documento"),
+    ));
+  const jaExistem = new Set(existentes.map((e: any) => e.chave).filter(Boolean));
+  const novas = catalogo
+    .filter((c: any) => !jaExistem.has(c.chave))
+    .map((c: any) => ({
+      companyId,
+      ficheiroId,
+      nome: c.nome,
+      sigla: c.sigla,
+      cor: c.cor,
+      tipoAcervo: "documento" as const,
+      categoriaChave: c.chave,
+      ordem: c.ordem ?? 0,
+    }));
+  if (novas.length > 0) {
+    try {
+      await db.insert(gdDisciplinas).values(novas);
+    } catch (e: any) {
+      // Race: 2 requests concorrentes da mesma obra fazem o seed simultâneo.
+      // Índice parcial uniq_gd_disc_ficheiro_cat_chave (Rev. 1774b) protege
+      // o banco; aqui só engolimos o duplicate key — a outra request já
+      // criou as pastas. Outros erros propagam.
+      if (e?.code !== "23505") throw e;
+    }
+  }
+}
 
 // ----- Helpers de controle de acesso por obra (Rev.1425) -----
 async function assertObraAccess(ctx: any, obraId: number | null | undefined) {
@@ -238,13 +314,17 @@ export const gestaoDocumentosRouter = router({
         cliente: obras.cliente,
         status: obras.status,
       }).from(obras).where(and(eq(obras.id, ficheiro.obraId), eq(obras.companyId, input.companyId)));
+      // Rev. 1774 — Auto-seed silencioso das categorias admin (Documentos da Obra)
+      // ao abrir a obra. Idempotente. Falhas não bloqueiam — log só.
+      try { await ensureDisciplinasAdminNoFicheiro(db, input.companyId, input.id); }
+      catch (e: any) { console.warn("[GD] ensureDisciplinasAdminNoFicheiro:", e?.message ?? e); }
       const disciplinas = await db.select().from(gdDisciplinas)
         .where(and(
           eq(gdDisciplinas.companyId, input.companyId),
           eq(gdDisciplinas.ficheiroId, input.id),
           eq(gdDisciplinas.ativo, true),
         ))
-        .orderBy(gdDisciplinas.nome);
+        .orderBy(gdDisciplinas.ordem, gdDisciplinas.nome);
       const pastas = await db.select().from(gdPastas)
         .where(and(
           eq(gdPastas.companyId, input.companyId),
@@ -1496,5 +1576,114 @@ export const gestaoDocumentosRouter = router({
         expiringDocs,
         recentDocs,
       };
+    }),
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Rev. 1774 — Catálogo de Categorias Administrativas (Documentos da Obra)
+  // ─────────────────────────────────────────────────────────────────────────
+  listCategoriasAdminPadrao: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await ensureCategoriasAdminCatalogo(db, input.companyId);
+      return db.select().from(gdCategoriasAdminPadrao)
+        .where(eq(gdCategoriasAdminPadrao.companyId, input.companyId))
+        .orderBy(gdCategoriasAdminPadrao.ordem, gdCategoriasAdminPadrao.nome);
+    }),
+
+  criarCategoriaAdminPadrao: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      chave:     z.string().min(1).max(50).regex(/^[a-z0-9_]+$/, "Use apenas letras minúsculas, números e _"),
+      nome:      z.string().min(1).max(150),
+      sigla:     z.string().min(1).max(10),
+      cor:       z.string().optional(),
+      ordem:     z.number().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!isAdmin(ctx)) throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem editar o catálogo" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      try {
+        const [row] = await db.insert(gdCategoriasAdminPadrao).values({
+          companyId: input.companyId,
+          chave:     input.chave.toLowerCase().trim(),
+          nome:      input.nome.trim(),
+          sigla:     input.sigla.toUpperCase().trim(),
+          cor:       input.cor || "#64748B",
+          ordem:     input.ordem ?? 100,
+        }).returning();
+        return row;
+      } catch (e: any) {
+        if (e?.code === "23505") throw new TRPCError({ code: "CONFLICT", message: "Já existe uma categoria com essa chave" });
+        throw e;
+      }
+    }),
+
+  editarCategoriaAdminPadrao: protectedProcedure
+    .input(z.object({
+      id:        z.number(),
+      companyId: z.number(),
+      nome:      z.string().min(1).max(150).optional(),
+      sigla:     z.string().min(1).max(10).optional(),
+      cor:       z.string().optional(),
+      ordem:     z.number().optional(),
+      ativo:     z.boolean().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!isAdmin(ctx)) throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem editar o catálogo" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const patch: any = {};
+      if (input.nome !== undefined)  patch.nome  = input.nome.trim();
+      if (input.sigla !== undefined) patch.sigla = input.sigla.toUpperCase().trim();
+      if (input.cor !== undefined)   patch.cor   = input.cor;
+      if (input.ordem !== undefined) patch.ordem = input.ordem;
+      if (input.ativo !== undefined) patch.ativo = input.ativo;
+      await db.update(gdCategoriasAdminPadrao).set(patch)
+        .where(and(
+          eq(gdCategoriasAdminPadrao.id, input.id),
+          eq(gdCategoriasAdminPadrao.companyId, input.companyId),
+        ));
+      return { success: true };
+    }),
+
+  excluirCategoriaAdminPadrao: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      if (!isAdmin(ctx)) throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem editar o catálogo" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Soft-delete: deixa ativo=false. Disciplinas já criadas nas obras
+      // PERMANECEM (preserva docs históricos). Novas obras não recebem mais
+      // a categoria. Admin pode reativar a qualquer momento.
+      await db.update(gdCategoriasAdminPadrao).set({ ativo: false })
+        .where(and(
+          eq(gdCategoriasAdminPadrao.id, input.id),
+          eq(gdCategoriasAdminPadrao.companyId, input.companyId),
+        ));
+      return { success: true };
+    }),
+
+  aplicarCategoriasATodasObras: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      if (!isAdmin(ctx)) throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem aplicar o catálogo" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const ficheiros = await db.select({ id: gdFicheirosObra.id })
+        .from(gdFicheirosObra)
+        .where(eq(gdFicheirosObra.companyId, input.companyId));
+      let processados = 0;
+      for (const f of ficheiros) {
+        try {
+          await ensureDisciplinasAdminNoFicheiro(db, input.companyId, f.id);
+          processados++;
+        } catch (e: any) {
+          console.warn(`[GD] aplicarCategoriasATodasObras ficheiro=${f.id}:`, e?.message ?? e);
+        }
+      }
+      return { ficheiros: ficheiros.length, processados };
     }),
 });
