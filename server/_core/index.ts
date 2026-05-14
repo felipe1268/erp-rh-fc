@@ -1057,7 +1057,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v1774b-2026-05-14-gd-disc-ficheiro-cat-uniq";
+    const COLFIX_VERSION = "v1775-2026-05-14-gd-disc-tipoacervo-backfill";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -1874,6 +1874,15 @@ Regras:
             CREATE UNIQUE INDEX IF NOT EXISTS uniq_gd_disc_ficheiro_cat_chave
               ON gd_disciplinas (ficheiro_id, categoria_chave)
               WHERE categoria_chave IS NOT NULL AND deleted_at IS NULL;
+            -- Rev. 1775 — Backfill defensivo: todas as disciplinas antigas (criadas
+            -- ANTES da Rev. 1774, quando a coluna não existia) precisam ter
+            -- tipo_acervo='projeto' explícito. O DEFAULT do ALTER ADD COLUMN faz isso
+            -- em PG 11+, mas se o ALTER falhou no meio (quem sabe rollback parcial)
+            -- ou rodou em PG <11, podemos ter NULLs órfãs que sumiriam do filtro
+            -- client-side. Esse UPDATE fecha o gap: NULL → 'projeto', preservando
+            -- 'documento' onde já estiver setado.
+            UPDATE gd_disciplinas SET tipo_acervo = 'projeto'
+              WHERE tipo_acervo IS NULL OR tipo_acervo = '';
           EXCEPTION WHEN OTHERS THEN NULL;
           END $$
         `);

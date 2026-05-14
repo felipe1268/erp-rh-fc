@@ -315,9 +315,15 @@ export const gestaoDocumentosRouter = router({
         status: obras.status,
       }).from(obras).where(and(eq(obras.id, ficheiro.obraId), eq(obras.companyId, input.companyId)));
       // Rev. 1774 — Auto-seed silencioso das categorias admin (Documentos da Obra)
-      // ao abrir a obra. Idempotente. Falhas não bloqueiam — log só.
+      // ao abrir a obra. Idempotente. Falhas não bloqueiam — log rico pra diag.
       try { await ensureDisciplinasAdminNoFicheiro(db, input.companyId, input.id); }
-      catch (e: any) { console.warn("[GD] ensureDisciplinasAdminNoFicheiro:", e?.message ?? e); }
+      catch (e: any) {
+        console.error("[GD] ensureDisciplinasAdminNoFicheiro FAIL", {
+          companyId: input.companyId, ficheiroId: input.id,
+          code: e?.code, constraint: e?.constraint, detail: e?.detail,
+          message: e?.message, stack: e?.stack?.split("\n").slice(0, 3).join(" | "),
+        });
+      }
       const disciplinas = await db.select().from(gdDisciplinas)
         .where(and(
           eq(gdDisciplinas.companyId, input.companyId),
