@@ -426,6 +426,78 @@ function IndicadorDetalheModal({
             </CardContent>
           </Card>
 
+          {/* Rev. 1779b — Funcionários por mês (rastreio de "meliantes") */}
+          <Card className="bg-white">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Users className="h-4 w-4 text-slate-600" />
+                Funcionários por mês — {ind.label}
+                <span className="ml-auto text-[10px] text-slate-500 font-normal">
+                  {ind.chave === "ativos" ? "amostra de até 30" :
+                   (ind.chave === "semReg" || ind.chave === "cobertura") ? "ativos sem nenhuma batida" :
+                   "top 10 por mês"}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {meses.map((m, mi) => {
+                  const topAll: any[] = (m.resumo as any)?.topPorIndicador?.[ind.chave] || [];
+                  const isAtual = mi === meses.length - 1;
+                  const totalIndicador = m.resumo ? ind.pegar(m.resumo) : null;
+                  return (
+                    <div key={mi} className={`rounded-lg border p-3 ${isAtual ? "border-blue-300 bg-blue-50/40" : "border-slate-200 bg-white"}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`text-[11px] font-bold uppercase tracking-wide ${isAtual ? "text-blue-700" : "text-slate-600"}`}>
+                          {fmtMesCurto(m.mes)} {isAtual && <span className="ml-1 text-blue-600">·atual</span>}
+                        </span>
+                        {totalIndicador != null && (
+                          <span className="text-[11px] text-slate-500 tabular-nums">
+                            total: <span className="font-semibold text-slate-700">{ind.format(totalIndicador)}</span>
+                          </span>
+                        )}
+                        <span className="ml-auto text-[10px] text-slate-400">{topAll.length} func.</span>
+                      </div>
+                      {topAll.length === 0 ? (
+                        <div className="text-[12px] text-slate-400 italic py-1">Sem dados de funcionários neste mês.</div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                          {topAll.map((f, fi) => (
+                            <div key={`${f.employeeId}-${fi}`} className={`flex items-start gap-2 px-2 py-1.5 rounded-md border ${f.isDesligado ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-white"}`}>
+                              <span className={`shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
+                                fi === 0 ? "bg-amber-200 text-amber-800" :
+                                fi === 1 ? "bg-slate-200 text-slate-700" :
+                                fi === 2 ? "bg-orange-200 text-orange-800" :
+                                "bg-slate-100 text-slate-500"
+                              }`}>{fi + 1}</span>
+                              <div className="min-w-0 flex-1">
+                                <div className={`text-[12px] font-semibold leading-tight truncate ${f.isDesligado ? "text-slate-500 line-through" : "text-slate-800"}`} title={f.nome}>
+                                  {f.nome}
+                                </div>
+                                <div className="text-[10px] text-slate-500 truncate" title={f.funcao}>{f.funcao}</div>
+                                {f.extra && (
+                                  <div className="text-[10px] text-slate-600 mt-0.5 leading-tight">{f.extra}</div>
+                                )}
+                              </div>
+                              {(ind.chave !== "semReg" && ind.chave !== "cobertura" && ind.chave !== "ativos") && (
+                                <span className="shrink-0 text-[11px] font-bold tabular-nums text-slate-700">
+                                  {ind.chave === "atrasos" ? "" :
+                                   ind.chave === "percHE" ? `${f.valor.toFixed(1)}%` :
+                                   ind.chave === "faltas" ? `${f.valor}d` :
+                                   `${f.valor.toFixed(1)}h`}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Insights automáticos */}
           {insights.length > 0 && (
             <Card className="bg-white">

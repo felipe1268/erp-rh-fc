@@ -421,6 +421,57 @@ async function getDashCartaoPonto(companyId: number, mesRef?: string, companyIds
   const funcionariosComRegistro = Object.keys(porFuncionario).length;
   const funcionariosSemRegistro = Math.max(0, empsAtivos.length - funcionariosComRegistro);
 
+  // Rev. 1779b — Top funcionários por indicador (rastreabilidade dos "meliantes").
+  // Para cada indicador do dashboard, retorna até 10 funcionários ordenados pelo
+  // valor relevante (maiores faltosos, maiores horas-extras, sem-registro, etc.)
+  // Usado pelo modal "Análise aprofundada" — uma seção por mês × indicador.
+  const idsComRegistro = new Set(Object.keys(porFuncionario).map(Number));
+  const ativosSemRegistro = empsAtivos.filter(e => !idsComRegistro.has(e.id));
+  const buildTopGenerico = (mapper: (d: typeof porFuncionario[number], emp: typeof allEmps[number]) => { valor: number; extra?: string } | null, limit = 10) => {
+    return Object.entries(porFuncionario)
+      .map(([empId, d]) => {
+        const emp = empMap.get(Number(empId));
+        if (!emp) return null;
+        const m = mapper(d, emp);
+        if (!m || m.valor <= 0) return null;
+        return {
+          employeeId: Number(empId),
+          nome: emp.nome || `Func. ${empId}`,
+          funcao: emp.funcao || "-",
+          isDesligado: isDesligadoStatus(emp.status),
+          valor: Math.round(m.valor * 100) / 100,
+          extra: m.extra,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, limit);
+  };
+  const semRegistroList = ativosSemRegistro.slice(0, 30).map(e => ({
+    employeeId: e.id, nome: e.nome || `Func. ${e.id}`, funcao: e.funcao || "-",
+    isDesligado: isDesligadoStatus(e.status), valor: 0, extra: "sem nenhuma batida no mês",
+  }));
+  const topPorIndicador = {
+    horasTrab: buildTopGenerico(d => ({ valor: d.horasTrab, extra: `${(d.horasTrab).toFixed(1)}h em ${d.dias}d` })),
+    horasExtras: buildTopGenerico(d => ({ valor: d.horasExtras, extra: `${d.horasExtras.toFixed(1)}h em ${d.dias}d` })),
+    percHE: buildTopGenerico(d => d.horasTrab > 0 ? { valor: (d.horasExtras / d.horasTrab) * 100, extra: `${d.horasExtras.toFixed(1)}h HE / ${d.horasTrab.toFixed(1)}h normais` } : null),
+    faltas: rankingFaltas.map(r => ({
+      employeeId: r.employeeId, nome: r.nome, funcao: r.funcao, isDesligado: r.isDesligado,
+      valor: r.faltasDias, extra: r.faltasDatas.length > 0 ? `Datas: ${r.faltasDatas.slice(0, 5).join(", ")}${r.faltasDatas.length > 5 ? "…" : ""}` : undefined,
+    })),
+    atrasos: rankingAtrasos.map(r => ({
+      employeeId: r.employeeId, nome: r.nome, funcao: r.funcao, isDesligado: r.isDesligado,
+      valor: r.atrasosMinutos, extra: r.atrasosFormatado,
+    })),
+    ativos: empsAtivos.slice(0, 30).map(e => ({
+      employeeId: e.id, nome: e.nome || `Func. ${e.id}`, funcao: e.funcao || "-",
+      isDesligado: false, valor: 1, extra: e.setor || undefined,
+    })),
+    comReg: buildTopGenerico(d => ({ valor: d.horasTrab, extra: `${d.horasTrab.toFixed(1)}h trabalhadas` })),
+    semReg: semRegistroList,
+    cobertura: semRegistroList, // mesma lista — o "problema" da cobertura são os sem registro
+  };
+
   // % de Horas Extras sobre Horas Normais
   const percentualHE = totalHorasTrab > 0 ? Math.round((totalHorasExtras / totalHorasTrab) * 10000) / 100 : 0;
 
@@ -444,6 +495,7 @@ async function getDashCartaoPonto(companyId: number, mesRef?: string, companyIds
       funcionariosSemRegistro,
       totalFuncionariosAtivos: empsAtivos.length,
       toleranciaCLT: TOLERANCIA_CLT_MINUTOS,
+      topPorIndicador,
     },
     rankingFaltas,
     rankingAtrasos,
