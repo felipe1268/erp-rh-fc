@@ -935,6 +935,26 @@ export default function Colaboradores() {
                             const linha1 = partes.length > 0
                               ? <div className="text-[11px] text-muted-foreground mt-0.5 truncate">{partes.join(" • ")}</div>
                               : null;
+                            const obraNome = (emp as any).obraAtualNome as string | null;
+                            const linhaObra = !isSaiu && obraNome
+                              ? (
+                                <div className="mt-1 flex">
+                                  <span className="inline-flex items-center gap-1 max-w-full px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-medium leading-none">
+                                    <Building2 className="w-3 h-3 flex-shrink-0" />
+                                    <span className="truncate">{obraNome}</span>
+                                  </span>
+                                </div>
+                              )
+                              : !isSaiu
+                              ? (
+                                <div className="mt-1 flex">
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200 text-[10px] font-medium leading-none">
+                                    <Building2 className="w-3 h-3" />
+                                    Sem obra
+                                  </span>
+                                </div>
+                              )
+                              : null;
                             let linha2: ReactNode = null;
                             if (isSaiu && (emp as any).dataDesligamentoEfetiva) {
                               const dt = formatDate((emp as any).dataDesligamentoEfetiva);
@@ -945,7 +965,7 @@ export default function Colaboradores() {
                                 </div>
                               );
                             }
-                            return <>{linha1}{linha2}</>;
+                            return <>{linha1}{linhaObra}{linha2}</>;
                           })()}
                         </div>
                       </div>
