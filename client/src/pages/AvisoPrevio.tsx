@@ -1873,6 +1873,52 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                   </Popover>
                 </div>
 
+                {/* Rev. 1794 — Card Admissão / Tempo de empresa do colaborador selecionado */}
+                {selectedEmp?.dataAdmissao && (() => {
+                  const ref = form.dataAviso ? new Date(form.dataAviso + 'T00:00:00') : new Date();
+                  const adm = new Date(selectedEmp.dataAdmissao + 'T00:00:00');
+                  let anos = ref.getFullYear() - adm.getFullYear();
+                  let meses = ref.getMonth() - adm.getMonth();
+                  let dias = ref.getDate() - adm.getDate();
+                  if (dias < 0) {
+                    meses -= 1;
+                    const ultDiaMesAnterior = new Date(ref.getFullYear(), ref.getMonth(), 0).getDate();
+                    dias += ultDiaMesAnterior;
+                  }
+                  if (meses < 0) { anos -= 1; meses += 12; }
+                  const partes: string[] = [];
+                  if (anos > 0) partes.push(`${anos} ${anos === 1 ? 'ano' : 'anos'}`);
+                  if (meses > 0) partes.push(`${meses} ${meses === 1 ? 'mês' : 'meses'}`);
+                  if (dias > 0 || partes.length === 0) partes.push(`${dias} ${dias === 1 ? 'dia' : 'dias'}`);
+                  const tempoStr = partes.join(', ');
+                  const totalDias = Math.max(0, Math.floor((ref.getTime() - adm.getTime()) / (1000 * 60 * 60 * 24)));
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 -mt-2">
+                      <div className="rounded-xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50 p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Calendar className="h-4 w-4 text-blue-600" />
+                          <span className="text-[11px] font-semibold uppercase text-blue-700 tracking-wide">Data de Admissão</span>
+                        </div>
+                        <p className="text-xl font-bold text-blue-900">{formatDate(selectedEmp.dataAdmissao)}</p>
+                        <p className="text-[11px] text-blue-600 mt-0.5">
+                          {new Date(selectedEmp.dataAdmissao + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long' })}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100/50 p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Clock className="h-4 w-4 text-emerald-600" />
+                          <span className="text-[11px] font-semibold uppercase text-emerald-700 tracking-wide">Tempo de Empresa</span>
+                        </div>
+                        <p className="text-xl font-bold text-emerald-900">{tempoStr}</p>
+                        <p className="text-[11px] text-emerald-600 mt-0.5">
+                          Total: {totalDias.toLocaleString('pt-BR')} dias
+                          {form.dataAviso && <span className="text-emerald-500"> · até a data do aviso</span>}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Alerta CIPA - Estabilidade provisória (CLT Art. 165 + CF Art. 10 ADCT) */}
                 {form.employeeId && cipaCheckQ.data?.temEstabilidade && (
                   <div className="rounded-xl border-2 border-red-400 bg-red-50 p-4 space-y-2">

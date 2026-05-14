@@ -12739,4 +12739,13 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-14 17:30:00",
   },
+  {
+    version: 1794,
+    titulo: "Aviso Prévio · Card de Data de Admissão e Tempo de Empresa do colaborador selecionado",
+    descricao: "Pedido do user (com screenshot da tela 'Novo Aviso Prévio'): 'coloca a data de admissão e o tempo de empresa do funcionário'. A tela já mostrava 'Admissão: 23/10/2024' discretamente no header verde da Previsão de Rescisão (no topo dos KPIs verbais), mas o user queria essa informação destacada logo abaixo do seletor de Colaborador, junto com o tempo de empresa calculado. Adicionado em `client/src/pages/AvisoPrevio.tsx` (L1879-1923, dentro do `FullScreenDialog` do modal Novo/Editar Aviso Prévio): card visual com 2 colunas (md:grid-cols-2) renderizado condicionalmente quando `selectedEmp?.dataAdmissao` existe. (1) **Card 'Data de Admissão'** — borda+gradient azul (border-blue-200 + from-blue-50 to-blue-100/50), ícone Calendar, valor formatado em pt-BR (`formatDate`), subtítulo com o dia da semana via `toLocaleDateString('pt-BR', { weekday: 'long' })`. (2) **Card 'Tempo de Empresa'** — borda+gradient emerald (border-emerald-200 + from-emerald-50 to-emerald-100/50), ícone Clock, calcula anos/meses/dias entre `selectedEmp.dataAdmissao` e a data de referência (`form.dataAviso` se preenchida, senão hoje) usando aritmética de calendário civil (decrementa mês quando dias<0, decrementa ano quando meses<0, dias residuais via `new Date(year, month, 0).getDate()`); pluralização pt-BR ('1 ano' vs '2 anos', '1 mês' vs '2 meses', '1 dia' vs '2 dias'); subtítulo mostra total absoluto em dias (`Math.floor(diff / 86400000).toLocaleString('pt-BR')`) e marca 'até a data do aviso' quando `form.dataAviso` está preenchida. Card é REATIVO: ao trocar a Data do Aviso, o tempo de empresa recalcula automaticamente (mesmo padrão do `calculoPreview` que já usa `selectedEmp.dataAdmissao` na L2049-2053 para anos de serviço). Sem mudança em backend, sem novos imports (Calendar e Clock já importados de lucide-react na L21).",
+    tipo: "feature",
+    modulos: "Pessoal · Aviso Prévio",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-14 18:00:00",
+  },
 ];
