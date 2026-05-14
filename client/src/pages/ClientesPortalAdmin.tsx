@@ -14,7 +14,7 @@ import {
   Loader2, ShieldCheck, CheckCircle2, AlertCircle, Copy, Reply,
   Smile, Frown, Meh, TrendingUp, Users, Plus, Trash2, RefreshCw, UserPlus,
   Lock, UnlockKeyhole, SlidersHorizontal, ExternalLink, Layers,
-  Building2, ThumbsUp, X, CalendarDays, Pencil, ChevronUp, ChevronDown, ListOrdered,
+  Building2, ThumbsUp, X, CalendarDays, Pencil, ChevronUp, ChevronDown, ChevronRight, ListOrdered,
 } from "lucide-react";
 import {
   PORTAL_CLIENTE_ABAS, parseAbasLiberadas, ABA_OBRIGATORIA, type PortalClienteAbaKey,
@@ -984,43 +984,147 @@ export default function ClientesPortalAdmin() {
           </DialogContent>
         </Dialog>
 
-        {/* Modal: Picker — escolher usuário para liberar abas (atalho da lista de clientes) */}
+        {/* Modal: Picker — escolher usuário para liberar abas. Rev. 1784 — R-001 full-screen + visual rico. */}
         <Dialog open={!!abasPicker} onOpenChange={(o) => { if (!o) setAbasPicker(null); }}>
-          <DialogContent className="max-w-lg bg-white">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <SlidersHorizontal className="w-5 h-5 text-indigo-600" />
-                Liberar módulos & abas — escolha o usuário
-              </DialogTitle>
-            </DialogHeader>
+          <DialogContent
+            resizable={false}
+            showCloseButton={false}
+            className="w-[100vw] sm:w-[98vw] max-w-none h-[100dvh] sm:h-[96dvh] max-h-[100dvh] sm:max-h-[96dvh] p-0 gap-0 overflow-hidden flex flex-col rounded-none sm:rounded-lg border-0 sm:border bg-white"
+          >
             {abasPicker && (
-              <div className="space-y-2">
-                <div className="bg-slate-50 rounded-lg p-3 text-sm">
-                  <div className="font-semibold text-slate-800">{abasPicker.cliente.razaoSocial}</div>
-                  {abasPicker.cliente.nomeFantasia && <div className="text-xs text-slate-500">{abasPicker.cliente.nomeFantasia}</div>}
-                </div>
-                <p className="text-xs text-slate-500">Selecione o usuário ativo para configurar quais abas ele verá no Portal:</p>
-                <div className="space-y-1.5 max-h-[55vh] overflow-y-auto">
-                  {abasPicker.usuarios.map((u: any) => {
-                    const liber = parseAbasLiberadas(u.abasLiberadas);
-                    return (
-                      <button key={u.id}
-                        onClick={() => { setAbasPicker(null); abrirAbas(u); }}
-                        className="w-full text-left border rounded-lg p-3 hover:bg-indigo-50 hover:border-indigo-200 transition flex items-center justify-between gap-3"
-                      >
-                        <div className="min-w-0">
-                          <div className="font-medium text-slate-800 truncate">{u.nomeResponsavel || u.emailResponsavel}</div>
-                          <div className="text-xs text-slate-500 truncate">{u.emailResponsavel}</div>
+              <>
+                {/* Header gradient (R-002) */}
+                <div className="bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-white p-4 sm:p-6 shrink-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="bg-white/15 backdrop-blur-sm rounded-lg p-2 sm:p-2.5 shrink-0">
+                        <SlidersHorizontal className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <DialogHeader className="space-y-0">
+                          <DialogTitle className="text-white text-base sm:text-xl font-semibold leading-tight">
+                            Liberar módulos &amp; abas
+                          </DialogTitle>
+                        </DialogHeader>
+                        <p className="text-white/80 text-xs sm:text-sm mt-0.5">
+                          Escolha o usuário do Portal para configurar quais abas ele verá
+                        </p>
+                        <div className="mt-2 inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-md px-2.5 py-1">
+                          <Building2 className="w-3.5 h-3.5 text-white/90 shrink-0" />
+                          <span className="text-xs sm:text-sm font-medium text-white truncate max-w-[60vw] sm:max-w-[50vw]" title={abasPicker.cliente.razaoSocial}>
+                            {abasPicker.cliente.razaoSocial}
+                          </span>
+                          {abasPicker.cliente.nomeFantasia && (
+                            <span className="hidden sm:inline text-xs text-white/70 truncate max-w-[20vw]" title={abasPicker.cliente.nomeFantasia}>
+                              · {abasPicker.cliente.nomeFantasia}
+                            </span>
+                          )}
                         </div>
-                        <Badge variant="outline" className="shrink-0 text-[10px]">{liber.length} aba{liber.length === 1 ? "" : "s"}</Badge>
-                      </button>
-                    );
-                  })}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAbasPicker(null)}
+                      aria-label="Fechar"
+                      className="shrink-0 rounded-md p-1.5 hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white/40 transition"
+                    >
+                      <X className="w-5 h-5 text-white" />
+                    </button>
+                  </div>
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setAbasPicker(null)}>Fechar</Button>
-                </DialogFooter>
-              </div>
+
+                {/* Body — KPI strip + lista de usuários (R-002 + R-004 cards stacked) */}
+                <div className="flex-1 overflow-auto p-4 sm:p-6 bg-slate-50/40">
+                  {/* KPI strip */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-5">
+                    <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3 sm:p-4">
+                      <div className="text-[10px] sm:text-xs text-slate-500 uppercase font-semibold tracking-wide">Usuários ativos</div>
+                      <div className="text-xl sm:text-2xl font-bold text-slate-800 tabular-nums mt-0.5">
+                        {abasPicker.usuarios.length}
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3 sm:p-4">
+                      <div className="text-[10px] sm:text-xs text-slate-500 uppercase font-semibold tracking-wide">Abas liberadas (total)</div>
+                      <div className="text-xl sm:text-2xl font-bold text-indigo-700 tabular-nums mt-0.5">
+                        {abasPicker.usuarios.reduce((acc: number, u: any) => acc + parseAbasLiberadas(u.abasLiberadas).length, 0)}
+                      </div>
+                    </div>
+                    <div className="col-span-2 sm:col-span-1 bg-white rounded-lg border border-slate-200 shadow-sm p-3 sm:p-4">
+                      <div className="text-[10px] sm:text-xs text-slate-500 uppercase font-semibold tracking-wide">Sem nenhuma aba</div>
+                      <div className="text-xl sm:text-2xl font-bold text-amber-700 tabular-nums mt-0.5">
+                        {abasPicker.usuarios.filter((u: any) => parseAbasLiberadas(u.abasLiberadas).length === 0).length}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-sm text-slate-700 mb-3 font-medium">
+                    Selecione um usuário para configurar suas abas no Portal:
+                  </div>
+
+                  {abasPicker.usuarios.length === 0 ? (
+                    <div className="bg-white border border-dashed border-slate-300 rounded-lg p-8 text-center">
+                      <Users className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                      <div className="text-sm font-medium text-slate-600">Nenhum usuário ativo encontrado</div>
+                      <div className="text-xs text-slate-500 mt-1">Cadastre usuários neste cliente para liberar acesso ao Portal.</div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+                      {abasPicker.usuarios.map((u: any) => {
+                        const liber = parseAbasLiberadas(u.abasLiberadas);
+                        const initials = (u.nomeResponsavel || u.emailResponsavel || "?")
+                          .split(/\s+/).filter(Boolean).slice(0, 2).map((s: string) => s[0]?.toUpperCase()).join("") || "?";
+                        const semAbas = liber.length === 0;
+                        return (
+                          <button
+                            key={u.id}
+                            type="button"
+                            tabIndex={0}
+                            role="button"
+                            aria-label={`Configurar abas de ${u.nomeResponsavel || u.emailResponsavel}`}
+                            onClick={() => { setAbasPicker(null); abrirAbas(u); }}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setAbasPicker(null); abrirAbas(u); } }}
+                            className="group text-left bg-white border border-slate-200 rounded-lg p-3 sm:p-4 hover:border-indigo-300 hover:shadow-md focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none transition flex items-center gap-3"
+                          >
+                            <div className="shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                              {initials}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-slate-800 truncate text-sm sm:text-base" title={u.nomeResponsavel || u.emailResponsavel}>
+                                {u.nomeResponsavel || u.emailResponsavel}
+                              </div>
+                              <div className="text-xs text-slate-500 truncate" title={u.emailResponsavel}>
+                                {u.emailResponsavel}
+                              </div>
+                              <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                                <Badge
+                                  variant="outline"
+                                  className={`text-[10px] font-bold ${semAbas ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}
+                                >
+                                  {liber.length} aba{liber.length === 1 ? "" : "s"}
+                                </Badge>
+                                {semAbas && (
+                                  <span className="text-[10px] text-amber-700 font-medium">⚠ sem acesso</span>
+                                )}
+                              </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-500 shrink-0 transition" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="border-t bg-white px-4 sm:px-6 py-3 flex items-center justify-between gap-2 shrink-0">
+                  <div className="text-xs text-slate-500 hidden sm:block">
+                    Dica: clique em um usuário para abrir o configurador de abas.
+                  </div>
+                  <Button variant="outline" onClick={() => setAbasPicker(null)} className="ml-auto">
+                    Fechar
+                  </Button>
+                </div>
+              </>
             )}
           </DialogContent>
         </Dialog>
