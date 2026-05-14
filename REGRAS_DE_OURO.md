@@ -213,6 +213,68 @@
 
 ---
 
+## R-014 · Geração de números sequenciais multitenancy = counter table com UPSERT atômico
+
+**TODA geração de número sequencial por tenant (numero_sc, numero_pedido, numero_oc, numero_contrato, numero_medicao, etc.) DEVE usar uma counter table dedicada com `INSERT ... ON CONFLICT DO UPDATE ... RETURNING`. NUNCA `MAX(seq)+1`, NUNCA `COUNT(*)+1`, NUNCA mesmo com `pg_advisory_xact_lock`.**
+
+**Por que advisory lock + MAX+1 NÃO basta** (histórico Compras Rev. 1743 → 1790 → 1795 → 1799):
+- Rev. 1743: `MAX(suffix)+1+offset` com 8 retries — race entre leitores simultâneos.
+- Rev. 1790: adicionou `pg_advisory_xact_lock(ns, key)` por (empresa, ano) — ainda colidiu porque outros módulos (epis/frotas) inseriam SEM lock.
+- Rev. 1795: estendeu o lock para epis/frotas — **mesmo assim** prod 14/05/2026 mostrou 3 retries computando MESMO `SC-2026-0010` (logs `code: '23505' x3`). Causa: combinação de release/reacquire entre tentativas + leitura MAX que pode ver snapshot stale via MVCC quando há transações concorrentes em vôo.
+
+**A única solução à prova de race** (Rev. 1799):
+
+```sql
+-- 1. Counter table (uma vez, em ColFix idempotente):
+CREATE TABLE compras_sc_counters (
+  company_id INTEGER NOT NULL,
+  ano        INTEGER NOT NULL,
+  ultimo_seq INTEGER NOT NULL DEFAULT 0,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (company_id, ano)
+);
+
+-- 2. Semeia a partir do MAX existente (idempotente, não regride):
+INSERT INTO compras_sc_counters (company_id, ano, ultimo_seq)
+SELECT company_id, ano_extraido, MAX(seq_extraido)
+FROM compras_solicitacoes ...
+GROUP BY company_id, ano_extraido
+ON CONFLICT (company_id, ano)
+DO UPDATE SET ultimo_seq = GREATEST(compras_sc_counters.ultimo_seq, EXCLUDED.ultimo_seq);
+
+-- 3. Geração atômica (UM ÚNICO statement, dentro da transaction da SC):
+INSERT INTO compras_sc_counters (company_id, ano, ultimo_seq)
+VALUES ($companyId, $ano, 1)
+ON CONFLICT (company_id, ano)
+DO UPDATE SET ultimo_seq = compras_sc_counters.ultimo_seq + 1,
+              atualizado_em = NOW()
+RETURNING ultimo_seq;
+```
+
+Postgres adquire row-level lock no UPSERT, atomicamente incrementa, retorna o novo valor. **Zero race, sem advisory lock, sem retry, sem MAX+1.**
+
+**Regras inegociáveis ao implementar geração sequencial nova ou refatorar antiga**:
+
+- ✅ **Counter table dedicada** com PK composta (`company_id`, ...particionadores como ano/projeto/etc).
+- ✅ **Inicialização idempotente em ColFix** (`server/_core/index.ts`): semeia counter a partir do `MAX(seq)` da tabela final usando `ON CONFLICT DO UPDATE SET ultimo_seq = GREATEST(...)` — **nunca** sobrescreve para baixo.
+- ✅ **Geração via UPSERT atômico em UM statement** dentro da `db.transaction(async (tx) => {...})` que insere a entidade — assim a alocação do número e o INSERT são atômicos juntos.
+- ✅ **Índice único `(company_id, numero_xx)` na tabela final** continua como rede de segurança — se algum bug futuro reintroduzir colisão, o INSERT falha 23505 e o operador descobre.
+- ✅ **Helper exportado e único** (ex.: `gerarProximoNumeroScAtomico(tx, companyId)` em `server/routers/compras.ts:878`) — todos os módulos que inserem na entidade chamam o MESMO helper, **proibido inline-ar a lógica**.
+- ❌ **PROIBIDO** `SELECT MAX(...)+1` ou `COUNT(*)+1` em qualquer rota de produção.
+- ❌ **PROIBIDO** `pg_advisory_lock`/`pg_advisory_xact_lock` para gerar números sequenciais — é workaround inferior à counter table.
+- ❌ **PROIBIDO** loop de retry para "tentar próximo número" — se o counter está atômico, não há retry necessário; se há retry, o design está errado.
+- ✅ **Defensive seed inline no helper**: o branch INSERT (primeira escrita para uma `(empresa, ano)`) deve inicializar `ultimo_seq` com `COALESCE((SELECT MAX(seq) FROM tabela_final WHERE company_id=$1 AND numero ~ '^...'), 0) + 1`, **não** com `1` literal. Cobre cenários onde o ColFix de seed não rodou para esta empresa (empresa criada após boot, restore parcial, import manual). Sob concorrência continua seguro: o `ON CONFLICT DO UPDATE` resolve qualquer race.
+- ⚠️ **Escape de regex em template literal TS**: ao construir regex como `'^SC-\\d{4}-\\d+$'` para passar ao Postgres ARE (operador `~`), use `\\d` no source TS. Em strings/template literals JS o `\d` "sobrevive" como `\d` (backslash preservado para escape desconhecido), mas **escrever `\\d` no source é a forma defensiva e legível** — não depende desse comportamento de "fallback" do parser. Postgres ARE suporta `\d` nativamente.
+
+**Locais que aplicam a regra atualmente**:
+- `server/routers/compras.ts:878` (`gerarProximoNumeroScAtomico`) — tabela `compras_sc_counters` por `(company_id, ano)`.
+- `server/_core/index.ts:553` — ColFix Rev.1799 que cria + semeia a counter table.
+- Chamadas em `criarSolicitacao`, `duplicarSolicitacao` (compras.ts), `epis.ts:506/1951`, `frotas.ts:4545` — todas usam o helper.
+
+**Justificativa**: a única primitiva de Postgres que serializa N writers concorrentes COM visibilidade transacional GARANTIDA é o row-level lock pego durante `INSERT ... ON CONFLICT DO UPDATE`. Advisory lock serializa, mas o que cada writer LÊ depois do lock pode ser um snapshot diferente; counter table elimina a necessidade de qualquer leitura externa.
+
+---
+
 ## Checklist obrigatório antes de marcar uma tarefa como pronta
 
 - [ ] Modal/tela é full-screen (R-001)?
@@ -227,3 +289,4 @@
 - [ ] SQL com aspas em camelCase + soft-delete + companyId (R-010)?
 - [ ] Tela de planejamento exclui `isIndireta`/`isExterna` do CPM (R-011)?
 - [ ] Importação preserva `eapCodigo` do orçamento sem renumerar (R-013)?
+- [ ] Toda geração de número sequencial usa counter table + UPSERT atômico, nunca MAX+1 (R-014)?

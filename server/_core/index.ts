@@ -547,6 +547,43 @@ Regras:
           console.log(`[SyncSchema+] Rev. 1743: duplicatas em compras_solicitacoes renumeradas + UNIQUE INDEX (company_id, numero_sc) garantido.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.1743 unique compras_solicitacoes:`, e?.message || e); }
 
+        // Rev. 1799 — R-014 · Counter table atômica para geração de numero_sc.
+        // Substitui MAX(seq)+1 + advisory lock (que ainda permitia race conditions
+        // raras quando MVCC retornava snapshot stale entre retries — visto em prod:
+        // 3 tentativas computando MESMO numero_sc 'SC-2026-0010' para company 60002).
+        // Solução: UPSERT atômico `INSERT ... ON CONFLICT DO UPDATE ... RETURNING`
+        // — Postgres garante atomicidade no row-level lock, colisão impossível.
+        // Inicialização idempotente: para cada (company_id, ano) com SCs existentes,
+        // semeia o counter com MAX(seq) atual; se já existe, mantém o maior valor.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS compras_sc_counters (
+              company_id INTEGER NOT NULL,
+              ano        INTEGER NOT NULL,
+              ultimo_seq INTEGER NOT NULL DEFAULT 0,
+              atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              PRIMARY KEY (company_id, ano)
+            )
+          `);
+          // Semeia counters a partir do MAX existente em compras_solicitacoes.
+          // Idempotente: ON CONFLICT só atualiza se o MAX for MAIOR que o counter atual
+          // (evita "voltar" o counter caso já tenha avançado por SCs criadas).
+          await db.execute(sql`
+            INSERT INTO compras_sc_counters (company_id, ano, ultimo_seq)
+            SELECT
+              company_id,
+              CAST(SUBSTRING(numero_sc FROM 4 FOR 4) AS INTEGER) AS ano,
+              MAX(CAST(SUBSTRING(numero_sc FROM 9) AS INTEGER)) AS ultimo_seq
+            FROM compras_solicitacoes
+            WHERE numero_sc ~ '^SC-\d{4}-\d+$'
+            GROUP BY company_id, CAST(SUBSTRING(numero_sc FROM 4 FOR 4) AS INTEGER)
+            ON CONFLICT (company_id, ano)
+            DO UPDATE SET ultimo_seq = GREATEST(compras_sc_counters.ultimo_seq, EXCLUDED.ultimo_seq),
+                          atualizado_em = NOW()
+          `);
+          console.log(`[SyncSchema+] Rev. 1799: tabela compras_sc_counters criada e semeada com MAX(seq) atual.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.1799 compras_sc_counters:`, e?.message || e); }
+
         try {
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_escritorio INTEGER`);
           await db.execute(sql`ALTER TABLE cliente_avaliacoes ADD COLUMN IF NOT EXISTS nota_faturamento INTEGER`);
