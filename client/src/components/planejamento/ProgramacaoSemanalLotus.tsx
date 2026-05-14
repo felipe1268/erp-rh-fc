@@ -762,30 +762,41 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         return newWs;
       };
 
-      // 5. Helper: limpa imagens existentes da aba e adiciona os 3 logos do cadastro
-      //    nas MESMAS posições (TwoCellAnchor) do template original.
-      // Posições extraídas do template REVTE-PSEM-FC original:
-      //   • Img0 — gerenciadora (LOTUS): cols B-C / rows 2-5
-      //   • Img2 — cliente (Santuário): cols I-K / rows 2-4
-      //   • Img1 — construtora (FC/proponente): cols N-P / rows 2-5
-      const POS_GER = { tl: { col: 1.9999, row: 1.2988 }, br: { col: 3.2851, row: 4.9999 } } as any;
-      const POS_CLI = { tl: { col: 8.9999, row: 1.9676 }, br: { col: 11.9999, row: 3.9999 } } as any;
-      const POS_EMP = { tl: { col: 13.9999, row: 1.2116 }, br: { col: 15.9999, row: 4.9430 } } as any;
+      // 5. Helper: substitui os 3 logos preservando o RANGE NATIVO (TwoCellAnchor
+      //    com EMU offsets exatos) das imagens originais do template — garante
+      //    paridade absoluta de posição/tamanho com o REVTE-PSEM-FC. Antes
+      //    chutávamos posições com `col: 1.9999` (= quase fim da célula),
+      //    o que empurrava os logos pra próxima coluna e os distorcia.
+      // Ordem das imagens no template (verificada via inspeção do .xlsx):
+      //   index 0 → gerenciadora (LOTUS, cols B-D)
+      //   index 1 → construtora/proponente (FC, cols N-P)
+      //   index 2 → cliente (Santuário, cols I-L)
+      // Captura os 3 ranges UMA vez do template antes de qualquer mutação.
+      const tplMedia: any[] = Array.isArray((tplWs as any)._media) ? (tplWs as any)._media.slice() : [];
+      const tplImgs = tplMedia.filter((m) => m?.type === "image");
+      const RANGE_GER = tplImgs[0]?.range ? JSON.parse(JSON.stringify(tplImgs[0].range)) : null;
+      const RANGE_EMP = tplImgs[1]?.range ? JSON.parse(JSON.stringify(tplImgs[1].range)) : null;
+      const RANGE_CLI = tplImgs[2]?.range ? JSON.parse(JSON.stringify(tplImgs[2].range)) : null;
+
       const insertLogos = (ws: any) => {
-        // Limpa imagens herdadas do template (logos do exemplo Santuário/Lotus/FC)
+        // Remove SOMENTE as imagens da aba (preserva qualquer outro tipo de media)
         try {
           if (Array.isArray((ws as any)._media)) {
             (ws as any)._media = (ws as any)._media.filter((m: any) => m?.type !== "image");
           }
         } catch { /* noop */ }
-        const addImg = (img: { buf: ArrayBuffer; ext: "png" | "jpeg" } | null, pos: any) => {
-          if (!img) return;
+        const addImg = (
+          img: { buf: ArrayBuffer; ext: "png" | "jpeg" } | null,
+          range: any,
+        ) => {
+          if (!img || !range) return;
           const id = wb.addImage({ buffer: img.buf as any, extension: img.ext });
-          ws.addImage(id, pos);
+          // Re-anexa no RANGE NATIVO original (cópia profunda — addImage muta)
+          ws.addImage(id, JSON.parse(JSON.stringify(range)));
         };
-        addImg(imgGer, POS_GER);
-        addImg(imgCli, POS_CLI);
-        addImg(imgEmp, POS_EMP);
+        addImg(imgGer, RANGE_GER);
+        addImg(imgEmp, RANGE_EMP);
+        addImg(imgCli, RANGE_CLI);
       };
 
       // 6. Cores oficiais extraídas do tema do template (#4472C4 = Accent1).
