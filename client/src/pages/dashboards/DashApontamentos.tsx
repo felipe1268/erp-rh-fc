@@ -4,6 +4,38 @@ import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import TabelaComparativaAnual, { type LinhaInd } from "@/components/TabelaComparativaAnual";
+import { ClipboardList, CheckCircle2 as CheckIcon2, Clock as ClockIcon2, AlertOctagon, Percent as PercentIcon, Timer as TimerIcon } from "lucide-react";
+
+const APONT_INDICADORES: LinhaInd[] = [
+  { chave: "criados", label: "Apontamentos criados", icone: ClipboardList, cor: "blue", lowerIsBetter: true,
+    pegar: r => Number(r.criados) || 0, format: v => `${v}`,
+    alertaPct: 30, hint: "Pico súbito pode indicar evento (acidente, paralisação, falha de equipamento).",
+    acoes: ["Identificar tipo de ocorrência mais frequente do mês.", "Cruzar com Diário de Obra: condições climáticas, eventos.", "Verificar se há obra/equipe específica concentrando ocorrências."] },
+  { chave: "resolvidos", label: "Resolvidos no mês", icone: CheckIcon2, cor: "green", lowerIsBetter: false,
+    pegar: r => Number(r.resolvidos) || 0, format: v => `${v}`,
+    alertaPct: 30, hint: "Velocidade de resposta da gestão às demandas de campo.",
+    acoes: ["Documentar ações tomadas para histórico (lessons learned).", "Validar com solicitante o fechamento da ocorrência."] },
+  { chave: "pendentes", label: "Pendentes (fim do mês)", icone: ClockIcon2, cor: "yellow", lowerIsBetter: true,
+    pegar: r => Number(r.pendentes) || 0, format: v => `${v}`,
+    alertaPct: 30, hint: "Acúmulo indica gargalo de atendimento ou descontrole de prazos.",
+    acoes: ["Listar pendentes mais antigos e priorizar.", "Definir SLA por prioridade (alta: 24h, média: 5 dias).", "Designar responsável claro por categoria de ocorrência.", "Escalar pendentes > 30 dias para gerência."] },
+  { chave: "urgentes", label: "Alta/Urgente/Crítica", icone: AlertOctagon, cor: "red", lowerIsBetter: true,
+    pegar: r => Number(r.urgentes) || 0, format: v => `${v}`,
+    alertaPct: 25, hint: "Ocorrências de alta criticidade — risco SST, financeiro ou de imagem.",
+    acoes: ["Plano de ação imediato (até 24h da abertura).", "Comunicar gestor de obra e SST.", "Documentar causa-raiz e ação corretiva.", "Mapear se há padrão (mesma obra/função/equipamento)."] },
+  { chave: "taxa", label: "Taxa de Resolução (%)", icone: PercentIcon, cor: "teal", lowerIsBetter: false,
+    pegar: r => Number(r.taxaResolucaoPct) || 0, format: v => `${v.toFixed(1)}%`,
+    alertaAbsoluto: v => v < 70,
+    hint: "Resolvidos / Criados no mês. Meta interna: ≥ 80%.",
+    acoes: ["Abaixo de 70%: backlog crescente, ação imediata.", "Comparar entre obras: taxa baixa indica falha de gestão local.", "Treinar encarregados sobre triagem e resolução."] },
+  { chave: "tempo", label: "Tempo Médio de Resolução", icone: TimerIcon, cor: "orange", lowerIsBetter: true,
+    pegar: r => Number(r.tempoMedioHoras) || 0,
+    format: v => v < 24 ? `${v.toFixed(1)}h` : `${(v / 24).toFixed(1)}d`,
+    alertaAbsoluto: v => v > 168,
+    hint: "Tempo entre criação e resolução. Acima de 7 dias (168h) sugere processo travado.",
+    acoes: ["Definir SLA por prioridade.", "Identificar tipos de ocorrência mais lentos para otimizar fluxo.", "Cruzar com responsáveis: alguém centralizando demais?"] },
+];
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -65,6 +97,11 @@ export default function DashApontamentos() {
   );
 
   const { data: porMes, isLoading: loadMes } = trpc.fieldNotes.statsPorMes.useQuery(
+    { companyId: queryCompanyId, ano, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+  );
+
+  const { data: comparativo, isLoading: loadingComp } = trpc.dashboards.apontamentosComparativo.useQuery(
     { companyId: queryCompanyId, ano, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
@@ -261,6 +298,13 @@ export default function DashApontamentos() {
                 )}
               </CardContent>
             </Card>
+            <TabelaComparativaAnual
+              meses={comparativo?.meses || []}
+              indicadores={APONT_INDICADORES}
+              isLoading={loadingComp}
+              titulo={`Tendência mês-a-mês — ${ano}`}
+              subtitulo="Janeiro até o mês corrente · clique em qualquer linha para análise aprofundada"
+            />
           </>
         )}
       </div>

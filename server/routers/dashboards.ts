@@ -474,6 +474,218 @@ async function getDashCartaoPontoComparativo(companyId: number, mesRef?: string,
 }
 
 // ============================================================
+// Comparativos genéricos por dashboard (Rev. 1779)
+// ============================================================
+function _mesesAteRef(ano?: number, mesRef?: string) {
+  const now = new Date();
+  const refY = ano || (mesRef ? parseInt(mesRef.split("-")[0]) : now.getFullYear());
+  const refM = (mesRef ? parseInt(mesRef.split("-")[1]) : (refY === now.getFullYear() ? now.getMonth() + 1 : 12));
+  const meses: string[] = [];
+  for (let m = 1; m <= refM; m++) meses.push(`${refY}-${String(m).padStart(2, "0")}`);
+  return { refY, refM, meses };
+}
+function _companyList(companyId: number, companyIds?: number[]) {
+  const ids = (companyIds && companyIds.length > 0 ? companyIds : [companyId]).filter(n => n > 0);
+  if (ids.length === 0) return null;
+  return sql.join(ids.map(id => sql`${id}`), sql`,`);
+}
+
+async function getDashHorasExtrasComparativo(companyId: number, ano?: number, companyIds?: number[]) {
+  const { refY, meses } = _mesesAteRef(ano);
+  const resultados = await Promise.all(meses.map(m => {
+    const mesNum = parseInt(m.split("-")[1]);
+    return getDashHorasExtras(companyId, refY, { periodoTipo: 'mes', periodoValor: String(mesNum) } as any, companyIds);
+  }));
+  return {
+    ano: refY,
+    meses: resultados.map((r, i) => ({ mes: meses[i], resumo: r?.resumo ?? null })),
+  };
+}
+
+async function getDashFolhaPagamentoComparativo(companyId: number, mesRef?: string, companyIds?: number[]) {
+  const { meses, refY } = _mesesAteRef(undefined, mesRef);
+  const resultados = await Promise.all(meses.map(m => getDashFolhaPagamento(companyId, m, companyIds)));
+  return {
+    ano: refY,
+    meses: resultados.map((r, i) => ({ mes: meses[i], resumo: r?.resumo ?? null })),
+  };
+}
+
+async function getDashFuncionariosComparativo(companyId: number, ano?: number, companyIds?: number[]) {
+  const db = await getDb(); if (!db) return { ano: ano || new Date().getFullYear(), meses: [] };
+  const { refY, meses } = _mesesAteRef(ano);
+  const cl = _companyList(companyId, companyIds);
+  if (!cl) return { ano: refY, meses: [] };
+  const inicioAno = `${refY}-01-01`;
+  const fimRef = meses[meses.length - 1] + "-01";
+  const rows: any = await db.execute(sql`
+    WITH meses AS (
+      SELECT generate_series(${inicioAno}::date, ${fimRef}::date, '1 month'::interval)::date AS mi
+    )
+    SELECT
+      to_char(m.mi, 'YYYY-MM') AS mes,
+      (SELECT COUNT(*) FROM employees e WHERE e."companyId" IN (${cl}) AND e."deletedAt" IS NULL
+        AND e."dataAdmissao"::date <= (m.mi + interval '1 month - 1 day')::date
+        AND (e."dataDemissao" IS NULL OR e."dataDemissao"::date > (m.mi + interval '1 month - 1 day')::date)) AS ativos,
+      (SELECT COUNT(*) FROM employees e WHERE e."companyId" IN (${cl}) AND e."deletedAt" IS NULL
+        AND e."dataAdmissao"::date >= m.mi AND e."dataAdmissao"::date <= (m.mi + interval '1 month - 1 day')::date) AS admissoes,
+      (SELECT COUNT(*) FROM employees e WHERE e."companyId" IN (${cl}) AND e."deletedAt" IS NULL
+        AND e."dataDemissao" IS NOT NULL AND e."dataDemissao"::date >= m.mi AND e."dataDemissao"::date <= (m.mi + interval '1 month - 1 day')::date) AS demissoes
+    FROM meses m
+    ORDER BY m.mi
+  `);
+  const arr = (rows.rows || rows) as any[];
+  const map = new Map<string, any>();
+  arr.forEach(r => {
+    const ativos = Number(r.ativos) || 0;
+    const adm = Number(r.admissoes) || 0;
+    const dem = Number(r.demissoes) || 0;
+    const turnover = ativos > 0 ? Math.round(((adm + dem) / 2 / ativos) * 1000) / 10 : 0;
+    map.set(r.mes, { ativos, admissoes: adm, demissoes: dem, saldo: adm - dem, turnoverPct: turnover });
+  });
+  return {
+    ano: refY,
+    meses: meses.map(m => ({ mes: m, resumo: map.get(m) || null })),
+  };
+}
+
+async function getDashAvisoPrevioComparativo(companyId: number, ano?: number, companyIds?: number[]) {
+  const db = await getDb(); if (!db) return { ano: ano || new Date().getFullYear(), meses: [] };
+  const { refY, meses } = _mesesAteRef(ano);
+  const cl = _companyList(companyId, companyIds);
+  if (!cl) return { ano: refY, meses: [] };
+  const inicioAno = `${refY}-01-01`;
+  const fimRef = meses[meses.length - 1] + "-01";
+  const rows: any = await db.execute(sql`
+    WITH meses AS (
+      SELECT generate_series(${inicioAno}::date, ${fimRef}::date, '1 month'::interval)::date AS mi
+    )
+    SELECT
+      to_char(m.mi, 'YYYY-MM') AS mes,
+      (SELECT COUNT(*) FROM termination_notices t WHERE t."companyId" IN (${cl}) AND t."deletedAt" IS NULL
+        AND t.status <> 'cancelado'
+        AND t."dataInicio"::date >= m.mi AND t."dataInicio"::date <= (m.mi + interval '1 month - 1 day')::date) AS iniciados,
+      (SELECT COUNT(*) FROM termination_notices t WHERE t."companyId" IN (${cl}) AND t."deletedAt" IS NULL
+        AND t.status = 'concluido'
+        AND COALESCE(t."dataConclusao", t."dataFim")::date >= m.mi
+        AND COALESCE(t."dataConclusao", t."dataFim")::date <= (m.mi + interval '1 month - 1 day')::date) AS concluidos,
+      (SELECT COUNT(*) FROM termination_notices t WHERE t."companyId" IN (${cl}) AND t."deletedAt" IS NULL
+        AND t.status = 'em_andamento'
+        AND t."dataInicio"::date <= (m.mi + interval '1 month - 1 day')::date
+        AND (t."dataConclusao" IS NULL OR t."dataConclusao"::date > (m.mi + interval '1 month - 1 day')::date)) AS em_andamento,
+      (SELECT COALESCE(SUM(NULLIF(REPLACE(t."valorEstimadoTotal",',','.'),'')::numeric), 0) FROM termination_notices t
+        WHERE t."companyId" IN (${cl}) AND t."deletedAt" IS NULL
+        AND t.status <> 'cancelado'
+        AND t."dataInicio"::date >= m.mi AND t."dataInicio"::date <= (m.mi + interval '1 month - 1 day')::date) AS valor_iniciados
+    FROM meses m
+    ORDER BY m.mi
+  `);
+  const arr = (rows.rows || rows) as any[];
+  const map = new Map<string, any>();
+  arr.forEach(r => map.set(r.mes, {
+    iniciados: Number(r.iniciados) || 0,
+    concluidos: Number(r.concluidos) || 0,
+    emAndamento: Number(r.em_andamento) || 0,
+    valorIniciados: Number(r.valor_iniciados) || 0,
+  }));
+  return { ano: refY, meses: meses.map(m => ({ mes: m, resumo: map.get(m) || null })) };
+}
+
+async function getDashFeriasComparativo(companyId: number, ano?: number, companyIds?: number[]) {
+  const db = await getDb(); if (!db) return { ano: ano || new Date().getFullYear(), meses: [] };
+  const { refY, meses } = _mesesAteRef(ano);
+  const cl = _companyList(companyId, companyIds);
+  if (!cl) return { ano: refY, meses: [] };
+  const inicioAno = `${refY}-01-01`;
+  const fimRef = meses[meses.length - 1] + "-01";
+  const rows: any = await db.execute(sql`
+    WITH meses AS (
+      SELECT generate_series(${inicioAno}::date, ${fimRef}::date, '1 month'::interval)::date AS mi
+    )
+    SELECT
+      to_char(m.mi, 'YYYY-MM') AS mes,
+      (SELECT COUNT(*) FROM vacation_periods v WHERE v."companyId" IN (${cl}) AND v."deletedAt" IS NULL
+        AND v."dataInicio" IS NOT NULL
+        AND v."dataInicio"::date >= m.mi AND v."dataInicio"::date <= (m.mi + interval '1 month - 1 day')::date) AS iniciadas,
+      (SELECT COUNT(*) FROM vacation_periods v WHERE v."companyId" IN (${cl}) AND v."deletedAt" IS NULL
+        AND v."dataFim" IS NOT NULL
+        AND v."dataFim"::date >= m.mi AND v."dataFim"::date <= (m.mi + interval '1 month - 1 day')::date) AS concluidas,
+      (SELECT COUNT(*) FROM vacation_periods v WHERE v."companyId" IN (${cl}) AND v."deletedAt" IS NULL
+        AND v."dataInicio" IS NOT NULL AND v."dataFim" IS NOT NULL
+        AND v."dataInicio"::date <= (m.mi + interval '1 month - 1 day')::date
+        AND v."dataFim"::date >= (m.mi + interval '1 month - 1 day')::date) AS em_gozo,
+      (SELECT COUNT(*) FROM vacation_periods v WHERE v."companyId" IN (${cl}) AND v."deletedAt" IS NULL
+        AND v."periodoConcessivoFim"::date <= (m.mi + interval '1 month - 1 day')::date
+        AND v."dataInicio" IS NULL
+        AND v.status NOT IN ('pago','cancelado')) AS vencidas,
+      (SELECT COALESCE(SUM(NULLIF(REPLACE(v."valorTotal",',','.'),'')::numeric), 0) FROM vacation_periods v
+        WHERE v."companyId" IN (${cl}) AND v."deletedAt" IS NULL
+        AND v."dataInicio" IS NOT NULL
+        AND v."dataInicio"::date >= m.mi AND v."dataInicio"::date <= (m.mi + interval '1 month - 1 day')::date) AS custo_iniciadas
+    FROM meses m
+    ORDER BY m.mi
+  `);
+  const arr = (rows.rows || rows) as any[];
+  const map = new Map<string, any>();
+  arr.forEach(r => map.set(r.mes, {
+    iniciadas: Number(r.iniciadas) || 0,
+    concluidas: Number(r.concluidas) || 0,
+    emGozo: Number(r.em_gozo) || 0,
+    vencidas: Number(r.vencidas) || 0,
+    custoIniciadas: Number(r.custo_iniciadas) || 0,
+  }));
+  return { ano: refY, meses: meses.map(m => ({ mes: m, resumo: map.get(m) || null })) };
+}
+
+async function getDashApontamentosComparativo(companyId: number, ano?: number, companyIds?: number[]) {
+  const db = await getDb(); if (!db) return { ano: ano || new Date().getFullYear(), meses: [] };
+  const { refY, meses } = _mesesAteRef(ano);
+  const cl = _companyList(companyId, companyIds);
+  if (!cl) return { ano: refY, meses: [] };
+  const inicioAno = `${refY}-01-01`;
+  const fimRef = meses[meses.length - 1] + "-01";
+  const rows: any = await db.execute(sql`
+    WITH meses AS (
+      SELECT generate_series(${inicioAno}::date, ${fimRef}::date, '1 month'::interval)::date AS mi
+    )
+    SELECT
+      to_char(m.mi, 'YYYY-MM') AS mes,
+      (SELECT COUNT(*) FROM field_notes f WHERE f."companyId" IN (${cl}) AND f."deletedAt" IS NULL
+        AND f.data::date >= m.mi AND f.data::date <= (m.mi + interval '1 month - 1 day')::date) AS criados,
+      (SELECT COUNT(*) FROM field_notes f WHERE f."companyId" IN (${cl}) AND f."deletedAt" IS NULL
+        AND f."resolvidoEm" IS NOT NULL
+        AND f."resolvidoEm"::date >= m.mi AND f."resolvidoEm"::date <= (m.mi + interval '1 month - 1 day')::date) AS resolvidos,
+      (SELECT COUNT(*) FROM field_notes f WHERE f."companyId" IN (${cl}) AND f."deletedAt" IS NULL
+        AND f.data::date <= (m.mi + interval '1 month - 1 day')::date
+        AND (f."resolvidoEm" IS NULL OR f."resolvidoEm"::date > (m.mi + interval '1 month - 1 day')::date)) AS pendentes,
+      (SELECT COUNT(*) FROM field_notes f WHERE f."companyId" IN (${cl}) AND f."deletedAt" IS NULL
+        AND f.prioridade IN ('alta','urgente','critica')
+        AND f.data::date >= m.mi AND f.data::date <= (m.mi + interval '1 month - 1 day')::date) AS urgentes,
+      (SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (f."resolvidoEm"::timestamp - f.data::timestamp)) / 3600.0), 0)
+        FROM field_notes f WHERE f."companyId" IN (${cl}) AND f."deletedAt" IS NULL
+        AND f."resolvidoEm" IS NOT NULL
+        AND f."resolvidoEm"::date >= m.mi AND f."resolvidoEm"::date <= (m.mi + interval '1 month - 1 day')::date) AS tempo_medio_h
+    FROM meses m
+    ORDER BY m.mi
+  `);
+  const arr = (rows.rows || rows) as any[];
+  const map = new Map<string, any>();
+  arr.forEach(r => {
+    const cri = Number(r.criados) || 0;
+    const res = Number(r.resolvidos) || 0;
+    map.set(r.mes, {
+      criados: cri,
+      resolvidos: res,
+      pendentes: Number(r.pendentes) || 0,
+      urgentes: Number(r.urgentes) || 0,
+      tempoMedioHoras: Math.round((Number(r.tempo_medio_h) || 0) * 10) / 10,
+      taxaResolucaoPct: cri > 0 ? Math.round((res / cri) * 1000) / 10 : 0,
+    });
+  });
+  return { ano: refY, meses: meses.map(m => ({ mes: m, resumo: map.get(m) || null })) };
+}
+
+// ============================================================
 // 3. DASHBOARD FOLHA DE PAGAMENTO
 // ============================================================
 async function getDashFolhaPagamento(companyId: number, mesRef?: string, companyIds?: number[]) {
@@ -3524,6 +3736,12 @@ export const dashboardsRouter = router({
   drillDown: protectedProcedure.input(z.object({ companyId: z.number(), filterType: z.string(), filterValue: z.string(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDrillDown(input.companyId, input.filterType, input.filterValue, input.companyIds)),
   cartaoPonto: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashCartaoPonto(input.companyId, input.mesReferencia, input.companyIds)),
   cartaoPontoComparativo: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashCartaoPontoComparativo(input.companyId, input.mesReferencia, input.companyIds)),
+  horasExtrasComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashHorasExtrasComparativo(input.companyId, input.ano, input.companyIds)),
+  folhaPagamentoComparativo: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFolhaPagamentoComparativo(input.companyId, input.mesReferencia, input.companyIds)),
+  funcionariosComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFuncionariosComparativo(input.companyId, input.ano, input.companyIds)),
+  avisoPrevioComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashAvisoPrevioComparativo(input.companyId, input.ano, input.companyIds)),
+  feriasComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFeriasComparativo(input.companyId, input.ano, input.companyIds)),
+  apontamentosComparativo: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashApontamentosComparativo(input.companyId, input.ano, input.companyIds)),
   folhaPagamento: protectedProcedure.input(z.object({ companyId: z.number(), mesReferencia: z.string().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFolhaPagamento(input.companyId, input.mesReferencia, input.companyIds)),
   horasExtras: protectedProcedure.input(z.object({
     companyId: z.number(),

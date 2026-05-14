@@ -6,6 +6,28 @@ import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import TabelaComparativaAnual, { type LinhaInd } from "@/components/TabelaComparativaAnual";
+import { UserMinus, CheckCircle2, Clock as ClockIcon, DollarSign as DollarIcon } from "lucide-react";
+
+const AP_INDICADORES: LinhaInd[] = [
+  { chave: "iniciados", label: "Avisos Iniciados no mês", icone: UserMinus, cor: "red", lowerIsBetter: true,
+    pegar: r => Number(r.iniciados) || 0, format: v => `${v}`,
+    alertaPct: 50, hint: "Pico de aberturas exige investigação (clima, fim de obra, demissão por justa causa).",
+    acoes: ["Categorizar por motivo (sem justa causa, justa causa, pedido).", "Cruzar com pesquisa de clima e fim de obras.", "Conferir prazo de comunicação ao funcionário (mínimo 30 dias).", "Garantir homologação dentro do prazo legal (até 10 dias da rescisão)."] },
+  { chave: "concluidos", label: "Avisos Concluídos", icone: CheckCircle2, cor: "green", lowerIsBetter: false,
+    pegar: r => Number(r.concluidos) || 0, format: v => `${v}`,
+    alertaPct: 30, hint: "Avisos finalizados no mês — inclui pagamento da rescisão.",
+    acoes: ["Conferir TRCT assinado e arquivado.", "Validar pagamento em até 10 dias (Lei 7.855/89).", "Atualizar eSocial S-2299 (desligamento)."] },
+  { chave: "emAndamento", label: "Em Andamento (fim do mês)", icone: ClockIcon, cor: "yellow", lowerIsBetter: true,
+    pegar: r => Number(r.emAndamento) || 0, format: v => `${v}`,
+    alertaPct: 30, hint: "Avisos abertos não concluídos — risco de passivo trabalhista se prazo estourar.",
+    acoes: ["Listar avisos com mais de 60 dias em aberto.", "Conferir se há reduções de jornada não controladas (Art. 488 CLT).", "Validar previsão de pagamento das rescisões."] },
+  { chave: "valorIniciados", label: "Valor Estimado das Aberturas", icone: DollarIcon, cor: "purple", lowerIsBetter: true,
+    pegar: r => Number(r.valorIniciados) || 0,
+    format: v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }),
+    alertaPct: 50, hint: "Soma das rescisões projetadas dos avisos abertos no mês — impacto em fluxo de caixa.",
+    acoes: ["Garantir provisão financeira para o mês de pagamento.", "Cruzar com fluxo de caixa de 30/45 dias.", "Avaliar impacto na DRE (rescisões viram despesa não-recorrente)."] },
+];
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertTriangle, Clock, DollarSign, Users, CalendarDays,
@@ -79,6 +101,10 @@ export default function DashAvisoPrevio() {
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const [ano, setAno] = useState(new Date().getFullYear());
   const { data, isLoading } = trpc.dashboards.avisoPrevio.useQuery(
+    { companyId: queryCompanyId, ano, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+  );
+  const { data: comparativo, isLoading: loadingComp } = trpc.dashboards.avisoPrevioComparativo.useQuery(
     { companyId: queryCompanyId, ano, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
@@ -622,6 +648,14 @@ export default function DashAvisoPrevio() {
                 </div>
               </DialogContent>
             </Dialog>
+
+            <TabelaComparativaAnual
+              meses={comparativo?.meses || []}
+              indicadores={AP_INDICADORES}
+              isLoading={loadingComp}
+              titulo={`Tendência mês-a-mês — ${ano}`}
+              subtitulo="Janeiro até o mês corrente · clique em qualquer linha para análise aprofundada"
+            />
 
             {/* ===== INFORMAÇÃO LEGAL ===== */}
             <Card>

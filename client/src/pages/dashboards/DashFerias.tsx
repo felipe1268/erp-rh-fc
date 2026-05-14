@@ -5,6 +5,34 @@ import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
+import TabelaComparativaAnual, { type LinhaInd } from "@/components/TabelaComparativaAnual";
+import { Palmtree, CheckCircle2 as CheckIcon, Sun, AlertTriangle as AlertIcon, DollarSign as DollarIcon } from "lucide-react";
+
+const FERIAS_INDICADORES: LinhaInd[] = [
+  { chave: "iniciadas", label: "Férias Iniciadas no mês", icone: Palmtree, cor: "green", lowerIsBetter: false,
+    pegar: r => Number(r.iniciadas) || 0, format: v => `${v}`,
+    alertaPct: 50, hint: "Concentração em poucos meses pode comprometer obras (sazonalidade).",
+    acoes: ["Distribuir férias ao longo do ano para evitar parar obra.", "Conferir aviso prévio de 30 dias (CLT Art. 135).", "Validar pagamento até 2 dias antes do início (Art. 145).", "Comunicar coletivas com 15 dias de antecedência ao MTE."] },
+  { chave: "concluidas", label: "Férias Concluídas", icone: CheckIcon, cor: "blue", lowerIsBetter: false,
+    pegar: r => Number(r.concluidas) || 0, format: v => `${v}`,
+    alertaPct: 50, hint: "Férias finalizadas no mês — funcionário retorna ao trabalho.",
+    acoes: ["Confirmar retorno do funcionário no eSocial S-2230.", "Validar reposição na obra durante o gozo."] },
+  { chave: "emGozo", label: "Em Gozo (fim do mês)", icone: Sun, cor: "yellow", lowerIsBetter: false,
+    pegar: r => Number(r.emGozo) || 0, format: v => `${v}`,
+    hint: "Funcionários atualmente em férias — impacta efetivo disponível.",
+    acoes: ["Garantir cobertura de função na obra.", "Conferir se há substituto designado para cargos críticos."] },
+  { chave: "vencidas", label: "Vencidas (passivo)", icone: AlertIcon, cor: "red", lowerIsBetter: true,
+    pegar: r => Number(r.vencidas) || 0, format: v => `${v}`,
+    alertaAbsoluto: v => v > 0,
+    hint: "CLT obriga gozo dentro de 12 meses do período concessivo. Vencidas viram pagamento em dobro (Art. 137).",
+    acoes: ["URGENTE: programar gozo imediato ou pagar em dobro.", "Identificar funcionários e enviar comunicado obrigatório.", "Conferir se há acordo individual válido para fracionar.", "Mapear causa: chefia bloqueando ou funcionário recusando."] },
+  { chave: "custoIniciadas", label: "Custo das Férias Iniciadas", icone: DollarIcon, cor: "purple", lowerIsBetter: false,
+    pegar: r => Number(r.custoIniciadas) || 0,
+    format: v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }),
+    alertaPct: 50, hint: "Soma de férias + 1/3 + abono pecuniário das férias iniciadas no mês.",
+    acoes: ["Garantir provisão financeira (pagamento até D-2 do gozo).", "Conferir cálculo: salário + médias HE/adicionais + 1/3 constitucional.", "Validar abono pecuniário (até 1/3 dos dias, opcional)."] },
+];
+
 import { dataLimiteInicioGozoFerias } from "@/lib/dateUtils";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +78,10 @@ export default function DashFerias() {
   );
 
   const { data, isLoading } = trpc.dashboards.ferias.useQuery(
+    { companyId: queryCompanyId, ano, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: companyId > 0 || companyIds.length > 0 }
+  );
+  const { data: comparativo, isLoading: loadingComp } = trpc.dashboards.feriasComparativo.useQuery(
     { companyId: queryCompanyId, ano, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: companyId > 0 || companyIds.length > 0 }
   );
@@ -959,6 +991,14 @@ export default function DashFerias() {
           )}
         </DialogContent>
       </Dialog>
+
+      <TabelaComparativaAnual
+        meses={comparativo?.meses || []}
+        indicadores={FERIAS_INDICADORES}
+        isLoading={loadingComp}
+        titulo={`Tendência mês-a-mês — ${ano}`}
+        subtitulo="Janeiro até o mês corrente · clique em qualquer linha para análise aprofundada"
+      />
     </div>
           <PrintFooterLGPD />
     </DashboardLayout>

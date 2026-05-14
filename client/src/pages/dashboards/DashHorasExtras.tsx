@@ -10,7 +10,38 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Clock, DollarSign, Users, TrendingUp, Percent, Building2,
-  BarChart3, Loader2, ExternalLink, ArrowLeft } from "lucide-react";
+  BarChart3, Loader2, ExternalLink, ArrowLeft, Timer, UserPlus } from "lucide-react";
+import TabelaComparativaAnual, { type LinhaInd } from "@/components/TabelaComparativaAnual";
+
+const HE_INDICADORES: LinhaInd[] = [
+  { chave: "totalHoras", label: "Total de Horas Extras", icone: Clock, cor: "orange", lowerIsBetter: true,
+    pegar: r => Number(r.totalHoras) || 0, format: v => `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}h`,
+    alertaPct: 25, hint: "Variação > 25% vs mês anterior pede investigação (cronograma, atraso, surto de demanda).",
+    acoes: ["Confirmar se houve evento extraordinário (entrega, virada de mês de faturamento).", "Comparar com Diário de Obra: dias trabalhados em fim de semana.", "Cruzar com Apontamentos de Campo: paralisações que geraram recuperação.", "Avaliar dimensionamento da equipe da obra com mais HE."] },
+  { chave: "totalValor", label: "Custo Total HE (R$)", icone: DollarSign, cor: "red", lowerIsBetter: true,
+    pegar: r => Number(r.totalValor) || 0, format: v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }),
+    alertaPct: 25, hint: "Acompanha o volume de horas; alta sustentada pressiona orçamento e CMV.",
+    acoes: ["Mapear obras com maior custo de HE (ranking).", "Avaliar se o orçamento da obra previa esse volume.", "Negociar banco de horas (CCT permite até 6 meses de compensação).", "Considerar contratação CLT vs HE quando custo de HE > 30% do salário base."] },
+  { chave: "pessoasComHE", label: "Pessoas com HE", icone: Users, cor: "blue", lowerIsBetter: false,
+    pegar: r => Number(r.pessoasComHE) || 0, format: v => `${v}`,
+    alertaPct: 30, hint: "Concentração em poucas pessoas → risco de burnout (NR-17 / fadiga).",
+    acoes: ["Identificar Top 10 com mais HE/mês.", "Avaliar revezamento entre equipes da mesma obra.", "Monitorar atestados das pessoas com >40h HE/mês."] },
+  { chave: "media", label: "Média h/Pessoa", icone: TrendingUp, cor: "yellow", lowerIsBetter: true,
+    pegar: r => Number(r.mediaHorasPorPessoa) || 0, format: v => `${v.toFixed(1)}h`,
+    alertaAbsoluto: v => v > 20,
+    hint: "Acima de 20h/mês por pessoa indica jornada extenuante (CLT Art. 59 limita 2h/dia).",
+    acoes: ["CLT permite até ~44h/mês de HE (2h/dia × 22 dias).", "Acima de 30h/mês: revisar com SST por risco de fadiga.", "Negociar banco de horas no lugar de pagamento de HE."] },
+  { chave: "percHEFolha", label: "% HE / Folha Bruta", icone: Percent, cor: "orange", lowerIsBetter: true,
+    pegar: r => Number(r.percentualHEsobreFolha) || 0, format: v => `${v.toFixed(1)}%`,
+    alertaAbsoluto: v => v > 5,
+    hint: "Benchmark setor construção: 3-5%. Acima de 5% por 3 meses = déficit estrutural.",
+    acoes: ["Se > 5% por 3 meses: déficit estrutural — abrir vagas.", "Comparar com benchmark setor (CBIC: ~4% no setor construção).", "Validar se previsão orçamentária prevê esse % ou se é estouro de meta."] },
+  { chave: "custoPP", label: "Custo HE / Pessoa", icone: UserPlus, cor: "purple", lowerIsBetter: true,
+    pegar: r => { const t = Number(r.totalValor) || 0; const p = Number(r.pessoasComHE) || 0; return p > 0 ? Math.round(t / p) : 0; },
+    format: v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }),
+    alertaPct: 25, hint: "Custo médio de HE por colaborador no mês.",
+    acoes: ["Correlacionar com função (encarregados costumam ter mais HE).", "Comparar entre obras: dispersão alta sugere má distribuição."] },
+];
 import { Link } from "wouter";
 import { useState, useMemo } from "react";
 
@@ -44,6 +75,10 @@ export default function DashHorasExtras() {
   }), [queryCompanyId, year, month, isConstrutoras, companyIds]);
 
   const { data, isLoading } = trpc.dashboards.horasExtras.useQuery(queryInput, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 });
+  const { data: comparativo, isLoading: loadingComp } = trpc.dashboards.horasExtrasComparativo.useQuery(
+    { companyId: queryCompanyId, ano: year, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+  );
 
   const periodoLabel = `${MESES_FULL[month - 1]} ${year}`;
 
@@ -263,6 +298,13 @@ export default function DashHorasExtras() {
                 </CardContent>
               </Card>
             )}
+            <TabelaComparativaAnual
+              meses={comparativo?.meses || []}
+              indicadores={HE_INDICADORES}
+              isLoading={loadingComp}
+              titulo={`Tendência mês-a-mês — ${year}`}
+              subtitulo="Janeiro até o mês de referência · clique em qualquer linha para análise aprofundada"
+            />
           </>
         )}
       </div>

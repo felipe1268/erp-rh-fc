@@ -6,6 +6,40 @@ import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import MonthSelector from "@/components/MonthSelector";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import TabelaComparativaAnual, { type LinhaInd } from "@/components/TabelaComparativaAnual";
+import { Wallet as WalletIcon, Users as UsersIcon, Banknote, ShieldCheck, Receipt as ReceiptIcon, PiggyBank } from "lucide-react";
+
+const FOLHA_INDICADORES: LinhaInd[] = [
+  { chave: "custoTotal", label: "Custo Total da Folha", icone: WalletIcon, cor: "blue", lowerIsBetter: false,
+    pegar: r => Number(r.custoTotalMes) || Number(r.custoTotal) || 0,
+    format: v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }),
+    alertaPct: 15, hint: "Variação > 15% mês a mês exige justificativa (admissões, dissídio, 13º).",
+    acoes: ["Comparar com headcount: aumento proporcional ao quadro?", "Verificar dissídio do mês (CCT da categoria).", "Cruzar com horas extras: pico de HE infla folha.", "Conferir adicional de insalubridade/periculosidade novos."] },
+  { chave: "totalFunc", label: "Funcionários na Folha", icone: UsersIcon, cor: "blue", lowerIsBetter: false,
+    pegar: r => Number(r.totalFuncionarios) || 0, format: v => `${v}`,
+    alertaPct: 10, hint: "Quedas grandes podem indicar desligamentos em massa ou falha de processamento.",
+    acoes: ["Cruzar com Aviso Prévio: desligamentos no mês.", "Verificar se houve fim de obra ou redução de equipe.", "Confirmar se todos os ativos foram processados (não ficaram fora)."] },
+  { chave: "proventos", label: "Total de Proventos", icone: Banknote, cor: "green", lowerIsBetter: false,
+    pegar: r => Number(r.totalProventosMes) || Number(r.totalProventos) || 0,
+    format: v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }),
+    alertaPct: 15, hint: "Soma de salário + HE + adicionais + bônus.",
+    acoes: ["Validar variações com folha de medição.", "Conferir se 13º (nov/dez) infla artificialmente o mês."] },
+  { chave: "liquido", label: "Líquido Pago", icone: PiggyBank, cor: "teal", lowerIsBetter: false,
+    pegar: r => Number(r.totalLiquidoMes) || Number(r.totalLiquido) || 0,
+    format: v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }),
+    alertaPct: 15, hint: "Valor que efetivamente cai na conta dos funcionários.",
+    acoes: ["Cruzar com extrato bancário do mês.", "Conferir se houve pagamentos retroativos."] },
+  { chave: "fgts", label: "FGTS", icone: ShieldCheck, cor: "orange", lowerIsBetter: false,
+    pegar: r => Number(r.totalFgtsMes) || Number(r.totalFgts) || 0,
+    format: v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }),
+    alertaPct: 15, hint: "8% sobre proventos — depósito até dia 20 do mês seguinte (Lei 8.036/90).",
+    acoes: ["Conferir com guia FGTS gerada no eSocial.", "Validar atraso na quitação (multa de 0,5% ao mês + correção)."] },
+  { chave: "inss", label: "INSS Total (Empresa+Func)", icone: ReceiptIcon, cor: "red", lowerIsBetter: false,
+    pegar: r => Number(r.totalInssMes) || Number(r.totalInss) || 0,
+    format: v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }),
+    alertaPct: 15, hint: "DARF/GPS — recolhimento até dia 20 do mês seguinte.",
+    acoes: ["Conferir alíquota (~28% incluindo terceiros e RAT).", "Validar com DCTFWeb."] },
+];
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -80,6 +114,10 @@ export default function DashFolhaPagamento() {
   const [mesRef] = useState(() => new Date().toISOString().slice(0, 7));
   const [mes, setMes] = useState(mesRef);
   const { data, isLoading } = trpc.dashboards.folhaPagamento.useQuery(
+    { companyId: queryCompanyId, mesReferencia: mes, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+  );
+  const { data: comparativoAnual, isLoading: loadingCompAnual } = trpc.dashboards.folhaPagamentoComparativo.useQuery(
     { companyId: queryCompanyId, mesReferencia: mes, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
@@ -730,6 +768,14 @@ export default function DashFolhaPagamento() {
         isConstrutoras={isConstrutoras}
         comparativo={comparativo}
         onClose={() => setMesDetalhe(null)}
+      />
+
+      <TabelaComparativaAnual
+        meses={comparativoAnual?.meses || []}
+        indicadores={FOLHA_INDICADORES}
+        isLoading={loadingCompAnual}
+        titulo={`Tendência mês-a-mês — ${mes.split("-")[0]}`}
+        subtitulo="Janeiro até o mês de referência · clique em qualquer linha para análise aprofundada"
       />
 
       <PrintFooterLGPD />

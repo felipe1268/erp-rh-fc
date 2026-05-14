@@ -8,6 +8,33 @@ import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import TabelaComparativaAnual, { type LinhaInd } from "@/components/TabelaComparativaAnual";
+import { Users as UsersIcon, UserPlus, UserMinus, RefreshCw, Scale } from "lucide-react";
+
+const FUNC_INDICADORES: LinhaInd[] = [
+  { chave: "ativos", label: "Funcionários Ativos (fim do mês)", icone: UsersIcon, cor: "blue", lowerIsBetter: false,
+    pegar: r => Number(r.ativos) || 0, format: v => `${v}`,
+    alertaPct: 10, hint: "Quedas grandes podem refletir desligamentos em massa ou fim de obra.",
+    acoes: ["Cruzar com Aviso Prévio: desligamentos no mês.", "Verificar fim de obras (encerramento de equipe inteira).", "Avaliar reposição: vagas abertas vs. necessidade da obra."] },
+  { chave: "admissoes", label: "Admissões no mês", icone: UserPlus, cor: "green", lowerIsBetter: false,
+    pegar: r => Number(r.admissoes) || 0, format: v => `${v}`,
+    alertaPct: 50, hint: "Picos sazonais ok; volumes inesperados merecem revisão de quadro.",
+    acoes: ["Conferir se admissões estão na previsão orçamentária.", "Validar exames admissionais e ASOs (NR-7).", "Confirmar registro no eSocial S-2200 dentro do prazo."] },
+  { chave: "demissoes", label: "Demissões no mês", icone: UserMinus, cor: "red", lowerIsBetter: true,
+    pegar: r => Number(r.demissoes) || 0, format: v => `${v}`,
+    alertaPct: 50, hint: "Pico de saídas → investigar clima, salário, segurança, fim de obra.",
+    acoes: ["Realizar entrevista de desligamento estruturada.", "Cruzar com pesquisa de clima do trimestre.", "Conferir se rescisões foram pagas no prazo (10 dias).", "Mapear funções/obras com mais saídas (turnover concentrado)."] },
+  { chave: "saldo", label: "Saldo (Adm − Dem)", icone: Scale, cor: "teal", lowerIsBetter: false,
+    pegar: r => Number(r.saldo) || 0, format: v => v > 0 ? `+${v}` : `${v}`,
+    alertaAbsoluto: v => v < -5,
+    hint: "Saldo negativo persistente reduz quadro — risco para cronograma.",
+    acoes: ["Saldo negativo 3 meses seguidos: rever política de retenção.", "Comparar saldo com plano de obras do trimestre."] },
+  { chave: "turnover", label: "Turnover (%)", icone: RefreshCw, cor: "orange", lowerIsBetter: true,
+    pegar: r => Number(r.turnoverPct) || 0, format: v => `${v.toFixed(1)}%`,
+    alertaAbsoluto: v => v > 5,
+    hint: "Benchmark construção civil: 3-5%/mês saudável. Acima: alerta de retenção (CBIC, FGV).",
+    acoes: ["Turnover > 5%/mês por 3 meses: ação imediata em retenção.", "Mapear top 3 motivos de saída (entrevistas).", "Avaliar pacote de benefícios vs. concorrência local.", "Conferir custo de turnover (estimativa: 3-6× salário por reposição)."] },
+];
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, UserCheck, UserX, Trophy, AlertTriangle, Calendar, MapPin, Briefcase, Heart, TrendingUp, TrendingDown, Clock, ArrowLeft, Search, ChevronDown, X } from "lucide-react";
 import { Loader2 } from "lucide-react";
@@ -41,6 +68,11 @@ export default function DashFuncionarios() {
   const companyIds = getCompanyIdsForQuery();
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const { data, isLoading, isError } = trpc.dashboards.funcionarios.useQuery({ companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) }, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 });
+  const anoAtual = new Date().getFullYear();
+  const { data: comparativo, isLoading: loadingComp } = trpc.dashboards.funcionariosComparativo.useQuery(
+    { companyId: queryCompanyId, ano: anoAtual, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+  );
 
   // Drill-down state
   const [drillDown, setDrillDown] = useState<{ open: boolean; title: string; filterType: string; filterValue: string }>({
@@ -560,6 +592,14 @@ export default function DashFuncionarios() {
           </Card>
         </div>
       </div>
+
+      <TabelaComparativaAnual
+        meses={comparativo?.meses || []}
+        indicadores={FUNC_INDICADORES}
+        isLoading={loadingComp}
+        titulo={`Movimentação mês-a-mês — ${anoAtual}`}
+        subtitulo="Headcount, admissões, demissões e turnover · clique em qualquer linha para análise aprofundada"
+      />
 
       {/* Drill-Down Modal */}
       <DrillDownModal
