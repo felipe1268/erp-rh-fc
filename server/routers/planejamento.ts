@@ -1750,6 +1750,53 @@ export const planejamentoRouter = router({
       return { success: true };
     }),
 
+  // Rev. 1783 — Desconsolida a premissa do cutoff (destrava o one-way lock).
+  // Restrito a admin/admin_master. Necessário quando a equipe consolida o dia
+  // errado e precisa corrigir. Toda ação fica registrada no audit log com motivo.
+  desconsolidarCutoff: protectedProcedure
+    .input(z.object({ projetoId: z.number(), motivo: z.string().min(5, "Informe um motivo (mín. 5 caracteres).") }))
+    .mutation(async ({ input, ctx }) => {
+      const isAdminDes = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdminDes) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem desconsolidar o cutoff." });
+      }
+      const db = await getDb();
+      const [proj] = await db.select({
+        companyId: planejamentoProjetos.companyId,
+        cutoffConsolidado: planejamentoProjetos.cutoffConsolidado,
+        cutoffConsolidadoEm: planejamentoProjetos.cutoffConsolidadoEm,
+        cutoffConsolidadoPor: planejamentoProjetos.cutoffConsolidadoPor,
+        diaCorteSemana: planejamentoProjetos.diaCorteSemana,
+      }).from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
+      if (!proj) throw new TRPCError({ code: "NOT_FOUND", message: "Projeto não encontrado." });
+      if (!proj.cutoffConsolidado) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cutoff não está consolidado — nada a desfazer." });
+      }
+      const quem = ctx.user.name || ctx.user.email || "—";
+      await db.update(planejamentoProjetos).set({
+        cutoffConsolidado: false,
+        cutoffConsolidadoEm: null,
+        cutoffConsolidadoPor: null,
+        atualizadoEm: new Date(),
+      }).where(eq(planejamentoProjetos.id, input.projetoId));
+      try {
+        await createAuditLog({
+          ctx,
+          entity: "planejamento_projetos",
+          entityId: input.projetoId,
+          action: "DESCONSOLIDAR_CUTOFF",
+          changes: {
+            diaCorteSemana: proj.diaCorteSemana,
+            consolidadoAnteriormenteEm: proj.cutoffConsolidadoEm,
+            consolidadoAnteriormentePor: proj.cutoffConsolidadoPor,
+            motivo: input.motivo,
+            desfeitoPor: quem,
+          },
+        });
+      } catch (e: any) { console.error(`[desconsolidarCutoff] audit log falhou:`, e?.message || e); }
+      return { success: true };
+    }),
+
   fecharSemana: protectedProcedure
     .input(z.object({
       projetoId: z.number(),

@@ -448,6 +448,12 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     onSuccess: () => { toast.success("Premissa de cutoff consolidada — agora está protegida contra alteração."); refetchDataCorte(); utils.planejamento.getProjetoById.invalidate({ id: projetoId }); },
     onError: (e: any) => toast.error(e.message || "Falha ao consolidar premissa."),
   });
+  // Rev. 1783 — Desconsolidar cutoff (admin only). Pede motivo e registra no audit log.
+  const desconsolidarCutoffMut = trpc.planejamento.desconsolidarCutoff.useMutation({
+    onSuccess: () => { toast.success("Cutoff desconsolidado — você pode trocar o dia da semana novamente."); refetchDataCorte(); utils.planejamento.getProjetoById.invalidate({ id: projetoId }); },
+    onError: (e: any) => toast.error(e.message || "Falha ao desconsolidar cutoff."),
+  });
+  const isAdminUser = (user as any)?.role === "admin" || (user as any)?.role === "admin_master" || isAdminMaster;
 
   const { data: heCustosData, isLoading: heCustosLoading } = trpc.planejamento.getHECustosByProjeto.useQuery(
     { projetoId }, { enabled: !!projetoId && aba === "custo-rh" }
@@ -764,10 +770,33 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                   ))}
                 </select>
                 {dataCorteInfo.cutoffConsolidado ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5"
-                    title={`Premissa consolidada por ${dataCorteInfo.cutoffConsolidadoPor || "—"}.`}>
-                    🔒 Consolidado
-                  </span>
+                  <div className="inline-flex items-center gap-1">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5"
+                      title={`Premissa consolidada em ${dataCorteInfo.cutoffConsolidadoEm ? new Date(dataCorteInfo.cutoffConsolidadoEm).toLocaleDateString("pt-BR") : "—"} por ${dataCorteInfo.cutoffConsolidadoPor || "—"}.`}>
+                      🔒 Consolidado
+                    </span>
+                    {isAdminUser && (
+                      <button type="button"
+                        disabled={desconsolidarCutoffMut.isPending}
+                        title="Desconsolidar (admin) — destrava a premissa para troca do dia. Ação registrada no audit log."
+                        onClick={() => {
+                          const motivo = window.prompt(
+                            "Tem certeza que deseja DESCONSOLIDAR o cutoff?\n\n" +
+                            "Após desconsolidar, o dia da semana poderá ser alterado novamente — o que pode rebagunçar a Programação Semanal.\n\n" +
+                            "Informe o motivo (mín. 5 caracteres):"
+                          );
+                          if (!motivo) return;
+                          if (motivo.trim().length < 5) {
+                            toast.error("Motivo precisa ter pelo menos 5 caracteres.");
+                            return;
+                          }
+                          desconsolidarCutoffMut.mutate({ projetoId, motivo: motivo.trim() });
+                        }}
+                        className="text-[10px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded px-1.5 py-0.5">
+                        🔓 Desconsolidar
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <button type="button"
                     disabled={consolidarCutoffMut.isPending}
