@@ -12659,6 +12659,15 @@ export const CHANGELOG: RevisionEntry[] = [
     dataPublicacao: "2026-05-14 12:00:00",
   },
   {
+    version: 1789,
+    titulo: "Portal Cliente · KPIs Curva S — Previsto azul, Realizado verde (semantic colors)",
+    descricao: "Pedido do user direto: 'previsto quero azul, o realizado verde'. Antes (Rev. 1788) os 3 cards do header da Curva S do Portal Cliente eram: PREVISTO em amber/dourado (#9A7408 + bg amber-50/50), REALIZADO em azul-marinho (#1B3A8A + bg blue-50/50), DESVIO em vermelho/verde por sinal. A escolha amber para previsto vinha da convenção MS Project (texto10 amarelo) mas conflitava com o entendimento natural do usuário no contexto Lean: azul = planejado/baseline, verde = executado/sucesso. **Fix** em `client/src/pages/portal/PortalPlanejamentoCliente.tsx` L2210-2212 (3 linhas): trocados ícones, accent de background e `valueClassName` (Rev. 1788) — Previsto: `text-blue-600` ícone + `bg-gradient-to-br from-blue-50/50 to-white` accent + `text-blue-700` valor; Realizado: `text-emerald-600` ícone + `bg-gradient-to-br from-emerald-50/50 to-white` accent + `text-emerald-700` valor. DESVIO mantém vermelho/verde por sinal (Rev. 1788). Visual ficou mais semântico: usuário lê 'azul=planejado/projeto, verde=feito, vermelho=problema' — alinhado com semáforo universal. Sem alteração nas curvas internas (Curva S Trabalho continua amber=previsto/azul=realizado pois lá são linhas, e o gráfico segue o padrão ANSI EVMS). Bump 1788→1789, replit.md remove Rev 1784.",
+    tipo: "ui-polish",
+    modulos: "Portal Cliente · Planejamento, Curva S",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-14 14:45:00",
+  },
+  {
     version: 1788,
     titulo: "Portal Cliente · KPI \"Desvio\" pinta valor em vermelho quando negativo (atraso)",
     descricao: "Pedido do usuário (screenshot da Curva S do Portal Cliente Santuário Aparecida): 'quero que os valores negativos fiquem em vermelho.. para dar ênfase no atraso'. Card 'DESVIO -0,05%' tinha o background levemente avermelhado e o ícone AlertTriangle vermelho, mas o NÚMERO em si (-0,05%) era renderizado em `text-slate-900` fixo (cor neutra) — atraso passava despercebido. Causa: componente `KpiCard` em `client/src/pages/portal/PortalPlanejamentoCliente.tsx` L2582-2593 tinha cor do valor hardcoded sem prop para override. **Fix**: (a) adicionado prop opcional `valueClassName?: string` e `subClassName?: string` em `KpiCard` (L2582), valor renderiza com `${valueClassName || \"text-slate-900\"}`, mantém comportamento default. (b) chamada do `KpiCard` Desvio (L2209-2215) passa `valueClassName={kpis.desvio < 0 ? \"text-red-600\" : kpis.desvio > 0 ? \"text-emerald-600\" : \"text-slate-900\"}` + `subClassName` consistente em vermelho/verde semibold. Resultado: o '-0,05%' agora aparece em vermelho-600 negrito, o subtítulo 'atrasado' também vermelho-600 semibold, mantendo consistência visual com o ícone AlertTriangle vermelho e o background red-50/50 já existente. Sem schema change, sem alteração nos demais usos do `KpiCard` (Previsto/Realizado/Atividades — todos passam `valueClassName=undefined`, mantém slate-900 default). Bump 1787→1788, replit.md remove Rev 1783.",

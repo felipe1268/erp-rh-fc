@@ -2204,8 +2204,9 @@ function AbaCurvaS({ curvaData, kpis, projeto, curvaMedicoes = [] }: any) {
     <div className="space-y-4">
       {/* KPIs resumo */}
       <div className="grid gap-3 sm:grid-cols-3">
-        <KpiCard label="Previsto"  value={fmtPct(kpis.previsto)}  icon={<TrendingUp  className="w-5 h-5" style={{ color: "#9A7408" }} />} accent="bg-gradient-to-br from-amber-50/50 to-white" />
-        <KpiCard label="Realizado" value={fmtPct(kpis.realizado)} icon={<CheckCircle2 className="w-5 h-5" style={{ color: "#1B3A8A" }} />} accent="bg-gradient-to-br from-blue-50/50 to-white" />
+        {/* Rev. 1789 — Previsto azul, Realizado verde (consistente com convenção do app: azul = planejado, verde = realizado/sucesso). */}
+        <KpiCard label="Previsto"  value={fmtPct(kpis.previsto)}  icon={<TrendingUp  className="w-5 h-5 text-blue-600" />} accent="bg-gradient-to-br from-blue-50/50 to-white"      valueClassName="text-blue-700" />
+        <KpiCard label="Realizado" value={fmtPct(kpis.realizado)} icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />} accent="bg-gradient-to-br from-emerald-50/50 to-white" valueClassName="text-emerald-700" />
         <KpiCard
           label="Desvio"
           value={`${kpis.desvio >= 0 ? "+" : ""}${fmtPct(kpis.desvio)}`}
