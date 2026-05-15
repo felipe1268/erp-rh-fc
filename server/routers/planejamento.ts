@@ -1059,6 +1059,8 @@ export const planejamentoRouter = router({
         isIndireta:          z.boolean().optional(),
         isExterna:           z.boolean().optional(),
         externaResponsavel:  z.string().nullish(),
+        // Rev. 1823 — responsável manual (planejador atribui terceiro sem marcar como externa)
+        responsavelLotus:    z.string().nullish(),
         disabled:            z.boolean().optional(),
         percentConcluido:    z.preprocess(v => v == null ? 0 : Number(v), z.number().min(0).max(100)).optional(),
         // Rev. 1670 — Snapshot %Previsto (Texto10) e %Realizado AUX (Texto7)
@@ -1096,6 +1098,8 @@ export const planejamentoRouter = router({
           isIndireta:          a.isIndireta ?? false,
           isExterna:           a.isExterna ?? false,
           externaResponsavel:  a.externaResponsavel ?? null,
+          // Rev. 1823 — responsável manual (texto livre); vazio vira null → cai no auto-resolve
+          responsavelLotus:    a.responsavelLotus === undefined ? undefined : ((a.responsavelLotus ?? '').toString().trim() || null),
           disabled:            isDisabled,
           // Rev. 1670 — snapshot por atividade (string p/ Drizzle numeric)
           previstoMspPct:      a.previstoMspPct == null ? null : String(Number(a.previstoMspPct).toFixed(4)),
@@ -1282,6 +1286,7 @@ export const planejamentoRouter = router({
                 ${cases("is_indireta", r => escBool(r.isIndireta))},
                 ${cases("is_externa", r => escBool(r.isExterna))},
                 ${cases("externa_responsavel", r => esc(r.externaResponsavel))},
+                ${cases("responsavel_lotus", r => r.responsavelLotus === undefined ? "responsavel_lotus" : esc(r.responsavelLotus))},
                 ${cases("disabled", r => escBool(r.disabled))},
                 ${cases("previsto_msp_pct", r => escNumNull(r.previstoMspPct))},
                 ${cases("realizado_msp_pct", r => escNumNull(r.realizadoMspPct))}

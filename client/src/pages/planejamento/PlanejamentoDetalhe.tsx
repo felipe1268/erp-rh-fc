@@ -3630,6 +3630,28 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                               <UiTooltipContent side="top" className="text-xs">Desativar atividade (fora do escopo, igual ao MS Project — não conta em peso, avanço nem custo)</UiTooltipContent>
                             </UiTooltip>
                           </UiTooltipProvider>
+                          {/* Rev. 1823 — Responsável manual: planejador atribui terceiro sem precisar marcar como externa (ex.: cliente pediu pra incluir atividade de outra empresa pra ver impacto global) */}
+                          <UiTooltipProvider delayDuration={300}>
+                            <UiTooltip>
+                              <UiTooltipTrigger asChild>
+                                <input type="checkbox"
+                                  checked={!!a._respManual || (a.responsavelLotus !== null && a.responsavelLotus !== undefined)}
+                                  onChange={e => {
+                                    if (e.target.checked) {
+                                      updateLinha(idx, "_respManual", true);
+                                      if (a.responsavelLotus === null || a.responsavelLotus === undefined) {
+                                        updateLinha(idx, "responsavelLotus", "");
+                                      }
+                                    } else {
+                                      updateLinha(idx, "_respManual", false);
+                                      updateLinha(idx, "responsavelLotus", null);
+                                    }
+                                  }}
+                                  className="h-3.5 w-3.5 shrink-0 cursor-pointer" style={{accentColor:"#0891b2"}} />
+                              </UiTooltipTrigger>
+                              <UiTooltipContent side="top" className="text-xs max-w-xs">Atribuir responsável manualmente (digitar nome da empresa terceira). Aparece na coluna RESPONSÁVEL da Programação Semanal e sobrepõe o auto-resolve por OS/contrato.</UiTooltipContent>
+                            </UiTooltip>
+                          </UiTooltipProvider>
                           <Input value={a.nome} onChange={e => updateLinha(idx, "nome", e.target.value)}
                             className={`h-7 text-xs w-full ${a.isGrupo ? "font-semibold bg-yellow-50" : ""} ${a.disabled ? "line-through text-slate-400" : ""}`}
                             placeholder="Nome da atividade" />
@@ -3641,6 +3663,15 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                             onChange={e => updateLinha(idx, "externaResponsavel", e.target.value)}
                             className="h-6 text-[11px] w-full mt-1 bg-amber-50 border-amber-200 placeholder:text-amber-400"
                             placeholder="Responsável externo (ex.: Concessionária CPFL)"
+                          />
+                        )}
+                        {/* Rev. 1823 — Input do responsável manual */}
+                        {(!!a._respManual || (a.responsavelLotus !== null && a.responsavelLotus !== undefined)) && !a.isExterna && (
+                          <Input
+                            value={a.responsavelLotus ?? ""}
+                            onChange={e => updateLinha(idx, "responsavelLotus", e.target.value)}
+                            className="h-6 text-[11px] w-full mt-1 bg-cyan-50 border-cyan-300 placeholder:text-cyan-500"
+                            placeholder="Responsável manual (ex.: EMPRESA XYZ LTDA)"
                           />
                         )}
                       </td>
