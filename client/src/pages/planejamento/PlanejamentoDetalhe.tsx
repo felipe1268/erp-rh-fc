@@ -540,7 +540,12 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     let refStr: string;
     if (semanaVisualizacao) {
       const semFim = new Date(new Date(semanaVisualizacao + "T12:00:00").getTime() + 7 * 86400000).toISOString().slice(0, 10);
-      refStr = (cutoffOficialAt && cutoffOficialAt < semFim) ? cutoffOficialAt : semFim;
+      // Rev. 1823 — Clipping no cutoff só vale para a semana CORRENTE (que
+      // contém o cutoff). Semana FUTURA (simulação) usa semFim cheio para
+      // mostrar a META acumulada projetada — antes ficava travada no cutoff
+      // de hoje, fazendo o "% Previsto" parar de crescer ao navegar pra frente.
+      const naSemanaCorrente = !!cutoffOficialAt && cutoffOficialAt >= semanaVisualizacao && cutoffOficialAt < semFim;
+      refStr = naSemanaCorrente ? cutoffOficialAt! : semFim;
     } else {
       refStr = cutoffOficialAt ?? refDateStr;
       if (cutoffOficialAt && refDateStr < cutoffOficialAt) refStr = refDateStr;
@@ -589,7 +594,9 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     let refStr: string;
     if (semanaVisualizacao) {
       const semFim = new Date(new Date(semanaVisualizacao + "T12:00:00").getTime() + 7 * 86400000).toISOString().slice(0, 10);
-      refStr = (cutoffOficial && cutoffOficial < semFim) ? cutoffOficial : semFim;
+      // Rev. 1823 — clipa só na semana corrente (ver nota em avancoAtual).
+      const naSemanaCorrente = !!cutoffOficial && cutoffOficial >= semanaVisualizacao && cutoffOficial < semFim;
+      refStr = naSemanaCorrente ? cutoffOficial! : semFim;
     } else {
       refStr = cutoffOficial ?? refDateStr;
       if (cutoffOficial && refDateStr < cutoffOficial) refStr = refDateStr;
@@ -5261,12 +5268,16 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     // planejado). pvMacro só usa o envelope contratual do projeto e ignora
     // se o cronograma foi limpo, então precisa de guarda explícita aqui.
     if (folhas.length === 0) return 0;
-    // Rev. 1811 — PREVISTO físico = curva S por atividade (PMI Practice
-    // Standard for Scheduling §6.2). Ref clipa no cutoff oficial sempre que
-    // este for ANTES do fim da semana — semana futura mostra o PV ao cutoff
-    // (Status Date), semana passada mostra o PV ao fim da própria semana.
+    // Rev. 1823 — PREVISTO físico = curva S por atividade (PMI PS §6.2).
+    // O clipping no cutoff só vale para a semana CORRENTE (que contém o
+    // cutoff). Para semana FUTURA (simulação), usa semanaFim cheio para
+    // exibir a META acumulada projetada — antes a Rev. 1811 clipava também
+    // semanas futuras, fazendo o "% Previsto" travar no valor de hoje
+    // assim que o usuário navegava pra frente (semana 37 mostrava 21,85%
+    // igual à semana atual).
     const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
-    const ref = (cutoffStr && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
+    const naSemanaCorrente = !!cutoffStr && cutoffStr >= semanaAtual && cutoffStr < semanaFim;
+    const ref = naSemanaCorrente ? cutoffStr! : semanaFim;
     return pvPonderadoPorAtividade(ref, folhas, usarPesoPorDuracao, calMSP);
   }, [folhas, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, dataCorteInfo?.dataCorteOficial]);
 
@@ -5299,8 +5310,10 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     // Rev. 1811 — PREVISTO c/ indiretas = curva S por atividade considerando
     // também as indiretas (mesma fórmula, base estendida).
     if (folhasComInd.length === 0) return 0;
+    // Rev. 1823 — clipa só na semana corrente (ver nota em `previsto`).
     const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
-    const ref = (cutoffStr && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
+    const naSemanaCorrente = !!cutoffStr && cutoffStr >= semanaAtual && cutoffStr < semanaFim;
+    const ref = naSemanaCorrente ? cutoffStr! : semanaFim;
     return pvPonderadoPorAtividade(ref, folhasComInd, usarPesoPorDuracao, calMSP);
   }, [folhasComInd, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, dataCorteInfo?.dataCorteOficial]);
 
