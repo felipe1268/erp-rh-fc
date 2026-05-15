@@ -447,12 +447,53 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     const hojeStr = dateStr(hoje);
     const semanaContemHoje = semIniStr <= hojeStr && hojeStr <= semFimStr;
     const cutoffStr = semanaContemHoje ? hojeStr : semFimStr;
+
+    // Rev. 1819 — Hierarquia de PESO EFETIVO (mesma da Rev. 1815 em
+    // `pvPonderadoPorAtividade`). Vale para TODAS as obras ativas:
+    //  • Cobertura 100% de pesoFinanceiro nas folhas do projeto → EVM clássico
+    //    (peso financeiro). Funciona em REVTE / HOTEL DO PAPA (sem mudança).
+    //  • Cobertura parcial (ex. QIU 2 - FASE 4 onde só algumas folhas têm
+    //    peso > 0) → peso por DURAÇÃO sobre TODAS as folhas. Sem isso,
+    //    metaPct=0 zerava META SEMANAL (Prev./Real./Δ), Aderência (PPC), as
+    //    cores das células e o "Maior peso" do analiseSemana.
+    //  • Sem dados de duração → uniforme (1/n). Defesa em profundidade.
+    //
+    // O peso efetivo é em PP do projeto (escala 0-100 totalizando 100), igual
+    // ao `pesoFinanceiro` original. Assim metaPct/realPct mantêm a mesma
+    // semântica e nada downstream precisa mudar (analiseSemana, totaisSemana,
+    // cores via faixasCelula, KPIs FC).
+    const folhasProjeto = atividades.filter((a) => !a.isGrupo && a.dataInicio && a.dataFim);
+    const pesoOf = (a: any) => {
+      const n = parseFloat(String(a?.pesoFinanceiro ?? "0"));
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    };
+    const durOf = (a: any) => {
+      const d = Number(a?.duracaoDias ?? 0);
+      if (Number.isFinite(d) && d > 0) return d;
+      const i = (a?.dataInicio || "").slice(0, 10);
+      const f = (a?.dataFim || "").slice(0, 10);
+      if (!i || !f) return 1;
+      const ini = new Date(i + "T12:00:00").getTime();
+      const fim = new Date(f + "T12:00:00").getTime();
+      const dias = Math.max(1, Math.round((fim - ini) / 86400000) + 1);
+      return Number.isFinite(dias) ? dias : 1;
+    };
+    const cobrePesoTotal = folhasProjeto.length > 0 && folhasProjeto.every((a) => pesoOf(a) > 0);
+    const somaDurFolhas = folhasProjeto.reduce((s, a) => s + durOf(a), 0);
+    const modo: "custo" | "duracao" | "uniforme" =
+      cobrePesoTotal ? "custo" : (somaDurFolhas > 0 ? "duracao" : "uniforme");
+    const pesoEfetivoOf = (a: any): number => {
+      if (modo === "custo") return pesoOf(a);
+      if (modo === "duracao") return (durOf(a) / somaDurFolhas) * 100;
+      return (1 / folhasProjeto.length) * 100;
+    };
+
     for (const a of atividadesDaSemana) {
-      const peso = parseFloat(String(a.pesoFinanceiro ?? "0")) || 0;
+      const pesoEf = pesoEfetivoOf(a);
       const ini = a.dataInicio?.slice(0, 10);
       const fim = a.dataFim?.slice(0, 10);
       let metaPct = 0;
-      if (ini && fim && peso > 0) {
+      if (ini && fim && pesoEf > 0) {
         // Sempre dias úteis (com calMSP quando disponível, ou seg-sex como
         // fallback — `diasUteisEntre` aceita `null` e considera dia útil
         // segunda a sexta). Garante paridade visual independentemente do
@@ -464,7 +505,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
           const janFim = cutoffStr < fim ? cutoffStr : fim;
           if (janIni <= janFim) {
             const duJan = diasUteisEntre(janIni, janFim, calMSP);
-            metaPct = peso * (duJan / duEnv);
+            metaPct = pesoEf * (duJan / duEnv);
           }
         }
       }
@@ -482,7 +523,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
           if (acu > acumPct) acumPct = acu;
         }
       }
-      const realPct = peso * (somaSemanal / 100);
+      const realPct = pesoEf * (somaSemanal / 100);
       const aderenciaPct = metaPct > 0 ? (realPct / metaPct) * 100 : null;
       out.set(a.id, { metaPct, realPct, aderenciaPct, acumPct, somaSemanal });
     }
@@ -492,7 +533,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       if (typeof window !== "undefined") console.error("[Lotus.metricas] memo falhou — usando defaults:", err);
       return out;
     }
-  }, [atividadesDaSemana, avancosPorAtv, semIniStr, semFimStr, calMSP, hoje]);
+  }, [atividades, atividadesDaSemana, avancosPorAtv, semIniStr, semFimStr, calMSP, hoje]);
 
   // Rev. 1680 — Análise da semana: caminho crítico (CPM) + maior peso (Top 3).
   // Replica a lógica do `pesoSemana` da aba Padrão FC (`ProgramacaoSemanal.tsx` ~L641):
