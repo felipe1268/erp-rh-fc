@@ -3117,15 +3117,19 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
 
       {/* Modal: Dar Baixa no Aviso Prévio */}
       <Dialog open={darBaixaModal.open} onOpenChange={(v) => { if (!darBaixa.isPending) setDarBaixaModal(s => ({ ...s, open: v })); }}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
+        {/* Rev. 1831 — modal "Dar Baixa": largura 3xl + altura cap 92dvh + body
+            interno com scroll próprio (footer e header sempre visíveis sem
+            barra de rolagem global no DialogContent). Resolve UX reportada na
+            screenshot (modal ~470px de largura forçava scroll vertical). */}
+        <DialogContent className="sm:max-w-3xl max-h-[92dvh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
             <DialogTitle className="flex items-center gap-2 text-green-700">
               <CheckCircle2 className="h-5 w-5" />
               Dar Baixa no Aviso Prévio
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="space-y-4 px-6 py-4 flex-1 overflow-y-auto min-h-0">
             {darBaixaModal.funcionarioNome && (
               <p className="text-sm text-slate-600">
                 Funcionário: <span className="font-semibold text-slate-800">{darBaixaModal.funcionarioNome}</span>
@@ -3464,7 +3468,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
             </div>
           </div>
 
-          <DialogFooter className="gap-2">
+          <DialogFooter className="gap-2 px-6 py-4 border-t shrink-0 bg-white">
             <Button variant="outline" onClick={() => setDarBaixaModal(s => ({ ...s, open: false }))} disabled={darBaixa.isPending}>
               Cancelar
             </Button>

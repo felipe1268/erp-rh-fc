@@ -13204,4 +13204,17 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-15 22:30:00",
   },
+  {
+    version: 1831,
+    titulo: "Aviso Prévio · modal 'Dar Baixa' redimensionado — sem barra de rolagem global",
+    descricao:
+      "User (15/05/2026, screenshot do modal 'Dar Baixa no Aviso Prévio' do ALEX PAULO RODRIGUES com scrollbar vertical à direita): 'redistribua o tamanho dessa tela para que não precise da barra de rolagem'.\n\n" +
+      "Causa: `client/src/pages/AvisoPrevio.tsx` L3120 — DialogContent estava em `max-w-xl` (576px). Em viewport pequeno o conteúdo (BAIXAS REGISTRADAS + 3 cards Tipo da Baixa em grid-cols-3 + valor + observações + checkbox + footer) ultrapassava `max-h-[85vh]` default do shadcn → DialogContent inteiro virava scrollable, levando footer pra fora da viewport útil.\n\n" +
+      "Fix (1 edit, 2 hunks): L3127 — DialogContent agora `sm:max-w-3xl max-h-[92dvh] flex flex-col p-0 gap-0` (largura ~768px + cap altura + flex-col p/ separar header/body/footer). L3128 — DialogHeader ganhou padding próprio + `border-b shrink-0`. L3135 — div interno virou `flex-1 overflow-y-auto min-h-0` (scroll APENAS no body, header/footer sempre visíveis). L3474 — DialogFooter ganhou `px-6 py-4 border-t shrink-0 bg-white` p/ ficar fixo no rodapé.\n\n" +
+      "Resultado: nas resoluções comuns (≥768px largura) o conteúdo cabe sem scroll. Em telas menores, o scroll fica APENAS no body — Cancelar/Confirmar sempre clicáveis. Os 3 cards Tipo da Baixa ficam mais largos (era ~150px cada → ~220px) reduzindo quebras de texto verticais. Zero mudança de comportamento, lógica intocada (handleConfirmarBaixa, darBaixa mutation, `darBaixaForm`). R-001 OK (sm: prefix preserva mobile).",
+    tipo: "melhoria",
+    modulos: "RH · Aviso Prévio · UX",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-15 23:00:00",
+  },
 ];
