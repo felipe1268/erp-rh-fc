@@ -456,7 +456,9 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     // do orçamento naquela obra (foi feito em prod via SQL replicando a mesma
     // fórmula da procedure).
     for (const a of atividadesDaSemana) {
-      const peso = parseFloat(String(a.pesoFinanceiro ?? "0")) || 0;
+      // Rev. 1819 — Number.isFinite blinda contra Infinity/NaN/dados inválidos.
+      const pesoRaw = parseFloat(String(a.pesoFinanceiro ?? "0"));
+      const peso = Number.isFinite(pesoRaw) && pesoRaw > 0 ? pesoRaw : 0;
       const ini = a.dataInicio?.slice(0, 10);
       const fim = a.dataFim?.slice(0, 10);
       let metaPct = 0;
@@ -623,7 +625,12 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     let prevAcumOficial = 0;
     let fonteOficial: "msp" | "linear" | "fallback" = "fallback";
     if (refFimAcum && folhas.length > 0) {
-      prevAcumOficial = pvPonderadoPorAtividade(refFimAcum, folhas, false, calMSP);
+      // Rev. 1819 — strictPesoFinanceiro=true: mesmo padrão único do memo
+      // `metricas` (peso financeiro puro, sem fallback de duração). Garante
+      // que rodapé "Previsto acumulado oficial" não diverge das linhas quando
+      // a obra está com cobertura parcial de pesoFinanceiro (ex.: CHLORUM e
+      // QIU 2 enquanto o usuário não roda "Recalcular pesos").
+      prevAcumOficial = pvPonderadoPorAtividade(refFimAcum, folhas, false, calMSP, true);
       fonteOficial = calMSP ? "msp" : "linear";
     }
 

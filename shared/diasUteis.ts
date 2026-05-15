@@ -291,6 +291,14 @@ export function pvPonderadoPorAtividade(
   folhasArr: any[],
   usarPesoPorDuracao: boolean,
   cal: CalendarioMSProject | null,
+  // Rev. 1819 — Modo "padrão único" (decisão usuário): SEMPRE usar peso
+  // financeiro, sem fallback de duração/uniforme. Se cobertura < 100%, retorna
+  // o PV calculado SÓ sobre as folhas com peso > 0 (folhas sem peso ficam
+  // invisíveis — o que é desejado: força o usuário a rodar "Recalcular pesos"
+  // e mantém alinhamento entre linhas semanais e rodapé no LOTUS).
+  // Default false preserva comportamento da Rev. 1815 (top bar, AvancoSemanal,
+  // REFIs em PlanejamentoDetalhe continuam usando hierarquia com fallback).
+  strictPesoFinanceiro: boolean = false,
 ): number {
   if (!folhasArr || folhasArr.length === 0) return 0;
   // Rev. 1815 — blindagem contra datas inválidas (strings vazias/malformadas
@@ -345,10 +353,12 @@ export function pvPonderadoPorAtividade(
   const somaDurTodas = folhasComDatas.reduce((s, a) => s + durOf(a), 0);
 
   // Hierarquia (ver bloco doc acima):
+  //   0º Rev. 1819 — strictPesoFinanceiro=true → SEMPRE custo (sem fallback);
   //   1º explícito por duração; 2º cobertura 100% de custo; 3º duração;
   //   4º uniforme.
   let modo: "duracao" | "custo" | "uniforme";
-  if (usarPesoPorDuracao)               modo = "duracao";
+  if (strictPesoFinanceiro)             modo = "custo";
+  else if (usarPesoPorDuracao)          modo = "duracao";
   else if (cobrePesoTotal)              modo = "custo";
   else if (somaDurTodas > 0)            modo = "duracao";
   else                                  modo = "uniforme";
