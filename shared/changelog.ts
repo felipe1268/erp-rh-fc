@@ -25,6 +25,27 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1848,
+    titulo: "Planejamento · REFIS Análise Detalhada — gráfico 'Avanço Físico por Grupo' mostra TODOS os tópicos (não só ESGOTO)",
+    descricao: "User (15/05/2026, screenshot /planejamento/29 aba REFIS, gráfico 'Avanço Físico por Grupo' mostrando UNICA barra ESGOTO 19.30%/33.30% + bloco de etapas só com sub-bars 'ESGOTO:' a 0%): \"o refis esta fugado preciso que gere grafico de todo os topicos analise detalhada como estava anteriormente.. porque vc mudou isso?\" + \"hoje so apareceu o topico esgoto.. não da\".\n\n" +
+      "Causa-raiz: client/src/pages/planejamento/PlanejamentoDetalhe.tsx L11468-11470 — o filtro de g1 (top-level groups) usava `a.isGrupo && a.eapCodigo && (a.nivel === 1 || !String(a.eapCodigo).includes('.'))`. Esse filtro depende de DOIS sinais frágeis pós-reimport MSP: (1) campo `nivel` precisa ser exatamente 1 (que pode vir undefined ou shiftado por importer), OU (2) eapCodigo sem ponto (que falha quando o EAP top-level já vem normalizado com ponto, ex.: '1.1', '2.1'). Resultado na obra 29: apenas o grupo cujo EAP por sorte casou ('ESGOTO') passou — todos os outros tópicos (REDE, etc.) foram silenciosamente descartados, deixando o gráfico com 1 única barra. Bloco 5 (Avanço por Etapa) também ficou com etapas só de ESGOTO. Bug não-determinístico: depende exclusivamente de como o importer populou nivel+eapCodigo no projeto específico.\n\n" +
+      "Fix (1 arquivo, 1 hunk): client/src/pages/planejamento/PlanejamentoDetalhe.tsx L11471-11491 — substituído filtro legado por DETECÇÃO ESTRUTURAL de grupos-raiz (achado de architect review: minDepth dropava ramos heterogêneos onde uns começam em '1' e outros em '2.1'). Estratégia final:\n" +
+      "  const gruposComEap = atividades.filter((a) => a.isGrupo && a.eapCodigo);\n" +
+      "  const eapsGruposSet = new Set(gruposComEap.map((a) => String(a.eapCodigo)));\n" +
+      "  const g1 = gruposComEap.filter((a) => {\n" +
+      "    const partes = String(a.eapCodigo).split('.');\n" +
+      "    for (let i = partes.length - 1; i >= 1; i--)\n" +
+      "      if (eapsGruposSet.has(partes.slice(0, i).join('.'))) return false;\n" +
+      "    return true; // sem ancestral grupo no dataset → é raiz\n" +
+      "  }).sort((a,b) => String(a.eapCodigo).localeCompare(String(b.eapCodigo)));\n" +
+      "Um grupo é raiz se NENHUM outro grupo é seu ancestral EAP (prefixo estrito). Suporta hierarquias mistas — projetos com tops em depth 1 + tops em depth 2 retornam ambos. Independe de `nivel` (que pode vir undefined). Bloco 5 (etapas dentro de cada grupo) intacto porque itera sobre `g1.map(...).etapas` usando `gDepth + 1` derivado do gEap real.\n\n" +
+      "Preservado: ZERO mudança em backend, contrato tRPC, schema, migration, DELETE; calc()/prevInd() intactos; filtro final `g.nLeaves > 0` (esconde grupos sem folhas) intacto; render dos blocos 4 e 5 (L12862, L12915) NÃO tocado; mesma lista grupos alimenta também o tooltip e card colapsado; outros usos de `nivel === 1` em `gruposEap` (L3123, L4025) NÃO foram alterados (escopo distinto: telas de cronograma/Gantt, não REFIS). Reversível em 1 hunk. R-001 OK.",
+    tipo: 'bugfix',
+    modulos: 'Planejamento',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 20:30:00',
+  },
+  {
     version: 1847,
     titulo: "Fechamento de Ponto · Modal de Ranking (Mais Horas Extras / Atrasados / Pontuais / Faltas) — Tela cheia",
     descricao: "User (15/05/2026, screenshot do modal 'Mais Horas Extras' sobre /fechamento-ponto, dialog ocupando ~96vw x 92vh com bordas escuras visiveis): \"coloque esta tela full screen para melhor visualização..\".\n\nFix (1 arquivo, 1 hunk): client/src/pages/FechamentoPonto.tsx L2078 — DialogContent do modal de ranking (compartilhado por 'pontuais', 'atrasados', 'extras', 'faltas') trocou `w-[96vw] max-w-7xl h-[92vh]` por `w-screen h-screen max-w-none sm:max-w-none rounded-none border-0`. Agora ocupa 100% da viewport, sem cantos arredondados nem borda — cabecalho, filtros (busca + obra), tabela de colaboradores e footer aproveitam toda a area visivel. Estrutura interna intacta: flex-col + p-0 gap-0, header shrink-0 com DialogTitle/DialogDescription, area scroll do meio, footer fixo. ResizableWidth segue desabilitado via resizable={false}.\n\nPreservado: ZERO mudanca em handlers (setRankingModal, setRankingSearch, setRankingObraFilter, exportar CSV, imprimir/PDF), backend, contrato tRPC, schema. Outros DialogContent da pagina (L570 confirmacao, L4095 detalhes individuais, L4748 edicao, L5060/L5125 sub-modais) NAO foram tocados. Reversivel em 1 hunk. R-001 OK.",

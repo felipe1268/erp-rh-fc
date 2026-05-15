@@ -11465,8 +11465,26 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       };
     }
 
-    const g1 = atividades
-      .filter((a: any) => a.isGrupo && a.eapCodigo && (a.nivel === 1 || !String(a.eapCodigo).includes('.')))
+    // Rev. 1848 — Detecção ESTRUTURAL de grupos-raiz (não depende de `nivel`
+    // nem de `!includes('.')`, ambos frágeis pós-reimport MSP).
+    // Um grupo é "top-level" se NENHUM outro grupo no dataset é seu ancestral
+    // (i.e., não existe outro grupo cujo eapCodigo seja prefixo estrito do dele).
+    // Isso suporta hierarquias heterogêneas — projetos onde alguns ramos começam
+    // em "1" e outros em "2.1" são tratados corretamente, todos os tópicos
+    // aparecem no gráfico "Avanço Físico por Grupo".
+    const gruposComEap = atividades.filter((a: any) => a.isGrupo && a.eapCodigo);
+    const eapsGruposSet = new Set<string>(gruposComEap.map((a: any) => String(a.eapCodigo)));
+    const g1 = gruposComEap
+      .filter((a: any) => {
+        const eap = String(a.eapCodigo);
+        const partes = eap.split('.');
+        // Itera sobre todos os ancestrais EAP possíveis (ex.: "1.2.3" → "1.2", "1")
+        // e verifica se algum deles existe como grupo. Se sim, NÃO é raiz.
+        for (let i = partes.length - 1; i >= 1; i--) {
+          if (eapsGruposSet.has(partes.slice(0, i).join('.'))) return false;
+        }
+        return true;
+      })
       .sort((a: any, b: any) => String(a.eapCodigo ?? '').localeCompare(String(b.eapCodigo ?? '')));
 
     return g1.map((g: any) => {
