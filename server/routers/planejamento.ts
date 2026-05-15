@@ -8,6 +8,8 @@ import { parseCalendarioJson, fracaoDecorridaMs } from "../../shared/diasUteis";
 import { resolverResponsaveisBatch, truncarNomeEmpresa, type ResponsavelInfo } from "../_shared/responsavelAtividade";
 // Rev. 1820 — FONTE ÚNICA do recálculo de pesos (item 4 + item 10).
 import { recalcularPesosCore } from "../_shared/recalcularPesos";
+// Rev. 1821 — Normalização canônica do EAP (match orçamento ↔ cronograma).
+import { eapCanonico } from "../_shared/normalizarEap";
 import { eq, and, desc, asc, sql, isNotNull, inArray, or, ilike, lt, ne, gt } from "drizzle-orm";
 import {
   planejamentoProjetos,
@@ -3764,13 +3766,42 @@ export const planejamentoRouter = router({
           .where(eq(planejamentoAtividades.revisaoId, input.revisaoId)),
       ]);
 
-      // Filtra orçamento: só folhas (tipo != Etapa/Subetapa) com custo > 0
+      // Rev. 1821 — chave NORMALIZADA via eapCanonico (mesma chave usada pelo
+      // recalcularPesosCore). Antes era literal: "02.16.02.01" (orçamento) ≠
+      // "2.16.2.1" (cronograma) → tudo caía em "Só no Orçamento" / "Só no
+      // Cronograma" embora seja a MESMA EAP. Agora bate corretamente. O EAP
+      // exibido na UI continua o LITERAL (preservamos no objeto: chave do Map
+      // = canônica, valor = item original com `eapCodigo` literal).
+      //
+      // Fix code-review #4: AGREGAR quando 2+ itens caem na mesma chave
+      // canônica em vez de sobrescrever (last-write-wins descartaria itens).
+      // Caso real raro mas possível: orçamento com "02.16" e "2.16" lançados
+      // como itens distintos (erro de cadastro do usuário). Aqui SOMAMOS o
+      // custo (orçamento) e mantemos um representante para descrição/nome.
       const folhasOrc = itensOrc.filter(i => i.tipo !== 'Etapa/Subetapa' && parseFloat(String(i.custoTotal || 0)) > 0);
-      const orcMap = new Map(folhasOrc.map(i => [(i.eapCodigo ?? '').trim(), i]));
+      const orcMap = new Map<string, typeof folhasOrc[number]>();
+      for (const i of folhasOrc) {
+        const k = eapCanonico(i.eapCodigo);
+        if (!k) continue;
+        const exist = orcMap.get(k);
+        if (exist) {
+          const somado = (parseFloat(String(exist.custoTotal || 0)) || 0) + (parseFloat(String(i.custoTotal || 0)) || 0);
+          orcMap.set(k, { ...exist, custoTotal: String(somado) as any });
+        } else {
+          orcMap.set(k, i);
+        }
+      }
 
-      // Filtra cronograma: só folhas reais (não grupo, não marco)
+      // Filtra cronograma: só folhas reais (não grupo, não marco). Aqui não
+      // somamos nada (atividade do cronograma não tem "custo agregável");
+      // mantém o primeiro encontrado como representante (raríssimo colidir).
       const folhasCron = ativs.filter(a => !a.isGrupo && !a.isMarco && a.eapCodigo);
-      const cronMap = new Map(folhasCron.map(a => [(a.eapCodigo ?? '').trim(), a]));
+      const cronMap = new Map<string, typeof folhasCron[number]>();
+      for (const a of folhasCron) {
+        const k = eapCanonico(a.eapCodigo);
+        if (!k) continue;
+        if (!cronMap.has(k)) cronMap.set(k, a);
+      }
 
       const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
 
@@ -3785,7 +3816,9 @@ export const planejamentoRouter = router({
           const dCron = norm(cronIt.nome ?? '');
           const descBate = dOrc === dCron || dOrc.includes(dCron.substring(0, 20)) || dCron.includes(dOrc.substring(0, 20));
           casados.push({
-            eapCodigo: eap,
+            // Rev. 1821 — exibe o EAP LITERAL do orçamento (preserva
+            // formato original "02.16.02.01" para o usuário).
+            eapCodigo: (orcIt.eapCodigo ?? '').trim(),
             descricaoOrc: orcIt.descricao ?? '',
             nomeCron: cronIt.nome ?? '',
             custoTotal: parseFloat(String(orcIt.custoTotal || 0)),
@@ -3793,7 +3826,7 @@ export const planejamentoRouter = router({
           });
         } else {
           soNoOrcamento.push({
-            eapCodigo: eap,
+            eapCodigo: (orcIt.eapCodigo ?? '').trim(),
             descricao: orcIt.descricao ?? '',
             custoTotal: parseFloat(String(orcIt.custoTotal || 0)),
             nivel: orcIt.nivel ?? 0,
@@ -3803,7 +3836,8 @@ export const planejamentoRouter = router({
       for (const [eap, cronIt] of cronMap) {
         if (!orcMap.has(eap)) {
           soNoCronograma.push({
-            eapCodigo: eap,
+            // Rev. 1821 — exibe EAP LITERAL do cronograma (formato MSP).
+            eapCodigo: (cronIt.eapCodigo ?? '').trim(),
             nome: cronIt.nome ?? '',
             isGrupo: !!cronIt.isGrupo,
             isMarco: !!cronIt.isMarco,
@@ -5636,6 +5670,11 @@ REGRAS TÉCNICAS:
       return await recalcularPesosCore(db, input.projetoId, input.revisaoId);
     }),
 
+  // Rev. 1821 — Procedure `diagnosticoOrcamento` foi DESCARTADA antes de
+  // shipar: o componente <DiagnosticoEapOrcCron /> e a procedure existente
+  // `diagnosticoEapOrcVsCron` (L3704) já cobrem o caso. Nesta revisão a chave
+  // de comparação dela passa a usar `eapCanonico()` — mesmo critério do
+  // `recalcularPesosCore`. Sem UI nova, sem procedure duplicada (R-017).
   dashboardGeral: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input, ctx }) => {

@@ -23,6 +23,10 @@ import {
   planejamentoAtividades,
   orcamentoItens,
 } from "../../drizzle/schema";
+// Rev. 1821 — Normalização canônica do EAP (sem zero à esquerda em cada
+// segmento). Aplicada SÓ na chave de comparação; o `eap_codigo` literal
+// (vindo do Excel/MSP) permanece intacto no banco.
+import { eapCanonico } from "./normalizarEap";
 
 export type RecalcularPesosResult = {
   ok: boolean;
@@ -82,19 +86,33 @@ export async function recalcularPesosCore(
       }).from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, proj.orcamentoId));
 
       if (eapItens.length > 0) {
-        // Soma custoTotal por EAP (orçamento)
+        // Soma custoTotal por EAP (orçamento) — chave NORMALIZADA (Rev. 1821).
+        // Antes a comparação era literal: "02.16.02.01" (orçamento) ≠ "2.16.2.1"
+        // (cronograma) → match falhava → atividade ficava sem peso → "Sem meta"
+        // em massa em obras como HOTEL DO PAPA. Agora ambos os lados normalizam
+        // pra forma canônica antes de comparar (sem persistir nada no banco).
         const custoMap = new Map<string, number>();
         for (const it of eapItens) {
-          const code = (it.eapCodigo ?? "").trim();
+          const code = eapCanonico(it.eapCodigo);
           if (!code) continue;
           custoMap.set(code, (custoMap.get(code) ?? 0) + (parseFloat(it.custoTotal ?? "0") || 0));
         }
 
-        const totalCusto = folhas.reduce((s: number, a: any) => {
-          const c = custoMap.get((a.eapCodigo ?? "").trim());
-          return s + (c ?? 0);
-        }, 0);
-        vinculados = folhas.filter((a: any) => custoMap.has((a.eapCodigo ?? "").trim())).length;
+        // Rev. 1821 (fix code-review #3) — `totalCusto` deve somar cada EAP
+        // ÚNICA presente nas folhas, não 1× POR FOLHA. Quando N folhas
+        // compartilham a mesma EAP (caso explorado no rateio item 4 da
+        // Rev. 1820), somar por folha inflava o denominador e drenava o
+        // pesoEapPct — Σ pesos << 100%. Agora: set de EAPs canônicas com
+        // folha vinculada → soma cada custo apenas 1×.
+        const eapsComFolha = new Set<string>();
+        for (const a of folhas) {
+          const k = eapCanonico(a.eapCodigo);
+          if (k && custoMap.has(k)) eapsComFolha.add(k);
+        }
+        let totalCusto = 0;
+        for (const k of eapsComFolha) totalCusto += custoMap.get(k) ?? 0;
+
+        vinculados = folhas.filter((a: any) => custoMap.has(eapCanonico(a.eapCodigo))).length;
         semVinculo = folhas.length - vinculados;
 
         if (totalCusto > 0) {
@@ -102,10 +120,12 @@ export async function recalcularPesosCore(
 
           // ── ITEM 4: RATEIO POR DURAÇÃO ENTRE FOLHAS DA MESMA EAP ──────────
           // Soma duração das folhas POR EAP (para ratear o custo da EAP entre elas).
+          // Rev. 1821: chave normalizada (eapCanonico) — folhas "02.16.02.01" e
+          // "2.16.2.1" agora são tratadas como a MESMA EAP (são, na verdade).
           const durByEap = new Map<string, number>();
           const countByEap = new Map<string, number>();
           for (const a of folhas) {
-            const eap = (a.eapCodigo ?? "").trim();
+            const eap = eapCanonico(a.eapCodigo);
             if (!eap) continue;
             const dur = Number.isFinite(a.duracaoDias) ? Math.max(0, Number(a.duracaoDias)) : 0;
             durByEap.set(eap, (durByEap.get(eap) ?? 0) + dur);
@@ -117,7 +137,7 @@ export async function recalcularPesosCore(
               updates.push({ id: a.id, peso: "0" });
               continue;
             }
-            const eap = (a.eapCodigo ?? "").trim();
+            const eap = eapCanonico(a.eapCodigo);
             const custoEap = custoMap.get(eap) ?? 0;
             if (custoEap <= 0 || !eap) {
               updates.push({ id: a.id, peso: "0" });
