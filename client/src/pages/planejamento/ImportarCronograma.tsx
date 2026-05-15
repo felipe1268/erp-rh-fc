@@ -678,17 +678,19 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
 
   // Rev. 1822 — Barra de progresso da importação. O backend processa o lote
   // inteiro numa transação só (sem streaming), então o progresso real é
-  // desconhecido. Sobe suavemente até 90% (assintota) enquanto o request
-  // está em voo e completa em 100% quando a mutation retorna sucesso.
+  // desconhecido. Sobe assintoticamente até 99% (sempre se mexendo, nunca
+  // "trava") e completa em 100% quando a mutation retorna sucesso.
   const [progressoImport, setProgressoImport] = useState(0);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function iniciarProgresso() {
-    setProgressoImport(5);
+    setProgressoImport(3);
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    // Tick rápido (120ms) com decay assintótico — sobe veloz no início
+    // e desacelera perto do limite (99%). Visualmente nunca "trava".
     progressIntervalRef.current = setInterval(() => {
-      setProgressoImport(p => (p < 90 ? p + Math.max(0.5, (90 - p) * 0.04) : p));
-    }, 250);
+      setProgressoImport(p => (p < 99 ? p + Math.max(0.15, (99 - p) * 0.06) : p));
+    }, 120);
   }
   function finalizarProgresso(sucesso: boolean) {
     if (progressIntervalRef.current) {

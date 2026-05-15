@@ -1293,7 +1293,10 @@ export const planejamentoRouter = router({
 
         if (toInsert.length > 0) {
           const insertRows = toInsert.map(a => rows[a._idx]);
-          const CHUNK = 100;
+          // Rev. 1822 — chunk maior (500) reduz round-trips ao Postgres
+          // (1900 atividades: 19 → 4 INSERTs). Postgres aguenta facilmente
+          // ~10k rows/INSERT; 500 fica conservador pro tamanho da row.
+          const CHUNK = 500;
           for (let i = 0; i < insertRows.length; i += CHUNK) {
             await tx.insert(planejamentoAtividades).values(insertRows.slice(i, i + CHUNK));
           }
