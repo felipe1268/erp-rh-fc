@@ -4889,6 +4889,13 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   const [importando, setImportando] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importFileName, setImportFileName] = useState("");
+  // Rev. 1808 — Modal de diagnóstico (read-only) de avanços
+  const [diagOpen, setDiagOpen] = useState(false);
+  const { data: diagData, isFetching: diagLoading, refetch: refetchDiag } =
+    trpc.planejamento.diagnosticarAvancos.useQuery(
+      { projetoId },
+      { enabled: diagOpen, refetchOnWindowFocus: false },
+    );
   const [confirmLimpar, setConfirmLimpar] = useState(false);
   const [confirmTodasSemanas, setConfirmTodasSemanas] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -5817,6 +5824,16 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
             {filtroAtivo === "pendentes" && `Não Execut. (${folhasPendentes.length})`}
             {filtroAtivo === "todas"     && `Todas (${folhas.length})`}
           </Button>
+          {/* Rev. 1808 — Diagnóstico só-leitura de avanços */}
+          <Button
+            size="sm" variant="outline"
+            className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50"
+            onClick={() => setDiagOpen(true)}
+            title="Mostra a foto real dos avanços no banco (não escreve nada)"
+          >
+            <Activity className="h-3.5 w-3.5" />
+            Diagnóstico
+          </Button>
           {/* Botão importar MS Project */}
           <Button
             size="sm" variant="outline"
@@ -6457,6 +6474,192 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         <div className="flex items-center gap-1"><div className="h-px w-3 bg-orange-400" /> Linha prevista</div>
         <div className="flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-amber-500" /> Atrasado &gt;5%</div>
       </div>
+
+      {/* Rev. 1808 — Modal de Diagnóstico de Avanços (read-only) */}
+      <Dialog open={diagOpen} onOpenChange={setDiagOpen}>
+        <DialogContent
+          className="w-[100vw] h-[100dvh] max-w-none sm:w-[98vw] sm:h-[96dvh] sm:max-w-none p-0 flex flex-col"
+          // @ts-expect-error shadcn ignores prop but is required for full-screen
+          resizable={false}
+        >
+          <DialogHeader className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shrink-0">
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <Activity className="h-5 w-5" />
+              Diagnóstico de Avanços — {diagData?.projeto?.nome ?? `Projeto ${projetoId}`}
+            </DialogTitle>
+            <DialogDescription className="text-blue-100">
+              Foto direta do banco — somente leitura, nada é alterado. Use para entender o que aconteceu antes de pedir uma reparação.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50">
+            {diagLoading && (
+              <div className="flex items-center gap-2 text-slate-600 text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Consultando o banco…
+              </div>
+            )}
+
+            {diagData && (
+              <>
+                {/* KPIs gerais */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="bg-white rounded-xl border border-blue-200 p-4 shadow-sm">
+                    <div className="text-xs text-slate-500 uppercase tracking-wide">Total de avanços (todas revisões)</div>
+                    <div className="text-3xl font-bold text-blue-700 mt-1">{diagData.totalAvancos.toLocaleString("pt-BR")}</div>
+                  </div>
+                  <div className={`rounded-xl border p-4 shadow-sm ${diagData.totalOrfaos > 0 ? "bg-amber-50 border-amber-300" : "bg-white border-slate-200"}`}>
+                    <div className="text-xs text-slate-500 uppercase tracking-wide">Avanços órfãos</div>
+                    <div className={`text-3xl font-bold mt-1 ${diagData.totalOrfaos > 0 ? "text-amber-700" : "text-slate-400"}`}>
+                      {diagData.totalOrfaos.toLocaleString("pt-BR")}
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-1">apontam pra atividade que não existe mais</div>
+                  </div>
+                  <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                    <div className="text-xs text-slate-500 uppercase tracking-wide">Revisões existentes</div>
+                    <div className="text-3xl font-bold text-slate-700 mt-1">{diagData.porRevisao.length}</div>
+                  </div>
+                </div>
+
+                {/* Tabela por revisão */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50 font-semibold text-sm text-slate-700">
+                    Avanços por Revisão
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-100 text-slate-600">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Rev.</th>
+                          <th className="px-3 py-2 text-left">Status</th>
+                          <th className="px-3 py-2 text-right">Atividades</th>
+                          <th className="px-3 py-2 text-right">Avanços</th>
+                          <th className="px-3 py-2 text-right">Órfãos</th>
+                          <th className="px-3 py-2 text-right">Semanas</th>
+                          <th className="px-3 py-2 text-left">Última semana</th>
+                          <th className="px-3 py-2 text-left">Último lançamento</th>
+                          <th className="px-3 py-2 text-left">Por</th>
+                          <th className="px-3 py-2 text-left">IDs ativ. (range)</th>
+                          <th className="px-3 py-2 text-left">IDs ref. avanços</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {diagData.porRevisao.map((r) => {
+                          const isAtiva = r.revisaoId === revisaoAtiva?.id;
+                          const idMismatch = r.totalAvancos > 0 && r.atividadesNaRevisao > 0 &&
+                            (r.avancosIdsRefMax != null && r.atividadesIdsRefMin != null) &&
+                            (r.avancosIdsRefMax < r.atividadesIdsRefMin || (r.avancosIdsRefMin != null && r.atividadesIdsRefMax != null && r.avancosIdsRefMin > r.atividadesIdsRefMax));
+                          return (
+                            <tr key={r.revisaoId} className={`border-t border-slate-100 ${isAtiva ? "bg-blue-50 font-semibold" : ""}`}>
+                              <td className="px-3 py-2">
+                                {String(r.revisaoNumero ?? "?").padStart(2, "0")}
+                                {isAtiva && <span className="ml-1.5 text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded">ATIVA</span>}
+                              </td>
+                              <td className="px-3 py-2">{r.revisaoStatus ?? "—"}</td>
+                              <td className="px-3 py-2 text-right">{r.atividadesNaRevisao.toLocaleString("pt-BR")}</td>
+                              <td className="px-3 py-2 text-right font-bold">{r.totalAvancos.toLocaleString("pt-BR")}</td>
+                              <td className={`px-3 py-2 text-right ${r.orfaos > 0 ? "text-amber-700 font-bold" : "text-slate-400"}`}>
+                                {r.orfaos.toLocaleString("pt-BR")}
+                              </td>
+                              <td className="px-3 py-2 text-right">{r.semanasDistintas}</td>
+                              <td className="px-3 py-2">{r.ultimaSemana ? r.ultimaSemana.split("-").reverse().join("/") : "—"}</td>
+                              <td className="px-3 py-2 text-slate-500">{r.ultimoCriadoEm ? r.ultimoCriadoEm.replace("T", " ").slice(0, 19) : "—"}</td>
+                              <td className="px-3 py-2 text-slate-500 truncate max-w-[160px]" title={r.ultimoCriadoPor ?? ""}>{r.ultimoCriadoPor ?? "—"}</td>
+                              <td className="px-3 py-2 text-slate-500">{r.atividadesIdsRefMin != null ? `${r.atividadesIdsRefMin}–${r.atividadesIdsRefMax}` : "—"}</td>
+                              <td className={`px-3 py-2 ${idMismatch ? "text-amber-700 font-bold" : "text-slate-500"}`}>
+                                {r.avancosIdsRefMin != null ? `${r.avancosIdsRefMin}–${r.avancosIdsRefMax}` : "—"}
+                                {idMismatch && <span className="ml-1 text-[10px]">⚠ não cruza</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Últimos avanços */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50 font-semibold text-sm text-slate-700">
+                    10 últimos lançamentos (qualquer revisão)
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-100 text-slate-600">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Quando</th>
+                          <th className="px-3 py-2 text-left">Por</th>
+                          <th className="px-3 py-2 text-right">Rev.ID</th>
+                          <th className="px-3 py-2 text-right">Ativ.ID</th>
+                          <th className="px-3 py-2 text-left">Semana</th>
+                          <th className="px-3 py-2 text-right">% Acum.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {diagData.ultimosAvancos.length === 0 && (
+                          <tr><td colSpan={6} className="px-3 py-4 text-center text-slate-400">Nenhum avanço encontrado.</td></tr>
+                        )}
+                        {diagData.ultimosAvancos.map((av: any) => (
+                          <tr key={av.id} className="border-t border-slate-100">
+                            <td className="px-3 py-2 text-slate-600">{av.criado_em ? String(av.criado_em).replace("T", " ").slice(0, 19) : "—"}</td>
+                            <td className="px-3 py-2 text-slate-600 truncate max-w-[180px]" title={av.criado_por ?? ""}>{av.criado_por ?? "—"}</td>
+                            <td className="px-3 py-2 text-right">{av.revisao_id}</td>
+                            <td className="px-3 py-2 text-right">{av.atividade_id}</td>
+                            <td className="px-3 py-2">{av.semana ? String(av.semana).split("-").reverse().join("/") : "—"}</td>
+                            <td className="px-3 py-2 text-right font-semibold">{Number(av.percentual_acumulado ?? 0).toFixed(2)}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Audit log recente */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50 font-semibold text-sm text-slate-700">
+                    Audit log do projeto — últimas 72 horas ({diagData.auditRecente.length})
+                  </div>
+                  <div className="overflow-x-auto max-h-80">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-100 text-slate-600 sticky top-0">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Quando</th>
+                          <th className="px-3 py-2 text-left">Quem</th>
+                          <th className="px-3 py-2 text-left">Ação</th>
+                          <th className="px-3 py-2 text-left">Entidade</th>
+                          <th className="px-3 py-2 text-left">Detalhes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {diagData.auditRecente.length === 0 && (
+                          <tr><td colSpan={5} className="px-3 py-4 text-center text-slate-400">Nenhum registro de auditoria nas últimas 72h para este projeto.</td></tr>
+                        )}
+                        {diagData.auditRecente.map((ev: any) => (
+                          <tr key={ev.id} className="border-t border-slate-100">
+                            <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{ev.createdAt ? String(ev.createdAt).replace("T", " ").slice(0, 19) : "—"}</td>
+                            <td className="px-3 py-2 text-slate-600 truncate max-w-[160px]" title={ev.userName ?? ""}>{ev.userName ?? "—"}</td>
+                            <td className="px-3 py-2"><span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[10px]">{ev.action}</span></td>
+                            <td className="px-3 py-2 text-slate-500">{ev.entityType ?? "—"}{ev.entityId ? ` #${ev.entityId}` : ""}</td>
+                            <td className="px-3 py-2 text-slate-500 font-mono text-[10px] max-w-[400px] truncate" title={ev.details ?? ""}>{ev.details ?? "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <DialogFooter className="px-6 py-3 border-t border-slate-200 bg-white shrink-0">
+            <Button variant="outline" size="sm" onClick={() => refetchDiag()} disabled={diagLoading} className="gap-1.5">
+              {diagLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5" />}
+              Reconsultar
+            </Button>
+            <Button size="sm" onClick={() => setDiagOpen(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
