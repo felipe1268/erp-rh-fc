@@ -13473,4 +13473,23 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-16 03:00:00",
   },
+  {
+    version: 1845,
+    titulo: "Central de Alertas (Home/PainelRH) — exclui Reclusos e Afastados >15 dias",
+    descricao:
+      "User (15/05/2026, screenshot da Central de Alertas em Home/PainelRH listando 19 alertas, com cards 'Sem ASO' / 'ASO Vencendo' de funcionários cujo status é Afastado de longa data ou Recluso): 'tire da lista os afastados acima de 15 dias e reclusos'.\n\n" +
+      "Causa-raiz: `server/routers/homeData.ts` constrói as listas `asosAlerta`, `semAso`, `feriasAlerta`, `experiencias`, `avisosPrevios` a partir de `todosNaoDesligados` (L55-58 — só corta Desligado/Lista_Negra/Inativo + flag listaNegra=1). Funcionários em status='Afastado' (auxílio-doença INSS, B91, B31, atestados longos) e 'Recluso' permaneciam aparecendo nos cards de alerta operacional — gerando ruído visual (não há ação possível: estão fora da operação por 6m+ no caso de afastamento INSS, e nesses casos o ASO/contrato de experiência não vai ser renovado mesmo). Filtro client-side L155 do PainelRH/L870-996 do Home.tsx só removia 'desligado' (`a.empStatus?.toLowerCase() !== 'desligado'`).\n\n" +
+      "Por que >15 dias e não 'qualquer Afastado': curtos atestados (≤15d, custo do empregador, CLT Art. 60 §3º) tipicamente NÃO mudam o status do colaborador no sistema — ficam só como ocorrência no espelho de ponto. Quando o RH efetivamente troca status para 'Afastado' e preenche `licencaDataInicio` (campo Rev. 1731 — formulário em Colaboradores.tsx aba Profissional), o caso já é INSS/B91 (>15d, ônus do INSS). Logo, status='Afastado' há mais de 15 dias é um proxy seguro para 'fora da operação por longo prazo'. Para casos sem `licencaDataInicio` registrado mas status='Afastado' (legado), tratamos como longo prazo por padrão (não faz sentido ter o status setado sem ser longo).\n\n" +
+      "Fix (1 arquivo, 4 hunks):\n" +
+      "  1) `server/routers/homeData.ts` L63-82 (após `todosNaoDesligados`): novo helper `isLongTermAfastado(emp)` (`normStatus(emp.status)==='afastado'` AND (sem `licencaDataInicio` OR `(today - licencaDataInicio) > 15` dias)) + `isReclusoOrLongAfast(emp)` (`status==='recluso'` OR longTerm). Constrói `alertableEmpIds = Set<number>` derivado de `todosNaoDesligados.filter(!isReclusoOrLongAfast)`. Comentário explica que NÃO mexe em `todosNaoDesligados` em si — KPIs/aniversariantes/quadro de pessoal continuam contando esses funcionários (que de fato fazem parte da empresa); só a *lista de alertas acionáveis* os exclui.\n" +
+      "  2) L193-195 (loop `asosAlerta`): adiciona segundo guard `if (!alertableEmpIds.has(empId)) continue;` logo após o `todosNaoDesligadosIds.has` existente. ASOs vencidos/vencendo de Reclusos/Afastados>15d deixam de entrar.\n" +
+      "  3) L227-229 (filtro `semAso`): `.filter(e => alertableEmpIds.has(e.id) && !asoMap.has(e.id))`. Cards 'Sem ASO' deixam de listar Recluso/Afastado>15d.\n" +
+      "  4) L492-494 (filtro `experiencias`): `alertableEmpIds.has(e.id) &&` antes da condição original. Contratos de experiência de Reclusos/Afastados>15d deixam de gerar alerta (caso raro, mas possível).\n\n" +
+      "Por que é seguro: ZERO mudança em schema/migration/DELETE/contrato. ZERO mudança em backend de cálculo de ferias/aviso prévio (já consomem `licencaDataInicio` corretamente desde Rev. 1694/1731). `feriasAlerta` (L208/now ~L240) já filtra `e.status === 'Ativo'` — Recluso/Afastado naturalmente fora. `avisosPrevios` (L537/now ~L565) tem origem em `terminationNotices` — pessoas em rescisão estão com status 'Ativo' (a rescisão muda para 'Desligado' só após dataBaixa) e Reclusos/Afastados raramente têm aviso em curso, mas se tiverem, é financeiramente legítimo manter o alerta. Solicitações HE/MO (Rev. 1271, L122-150 do PainelRH/L122-150 Home) NÃO são afetadas — não pertencem a employees, são pendências de fluxo de aprovação. Filtro existente do client (L155 PainelRH / L870-996 Home, `empStatus !== 'desligado'`) permanece como segunda barreira defensiva. Todos os 4 consumidores (`homeData.tsx`, `Home.tsx`, `PainelRH.tsx`, KPI cards) recebem dados já filtrados — ZERO mudança no client necessária. Reversível em 4 hunks. R-001/R-007/R-010 OK.\n\n" +
+      "Esperado: total de alertas cai (no exemplo do user, 19 → cai para os ~10-13 que de fato precisam de ação), cards de Reclusos/Afastados>15d somem das tabs Todos/ASOs/Experiência. Aniversariantes/quadro de pessoal/KPIs continuam contando esses funcionários (alinhado com expectativa de dashboard panorâmico).",
+    tipo: "bugfix",
+    modulos: "Home · PainelRH · Central de Alertas",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-15 16:00:00",
+  },
 ];

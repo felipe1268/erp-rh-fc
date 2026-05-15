@@ -57,6 +57,27 @@ export const homeDataRouter = router({
         return !STATUS_FORA_NORM.has(normStatus(e.status));
       });
 
+      // Rev. 1845 — excluir Reclusos e Afastados (>15 dias) da Central de Alertas
+      // operacional (ASOs vencidos/vencendo, Sem ASO, Experiencia, etc.). Curto
+      // afastamento (<=15d) tipicamente nao muda o status no sistema; quando o
+      // status='Afastado' eh setado, o caso ja eh longo (INSS/B91/B31). Reclusos
+      // tambem nao tem operacao ativa. Mantemos esses funcionarios em
+      // todosNaoDesligados (KPIs / aniversariantes / quadro continuam contando)
+      // — apenas a *lista de alertas acionaveis* os exclui.
+      const isLongTermAfastado = (emp: any): boolean => {
+        if (normStatus(emp.status) !== 'afastado') return false;
+        const ini = emp.licencaDataInicio;
+        if (!ini) return true; // sem data registrada => assumimos longo prazo
+        const dt = new Date(toDateStr(ini) + 'T00:00:00');
+        const dias = Math.floor((hoje.getTime() - dt.getTime()) / (1000 * 60 * 60 * 24));
+        return dias > 15;
+      };
+      const isReclusoOrLongAfast = (emp: any): boolean =>
+        normStatus(emp.status) === 'recluso' || isLongTermAfastado(emp);
+      const alertableEmpIds = new Set(
+        todosNaoDesligados.filter(e => !isReclusoOrLongAfast(e)).map(e => e.id),
+      );
+
       // ============================================================
       // 2. ANIVERSARIANTES DO MÊS
       // ============================================================
@@ -168,6 +189,7 @@ export const homeDataRouter = router({
 
       for (const [empId, aso] of Array.from(asoMap.entries())) {
         if (!todosNaoDesligadosIds.has(empId)) continue;
+        if (!alertableEmpIds.has(empId)) continue; // Rev. 1845 — corta Recluso/Afastado>15d
         const emp = empMap.get(empId);
         if (!emp) continue;
 
@@ -198,8 +220,9 @@ export const homeDataRouter = router({
       asosAlerta.sort((a, b) => a.diasRestantes - b.diasRestantes);
 
       // Funcionários não-desligados SEM nenhum ASO
+      // Rev. 1845 — exclui Reclusos e Afastados >15 dias (alertableEmpIds)
       const semAso = todosNaoDesligados
-        .filter(e => !asoMap.has(e.id))
+        .filter(e => alertableEmpIds.has(e.id) && !asoMap.has(e.id))
         .map(e => ({ id: e.id, nome: e.nomeCompleto, funcao: e.funcao, status: e.status }));
 
       // ============================================================
@@ -464,7 +487,8 @@ export const homeDataRouter = router({
       // 10. CONTRATOS DE EXPERIÊNCIA
       // ============================================================
       const experiencias = todosNaoDesligados
-        .filter(e => (e as any).experienciaTipo && (e as any).experienciaStatus !== 'efetivado' && (e as any).experienciaStatus !== 'desligado_experiencia')
+        // Rev. 1845 — corta Reclusos / Afastados >15d
+        .filter(e => alertableEmpIds.has(e.id) && (e as any).experienciaTipo && (e as any).experienciaStatus !== 'efetivado' && (e as any).experienciaStatus !== 'desligado_experiencia')
         .map(e => {
           const exp = e as any;
           const tipo = exp.experienciaTipo; // '30_30' ou '45_45'
