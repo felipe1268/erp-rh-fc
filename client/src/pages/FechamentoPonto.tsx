@@ -5431,26 +5431,26 @@ function FaltasReportModal(props: {
       headerColor="bg-gradient-to-r from-rose-700 to-rose-900"
       footer={<Button variant="outline" onClick={onClose}>Fechar</Button>}
     >
-        {/* Filtros */}
-        <div className="grid gap-3 md:grid-cols-12 items-end mb-3">
-          <div className="md:col-span-3">
+        {/* Filtros — Rev. 1836: 1col mobile · 2col sm · 4col lg (mais respirável que md-12) */}
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 items-end mb-3">
+          <div className="min-w-0">
             <Label className="text-xs">Período — Início</Label>
             <Input type="date" value={dataInicio} onChange={(e) => props.onChangeDataInicio(e.target.value)} data-testid="input-faltas-inicio" />
           </div>
-          <div className="md:col-span-3">
+          <div className="min-w-0">
             <Label className="text-xs">Período — Fim</Label>
             <Input type="date" value={dataFim} onChange={(e) => props.onChangeDataFim(e.target.value)} data-testid="input-faltas-fim" />
           </div>
-          <div className="md:col-span-3">
+          <div className="min-w-0">
             <Label className="text-xs">Obras (opcional)</Label>
             <Popover open={obraPopoverOpen} onOpenChange={setObraPopoverOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="w-full justify-between font-normal" size="sm">
-                  {obraIds.length === 0 ? "Todas as obras" : `${obraIds.length} obra(s) selecionada(s)`}
-                  <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                <Button variant="outline" className="w-full justify-between font-normal min-w-0" size="sm">
+                  <span className="truncate">{obraIds.length === 0 ? "Todas as obras" : `${obraIds.length} obra(s) selecionada(s)`}</span>
+                  <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0 ml-2" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[300px] p-0">
+              <PopoverContent className="w-[min(300px,calc(100vw-2rem))] p-0">
                 <Command>
                   <CommandInput placeholder="Buscar obra..." />
                   <CommandList>
@@ -5472,46 +5472,46 @@ function FaltasReportModal(props: {
               </PopoverContent>
             </Popover>
           </div>
-          <div className="md:col-span-3">
+          <div className="min-w-0">
             <Label className="text-xs">Buscar funcionário</Label>
             <Input placeholder="Nome ou matrícula..." value={search} onChange={(e) => onChangeSearch(e.target.value)} data-testid="input-faltas-search" />
           </div>
         </div>
 
-        {/* Totais */}
+        {/* Totais — Rev. 1836: 2col mobile · 3col sm · 5col lg, padding/tipografia fluidos */}
         {totais && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
-            <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-rose-700">{totais.injustificadas}</p>
-              <p className="text-xs text-rose-700">Faltas Injustificadas</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-3">
+            <div className="bg-rose-50 border border-rose-200 rounded-lg p-2 sm:p-3 text-center min-w-0">
+              <p className="text-xl sm:text-2xl font-bold text-rose-700 leading-tight tabular-nums">{totais.injustificadas}</p>
+              <p className="text-[11px] sm:text-xs text-rose-700 leading-tight">Faltas Injustificadas</p>
             </div>
-            <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-cyan-700">{totais.justificadas}</p>
-              <p className="text-xs text-cyan-700">Faltas Justificadas</p>
+            <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-2 sm:p-3 text-center min-w-0">
+              <p className="text-xl sm:text-2xl font-bold text-cyan-700 leading-tight tabular-nums">{totais.justificadas}</p>
+              <p className="text-[11px] sm:text-xs text-cyan-700 leading-tight">Faltas Justificadas</p>
             </div>
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-purple-700">{totais.dsrPerdido}</p>
-              <p className="text-xs text-purple-700">DSR Perdido</p>
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 sm:p-3 text-center min-w-0">
+              <p className="text-xl sm:text-2xl font-bold text-purple-700 leading-tight tabular-nums">{totais.dsrPerdido}</p>
+              <p className="text-[11px] sm:text-xs text-purple-700 leading-tight">DSR Perdido</p>
             </div>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-yellow-700">{totais.atrasos}</p>
-              <p className="text-xs text-yellow-700">Atrasos</p>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 sm:p-3 text-center min-w-0">
+              <p className="text-xl sm:text-2xl font-bold text-yellow-700 leading-tight tabular-nums">{totais.atrasos}</p>
+              <p className="text-[11px] sm:text-xs text-yellow-700 leading-tight">Atrasos</p>
             </div>
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-orange-700">{totais.saidasAntecipadas}</p>
-              <p className="text-xs text-orange-700">Saídas Antecipadas</p>
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 sm:p-3 text-center min-w-0 col-span-2 sm:col-span-1">
+              <p className="text-xl sm:text-2xl font-bold text-orange-700 leading-tight tabular-nums">{totais.saidasAntecipadas}</p>
+              <p className="text-[11px] sm:text-xs text-orange-700 leading-tight">Saídas Antecipadas</p>
             </div>
           </div>
         )}
 
-        {/* Ações */}
-        <div className="flex justify-between items-center mb-2">
+        {/* Ações — Rev. 1836: empilha em mobile, contador em cima */}
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-2">
           <p className="text-xs text-muted-foreground">
             {report.isLoading ? "Calculando..." : `${filtered.length} funcionário(s) com ocorrências no período`}
           </p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button size="sm" variant="outline" onClick={exportarPDF} disabled={!report.data || filtered.length === 0} data-testid="btn-faltas-pdf">
-              <Printer className="h-4 w-4 mr-1" /> PDF / Imprimir
+              <Printer className="h-4 w-4 mr-1" /> <span className="hidden sm:inline">PDF / Imprimir</span><span className="sm:hidden">PDF</span>
             </Button>
             <Button size="sm" variant="outline" onClick={exportarExcel} disabled={!report.data || filtered.length === 0} data-testid="btn-faltas-excel">
               <FileDown className="h-4 w-4 mr-1" /> Excel
@@ -5519,19 +5519,19 @@ function FaltasReportModal(props: {
           </div>
         </div>
 
-        {/* Tabela */}
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        {/* Tabela — Rev. 1836: wrapper overflow-x-auto + min-w pra evitar quebra das colunas numéricas */}
+        <div className="border rounded-lg overflow-x-auto">
+          <table className="w-full min-w-[680px] text-sm">
             <thead className="bg-slate-100 text-xs">
               <tr>
                 <th className="text-left p-2 w-8"></th>
                 <th className="text-left p-2">Funcionário</th>
                 <th className="text-left p-2 hidden md:table-cell">Cargo</th>
-                <th className="text-center p-2"><span title="Faltas injustificadas">Inj.</span></th>
-                <th className="text-center p-2"><span title="Faltas justificadas (com atestado)">Just.</span></th>
-                <th className="text-center p-2"><span title="DSR perdido (semanas com falta)">DSR</span></th>
-                <th className="text-center p-2"><span title="Atrasos">Atr.</span></th>
-                <th className="text-center p-2"><span title="Saídas antecipadas">Saí.Ant.</span></th>
+                <th className="text-center p-2 whitespace-nowrap"><span title="Faltas injustificadas">Inj.</span></th>
+                <th className="text-center p-2 whitespace-nowrap"><span title="Faltas justificadas (com atestado)">Just.</span></th>
+                <th className="text-center p-2 whitespace-nowrap"><span title="DSR perdido (semanas com falta)">DSR</span></th>
+                <th className="text-center p-2 whitespace-nowrap"><span title="Atrasos">Atr.</span></th>
+                <th className="text-center p-2 whitespace-nowrap"><span title="Saídas antecipadas">Saí.Ant.</span></th>
                 <th className="text-center p-2 w-10"><span title="Abrir Espelho de Ponto">Esp.</span></th>
               </tr>
             </thead>
@@ -5547,20 +5547,24 @@ function FaltasReportModal(props: {
                 return (
                   <React.Fragment key={f.employeeId}>
                     <tr className="border-t hover:bg-slate-50 cursor-pointer" onClick={() => onToggleExpanded(f.employeeId)} data-testid={`row-faltas-${f.employeeId}`}>
-                      <td className="p-2">{isExp ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</td>
+                      <td className="p-2 align-top">{isExp ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</td>
                       <td className="p-2 font-medium">
-                        {f.nomeCompleto}
-                        {f.matricula && <span className="text-xs text-muted-foreground ml-2">({f.matricula})</span>}
-                        {f.status && f.status !== "Ativo" && <Badge variant="outline" className="ml-2 text-xs">{f.status}</Badge>}
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="break-words">{f.nomeCompleto}</span>
+                          {f.matricula && <span className="text-xs text-muted-foreground">({f.matricula})</span>}
+                          {f.status && f.status !== "Ativo" && <Badge variant="outline" className="text-xs">{f.status}</Badge>}
+                        </div>
+                        {/* Cargo embaixo do nome em mobile (oculto em md+) */}
+                        {f.cargo && <div className="md:hidden text-xs text-muted-foreground mt-0.5 truncate">{f.cargo}</div>}
                       </td>
-                      <td className="p-2 hidden md:table-cell text-xs text-muted-foreground">{f.cargo || "-"}</td>
-                      <td className="p-2 text-center font-bold text-rose-700">{f.injustificadas || ""}</td>
-                      <td className="p-2 text-center text-cyan-700">{f.justificadas || ""}</td>
-                      <td className="p-2 text-center text-purple-700">{f.dsrPerdido || ""}</td>
-                      <td className="p-2 text-center text-yellow-700">
+                      <td className="p-2 hidden md:table-cell text-xs text-muted-foreground max-w-[180px] truncate" title={f.cargo || ""}>{f.cargo || "-"}</td>
+                      <td className="p-2 text-center font-bold text-rose-700 tabular-nums whitespace-nowrap">{f.injustificadas || ""}</td>
+                      <td className="p-2 text-center text-cyan-700 tabular-nums whitespace-nowrap">{f.justificadas || ""}</td>
+                      <td className="p-2 text-center text-purple-700 tabular-nums whitespace-nowrap">{f.dsrPerdido || ""}</td>
+                      <td className="p-2 text-center text-yellow-700 tabular-nums whitespace-nowrap">
                         {f.atrasos || ""}{f.atrasos > 0 && <span className="text-xs text-muted-foreground"> ({fmtMin(f.minutosAtraso)})</span>}
                       </td>
-                      <td className="p-2 text-center text-orange-700">
+                      <td className="p-2 text-center text-orange-700 tabular-nums whitespace-nowrap">
                         {f.saidasAntecipadas || ""}{f.saidasAntecipadas > 0 && <span className="text-xs text-muted-foreground"> ({fmtMin(f.minutosSaidaAntec)})</span>}
                       </td>
                       <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>

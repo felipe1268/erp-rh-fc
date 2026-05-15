@@ -13297,4 +13297,28 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-16 00:15:00",
   },
+  {
+    version: 1836,
+    titulo: "Fechamento de Ponto · Relatório de Faltas/Atrasos/Saídas — layout 100% responsivo",
+    descricao:
+      "User (15/05/2026, screenshot do modal full-screen 'Relatório de Faltas, Atrasos e Saídas Antecipadas'): 'melhore este layout para, querto tudo reponsivo e respeite nossas regras de ouro'.\n\n" +
+      "Causa pré-existente: `client/src/pages/FechamentoPonto.tsx` L5435-5621 — modal de report tinha 4 problemas de responsividade:\n" +
+      "  (1) Filtros em `md:grid-cols-12` com 4×col-span-3 → no breakpoint md (768-1024px) os 4 inputs ficavam apertados, sem espaço para labels e datas.\n" +
+      "  (2) Cards de totais `grid-cols-2 md:grid-cols-5` → no md ficavam 5 cards estreitíssimos brigando com texto 'Faltas Injustificadas'/'Saídas Antecipadas' (textos longos quebrando em 2 linhas mal formatadas).\n" +
+      "  (3) Tabela `<table className='w-full text-sm'>` SEM wrapper `overflow-x-auto` e SEM `min-w` → em viewports estreitos as colunas numéricas (Inj/Just/DSR/Atr+'(10h14)'/Saí.Ant.+'(4h05)') quebravam linha, destruindo a leitura.\n" +
+      "  (4) Linha de Ações em `flex justify-between` → contador colapsava com botões PDF/Excel em mobile.\n\n" +
+      "Fix (1 arquivo, 1 hunk grande): `client/src/pages/FechamentoPonto.tsx` L5437-5582.\n" +
+      "  • Filtros: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4` (escada natural 1→2→4); cada input ganha `min-w-0` (evita overflow do grid item); botão Obras Popover ganha `<span className='truncate'>` + ícone `shrink-0 ml-2`; PopoverContent vira `w-[min(300px,calc(100vw-2rem))]` (não estoura a viewport mobile).\n" +
+      "  • Cards de totais: `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5`; padding `p-2 sm:p-3` fluido; tipografia `text-xl sm:text-2xl` no número e `text-[11px] sm:text-xs` no label; `tabular-nums` + `leading-tight` (números alinhados); 5º card (Saídas Antecipadas) ganha `col-span-2 sm:col-span-1` para preencher a linha em mobile (em vez de ficar sozinho à esquerda numa linha de 2 colunas).\n" +
+      "  • Ações: vira `flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2`; botões em `flex-wrap`; texto do PDF colapsa para 'PDF' em mobile via `<span className='hidden sm:inline'>PDF / Imprimir</span><span className='sm:hidden'>PDF</span>`.\n" +
+      "  • Tabela: wrapper vira `border rounded-lg overflow-x-auto` (era `overflow-hidden`); `<table>` ganha `min-w-[680px]` para forçar scroll horizontal em telas estreitas em vez de quebra de coluna; todas as `<th>`/células numéricas (`Inj./Just./DSR/Atr./Saí.Ant.`) ganham `whitespace-nowrap` + `tabular-nums` (alinhamento monoespaçado dos dígitos).\n" +
+      "  • Coluna Funcionário: nome+matrícula+badge viram `flex flex-wrap items-center gap-x-2 gap-y-1` (em vez de `ml-2` que vazava); cargo passa a aparecer EMBAIXO do nome em mobile (`md:hidden text-xs text-muted-foreground truncate`) já que a coluna 'Cargo' dedicada é `hidden md:table-cell` — antes mobile perdia o cargo totalmente.\n" +
+      "  • Coluna Cargo (md+): ganha `max-w-[180px] truncate` + `title={f.cargo}` (cargos longos como 'ENCARREGADO DE OBRAS' antes empurravam toda a tabela para a direita).\n\n" +
+      "Por que é seguro: ZERO mudança em lógica/dados/handlers (`onToggleExpanded`, `exportarPDF`, `exportarExcel`, `report.data`, `filtered`, `fmtMin`, `fmtBR` intocados). ZERO schema/migration/DELETE/contrato tRPC. Só JSX/Tailwind. `data-testid` preservados (input-faltas-inicio/fim/search, btn-faltas-pdf/excel, btn-espelho-${id}, row-faltas-${id}). `colSpan={9}` da linha vazia/loading mantido (nº de colunas inalterado). Reversível em 1 hunk. R-001 OK.\n\n" +
+      "Esperado: em mobile (<640px) tabela rola horizontalmente sem quebrar colunas; cards de totais empilham 2×3 organizados; filtros stack vertical. Em tablet (640-1024px) filtros 2×2, totais 3+2, tabela respira. Em desktop (≥1024px) filtros 4-up, totais 5-up, tabela full-width — comportamento idêntico ao screenshot do user.",
+    tipo: "melhoria",
+    modulos: "RH · Fechamento de Ponto · UX/Responsividade",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-16 00:30:00",
+  },
 ];
