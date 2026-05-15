@@ -228,6 +228,50 @@ export function derivarCutoffIso(
   return `${dataIso}T${hora.length === 5 ? hora + ":00" : hora}`;
 }
 
+/**
+ * Rev. 1825 — `pctRaizMSP`: replica EXATAMENTE a fórmula Texto6 do MS Project
+ * para a TASK RAIZ (% PREVISTO da raiz), porém SEM o `Int(...)` — preserva
+ * casas decimais.
+ *
+ * Fórmula MSP nativa:
+ *   IIf(StatusDate < BaselineStart, 0,
+ *   IIf(StatusDate > BaselineFinish, 100,
+ *       (ProjDateDiff(BaselineStart, StatusDate, ProjectCalendar) /
+ *        ProjDateDiff(BaselineStart, BaselineFinish, ProjectCalendar)) × 100))
+ *
+ * Sem ponderação por custo. É a "régua puramente temporal" da raiz, em DIAS
+ * ÚTEIS do calendário MSP. Foi a métrica que o usuário escolheu para o banner
+ * "Avanço Físico Live" e o card "PREVISTO (SEMANA)" — paridade absoluta com
+ * a coluna "% PREVISTO" que ele criou no Project (FieldID=188743746).
+ *
+ * Para QUALQUER refStr fora de [start, finish] devolve 0 ou 100. Para datas
+ * dentro do envelope, devolve `du(start→ref) / du(start→finish) × 100`,
+ * usando `fracaoDecorridaMs` (idêntico ao `ProjDateDiff` quando ambos os
+ * endpoints caem em horário comercial). Função PURA, sem hooks, idempotente.
+ */
+export function pctRaizMSP(
+  refStr: string,
+  projIniIso: string | null | undefined,
+  projFimIso: string | null | undefined,
+  cal: CalendarioMSProject | null,
+): number {
+  if (!refStr || !projIniIso || !projFimIso) return 0;
+  const iniIso = String(projIniIso).slice(0, 10);
+  const fimIso = String(projFimIso).slice(0, 10);
+  const refIso = String(refStr).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iniIso)) return 0;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fimIso)) return 0;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(refIso)) return 0;
+  const iniMs = new Date(iniIso + "T12:00:00").getTime();
+  const fimMs = new Date(fimIso + "T12:00:00").getTime();
+  const refMs = new Date(refIso + "T12:00:00").getTime();
+  if (!Number.isFinite(iniMs) || !Number.isFinite(fimMs) || !Number.isFinite(refMs)) return 0;
+  if (fimMs <= iniMs) return 0;
+  if (refMs <= iniMs) return 0;
+  if (refMs >= fimMs) return 100;
+  return Math.min(100, Math.max(0, fracaoDecorridaMs(iniMs, refMs, fimMs, cal) * 100));
+}
+
 /** Versão milissegundo-aware para os call sites antigos que já tinham `Date.getTime()`. */
 export function fracaoDecorridaMs(iniMs: number, refMs: number, fimMs: number, cal: CalendarioMSProject | null): number {
   if (!cal) {

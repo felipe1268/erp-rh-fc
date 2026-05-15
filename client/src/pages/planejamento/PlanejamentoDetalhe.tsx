@@ -11,7 +11,7 @@ import PlanejamentoPrintHeader from "@/components/PlanejamentoPrintHeader";
 import PrintActions from "@/components/PrintActions";
 import ImportarCronograma, { parseMSProjectXML, parseMSProjectXLSX, TarefaImportada } from "./ImportarCronograma";
 import DiagnosticoEapOrcCron from "@/components/planejamento/DiagnosticoEapOrcCron";
-import { parseCalendarioJson, fracaoDecorridaMs, pvPonderadoPorAtividade } from "../../../../shared/diasUteis";
+import { parseCalendarioJson, fracaoDecorridaMs, pvPonderadoPorAtividade, pctRaizMSP } from "../../../../shared/diasUteis";
 import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
 import { DiagramaRede } from "./DiagramaRede";
 const BimViewer = React.lazy(() => import("./BimViewer"));
@@ -601,13 +601,21 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       refStr = cutoffOficial ?? refDateStr;
       if (cutoffOficial && refDateStr < cutoffOficial) refStr = refDateStr;
     }
-    // Rev. 1811 — PREVISTO físico = curva S ponderada por atividade
-    // (PMI Practice Standard for Scheduling §6.2). Não usa mais a fração
-    // EVM linear do envelope contratual nem o snapshot Texto11 do MSP —
-    // aqueles representavam apenas "% do prazo decorrido" e não a distribuição
-    // física real do cronograma. A fórmula `pvPonderadoPorAtividade` é a
-    // FONTE ÚNICA de Previsto em toda a UI (top bar + cards do Avanço Semanal).
+    // Rev. 1825 — PREVISTO LIVE = fórmula Texto6 da raiz do MSP (escolha
+    // explícita do usuário p/ paridade absoluta com a coluna "% PREVISTO"
+    // que ele criou no Project: FieldID=188743746). Calcula
+    //   du(projIni → ref) / du(projIni → projFim) × 100
+    // em DIAS ÚTEIS do calendário MSP, sem ponderar por custo, com casas
+    // decimais (sem o Int(...) do MSP nativo). Fallback p/ pvPonderado
+    // quando faltar dataInicio/dataTerminoContratual/calMSP.
     const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
+    const projIniRaiz = (proj as any)?.dataInicio as string | null | undefined;
+    const projFimRaiz = (proj as any)?.dataTerminoContratual as string | null | undefined;
+    // Rev. 1825 — fallback p/ pvPonderado quando faltar calMSP também (sem
+    // calendário, pctRaizMSP cairia em dias corridos linear → perde paridade).
+    if (projIniRaiz && projFimRaiz && calMSP) {
+      return +pctRaizMSP(refStr, projIniRaiz, projFimRaiz, calMSP).toFixed(2);
+    }
     return +pvPonderadoPorAtividade(refStr, folhas, usarPesoPorDuracao, calMSP).toFixed(2);
   }, [atividades, refisComIndiretasGlobal, refDateStr, modoVisao, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual, dataCorteInfo?.dataCorteOficial, semanaVisualizacao, usarPesoPorDuracao]);
 
@@ -5222,16 +5230,24 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
       const refFim = (cutoffStr && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
       const refIni = (cutoffStr && cutoffStr < semanaAtual) ? cutoffStr : semanaAtual;
-      prev = Math.max(0, pvPonderadoPorAtividade(refFim, folhas, usarPesoPorDuracao, calMSP)
-                        - pvPonderadoPorAtividade(refIni, folhas, usarPesoPorDuracao, calMSP));
+      // Rev. 1825 — Texto6 raiz (paridade absoluta MSP) c/ fallback ponderado.
+      const usarRaiz = !!(projIniIso && projFimIso && calMSP);
+      prev = usarRaiz
+        ? Math.max(0, pctRaizMSP(refFim, projIniIso, projFimIso, calMSP)
+                    - pctRaizMSP(refIni, projIniIso, projFimIso, calMSP))
+        : Math.max(0, pvPonderadoPorAtividade(refFim, folhas, usarPesoPorDuracao, calMSP)
+                    - pvPonderadoPorAtividade(refIni, folhas, usarPesoPorDuracao, calMSP));
     }
     // ── Previsto ACUMULADO até a janela cobrável da semana ──────────────────
     // Rev. 1811 — também via curva S ponderada. refFimAcum clipa no cutoff
     // sempre que este for antes do fim da semana selecionada.
     const cutoffStrAcum = dataCorteInfo?.dataCorteOficial ?? null;
     const refFimAcum = (cutoffStrAcum && cutoffStrAcum < semanaFim) ? cutoffStrAcum : semanaFim;
+    // Rev. 1825 — Texto6 raiz (paridade MSP) c/ fallback ponderado.
     const previstoAcumulado = folhas.length > 0
-      ? pvPonderadoPorAtividade(refFimAcum, folhas, usarPesoPorDuracao, calMSP)
+      ? (projIniIso && projFimIso && calMSP
+          ? pctRaizMSP(refFimAcum, projIniIso, projFimIso, calMSP)
+          : pvPonderadoPorAtividade(refFimAcum, folhas, usarPesoPorDuracao, calMSP))
       : 0;
 
     // Rev. 1656.4 — Aderência alinhada ao top bar/card grande (SPI EVM clássico):
@@ -5252,7 +5268,10 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       // do que ainda não era exigível pelo Status Date).
       const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
       const refSemAnt = (cutoffStr && cutoffStr < semanaAtual) ? cutoffStr : semanaAtual;
-      pvAcum = pvPonderadoPorAtividade(refSemAnt, folhas, usarPesoPorDuracao, calMSP);
+      // Rev. 1825 — Texto6 raiz (paridade MSP) c/ fallback ponderado.
+      pvAcum = (projIniIso && projFimIso && calMSP)
+        ? pctRaizMSP(refSemAnt, projIniIso, projFimIso, calMSP)
+        : pvPonderadoPorAtividade(refSemAnt, folhas, usarPesoPorDuracao, calMSP);
     }
     let evAcum = 0;
     folhas.forEach((a: any) => {
@@ -5267,7 +5286,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     const debitoAcumulado = Math.max(0, pvAcum - evAcum);
     const metaRecuperacao = prev + debitoAcumulado;
     return { previsto: prev, previstoAcumulado, realizado: real, realizadoAcumulado: realAcum, aderencia, debitoAcumulado, metaRecuperacao, semIniDate, semFimDate };
-  }, [folhas, avancos, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, dataCorteInfo?.dataCorteOficial]);
+  }, [folhas, avancos, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, dataCorteInfo?.dataCorteOficial, projIniIso, projFimIso]);
 
   // Rev. 1534 — Janela de Recovery Schedule (AACE 23R-02). Lê do mesmo
   // revisaoAtiva.recoveryWindowSemanas que ProgramacaoSemanal usa, para que
@@ -5309,8 +5328,10 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
     const naSemanaCorrente = !!cutoffStr && cutoffStr >= semanaAtual && cutoffStr < semanaFim;
     const ref = naSemanaCorrente ? cutoffStr! : semanaFim;
+    // Rev. 1825 — Texto6 raiz (paridade MSP) c/ fallback ponderado.
+    if (projIniIso && projFimIso && calMSP) return pctRaizMSP(ref, projIniIso, projFimIso, calMSP);
     return pvPonderadoPorAtividade(ref, folhas, usarPesoPorDuracao, calMSP);
-  }, [folhas, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, dataCorteInfo?.dataCorteOficial]);
+  }, [folhas, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, dataCorteInfo?.dataCorteOficial, projIniIso, projFimIso]);
 
   // ── Realizado acumulado ponderado (semana atual) ───────────────────────────
   // Prioriza avancoLocal > avancoExistente (semana exata) > avancoMaisRecente (semana mais recente ≤ atual)
@@ -5345,8 +5366,11 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
     const naSemanaCorrente = !!cutoffStr && cutoffStr >= semanaAtual && cutoffStr < semanaFim;
     const ref = naSemanaCorrente ? cutoffStr! : semanaFim;
+    // Rev. 1825 — Texto6 raiz (paridade MSP). Fórmula da raiz NÃO depende de
+    // folhasComInd — só do envelope do projeto. Fallback ponderado mantido.
+    if (projIniIso && projFimIso && calMSP) return pctRaizMSP(ref, projIniIso, projFimIso, calMSP);
     return pvPonderadoPorAtividade(ref, folhasComInd, usarPesoPorDuracao, calMSP);
-  }, [folhasComInd, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, dataCorteInfo?.dataCorteOficial]);
+  }, [folhasComInd, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, dataCorteInfo?.dataCorteOficial, projIniIso, projFimIso]);
 
   const realizadoComInd = useMemo(() => {
     // Rev. 1642 — calendário MS Project para indiretas (paridade 100%).
@@ -11210,8 +11234,12 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     // cobertura parcial de pesoFinanceiro). Removido o cálculo local com
     // calcPesoTotal/prevIndRef que sofria do mesmo bug saturando QIU 2 em 100%.
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
+    // Rev. 1825 — Texto6 raiz (paridade MSP) c/ fallback ponderado.
+    const _ini = (proj as any)?.dataInicio as string | null | undefined;
+    const _fim = (proj as any)?.dataTerminoContratual as string | null | undefined;
+    if (_ini && _fim && calMSP) return pctRaizMSP(semanaFimRefis, _ini, _fim, calMSP);
     return pvPonderadoPorAtividade(semanaFimRefis, folhas, usarPesoPorDuracao, calMSP);
-  }, [atividades, semanaFimRefis, usarPesoPorDuracao, calMSP]);
+  }, [atividades, semanaFimRefis, usarPesoPorDuracao, calMSP, proj]);
 
   const semIdx   = semanas.indexOf(semana);
   const semAntes = semIdx > 0 ? semanas[semIdx - 1] : null;
@@ -11227,10 +11255,13 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const avancoPrevAntes = useMemo(() => {
     if (!semAntesFim) return 0;
-    // Rev. 1815 — FONTE ÚNICA pvPonderadoPorAtividade.
+    // Rev. 1825 — Texto6 raiz (paridade MSP) c/ fallback ponderado.
+    const _ini = (proj as any)?.dataInicio as string | null | undefined;
+    const _fim = (proj as any)?.dataTerminoContratual as string | null | undefined;
+    if (_ini && _fim && calMSP) return pctRaizMSP(semAntesFim, _ini, _fim, calMSP);
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
     return pvPonderadoPorAtividade(semAntesFim, folhas, usarPesoPorDuracao, calMSP);
-  }, [atividades, semAntesFim, usarPesoPorDuracao, calMSP]);
+  }, [atividades, semAntesFim, usarPesoPorDuracao, calMSP, proj]);
 
   const avancoPrevSemanal = Math.max(0, avancoPrevisto - avancoPrevAntes);
 
@@ -11277,10 +11308,14 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const spi = avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0;
 
   const refisPrevistoComInd = useMemo(() => {
-    // Rev. 1815 — FONTE ÚNICA pvPonderadoPorAtividade (c/ indiretas).
+    // Rev. 1825 — Texto6 raiz (paridade MSP). Mesma fórmula da raiz, sem
+    // distinção indiretas/diretas (não muda o envelope). Fallback ponderado.
+    const _ini = (proj as any)?.dataInicio as string | null | undefined;
+    const _fim = (proj as any)?.dataTerminoContratual as string | null | undefined;
+    if (_ini && _fim && calMSP) return pctRaizMSP(semanaFimRefis, _ini, _fim, calMSP);
     const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim);
     return pvPonderadoPorAtividade(semanaFimRefis, f, usarPesoPorDuracao, calMSP);
-  }, [atividades, semanaFimRefis, usarPesoPorDuracao, calMSP]);
+  }, [atividades, semanaFimRefis, usarPesoPorDuracao, calMSP, proj]);
 
   const refisRealComInd = useMemo(() => {
     const m: Record<number, number> = {};
@@ -11316,10 +11351,13 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const avancoPrevAntesComInd = useMemo(() => {
     if (!semAntesFim) return 0;
-    // Rev. 1815 — FONTE ÚNICA pvPonderadoPorAtividade (c/ indiretas).
+    // Rev. 1825 — Texto6 raiz (paridade MSP) c/ fallback ponderado.
+    const _ini = (proj as any)?.dataInicio as string | null | undefined;
+    const _fim = (proj as any)?.dataTerminoContratual as string | null | undefined;
+    if (_ini && _fim && calMSP) return pctRaizMSP(semAntesFim, _ini, _fim, calMSP);
     const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim);
     return pvPonderadoPorAtividade(semAntesFim, f, usarPesoPorDuracao, calMSP);
-  }, [atividades, semAntesFim, usarPesoPorDuracao, calMSP]);
+  }, [atividades, semAntesFim, usarPesoPorDuracao, calMSP, proj]);
 
   const avancoRealAntesComInd = useMemo(() => {
     if (!semAntes) return 0;

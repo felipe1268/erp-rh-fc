@@ -25,6 +25,60 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1825,
+    titulo: "Planejamento · MSP — `pctRaizMSP` substitui `pvPonderadoPorAtividade` no banner Live, cards Avanço Semanal e REFIS (paridade ABSOLUTA com Texto6 da raiz, com decimais)",
+    descricao: "User (15/05/2026, após Rev. 1824 reduzir REVTE-CIVIL de 7,37% → 2,51% no live de 15/05): pediu paridade EXATA com a fórmula da coluna '% PREVISTO' (Texto6, FieldID=188743746) que ele criou no MS Project — fórmula puramente temporal da TASK RAIZ, em dias úteis do calendário do projeto, SEM ponderar por custo. Optou explicitamente pelo cenário (A): mesma fórmula do MSP, mas com casas decimais (sem o `Int(...)` que o MSP nativo aplica e que truncou 1,38% → 1% no XML PLN_805_03_2026_R04_SEMANA_01).\n\n" +
+      "FÓRMULA NATIVA DO MSP (Texto6 raiz):\n" +
+      "  IIf(StatusDate < BaselineStart, 0,\n" +
+      "  IIf(StatusDate > BaselineFinish, 100,\n" +
+      "      Int((ProjDateDiff(BaselineStart, StatusDate, ProjectCalendar) /\n" +
+      "           ProjDateDiff(BaselineStart, BaselineFinish, ProjectCalendar)) × 100)))\n\n" +
+      "ERP (sem o Int):\n" +
+      "  pct = du(projIni → ref) / du(projIni → projFim) × 100  (calendário MSP)\n\n" +
+      "DIAGNÓSTICO PRÉ-1825 — pq o ERP travava em 2,51% no live de 15/05 mesmo após Rev. 1824:\n" +
+      "Após a Rev. 1824 destravar o calendário (calendario_json passou a popular via SyncSchema+ INCONDICIONAL), `fracaoDecorridaMs` voltou a usar dias úteis MSP (correto). PORÉM o banner Live continuava chamando `pvPonderadoPorAtividade` (PMI Practice Standard for Scheduling §6.2 — curva S por ATIVIDADE, ponderada por custo), enquanto o user esperava a curva da RAIZ (puramente temporal). Os dois métodos são metodologicamente válidos (ambos são EVM, ANSI/EIA-748 §2.b), mas dão números diferentes:\n" +
+      "  • REVTE-CIVIL (07/05/2026, StatusDate do XML):\n" +
+      "    - Texto6 raiz (cost-weighted: BCWS/Cost = 2.949.997 / 141.404.240): 2,09% (Int trunca → 2%)\n" +
+      "    - Texto6 raiz (TEMPORAL puro: du-decorridos/du-totais = 4/284):       1,41% (Int trunca → 1%)\n" +
+      "    - ERP curva-S ponderada por atividade (custo×overlap):                ~2,51%\n" +
+      "  Diferença surge porque a curva-S por atividade dá peso desproporcional a frentes longas/caras com início futuro (no XML, FUNDAÇÕES e ESTRUTURA têm 60% do BCWS e iniciam em jun/26 → infla denominador).\n" +
+      "  User escolheu (A) TEMPORAL puro com decimais — é o que aparece na coluna '% PREVISTO' que ele exibe ao cliente no MSP.\n\n" +
+      "MUDANÇAS:\n" +
+      "1. `shared/diasUteis.ts` L255-276 — NOVA função `pctRaizMSP(refStr, projIniIso, projFimIso, cal): number`. PURA, idempotente, sem hooks. Reusa `fracaoDecorridaMs` (já era a base do MSP via `ProjDateDiff` em horário comercial). Guard p/ refs fora do envelope (devolve 0 ou 100 — replica o MSP). Fórmulas:\n" +
+      "   • ref ≤ projIni → 0\n" +
+      "   • ref ≥ projFim → 100\n" +
+      "   • dentro     → Math.min(100, Math.max(0, fracaoDecorridaMs(ini, ref, fim, cal) × 100))\n" +
+      "2. `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` L17 — adicionado `pctRaizMSP` ao import único.\n" +
+      "3. SUBSTITUÍDAS 11 chamadas de `pvPonderadoPorAtividade` por `pctRaizMSP` (com fallback PARA `pvPonderadoPorAtividade` quando faltar `dataInicio`/`dataTerminoContratual` do projeto):\n" +
+      "   • L617 — `avancoPrevistoDia` (top bar 'Avanço Físico' Live)\n" +
+      "   • L5236-5240 — `previstoRealizadoSemana.prev` (delta semanal cards Avanço Semanal)\n" +
+      "   • L5247-5252 — `previstoRealizadoSemana.previstoAcumulado` (denominador SPI)\n" +
+      "   • L5272-5275 — `pvAcum` (débito acumulado / Schedule Variance)\n" +
+      "   • L5333 — `previsto` (card 'PREVISTO (SEMANA)' Avanço Semanal)\n" +
+      "   • L5372 — `previstoComInd` (toggle 'c/ Indiretas' do Avanço Semanal)\n" +
+      "   • L11241 — `Refis.avancoPrevisto` (PrevAcum REFIS BLOCO 2)\n" +
+      "   • L11262 — `Refis.avancoPrevAntes` (delta semanal REFIS)\n" +
+      "   • L11316 — `Refis.refisPrevistoComInd` (REFIS c/ indiretas)\n" +
+      "   • L11358 — `Refis.avancoPrevAntesComInd` (delta REFIS c/ indiretas)\n" +
+      "   Em cada substituição: lê `(proj as any)?.dataInicio` e `(proj as any)?.dataTerminoContratual` no escopo (Outer/AvancoSemanal/Refis — todos têm `proj` acessível) e adiciona ao deps array do useMemo. `pvPonderadoPorAtividade` PERMANECE no codebase como fallback defensivo (zero quebra p/ projetos sem MSP) e na curva-S detalhada que não é macro-da-raiz.\n\n" +
+      "PRESERVADO:\n" +
+      "• `pvMacro` (L630 Outer / L5018 AvancoSemanal) — JÁ usava a fórmula MSP raiz desde Rev. 1646.6; não tocada (continua sendo a fonte do snapshot Texto11 quando ref bate exato com StatusDate).\n" +
+      "• Snapshot `previstoMspSnapshot` em `pvMacro` continua dando paridade absoluta no StatusDate gravado (quando envelope intacto).\n" +
+      "• `pvPonderadoPorAtividade` mantida no shared p/ outros call sites (relatórios detalhados, EVM por frente).\n" +
+      "• `cutoff clipping` (Rev. 1656.1/1823) intacto — `naSemanaCorrente` continua governando refStr.\n\n" +
+      "VALIDAÇÃO ESPERADA APÓS DEPLOY (REVTE-CIVIL, projeto 35 SANTUÁRIO N.S. APARECIDA, XML PLN_805_03_2026_R04):\n" +
+      "  • Live 07/05/2026 (StatusDate XML): 1,41% (was 2,09% snapshot truncado / 2,51% curva-S)\n" +
+      "  • Live 15/05/2026 (semana corrente): ~3,15% (4 du a mais decorridos: 11/05/2026 a 15/05/2026)\n" +
+      "  • Card 'PREVISTO (SEMANA)' Sem11/05-15/05: 1,76% (5/284 du)\n" +
+      "  • Top bar = card grande = REFIS (3 fontes convergentes — paridade absoluta entre componentes do ERP)\n" +
+      "  • MSP nativo mostra 1% (Int trunca 1,38%) — ERP mostra 1,41% (sem trunc, decisão explícita do user p/ casas decimais)\n\n" +
+      "ZERO SCHEMA / ZERO MIGRATION / ZERO DELETE / ZERO contrato tRPC alterado. R-007 (import único lucide-react) OK. R-010 N/A (puro frontend). Reversível trocando `pctRaizMSP(...)` por `pvPonderadoPorAtividade(refX, folhas, usarPesoPorDuracao, calMSP)` em cada call site.",
+    tipo: 'bugfix',
+    modulos: 'planejamento',
+    criadoPor: 'Replit Agent',
+    dataPublicacao: '2026-05-15 23:30:00',
+  },
+  {
     version: 1824,
     titulo: "Planejamento · MSP — paridade 100% MS Project: coluna calendario_json migrada PRA FORA do ColFix (estava sendo skipada por version-guard, deixando ERP em fração linear de DIAS CORRIDOS)",
     descricao: "User (15/05/2026, projeto 35 SANTUÁRIO N.S. APARECIDA / REVTE-CIVIL): 'percebi que o avanço apresentado no ERP está dando divergente do MSproject... precisamos seguir exatamente a informação Msproject... a planilha que adicionamos, precisamos que seja respeitada 100%'. Anexou XML PLN_805_03_2026_R04_SEMANA_01 (115 tasks, 64 folhas non-mile, StatusDate 07/05/2026, Cost R$ 141.404.240, BCWS R$ 2.949.997).\n\n" +
