@@ -296,28 +296,48 @@ export function pvPonderadoPorAtividade(
   // Rev. 1815 — blindagem contra datas inválidas (strings vazias/malformadas
   // produziam NaN no fracaoDecorridaMs e contaminavam o resultado final).
   // Folhas inválidas são silenciosamente ignoradas — nunca derrubam o PV.
+  // Rev. 1816 — Normaliza qualquer formato de data (YYYY-MM-DD, ISO com
+  // hora, Date object via .toString()) para YYYY-MM-DD antes de concatenar
+  // "T12:00:00", senão "2026-05-15T00:00:00.000Z" + "T12:00:00" vira
+  // string inválida e zera todo o cálculo silenciosamente.
+  const isoDay = (v: any): string | null => {
+    if (!v) return null;
+    const s = typeof v === "string" ? v : (v instanceof Date ? v.toISOString() : String(v));
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? m[0] : null;
+  };
   const folhasComDatas = folhasArr.filter((a: any) => {
-    if (!a.dataInicio || !a.dataFim) return false;
-    const ini = new Date(a.dataInicio + "T12:00:00").getTime();
-    const fim = new Date(a.dataFim   + "T12:00:00").getTime();
+    const i = isoDay(a?.dataInicio);
+    const f = isoDay(a?.dataFim);
+    if (!i || !f) return false;
+    const ini = new Date(i + "T12:00:00").getTime();
+    const fim = new Date(f + "T12:00:00").getTime();
     return Number.isFinite(ini) && Number.isFinite(fim) && fim >= ini;
   });
   if (folhasComDatas.length === 0) return 0;
-  const refMs = new Date(refStr + "T12:00:00").getTime();
+  const refIso = isoDay(refStr);
+  if (!refIso) return 0;
+  const refMs = new Date(refIso + "T12:00:00").getTime();
   if (!Number.isFinite(refMs)) return 0;
 
   // Duração robusta: prefere duracaoDias gravado; se faltar/0, deriva de
   // (dataFim - dataInicio) em dias corridos (mín. 1). Evita zerar peso de
   // folhas válidas só porque o campo duracaoDias não foi preenchido no import.
   const durOf = (a: any): number => {
-    const d = a.duracaoDias ?? 0;
-    if (d > 0) return d;
-    const ini = new Date(a.dataInicio + "T12:00:00").getTime();
-    const fim = new Date(a.dataFim + "T12:00:00").getTime();
+    const d = Number(a.duracaoDias ?? 0);
+    if (Number.isFinite(d) && d > 0) return d;
+    const i = isoDay(a?.dataInicio);
+    const f = isoDay(a?.dataFim);
+    if (!i || !f) return 1;
+    const ini = new Date(i + "T12:00:00").getTime();
+    const fim = new Date(f + "T12:00:00").getTime();
     const dias = Math.max(1, Math.round((fim - ini) / 86400000) + 1);
-    return dias;
+    return Number.isFinite(dias) ? dias : 1;
   };
-  const custoOf = (a: any): number => parseFloat(a.pesoFinanceiro || "0") || 0;
+  const custoOf = (a: any): number => {
+    const n = parseFloat(String(a?.pesoFinanceiro ?? "0"));
+    return Number.isFinite(n) ? n : 0;
+  };
 
   // Cobertura COMPLETA de peso financeiro = todas folhasComDatas com custo>0.
   // Só nesse caso faz sentido usar EV clássico (toda atividade contribui).
@@ -342,9 +362,13 @@ export function pvPonderadoPorAtividade(
 
   let soma = 0;
   for (const a of folhasComDatas) {
-    const ini = new Date(a.dataInicio + "T12:00:00").getTime();
-    const fim = new Date(a.dataFim + "T12:00:00").getTime();
-    const fracao = fracaoDecorridaMs(ini, refMs, fim, cal);
+    const i = isoDay(a?.dataInicio);
+    const f = isoDay(a?.dataFim);
+    if (!i || !f) continue;
+    const ini = new Date(i + "T12:00:00").getTime();
+    const fim = new Date(f + "T12:00:00").getTime();
+    let fracao = 0;
+    try { fracao = fracaoDecorridaMs(ini, refMs, fim, cal); } catch { fracao = 0; }
     const exp = (Number.isFinite(fracao) ? fracao : 0) * 100;
     const peso = modo === "uniforme" ? 1 : (modo === "custo" ? custoOf(a) : durOf(a));
     if (!Number.isFinite(peso) || peso <= 0) continue;

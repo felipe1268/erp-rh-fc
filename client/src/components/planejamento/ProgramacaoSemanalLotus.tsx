@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, FileSpreadsheet, Printer, ChevronLeft, ChevronRight, AlertTriangle, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { parseCalendarioJson, ehDiaUtil, diasUteisEntre, fracaoDecorridaMs, type CalendarioMSProject } from "@shared/diasUteis";
+import { parseCalendarioJson, ehDiaUtil, diasUteisEntre, fracaoDecorridaMs, pvPonderadoPorAtividade, type CalendarioMSProject } from "@shared/diasUteis";
 
 // Rev. 1663 — Threshold de aderência semanal (PPC do Last Planner System).
 // PMBOK 7ª usa SPI ≥ 0,95 como "no prazo". Mantemos a convenção: ≥95% verde,
@@ -328,6 +328,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   type LinhaAtiv = { tipo: "ativ"; ativ: Atividade };
   const linhas: (LinhaGrupo | LinhaAtiv)[] = useMemo(() => {
     const result: (LinhaGrupo | LinhaAtiv)[] = [];
+   try {
     const gruposEmitidos = new Set<string>();
     const eapPrefixos = (eap: string): string[] => {
       const partes = eap.split(".");
@@ -354,6 +355,10 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       result.push({ tipo: "ativ", ativ: a });
     });
     return result;
+   } catch (err) {
+    if (typeof window !== "undefined") console.error("[Lotus.linhas] memo falhou — usando defaults:", err);
+    return result;
+   }
   }, [atividadesDaSemana, atividades]);
 
   const handleSetReal = (atividadeId: number, campo: "dataInicioReal" | "dataFimReal", valor: string) => {
@@ -420,6 +425,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
 
   const metricas = useMemo(() => {
     const out = new Map<number, { metaPct: number; realPct: number; aderenciaPct: number | null; acumPct: number; somaSemanal: number }>();
+    try {
     if (!semIniStr) return out;
     // Rev. 1787 — Cutoff só se aplica na SEMANA CORRENTE (que contém hoje).
     // Para semanas FUTURAS o cutoff deve ser semFim (cobra meta planejada cheia
@@ -470,6 +476,11 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       out.set(a.id, { metaPct, realPct, aderenciaPct, acumPct, somaSemanal });
     }
     return out;
+    } catch (err) {
+      // Rev. 1816 — Blindagem: nunca derruba a tela LOTUS por bug nesse memo.
+      if (typeof window !== "undefined") console.error("[Lotus.metricas] memo falhou — usando defaults:", err);
+      return out;
+    }
   }, [atividadesDaSemana, avancosPorAtv, semIniStr, semFimStr, calMSP, hoje]);
 
   // Rev. 1680 — Análise da semana: caminho crítico (CPM) + maior peso (Top 3).
@@ -479,6 +490,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   //    é peso financeiro × fração da janela semanal). Filtra contribuições > 0.
   // projectEnd = maior dataFim de TODAS as atividades do projeto (folhas).
   const analiseSemana = useMemo(() => {
+   try {
     const folhas = atividades.filter((a) => !a.isGrupo && a.dataFim);
     const projectEndStr = folhas
       .map((a) => a.dataFim!)
@@ -508,6 +520,16 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     const maiorPesoIds = new Set<number>(top3.map(([id]) => id));
     const maiorPesoOrder = new Map<number, number>(top3.map(([id], idx) => [id, idx + 1]));
     return { criticasIds, quaseCriticasIds, maiorPesoIds, maiorPesoOrder, contribById };
+   } catch (err) {
+    if (typeof window !== "undefined") console.error("[Lotus.analiseSemana] memo falhou — usando defaults:", err);
+    return {
+      criticasIds: new Set<number>(),
+      quaseCriticasIds: new Set<number>(),
+      maiorPesoIds: new Set<number>(),
+      maiorPesoOrder: new Map<number, number>(),
+      contribById: new Map<number, number>(),
+    };
+   }
   }, [atividades, atividadesDaSemana, metricas]);
 
   // Rev. 1811 — Closure que delega à função compartilhada `pvPonderadoPorAtividade`
@@ -542,6 +564,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   // estritamente como fallback — paridade era impossível pela diferença de
   // semântica (Σ delta semanal vs snapshot MSP acumulado).
   const totaisSemana = useMemo(() => {
+   try {
     // Universo de folhas IGUAL ao PlanejamentoDetalhe ~L506:
     //   !isGrupo && !disabled && (refisComIndiretasGlobal || !isIndireta)
     // LOTUS não expõe o toggle de indiretas, então adotamos o caso default
@@ -608,6 +631,24 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       totalPrevRow,
       totalRealRow,
     };
+   } catch (err) {
+    // Rev. 1816 — Blindagem: nunca derruba a tela LOTUS por bug nesse memo.
+    // Se algo der errado (data malformada, divisão por zero residual, etc.)
+    // retorna defaults seguros e loga pra console — o resto da tela continua
+    // funcionando (tabela, células, exportação Excel).
+    if (typeof window !== "undefined") {
+      console.error("[Lotus.totaisSemana] memo falhou — usando defaults:", err);
+    }
+    return {
+      prevAcumOficial: 0,
+      realAcumOficial: 0,
+      deltaOficial: 0,
+      fonteOficial: "fallback" as const,
+      refFimAcum: null as string | null,
+      totalPrevRow: 0,
+      totalRealRow: 0,
+    };
+   }
   }, [atividades, atividadesDaSemana, avancosPorAtv, metricas, semIniStr, semFimStr, calMSP, cutoffIso]);
 
   // Rev. 1679 — Totalização da semana (Prev / Real / Δ) — DEPRECATED.
