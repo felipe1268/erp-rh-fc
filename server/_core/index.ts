@@ -488,7 +488,12 @@ Regras:
           await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS cutoff_consolidado BOOLEAN DEFAULT FALSE`);
           await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS cutoff_consolidado_em TIMESTAMP`);
           await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS cutoff_consolidado_por VARCHAR(200)`);
-          console.log(`[SyncSchema+] Colunas data_corte_* garantidas em planejamento_projetos.`);
+          // Rev. 1824 — Calendário MSP (paridade dias úteis) movido pra fora do
+          // ColFix (era L1266 dentro do bloco com version-guard que pulava em DBs
+          // já versionados, deixando a coluna inexistente → fração linear de dias
+          // CORRIDOS inflava o Previsto comparado ao MS Project).
+          await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS calendario_json TEXT`);
+          console.log(`[SyncSchema+] Colunas data_corte_* + calendario_json garantidas em planejamento_projetos.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_projetos data_corte:`, e?.message || e); }
 
         // Rev. 1662 — Datas reais por atividade (visão LOTUS).
