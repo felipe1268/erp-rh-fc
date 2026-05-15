@@ -275,6 +275,65 @@ Postgres adquire row-level lock no UPSERT, atomicamente incrementa, retorna o no
 
 ---
 
+## R-015 · Mudanças retroativas em projetos prontos exigem migração + bypass para legado
+
+**JAMAIS um deploy pode quebrar entidades (projetos, contratos, processos, registros) que estavam funcionando ontem. Toda nova validação/regra/constraint introduzida em uma rota EXISTENTE deve ter um caminho de bypass para o legado.**
+
+**Histórico (Rev. 1798 → 1807)**: a R-013 (Rev. 1798) acrescentou ao `salvarAtividades` (Planejamento) um `throw new TRPCError(BAD_REQUEST)` se qualquer atividade-folha tivesse `eapCodigo` que não existisse no orçamento. Intenção legítima (forçar paridade EAP). Efeito colateral CRÍTICO: TODOS os projetos importados antes da R-013 — que tinham qualquer divergência mínima de EAP — passaram a abortar em qualquer save subsequente. Usuário ficou travado em projetos prontos por causa de uma regra desenhada para projetos NOVOS. Custo de descoberta: 9 revisões depois (Rev. 1807).
+
+**Padrão obrigatório a partir da Rev. 1807** ao introduzir validação nova em rota existente:
+
+1. ✅ **Comece como WARNING, não ERROR**. Log estruturado + retorno no payload (ex: `result.warnings: [{ code, message, samples }]`). Frontend renderiza um banner amarelo, não um modal de erro.
+2. ✅ **Promova a ERROR só para entidades criadas APÓS a revisão** (compare `entity.created_at` com a data de corte da revisão hardcoded em `shared/version.ts`/changelog).
+3. ✅ **Sempre ofereça um diagnóstico visual** (botão/relatório que LISTA as divergências) para o usuário corrigir no tempo dele, em paralelo, sem ter operação legítima abortada.
+4. ✅ **Migração de dados, quando viável**: rodar um script idempotente em ColFix que tenta corrigir o legado automaticamente (ex: auto-sincronizar nomes do orçamento — feito no L1014-1026).
+5. ❌ **PROIBIDO** introduzir `throw` novo em rota de `salvar*`/`atualizar*`/`upsert*` sem antes confirmar que TODOS os registros existentes em produção passam a regra. Se não puder confirmar, é warning.
+6. ❌ **PROIBIDO** quebrar fluxos de leitura (`get*`/`list*`) por validação nova — leitura sempre tem que devolver o que está no banco, mesmo que "inválido" pela regra nova. A validação acontece na escrita.
+
+**Aplicado atualmente em**: `server/routers/planejamento.ts:1042-1046` (`salvarAtividades` — EAP órfão vira warning). Padrão se estende a qualquer rota futura que adicione constraint sobre dados existentes.
+
+---
+
+## R-016 · Jamais loop O(n²) ou pior em `useMemo` de UI — indexar antes do loop
+
+**Quando você tiver `array.filter(...)` ou `array.find(...)` DENTRO de `array.forEach`/`array.map` em qualquer `useMemo`, PARE. Refatore para indexar a coleção interna em `Map`/`Set` ANTES do loop, ou use two-pointer se ambas as coleções são ordenáveis. Sem exceção.**
+
+**Histórico (Rev. 1807)**: `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` L5021-5042 tinha um `semanasComDados` que para cada semana (S) iterava todas as folhas (M), e para cada folha fazia `.filter` linear sobre TODOS os avanços (K) seguido de `.sort`. Complexidade `O(S × M × K)`. Para 100 semanas × 500 atividades × 5000 avanços = 250 MILHÕES de iterações + alocação de arrays temporários a cada re-render. Travava o main thread por > 2s. Refatorado para `O(K log K + S × M)` com `Map<atividadeId, Array<{sem, pct}>>` ordenado ASC + ponteiros monotônicos por atividade. Speedup ~5000× no caso de produção.
+
+**Padrão obrigatório**:
+
+```ts
+// ❌ ERRADO — O(N × M) com filter aninhado:
+items.forEach(item => {
+  const related = otherList.filter(o => o.itemId === item.id); // ← O(M) por item
+  // ...
+});
+
+// ✅ CORRETO — pré-indexa em Map (O(M)) + lookup O(1) por item:
+const byItemId = new Map<number, Array<typeof otherList[number]>>();
+for (const o of otherList) {
+  let arr = byItemId.get(o.itemId);
+  if (!arr) { arr = []; byItemId.set(o.itemId, arr); }
+  arr.push(o);
+}
+items.forEach(item => {
+  const related = byItemId.get(item.id) ?? []; // ← O(1)
+  // ...
+});
+```
+
+**Quando há monotonicidade (ambas listas ordenáveis pela mesma chave — ex: semanas)**: use ponteiros que só avançam (técnica two-pointer/merge), levando o caso `O(S × M × K)` para `O(K log K + S × M)` literalmente — ver `semanasComDados` L5031-5076 como referência.
+
+**Antes de commitar qualquer `useMemo`**:
+
+- [ ] Existe `.filter`/`.find`/`.includes` aninhado dentro de `.map`/`.forEach`? → indexar em Map.
+- [ ] Existe `.sort` dentro de loop? → mover o sort para FORA, fazer uma vez na pré-indexação.
+- [ ] As dependências do `useMemo` mudam frequentemente (vêm de `useQuery` invalidada por mutations)? → estimar pior caso real (centenas de itens × milhares de eventos é trivial atingir os milhões).
+
+**❌ PROIBIDO** entregar tela com `useMemo` cujo pior-caso analisado seja > 1 milhão de iterações por re-render — refatore primeiro.
+
+---
+
 ## Checklist obrigatório antes de marcar uma tarefa como pronta
 
 - [ ] Modal/tela é full-screen (R-001)?
@@ -290,3 +349,5 @@ Postgres adquire row-level lock no UPSERT, atomicamente incrementa, retorna o no
 - [ ] Tela de planejamento exclui `isIndireta`/`isExterna` do CPM (R-011)?
 - [ ] Importação preserva `eapCodigo` do orçamento sem renumerar (R-013)?
 - [ ] Toda geração de número sequencial usa counter table + UPSERT atômico, nunca MAX+1 (R-014)?
+- [ ] Validações novas em rotas existentes começam como WARNING e só viram ERROR para entidades criadas após a revisão (R-015)?
+- [ ] Nenhum `useMemo` tem `.filter`/`.find`/`.sort` aninhado dentro de loop — coleções grandes pré-indexadas em `Map`/two-pointer (R-016)?

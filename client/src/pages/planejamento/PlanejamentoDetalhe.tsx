@@ -5015,29 +5015,60 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   }, [folhas, semanaAtual, cutoffDow, filtroAtivo]);
 
   // % realizado ponderado por semana (para indicador no seletor).
-  // CORREÇÃO: para cada semana com dados, usa o ÚLTIMO avanço de cada atividade até
-  // aquela semana (não apenas os da semana exata). Isso garante que o acumulado
-  // exibido seja crescente e reflita corretamente o progresso global do projeto.
+  // Para cada semana com dados, usa o ÚLTIMO avanço de cada atividade até aquela
+  // semana (não apenas os da semana exata). Isso garante que o acumulado exibido
+  // seja crescente e reflita corretamente o progresso global do projeto.
+  //
+  // Rev. 1807 / R-016 (PERFORMANCE) — Antes: O(S × M × K) com .filter+.sort
+  // dentro de loop duplo (para 100 semanas × 500 atividades × 5000 avanços =
+  // 250 milhões de iterações + alocações de array, travava a UI por > 2s).
+  // Agora: pré-indexa avanços por atividade UMA VEZ (sort O(K log K)) e faz
+  // varredura monotônica por semana O(S × M) usando "ponteiro" por atividade
+  // que avança junto com `sem`. Complexidade total: O(K log K + S × M).
   const semanasComDados = useMemo(() => {
     const result: Record<string, number> = {};
+    const avs = avancos as any[];
+    if (folhas.length === 0 || avs.length === 0) return result;
+
     const pesoBrutoSCD = usarPesoPorDuracao
       ? folhas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
       : folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
     const semPesoSCD = pesoBrutoSCD === 0;
     const pesoTotalSCD = semPesoSCD ? (folhas.length || 1) : pesoBrutoSCD;
-    const todasSemanas = [...new Set((avancos as any[]).map((av: any) => av.semana as string))].sort();
-    todasSemanas.forEach(sem => {
+
+    // 1) Indexa avanços por atividadeId ordenados por semana ASC (uma única vez).
+    const idxPorAtiv = new Map<number, Array<{ sem: string; pct: number }>>();
+    for (const av of avs) {
+      let arr = idxPorAtiv.get(av.atividadeId);
+      if (!arr) { arr = []; idxPorAtiv.set(av.atividadeId, arr); }
+      arr.push({ sem: av.semana, pct: n(av.percentualAcumulado) });
+    }
+    for (const arr of idxPorAtiv.values()) arr.sort((a, b) => a.sem.localeCompare(b.sem));
+
+    // 2) Lista de semanas únicas em ordem ASC.
+    const todasSemanas = [...new Set(avs.map((av: any) => av.semana as string))].sort();
+
+    // 3) Pré-computa peso normalizado por atividade (folha) e ponteiros monotônicos.
+    const pesoNormPorFolha: Array<{ id: number; pesoNorm: number }> = folhas.map((a: any) => ({
+      id: a.id,
+      pesoNorm: (semPesoSCD ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro))) / pesoTotalSCD,
+    }));
+    const ponteiros: Record<number, number> = {}; // último índice consumido em idxPorAtiv[id]
+
+    for (const sem of todasSemanas) {
       let soma = 0;
-      folhas.forEach((a: any) => {
-        const peso = semPesoSCD ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
-        const avsAtiv = (avancos as any[])
-          .filter((av: any) => av.atividadeId === a.id && av.semana <= sem);
-        if (avsAtiv.length === 0) return;
-        avsAtiv.sort((x: any, y: any) => y.semana.localeCompare(x.semana));
-        soma += n(avsAtiv[0].percentualAcumulado) * (peso / pesoTotalSCD);
-      });
+      for (const { id, pesoNorm } of pesoNormPorFolha) {
+        const arr = idxPorAtiv.get(id);
+        if (!arr) continue;
+        let p = ponteiros[id] ?? -1;
+        // Avança o ponteiro enquanto a próxima entrada ainda for ≤ sem (monotônico).
+        while (p + 1 < arr.length && arr[p + 1].sem <= sem) p++;
+        ponteiros[id] = p;
+        if (p < 0) continue;
+        soma += arr[p].pct * pesoNorm;
+      }
       result[sem] = +Math.min(100, soma).toFixed(1);
-    });
+    }
     return result;
   }, [avancos, folhas, usarPesoPorDuracao]);
 

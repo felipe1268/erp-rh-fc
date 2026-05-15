@@ -966,13 +966,19 @@ export const planejamentoRouter = router({
         };
       });
 
-      // ── Rev. 1798 / R-013 — VALIDAÇÃO ESTRITA EAP+NOME contra orçamento ───
-      // Se o projeto tem orçamento vinculado, TODA atividade-folha direta
-      // (não-grupo, não-marco, não-indireta, não-externa, não-disabled) precisa
-      // ter eapCodigo que existe no orçamento E nome IDÊNTICO ao item do orçamento
-      // (case-insensitive, whitespace normalizado, acentos ignorados). Sem isso
-      // a importação ABORTA com lista de divergências — usuário corrige no MSP
-      // ou no orçamento e reimporta. Nunca renumeração silenciosa.
+      // ── Rev. 1798 / R-013 — VALIDAÇÃO de EAP+NOME contra orçamento ──────
+      // Se o projeto tem orçamento vinculado, fazemos AUTO-SYNC do nome da
+      // atividade pela descrição do orçamento (chave estável: eapCodigo).
+      //
+      // Rev. 1807 / R-015 — IMPORTANTE (regressão dos projetos antigos):
+      // a Rev. 1798 BLOQUEAVA o save quando o cronograma tinha algum EAP que
+      // não existia no orçamento. Isso quebrou projetos PRONTOS (importados
+      // antes da R-013) que tinham qualquer divergência mínima — usuário não
+      // conseguia mais salvar. Agora: EAPs órfãos viram WARNING (log + retorno
+      // no payload), nunca bloqueiam o save. A R-013 continua valendo para
+      // novos projetos; o Diagnóstico EAP×Cronograma (botão violet ao lado
+      // do Importar) sinaliza visualmente as divergências p/ o usuário corrigir
+      // sem precisar abortar uma operação legítima de salvar.
       try {
         const [projVal] = await db.select({ orcamentoId: planejamentoProjetos.orcamentoId })
           .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
@@ -1031,15 +1037,10 @@ export const planejamentoRouter = router({
           }
 
           if (erros.length > 0) {
-            const linhas: string[] = [];
-            linhas.push(`R-013: a importação foi BLOQUEADA porque ${erros.length} atividade(s) têm EAP que NÃO existe no orçamento vinculado. Corrija no MS Project (use o EAP exato do orçamento) ou cadastre o item no orçamento, e reimporte. Não há renumeração silenciosa.`);
-            linhas.push('');
-            linhas.push(`❌ EAP(s) não encontrados no orçamento:`);
-            for (const e of erros.slice(0, 20)) {
-              linhas.push(`  • EAP "${e.eap}" — atividade "${(e.nomeAtividade ?? '').substring(0, 80)}"`);
-            }
-            if (erros.length > 20) linhas.push(`  … e mais ${erros.length - 20} item(ns).`);
-            throw new TRPCError({ code: 'BAD_REQUEST', message: linhas.join('\n') });
+            // Rev. 1807 / R-015 — não bloqueia mais, apenas registra warning.
+            // O Diagnóstico EAP×Cronograma é o canal visual para o usuário corrigir.
+            const sample = erros.slice(0, 5).map(e => `${e.eap} (${(e.nomeAtividade ?? '').substring(0, 40)})`).join(', ');
+            console.warn(`[salvarAtividades] R-013 warning: ${erros.length} atividade(s) com EAP fora do orçamento (projeto ${input.projetoId}). Amostra: ${sample}${erros.length > 5 ? ` … +${erros.length - 5}` : ''}. Save NÃO foi bloqueado (Rev. 1807 / R-015 — projetos legados).`);
           }
         }
       } catch (e: any) {
