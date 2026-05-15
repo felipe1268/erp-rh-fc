@@ -83,3 +83,4 @@ Resumo das 10 regras (detalhes + checklist em `REGRAS_DE_OURO.md`):
 - **Tom de UI**: visual rico, gradientes coloridos por contexto, badges, ícones grandes — evitar telas chapadas.
 - **Modais SEMPRE full-screen** (R-001 das Regras de Ouro).
 - **Nunca mostrar valores de secrets** em código ou logs.
+- **Sempre citar o NOME do projeto** ao falar de algum projeto de planejamento (não usar só o id). Ex.: "projeto 29 (QIU 2 - FASE 4)" e não só "projeto 29". Se não souber o nome, falar isso explicitamente em vez de omitir.
