@@ -25,6 +25,27 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1842,
+    titulo: "Planejamento · Avanco Fisico (top bar) - paridade absoluta com card 'Previsto (Semana)' do Avanco Semanal",
+    descricao: "User (15/05/2026, 2 screenshots): primeiro reclamou que a barra do topo mostrava info diferente do card abaixo (Sem 3: top 1.39%/4.86% × bottom 4.86%/-1.55%); apos explicacao, pediu: \"quero que seja a mesma informacao lida para os dois, considerando a data cutoff\".\n\n" +
+      "Causa-raiz: dois calculos de fim-de-semana divergentes para o MESMO conceito.\n" +
+      "(a) Top bar (avancoAtual L547 e avancoPrevistoDia L601): semFim = semanaVisualizacao + 7 * 86400000 (naive, Mon -> Mon seguinte). Para semanaVis=08/05 -> semFim=15/05 (Sex).\n" +
+      "(b) Card 'PREVISTO (SEMANA)' em AvancoSemanal (L4985): semanaFim = cutoffWeekFromMonday(semanaAtual, cutoffDow).fim — respeita o dia do cutoff (cutoff=Qui -> startDow=Sex, fim=Qui da semana cutoff). Para semanaAtual=08/05 com cutoff=Qui -> fim=14/05.\n" +
+      "Resultado: na 2a semana, top calcula pctRaizMSP ate 15/05 (~3.82% / -0.51%) e bottom ate 14/05 (~3.13% / +0.19%) - mesmas formulas, refs diferentes.\n\n" +
+      "Fix (1 arquivo, 5 hunks):\n" +
+      "(1) L425 (parent scope, APOS dataCorteInfo L415 p/ evitar TDZ): adicionado const cutoffDowTop = (dataCorteInfo as any)?.diaCorteSemana ?? 4 — eleva o mesmo cutoffDow usado em AvancoSemanal L4908 ao escopo do componente pai (Inner) onde vivem os useMemos do top bar.\n" +
+      "(2) L547 avancoAtual: substituida formula `new Date(... + 7 * 86400000)` por `cutoffWeekFromMonday(semanaVisualizacao, cutoffDowTop).fim` — paridade exata com L4985.\n" +
+      "(3) L552 e L603: comparacao naSemanaCorrente trocada de `cutoffOficial < semFim` para `cutoffOficial <= semFim` — agora semFim eh inclusivo (dia do cutoff), entao boundary case (cutoff = ultimo dia da semana) classifica corretamente como 'na semana corrente'.\n" +
+      "(4) L601 avancoPrevistoDia: mesma substituicao da formula semFim.\n" +
+      "(5) Deps arrays dos dois useMemos (L577 e L625) ganham cutoffDowTop para reativar quando o usuario muda o dia de cutoff via setDiaCorteMut.\n\n" +
+      "Comportamento esperado pos-fix: na 2a semana (08-14/05) com cutoff=Qui, top bar passa a mostrar 3.13% (== bottom card) ao inves de 3.82%; variacao do top idem ao card (+0.19% adiantado, nao mais -0.51% atrasado). O Realizado nao muda (3.31%) porque ja usava o mesmo avancosMapSemana. Em projetos com cutoff diferente (ex.: Sex), a paridade vale igualmente — ambos derivam do MESMO cutoffWeekFromMonday.\n\n" +
+      "Preservado: ZERO mudanca em backend / contrato tRPC / schema / migration. Funcoes cutoffWeekFromMonday/mondayOfCutoffWeek (L100-115) intactas. Toggle Live/Oficial (Rev. 1637), modo Paridade MSP (Rev. 1833), refisComIndiretasGlobal (Rev. 1584) tudo intacto. Sem semana selecionada (semanaVisualizacao=null), top continua usando cutoffOficial como ref (Opcao A da Rev. 1655) — comportamento identico ao anterior. Reversivel em 5 hunks. R-001 OK.",
+    tipo: 'bugfix',
+    modulos: 'Planejamento',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 18:50:00',
+  },
+  {
     version: 1841,
     titulo: "Apontamentos de Campo · Modal 'Detalhes da ocorrencia' — modal maior, sem barras de rolagem",
     descricao: "User (15/05/2026, screenshot do modal aberto sobre a tela Apontamentos de Campo, com barra de rolagem horizontal visivel no rodape do dialog): \"arrume esta tela, quero ela maior, nao quero precisar das barras de rolagem..\".\n\n" +

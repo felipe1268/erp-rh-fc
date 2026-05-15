@@ -415,6 +415,14 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   const { data: dataCorteInfo, refetch: refetchDataCorte } = trpc.planejamento.getDataCorte.useQuery(
     { projetoId }, { enabled: !!projetoId }
   );
+
+  // Rev. 1842 — cutoffDow elevado ao parent scope (apos dataCorteInfo p/ evitar TDZ)
+  // para que avancoAtual/avancoPrevistoDia (top bar) usem o MESMO
+  // cutoffWeekFromMonday(...).fim do card 'PREVISTO (SEMANA)' em AvancoSemanal.
+  // Antes o top usava `semanaVisualizacao + 7 dias` (naive Mon->Mon=Sex); o card usa
+  // o fim da semana-cutoff (cutoff=Qui -> fim=Qui). Para cutoff=Qui, top dava 3.82%
+  // (15/05) e bottom 3.13% (14/05) na 2a semana. Agora ambos respeitam o cutoffDow.
+  const cutoffDowTop: number = (dataCorteInfo as any)?.diaCorteSemana ?? 4;
   // Rev. 1637.1 — Default OFICIAL (era Live). Live induzia o gestor a ver
   // "atraso fantasma" entre quintas (EV congelado vs PV rolando com today)
   // — exatamente o problema que a Rev. 1637 nasceu para resolver. Mantemos
@@ -544,12 +552,15 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     const cutoffOficialAt = dataCorteInfo?.dataCorteOficial ?? null;
     let refStr: string;
     if (semanaVisualizacao) {
-      const semFim = new Date(new Date(semanaVisualizacao + "T12:00:00").getTime() + 7 * 86400000).toISOString().slice(0, 10);
+      // Rev. 1842 — semFim agora respeita o cutoffDow (Sex→Qui p/ cutoff=Qui),
+      // espelhando exatamente cutoffWeekFromMonday(semanaAtual, cutoffDow).fim usado
+      // pelo card "PREVISTO (SEMANA)" em AvancoSemanal. Antes era +7 dias naive.
+      const semFim = cutoffWeekFromMonday(semanaVisualizacao, cutoffDowTop).fim;
       // Rev. 1823 — Clipping no cutoff só vale para a semana CORRENTE (que
       // contém o cutoff). Semana FUTURA (simulação) usa semFim cheio para
       // mostrar a META acumulada projetada — antes ficava travada no cutoff
       // de hoje, fazendo o "% Previsto" parar de crescer ao navegar pra frente.
-      const naSemanaCorrente = !!cutoffOficialAt && cutoffOficialAt >= semanaVisualizacao && cutoffOficialAt < semFim;
+      const naSemanaCorrente = !!cutoffOficialAt && cutoffOficialAt >= semanaVisualizacao && cutoffOficialAt <= semFim;
       refStr = naSemanaCorrente ? cutoffOficialAt! : semFim;
     } else {
       refStr = cutoffOficialAt ?? refDateStr;
@@ -574,7 +585,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       return s + val * (peso / pesoTotal);
     }, 0);
     return Math.min(100, ponderado);
-  }, [atividades, avancosMapSemana, usarPesoPorDuracao, refisComIndiretasGlobal, refDateStr, modoVisao, dataCorteInfo?.dataCorteOficial, semanaVisualizacao]);
+  }, [atividades, avancosMapSemana, usarPesoPorDuracao, refisComIndiretasGlobal, refDateStr, modoVisao, dataCorteInfo?.dataCorteOficial, semanaVisualizacao, cutoffDowTop]);
 
   const avancoPrevistoDia = useMemo(() => {
     // Rev. 1646 — Paridade 100% MS Project: o "Avanço Previsto" no card do
@@ -598,9 +609,10 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     const cutoffOficial = dataCorteInfo?.dataCorteOficial ?? null;
     let refStr: string;
     if (semanaVisualizacao) {
-      const semFim = new Date(new Date(semanaVisualizacao + "T12:00:00").getTime() + 7 * 86400000).toISOString().slice(0, 10);
+      // Rev. 1842 — mesmo cutoffWeekFromMonday do card inferior (paridade absoluta).
+      const semFim = cutoffWeekFromMonday(semanaVisualizacao, cutoffDowTop).fim;
       // Rev. 1823 — clipa só na semana corrente (ver nota em avancoAtual).
-      const naSemanaCorrente = !!cutoffOficial && cutoffOficial >= semanaVisualizacao && cutoffOficial < semFim;
+      const naSemanaCorrente = !!cutoffOficial && cutoffOficial >= semanaVisualizacao && cutoffOficial <= semFim;
       refStr = naSemanaCorrente ? cutoffOficial! : semFim;
     } else {
       refStr = cutoffOficial ?? refDateStr;
@@ -622,7 +634,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       return +pctRaizMSP(refStr, projIniRaiz, projFimRaiz, calMSP).toFixed(2);
     }
     return +pvPonderadoPorAtividade(refStr, folhas, usarPesoPorDuracao, calMSP).toFixed(2);
-  }, [atividades, refisComIndiretasGlobal, refDateStr, modoVisao, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual, dataCorteInfo?.dataCorteOficial, semanaVisualizacao, usarPesoPorDuracao]);
+  }, [atividades, refisComIndiretasGlobal, refDateStr, modoVisao, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual, dataCorteInfo?.dataCorteOficial, semanaVisualizacao, usarPesoPorDuracao, cutoffDowTop]);
 
   // ── Rev. 1715 — pvMacro elevado ao escopo do Inner ─────────────────────
   // A Rev. 1713 começou a propagar `pvMacro={pvMacro}` para `<Refis>` (L~1053)
