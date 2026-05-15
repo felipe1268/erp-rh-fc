@@ -5414,10 +5414,9 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         doc.querySelectorAll("Task").forEach(task => {
           const uid = task.querySelector("UID")?.textContent ?? "";
           if (uid === "0") return;
-          // Rev. 1822 — código EAP: Item (Texto1, FieldID=188743731) PRIMEIRO;
-          // fallback no <WBS> SÓ pra folhas (sumário sem Item fica vazio e é
-          // pulado abaixo). Mesma política do parser de ImportarCronograma.tsx.
-          const isSummary = task.querySelector("Summary")?.textContent === "1";
+          // Rev. 1822 — código EAP = APENAS o campo Item (Texto1,
+          // FieldID=188743731). Sem fallback de WBS. Mesma política do
+          // parser de ImportarCronograma.tsx.
           let wbs = "";
           for (const child of Array.from(task.children)) {
             if (child.tagName !== "ExtendedAttribute") continue;
@@ -5426,7 +5425,6 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
             const val = (child.querySelector("Value")?.textContent ?? "").trim();
             if (val) { wbs = val; break; }
           }
-          if (!wbs && !isSummary) wbs = task.querySelector("WBS")?.textContent?.trim() ?? "";
           if (!wbs) return;
 
           // 1ª prioridade: Texto7 (%Reali AUX, FieldID 188743747) — 4 casas, vírgula BR

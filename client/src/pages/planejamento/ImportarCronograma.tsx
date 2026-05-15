@@ -336,9 +336,14 @@ export function parseMSProjectXML(text: string): TarefaImportada[] {
   return parseMSProjectTasksFromDoc(doc);
 }
 
-// Rev. 1822 — Lê APENAS o campo "Item" (Texto1, ExtendedAttribute
-// FieldID=188743731) digitado pelo engenheiro. Filhos diretos do <Task>
-// (não `querySelectorAll`) pra evitar pegar Texto1 de Assignment aninhado.
+// Rev. 1822 — Lê SOMENTE o campo "Item" (Texto1, ExtendedAttribute
+// FieldID=188743731) — o código que o engenheiro digita no MS Project.
+// Sem fallback de WBS, sem invenção. User: "só quero que copie o número
+// do item, não precisa inventar nada a mais". Atividades sem Item ficam
+// com `eap_codigo` vazio (não casam com orçamento, ficam "Sem meta").
+//
+// Filhos diretos do <Task> (não `querySelectorAll`) pra evitar pegar
+// Texto1 de Assignment aninhado.
 function lerItemDaTask(task: Element): string {
   for (const child of Array.from(task.children)) {
     if (child.tagName !== "ExtendedAttribute") continue;
@@ -348,27 +353,6 @@ function lerItemDaTask(task: Element): string {
     if (val) return val;
   }
   return "";
-}
-
-// Rev. 1822 — Resolve o código EAP final de uma tarefa.
-//
-// Templates do FC variam:
-//   • Alguns usam Item (Texto1) — "01.01", "02.16.02.01".
-//   • Outros usam WBS customizado direto na coluna WBS — "10.04.03.01".
-//   • WBS automático do MSP ("1", "2", "2.1") só faz sentido em FOLHAS — pra
-//     sumários poluiria a tela com numeração interna do programa.
-//
-// Política:
-//   • Sempre tenta Item PRIMEIRO.
-//   • Se vazio E for FOLHA (não-sumário) → fallback no <WBS> (cobre WBS
-//     customizado de templates que não usam Texto1).
-//   • Se vazio E for SUMÁRIO → retorna vazio (cabeçalho fica sem código,
-//     limpa visual da tela de import).
-function lerCodigoEapDaTask(task: Element, isSummary: boolean): string {
-  const item = lerItemDaTask(task);
-  if (item) return item;
-  if (isSummary) return "";
-  return task.querySelector("WBS")?.textContent?.trim() ?? "";
 }
 
 function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
@@ -384,8 +368,7 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     for (const child of Array.from(task.children)) {
       if (child.tagName === "UID") { uid = child.textContent ?? ""; break; }
     }
-    const isSummary = task.querySelector("Summary")?.textContent === "1";
-    const codigo = lerCodigoEapDaTask(task, isSummary);
+    const codigo = lerItemDaTask(task);
     if (uid && codigo) uidToWbs.set(uid, codigo);
   }
 
@@ -403,10 +386,9 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     const fin   = fmtDate(task.querySelector("Finish")?.textContent ?? "");
     const durRaw= task.querySelector("Duration")?.textContent ?? "";
     const summ  = task.querySelector("Summary")?.textContent === "1";
-    // Rev. 1822 — código EAP: Item (Texto1) → fallback WBS SÓ em folhas.
-    // Sumário sem Item fica vazio (não polui visual com WBS automático
-    // tipo "1", "2", "3"). Variável segue chamada "wbs" pra minimizar diff.
-    const wbs   = lerCodigoEapDaTask(task, summ);
+    // Rev. 1822 — código EAP = APENAS o campo Item do MS Project.
+    // Sem fallback de WBS. Variável segue "wbs" pra minimizar diff.
+    const wbs   = lerItemDaTask(task);
     const milestoneTag = task.querySelector("Milestone")?.textContent;
     const isMarco = milestoneTag === "1" || (!summ && parseDuration(durRaw) === 0 && durRaw !== "" && durRaw !== "0");
     const res   = task.querySelector("Assignment ResourceUID")?.textContent ?? "";
@@ -475,18 +457,11 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     // Pula a tarefa de nível 0 (cabeçalho do projeto)
     if (uid === "0" || name === "" || level === 0) continue;
 
-    // Rev. 1822 / R-013 — Validação dura SOMENTE em folhas reais (não-sumário,
-    // não-marco). Sumários e marcos podem ficar com `eap_codigo` vazio porque
-    // não têm item no orçamento (são só cabeçalhos hierárquicos do MSP).
-    // Folha sem Item = erro de cadastro no Project que precisa ser corrigido
-    // pelo engenheiro antes de importar.
-    if (!wbs && !summ && !isMarco) {
-      throw new Error(
-        `Atividade "${name.substring(0, 60)}" (nível ${level}) SEM código EAP no XML. ` +
-        `Toda FOLHA precisa ter código no campo "Item" (Texto1) OU na coluna WBS do MS Project — é o que casa com o orçamento. ` +
-        `Sumários e marcos não precisam. Corrija no Project e reimporte (R-013).`
-      );
-    }
+    // Rev. 1822 — Sem validação dura: se a atividade não tem Item no MSP,
+    // ela entra com `eap_codigo` vazio (decisão do usuário: copiar fielmente
+    // o que vem do Project, sem inventar). Atividades sem Item simplesmente
+    // não vão casar com orçamento e aparecerão como "Sem meta" no LOTUS —
+    // visível pro engenheiro corrigir lá no Project quando quiser.
 
     result.push({
       wbs, nome: name, nivel: level, inicio: start, fim: fin,
