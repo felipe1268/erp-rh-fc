@@ -68,15 +68,53 @@ export const employeeDocumentsRouter = router({
       return { success: true, url };
     }),
 
+  // Atualizar metadados do documento (tipo, descricao, dataValidade) - sem trocar o arquivo
+  atualizar: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      id: z.number(),
+      tipo: z.enum(['rg','cnh','ctps','comprovante_residencia','certidao_nascimento','titulo_eleitor','reservista','pis','foto_3x4','contrato_trabalho','termo_rescisao','atestado_medico','diploma','certificado','outros']).optional(),
+      descricao: z.string().nullable().optional(),
+      dataValidade: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = (await getDb())!;
+      const patch: any = {};
+      if (input.tipo !== undefined) patch.tipo = input.tipo;
+      if (input.descricao !== undefined) patch.descricao = input.descricao || null;
+      if (input.dataValidade !== undefined) patch.dataValidade = input.dataValidade || null;
+      if (Object.keys(patch).length === 0) return { success: true };
+      const result = await db.update(employeeDocuments).set(patch)
+        .where(and(
+          companyFilter(employeeDocuments.companyId, input),
+          eq(employeeDocuments.id, input.id),
+          sql`${employeeDocuments.deletedAt} IS NULL`,
+        ))
+        .returning({ id: employeeDocuments.id });
+      if (result.length === 0) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Documento não encontrado ou sem permissão.' });
+      }
+      return { success: true };
+    }),
+
   // Excluir documento (soft delete)
   excluir: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number(), companyId: z.number(), companyIds: z.array(z.number()).optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
-      await db.update(employeeDocuments).set({
+      const result = await db.update(employeeDocuments).set({
         deletedAt: sql`NOW()`,
         deletedBy: ctx.user.name ?? 'Sistema',
-      }).where(eq(employeeDocuments.id, input.id));
+      }).where(and(
+        companyFilter(employeeDocuments.companyId, input),
+        eq(employeeDocuments.id, input.id),
+        sql`${employeeDocuments.deletedAt} IS NULL`,
+      ))
+        .returning({ id: employeeDocuments.id });
+      if (result.length === 0) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Documento não encontrado ou sem permissão.' });
+      }
       return { success: true };
     }),
 

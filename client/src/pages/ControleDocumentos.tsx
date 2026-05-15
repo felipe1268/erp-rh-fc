@@ -1248,11 +1248,35 @@ function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee, Em
   const { data: docs = [], refetch } = trpc.employeeDocuments.listar.useQuery({ companyId, companyIds }, { enabled: !!companyId || (companyIds && companyIds.length > 0) });
   const uploadDoc = trpc.employeeDocuments.upload.useMutation({ onSuccess: () => { refetch(); toast.success("Documento enviado!"); } });
   const deleteDoc = trpc.employeeDocuments.excluir.useMutation({ onSuccess: () => { refetch(); toast.success("Documento excluído!"); } });
+  const updateDoc = trpc.employeeDocuments.atualizar.useMutation({ onSuccess: () => { refetch(); toast.success("Documento atualizado!"); } });
 
   const [showUpload, setShowUpload] = useState(false);
   const [docForm, setDocForm] = useState<any>({});
+  const [editingDoc, setEditingDoc] = useState<any>(null);
+  const [editForm, setEditForm] = useState<{ tipo: string; descricao: string; dataValidade: string }>({ tipo: "", descricao: "", dataValidade: "" });
   const [searchDoc, setSearchDoc] = useState("");
   const [filterTipo, setFilterTipo] = useState("todos");
+
+  const openEdit = (d: any) => {
+    setEditingDoc(d);
+    setEditForm({
+      tipo: d.tipo || "",
+      descricao: d.descricao || "",
+      dataValidade: d.dataValidade ? String(d.dataValidade).split("T")[0] : "",
+    });
+  };
+  const handleSaveEdit = async () => {
+    if (!editingDoc) return;
+    await updateDoc.mutateAsync({
+      companyId,
+      companyIds,
+      id: editingDoc.id,
+      tipo: editForm.tipo as any,
+      descricao: editForm.descricao || null,
+      dataValidade: editForm.dataValidade || null,
+    });
+    setEditingDoc(null);
+  };
 
   const filtered = useMemo(() => {
     let list = docs as any[];
@@ -1366,9 +1390,14 @@ function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee, Em
                       </td>
                       <td className="p-2 text-muted-foreground">{formatDate(d.createdAt?.split("T")[0] || d.createdAt?.split(" ")[0])}</td>
                       <td className="p-2 text-center">
-                        <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => { if (confirm("Excluir este documento?")) deleteDoc.mutate({ id: d.id }); }}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-center gap-1">
+                          <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Editar tipo, descrição e validade" onClick={() => openEdit(d)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" title="Excluir documento" onClick={() => { if (confirm("Excluir este documento?")) deleteDoc.mutate({ id: d.id, companyId, companyIds }); }}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1432,6 +1461,101 @@ function DocumentosPanel({ companyId, companyIds, employees, onClickEmployee, Em
               {uploadDoc.isPending ? "Enviando..." : "Enviar Documento"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Edição (full-screen, R-001) */}
+      <Dialog open={!!editingDoc} onOpenChange={(o) => { if (!o) setEditingDoc(null); }}>
+        <DialogContent
+          className="w-[100vw] h-[100dvh] max-w-none sm:w-[98vw] sm:h-[96dvh] sm:max-w-[1400px] p-0 overflow-hidden flex flex-col gap-0"
+          resizable={false}
+        >
+          <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 text-white px-6 py-5 shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2.5 rounded-lg">
+                <Pencil className="h-6 w-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-xl font-bold leading-tight">Editar Documento</h2>
+                <p className="text-blue-100 text-sm mt-0.5 truncate">
+                  {editingDoc?.nome || ""}
+                  {editingDoc?.employeeId ? ` · ${employees.find((e: any) => e.id === editingDoc.employeeId)?.nomeCompleto || ""}` : ""}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+            <div className="max-w-3xl mx-auto space-y-5">
+              <div className="bg-white rounded-lg border p-5 space-y-4 shadow-sm">
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Tipo de Documento</label>
+                  <Select value={editForm.tipo} onValueChange={(v) => setEditForm({ ...editForm, tipo: v })}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(TIPOS_DOC_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Descrição</label>
+                  <Input
+                    className="mt-1"
+                    value={editForm.descricao}
+                    onChange={(e) => setEditForm({ ...editForm, descricao: e.target.value })}
+                    placeholder="Descrição opcional"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-slate-700">Data de Validade</label>
+                  <div className="mt-1 flex gap-2">
+                    <Input
+                      type="date"
+                      value={editForm.dataValidade}
+                      onChange={(e) => setEditForm({ ...editForm, dataValidade: e.target.value })}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="text-amber-700 border-amber-300 hover:bg-amber-50"
+                      onClick={() => setEditForm({ ...editForm, dataValidade: "" })}
+                      title="Limpar data de validade (documento sem prazo)"
+                    >
+                      <X className="h-4 w-4 mr-1" /> Limpar
+                    </Button>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1.5 flex items-start gap-1.5">
+                    <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-blue-600" />
+                    <span>Se o documento <b>não tem prazo de validade</b>, clique em "Limpar" para remover a data — o badge "Vencido" some.</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
+                <div className="flex items-start gap-2">
+                  <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">O arquivo enviado <b>NÃO é alterado</b> aqui.</p>
+                    <p className="mt-1 text-amber-800">Para trocar o PDF/imagem, exclua este documento e faça um novo upload.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t bg-white px-6 py-4 flex items-center justify-end gap-2 shadow-[0_-2px_8px_rgba(0,0,0,0.04)]">
+            <Button variant="outline" onClick={() => setEditingDoc(null)}>Cancelar</Button>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={updateDoc.isPending || !editForm.tipo}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {updateDoc.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Salvando...</> : <><CheckCircle2 className="h-4 w-4 mr-1" /> Salvar alterações</>}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </Card>

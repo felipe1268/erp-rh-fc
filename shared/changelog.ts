@@ -13130,4 +13130,23 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-15 19:30:00",
   },
+  {
+    version: 1827,
+    titulo: "Controle de Documentos · botão Editar (lápis) + mutation `atualizar` — corrige documentos com data de validade errada sem precisar excluir e reenviar",
+    descricao:
+      "User (15/05/2026, screenshot do ControleDocumentos > Documentos dos Colaboradores mostrando 3 PDFs do tipo 'Outros' marcados como 'Vencido' em datas aleatórias — 29/04/2026, 23/04/2026, 12/11/2025): 'preciso de um botão de editar... esses vencidos não têm nada a ver, na hora de salvar deve ter puxado alguma data sem querer'.\n\n" +
+      "Investigação backend (`server/routers/employeeDocuments.ts` L31-69 `upload`): o handler grava `dataValidade: input.dataValidade || null` e o frontend (L1278-1286 do ControleDocumentos.tsx) só passa `docForm.dataValidade` que vem do `<Input type='date'>` digitado pelo user. NADA puxa data de outro lugar — nenhum default, nenhum pre-fill da metadata do PDF, nenhum cálculo automático. Causa-raiz mais provável das 3 datas fantasma: autocomplete do navegador (Chrome lembra a última data digitada num input type=date e sugere) ou digitação esquecida em sessão anterior. Sem reprodução, decidi atacar pelo lado prático: botão de editar resolve o caso atual + qualquer recorrência futura.\n\n" +
+      "Implementação:\n" +
+      "  • `server/routers/employeeDocuments.ts` L74-122 — nova mutation `atualizar` + hardening de `excluir`: ambas agora exigem `companyId` + `companyIds?` no input e usam `companyFilter(employeeDocuments.companyId, input)` no WHERE (correção de IDOR pegada no code review — sem o filtro de empresa, qualquer usuário autenticado podia editar/excluir documento de outra empresa conhecendo o id). Cada mutation usa `.returning({ id })` e estoura `TRPCError NOT_FOUND` se nenhuma linha bater (em vez de fingir sucesso silencioso). `atualizar` ainda valida `dataValidade` via regex `/^\\d{4}-\\d{2}-\\d{2}$/` no zod. Patch parcial — só atualiza campos que vieram no input; `descricao || null` e `dataValidade || null` permitem LIMPAR os campos passando string vazia. Filtro `deleted_at IS NULL` em ambas evita editar/re-deletar documento já excluído. Sem trocar o arquivo (R-010 OK).\n" +
+      "  • `client/src/pages/ControleDocumentos.tsx` L1254 — `updateDoc = trpc.employeeDocuments.atualizar.useMutation`. L1258-1259 — states `editingDoc` + `editForm` (tipo/descricao/dataValidade). L1263-1282 — helpers `openEdit` (carrega o documento no form) e `handleSaveEdit` (envia patch + companyId/companyIds + fecha modal). L1400 — call de `deleteDoc.mutate` agora também passa `companyId/companyIds` (novo contrato).\n" +
+      "  • `client/src/pages/Colaboradores.tsx` L3235 — `excluirMut.mutate` atualizado para passar `companyId` (mesmo motivo do contrato novo).\n" +
+      "  • L1393-1402 — coluna 'Ações' agora tem 2 botões lado a lado (`<div className='flex gap-1'>`): Pencil azul ('Editar tipo, descrição e validade') + Trash2 vermelho ('Excluir documento'). Layout inalterado — só agrupei.\n" +
+      "  • L1468-1543 — novo Dialog de edição **full-screen** (R-001 OK: `w-[100vw] h-[100dvh] sm:w-[98vw] sm:h-[96dvh] sm:max-w-[1400px]` + `resizable={false}`). Header gradient azul/indigo com ícone Pencil + nome do arquivo + nome do colaborador. Corpo com 3 campos (Tipo via Select, Descrição via Input, Data de Validade via input date) + botão 'Limpar' AMBER ao lado da data (X icon) que zera o campo — corrige exatamente o caso do user. Hint informativo: 'Se o documento NÃO tem prazo de validade, clique em Limpar — o badge Vencido some.' Card amber abaixo avisa que o ARQUIVO em si não pode ser trocado por aqui (pra trocar, exclui e re-uploada). Footer com Cancelar + Salvar (azul, com Loader2/CheckCircle2).\n" +
+      "  • Imports lucide-react: TODOS os ícones usados (Pencil, X, Info, Loader2, CheckCircle2, Trash2) já estavam no único bloco de import L20 — nenhum novo import necessário (R-007 OK).\n\n" +
+      "Backend INTOCADO em todo o resto. Schema INTOCADO. Reversível em 3 edits (revert mutation + revert states + remover dialog). Zero migration, zero DELETE. Listar/upload/excluir/resumoPorFuncionario/alertasVencimento todos preservados.",
+    tipo: "feature",
+    modulos: "RH · Pasta Funcional · Controle de Documentos",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-15 20:15:00",
+  },
 ];

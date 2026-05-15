@@ -3229,7 +3229,7 @@ function DocumentUploadSection({ employeeId, companyId }: { employeeId: number; 
                 )}
               </div>
               <a href={d.fileUrl} target="_blank" rel="noopener" className="text-xs text-primary hover:underline">Ver</a>
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { if (confirm('Excluir este documento?')) excluirMut.mutate({ id: d.id }); }}>
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { if (confirm('Excluir este documento?')) excluirMut.mutate({ id: d.id, companyId }); }}>
                 <Trash2 className="w-3 h-3 text-destructive" />
               </Button>
             </div>
