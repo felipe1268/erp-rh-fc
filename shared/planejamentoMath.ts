@@ -41,6 +41,111 @@ export interface AvancoMath {
   percentualAcumulado: number | string | null;
 }
 
+// ─── Rev. 1829 — Distribuição diária do peso ─────────────────────────────────
+// Auditoria contra regras MSP exigiu que o ERP saiba quanto da atividade está
+// previsto/realizado em CADA DIA ÚTIL (não só por semana). Habilita curva S
+// dia-a-dia, histograma de cargas, KPIs de aderência diária e Last Planner.
+//
+// Premissa preservada: o ERP NÃO recalcula datas, duração ou vínculos. Apenas
+// distribui o `valor` (peso financeiro ou pesoIgual=1) linearmente entre os
+// dias úteis do envelope [dataInicio, dataFim], respeitando o calendário MSP
+// (`ehDiaUtil` da Rev. 1824). Atividades sem `dataInicio`/`dataFim` ou sem
+// dias úteis no envelope retornam Map vazio (sem ruído na curva).
+
+import { ehDiaUtil, type CalendarioMSProject } from "./diasUteis";
+
+/**
+ * Lista de dias úteis (ISO YYYY-MM-DD) entre `iniIso` e `fimIso` inclusive,
+ * filtrados pelo calendário MSP do projeto. Quando `cal=null`, considera
+ * Seg-Sex como úteis (sem feriados — fallback usado em projetos legados sem
+ * `calendarioJson` populado, p.ex. importados antes da Rev. 1824).
+ */
+export function listarDiasUteis(iniIso: string, fimIso: string, cal: CalendarioMSProject | null): string[] {
+  if (!iniIso || !fimIso) return [];
+  const out: string[] = [];
+  const ini = new Date(iniIso + "T12:00:00Z");
+  const fim = new Date(fimIso + "T12:00:00Z");
+  if (!Number.isFinite(ini.getTime()) || !Number.isFinite(fim.getTime())) return [];
+  if (fim < ini) return [];
+  const cur = new Date(ini.getTime());
+  while (cur <= fim) {
+    const iso = cur.toISOString().slice(0, 10);
+    if (ehDiaUtil(iso, cal)) out.push(iso);
+    cur.setUTCDate(cur.getUTCDate() + 1);
+    if (out.length > 365 * 30) break; // guard de runaway (30 anos máx.)
+  }
+  return out;
+}
+
+/**
+ * Distribui o `valor` (peso financeiro de uma atividade, ou 1 quando o ERP
+ * usa peso igual) linearmente entre os dias úteis do envelope da atividade.
+ * Retorna Map<dataISO, valorDoDia>.
+ *
+ * Distribuição linear é o padrão PMI (Practice Standard for EVM §3.2 — front
+ * loaded/back loaded ficam pra Fase 2, exigem perfil de recursos). Soma dos
+ * valores diários === valor original (com erro de arredondamento <1e-9).
+ *
+ * Atividades sem datas, atividades fora do calendário MSP (envelope só em
+ * fins-de-semana/feriados) ou com `valor=0` retornam Map vazio.
+ */
+export function distribuirPesoDiario(
+  atividade: AtividadeMath,
+  valor: number,
+  cal: CalendarioMSProject | null,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  if (!atividade.dataInicio || !atividade.dataFim) return out;
+  if (!Number.isFinite(valor) || valor === 0) return out;
+  const dias = listarDiasUteis(atividade.dataInicio, atividade.dataFim, cal);
+  if (dias.length === 0) return out;
+  const porDia = valor / dias.length;
+  for (const d of dias) out.set(d, porDia);
+  return out;
+}
+
+/**
+ * Curva S DIÁRIA do projeto: para cada dia útil entre o menor `dataInicio` e
+ * o maior `dataFim` das folhas, retorna `{ data, previstoDia, previstoAcumulado }`.
+ * `previstoDia` é a soma dos `pesoDe(a) × distribuição linear` de todas as
+ * atividades ativas naquele dia. Acumulado é a integral monotônica.
+ *
+ * Apenas FOLHAS contábeis (regra de ouro #3 — `folhasContaveis`). Pesagem
+ * idêntica à `calcularPesos` (regra de ouro #4): `pesoFinanceiro` quando ≥20%
+ * das folhas têm peso > 0; senão peso igual (1/N).
+ *
+ * Saída em % (0-100), pronta pra plotar contra `realizadoAcumulado` semanal
+ * existente. Ordenada por data ASC.
+ */
+export function curvaSDiaria<T extends AtividadeMath>(
+  ativs: T[],
+  cal: CalendarioMSProject | null,
+): Array<{ data: string; previstoDia: number; previstoAcumulado: number }> {
+  const folhas = folhasContaveis(ativs);
+  if (folhas.length === 0) return [];
+  const { pesoTotal, pesoDe } = calcularPesos(folhas);
+  if (pesoTotal <= 0) return [];
+
+  const acc = new Map<string, number>();
+  for (const a of folhas) {
+    const peso = pesoDe(a);
+    if (peso <= 0) continue;
+    // Distribui peso/pesoTotal × 100 (% do projeto) entre os dias úteis
+    const dist = distribuirPesoDiario(a, (peso / pesoTotal) * 100, cal);
+    for (const [d, v] of dist) acc.set(d, (acc.get(d) ?? 0) + v);
+  }
+
+  const dias = Array.from(acc.keys()).sort();
+  const out: Array<{ data: string; previstoDia: number; previstoAcumulado: number }> = [];
+  let acum = 0;
+  for (const d of dias) {
+    const dia = acc.get(d) ?? 0;
+    acum += dia;
+    out.push({ data: d, previstoDia: dia, previstoAcumulado: Math.min(100, acum) });
+  }
+  return out;
+}
+
 const num = (v: unknown): number => {
   if (v == null) return 0;
   const n = typeof v === "number" ? v : parseFloat(String(v));

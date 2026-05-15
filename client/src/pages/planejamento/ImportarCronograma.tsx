@@ -731,6 +731,8 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
         const comPct = tarefas
           .filter(t => !t.isGrupo && (t.percentConcluido ?? 0) > 0)
           .map(t => ({
+            // Rev. 1829 — UID MSP é a 1ª chave de matching
+            mspUid: t.mspUid || undefined,
             eapCodigo: t.eapCodigo || t.wbs,
             nome: t.nome,
             percentConcluido: t.percentConcluido ?? 0,
@@ -898,6 +900,8 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
     if (!revisaoAtiva) return;
     const atividades = tarefas.map((t, i) => ({
       eapCodigo:           t.eapCodigo || t.wbs,
+      // Rev. 1829 — UID do MSP (chave única). Vazio em XLSX (formato legado).
+      mspUid:              t.mspUid || undefined,
       nome:                t.nome,
       nivel:               t.nivel,
       dataInicio:          t.inicio || undefined,
@@ -935,6 +939,8 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
         modo: modoImport,
         atividades: atividades.map(a => ({
           eapCodigo:        a.eapCodigo,
+          // Rev. 1829 — UID MSP propagado também no modo mesclar
+          mspUid:           a.mspUid,
           nome:             a.nome,
           nivel:            a.nivel,
           dataInicio:       a.dataInicio,

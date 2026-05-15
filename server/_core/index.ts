@@ -514,7 +514,21 @@ Regras:
           // contra regras MSP). Index composto (revisao_id, msp_uid) acelera o
           // lookup `uidToId` no salvarAtividades/importarAvancosDoArquivo.
           await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS msp_uid VARCHAR(20)`);
-          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_planej_ativ_msp_uid ON planejamento_atividades(revisao_id, msp_uid)`);
+          // Rev. 1829 — UNIQUE partial index (achado de code review): UID é
+          // chave única de identidade dentro da revisão. Partial WHERE
+          // msp_uid IS NOT NULL preserva legados (NULL) sem violação. Se já
+          // existir o índice não-unique de versão anterior, é dropado primeiro.
+          try {
+            await db.execute(sql`DROP INDEX IF EXISTS idx_planej_ativ_msp_uid`);
+          } catch {}
+          try {
+            await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS uniq_planej_ativ_msp_uid ON planejamento_atividades(revisao_id, msp_uid) WHERE msp_uid IS NOT NULL`);
+          } catch (eu: any) {
+            // Duplicatas pré-existentes (nunca deve acontecer em produção pq UID
+            // só foi populado via importer Rev. 1829). Loga e segue com índice não-unique.
+            console.warn(`[SyncSchema+] Rev. 1829: UNIQUE INDEX msp_uid falhou (${eu?.message || eu}); criando índice não-unique como fallback.`);
+            await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_planej_ativ_msp_uid ON planejamento_atividades(revisao_id, msp_uid)`);
+          }
           console.log(`[SyncSchema+] Colunas data_*_real + responsavel_lotus + previsto/realizado_msp_pct + msp_uid garantidas em planejamento_atividades.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_atividades datas reais:`, e?.message || e); }
 

@@ -1043,6 +1043,8 @@ export const planejamentoRouter = router({
       atividades: z.array(z.object({
         id:                  z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
         eapCodigo:           z.string().nullish(),
+        // Rev. 1829 — UID nativo do MS Project (chave única de identidade)
+        mspUid:              z.string().nullish(),
         nome:                z.string(),
         nivel:               z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
         dataInicio:          z.string().nullish(),
@@ -1072,12 +1074,34 @@ export const planejamentoRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      // Rev. 1829 — Hardening multi-tenant (achado de code review). Valida
+      // que (a) revisão pertence ao projeto declarado e (b) projeto pertence
+      // à companyId do usuário (admin/admin_master atravessa). Bloqueia IDOR
+      // por enumeração de revisaoId/projetoId.
+      {
+        const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+        const [rev] = await db.select({ projetoId: planejamentoRevisoes.projetoId })
+          .from(planejamentoRevisoes).where(eq(planejamentoRevisoes.id, input.revisaoId)).limit(1);
+        if (!rev) throw new TRPCError({ code: "NOT_FOUND", message: "Revisão não encontrada." });
+        if (Number(rev.projetoId) !== Number(input.projetoId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Revisão não pertence ao projeto informado." });
+        }
+        if (!isAdmin) {
+          const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+            .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
+          if (!proj || String(proj.companyId) !== String((ctx.user as any).companyId)) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+          }
+        }
+      }
       const rows = input.atividades.map((a, i) => {
         const isDisabled = a.disabled ?? false;
         return {
           revisaoId:           input.revisaoId,
           projetoId:           input.projetoId,
           eapCodigo:           a.eapCodigo ?? null,
+          // Rev. 1829 — UID nativo do MS Project (chave única). Vazio em XLSX.
+          mspUid:              (a.mspUid ?? '').toString().trim() || null,
           nome:                a.nome ?? "",
           nivel:               a.nivel ?? 1,
           dataInicio:          a.dataInicio ?? null,
@@ -1270,6 +1294,7 @@ export const planejamentoRouter = router({
             await tx.execute(sql.raw(`
               UPDATE planejamento_atividades SET
                 ${cases("eap_codigo", r => esc(r.eapCodigo))},
+                ${cases("msp_uid", r => esc(r.mspUid))},
                 ${cases("nome", r => esc(r.nome))},
                 ${cases("nivel", r => escNum(r.nivel))},
                 ${cases("data_inicio", r => r.dataInicio ? esc(r.dataInicio) : "NULL")},
@@ -1320,9 +1345,13 @@ export const planejamentoRouter = router({
         const segunda = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate() + diffParaSeg));
         const semanaIso = segunda.toISOString().slice(0, 10);
 
-        // Busca TODAS as atividades desta revisão (por eapCodigo E por nome, para fallback)
+        // Rev. 1829 — Busca atividades da revisão. Index primário: msp_uid
+        // (chave única e ESTÁVEL no MSP, preservada em rename/move). Fallback
+        // secundário: eap_codigo (Item do MSP — pode mudar). Fallback por nome
+        // FOI ELIMINADO (auditoria contra regras MSP — renomear quebrava match).
         const atividadesSalvas = await db.select({
           id: planejamentoAtividades.id,
+          mspUid: planejamentoAtividades.mspUid,
           eapCodigo: planejamentoAtividades.eapCodigo,
           nome: planejamentoAtividades.nome,
         }).from(planejamentoAtividades)
@@ -1330,12 +1359,11 @@ export const planejamentoRouter = router({
 
         console.log(`[ImportAvanco] atividades salvas na revisão ${input.revisaoId}: ${atividadesSalvas.length}`);
 
-        // Índice por eapCodigo (primário) e nome (fallback)
+        const uidToId = new Map<string, number>();
         const eapToId = new Map<string, number>();
-        const nomeToId = new Map<string, number>();
         for (const a of atividadesSalvas) {
+          if (a.mspUid) uidToId.set(a.mspUid.trim(), a.id);
           if (a.eapCodigo) eapToId.set(a.eapCodigo.trim(), a.id);
-          if (a.nome) nomeToId.set(a.nome.trim().toLowerCase(), a.id);
         }
 
         const userName = (ctx as any).user?.name ?? "Importação MS Project";
@@ -1344,15 +1372,15 @@ export const planejamentoRouter = router({
         let naoEncontrados = 0;
 
         for (const a of atividadesComAvanco) {
+          const uid = ((a as any).mspUid || "").toString().trim();
           const eap = (a.eapCodigo || "").trim();
-          const nome = (a.nome || "").trim().toLowerCase();
-          // Tenta por EAP primeiro, depois por nome
-          const atividadeId = eapToId.get(eap) ?? nomeToId.get(nome);
+          // Rev. 1829 — UID 1º (chave única MSP), depois EAP. Sem fallback nome.
+          const atividadeId = (uid && uidToId.get(uid)) ?? eapToId.get(eap);
 
           if (!atividadeId) {
             naoEncontrados++;
             if (naoEncontrados <= 3) {
-              console.log(`[ImportAvanco] não encontrou: eap="${eap}" nome="${a.nome}" pct=${a.percentConcluido}`);
+              console.log(`[ImportAvanco] não encontrou: uid="${uid}" eap="${eap}" nome="${a.nome}" pct=${a.percentConcluido}`);
             }
             continue;
           }
@@ -1444,6 +1472,8 @@ export const planejamentoRouter = router({
       modo: z.enum(["substituir", "apenas_predecessora", "mesclar"]),
       atividades: z.array(z.object({
         eapCodigo:        z.string().nullish(),
+        // Rev. 1829 — UID nativo do MS Project (chave única de identidade)
+        mspUid:           z.string().nullish(),
         nome:             z.string(),
         nivel:            z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
         dataInicio:       z.string().nullish(),
@@ -1469,17 +1499,45 @@ export const planejamentoRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
 
-      // Carrega atividades existentes da revisão
+      // Rev. 1829 — Hardening multi-tenant (IDOR) — mesmo padrão de salvarAtividades.
+      {
+        const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+        const [rev] = await db.select({ projetoId: planejamentoRevisoes.projetoId })
+          .from(planejamentoRevisoes).where(eq(planejamentoRevisoes.id, input.revisaoId)).limit(1);
+        if (!rev) throw new TRPCError({ code: "NOT_FOUND", message: "Revisão não encontrada." });
+        if (Number(rev.projetoId) !== Number(input.projetoId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Revisão não pertence ao projeto informado." });
+        }
+        if (!isAdmin) {
+          const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+            .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
+          if (!proj || String(proj.companyId) !== String((ctx.user as any).companyId)) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+          }
+        }
+      }
+
+      // Rev. 1829 — Carrega atividades existentes c/ msp_uid (chave única MSP)
       const existentes = await db.select({
         id: planejamentoAtividades.id,
+        mspUid: planejamentoAtividades.mspUid,
         eapCodigo: planejamentoAtividades.eapCodigo,
       }).from(planejamentoAtividades)
         .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
 
+      const uidToId = new Map<string, number>();
       const eapToId = new Map<string, number>();
       for (const e of existentes) {
+        if (e.mspUid) uidToId.set(e.mspUid.trim(), e.id);
         if (e.eapCodigo) eapToId.set(e.eapCodigo.trim(), e.id);
       }
+      // Resolve identidade da atividade: UID 1º (estável), EAP 2º. Sem nome.
+      const resolveId = (a: { mspUid?: string | null; eapCodigo?: string | null }): number | undefined => {
+        const uid = (a.mspUid ?? "").toString().trim();
+        if (uid && uidToId.has(uid)) return uidToId.get(uid);
+        const eap = (a.eapCodigo ?? "").toString().trim();
+        return eap ? eapToId.get(eap) : undefined;
+      };
 
       let atualizados = 0;
       let inseridos   = 0;
@@ -1488,9 +1546,7 @@ export const planejamentoRouter = router({
       // ── Modo 1: APENAS PREDECESSORA ────────────────────────────────────────
       if (input.modo === "apenas_predecessora") {
         for (const a of input.atividades) {
-          const eap = (a.eapCodigo ?? "").trim();
-          if (!eap) continue;
-          const id = eapToId.get(eap);
+          const id = resolveId(a);
           if (!id) { naoEncontrados++; continue; }
           await db.update(planejamentoAtividades)
             .set({ predecessora: a.predecessora ?? null })
@@ -1504,8 +1560,8 @@ export const planejamentoRouter = router({
       if (input.modo === "mesclar") {
         await db.transaction(async (tx) => {
           for (const [i, a] of input.atividades.entries()) {
-            const eap = (a.eapCodigo ?? "").trim();
-            const id  = eap ? eapToId.get(eap) : undefined;
+            const id  = resolveId(a);
+            const mspUidVal = (a.mspUid ?? "").toString().trim() || null;
 
             // Rev. 1670 — snapshot Texto10/Texto7 vindo do XML (4 casas, nullable)
             const previstoMspPct  = a.previstoMspPct  == null ? null : String(Number(a.previstoMspPct).toFixed(4));
@@ -1515,6 +1571,9 @@ export const planejamentoRouter = router({
               // Atualiza SOMENTE campos do XML; preserva isMarco, isIndireta, disabled,
               // recursoPrincipal, quantidadePlanejada (campos tipicamente ajustados pelo usuário)
               await tx.update(planejamentoAtividades).set({
+                // Rev. 1829 — back-fill UID em projetos legados se vier no XML
+                mspUid:         mspUidVal ?? undefined,
+                eapCodigo:      a.eapCodigo ?? null,
                 nome:           a.nome ?? "",
                 nivel:          a.nivel ?? 1,
                 dataInicio:     a.dataInicio ?? null,
@@ -1537,6 +1596,8 @@ export const planejamentoRouter = router({
                 revisaoId:      input.revisaoId,
                 projetoId:      input.projetoId,
                 eapCodigo:      a.eapCodigo ?? null,
+                // Rev. 1829 — UID nativo do MSP (chave única de identidade)
+                mspUid:         mspUidVal,
                 nome:           a.nome ?? "",
                 nivel:          a.nivel ?? 1,
                 dataInicio:     a.dataInicio ?? null,
@@ -1580,6 +1641,8 @@ export const planejamentoRouter = router({
       revisaoId: z.number(),
       projetoId: z.number(),
       atividades: z.array(z.object({
+        // Rev. 1829 — UID nativo do MSP (chave única de identidade)
+        mspUid:           z.string().nullish(),
         eapCodigo:        z.string().nullish(),
         nome:             z.string().nullish(),
         percentConcluido: z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
@@ -1587,6 +1650,25 @@ export const planejamentoRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+
+      // Rev. 1829 — Hardening multi-tenant (IDOR) — mesmo padrão de salvarAtividades.
+      {
+        const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+        const [rev] = await db.select({ projetoId: planejamentoRevisoes.projetoId })
+          .from(planejamentoRevisoes).where(eq(planejamentoRevisoes.id, input.revisaoId)).limit(1);
+        if (!rev) throw new TRPCError({ code: "NOT_FOUND", message: "Revisão não encontrada." });
+        if (Number(rev.projetoId) !== Number(input.projetoId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Revisão não pertence ao projeto informado." });
+        }
+        if (!isAdmin) {
+          const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+            .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId)).limit(1);
+          if (!proj || String(proj.companyId) !== String((ctx.user as any).companyId)) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para este projeto." });
+          }
+        }
+      }
+
       const comAvanco = input.atividades.filter(a => (a.percentConcluido ?? 0) > 0);
       if (comAvanco.length === 0) return { atualizados: 0, inseridos: 0, naoEncontrados: 0 };
 
@@ -1596,27 +1678,29 @@ export const planejamentoRouter = router({
       const segunda = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate() + diffParaSeg));
       const semanaIso = segunda.toISOString().slice(0, 10);
 
+      // Rev. 1829 — UID 1º (chave única MSP), depois EAP. Sem fallback nome.
       const atividadesSalvas = await db.select({
         id: planejamentoAtividades.id,
+        mspUid: planejamentoAtividades.mspUid,
         eapCodigo: planejamentoAtividades.eapCodigo,
         nome: planejamentoAtividades.nome,
       }).from(planejamentoAtividades)
         .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
 
+      const uidToId = new Map<string, number>();
       const eapToId = new Map<string, number>();
-      const nomeToId = new Map<string, number>();
       for (const a of atividadesSalvas) {
+        if (a.mspUid) uidToId.set(a.mspUid.trim(), a.id);
         if (a.eapCodigo) eapToId.set(a.eapCodigo.trim(), a.id);
-        if (a.nome) nomeToId.set(a.nome.trim().toLowerCase(), a.id);
       }
 
       const userName = (ctx as any).user?.name ?? "Importação MS Project";
       let inseridos = 0, atualizados = 0, naoEncontrados = 0;
 
       for (const a of comAvanco) {
+        const uid = (a.mspUid ?? "").toString().trim();
         const eap = (a.eapCodigo ?? "").trim();
-        const nome = (a.nome ?? "").trim().toLowerCase();
-        const atividadeId = eapToId.get(eap) ?? nomeToId.get(nome);
+        const atividadeId = (uid && uidToId.get(uid)) ?? eapToId.get(eap);
         if (!atividadeId) { naoEncontrados++; continue; }
 
         const pct = String((a.percentConcluido ?? 0).toFixed(4));
