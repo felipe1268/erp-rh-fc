@@ -11152,17 +11152,12 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // longas com início futuro inflavam o denominador. Fallback per-atividade
   // só quando pvMacro não está disponível (sem MSP/sem datas oficiais).
   const avancoPrevisto = useMemo(() => {
-    // Rev. 1811 — REFIS PREVISTO = curva S por atividade (PMI Practice
-    // Standard for Scheduling §6.2). Removido o shortcut pvMacro (= % do
-    // prazo decorrido linear, não representava a curva S real do cronograma).
+    // Rev. 1815 — FONTE ÚNICA: pvPonderadoPorAtividade (compat. fix de
+    // cobertura parcial de pesoFinanceiro). Removido o cálculo local com
+    // calcPesoTotal/prevIndRef que sofria do mesmo bug saturando QIU 2 em 100%.
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
-    if (!folhas.length) return 0;
-    const { pesoTotal, semPeso } = calcPesoTotal(folhas);
-    return Math.min(100, folhas.reduce((s: number, a: any) => {
-      const peso = getPeso(a, semPeso);
-      return s + prevIndRef(a, semanaFimRefis) * (peso / pesoTotal);
-    }, 0));
-  }, [atividades, semanaFimRefis, usarPesoPorDuracao]);
+    return pvPonderadoPorAtividade(semanaFimRefis, folhas, usarPesoPorDuracao, calMSP);
+  }, [atividades, semanaFimRefis, usarPesoPorDuracao, calMSP]);
 
   const semIdx   = semanas.indexOf(semana);
   const semAntes = semIdx > 0 ? semanas[semIdx - 1] : null;
@@ -11178,15 +11173,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const avancoPrevAntes = useMemo(() => {
     if (!semAntesFim) return 0;
-    // Rev. 1811 — paridade com `avancoPrevisto`: curva S por atividade.
+    // Rev. 1815 — FONTE ÚNICA pvPonderadoPorAtividade.
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
-    if (!folhas.length) return 0;
-    const { pesoTotal, semPeso } = calcPesoTotal(folhas);
-    return Math.min(100, folhas.reduce((s: number, a: any) => {
-      const peso = getPeso(a, semPeso);
-      return s + prevIndRef(a, semAntesFim) * (peso / pesoTotal);
-    }, 0));
-  }, [atividades, semAntesFim, usarPesoPorDuracao]);
+    return pvPonderadoPorAtividade(semAntesFim, folhas, usarPesoPorDuracao, calMSP);
+  }, [atividades, semAntesFim, usarPesoPorDuracao, calMSP]);
 
   const avancoPrevSemanal = Math.max(0, avancoPrevisto - avancoPrevAntes);
 
@@ -11233,15 +11223,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const spi = avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0;
 
   const refisPrevistoComInd = useMemo(() => {
-    // Rev. 1811 — REFIS PREVISTO c/ indiretas = curva S por atividade.
+    // Rev. 1815 — FONTE ÚNICA pvPonderadoPorAtividade (c/ indiretas).
     const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim);
-    if (!f.length) return 0;
-    const { pesoTotal, semPeso } = calcPesoTotal(f);
-    return Math.min(100, f.reduce((s: number, a: any) => {
-      const peso = getPeso(a, semPeso);
-      return s + prevIndRef(a, semanaFimRefis) * (peso / pesoTotal);
-    }, 0));
-  }, [atividades, semanaFimRefis, usarPesoPorDuracao]);
+    return pvPonderadoPorAtividade(semanaFimRefis, f, usarPesoPorDuracao, calMSP);
+  }, [atividades, semanaFimRefis, usarPesoPorDuracao, calMSP]);
 
   const refisRealComInd = useMemo(() => {
     const m: Record<number, number> = {};
@@ -11277,15 +11262,10 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const avancoPrevAntesComInd = useMemo(() => {
     if (!semAntesFim) return 0;
-    // Rev. 1811 — paridade com `refisPrevistoComInd`: curva S por atividade.
+    // Rev. 1815 — FONTE ÚNICA pvPonderadoPorAtividade (c/ indiretas).
     const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim);
-    if (!f.length) return 0;
-    const { pesoTotal, semPeso } = calcPesoTotal(f);
-    return Math.min(100, f.reduce((s: number, a: any) => {
-      const peso = getPeso(a, semPeso);
-      return s + prevIndRef(a, semAntesFim) * (peso / pesoTotal);
-    }, 0));
-  }, [atividades, semAntesFim, usarPesoPorDuracao]);
+    return pvPonderadoPorAtividade(semAntesFim, f, usarPesoPorDuracao, calMSP);
+  }, [atividades, semAntesFim, usarPesoPorDuracao, calMSP]);
 
   const avancoRealAntesComInd = useMemo(() => {
     if (!semAntes) return 0;

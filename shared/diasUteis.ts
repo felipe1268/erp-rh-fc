@@ -261,19 +261,28 @@ export function fracaoDecorridaMs(iniMs: number, refMs: number, fimMs: number, c
 // não-lineares (ex.: HOTEL DO PAPA - AMPLIAÇÃO DO 5 PAV: pvMacro 84.68% vs
 // curva S real 53.25%).
 //
-// **Rev. 1812 — Hierarquia automática de peso (PMI EVM Practice Standard
-// §5.2 / Mattos §7.4 / Vargas)**, garantindo a MESMA lógica funcionando
-// em obras NOVAS (sem orçamento) e ANTIGAS (com peso financeiro):
+// **Rev. 1815 — Hierarquia automática de peso com detecção de COBERTURA
+// PARCIAL (PMI EVM Practice Standard §5.2 / Mattos §7.4 / Vargas §10.3)**,
+// garantindo a MESMA lógica funcionando em obras NOVAS (sem orçamento),
+// ANTIGAS (com peso financeiro 100%) e MISTAS (algumas folhas com peso, a
+// maioria sem — o caso QIU 2 - FASE 4 pós-import parcial de orçamento):
 //   1º) `usarPesoPorDuracao=true` (escolha explícita do usuário) → duração;
-//   2º) Σ pesoFinanceiro > 0 → peso financeiro (EV clássico);
-//   3º) Σ duracaoDias > 0 → duração (Schedule-Based EV / Time-Phased Budget,
-//       Vargas §10.3) — fallback automático quando orçamento ainda não foi
-//       importado / vinculado;
+//   2º) **TODAS** as folhasComDatas têm pesoFinanceiro > 0 (cobertura 100%) →
+//       peso financeiro (EV clássico). HOTEL DO PAPA cai aqui;
+//   3º) Pelo menos uma folha tem duração computável (duracaoDias > 0 OU
+//       derivável de dataFim-dataInicio) → duração (Schedule-Based EV /
+//       Time-Phased Budget). QIU 2 cai aqui — cobertura parcial de peso
+//       financeiro NUNCA mais satura PV em 100% por "ignorar" atividades
+//       futuras sem orçamento;
 //   4º) uniforme (1 por atividade-folha) — último recurso (cronograma sem
-//       datas E sem peso, raríssimo).
-// QIU 2 - FASE 4 caía no 4º antes da Rev. 1812 (todos pesos = 0) — atividade
-// curta valia igual a longa, distorcia PV. Rev. 1812 detecta e usa duração
-// automaticamente, sem o usuário precisar configurar nada.
+//       datas E sem duração, raríssimo).
+// **Por que cobertura parcial era venenosa**: na Rev. 1812 a regra era
+// `Σ peso > 0 → usa peso`. Se UMA atividade passada tinha peso e as 1505
+// futuras tinham peso=0, a soma ponderada virava (peso_passada × 100% + 0 +
+// 0 + ... ) / peso_passada = 100%. As folhas futuras ficavam invisíveis. Em
+// QIU 2 isso saturava o PV mesmo com cronograma se estendendo até 10/12/2026.
+// Rev. 1815: exige cobertura COMPLETA pra usar peso financeiro; senão duração
+// — todas as folhas (passadas e futuras) entram com peso > 0.
 //
 // FONTE ÚNICA de PREVISTO em todo o módulo Planejamento (top bar, cards de
 // Avanço Semanal, REFIS, ProgramacaoSemanalLotus). Função pura, sem hooks.
@@ -284,26 +293,63 @@ export function pvPonderadoPorAtividade(
   cal: CalendarioMSProject | null,
 ): number {
   if (!folhasArr || folhasArr.length === 0) return 0;
-  const folhasComDatas = folhasArr.filter((a: any) => a.dataInicio && a.dataFim);
+  // Rev. 1815 — blindagem contra datas inválidas (strings vazias/malformadas
+  // produziam NaN no fracaoDecorridaMs e contaminavam o resultado final).
+  // Folhas inválidas são silenciosamente ignoradas — nunca derrubam o PV.
+  const folhasComDatas = folhasArr.filter((a: any) => {
+    if (!a.dataInicio || !a.dataFim) return false;
+    const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+    const fim = new Date(a.dataFim   + "T12:00:00").getTime();
+    return Number.isFinite(ini) && Number.isFinite(fim) && fim >= ini;
+  });
   if (folhasComDatas.length === 0) return 0;
-  const somaCusto = folhasArr.reduce((s: number, a: any) => s + (parseFloat(a.pesoFinanceiro || "0") || 0), 0);
-  const somaDur   = folhasArr.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0);
-  // Hierarquia (ver bloco doc acima): explícito por duração > custo > duração
-  // automática > uniforme.
-  const usarDur = usarPesoPorDuracao || somaCusto === 0;
-  const pesoBruto = usarDur ? somaDur : somaCusto;
-  const semPeso = pesoBruto === 0;
-  const denom = semPeso ? (folhasComDatas.length || 1) : pesoBruto;
-  const ref = new Date(refStr + "T12:00:00").getTime();
+  const refMs = new Date(refStr + "T12:00:00").getTime();
+  if (!Number.isFinite(refMs)) return 0;
+
+  // Duração robusta: prefere duracaoDias gravado; se faltar/0, deriva de
+  // (dataFim - dataInicio) em dias corridos (mín. 1). Evita zerar peso de
+  // folhas válidas só porque o campo duracaoDias não foi preenchido no import.
+  const durOf = (a: any): number => {
+    const d = a.duracaoDias ?? 0;
+    if (d > 0) return d;
+    const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+    const fim = new Date(a.dataFim + "T12:00:00").getTime();
+    const dias = Math.max(1, Math.round((fim - ini) / 86400000) + 1);
+    return dias;
+  };
+  const custoOf = (a: any): number => parseFloat(a.pesoFinanceiro || "0") || 0;
+
+  // Cobertura COMPLETA de peso financeiro = todas folhasComDatas com custo>0.
+  // Só nesse caso faz sentido usar EV clássico (toda atividade contribui).
+  const cobrePesoTotal = folhasComDatas.every((a: any) => custoOf(a) > 0);
+  const somaDurTodas = folhasComDatas.reduce((s, a) => s + durOf(a), 0);
+
+  // Hierarquia (ver bloco doc acima):
+  //   1º explícito por duração; 2º cobertura 100% de custo; 3º duração;
+  //   4º uniforme.
+  let modo: "duracao" | "custo" | "uniforme";
+  if (usarPesoPorDuracao)               modo = "duracao";
+  else if (cobrePesoTotal)              modo = "custo";
+  else if (somaDurTodas > 0)            modo = "duracao";
+  else                                  modo = "uniforme";
+
+  const denom = modo === "uniforme"
+    ? folhasComDatas.length
+    : (modo === "custo"
+        ? folhasComDatas.reduce((s, a) => s + custoOf(a), 0)
+        : somaDurTodas);
+  if (!Number.isFinite(denom) || denom <= 0) return 0;
+
   let soma = 0;
   for (const a of folhasComDatas) {
     const ini = new Date(a.dataInicio + "T12:00:00").getTime();
     const fim = new Date(a.dataFim + "T12:00:00").getTime();
-    const exp = fracaoDecorridaMs(ini, ref, fim, cal) * 100;
-    const peso = semPeso
-      ? 1
-      : (usarDur ? (a.duracaoDias ?? 0) : (parseFloat(a.pesoFinanceiro || "0") || 0));
+    const fracao = fracaoDecorridaMs(ini, refMs, fim, cal);
+    const exp = (Number.isFinite(fracao) ? fracao : 0) * 100;
+    const peso = modo === "uniforme" ? 1 : (modo === "custo" ? custoOf(a) : durOf(a));
+    if (!Number.isFinite(peso) || peso <= 0) continue;
     soma += (exp * peso) / denom;
   }
+  if (!Number.isFinite(soma)) return 0;
   return Math.min(100, Math.max(0, soma));
 }
