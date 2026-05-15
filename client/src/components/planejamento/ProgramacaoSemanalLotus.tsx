@@ -1245,7 +1245,10 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         preencherAba(ws, calcSemana(sem));
       }
 
-      // 12. Salva e dispara download (naming padrão Lotus: REVTE-PSEM-FC-AA-MM-DD.xlsx)
+      // 12. Salva e dispara download.
+      // Rev. 1823 — naming agora respeita o NOME DA OBRA (ex.:
+      // "QIU-2-FASE-4-PSEM-FC-26-05-15.xlsx") em vez do hardcoded "REVTE".
+      // Sanitiza acentos/espaços/caracteres inválidos pra nome de arquivo.
       const buf = await wb.xlsx.writeBuffer();
       const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
       const url = URL.createObjectURL(blob);
@@ -1253,9 +1256,15 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       const yy = String(today.getFullYear()).slice(-2);
       const mm = String(today.getMonth() + 1).padStart(2, "0");
       const dd = String(today.getDate()).padStart(2, "0");
+      const slugObra = (nomeProjeto ?? "OBRA")
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .toUpperCase()
+        .slice(0, 60) || "OBRA";
       const a = document.createElement("a");
       a.href = url;
-      a.download = `REVTE-PSEM-FC-${yy}-${mm}-${dd}.xlsx`;
+      a.download = `${slugObra}-PSEM-FC-${yy}-${mm}-${dd}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
       toast({ title: "Excel exportado", description: `${semanasParaExportar.length} semana(s) — ${a.download}` });
