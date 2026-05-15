@@ -13149,4 +13149,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-15 20:15:00",
   },
+  {
+    version: 1828,
+    titulo: "Controle de Documentos · ASO — Periódico/Retorno/Mudança de Função agora SUBSTITUI Admissional anterior (cross-tipo, sem depender de vencimento)",
+    descricao:
+      "User (15/05/2026, screenshot da aba ASOs com PAULO HENRIQUE LIMA GUIMARAES aparecendo em DUAS linhas: linha 1 ASO Admissional 16/05/2025 com badge laranja '2 DIAS PARA VENCER' + linha 2 ASO Periódico 11/05/2026 com badge verde 'VÁLIDO'): 'aso admissional não foi substituído pelo aso periódico'.\n\n" +
+      "Investigação (`server/routers/controleDocumentos.ts asos.list` L407-471): a lógica de SUBSTITUÍDO existia mas era ESTRITA demais: (1) só marcava o ASO como SUBSTITUÍDO se o `statusCalc.status === 'VENCIDO'`. ASO em '2 DIAS PARA VENCER' tecnicamente não está vencido → não entrava na branch; (2) `latestByEmployeeTipo` agrupa por `employeeId + tipo`, então um Admissional sempre é 'latest of type' (não tem outro Admissional concorrendo) — por isso `!isLatestOfType` também ficava false e não disparava o flag. Resultado: o ERP exibia ambos lado a lado em opacidade cheia, induzindo o RH a achar que precisava renovar o Admissional que já tinha sido substituído por um Periódico recém-emitido.\n\n" +
+      "Implementação:\n" +
+      "  • `server/routers/controleDocumentos.ts` L457-489 — nova regra cross-tipo: define `TIPOS_SUBSTITUTIVOS = {Admissional, Periodico, Retorno, Mudanca_Funcao}` (Demissional fica de fora — é terminal e mantém histórico visível). Para CADA ASO, varre o `byEmployee` (todos os ASOs do colaborador) e flagga `hasNewerSupersedingAso = existe ASO mais novo (`dataExame > r.dataExame`) de tipo substitutivo COM `dataValidade >= hoje`. Se sim → retorna `{status: 'SUBSTITUÍDO', isHistorico: true}` independente do status atual (válido/a vencer/vencido). Caso contrário, mantém a regra legada (VENCIDO + !isLatestOfType) e o cálculo normal de status. Resultado pro caso do user: o Periódico de 11/05/2026 (válido até 11/05/2027) é mais novo que o Admissional de 16/05/2025 → Admissional vira SUBSTITUÍDO, frontend já aplica `opacity-60` (L2391 do ControleDocumentos.tsx, comportamento existente).\n" +
+      "  • `server/routers/controleDocumentos.ts` L1335-1354 — endpoint `raioX` (Pasta Funcional do colaborador) sincronizado com a MESMA regra cross-tipo do `asos.list`. Antes: o Raio-X mostrava status divergente do ControleDocumentos pra mesmo ASO (admissional substituído aparecia '2 dias pra vencer' lá e SUBSTITUÍDO no painel). Agora os dois consomem a mesma lógica.\n" +
+      "  • `server/routers/controleDocumentos.ts` L1214-1235 — contador `asosAVencer` no `resumo`: trocou o COUNT direto por SQL bruta com `NOT EXISTS` (mesmo padrão do `asosVencidos` logo acima — L1194-1208). Sem isso, o card 'ASOs A Vencer' do PainelSST/ControleDocumentos continuaria contando o Admissional substituído de PAULO como '2 dias pra vencer', poluindo o KPI. Agora subtrai qualquer ASO que tenha sucessor válido (qualquer tipo).\n" +
+      "  • `homeData.ts` L169-198 (asosAlerta): JÁ usava `bestValidAso = empAsos.find(válido)` como referência por funcionário (única entrada no map), então homepage nunca alertou sobre admissional substituído — comportamento correto preservado, sem mudanças.\n\n" +
+      "Frontend INTOCADO (já tinha tratamento `opacity-60` pra `isHistorico`). Schema INTOCADO. Zero migration, zero DELETE. Reversível em 2 edits no controleDocumentos.ts. R-007/R-010 OK. PROD vai refletir após deploy — nenhuma reimportação necessária.",
+    tipo: "fix",
+    modulos: "RH · SST · Controle de Documentos",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-15 21:30:00",
+  },
 ];

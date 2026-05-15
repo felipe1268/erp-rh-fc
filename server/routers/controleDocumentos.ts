@@ -451,22 +451,37 @@ export const controleDocumentosRouter = router({
           latestByEmployeeTipo.set(key, group[0].id.toString());
         }
 
+        // Tipos que substituem qualquer ASO anterior do mesmo funcionário (ciclo ocupacional reinicia).
+        // Demissional é terminal mas não invalida histórico do colaborador ativo (mantemos visível).
+        const TIPOS_SUBSTITUTIVOS = new Set(["Admissional", "Periodico", "Retorno", "Mudanca_Funcao"]);
+
         return rows.map((r: any) => {
           const key = `${r.employeeId}_${r.tipo}`;
           const isLatestOfType = latestByEmployeeTipo.get(key) === r.id.toString();
           const statusCalc = calcularStatusASO(r.dataValidade);
 
-          if (statusCalc.status === "VENCIDO") {
-            const empGroup = byEmployee.get(r.employeeId) || [];
-            const hasNewerValidAso = empGroup.some((a: any) =>
-              a.id !== r.id &&
-              (a.dataExame || "").localeCompare(r.dataExame || "") > 0 &&
-              calcularStatusASO(a.dataValidade).status !== "VENCIDO"
-            );
-            if (hasNewerValidAso || !isLatestOfType) {
-              return { ...r, status: "SUBSTITUÍDO", diasRestantes: statusCalc.diasRestantes, isHistorico: true };
-            }
+          // Regra de SUBSTITUIÇÃO cross-tipo: se existe um ASO mais novo de tipo substitutivo
+          // (Admissional/Periódico/Retorno/Mudança Função) que ainda não venceu, este ASO
+          // antigo é considerado SUBSTITUÍDO — independente do status atual dele (vencido,
+          // a vencer ou válido). Isso resolve o caso "Periódico recém-emitido não esconde
+          // o Admissional antigo que ainda mostra 'X dias para vencer'".
+          const empGroup = byEmployee.get(r.employeeId) || [];
+          const hasNewerSupersedingAso = empGroup.some((a: any) =>
+            a.id !== r.id &&
+            TIPOS_SUBSTITUTIVOS.has(a.tipo) &&
+            (a.dataExame || "").localeCompare(r.dataExame || "") > 0 &&
+            calcularStatusASO(a.dataValidade).status !== "VENCIDO"
+          );
+
+          if (hasNewerSupersedingAso) {
+            return { ...r, status: "SUBSTITUÍDO", diasRestantes: statusCalc.diasRestantes, isHistorico: true };
           }
+
+          // Caso legado: VENCIDO sem substituto válido mas que não é o mais recente DO MESMO TIPO
+          if (statusCalc.status === "VENCIDO" && !isLatestOfType) {
+            return { ...r, status: "SUBSTITUÍDO", diasRestantes: statusCalc.diasRestantes, isHistorico: true };
+          }
+
           return { ...r, ...statusCalc, isHistorico: !isLatestOfType };
         });
       }),
@@ -1193,23 +1208,28 @@ export const controleDocumentosRouter = router({
       `)) as any).rows || [];
       const asosVencidos = { count: Number(asosVencidosRows[0]?.count || 0) };
 
-      // ASOs a vencer em 30 dias
+      // ASOs a vencer em 30 dias — exclui ASOs já SUBSTITUÍDOS por outro mais novo válido
+      // (mesmo padrão NOT EXISTS usado em asosVencidos acima — Rev. 1828).
       const em30dias = new Date();
       em30dias.setDate(em30dias.getDate() + 30);
       const em30diasStr = em30dias.toISOString().split("T")[0];
-      const [asosAVencer] = await db
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(asos)
-        .innerJoin(employees, eq(asos.employeeId, employees.id))
-        .where(
-          and(
-            companyFilter(asos.companyId, input),
-            isNull(employees.deletedAt),
-            isNull(asos.deletedAt),
-            sql`${asos.dataValidade} >= ${hoje}`,
-            sql`${asos.dataValidade} <= ${em30diasStr}`
+      const asosAVencerRows = ((await db.execute(sql`
+        SELECT COUNT(*) as count FROM asos a
+        INNER JOIN employees e ON a."employeeId" = e.id
+        WHERE a."companyId" IN (${companyIdsSql})
+          AND e."deletedAt" IS NULL
+          AND a."deletedAt" IS NULL
+          AND a."dataValidade" >= ${hoje}
+          AND a."dataValidade" <= ${em30diasStr}
+          AND NOT EXISTS (
+            SELECT 1 FROM asos a2
+            WHERE a2."employeeId" = a."employeeId"
+              AND a2."deletedAt" IS NULL
+              AND a2."dataExame" > a."dataExame"
+              AND a2."dataValidade" >= ${hoje}
           )
-        );
+      `)) as any).rows || [];
+      const asosAVencer = { count: Number(asosAVencerRows[0]?.count || 0) };
 
       // Treinamentos vencidos
       const [treinVencidos] = await db
@@ -1309,19 +1329,23 @@ export const controleDocumentosRouter = router({
         if (!asoByTipo.has(a.tipo || "")) asoByTipo.set(a.tipo || "", a);
       }
 
+      // Mesma regra cross-tipo do `asos.list` (Rev. 1828) — mantém Raio-X consistente com a tela principal.
+      const TIPOS_SUBSTITUTIVOS_RX = new Set(["Admissional", "Periodico", "Retorno", "Mudanca_Funcao"]);
       const asosComStatus = empAsos.map(a => {
         const statusCalc = calcularStatusASO(a.dataValidade || "");
         const isLatestOfType = asoByTipo.get(a.tipo || "")?.id === a.id;
 
-        if (statusCalc.status === "VENCIDO") {
-          const hasNewerValidAso = empAsos.some(other =>
-            other.id !== a.id &&
-            (other.dataExame || "").localeCompare(a.dataExame || "") > 0 &&
-            calcularStatusASO(other.dataValidade || "").status !== "VENCIDO"
-          );
-          if (hasNewerValidAso || !isLatestOfType) {
-            return { ...a, status: "SUBSTITUÍDO", diasRestantes: statusCalc.diasRestantes, isHistorico: true };
-          }
+        const hasNewerSupersedingAso = empAsos.some(other =>
+          other.id !== a.id &&
+          TIPOS_SUBSTITUTIVOS_RX.has(other.tipo || "") &&
+          (other.dataExame || "").localeCompare(a.dataExame || "") > 0 &&
+          calcularStatusASO(other.dataValidade || "").status !== "VENCIDO"
+        );
+        if (hasNewerSupersedingAso) {
+          return { ...a, status: "SUBSTITUÍDO", diasRestantes: statusCalc.diasRestantes, isHistorico: true };
+        }
+        if (statusCalc.status === "VENCIDO" && !isLatestOfType) {
+          return { ...a, status: "SUBSTITUÍDO", diasRestantes: statusCalc.diasRestantes, isHistorico: true };
         }
         return { ...a, ...statusCalc, isHistorico: !isLatestOfType };
       });
