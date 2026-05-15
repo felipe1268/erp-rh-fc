@@ -742,6 +742,10 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
             await importarAvancosMutation.mutateAsync({
               revisaoId: revisaoAtiva.id,
               projetoId,
+              // Rev. 1830 — Semana de referência = StatusDate do XML (não hoje).
+              // Sem isso, snapshot da SEMANA N caía na semana atual do servidor
+              // e a "evolução da primeira semana" ficava em branco.
+              semanaIso: metadadosMSP?.statusDate || undefined,
               atividades: comPct,
             });
           } catch (e) {
@@ -925,7 +929,8 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
     if (modoImport === "substituir") {
       // Comportamento original: apaga revisão e recria
       salvarMutation.mutate(
-        { revisaoId: revisaoAtiva.id, projetoId, atividades },
+        // Rev. 1830 — semanaIso = StatusDate do XML (Monday calc no backend).
+        { revisaoId: revisaoAtiva.id, projetoId, atividades, semanaIso: metadadosMSP?.statusDate || undefined },
         {
           onSuccess: () => finalizarProgresso(true),
           onError:   () => finalizarProgresso(false),

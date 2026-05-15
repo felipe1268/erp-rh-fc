@@ -13186,4 +13186,22 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-15 21:30:00",
   },
+  {
+    version: 1830,
+    titulo: "Planejamento · Importer MSP — snapshot semanal usa StatusDate do XML (não a data de hoje) — corrige 'evolução da primeira semana incorreta'",
+    descricao:
+      "User (15/05/2026, anexou XMLs `PLN_805_03_2026_R04_REVTE-CIVIL - SEMANA 1.xml` (StatusDate=2026-05-07) + `... - CONTRATUAL.xml` (baseline) e screenshot da coluna `% concluída` do MS Project mostrando 1%, 100%, 2%, 28%×7, 6%×2, 0%...): 'avanço previsto OK, evolução semana 1 errada'.\n\n" +
+      "Diagnóstico (parser node nos XMLs): a SEMANA 1 do XML traz 10 leaves com `<PercentComplete>` >0 (UIDs 5040, 5041, 5046, 5048, 5049, 5055, 5654, 5656, 5395, 5482) e o importer (ImportarCronograma.tsx L417-419) lê esses valores corretamente. O parser MSP também já extrai `StatusDate` (parseMSProjectStatusDate L206) e o frontend já o tem em mãos via `metadadosMSP.statusDate` (Rev. 1642). O bug estava no SNAPSHOT em `planejamento_avancos`: tanto `salvarAtividades` (substituir, L1342-1346) quanto `importarAvancosDoArquivo` (mesclar, L1675-1679) calculavam `semanaIso` a partir de `new Date()` (data de hoje no servidor). Importando hoje (15/05, sexta) → Monday=11/05. Mas a SEMANA 1 do XML é cutoff em 07/05 (quinta) → Monday=04/05. Resultado: o snapshot da SEMANA 1 caía na semana 11/05 (errada) e a semana 04/05 ficava em branco — 'evolução da primeira semana incorreta'.\n\n" +
+      "Implementação (cirúrgica, 4 edits):\n" +
+      "  • `server/routers/planejamento.ts` L1042-1050 — `salvarAtividades` zod ganhou `semanaIso: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional()` (top-level do input). Backend L1347-1357 troca `const hoje = new Date()` por `const ref = input.semanaIso ? new Date(input.semanaIso + 'T12:00:00Z') : new Date()`. Cálculo Monday IDÊNTICO (`getUTCDay()` + diff). Comportamento legado preservado quando `semanaIso` ausente.\n" +
+      "  • `server/routers/planejamento.ts` L1651-1656 — `importarAvancosDoArquivo` zod idem. Backend L1685-1697 mesma substituição.\n" +
+      "  • `client/src/pages/planejamento/ImportarCronograma.tsx` L745-752 — chamada `importarAvancosMutation.mutateAsync` (modo mesclar/apenas_predecessora) passa `semanaIso: metadadosMSP?.statusDate || undefined`.\n" +
+      "  • L934-936 — chamada `salvarMutation.mutate` (modo substituir) passa o mesmo `semanaIso`.\n\n" +
+      "Premissas auditadas preservadas: backend NÃO recalcula `semana` de avanços já gravados (UPDATE só roda dentro da janela `semanaIso` recém-passada via UID/EAP match — Rev. 1829), `planejamento_avancos` legado intacto, baseline congelado (Texto6/7/10/11), MSP segue fonte oficial, calendário MSP intocado. XMLs sem StatusDate (raríssimo) caem no fallback Monday-de-hoje (= comportamento pré-1830). Reversível em 4 edits. Zero schema/migration/DELETE/contrato tRPC novo. R-007/R-008/R-010 OK.\n\n" +
+      "Validação esperada (REVTE-CIVIL com SEMANA 1): após reimportar em modo 'mesclar' (ou 'substituir' se for 1º import), `planejamento_avancos.semana = '2026-05-04'` aparece com 10 linhas (uma por leaf c/ pct>0), e o card 'Avanço Semanal' da semana 04/05 mostra os pcts do XML em vez de zerado.",
+    tipo: "bugfix",
+    modulos: "Planejamento · Importer MSP · Snapshot semanal",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-15 22:30:00",
+  },
 ];

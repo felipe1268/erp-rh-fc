@@ -1040,6 +1040,11 @@ export const planejamentoRouter = router({
     .input(z.object({
       revisaoId: z.number(),
       projetoId: z.number(),
+      // Rev. 1830 — semana ISO de referência pro snapshot de avanços (Monday).
+      // Quando importa um XML SEMANA N, o frontend envia a Monday do StatusDate
+      // do XML (não a data de hoje). Sem isso, o snapshot caía na semana atual
+      // do servidor e a "evolução da primeira semana" ficava em branco.
+      semanaIso: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "semanaIso inválida").optional(),
       atividades: z.array(z.object({
         id:                  z.preprocess(v => v == null ? undefined : Number(v), z.number().optional()),
         eapCodigo:           z.string().nullish(),
@@ -1338,11 +1343,15 @@ export const planejamentoRouter = router({
       console.log(`[ImportAvanco] total atividades=${input.atividades.length} com_avanco=${atividadesComAvanco.length}`);
 
       if (atividadesComAvanco.length > 0) {
-        // Calcula a segunda-feira da semana atual (ISO)
-        const hoje = new Date();
-        const diaSemana = hoje.getUTCDay();
+        // Rev. 1830 — Semana de referência: usa semanaIso do XML (Monday do
+        // StatusDate) quando o frontend envia. Fallback p/ Monday-de-hoje só
+        // pra retrocompatibilidade. Sem isso, importar XML SEMANA 1 (StatusDate
+        // 07/05) gravava snapshot na semana de hoje (11/05) e a semana 04/05
+        // ficava em branco → "evolução da primeira semana incorreta".
+        const ref = (input as any).semanaIso ? new Date((input as any).semanaIso + "T12:00:00Z") : new Date();
+        const diaSemana = ref.getUTCDay();
         const diffParaSeg = diaSemana === 0 ? -6 : 1 - diaSemana;
-        const segunda = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate() + diffParaSeg));
+        const segunda = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), ref.getUTCDate() + diffParaSeg));
         const semanaIso = segunda.toISOString().slice(0, 10);
 
         // Rev. 1829 — Busca atividades da revisão. Index primário: msp_uid
@@ -1640,6 +1649,8 @@ export const planejamentoRouter = router({
     .input(z.object({
       revisaoId: z.number(),
       projetoId: z.number(),
+      // Rev. 1830 — semana ISO de referência (Monday do StatusDate do XML).
+      semanaIso: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "semanaIso inválida").optional(),
       atividades: z.array(z.object({
         // Rev. 1829 — UID nativo do MSP (chave única de identidade)
         mspUid:           z.string().nullish(),
@@ -1672,10 +1683,14 @@ export const planejamentoRouter = router({
       const comAvanco = input.atividades.filter(a => (a.percentConcluido ?? 0) > 0);
       if (comAvanco.length === 0) return { atualizados: 0, inseridos: 0, naoEncontrados: 0 };
 
-      const hoje = new Date();
-      const diaSemana = hoje.getUTCDay();
+      // Rev. 1830 — Semana de referência: usa input.semanaIso (Monday do
+      // StatusDate do XML) quando frontend envia. Fallback p/ Monday-de-hoje
+      // mantém retrocompatibilidade. Sem isso, snapshot da SEMANA N do XML
+      // caía na semana atual do servidor (bug "evolução semana 1 zerada").
+      const ref = input.semanaIso ? new Date(input.semanaIso + "T12:00:00Z") : new Date();
+      const diaSemana = ref.getUTCDay();
       const diffParaSeg = diaSemana === 0 ? -6 : 1 - diaSemana;
-      const segunda = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate() + diffParaSeg));
+      const segunda = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), ref.getUTCDate() + diffParaSeg));
       const semanaIso = segunda.toISOString().slice(0, 10);
 
       // Rev. 1829 — UID 1º (chave única MSP), depois EAP. Sem fallback nome.
