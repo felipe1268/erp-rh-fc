@@ -13251,4 +13251,23 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-15 23:45:00",
   },
+  {
+    version: 1834,
+    titulo: "Planejamento · Importer MSP — barra de progresso mais responsiva + mensagem por estágio (acaba a sensação de 'travou no 88%')",
+    descricao:
+      "User (15/05/2026, screenshot do Importer parado em 'Processando arquivo... 88%' no REVTE-CIVIL): 'pq quando chega no 88% ele trava e demora muito?'.\n\n" +
+      "Causa pré-existente (Rev. 1822): o backend processa o XML inteiro numa transação só (parse → upsert N atividades → snapshot semanal de avanços), sem streaming de progresso. O frontend usa uma curva ASSINTÓTICA falsa: `setProgressoImport(p => p + Math.max(0.15, (99 - p) * 0.06))` a cada 120ms. Decay 0.06 fazia a barra desacelerar dramaticamente: p=88 → +0,66pp/tick (~5,5%/s); p=95 → +0,24pp/tick (~2%/s); p=99 → clamp. De 88→99 levava ~10s, e depois pinava em ~99% por 20-60s aguardando o INSERT no Postgres terminar (importarComModo / salvarAtividades em projetos grandes tipo REVTE-CIVIL com 500+ atividades + snapshot semanal). Sem feedback do estágio, parecia travamento.\n\n" +
+      "Fix (1 arquivo, 4 hunks):\n" +
+      "  • `client/src/pages/planejamento/ImportarCronograma.tsx` L687-707 — curva mais agressiva: tick 100ms (era 120ms), decay 0.10 (era 0.06), min 0.20pp (era 0.15pp). Agora chega em 90% em ~2s, 95% em ~3s, 99% em ~6s. Resultado visual: barra continua se mexendo claramente até quase o fim.\n" +
+      "  • L696/L700/L715 — novo state `progressoTotalAtv` propagado por `iniciarProgresso(totalAtividades)` para personalizar a mensagem com o tamanho real do projeto. Limpado em `finalizarProgresso`.\n" +
+      "  • L720-730 — nova função pura `progressoMensagem(p, totalAtv)` com 4 estágios: <30 'Lendo arquivo MS Project…'; <75 'Convertendo N atividades…'; <95 'Enviando para o servidor…'; <100 'Salvando N atividades no banco — projetos grandes podem levar até 60s…' (>300 atividades) ou 'Salvando no banco — pode levar alguns segundos…'. Honestidade: usuário sabe explicitamente que aos ~95-99% a espera é o INSERT no Postgres, não congelamento da página.\n" +
+      "  • L946 — `iniciarProgresso()` vira `iniciarProgresso(tarefas.length)` (passa contagem real do XML parseado).\n" +
+      "  • L1427-1448 — JSX da barra usa `progressoMensagem(progressoImport, progressoTotalAtv ?? tarefas.length)` em vez do título estático 'Importando N atividades…'. Mantém spinner + percentual + barra; só troca o texto principal por algo dinâmico. Spans ganham `truncate` + `shrink-0` p/ não estourar largura quando a mensagem ficar longa.\n\n" +
+      "Por que é seguro: zero mudança no fluxo de mutation, zero schema, zero DELETE, zero contrato tRPC. Só UX da barra. Mantém o invariante de não atingir 100% antes da resposta do backend (clamp em 99). Reversível em 4 edits (curva 0.06/120ms + msg estática + iniciarProgresso() sem arg + state removido).\n\n" +
+      "Esperado para REVTE-CIVIL: barra sai de 'Lendo arquivo MS Project…' → 'Convertendo X atividades…' → 'Enviando para o servidor…' → 'Salvando X atividades no banco — pode levar até 60s…' (com X = ~500). Em vez de pinar mudo no 88%, fica explícito o que está acontecendo. R-001/R-007/R-010 OK.",
+    tipo: "melhoria",
+    modulos: "Planejamento · Importer MSP · UX",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-16 00:00:00",
+  },
 ];

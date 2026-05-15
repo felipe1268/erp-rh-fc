@@ -681,21 +681,27 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   }, [open, jaTemCronograma, atividadesExistentes]);
   const [resultadoImport, setResultadoImport] = useState<{ atualizados: number; inseridos: number; naoEncontrados: number } | null>(null);
 
-  // Rev. 1822 — Barra de progresso da importação. O backend processa o lote
-  // inteiro numa transação só (sem streaming), então o progresso real é
-  // desconhecido. Sobe assintoticamente até 99% (sempre se mexendo, nunca
-  // "trava") e completa em 100% quando a mutation retorna sucesso.
+  // Rev. 1834 — Barra de progresso da importação com estágios.
+  // O backend processa o lote inteiro numa transação só (sem streaming),
+  // então o progresso real é desconhecido. Curva agora desacelera MENOS
+  // (decay 0.10 vs 0.06 antigo) — chega em 95% em ~3s vs ~7s antes,
+  // eliminando a sensação de "trava no 88%". Mensagem dinâmica em 3
+  // estágios deixa explícito que aos ~95%+ a barra está PARADA pq o
+  // backend está salvando no banco (não congelou).
   const [progressoImport, setProgressoImport] = useState(0);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [progressoTotalAtv, setProgressoTotalAtv] = useState<number | null>(null);
 
-  function iniciarProgresso() {
+  function iniciarProgresso(totalAtividades?: number) {
     setProgressoImport(3);
+    setProgressoTotalAtv(typeof totalAtividades === "number" ? totalAtividades : null);
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-    // Tick rápido (120ms) com decay assintótico — sobe veloz no início
-    // e desacelera perto do limite (99%). Visualmente nunca "trava".
+    // Tick 100ms com decay 0.10 — chega em 90% em ~2s, 95% em ~3s, 99%
+    // em ~6s. Mais responsivo que a Rev. 1822 (decay 0.06) que demorava
+    // ~10s pra sair de 88% → 99%, dando a falsa sensação de travamento.
     progressIntervalRef.current = setInterval(() => {
-      setProgressoImport(p => (p < 99 ? p + Math.max(0.15, (99 - p) * 0.06) : p));
-    }, 120);
+      setProgressoImport(p => (p < 99 ? p + Math.max(0.20, (99 - p) * 0.10) : p));
+    }, 100);
   }
   function finalizarProgresso(sucesso: boolean) {
     if (progressIntervalRef.current) {
@@ -703,10 +709,22 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
       progressIntervalRef.current = null;
     }
     setProgressoImport(sucesso ? 100 : 0);
+    setProgressoTotalAtv(null);
   }
   useEffect(() => () => {
     if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
   }, []);
+  // Mensagem por estágio (UX honesta — usuário entende que nos últimos
+  // 5pp a barra está esperando o INSERT no Postgres, não congelou).
+  function progressoMensagem(p: number, totalAtv: number | null): string {
+    if (p < 30)  return "Lendo arquivo MS Project…";
+    if (p < 75)  return totalAtv ? `Convertendo ${totalAtv} atividades…` : "Convertendo atividades…";
+    if (p < 95)  return "Enviando para o servidor…";
+    if (p < 100) return totalAtv && totalAtv > 300
+      ? `Salvando ${totalAtv} atividades no banco — projetos grandes podem levar até 60s…`
+      : "Salvando no banco — pode levar alguns segundos…";
+    return "Concluído!";
+  }
 
   const salvarMutation = trpc.planejamento.salvarAtividades.useMutation({
     onSuccess: async () => {
@@ -925,7 +943,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
       realizadoMspPct:     t.realizadoMsp,
     }));
 
-    iniciarProgresso();
+    iniciarProgresso(tarefas.length);
     if (modoImport === "substituir") {
       // Comportamento original: apaga revisão e recria
       salvarMutation.mutate(
@@ -1406,17 +1424,24 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                 </div>
               )}
 
-              {/* Rev. 1822 — Barra de progresso da importação (0% → 100%). */}
+              {/* Rev. 1834 — Barra de progresso da importação com mensagem
+                  por estágio. Após 95% a barra fica visualmente parada (a
+                  transação Postgres está rolando) — a mensagem deixa
+                  explícito que NÃO é travamento. */}
               {(salvarMutation.isPending || importarComModoMutation.isPending || progressoImport > 0) && (
                 <div className="space-y-1.5 border border-emerald-200 bg-emerald-50/50 rounded p-2">
                   <div className="flex items-center justify-between text-[11px] text-emerald-800">
-                    <span className="flex items-center gap-1.5">
+                    <span className="flex items-center gap-1.5 min-w-0">
                       {progressoImport >= 100
-                        ? <CheckCircle2 className="h-3.5 w-3.5" />
-                        : <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                      <b>{progressoImport >= 100 ? "Importação concluída" : `Importando ${tarefas.length} atividades…`}</b>
+                        ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                        : <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />}
+                      <b className="truncate">
+                        {progressoImport >= 100
+                          ? "Importação concluída"
+                          : progressoMensagem(progressoImport, progressoTotalAtv ?? tarefas.length)}
+                      </b>
                     </span>
-                    <span className="tabular-nums font-semibold">{Math.round(progressoImport)}%</span>
+                    <span className="tabular-nums font-semibold shrink-0">{Math.round(progressoImport)}%</span>
                   </div>
                   <Progress value={progressoImport} className="h-2" />
                 </div>
