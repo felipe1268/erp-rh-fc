@@ -1,10 +1,27 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { feriados } from "../../drizzle/schema";
+import { feriados, userCompanies } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
+
+// Rev. 1840 — Tenant guard: garante que TODOS os companyIds requisitados pertencem
+// ao usuario (via userCompanies). admin_master atravessa. Bloqueia IDOR quando o
+// front passa companyIds arbitrarios.
+async function ensureUserOwnsCompanies(db: any, user: any, ids: number[]): Promise<void> {
+  if (!ids || ids.length === 0) return;
+  const role = String(user?.role || "").toLowerCase();
+  if (role === "admin_master") return;
+  const owned = await db.select({ companyId: userCompanies.companyId })
+    .from(userCompanies)
+    .where(and(eq(userCompanies.userId, user.id), inArray(userCompanies.companyId, ids)));
+  const ownedSet = new Set<number>(owned.map((r: any) => Number(r.companyId)));
+  const ok = ids.every(id => ownedSet.has(Number(id)));
+  if (!ok) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissao para uma ou mais empresas solicitadas." });
+  }
+}
 
 // Feriados nacionais fixos do Brasil
 const FERIADOS_NACIONAIS = [
@@ -236,6 +253,74 @@ export const feriadosRouter = router({
       }
 
       return { success: true, feriadosCriados: count };
+    }),
+
+  // Rev. 1840 — Lista todas as datas-feriado dentro de um período (YYYY-MM-DD).
+  // Considera (a) registros do banco para a empresa (ou globais com companyId NULL),
+  // expandindo recorrentes por todos os anos do período; (b) FERIADOS_NACIONAIS fixos
+  // (caso seedNacionais ainda não tenha sido executado para a empresa); (c) feriados
+  // móveis (Carnaval, Sexta Santa, Corpus Christi) por ano. É a fonte única para o
+  // EspelhoPonto e qualquer outro consumidor que precise reconhecer feriados sem
+  // duplicar a lógica que o `getFaltasReport` (fechamentoPonto.ts L4869-4887) faz.
+  listarPeriodo: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      dataInicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "dataInicio deve ser YYYY-MM-DD"),
+      dataFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "dataFim deve ser YYYY-MM-DD"),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const { dataInicio, dataFim } = input;
+      if (!dataInicio || !dataFim || dataInicio > dataFim) return [] as string[];
+
+      const cids = input.companyIds && input.companyIds.length > 0
+        ? input.companyIds
+        : [input.companyId];
+      // Rev. 1840 — guard tenant
+      await ensureUserOwnsCompanies(db, ctx.user, cids);
+
+      const rows = await db.select({ data: feriados.data, recorrente: feriados.recorrente })
+        .from(feriados)
+        .where(and(
+          eq(feriados.ativo, 1),
+          sql`(${feriados.companyId} IS NULL OR ${feriados.companyId} IN (${sql.join(cids.map(c => sql`${c}`), sql`, `)}))`,
+        ));
+
+      const set = new Set<string>();
+      const yIni = parseInt(dataInicio.slice(0, 4), 10);
+      const yFim = parseInt(dataFim.slice(0, 4), 10);
+
+      // (a) Banco — recorrentes expandidos
+      for (const f of rows) {
+        const raw = String(f.data);
+        if (f.recorrente === 1) {
+          const md = raw.length >= 10 ? raw.slice(5) : raw; // suporta 'YYYY-MM-DD' ou 'MM-DD'
+          for (let y = yIni; y <= yFim; y++) {
+            const ds = `${y}-${md}`;
+            if (ds >= dataInicio && ds <= dataFim) set.add(ds);
+          }
+        } else {
+          if (raw >= dataInicio && raw <= dataFim) set.add(raw);
+        }
+      }
+
+      // (b) Fixos nacionais — caso não estejam no banco
+      for (let y = yIni; y <= yFim; y++) {
+        for (const f of FERIADOS_NACIONAIS) {
+          const ds = `${y}-${f.data}`;
+          if (ds >= dataInicio && ds <= dataFim) set.add(ds);
+        }
+      }
+
+      // (c) Móveis (Páscoa-derivados) por ano
+      for (let y = yIni; y <= yFim; y++) {
+        for (const f of feriadosMoveis(y)) {
+          if (f.data >= dataInicio && f.data <= dataFim) set.add(f.data);
+        }
+      }
+
+      return Array.from(set).sort();
     }),
 
   // Verificar se uma data é feriado

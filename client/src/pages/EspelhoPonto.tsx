@@ -83,7 +83,7 @@ function nextDay(d: string): string {
   return dt.toISOString().slice(0, 10);
 }
 
-function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string>, dataDesligamento?: string | null, empStatus?: string | null): DayStatus {
+function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string>, dataDesligamento?: string | null, empStatus?: string | null, feriadosSet?: Set<string>): DayStatus {
   // Só marca como "desligado" se o status atual do cadastro for Desligado E a data
   // for posterior ao desligamento. Isso evita que uma dataDesligamentoEfetiva
   // residual (de um desligamento cancelado) mascare dias de funcionário Ativo.
@@ -99,7 +99,12 @@ function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string
   if (feriasDates?.has(dateStr)) return "ferias";
   const today = new Date().toISOString().slice(0, 10);
   if (dateStr > today) return "escuro";
-  if (!rec?.horasTrabalhadas || rec.horasTrabalhadas === "0:00" || rec.horasTrabalhadas === "") {
+  const noBatidas = !rec?.horasTrabalhadas || rec.horasTrabalhadas === "0:00" || rec.horasTrabalhadas === "";
+  // Rev. 1840 — Feriados nacionais/empresa: dia sem batida = "feriado" (NÃO é falta).
+  // Se o funcionário trabalhou no feriado (tem batidas), segue o fluxo normal e o dia
+  // vira "he"/"normal"/"atraso" conforme as batidas — feriado trabalhado é HE 100%.
+  if (feriadosSet?.has(dateStr) && noBatidas) return "feriado";
+  if (noBatidas) {
     if ((rec?.fonte === "apontamento" || rec?.fonte === "dixi+apontamento") && rec?.justificativa) return "apontamento";
     return "falta";
   }
@@ -614,6 +619,19 @@ export default function EspelhoPonto() {
     () => new Set<string>(((espelhoQ.data as any)?.feriasDates as string[]) || []),
     [espelhoQ.data]
   );
+  // Rev. 1840 — Set de feriados (nacionais + empresa + móveis) do período exibido.
+  // Usado em getDayStatus pra que dias de feriado sem batida apareçam como "Feriado"
+  // (laranja) em vez de "Falta" (vermelho), igual ao que o relatório do servidor já faz.
+  const feriadosQ = trpc.feriados.listarPeriodo.useQuery(
+    queryParams
+      ? { companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, dataInicio: queryParams.dataInicio, dataFim: queryParams.dataFim }
+      : { companyId: 0, dataInicio: "", dataFim: "" },
+    { enabled: !!queryParams && (queryCompanyId > 0 || companyIds.length > 0), staleTime: 5 * 60 * 1000 }
+  );
+  const feriadosSet = useMemo(
+    () => new Set<string>((feriadosQ.data as string[]) || []),
+    [feriadosQ.data]
+  );
   const hasData = !!queryParams && !espelhoQ.isLoading && !!empData;
 
   const allDays = useMemo(
@@ -633,13 +651,22 @@ export default function EspelhoPonto() {
       const isWeekendDay = dow === 0 || dow === 6;
       const r = recordMap[d];
       const isFerias = feriasDatesSet.has(d);
-      const isAbonado = r?.tipoDia === "feriado" || r?.tipoDia === "atestado" || r?.tipoDia === "bh";
+      const isAbonadoManual = r?.tipoDia === "feriado" || r?.tipoDia === "atestado" || r?.tipoDia === "bh";
+      // Rev. 1840 — Feriado nacional sem batidas é abonado (não falta, não trabalho).
+      // COM batidas, o funcionário trabalhou no feriado: HE/atrasos do dia entram
+      // normalmente nos totais (HE 100% via hePercentualDomingo no servidor).
+      const isFeriadoNac = feriadosSet.has(d);
+      const hasBatidasFeriadoNac = isFeriadoNac && !!(r && r.horasTrabalhadas && r.horasTrabalhadas !== "0:00" && r.horasTrabalhadas !== "");
+      const isFeriadoNacAbonado = isFeriadoNac && !hasBatidasFeriadoNac;
+      const isAbonado = isAbonadoManual || isFeriadoNacAbonado;
       if (r && !isFerias && !isAbonado) { totalHEMins += parseHHMM(r.horasExtras); totalAtrasoMins += parseHHMM(r.atrasos); }
       if (isWeekendDay) continue;
       if (isFerias) { diasFerias++; continue; }
-      // Dias abonados (feriado/atestado lançado manualmente) não contam falta
-      // nem trabalho — saem do cálculo de jornada útil.
+      // Dias abonados (feriado/atestado manual OU feriado nacional sem batida)
+      // não contam falta nem trabalho — saem do cálculo de jornada útil.
       if (isAbonado) continue;
+      // Feriado nacional COM batidas: contabiliza como dia trabalhado (HE 100%).
+      if (hasBatidasFeriadoNac) { trabalhados++; totalTrabMins += parseHHMM(r.horasTrabalhadas); continue; }
       const today = new Date().toISOString().slice(0, 10);
       if (d > today) continue;
       if (!r?.horasTrabalhadas || r.horasTrabalhadas === "0:00" || r.horasTrabalhadas === "") {
@@ -650,7 +677,7 @@ export default function EspelhoPonto() {
     }
     const saldoHEMins = totalHEMins - totalAtrasoMins;
     return { trabalhados, diasFalta, diasFerias, totalHEMins, totalAtrasoMins, totalTrabMins, saldoHEMins };
-  }, [allDays, recordMap, feriasDatesSet, dataDesligamento]);
+  }, [allDays, recordMap, feriasDatesSet, feriadosSet, dataDesligamento]);
 
   // Hide Ent.3/Saí.3 column when no records have a third shift
   const hasThirdShift = useMemo(
@@ -1004,7 +1031,7 @@ export default function EspelhoPonto() {
               {allDays.map((dateStr) => {
                 const { name, num, monthNum, isSun, isSat } = dayInfo(dateStr);
                 const rec = recordMap[dateStr] || null;
-                const s = getDayStatus(dateStr, rec, feriasDatesSet, dataDesligamento, empStatus);
+                const s = getDayStatus(dateStr, rec, feriasDatesSet, dataDesligamento, empStatus, feriadosSet);
                 const cfg = STATUS_STYLE[s];
                 // Dia em férias só bloqueia edição quando NÃO há registro. Se existe
                 // batida (ainda que ímpar), permitimos editar para corrigir/excluir —
