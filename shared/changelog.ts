@@ -13236,4 +13236,19 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-15 23:30:00",
   },
+  {
+    version: 1833,
+    titulo: "Planejamento · Paridade MSP TRAVADA — toggle removido, ERP sempre pondera por duração",
+    descricao:
+      "User (15/05/2026, após Rev. 1832 introduzir o toggle 💰/📐): 'só quero o MSP, não quero outra informação'. Pediu para eliminar a opção 'Peso Financeiro' da UI e travar o ERP em paridade absoluta com o MS Project.\n\n" +
+      "Fix (1 arquivo, 2 hunks):\n" +
+      "  • `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` L251-258 — state `usarPesoPorDuracao` + persistência em localStorage (Rev. 1832) substituídos por `const usarPesoPorDuracao = true`. Sem hook, sem opção de toggle. A árvore de cálculo inteira (avancoAtual L516, AvancoSemanal L4885+, Refis L11036+, pvPonderado em todos os call sites) recebe `true` e pondera por `duracaoDias` em todos os pontos.\n" +
+      "  • L911-928 — toggle 2-botões da Rev. 1832 substituído por badge estático azul '📐 Paridade MSP (Duração)' com tooltip explicando a fórmula (Σ ActualDuration_leaf / Σ Duration_leaf, em working time do calendário MSP). Mantém alinhamento visual com os outros badges do banner (Live/Oficial, Rev., desvio, Global).\n\n" +
+      "Por que é seguro: o caminho 'duracao' já existia desde a Rev. 1343, foi reativado pela Rev. 1832 e agora vira único. Toda a arquitetura (props, deps de useMemo, AvancoSemanal/Refis/Curva S) já estava preparada. Previsto LIVE intocado — usa `pctRaizMSP` (Rev. 1825), puramente temporal sobre envelope da raiz, paridade absoluta com Texto6. Entradas obsoletas em localStorage (`planejamentoPesoBase:*` da Rev. 1832) ficam órfãs; sem efeito porque ninguém mais lê.\n\n" +
+      "Esperado para REVTE-CIVIL (SEMANA 1): Realizado bate com a coluna '% concluída' da raiz do MSP (~1%). Reversível em 2 edits (devolver state da Rev. 1832 + toggle UI). Zero schema/migration/DELETE. R-001/R-007/R-010 OK.",
+    tipo: "melhoria",
+    modulos: "Planejamento · Avanço Físico · Paridade MSP",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-15 23:45:00",
+  },
 ];
