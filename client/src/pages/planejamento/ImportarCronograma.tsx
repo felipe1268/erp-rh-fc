@@ -336,15 +336,16 @@ export function parseMSProjectXML(text: string): TarefaImportada[] {
   return parseMSProjectTasksFromDoc(doc);
 }
 
-// Rev. 1822 — Lê o código EAP da atividade APENAS do campo "Item" (Texto1) do
-// template FC, digitado pelo engenheiro: "01.01", "02.16.02.01", etc. É um
-// ExtendedAttribute com FieldID=188743731 (Alias="ITEM").
+// Rev. 1822 — Lê o código EAP da atividade. Templates do FC variam:
+//   • Alguns usam o campo "Item" (Texto1, ExtendedAttribute FieldID=188743731)
+//     — código digitado manualmente: "01.01", "02.16.02.01".
+//   • Outros usam WBS customizado direto na coluna WBS do MSP (também o código
+//     do orçamento: "10.04.03.01") — fica em <WBS> no XML.
+//   • Outros (raros) usam WBS automático do MSP ("1", "2", "2.1") — funciona
+//     SE for o mesmo padrão usado no orçamento.
 //
-// SEM FALLBACK no <WBS> automático: o WBS do MSP é uma régua interna do
-// programa (1, 2, 2.1…) que não tem nada a ver com o código do orçamento.
-// User (16/05/2026): "precisa aparecer somente o que esta na coluna ITEM".
-// Tarefas SUMÁRIAS (cabeçalhos sem item de orçamento) ficam com `eap_codigo`
-// vazio — a validação R-013 abaixo só estoura erro pra FOLHAS reais.
+// Política: ITEM (Texto1) PRIMEIRO; fallback no <WBS>. Qualquer um dos dois
+// não-vazio vale. Folhas onde AMBOS estão vazios estouram R-013 abaixo.
 //
 // Filhos diretos do <Task> (não `querySelectorAll`) pra evitar pegar Texto1
 // de Assignment aninhado.
@@ -356,7 +357,7 @@ function lerCodigoItemDaTask(task: Element): string {
     const val = (child.querySelector("Value")?.textContent ?? "").trim();
     if (val) return val;
   }
-  return "";
+  return task.querySelector("WBS")?.textContent?.trim() ?? "";
 }
 
 function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
@@ -470,8 +471,8 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     // pelo engenheiro antes de importar.
     if (!wbs && !summ && !isMarco) {
       throw new Error(
-        `Atividade "${name.substring(0, 60)}" (nível ${level}) SEM código no campo "Item" do MS Project. ` +
-        `Toda FOLHA do cronograma precisa ter o Item (coluna Texto1) preenchido — esse é o EAP que casa com o orçamento. ` +
+        `Atividade "${name.substring(0, 60)}" (nível ${level}) SEM código EAP no XML. ` +
+        `Toda FOLHA precisa ter código no campo "Item" (Texto1) OU na coluna WBS do MS Project — é o que casa com o orçamento. ` +
         `Sumários e marcos não precisam. Corrija no Project e reimporte (R-013).`
       );
     }
