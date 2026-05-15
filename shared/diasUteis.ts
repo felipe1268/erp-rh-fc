@@ -242,3 +242,51 @@ export function fracaoDecorridaMs(iniMs: number, refMs: number, fimMs: number, c
   };
   return fracaoDecorrida(toIsoLocal(iniMs), toIsoLocal(refMs), toIsoLocal(fimMs), cal);
 }
+
+// ── Rev. 1811 — PREVISTO oficial: curva S por atividade ─────────────────────
+// PMI Practice Standard for Scheduling §6.2 / Mattos "Planejamento e Controle
+// de Obras" §7.4 / Vargas "Gerenciamento de Tempo": para CADA atividade-folha
+// com datas, % esperado em `refStr` =
+//   fracaoDecorridaMs(dataInicio_atv → ref, dataFim_atv, calendario) × 100.
+// Pondera por pesoFinanceiro (ou por duração quando usarPesoPorDuracao=true)
+// e soma. É a "linha de base" do cronograma físico — leva em conta a curva S
+// real do trabalho (mobilização leve, MEPF/acabamento pesados no fim) e o
+// peso de cada atividade.
+//
+// **NÃO confundir** com EVM linear do envelope contratual:
+//   fracaoDecorridaMs(projIni → ref, projFim) × 100,
+// que é apenas "% do prazo decorrido" e ignora a distribuição de peso.
+// Esse número (Texto10/Texto11 da raiz do MSP) é "tempo decorrido", não
+// Previsto físico. Usar pra Previsto físico produz divergência em curvas S
+// não-lineares (ex.: HOTEL DO PAPA - AMPLIAÇÃO DO 5 PAV: pvMacro 84.68% vs
+// curva S real 53.25%).
+//
+// FONTE ÚNICA de PREVISTO em todo o módulo Planejamento (top bar, cards de
+// Avanço Semanal, REFIS, ProgramacaoSemanalLotus). Função pura, sem hooks.
+export function pvPonderadoPorAtividade(
+  refStr: string,
+  folhasArr: any[],
+  usarPesoPorDuracao: boolean,
+  cal: CalendarioMSProject | null,
+): number {
+  if (!folhasArr || folhasArr.length === 0) return 0;
+  const folhasComDatas = folhasArr.filter((a: any) => a.dataInicio && a.dataFim);
+  if (folhasComDatas.length === 0) return 0;
+  const pesoBruto = usarPesoPorDuracao
+    ? folhasArr.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
+    : folhasArr.reduce((s: number, a: any) => s + (parseFloat(a.pesoFinanceiro || "0") || 0), 0);
+  const semPeso = pesoBruto === 0;
+  const denom = semPeso ? (folhasComDatas.length || 1) : pesoBruto;
+  const ref = new Date(refStr + "T12:00:00").getTime();
+  let soma = 0;
+  for (const a of folhasComDatas) {
+    const ini = new Date(a.dataInicio + "T12:00:00").getTime();
+    const fim = new Date(a.dataFim + "T12:00:00").getTime();
+    const exp = fracaoDecorridaMs(ini, ref, fim, cal) * 100;
+    const peso = semPeso
+      ? 1
+      : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : (parseFloat(a.pesoFinanceiro || "0") || 0));
+    soma += (exp * peso) / denom;
+  }
+  return Math.min(100, Math.max(0, soma));
+}

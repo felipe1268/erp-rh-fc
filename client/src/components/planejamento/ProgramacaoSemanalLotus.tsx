@@ -510,36 +510,27 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     return { criticasIds, quaseCriticasIds, maiorPesoIds, maiorPesoOrder, contribById };
   }, [atividades, atividadesDaSemana, metricas]);
 
-  // Rev. 1681 — pvMacro replicado de PlanejamentoDetalhe ~L4893 (FONTE ÚNICA
-  // do "Previsto%" do EVM clássico). Garante paridade absoluta com o card
-  // "PREVISTO (SEMANA)" / "Previsto (Acum.)" do Avanço Físico Semanal.
-  // Mesma fórmula: PV(t) = du(início_projeto → t)/du(envelope) × 100, com
-  // snapshot exato do MSP (Texto11) quando refStr === StatusDate gravado.
-  const pvMacro = useMemo(() => {
-    if (!projetoStart || !projetoFinish || !calMSP) return null as null | ((refStr: string) => number);
-    const projIniIso = projetoStart.slice(0, 10);
-    const projFimIso = projetoFinish.slice(0, 10);
-    const projIniMs = new Date(projIniIso + "T12:00:00").getTime();
-    const projFimMs = new Date(projFimIso + "T12:00:00").getTime();
-    if (projFimMs <= projIniMs) return null;
-    const envOk = !calMSP.envelopeStartSnapshot || !calMSP.envelopeFinishSnapshot
-      || (projIniIso === calMSP.envelopeStartSnapshot && projFimIso === calMSP.envelopeFinishSnapshot);
+  // Rev. 1811 — Closure que delega à função compartilhada `pvPonderadoPorAtividade`
+  // (curva S por atividade, FONTE ÚNICA de PREVISTO em todo o módulo
+  // Planejamento). Substitui o pvMacro Rev. 1681 (% do prazo decorrido linear
+  // do envelope MSP) — esse representava só "tempo decorrido", não a curva S
+  // física esperada. Universo de folhas IGUAL ao usado no `totaisSemana` e ao
+  // PlanejamentoDetalhe (sem indiretas, sem grupos, sem disabled).
+  const pvOficial = useMemo(() => {
     return (refStr: string): number => {
-      if (calMSP.previstoMspSnapshot != null && calMSP.statusDateSnapshot
-          && refStr === calMSP.statusDateSnapshot && envOk) {
-        return Number(calMSP.previstoMspSnapshot);
-      }
-      const ref = new Date(refStr + "T12:00:00").getTime();
-      return Math.min(100, Math.max(0, fracaoDecorridaMs(projIniMs, ref, projFimMs, calMSP) * 100));
+      const folhas = atividades.filter((a: any) => !a.isGrupo && !a.disabled && !a.isIndireta);
+      // usarPesoPorDuracao=false: ProgramacaoSemanalLotus pondera por
+      // pesoFinanceiro, igual ao default do PlanejamentoDetalhe (L245).
+      return pvPonderadoPorAtividade(refStr, folhas, false, calMSP);
     };
-  }, [projetoStart, projetoFinish, calMSP]);
+  }, [atividades, calMSP]);
 
   // Rev. 1681 — Totais OFICIAIS da semana (paridade absoluta com Avanço Físico
   // Semanal do PlanejamentoDetalhe). O TOTAL DA SEMANA mostra o ACUMULADO até
   // o fim da janela visível — mesma semântica do card "PREVISTO (SEMANA)"
   // 1,41% / "REALIZADO (ACUM.)" 1,38% / "VARIAÇÃO" -0,03%.
   //
-  //  • Previsto = pvMacro(semFim) — snapshot Texto11/MSP da raiz.
+  //  • Previsto = pvPonderadoPorAtividade(refFimAcum) — curva S por atividade (Rev. 1811).
   //  • Realizado = Σ peso × percentualAcumulado/100 (último avanço ≤ semFim
   //    por atividade, sobre TODAS as folhas do projeto — não só as da
   //    semana). Mesma fórmula de `previstoRealizadoSemana.realizadoAcumulado`
@@ -583,27 +574,15 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       }
     }
 
-    // Previsto ACUMULADO (oficial): pvMacro(refFimAcum) quando MSP disponível;
-    // fallback = interpolação linear (mesma fórmula do else de pvMacro
-    // L5107-5119 do PlanejamentoDetalhe).
+    // Rev. 1811 — Previsto ACUMULADO (oficial) = curva S por atividade,
+    // mesma função usada no PlanejamentoDetalhe (top bar + cards). Garante
+    // paridade absoluta entre o "Previsto acumulado oficial" do Lotus e o
+    // "PREVISTO (SEMANA)" do Avanço Semanal para o MESMO refFimAcum.
     let prevAcumOficial = 0;
     let fonteOficial: "msp" | "linear" | "fallback" = "fallback";
-    if (refFimAcum && pvMacro) {
-      prevAcumOficial = pvMacro(refFimAcum);
-      fonteOficial = "msp";
-    } else if (refFimAcum && folhas.length > 0) {
-      const refMs = new Date(refFimAcum + "T12:00:00").getTime();
-      for (const a of folhas) {
-        const peso = pesoOf(a);
-        if (peso === 0 || !a.dataInicio || !a.dataFim) continue;
-        const aIni = new Date(a.dataInicio + "T12:00:00").getTime();
-        const aFim = new Date(a.dataFim    + "T12:00:00").getTime();
-        let exp = 0;
-        if (refMs >= aFim)      exp = 100;
-        else if (refMs > aIni)  exp = Math.min(100, ((refMs - aIni) / (aFim - aIni)) * 100);
-        prevAcumOficial += peso * exp / 100;
-      }
-      fonteOficial = "linear";
+    if (refFimAcum && folhas.length > 0) {
+      prevAcumOficial = pvPonderadoPorAtividade(refFimAcum, folhas, false, calMSP);
+      fonteOficial = calMSP ? "msp" : "linear";
     }
 
     // Σ row-by-row (mantido para auditoria interna / Excel — pode somar com
@@ -629,7 +608,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       totalPrevRow,
       totalRealRow,
     };
-  }, [atividades, atividadesDaSemana, avancosPorAtv, metricas, semIniStr, semFimStr, pvMacro, cutoffIso]);
+  }, [atividades, atividadesDaSemana, avancosPorAtv, metricas, semIniStr, semFimStr, calMSP, cutoffIso]);
 
   // Rev. 1679 — Totalização da semana (Prev / Real / Δ) — DEPRECATED.
   // Substituído pela paridade oficial em `totaisSemana` (Rev. 1681).
@@ -1532,7 +1511,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                   </td>
                   <td
                     className="border border-slate-300 px-1 py-2 text-center text-[11px] tabular-nums whitespace-nowrap text-slate-900"
-                    title="Previsto acumulado oficial (pvMacro) — paridade absoluta com card 'PREVISTO (SEMANA)' do FC"
+                    title="Previsto acumulado oficial (curva S por atividade, Rev. 1811) — paridade absoluta com card 'PREVISTO (SEMANA)' do FC"
                   >
                     {fmtPct1(totaisSemana.prevAcumOficial)}
                   </td>

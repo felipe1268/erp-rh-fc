@@ -11,7 +11,7 @@ import PlanejamentoPrintHeader from "@/components/PlanejamentoPrintHeader";
 import PrintActions from "@/components/PrintActions";
 import ImportarCronograma, { parseMSProjectXML, parseMSProjectXLSX, TarefaImportada } from "./ImportarCronograma";
 import DiagnosticoEapOrcCron from "@/components/planejamento/DiagnosticoEapOrcCron";
-import { parseCalendarioJson, fracaoDecorridaMs } from "../../../../shared/diasUteis";
+import { parseCalendarioJson, fracaoDecorridaMs, pvPonderadoPorAtividade } from "../../../../shared/diasUteis";
 import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
 import { DiagramaRede } from "./DiagramaRede";
 const BimViewer = React.lazy(() => import("./BimViewer"));
@@ -62,6 +62,11 @@ function calcDesvio(dataTermino: string | null) {
   const dias = Math.round((fim.getTime() - hoje.getTime()) / 86400000);
   return dias;
 }
+
+// Rev. 1811 — `pvPonderadoPorAtividade` (PREVISTO físico, curva S por
+// atividade) está em `shared/diasUteis.ts` para ser FONTE ÚNICA também na
+// ProgramacaoSemanalLotus e demais consumidores. Ver ali a documentação
+// completa (PMI Practice Standard for Scheduling §6.2 / Mattos / Vargas).
 
 // ── Formata data ISO → dd/mm/aaaa ────────────────────────────────────────────
 function fmtBR(iso: string | null | undefined): string {
@@ -589,44 +594,15 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
       refStr = cutoffOficial ?? refDateStr;
       if (cutoffOficial && refDateStr < cutoffOficial) refStr = refDateStr;
     }
-    const ref = new Date(refStr + "T12:00:00").getTime();
-    // Rev. 1646.2 — prioridade ABSOLUTA: usa as datas oficiais da raiz do MSP
-    // (gravadas em proj.dataInicio + proj.dataTerminoContratual no momento do
-    // import). Fallback para min(folhas)/max(folhas) só se não foram importadas.
-    let projIni: number, projFim: number;
-    const projIniIso = (proj as any)?.dataInicio  as string | null | undefined;
-    const projFimIso = (proj as any)?.dataTerminoContratual as string | null | undefined;
-    if (projIniIso && projFimIso) {
-      projIni = new Date(projIniIso + "T12:00:00").getTime();
-      projFim = new Date(projFimIso + "T12:00:00").getTime();
-    } else {
-      let _ini = Infinity, _fim = -Infinity;
-      folhas.forEach((a: any) => {
-        const ini = new Date(a.dataInicio + "T12:00:00").getTime();
-        const fim = new Date(a.dataFim    + "T12:00:00").getTime();
-        if (ini < _ini) _ini = ini;
-        if (fim > _fim) _fim = fim;
-      });
-      projIni = _ini; projFim = _fim;
-    }
-    if (!isFinite(projIni) || !isFinite(projFim) || projFim <= projIni) return 0;
+    // Rev. 1811 — PREVISTO físico = curva S ponderada por atividade
+    // (PMI Practice Standard for Scheduling §6.2). Não usa mais a fração
+    // EVM linear do envelope contratual nem o snapshot Texto11 do MSP —
+    // aqueles representavam apenas "% do prazo decorrido" e não a distribuição
+    // física real do cronograma. A fórmula `pvPonderadoPorAtividade` é a
+    // FONTE ÚNICA de Previsto em toda a UI (top bar + cards do Avanço Semanal).
     const calMSP = parseCalendarioJson((proj as any)?.calendarioJson);
-    // Rev. 1646.4 — paridade EXATA com MSP: quando o cutoff bate com o
-    // StatusDate gravado no XML, usamos o snapshot do %PREVISTO calculado
-    // pelo próprio MSP (Texto11 da raiz). Sem isso, replicar a aritmética
-    // interna de `ProjDateDiff` (minutos com horas parciais e
-    // compensações de feriado em fim-de-semana) gera divergência residual
-    // (ex.: REVTE-CIVIL 1,39% vs MSP 1,41%).
-    // Validação de stale: snapshot só é confiável se cutoff = StatusDate E
-    // o envelope do projeto não foi editado depois do import.
-    const envOk = !calMSP?.envelopeStartSnapshot || !calMSP?.envelopeFinishSnapshot
-      || (projIniIso === calMSP.envelopeStartSnapshot && projFimIso === calMSP.envelopeFinishSnapshot);
-    if (calMSP?.previstoMspSnapshot != null && calMSP?.statusDateSnapshot && refStr === calMSP.statusDateSnapshot && envOk) {
-      return +Number(calMSP.previstoMspSnapshot).toFixed(2);
-    }
-    const pct = fracaoDecorridaMs(projIni, ref, projFim, calMSP) * 100;
-    return +Math.min(100, pct).toFixed(2);
-  }, [atividades, refisComIndiretasGlobal, refDateStr, modoVisao, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual, dataCorteInfo?.dataCorteOficial, semanaVisualizacao]);
+    return +pvPonderadoPorAtividade(refStr, folhas, usarPesoPorDuracao, calMSP).toFixed(2);
+  }, [atividades, refisComIndiretasGlobal, refDateStr, modoVisao, (proj as any)?.calendarioJson, (proj as any)?.dataInicio, (proj as any)?.dataTerminoContratual, dataCorteInfo?.dataCorteOficial, semanaVisualizacao, usarPesoPorDuracao]);
 
   // ── Rev. 1715 — pvMacro elevado ao escopo do Inner ─────────────────────
   // A Rev. 1713 começou a propagar `pvMacro={pvMacro}` para `<Refis>` (L~1053)
@@ -5199,57 +5175,26 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     if (folhas.length === 0) {
       return { previsto: 0, previstoAcumulado: 0, realizado: 0, realizadoAcumulado: 0, aderencia: null, debitoAcumulado: 0, metaRecuperacao: 0, semIniDate, semFimDate };
     }
-    if (pvMacro) {
-      // Rev. 1810 — convergência absoluta com o top card "Avanço Físico":
-      // sempre que o cutoff oficial existir e cair ANTES do fim da semana
-      // selecionada (corrente OU futura), o ref é o cutoff. Antes só clipava
-      // quando o cutoff caía DENTRO da semana — para semanas futuras, o ref
-      // ia para semanaFim e o pvMacro saturava em 100% (pvMacro clampa em
-      // [0,100]), criando o cenário "PREVISTO (SEMANA) 100% vs topo 31.48%"
-      // reportado pelo usuário no projeto QIU 2 - FASE 4 (id 29).
+    // Rev. 1811 — PREVISTO = curva S ponderada por atividade (PMI Practice
+    // Standard for Scheduling §6.2). Δ semanal = PV(refFim) − PV(refIni) onde
+    // ambos clipam no cutoff oficial sempre que este for ANTES do limite da
+    // semana — semanas inteiramente futuras dão Δ=0 (não há PV exigível além
+    // do Status Date). Semana já fechada usa semanaFim/semanaAtual originais.
+    {
       const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
       const refFim = (cutoffStr && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
       const refIni = (cutoffStr && cutoffStr < semanaAtual) ? cutoffStr : semanaAtual;
-      prev = Math.max(0, pvMacro(refFim) - pvMacro(refIni));
-    } else {
-      // Fallback (sem MSP): interp linear por datas + pesoFinanceiro (Rev. 1540).
-      folhas.forEach((a: any) => {
-        const peso = n(a.pesoFinanceiro);
-        if (!a.dataInicio || !a.dataFim) return;
-        const aIni = new Date(a.dataInicio + "T12:00:00").getTime();
-        const aFim = new Date(a.dataFim    + "T12:00:00").getTime();
-        const interp = (t: number) => {
-          if (aFim <= aIni) return t >= aFim ? 100 : 0;
-          if (t >= aFim) return 100;
-          if (t <= aIni) return 0;
-          return Math.min(100, ((t - aIni) / (aFim - aIni)) * 100);
-        };
-        prev += peso * Math.max(0, interp(semFimDate) - interp(semIniDate)) / 100;
-      });
+      prev = Math.max(0, pvPonderadoPorAtividade(refFim, folhas, usarPesoPorDuracao, calMSP)
+                        - pvPonderadoPorAtividade(refIni, folhas, usarPesoPorDuracao, calMSP));
     }
     // ── Previsto ACUMULADO até a janela cobrável da semana ──────────────────
-    // Rev. 1810 — convergência absoluta com o top bar "Avanço Físico":
-    // sempre que cutoff existir e for ANTES do fim da semana selecionada
-    // (corrente OU futura), refFimAcum = cutoff. Para semana passada (já
-    // fechada) usa o fim da semana — preserva PV histórico.
+    // Rev. 1811 — também via curva S ponderada. refFimAcum clipa no cutoff
+    // sempre que este for antes do fim da semana selecionada.
     const cutoffStrAcum = dataCorteInfo?.dataCorteOficial ?? null;
     const refFimAcum = (cutoffStrAcum && cutoffStrAcum < semanaFim) ? cutoffStrAcum : semanaFim;
-    let previstoAcumulado = 0;
-    if (folhas.length > 0 && pvMacro) {
-      previstoAcumulado = pvMacro(refFimAcum);
-    } else if (folhas.length > 0) {
-      const refMs = new Date(refFimAcum + "T12:00:00").getTime();
-      folhas.forEach((a: any) => {
-        const peso = n(a.pesoFinanceiro);
-        if (!a.dataInicio || !a.dataFim) return;
-        const aIni = new Date(a.dataInicio + "T12:00:00").getTime();
-        const aFim = new Date(a.dataFim    + "T12:00:00").getTime();
-        let exp = 0;
-        if (refMs >= aFim)      exp = 100;
-        else if (refMs > aIni)  exp = Math.min(100, ((refMs - aIni) / (aFim - aIni)) * 100);
-        previstoAcumulado += peso * exp / 100;
-      });
-    }
+    const previstoAcumulado = folhas.length > 0
+      ? pvPonderadoPorAtividade(refFimAcum, folhas, usarPesoPorDuracao, calMSP)
+      : 0;
 
     // Rev. 1656.4 — Aderência alinhada ao top bar/card grande (SPI EVM clássico):
     // numerador = realizado ACUMULADO até o fim da semana (`realAcum`),
@@ -5262,26 +5207,14 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     // ── Débito acumulado (Schedule Variance até semana anterior) ────────────
     // PMBOK 7ª/AACE 23R-02: PV é imutável (baseline); débito = PV − EV.
     let pvAcum = 0;
-    if (pvMacro) {
-      // PV oficial até o INÍCIO desta semana (= fim da anterior). Para semanas
-      // futuras (semIni > cutoff), capa no cutoff — não cobra débito de algo
-      // que ainda não era exigível.
-      // Rev. 1655 — fonte do cutoff = dataCorteInfo (refetched por mutations).
+    {
+      // Rev. 1811 — débito acumulado via curva S ponderada (mesma fórmula
+      // do PREVISTO). PV até o INÍCIO desta semana (= fim da anterior),
+      // clipando no cutoff oficial para semanas futuras (não cobra débito
+      // do que ainda não era exigível pelo Status Date).
       const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
       const refSemAnt = (cutoffStr && cutoffStr < semanaAtual) ? cutoffStr : semanaAtual;
-      pvAcum = pvMacro(refSemAnt);
-    } else {
-      const semAntFimMs = semIniDate;
-      folhas.forEach((a: any) => {
-        const peso = n(a.pesoFinanceiro);
-        if (!a.dataInicio || !a.dataFim) return;
-        const aIni = new Date(a.dataInicio + "T12:00:00").getTime();
-        const aFim = new Date(a.dataFim + "T12:00:00").getTime();
-        let exp = 0;
-        if (semAntFimMs >= aFim)      exp = 100;
-        else if (semAntFimMs > aIni)  exp = Math.min(100, ((semAntFimMs - aIni) / (aFim - aIni)) * 100);
-        pvAcum += peso * exp / 100;
-      });
+      pvAcum = pvPonderadoPorAtividade(refSemAnt, folhas, usarPesoPorDuracao, calMSP);
     }
     let evAcum = 0;
     folhas.forEach((a: any) => {
@@ -5296,7 +5229,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     const debitoAcumulado = Math.max(0, pvAcum - evAcum);
     const metaRecuperacao = prev + debitoAcumulado;
     return { previsto: prev, previstoAcumulado, realizado: real, realizadoAcumulado: realAcum, aderencia, debitoAcumulado, metaRecuperacao, semIniDate, semFimDate };
-  }, [folhas, avancos, semanaAtual, semanaFim, pvMacro, dataCorteInfo?.dataCorteOficial]);
+  }, [folhas, avancos, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, dataCorteInfo?.dataCorteOficial]);
 
   // Rev. 1534 — Janela de Recovery Schedule (AACE 23R-02). Lê do mesmo
   // revisaoAtiva.recoveryWindowSemanas que ProgramacaoSemanal usa, para que
@@ -5328,36 +5261,14 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     // planejado). pvMacro só usa o envelope contratual do projeto e ignora
     // se o cronograma foi limpo, então precisa de guarda explícita aqui.
     if (folhas.length === 0) return 0;
-    // Rev. 1646.6 — Modo MSP (paridade absoluta com top card): pvMacro do
-    // envelope. Quando a semana selecionada CONTÉM o cutoff oficial, encurta
-    // o ref ao cutoff (PV exigível). Caso contrário, usa o fim da semana
-    // (acumulado projetado para aquela semana — funciona p/ semanas futuras).
-    if (pvMacro) {
-      // Rev. 1810 — converge com o top card: cutoff manda sempre que cair
-      // antes do fim da semana selecionada. Antes saturava em 100% para
-      // semanas futuras (cenário do bug reportado em 15/05/2026).
-      const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
-      const ref = (cutoffStr && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
-      return pvMacro(ref);
-    }
-    // Fallback (sem calMSP/envelope): rolagem ponderada legado (Rev. 1538).
-    const folhasComDatas = folhas.filter((a: any) => a.dataInicio && a.dataFim);
-    const pesoBruto = usarPesoPorDuracao
-      ? folhas.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
-      : folhas.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
-    const semPeso = pesoBruto === 0;
-    const denom   = semPeso ? (folhasComDatas.length || 1) : pesoBruto;
-    let soma = 0;
-    folhasComDatas.forEach((a: any) => {
-      const ini  = new Date(a.dataInicio + "T12:00:00").getTime();
-      const fim  = new Date(a.dataFim    + "T12:00:00").getTime();
-      const ref  = new Date(semanaFim    + "T12:00:00").getTime();
-      const exp = fracaoDecorridaMs(ini, ref, fim, calMSP) * 100;
-      const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
-      soma += (exp * peso) / denom;
-    });
-    return soma;
-  }, [folhas, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, pvMacro, dataCorteInfo?.dataCorteOficial]);
+    // Rev. 1811 — PREVISTO físico = curva S por atividade (PMI Practice
+    // Standard for Scheduling §6.2). Ref clipa no cutoff oficial sempre que
+    // este for ANTES do fim da semana — semana futura mostra o PV ao cutoff
+    // (Status Date), semana passada mostra o PV ao fim da própria semana.
+    const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
+    const ref = (cutoffStr && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
+    return pvPonderadoPorAtividade(ref, folhas, usarPesoPorDuracao, calMSP);
+  }, [folhas, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, dataCorteInfo?.dataCorteOficial]);
 
   // ── Realizado acumulado ponderado (semana atual) ───────────────────────────
   // Prioriza avancoLocal > avancoExistente (semana exata) > avancoMaisRecente (semana mais recente ≤ atual)
@@ -5385,35 +5296,13 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
   const delta = +(realizadoAcum - previsto).toFixed(2);
 
   const previstoComInd = useMemo(() => {
-    // Rev. 1646.7 — sem atividades, Previsto = 0.
+    // Rev. 1811 — PREVISTO c/ indiretas = curva S por atividade considerando
+    // também as indiretas (mesma fórmula, base estendida).
     if (folhasComInd.length === 0) return 0;
-    // Rev. 1646.6 — pvMacro: mesma fonte de "previsto" (envelope macro do MSP),
-    // indiretas não fazem distinção em macro. Converge com o top card e o card
-    // "PREVISTO (SEMANA)" sem indiretas.
-    if (pvMacro) {
-      // Rev. 1810 — mesma convergência (cutoff sempre que < semanaFim).
-      const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
-      const ref = (cutoffStr && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
-      return pvMacro(ref);
-    }
-    // Fallback (sem MSP): rolagem ponderada legado.
-    const folhasComDatas = folhasComInd.filter((a: any) => a.dataInicio && a.dataFim);
-    const pesoBruto = usarPesoPorDuracao
-      ? folhasComInd.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
-      : folhasComInd.reduce((s: number, a: any) => s + n(a.pesoFinanceiro), 0);
-    const semPeso = pesoBruto === 0;
-    const denom   = semPeso ? (folhasComDatas.length || 1) : pesoBruto;
-    let soma = 0;
-    folhasComDatas.forEach((a: any) => {
-      const ini  = new Date(a.dataInicio + "T12:00:00").getTime();
-      const fim  = new Date(a.dataFim    + "T12:00:00").getTime();
-      const ref  = new Date(semanaFim    + "T12:00:00").getTime();
-      const exp = fracaoDecorridaMs(ini, ref, fim, calMSP) * 100;
-      const peso = semPeso ? 1 : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : n(a.pesoFinanceiro));
-      soma += (exp * peso) / denom;
-    });
-    return soma;
-  }, [folhasComInd, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, pvMacro, dataCorteInfo?.dataCorteOficial]);
+    const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
+    const ref = (cutoffStr && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
+    return pvPonderadoPorAtividade(ref, folhasComInd, usarPesoPorDuracao, calMSP);
+  }, [folhasComInd, semanaAtual, semanaFim, usarPesoPorDuracao, calMSP, dataCorteInfo?.dataCorteOficial]);
 
   const realizadoComInd = useMemo(() => {
     // Rev. 1642 — calendário MS Project para indiretas (paridade 100%).
@@ -11263,7 +11152,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // longas com início futuro inflavam o denominador. Fallback per-atividade
   // só quando pvMacro não está disponível (sem MSP/sem datas oficiais).
   const avancoPrevisto = useMemo(() => {
-    if (pvMacro) return pvMacro(semanaFimRefis);
+    // Rev. 1811 — REFIS PREVISTO = curva S por atividade (PMI Practice
+    // Standard for Scheduling §6.2). Removido o shortcut pvMacro (= % do
+    // prazo decorrido linear, não representava a curva S real do cronograma).
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
     if (!folhas.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
@@ -11271,7 +11162,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       const peso = getPeso(a, semPeso);
       return s + prevIndRef(a, semanaFimRefis) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, semanaFimRefis, usarPesoPorDuracao, pvMacro]);
+  }, [atividades, semanaFimRefis, usarPesoPorDuracao]);
 
   const semIdx   = semanas.indexOf(semana);
   const semAntes = semIdx > 0 ? semanas[semIdx - 1] : null;
@@ -11287,8 +11178,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const avancoPrevAntes = useMemo(() => {
     if (!semAntesFim) return 0;
-    // Rev. 1712.1 — paridade com `avancoPrevisto`: usa pvMacro quando disponível.
-    if (pvMacro) return pvMacro(semAntesFim);
+    // Rev. 1811 — paridade com `avancoPrevisto`: curva S por atividade.
     const folhas = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled && a.dataInicio && a.dataFim);
     if (!folhas.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(folhas);
@@ -11296,7 +11186,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       const peso = getPeso(a, semPeso);
       return s + prevIndRef(a, semAntesFim) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, semAntesFim, usarPesoPorDuracao, pvMacro]);
+  }, [atividades, semAntesFim, usarPesoPorDuracao]);
 
   const avancoPrevSemanal = Math.max(0, avancoPrevisto - avancoPrevAntes);
 
@@ -11343,10 +11233,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   const spi = avancoPrevisto > 0 ? avancoRealAtual / avancoPrevisto : 0;
 
   const refisPrevistoComInd = useMemo(() => {
-    // Rev. 1712.1 — pvMacro é macro do envelope MSP — independe de
-    // indiretas/diretas, então com ou sem indiretas o Previsto Global é o
-    // mesmo (e bate com o top card e Avanço Semanal).
-    if (pvMacro) return pvMacro(semanaFimRefis);
+    // Rev. 1811 — REFIS PREVISTO c/ indiretas = curva S por atividade.
     const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim);
     if (!f.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(f);
@@ -11354,7 +11241,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       const peso = getPeso(a, semPeso);
       return s + prevIndRef(a, semanaFimRefis) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, semanaFimRefis, usarPesoPorDuracao, pvMacro]);
+  }, [atividades, semanaFimRefis, usarPesoPorDuracao]);
 
   const refisRealComInd = useMemo(() => {
     const m: Record<number, number> = {};
@@ -11390,8 +11277,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
   const avancoPrevAntesComInd = useMemo(() => {
     if (!semAntesFim) return 0;
-    // Rev. 1712.1 — paridade com `refisPrevistoComInd`: pvMacro macro envelope.
-    if (pvMacro) return pvMacro(semAntesFim);
+    // Rev. 1811 — paridade com `refisPrevistoComInd`: curva S por atividade.
     const f = atividades.filter((a: any) => !a.isGrupo && !a.disabled && a.dataInicio && a.dataFim);
     if (!f.length) return 0;
     const { pesoTotal, semPeso } = calcPesoTotal(f);
@@ -11399,7 +11285,7 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       const peso = getPeso(a, semPeso);
       return s + prevIndRef(a, semAntesFim) * (peso / pesoTotal);
     }, 0));
-  }, [atividades, semAntesFim, usarPesoPorDuracao, pvMacro]);
+  }, [atividades, semAntesFim, usarPesoPorDuracao]);
 
   const avancoRealAntesComInd = useMemo(() => {
     if (!semAntes) return 0;
