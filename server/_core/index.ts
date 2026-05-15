@@ -509,7 +509,13 @@ Regras:
           // 100% Project × ERP sem replicar ProjDateDiff em JS.
           await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS previsto_msp_pct NUMERIC(8,4)`);
           await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS realizado_msp_pct NUMERIC(8,4)`);
-          console.log(`[SyncSchema+] Colunas data_*_real + responsavel_lotus + previsto/realizado_msp_pct garantidas em planejamento_atividades.`);
+          // Rev. 1829 — UID nativo do MS Project como chave única de identidade
+          // de atividade. Substitui o fallback por nome (proibido por auditoria
+          // contra regras MSP). Index composto (revisao_id, msp_uid) acelera o
+          // lookup `uidToId` no salvarAtividades/importarAvancosDoArquivo.
+          await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS msp_uid VARCHAR(20)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_planej_ativ_msp_uid ON planejamento_atividades(revisao_id, msp_uid)`);
+          console.log(`[SyncSchema+] Colunas data_*_real + responsavel_lotus + previsto/realizado_msp_pct + msp_uid garantidas em planejamento_atividades.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_atividades datas reais:`, e?.message || e); }
 
         // Rev. 1743 — UNIQUE INDEX em compras_solicitacoes (company_id, numero_sc).

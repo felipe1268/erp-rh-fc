@@ -16,6 +16,11 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 export interface TarefaImportada {
   wbs:              string;
+  // Rev. 1829 — UID nativo do MS Project (campo <UID> de cada <Task> no XML).
+  // Identidade ESTÁVEL entre revisões: preservado pelo MSP em rename/move.
+  // Backend usa como 1ª chave de matching (eliminou fallback por nome).
+  // Vazio em arquivos XLSX (formato não traz UID) — backend cai pra eapCodigo.
+  mspUid:           string;
   nome:             string;
   nivel:            number;
   inicio:           string;
@@ -465,7 +470,7 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     // visível pro engenheiro corrigir lá no Project quando quiser.
 
     result.push({
-      wbs, nome: name, nivel: level, inicio: start, fim: fin,
+      wbs, mspUid: uid, nome: name, nivel: level, inicio: start, fim: fin,
       durDias: parseDuration(durRaw), pred, recurso: res,
       isGrupo: summ, isMarco, eapCodigo: wbs, pesoFin: 0, percentConcluido,
       previstoMsp, realizadoMsp,

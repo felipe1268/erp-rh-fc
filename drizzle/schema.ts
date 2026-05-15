@@ -5274,6 +5274,15 @@ export const planejamentoAtividades = pgTable("planejamento_atividades", {
   revisaoId:            integer("revisao_id").notNull(),
   projetoId:            integer("projeto_id").notNull(),
   eapCodigo:            varchar("eap_codigo", { length: 50 }),
+  // Rev. 1829 — UID nativo do MS Project (campo <UID> de cada <Task> no XML).
+  // Identidade ESTÁVEL da atividade entre revisões: o MSP preserva o UID quando
+  // o usuário renomeia a tarefa, troca o WBS/Item, ou move ela na hierarquia.
+  // Passa a ser a 1ª chave de matching nos imports/avanços (eap_codigo continua
+  // como 2ª chave p/ casar com orçamento; fallback por nome FOI ELIMINADO —
+  // renomear no MSP não quebra mais o histórico de avanços). Nullable porque
+  // projetos legados (importados antes da Rev. 1829) ficam com null e caem no
+  // fallback eap_codigo até serem reimportados do XML.
+  mspUid:               varchar("msp_uid", { length: 20 }),
   nome:                 varchar({ length: 500 }).notNull(),
   nivel:                integer().default(1),
   dataInicio:           date("data_inicio"),
