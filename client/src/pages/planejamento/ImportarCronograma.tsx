@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState, useMemo, useEffect } from "react"
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -675,6 +676,31 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
   }, [open, jaTemCronograma, atividadesExistentes]);
   const [resultadoImport, setResultadoImport] = useState<{ atualizados: number; inseridos: number; naoEncontrados: number } | null>(null);
 
+  // Rev. 1822 — Barra de progresso da importação. O backend processa o lote
+  // inteiro numa transação só (sem streaming), então o progresso real é
+  // desconhecido. Sobe suavemente até 90% (assintota) enquanto o request
+  // está em voo e completa em 100% quando a mutation retorna sucesso.
+  const [progressoImport, setProgressoImport] = useState(0);
+  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function iniciarProgresso() {
+    setProgressoImport(5);
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    progressIntervalRef.current = setInterval(() => {
+      setProgressoImport(p => (p < 90 ? p + Math.max(0.5, (90 - p) * 0.04) : p));
+    }, 250);
+  }
+  function finalizarProgresso(sucesso: boolean) {
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    setProgressoImport(sucesso ? 100 : 0);
+  }
+  useEffect(() => () => {
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+  }, []);
+
   const salvarMutation = trpc.planejamento.salvarAtividades.useMutation({
     onSuccess: async () => {
       utils.planejamento.listarAtividades.invalidate();
@@ -739,6 +765,7 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
     setModoImport("mesclar");
     setResultadoImport(null);
     setMetadadosMSP(null);
+    finalizarProgresso(false);
   }
 
   // Rev. 1642 — fire-and-forget: grava StatusDate + calendário após qualquer
@@ -883,9 +910,16 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
       realizadoMspPct:     t.realizadoMsp,
     }));
 
+    iniciarProgresso();
     if (modoImport === "substituir") {
       // Comportamento original: apaga revisão e recria
-      salvarMutation.mutate({ revisaoId: revisaoAtiva.id, projetoId, atividades });
+      salvarMutation.mutate(
+        { revisaoId: revisaoAtiva.id, projetoId, atividades },
+        {
+          onSuccess: () => finalizarProgresso(true),
+          onError:   () => finalizarProgresso(false),
+        },
+      );
     } else {
       // Modos "mesclar" ou "apenas_predecessora": preserva ajustes locais
       importarComModoMutation.mutate({
@@ -911,6 +945,9 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
           previstoMspPct:   a.previstoMspPct,
           realizadoMspPct:  a.realizadoMspPct,
         })),
+      }, {
+        onSuccess: () => finalizarProgresso(true),
+        onError:   () => finalizarProgresso(false),
       });
     }
   }
@@ -1348,6 +1385,22 @@ export default function ImportarCronograma({ projetoId, revisaoAtiva, orcamentoI
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Importação concluída: <b>{resultadoImport.atualizados}</b> atualizadas, <b>{resultadoImport.inseridos}</b> novas
                   {resultadoImport.naoEncontrados > 0 && <> · <span className="text-amber-700"><b>{resultadoImport.naoEncontrados}</b> sem correspondência (ignoradas)</span></>}
+                </div>
+              )}
+
+              {/* Rev. 1822 — Barra de progresso da importação (0% → 100%). */}
+              {(salvarMutation.isPending || importarComModoMutation.isPending || progressoImport > 0) && (
+                <div className="space-y-1.5 border border-emerald-200 bg-emerald-50/50 rounded p-2">
+                  <div className="flex items-center justify-between text-[11px] text-emerald-800">
+                    <span className="flex items-center gap-1.5">
+                      {progressoImport >= 100
+                        ? <CheckCircle2 className="h-3.5 w-3.5" />
+                        : <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      <b>{progressoImport >= 100 ? "Importação concluída" : `Importando ${tarefas.length} atividades…`}</b>
+                    </span>
+                    <span className="tabular-nums font-semibold">{Math.round(progressoImport)}%</span>
+                  </div>
+                  <Progress value={progressoImport} className="h-2" />
                 </div>
               )}
 
