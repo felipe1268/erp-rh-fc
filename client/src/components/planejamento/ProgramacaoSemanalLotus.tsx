@@ -1160,7 +1160,11 @@ export default function ProgramacaoSemanalLotus(props: Props) {
             ws.getCell(r0, 6).value = a.dataFim ? fmtBR(a.dataFim) : "";
             ws.getCell(r0, 7).value = a.dataInicioReal ? fmtBR(a.dataInicioReal) : "";
             ws.getCell(r0, 8).value = a.dataFimReal ? fmtBR(a.dataFimReal) : "";
-            ws.getCell(r0, 9).value = a.responsavelLotus ?? engenheiroResponsavel ?? "";
+            // Rev. 1818 — Export Excel agora usa o RESPONSÁVEL RESOLVIDO
+            // (mesma fonte da tela: contrato terceiro vinculado → FC, com
+            // valor legado MSP já filtrado). Evita reexibir "CAIO AUGUSTO"
+            // herdado quando a UI já mostra "FC".
+            ws.getCell(r0, 9).value = a.responsavel?.labelCurto ?? a.responsavel?.label ?? "FC";
 
             // Pinta as barras dos dias (J-P) — esquema 4-linhas-por-tarefa do Lotus:
             // r0   = margem branca (topo)
@@ -1495,26 +1499,32 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                     <td className="border border-slate-300 px-1 py-1 text-center text-slate-700 text-[10px] uppercase">
                       <input
                         type="text"
-                        // Rev. 1817 — Mostra o Responsável RESOLVIDO automaticamente
-                        // (override manual → empresa do contrato terceiro vinculado → FC).
-                        // Mantém o input editável: ao digitar, vira override manual via setRealDates.
+                        // Rev. 1818 — Mostra o Responsável RESOLVIDO automaticamente.
+                        // PRIORIZA `a.responsavel?.labelCurto` (resolução do servidor,
+                        // já filtra valor legado MSP) sobre o raw `responsavelLotus`,
+                        // pra eliminar o ruído "CAIO AUGUSTO" herdado do MS Project.
+                        // Mantém editável: ao digitar, vira override manual via setRealDates.
                         // Visual idêntico ao histórico (texto preto, sem badge).
                         key={`resp-${a.id}-${a.responsavel?.labelCurto ?? ""}-${a.responsavelLotus ?? ""}`}
-                        defaultValue={a.responsavelLotus || a.responsavel?.labelCurto || engenheiroResponsavel || ""}
-                        placeholder={a.responsavel?.labelCurto || engenheiroResponsavel || "—"}
+                        defaultValue={a.responsavel?.labelCurto || ""}
+                        placeholder={a.responsavel?.labelCurto || "FC"}
                         onBlur={(e) => {
                           const novo = e.target.value.trim();
                           const padraoEng = (engenheiroResponsavel || "").trim();
-                          // Rev. 1817 — "default" agora abrange 3 caminhos:
-                          // (a) labelCurto do contrato terceiro vinculado,
-                          // (b) engenheiroResponsavel (FC),
-                          // (c) vazio. Em qualquer um deles, persistimos null
-                          // para que a resolução AUTOMÁTICA volte a valer (e o
-                          // próximo refresh mostre a empresa atualizada).
+                          // Rev. 1818 — "default" abrange 4 caminhos pra reverter à
+                          // resolução automática: (a) labelCurto do contrato terceiro,
+                          // (b) engenheiroResponsavel da FC (legado MSP),
+                          // (c) "FC" / "FC ENGENHARIA",
+                          // (d) vazio.
                           const padraoResolvido = (a.responsavel?.labelCurto || "").trim();
                           const atual = (a.responsavelLotus || "").trim();
                           if (novo === atual) return;
-                          const ehDefault = novo === "" || novo === padraoEng || novo === padraoResolvido;
+                          const ehDefault =
+                            novo === "" ||
+                            novo === padraoEng ||
+                            novo === padraoResolvido ||
+                            novo.toLowerCase() === "fc" ||
+                            novo.toLowerCase() === "fc engenharia";
                           const valor = ehDefault ? null : novo;
                           setRealDates.mutate({
                             atividadeId: a.id,

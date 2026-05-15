@@ -12970,4 +12970,20 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-15 08:30:00",
   },
+  {
+    version: 1818,
+    titulo: "Planejamento · Responsável — Ignorar nome do engenheiro herdado do MS Project (default vira FC)",
+    descricao:
+      "User (15/05/2026, screenshot do Padrão FC do projeto QIU 2 mostrando 'CAIO AUGUSTO' em todas as linhas da coluna RESPONSÁVEL): 'Ainda, não alterou o responsável tá aparecendo como Caio, nao era para aparecer o nome da construtora se não tiver OS APROVADA?'.\n\n" +
+      "Causa-raiz: importação MS Project legada populou `planejamento_atividades.responsavel_lotus` com o NOME DO ENGENHEIRO da FC (campo Texto1/Texto5 do MSP, lido de `obras.responsavel`). A hierarquia da Rev. 1817 tratava qualquer valor não-vazio em `responsavelLotus` como 'override manual' → vencia o fallback FC e poluía a tela inteira com o mesmo nome de pessoa.\n\n" +
+      "Decisão alinhada com user (2 perguntas): (a) ignorar valores legado MSP — default deve ser 'FC ENGENHARIA' (a construtora); (b) manter comportamento atual da camada (2) — basta contrato terceiro `status='ativo'` + item vinculado pra mostrar empresa terceira (sem exigir medição aprovada).\n\n" +
+      "Fix em 2 camadas:\n" +
+      "  • `server/_shared/responsavelAtividade.ts`: `resolverResponsaveisBatch` agora busca em UMA query extra (LEFT JOIN `planejamento_projetos → obras`) o nome do engenheiro do projeto. Construímos `VALORES_LEGADO_PADRAO = Set([\"\", \"fc\", \"fc engenharia\", \"fcengenharia\", engNorm])` (case/trim/whitespace-insensitive via helper `norm`). Camada (1b) `responsavelLotus` agora exige `manual && !ehValorLegado(manual)` — caso contrário cai no fallback FC. Sem schema, sem mexer nos dados (legado preservado intacto pra reverter se necessário).\n" +
+      "  • `client/src/components/planejamento/ProgramacaoSemanalLotus.tsx`: `defaultValue` do input de Responsável agora prioriza `a.responsavel?.labelCurto` (resolução do servidor, já filtrada) em vez do raw `a.responsavelLotus`. Placeholder fallback agora é literalmente 'FC' (não engenheiroResponsavel). `onBlur` aceita 4 padrões pra reverter ao automático: vazio, engenheiroResponsavel, labelCurto resolvido, ou 'FC'/'FC ENGENHARIA' (case-insensitive). Visual idêntico (texto preto, sem badge).\n\n" +
+      "Padrão FC herda automaticamente via FONTE ÚNICA (`listarAtividades` já consome `resolverResponsaveisBatch`). KPI/filtro também — agora obras 100% FC ficam corretamente sem chips (kpiResp.length=1, esconde widget). Garantias: zero schema/migration/DELETE; legado preservado; reversível trocando 1 condição. R-007 OK.",
+    tipo: "bugfix",
+    modulos: "Planejamento · Programação Semanal",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-15 09:00:00",
+  },
 ];

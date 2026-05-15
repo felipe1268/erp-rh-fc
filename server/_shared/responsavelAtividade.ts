@@ -28,6 +28,8 @@
 import { sql, inArray, and, eq, asc } from "drizzle-orm";
 import {
   planejamentoAtividades,
+  planejamentoProjetos,
+  obras,
   terceiroContratos,
   terceiroContratoItens,
   empresasTerceiras,
@@ -155,6 +157,40 @@ export async function resolverResponsaveisBatch(
   const out = new Map<number, ResponsavelInfo>();
   if (!atividades.length) return out;
 
+  // Rev. 1818 — Decisão do usuário (15/05/2026): legado do MS Project
+  // populou `responsavel_lotus` com o NOME DO ENGENHEIRO da FC (ex.: "CAIO
+  // AUGUSTO C..."). Esses valores NÃO devem aparecer como "override manual"
+  // — a coluna RESPONSÁVEL deve mostrar "FC" por padrão e só sobrescrever
+  // quando houver contrato terceiro ativo OU input REAL via popover.
+  // Pegamos o nome do engenheiro do projeto (obras.responsavel) em UMA
+  // query única e ignoramos qualquer `responsavelLotus` que case com ele
+  // (case/trim-insensitive). Também tratamos como legado valores genéricos
+  // tipo "FC", "FC ENGENHARIA" e o próprio companies.name (se igual).
+  let engenheiroNome: string | null = null;
+  try {
+    const [proj] = await db
+      .select({ engenheiro: obras.responsavel })
+      .from(planejamentoProjetos)
+      .leftJoin(obras, eq(obras.id, planejamentoProjetos.obraId))
+      .where(eq(planejamentoProjetos.id, projetoId))
+      .limit(1);
+    engenheiroNome = (proj?.engenheiro || "").trim() || null;
+  } catch (e: any) {
+    console.error(
+      "[resolverResponsaveisBatch] falha ao buscar engenheiro do projeto:",
+      e?.message || e,
+    );
+  }
+
+  const norm = (s: string | null | undefined) =>
+    (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const engNorm = norm(engenheiroNome);
+  const VALORES_LEGADO_PADRAO = new Set(
+    ["", "fc", "fc engenharia", "fcengenharia"].concat(engNorm ? [engNorm] : []),
+  );
+  const ehValorLegado = (v: string | null | undefined) =>
+    VALORES_LEGADO_PADRAO.has(norm(v));
+
   // 1) Busca todos os itens de contrato terceiro do projeto que tenham
   //    planejamentoAtividadeId preenchido e cujo contrato esteja ATIVO.
   //    Join com empresas_terceiras pra trazer razão social/CNPJ.
@@ -249,8 +285,10 @@ export async function resolverResponsaveisBatch(
       continue;
     }
     // (1b) Override: responsavelLotus digitado
+    // Rev. 1818 — Ignora valores legado herdados do MS Project (nome do
+    // engenheiro da FC, "FC", "FC ENGENHARIA"). Esses caem no fallback FC.
     const manual = (a.responsavelLotus || "").trim();
-    if (manual) {
+    if (manual && !ehValorLegado(manual)) {
       out.set(a.id, {
         tipo: "manual",
         label: manual,

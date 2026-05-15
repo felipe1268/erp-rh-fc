@@ -707,11 +707,27 @@ export const planejamentoRouter = router({
 
   listarAtividades: protectedProcedure
     .input(z.object({ revisaoId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = await getDb();
       const rows = await db.select().from(planejamentoAtividades)
         .where(eq(planejamentoAtividades.revisaoId, input.revisaoId))
         .orderBy(asc(planejamentoAtividades.ordem), asc(planejamentoAtividades.eapCodigo));
+
+      // Rev. 1818 — Hardening multi-tenant (achado de code review):
+      // bloqueia IDOR via enumeração de revisaoId. Mesma regra das outras
+      // procedures (getDataCorte/setRealDates/kpiResponsavelPorProjeto):
+      // companyId da revisão deve bater com o do usuário; admin/admin_master
+      // pode atravessar (suporte/diagnóstico).
+      if (rows.length > 0) {
+        const projCompany = rows[0].companyId as number;
+        const userCompany = (ctx.user as any).companyId;
+        const role = (ctx.user as any).role;
+        const isAdmin = role === "admin" || role === "admin_master";
+        if (!isAdmin && String(projCompany) !== String(userCompany)) {
+          console.warn(`[listarAtividades] FORBIDDEN revisaoId=${input.revisaoId} projCompany=${projCompany} userCompany=${userCompany} role=${role}`);
+          throw new Error("Sem permissão para esta revisão.");
+        }
+      }
 
       // Rev. 1666 — Busca a `dataCorteAtual` do projeto para limitar o realFim
       // derivado: realizado nunca pode passar do cutoff oficial PMBOK (status
