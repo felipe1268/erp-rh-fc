@@ -11,6 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Popover as UiPopover, PopoverContent as UiPopoverContent, PopoverTrigger as UiPopoverTrigger } from "@/components/ui/popover";
 import ProgramacaoSemanalLotus from "@/components/planejamento/ProgramacaoSemanalLotus";
+// Rev. 1817 — Responsável resolvido automaticamente (override → contrato → FC).
+import { ResponsavelCell } from "@/components/planejamento/ResponsavelCell";
 
 const n = (v: any) => parseFloat(v) || 0;
 
@@ -477,9 +479,39 @@ export function ProgramacaoSemanal({
   // Rev. 1641 — Last Planner: PPC/aderência mede previsibilidade do plano da
   // FC. Atividades externas (terceiros) ficam de fora porque não temos governança
   // sobre a entrega — entram só no SPI/Curva S/EV.
-  const atividadesSemAtual = useMemo(
+  const atividadesSemAtualBase = useMemo(
     () => atividadesSemAtualTodas.filter((a: any) => !a.isIndireta && !a.isExterna),
     [atividadesSemAtualTodas]
+  );
+
+  // Rev. 1817 — Filtro multi-select por Responsável (chave canônica do KPI).
+  // Vazio = mostra tudo (default). Persiste APENAS em memória (não localStorage)
+  // — quando o usuário muda de obra/revisão, volta ao default "tudo".
+  const [filtroResp, setFiltroResp] = useState<Set<string>>(new Set());
+  // Reset explícito do filtro ao trocar de revisão (e portanto de obra) —
+  // evita que chips selecionados em uma obra contaminem a próxima.
+  useEffect(() => {
+    setFiltroResp(new Set());
+  }, [revisaoId]);
+  function chaveResp(a: any): string {
+    const r = a?.responsavel;
+    if (!r) return "FC";
+    if (r.tipo === "contrato_terceiro" && r.fonteRef?.contratoId) return `C${r.fonteRef.contratoId}`;
+    if (r.tipo === "externa") return `E:${(r.label || "").toUpperCase()}`;
+    if (r.tipo === "manual")  return `M:${(r.label || "").toUpperCase()}`;
+    return "FC";
+  }
+  const atividadesSemAtual = useMemo(
+    () => filtroResp.size === 0
+      ? atividadesSemAtualBase
+      : atividadesSemAtualBase.filter((a: any) => filtroResp.has(chaveResp(a))),
+    [atividadesSemAtualBase, filtroResp]
+  );
+
+  // Rev. 1817 — KPI compacto de Responsáveis (peso financeiro × atividades).
+  const { data: kpiResp = [] } = trpc.planejamento.kpiResponsavelPorProjeto.useQuery(
+    { revisaoId },
+    { enabled: !!revisaoId, staleTime: 60_000 },
   );
 
   const grupoMap = useMemo(() => {
@@ -1377,6 +1409,61 @@ export function ProgramacaoSemanal({
             </div>
           )}
 
+          {/* Rev. 1817 — KPI compacto + Filtro multi-select por Responsável.
+              Texto preto puro (decisão do usuário), sem badges coloridos.
+              Click no chip alterna inclusão/exclusão; "Todos" zera o filtro.
+              Não aparece quando só FC executa (KPI degenera para 1 item). */}
+          {kpiResp.length > 1 && (
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 flex flex-wrap items-center gap-2">
+              <span className="text-[10px] uppercase tracking-wide font-semibold text-slate-500 mr-1">
+                Responsáveis
+              </span>
+              <button
+                type="button"
+                onClick={() => setFiltroResp(new Set())}
+                className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors ${
+                  filtroResp.size === 0
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                Todos
+              </button>
+              {kpiResp.map((k: any) => {
+                const ativo = filtroResp.has(k.chave);
+                return (
+                  <button
+                    key={k.chave}
+                    type="button"
+                    onClick={() => {
+                      setFiltroResp(prev => {
+                        const next = new Set(prev);
+                        if (next.has(k.chave)) next.delete(k.chave); else next.add(k.chave);
+                        return next;
+                      });
+                    }}
+                    title={`${k.label} • ${k.count} atividade${k.count !== 1 ? "s" : ""} • ${k.pesoPct.toFixed(1)}% do peso`}
+                    className={`text-[11px] px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1.5 ${
+                      ativo
+                        ? "bg-slate-900 text-white border-slate-900"
+                        : "bg-white text-slate-800 border-slate-300 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span className="font-medium">{k.labelCurto}</span>
+                    <span className={`text-[10px] tabular-nums ${ativo ? "text-slate-300" : "text-slate-500"}`}>
+                      {k.count} · {k.pesoPct.toFixed(0)}%
+                    </span>
+                  </button>
+                );
+              })}
+              {filtroResp.size > 0 && (
+                <span className="text-[10px] text-slate-500 ml-1">
+                  Mostrando {atividadesSemAtual.length} de {atividadesSemAtualBase.length} atividade{atividadesSemAtualBase.length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Tabela de atividades */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="px-4 py-2.5 border-b border-slate-50 bg-slate-50/60 flex items-center gap-2">
@@ -1412,6 +1499,8 @@ export function ProgramacaoSemanal({
                       <th className="py-2 px-3 w-20 text-right" title="Desvio = Real% − Previsto%. Positivo = atividade adiantada (verde). Negativo = atrasada (vermelho). Em semanas futuras o desvio fica em cinza neutro — a atividade ainda nem teve a chance de ser executada.">Desvio</th>
                       <th className="py-2 px-3 w-28 text-right" title={`Quanto esta atividade precisa avançar POR SEMANA para zerar o atraso individual, diluído na janela de Recovery Schedule (${janelaRecuperacao} semanas). Em semanas futuras é zero (atividade ainda não devia ter avançado).`}>Recuperação</th>
                       <th className="py-2 px-3 w-24 text-center">Status</th>
+                      {/* Rev. 1817 — Responsável (FONTE ÚNICA: override → contrato terceiro → FC). */}
+                      <th className="py-2 px-3 w-40" title="Responsável pela execução. Resolvido automaticamente: override manual → empresa do contrato terceiro vinculado a esta atividade → FC ENGENHARIA. Clique no lápis para sobrescrever.">Responsável</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1606,6 +1695,18 @@ export function ProgramacaoSemanal({
                             <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusColor(atrasada, av)}`}>
                               {statusLabel(atrasada, av)}
                             </span>
+                          </td>
+                          {/* Rev. 1817 — Responsável resolvido. */}
+                          <td className="py-2 px-3">
+                            <ResponsavelCell
+                              atividadeId={a.id}
+                              companyId={companyId}
+                              responsavel={a.responsavel ?? null}
+                              responsavelLotus={a.responsavelLotus ?? null}
+                              isExterna={a.isExterna ?? null}
+                              externaResponsavel={a.externaResponsavel ?? null}
+                              readOnly={portalMode}
+                            />
                           </td>
                         </tr>
                       );

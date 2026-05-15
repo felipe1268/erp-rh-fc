@@ -4,6 +4,8 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, createAuditLog } from "../db";
 import { importAtividadesCronogramaToFinancial } from "../services/financialIntegrationBridge";
 import { parseCalendarioJson, fracaoDecorridaMs } from "../../shared/diasUteis";
+// Rev. 1817 — Resolução automática do Responsável (FONTE ÚNICA).
+import { resolverResponsaveisBatch, truncarNomeEmpresa, type ResponsavelInfo } from "../_shared/responsavelAtividade";
 import { eq, and, desc, asc, sql, isNotNull, inArray, or, ilike, lt, ne, gt } from "drizzle-orm";
 import {
   planejamentoProjetos,
@@ -763,6 +765,30 @@ export const planejamentoRouter = router({
           avMap.set(a.atividadeId, cur);
         }
       }
+      // Rev. 1817 — Resolve em BATCH o Responsável de cada atividade
+      // (override manual → contrato terceiro vinculado → FC). Fonte única
+      // pra LOTUS, Padrão FC, Avanço Semanal, REFIS e exportações.
+      let respMap = new Map<number, ResponsavelInfo>();
+      try {
+        const projetoId = rows[0]?.projetoId as number | undefined;
+        const companyId = rows[0]?.companyId as number | undefined;
+        if (projetoId && companyId) {
+          respMap = await resolverResponsaveisBatch(
+            db,
+            rows.map(r => ({
+              id: r.id,
+              responsavelLotus: (r as any).responsavelLotus ?? null,
+              isExterna: (r as any).isExterna ?? null,
+              externaResponsavel: (r as any).externaResponsavel ?? null,
+            })),
+            projetoId,
+            companyId,
+          );
+        }
+      } catch (e: any) {
+        console.error("[listarAtividades resolverResponsaveis]", e?.message || e);
+      }
+
       return rows.map(r => {
         const inicioPlan = r.dataInicio ? toDateStr(r.dataInicio) : null;
         const fimPlan    = r.dataFim    ? toDateStr(r.dataFim)    : null;
@@ -802,8 +828,92 @@ export const planejamentoRouter = router({
           dataInicioReal:   realIniDigitado ?? (av?.primeira ? inicioPlan : null),
           dataFimReal:      realFimDigitado ?? realFimDerivado,
           responsavelLotus: (r as any).responsavelLotus ?? null,
+          // Rev. 1817 — Responsável resolvido (FONTE ÚNICA).
+          responsavel:      respMap.get(r.id) ?? null,
         };
       });
+    }),
+
+  /**
+   * Rev. 1817 — KPI de Responsáveis por projeto.
+   *
+   * Devolve o total de atividades (e o peso financeiro acumulado em %)
+   * agrupado por Responsável resolvido. Usado pelo card compacto no topo
+   * do Padrão FC e como base do filtro multi-select. Sempre EXCLUI
+   * grupos / marcos / disabled — a unidade contável é a mesma que entra
+   * no PV/EV.
+   */
+  kpiResponsavelPorProjeto: protectedProcedure
+    .input(z.object({ revisaoId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      const rows = await db.select().from(planejamentoAtividades)
+        .where(eq(planejamentoAtividades.revisaoId, input.revisaoId));
+      if (!rows.length) return [] as Array<{
+        chave: string;
+        tipo: string;
+        label: string;
+        labelCurto: string;
+        count: number;
+        pesoPct: number;
+      }>;
+      const projetoId = rows[0].projetoId as number;
+      const companyId = rows[0].companyId as number;
+      // Rev. 1817 — Hardening multi-tenant (segue padrão das demais
+      // procedures do router: getDataCorte/setRealDates/etc): exige que
+      // o companyId da revisão pertença ao usuário autenticado.
+      // admin/admin_master pode atravessar (suporte/diagnóstico).
+      const userCompany = (ctx.user as any).companyId;
+      const role = (ctx.user as any).role;
+      const isAdmin = role === "admin" || role === "admin_master";
+      if (!isAdmin && String(companyId) !== String(userCompany)) {
+        console.warn(`[kpiResponsavelPorProjeto] FORBIDDEN revisaoId=${input.revisaoId} projCompany=${companyId} userCompany=${userCompany} role=${role}`);
+        throw new Error("Sem permissão para esta revisão.");
+      }
+      const respMap = await resolverResponsaveisBatch(
+        db,
+        rows.map(r => ({
+          id: r.id,
+          responsavelLotus: (r as any).responsavelLotus ?? null,
+          isExterna: (r as any).isExterna ?? null,
+          externaResponsavel: (r as any).externaResponsavel ?? null,
+        })),
+        projetoId,
+        companyId,
+      );
+      // Universo: mesmas folhas que entram no PV/EV (sem grupo/marco/disabled).
+      const folhas = rows.filter((r: any) => !r.isGrupo && !r.isMarco && !r.disabled);
+      const totalPeso = folhas.reduce((s: number, r: any) => s + (parseFloat(String(r.pesoFinanceiro ?? "0")) || 0), 0);
+      type Acc = { chave: string; tipo: string; label: string; labelCurto: string; count: number; peso: number };
+      const acc = new Map<string, Acc>();
+      for (const r of folhas) {
+        const info = respMap.get(r.id) ?? { tipo: "fc", label: "FC ENGENHARIA", labelCurto: "FC", fonteRef: null };
+        // Chave de agregação: contrato → "C{id}"; externa → "E:{label}"; manual → "M:{label}"; fc → "FC".
+        const chave =
+          info.tipo === "contrato_terceiro" && info.fonteRef?.contratoId ? `C${info.fonteRef.contratoId}` :
+          info.tipo === "externa"   ? `E:${info.label.toUpperCase()}` :
+          info.tipo === "manual"    ? `M:${info.label.toUpperCase()}` :
+          "FC";
+        const cur = acc.get(chave) ?? { chave, tipo: info.tipo, label: info.label, labelCurto: info.labelCurto, count: 0, peso: 0 };
+        cur.count += 1;
+        cur.peso  += parseFloat(String((r as any).pesoFinanceiro ?? "0")) || 0;
+        acc.set(chave, cur);
+      }
+      const arr = Array.from(acc.values()).map(v => ({
+        chave: v.chave,
+        tipo: v.tipo,
+        label: v.label,
+        labelCurto: v.labelCurto,
+        count: v.count,
+        pesoPct: totalPeso > 0 ? (v.peso / totalPeso) * 100 : 0,
+      }));
+      // Ordena: maior peso primeiro; FC sempre por último (visualmente fica como "default").
+      arr.sort((a, b) => {
+        if (a.tipo === "fc" && b.tipo !== "fc") return 1;
+        if (b.tipo === "fc" && a.tipo !== "fc") return -1;
+        return b.pesoPct - a.pesoPct;
+      });
+      return arr;
     }),
 
   // Rev. 1662 — Datas reais por atividade (visão LOTUS).
@@ -813,11 +923,16 @@ export const planejamentoRouter = router({
   // atividade pertence a um projeto da MESMA empresa antes de gravar.
   setRealDates: protectedProcedure
     .input(z.object({
-      atividadeId:      z.number(),
-      companyId:        z.number(),
-      dataInicioReal:   z.string().nullable().optional(),
-      dataFimReal:      z.string().nullable().optional(),
-      responsavelLotus: z.string().nullable().optional(),
+      atividadeId:        z.number(),
+      companyId:          z.number(),
+      dataInicioReal:     z.string().nullable().optional(),
+      dataFimReal:        z.string().nullable().optional(),
+      responsavelLotus:   z.string().nullable().optional(),
+      // Rev. 1817 — Override completo de Responsável (popover do Padrão FC).
+      // Permite marcar uma atividade como executada por terceiro (texto livre)
+      // ou limpar o flag externo para voltar à resolução automática.
+      isExterna:          z.boolean().optional(),
+      externaResponsavel: z.string().nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -825,6 +940,8 @@ export const planejamentoRouter = router({
       if (input.dataInicioReal   !== undefined) patch.dataInicioReal   = input.dataInicioReal   || null;
       if (input.dataFimReal      !== undefined) patch.dataFimReal      = input.dataFimReal      || null;
       if (input.responsavelLotus !== undefined) patch.responsavelLotus = (input.responsavelLotus ?? "").trim() || null;
+      if (input.isExterna        !== undefined) patch.isExterna        = !!input.isExterna;
+      if (input.externaResponsavel !== undefined) patch.externaResponsavel = (input.externaResponsavel ?? "").trim() || null;
       if (Object.keys(patch).length === 0) return { ok: true };
       // Valida ownership: atividade → projeto → companyId
       const [check] = await db

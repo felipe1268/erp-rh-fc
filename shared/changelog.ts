@@ -12946,4 +12946,28 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-14 18:00:00",
   },
+  {
+    version: 1817,
+    titulo: "Planejamento · Responsável automático na Programação Semanal (override → contrato terceiro vinculado → FC)",
+    descricao:
+      "Decisão do usuário (15/05/2026): preencher AUTOMATICAMENTE quem executa cada atividade, sem coluna nova no schema, sem mudar visualmente o LOTUS, e sem eliminar o Padrão FC.\n\n" +
+      "Hierarquia (FONTE ÚNICA, primeira que casar vence):\n" +
+      "  (1) Override manual — `planejamentoAtividades.isExterna=true` (label = `externaResponsavel` || 'EXTERNA') OU `responsavelLotus` preenchido (texto livre).\n" +
+      "  (2) Contrato de terceiros vinculado DIRETAMENTE à atividade via `terceiro_contrato_itens.planejamentoAtividadeId`, com `terceiroContratos.status='ativo'`. Trazemos `razaoSocial`/`nomeFantasia`/`cnpj` num único join. Sem heurísticas por EAP/disciplina — usamos o vínculo canônico já existente no schema.\n" +
+      "  (3) Fallback 'FC ENGENHARIA' (label curto = 'FC').\n\n" +
+      "Implementação:\n" +
+      "  • `server/_shared/responsavelAtividade.ts` (NOVO): tipos, `truncarNomeEmpresa(nome)` (remove LTDA/EIRELI/ME/EPP/S/A/MEI, pega 2 primeiras palavras significativas, trunca em 22 chars com '…') e `resolverResponsaveisBatch(db, atividades, projetoId, companyId)` — UMA query única com inArray nos IDs (sem N+1, testado mentalmente para 1500+ atividades do QIU 2 - FASE 4). Sanity-check `[ResponsavelCheck]` loga sobreposições contrato↔atividade.\n" +
+      "  • `server/routers/planejamento.ts`:\n" +
+      "      − `listarAtividades` (L706) enriquecido com campo `responsavel: ResponsavelInfo` em cada linha (try/catch defensivo — falha vira null, não derruba a tela).\n" +
+      "      − Nova procedure `kpiResponsavelPorProjeto` retornando `[{ chave, tipo, label, labelCurto, count, pesoPct }]` agrupado por chave canônica (C{contratoId} | E:{label} | M:{label} | FC), ordenado por peso desc com FC sempre por último. Universo: mesmas folhas que entram no PV/EV.\n" +
+      "      − `setRealDates` (L820) estendido: aceita também `isExterna` + `externaResponsavel` para o popover de override do Padrão FC. Compatível com chamadas antigas (todos os campos opcionais).\n" +
+      "  • `client/src/components/planejamento/ResponsavelCell.tsx` (NOVO): `<ResponsavelCell />` (texto preto puro com tooltip rico — origem, contrato, CNPJ — e ícone-lápis pra abrir override) + `<ResponsavelOverridePopover />` (3 modos: Automático / Texto livre / Externa, persiste via setRealDates, invalida `listarAtividades` + `kpiResponsavelPorProjeto`). R-007 OK (1 import lucide).\n" +
+      "  • `ProgramacaoSemanalLotus.tsx`: ZERO mudança visual (decisão explícita do usuário). Apenas o `defaultValue` do input da coluna RESPONSÁVEL agora é `responsavelLotus || responsavel.labelCurto || engenheiroResponsavel`. `onBlur` reconhece os 3 'defaults' (override + auto-contrato + engenheiro FC) e persiste null pra qualquer um deles, devolvendo a atividade pra resolução automática. Tipo `Atividade` ganhou campo opcional `responsavel`.\n" +
+      "  • `client/src/pages/planejamento/ProgramacaoSemanal.tsx` (Padrão FC): coluna nova 'Responsável' depois de Status (não toca colSpan existentes); KPI compacto + filtro multi-select de chips entre o banner Previsto/Realizado e a tabela (só aparece se `kpiResp.length > 1`, evita poluir obras 100% FC); `<ResponsavelCell readOnly={portalMode} />` na célula; estado `filtroResp: Set<string>` em memória (zera ao trocar de obra/semana, sem localStorage).\n\n" +
+      "Garantias: zero schema change, zero migration, zero DELETE, zero coluna nova. Reaproveita `responsavelLotus`, `isExterna`, `externaResponsavel` (já existem no banco). LOTUS continua idêntico visualmente. Padrão FC ganha 1 coluna + KPI + filtro mas mantém TUDO o que já tinha. Excel/PDF herdam automaticamente o campo via `listarAtividades` (consumirão em revisão futura). R-007/R-001/R-006/R-008/R-009/R-010 OK.",
+    tipo: "feature",
+    modulos: "Planejamento · Programação Semanal",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-15 08:30:00",
+  },
 ];

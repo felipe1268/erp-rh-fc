@@ -28,6 +28,17 @@ interface Atividade {
   dataFimReal?: string | null;
   pesoFinanceiro?: string | number | null;
   responsavelLotus?: string | null;
+  // Rev. 1817 — Override bruto enviado pelo servidor.
+  isExterna?: boolean | null;
+  externaResponsavel?: string | null;
+  // Responsável resolvido (override → contrato terceiro → FC).
+  // FONTE ÚNICA: usado pelo input.defaultValue como label curto.
+  responsavel?: {
+    tipo: "manual" | "externa" | "contrato_terceiro" | "fc";
+    label: string;
+    labelCurto: string;
+    fonteRef: { contratoId?: number; contratoNumero?: string | null; empresaTerceiraId?: number; cnpj?: string | null } | null;
+  } | null;
 }
 
 interface Props {
@@ -1484,16 +1495,27 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                     <td className="border border-slate-300 px-1 py-1 text-center text-slate-700 text-[10px] uppercase">
                       <input
                         type="text"
-                        defaultValue={a.responsavelLotus ?? engenheiroResponsavel ?? ""}
-                        placeholder={engenheiroResponsavel || "—"}
+                        // Rev. 1817 — Mostra o Responsável RESOLVIDO automaticamente
+                        // (override manual → empresa do contrato terceiro vinculado → FC).
+                        // Mantém o input editável: ao digitar, vira override manual via setRealDates.
+                        // Visual idêntico ao histórico (texto preto, sem badge).
+                        key={`resp-${a.id}-${a.responsavel?.labelCurto ?? ""}-${a.responsavelLotus ?? ""}`}
+                        defaultValue={a.responsavelLotus || a.responsavel?.labelCurto || engenheiroResponsavel || ""}
+                        placeholder={a.responsavel?.labelCurto || engenheiroResponsavel || "—"}
                         onBlur={(e) => {
                           const novo = e.target.value.trim();
-                          const padrao = (engenheiroResponsavel || "").trim();
+                          const padraoEng = (engenheiroResponsavel || "").trim();
+                          // Rev. 1817 — "default" agora abrange 3 caminhos:
+                          // (a) labelCurto do contrato terceiro vinculado,
+                          // (b) engenheiroResponsavel (FC),
+                          // (c) vazio. Em qualquer um deles, persistimos null
+                          // para que a resolução AUTOMÁTICA volte a valer (e o
+                          // próximo refresh mostre a empresa atualizada).
+                          const padraoResolvido = (a.responsavel?.labelCurto || "").trim();
                           const atual = (a.responsavelLotus || "").trim();
-                          // Se igual ao atual (após trim), não envia.
                           if (novo === atual) return;
-                          // Se novo == padrão, persiste null pra "voltar ao default".
-                          const valor = novo === padrao || novo === "" ? null : novo;
+                          const ehDefault = novo === "" || novo === padraoEng || novo === padraoResolvido;
+                          const valor = ehDefault ? null : novo;
                           setRealDates.mutate({
                             atividadeId: a.id,
                             companyId,
