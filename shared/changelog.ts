@@ -13217,4 +13217,23 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-15 23:00:00",
   },
+  {
+    version: 1832,
+    titulo: "Planejamento · Toggle 'Peso Financeiro ↔ Duração (MSP)' — paridade ABSOLUTA com a coluna '% concluída' do MS Project",
+    descricao:
+      "User (15/05/2026, screenshots da tabela MSP do PLN_805_03_2026_R04_REVTE-CIVIL mostrando '1%' na linha raiz e na coluna '% concluída' das macro-etapas): 'Quero uma paridade absoluta sim, porque o projeto não apresenta estes valores, o valor está aparecendo 1%' — pediu que o ERP passasse a bater EXATAMENTE com a coluna nativa do MSP (que mostra 1% na raiz da REVTE-CIVIL) em vez do 2,12% que vinha mostrando.\n\n" +
+      "Causa pré-existente: `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` L250 era `const usarPesoPorDuracao = false` (constante, sem UI desde Rev. 1343). Toda a árvore de cálculo (`avancoAtual` L516-572, `AvancoSemanal` L4885+, `Refis` L11036+, `pvPonderadoPorAtividade` L562/5238/5249/5273/5350/5430/11198/11241) ponderava por `pesoFinanceiro` (Earned Value clássico, PMI Practice Standard for EVM §3.2). MSP nativo usa rollup por DURAÇÃO em working time do calendário: `% Complete (raiz) = Σ ActualDuration_leaf / Σ Duration_leaf`. Algebricamente equivalente a `Σ pct_leaf × Duration_leaf / Σ Duration_leaf`. Para REVTE-CIVIL: folhas caras como Tapumes (peso ~28%) com pct~28% e Mobilização (peso ~28%) com pct~28% inflavam o numerador → 2,12% por custo vs ~1% por duração (pesa pouco, prazo longo).\n\n" +
+      "Fix (1 arquivo, 2 hunks):\n" +
+      "  • L250 — `const usarPesoPorDuracao = false` vira **state** persistido em `localStorage[`planejamentoPesoBase:${projetoId}`]` ('financeiro' | 'duracao'). Default = 'financeiro' (preserva comportamento histórico Rev. 1343 e da maioria das obras). Cada projeto memoriza sua escolha — útil porque obras que reportam ao cliente final pelo MSP nativo querem 'duracao', e obras que medem por valor querem 'financeiro'.\n" +
+      "  • L911-933 — banner 'Avanço Físico' troca o badge estático '💰 Peso Financeiro' por **toggle 2-botões** (mesmo design do toggle Live/Oficial da Rev. 1637): 💰 Peso Financeiro (amber, ativo no default) ↔ 📐 Duração (MSP) (azul). Tooltips explicam exatamente o que cada modo calcula.\n\n" +
+      "Por que essa abordagem é segura: TODA a árvore de cálculo já recebia `usarPesoPorDuracao` como prop (L1034, L1071, L1090, L1103) — o constante == false só desativava o caminho 'duracao' que JÁ EXISTIA desde Rev. 1343. Reativar via state recompõe automaticamente: avanço físico topo, AvancoSemanal (cards PREVISTO/REALIZADO da semana, gráficos), Refis (compactos, evolução). O Previsto LIVE (banner amarelo) NÃO muda — ele usa `pctRaizMSP` (Rev. 1825), que já é puramente temporal sobre o envelope da raiz, paridade absoluta com Texto6 do MSP. Toggle muda principalmente o REALIZADO (e o PVponderado de fallback).\n\n" +
+      "Comparação esperada para REVTE-CIVIL (SEMANA 1 importada):\n" +
+      "  • 💰 Peso Financeiro → 2,12% (Earned Value clássico, atividades caras de início pesam mais).\n" +
+      "  • 📐 Duração (MSP)  → ~1% (paridade absoluta com a coluna '% concluída' da raiz do MSP).\n\n" +
+      "Premissas preservadas: snapshots semanais (`planejamento_avancos`) intactos, MSP segue fonte oficial, baseline congelado, calendário MSP intocado, lógica de `pctRaizMSP` (Previsto) intocada. Zero schema/migration/DELETE/contrato tRPC novo. Reversível em 2 edits (re-fixar `usarPesoPorDuracao = false` e voltar o badge estático). R-001 OK (toggle responsivo, mesma altura dos outros badges). R-007/R-010 OK.",
+    tipo: "feature",
+    modulos: "Planejamento · Avanço Físico · Paridade MSP",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-15 23:30:00",
+  },
 ];

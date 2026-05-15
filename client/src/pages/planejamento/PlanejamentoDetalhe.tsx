@@ -245,9 +245,32 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   // card "VISÃO GERAL" reflitam imediatamente o que o usuário está digitando,
   // em vez de só atualizar depois do "Salvar Avanços". Limpado ao salvar.
   const [avancoLocalLive, setAvancoLocalLive] = useState<Record<number, number>>({});
-  // Rev. 1343: ponderação fixada em Peso Financeiro (padrão da construção civil).
-  // O alternador "Duração (Project)" foi removido a pedido — toda a obra mede por valor.
-  const usarPesoPorDuracao = false;
+  // Rev. 1832 — Toggle "Peso Financeiro ↔ Duração (Paridade MSP)" reativado
+  // a pedido do usuário (15/05/2026): o ERP exibia 2,12% no Realizado da
+  // SEMANA 1 do REVTE-CIVIL enquanto a coluna "% concluída" da raiz do MS
+  // Project mostrava 1%. Causa: ponderação por `pesoFinanceiro` (Earned Value
+  // clássico) infla folhas caras (Tapumes 28%, Mobilização 28%) → soma maior
+  // que a média ponderada por duração que o MSP usa internamente para fazer
+  // rollup da raiz (Σ ActualDuration_leaf / Σ Duration_leaf, em working time
+  // do calendário). Quando a flag é true, ERP pondera por `duracaoDias` →
+  // paridade ABSOLUTA com a coluna nativa do MSP. Persistência em localStorage
+  // por projeto (cada obra tem o seu padrão). Default = Peso Financeiro
+  // (mantém comportamento histórico Rev. 1343).
+  const [usarPesoPorDuracao, setUsarPesoPorDuracao] = useState<boolean>(() => {
+    try {
+      if (typeof window === "undefined" || !projetoId) return false;
+      return window.localStorage.getItem(`planejamentoPesoBase:${projetoId}`) === "duracao";
+    } catch { return false; }
+  });
+  useEffect(() => {
+    try {
+      if (typeof window === "undefined" || !projetoId) return;
+      window.localStorage.setItem(
+        `planejamentoPesoBase:${projetoId}`,
+        usarPesoPorDuracao ? "duracao" : "financeiro",
+      );
+    } catch {}
+  }, [usarPesoPorDuracao, projetoId]);
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const [dragIdx, setDragIdx]   = useState<number | null>(null);
   const [overIdx, setOverIdx]   = useState<number | null>(null);
@@ -882,12 +905,29 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                   {desvio !== null && Math.abs(desvio) < 0.1 && (
                     <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">No prazo</span>
                   )}
-                  <span
-                    title="Avanço previsto ponderado pelo peso financeiro de cada atividade (padrão da construção civil — alinhado com medição, curva S e fluxo de caixa)."
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded border bg-white text-slate-500 border-slate-300"
-                  >
-                    💰 Peso Financeiro
-                  </span>
+                  {/* Rev. 1832 — Toggle "Peso Financeiro ↔ Duração (MSP)".
+                      Padrão da construção civil é Peso Financeiro (alinhado
+                      com medição, curva S e fluxo de caixa — Earned Value
+                      clássico, PMI Practice Standard for EVM §3.2). Modo
+                      Duração (MSP) replica o rollup nativo do MS Project
+                      para a raiz: Σ pct_leaf × duracaoDias_leaf / Σ
+                      duracaoDias_leaf — paridade ABSOLUTA com a coluna
+                      "% concluída" do MSP (a quem precisa bater o número
+                      reportado lá: ex. REVTE-CIVIL raiz mostra 1% no MSP). */}
+                  <div className="inline-flex items-center rounded-lg border border-slate-200 overflow-hidden text-[10px] font-semibold">
+                    <button type="button"
+                      onClick={() => setUsarPesoPorDuracao(false)}
+                      title="Peso Financeiro: Earned Value clássico — pondera cada atividade-folha pelo seu custo. Padrão da construção civil; alinhado com medição, curva S e fluxo de caixa."
+                      className={`px-2 py-1 ${!usarPesoPorDuracao ? "bg-amber-100 text-amber-800" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                      💰 Peso Financeiro
+                    </button>
+                    <button type="button"
+                      onClick={() => setUsarPesoPorDuracao(true)}
+                      title="Duração (MSP): pondera cada atividade-folha pela duração em dias úteis — replica EXATAMENTE o rollup da coluna '% concluída' da raiz do MS Project (Σ AD_leaf / Σ Duration_leaf)."
+                      className={`px-2 py-1 border-l border-slate-200 ${usarPesoPorDuracao ? "bg-blue-100 text-blue-800" : "bg-white text-slate-500 hover:bg-slate-50"}`}>
+                      📐 Duração (MSP)
+                    </button>
+                  </div>
                   {refisComIndiretasGlobal && (
                     <span
                       title="Indiretas (canteiro, mob/desmob) entram nos cálculos pela curva prevista linear — mesma convenção do card REFIS."
