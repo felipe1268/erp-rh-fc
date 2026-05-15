@@ -36,7 +36,7 @@ import {
   FileSearch, Brain, Scale, ClipboardPlus, ShieldAlert,
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft, Gauge,
-  Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine,
+  Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine, ChevronLeft,
   Camera, Blocks, CheckSquare, FileCheck2, Milestone,
   UserMinus, Search, X, GraduationCap, Sparkles, HeartPulse,
 } from "lucide-react";
@@ -866,13 +866,13 @@ export default function DashboardLayout({
     );
   }
 
-  // Rev. 1578 — Em telas de até 1279px (telefones, iPad portrait/landscape e
-  // tablets em geral) a barra lateral começa COLLAPSED em modo "ícone"
-  // (`collapsible="icon"` já configurado no <Sidebar/> abaixo). O usuário
-  // expande tocando no botão de menu quando precisar e ela continua aberta
-  // até clicar de novo. Em desktop (>=1280px) a barra continua começando
-  // aberta como antes. SSR-safe: defaultOpen=true se window indisponível.
-  const TABLET_BREAKPOINT = 1280;
+  // Rev. 1813 — Usuário pediu para MANTER a barra lateral em todas as telas.
+  // Reduzido de 1280 para 1024: em qualquer notebook/iPad landscape (≥1024px)
+  // a barra começa ABERTA. Em telas menores (tablet portrait, smartphone
+  // landscape) começa COLLAPSED em modo "ícone" — mas continua VISÍVEL
+  // (`collapsible="icon"` no <Sidebar/> abaixo + Rev. 1813 useMobile reduzido
+  // pra 480, evita que a barra vire Sheet overlay em tablets). SSR-safe.
+  const TABLET_BREAKPOINT = 1024;
   const sidebarDefaultOpen =
     typeof window === "undefined" ? true : window.innerWidth >= TABLET_BREAKPOINT;
 
@@ -1894,6 +1894,19 @@ function CompanyHeader({ isMobile, activeLabel }: { isMobile: boolean; activeLab
     <div className="flex border-b h-14 items-center justify-between bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
       <div className="flex items-center gap-2">
         {isMobile ? <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" /> : null}
+        {/* Rev. 1813 — Botão Voltar (histórico do navegador) presente em
+            TODAS as telas, conforme pedido do usuário. Usa window.history.back()
+            para respeitar a navegação real do usuário (não cai sempre na home
+            do módulo). Desabilitado quando não há histórico (1ª página). */}
+        <button
+          onClick={() => window.history.length > 1 ? window.history.back() : setLocation(MODULE_HOME_ROUTES[activeModule] || "/")}
+          title="Voltar"
+          aria-label="Voltar"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-background hover:bg-muted transition-colors text-muted-foreground hover:text-foreground shrink-0"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+          <span className="text-xs font-medium hidden sm:inline">Voltar</span>
+        </button>
         <button
           onClick={() => setLocation(MODULE_HOME_ROUTES[activeModule] || "/")}
           title="Tela Inicial"
