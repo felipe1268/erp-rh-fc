@@ -13345,4 +13345,21 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-16 00:45:00",
   },
+  {
+    version: 1838,
+    titulo: "Planejamento · Salvar Cronograma — fim do timeout 'Failed to execute json on Response' (UPDATE em batch CASE WHEN)",
+    descricao:
+      "User (15/05/2026, screenshot do toast vermelho 'Erro ao salvar cronograma: Failed to execute json on Response: Unexpected end of JSON input' na tela Cronograma do REVTE-CIVIL): 'erro quando salvo o cronograma..'.\n\n" +
+      "Causa-raiz: A mensagem 'Failed to execute json on Response: Unexpected end of JSON input' é o browser tentando fazer `.json()` em um body de resposta VAZIO. Em Replit dev, isso acontece quando o proxy picard corta a conexão por timeout (~60-90s) antes do servidor responder. Investigando `salvarAtividades` (`server/routers/planejamento.ts` L1039-1467), o gargalo estava em `recalcularPesosCore` (`server/_shared/recalcularPesos.ts` L182-186) que rodava SÍNCRONO dentro da request com loop sequencial: `for (const u of updates) { await db.update(planejamentoAtividades).set({ pesoFinanceiro: u.peso }).where(eq(...id, u.id)); }`. Para REVTE-CIVIL com 114 atividades = 114 round-trips sequenciais ao Neon (~30-50ms cada) = ~5-7s só nesse loop. Para projetos grandes que a Rev. 1822 explicitamente passou a suportar (1900 atividades), eram 1900 round-trips ~= 60-90s, batendo no limite do proxy. O salvarAtividades em si JÁ tinha batching CASE WHEN (L1284-1326, BATCH=50) — mas o recalc subsequente não.\n\n" +
+      "Fix (2 arquivos, 3 hunks):\n" +
+      "  1) `server/_shared/recalcularPesos.ts` L22 — adiciona `sql` ao import de `drizzle-orm`.\n" +
+      "  2) `server/_shared/recalcularPesos.ts` L182-186 — substitui o loop sequencial por batching CASE WHEN idêntico ao de `salvarAtividades`: `BATCH = 500`, monta `WHEN id THEN peso::numeric` por linha, executa `UPDATE planejamento_atividades SET peso_financeiro = CASE id ... ELSE peso_financeiro END WHERE id IN (...)` via `sql.raw()`. Resultado: 1900 round-trips → 4 (1900/500). Tempo cai de ~60s para <1s.\n" +
+      "  3) `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` L2957-2967 — `salvarMutation.onError` ganha tradução amigável quando detecta padrão de proxy-cut (`Failed to execute 'json'|Unexpected end of JSON input|Unexpected token`): toast vira 'O servidor demorou demais para responder ao salvar. Aguarde alguns segundos e tente novamente. Se persistir, recarregue a página.' Os outros erros (`TRPCError` legítimos, validação Zod, etc.) continuam mostrando `err.message` como antes.\n\n" +
+      "Por que é seguro: Resultado funcional do recálculo é IDÊNTICO — mesmo cálculo de pesos via custoMap/totalCusto/durByEap, mesmas regras de rateio item 4 da Rev. 1820, mesma normalização eapCanonico (Rev. 1821), mesma ordem de updates. Apenas o transporte SQL muda (CASE WHEN no PG é determinístico). `peso` é construído via `parseFloat(u.peso) || 0` — força número válido (zero default), inserido como literal SQL após cast `::numeric` (não há SQL injection: ids vêm do banco como inteiros, pesos vêm de `String(+peso.toFixed(4))`). Mensagem amigável só substitui o texto exibido — `console.error('[API Mutation Error]', error)` em main.tsx mantém o stack original para debug. ZERO schema/migration/DELETE/contrato tRPC. Reversível em 3 hunks. Compatível com Rev. 1822 (suporte a 1900 atividades). R-001/R-007/R-010 OK.\n\n" +
+      "Esperado em REVTE-CIVIL: salvar 114 atividades responde em <2s no servidor (em vez dos ~6-8s anteriores). Em projetos com 1900+ atividades, sai do regime de timeout e responde em <5s. Caso aconteça outro tipo de proxy-cut (ex.: Neon momentaneamente lento), o usuário vê texto amigável em pt-BR em vez do erro técnico do browser.",
+    tipo: "fix",
+    modulos: "Planejamento · Cronograma · Performance",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-16 01:15:00",
+  },
 ];

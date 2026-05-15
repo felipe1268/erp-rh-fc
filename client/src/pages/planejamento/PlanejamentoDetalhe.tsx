@@ -2952,7 +2952,15 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
       setEditando(false);
     },
     onError: (err) => {
-      toast.error(`Erro ao salvar cronograma: ${err.message}`);
+      // Rev. 1838 — Mensagem amigável quando o proxy/timeout corta a resposta
+      // (browser surfa "Failed to execute 'json' on 'Response'..."). O usuário
+      // não consegue interpretar isso. Sugere retry e mantém detalhe técnico.
+      const raw = err?.message ?? "";
+      const isProxyCut = /Failed to execute 'json'|Unexpected end of JSON input|Unexpected token/i.test(raw);
+      const friendly = isProxyCut
+        ? "O servidor demorou demais para responder ao salvar. Aguarde alguns segundos e tente novamente. Se persistir, recarregue a página."
+        : raw;
+      toast.error(`Erro ao salvar cronograma: ${friendly}`);
     },
   });
 

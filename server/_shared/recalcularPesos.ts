@@ -16,7 +16,7 @@
  *   - orcamento.importar (após criar itens da planilha)
  *   - orcamento.reimportar (após substituir itens)
  */
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   planejamentoProjetos,
   planejamentoRevisoes,
@@ -179,10 +179,23 @@ export async function recalcularPesosCore(
       }
     }
 
-    for (const u of updates) {
-      await db.update(planejamentoAtividades)
-        .set({ pesoFinanceiro: u.peso })
-        .where(eq(planejamentoAtividades.id, u.id));
+    // Rev. 1838 — UPDATE em batch via CASE WHEN (antes era 1 round-trip por
+    // atividade → 1900 atividades = 1900 queries sequenciais ao Neon → ~60s
+    // → proxy do Replit cortava a conexão e o tRPC client surfava
+    // "Failed to execute 'json' on 'Response': Unexpected end of JSON input".
+    // Mesmo padrão de batch já usado em salvarAtividades (L1284-1326).
+    const BATCH = 500;
+    for (let b = 0; b < updates.length; b += BATCH) {
+      const batch = updates.slice(b, b + BATCH);
+      if (batch.length === 0) continue;
+      const ids = batch.map(u => u.id);
+      // peso é string numérica já validada (parseFloat acima); usa-se como literal SQL
+      const whens = batch.map(u => `WHEN ${u.id} THEN ${parseFloat(u.peso) || 0}::numeric`).join(" ");
+      await db.execute(sql.raw(`
+        UPDATE planejamento_atividades
+        SET peso_financeiro = CASE id ${whens} ELSE peso_financeiro END
+        WHERE id IN (${ids.join(",")})
+      `));
     }
 
     return { ok: true, metodo, totalAtividades: folhas.length, vinculados, semVinculo };
