@@ -80,6 +80,7 @@ import {
   ArrowDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PdfViewer } from "@/components/PdfViewer";
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   em_elaboracao: { label: "Em Elaboração", color: "bg-yellow-100 text-yellow-800" },
@@ -3118,31 +3119,17 @@ export default function GestaoDocumentos() {
           </div>
           <div className="flex-1 overflow-hidden bg-gray-100">
             {previewDoc?.arquivoUrl && /\.pdf$/i.test(previewDoc.arquivoNome || "") && (
-              // Rev. 1716 — iPad/Safari não pagina PDF dentro de <iframe>
-              // (renderiza só o topo da primeira página e ESCONDE as imagens
-              // das páginas seguintes — caso típico do "Relatorio fotografico"
-              // que aparecia só com título e assinatura, sem as fotos). Mesmo
-              // padrão usado pelo Portal do Cliente desde a Rev. 1641:
-              // <object type="application/pdf"> com fallback "Abrir em nova
-              // aba" pra navegadores que bloquearem o plugin.
-              <object
-                data={previewDoc.arquivoUrl}
-                type="application/pdf"
-                className="pdf-viewer-frame w-full h-full min-h-[70vh] bg-white"
-                aria-label={previewDoc.titulo || "Preview PDF"}
-              >
-                <div className="flex flex-col items-center justify-center h-full min-h-[70vh] bg-slate-100 text-slate-700 p-6 text-center gap-3">
-                  <p className="text-sm">Não foi possível exibir o PDF neste navegador.</p>
-                  <a
-                    href={previewDoc.arquivoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition"
-                  >
-                    Abrir em nova aba
-                  </a>
-                </div>
-              </object>
+              // Rev. 1814 — Visualizador PDF nativo (react-pdf/PDF.js) com
+              // navegação rica (zoom, rotação, miniaturas), suporte a touch
+              // (pinch/pan via react-zoom-pan-pinch), atalhos de teclado e
+              // ferramentas de marcação (caneta, marca-texto, borracha).
+              // Marcações são salvas em localStorage por documento.
+              <PdfViewer
+                url={previewDoc.arquivoUrl}
+                fileName={previewDoc.arquivoNome}
+                docId={previewDoc.id}
+                onClose={() => setPreviewDoc(null)}
+              />
             )}
             {previewDoc?.arquivoUrl && /\.(png|jpg|jpeg|gif|webp)$/i.test(previewDoc.arquivoNome || "") && (
               <div className="flex items-center justify-center h-full min-h-[70vh] p-4">
