@@ -336,20 +336,10 @@ export function parseMSProjectXML(text: string): TarefaImportada[] {
   return parseMSProjectTasksFromDoc(doc);
 }
 
-// Rev. 1822 — Lê o código EAP da atividade. Templates do FC variam:
-//   • Alguns usam o campo "Item" (Texto1, ExtendedAttribute FieldID=188743731)
-//     — código digitado manualmente: "01.01", "02.16.02.01".
-//   • Outros usam WBS customizado direto na coluna WBS do MSP (também o código
-//     do orçamento: "10.04.03.01") — fica em <WBS> no XML.
-//   • Outros (raros) usam WBS automático do MSP ("1", "2", "2.1") — funciona
-//     SE for o mesmo padrão usado no orçamento.
-//
-// Política: ITEM (Texto1) PRIMEIRO; fallback no <WBS>. Qualquer um dos dois
-// não-vazio vale. Folhas onde AMBOS estão vazios estouram R-013 abaixo.
-//
-// Filhos diretos do <Task> (não `querySelectorAll`) pra evitar pegar Texto1
-// de Assignment aninhado.
-function lerCodigoItemDaTask(task: Element): string {
+// Rev. 1822 — Lê APENAS o campo "Item" (Texto1, ExtendedAttribute
+// FieldID=188743731) digitado pelo engenheiro. Filhos diretos do <Task>
+// (não `querySelectorAll`) pra evitar pegar Texto1 de Assignment aninhado.
+function lerItemDaTask(task: Element): string {
   for (const child of Array.from(task.children)) {
     if (child.tagName !== "ExtendedAttribute") continue;
     const fid = child.querySelector("FieldID")?.textContent ?? "";
@@ -357,6 +347,27 @@ function lerCodigoItemDaTask(task: Element): string {
     const val = (child.querySelector("Value")?.textContent ?? "").trim();
     if (val) return val;
   }
+  return "";
+}
+
+// Rev. 1822 — Resolve o código EAP final de uma tarefa.
+//
+// Templates do FC variam:
+//   • Alguns usam Item (Texto1) — "01.01", "02.16.02.01".
+//   • Outros usam WBS customizado direto na coluna WBS — "10.04.03.01".
+//   • WBS automático do MSP ("1", "2", "2.1") só faz sentido em FOLHAS — pra
+//     sumários poluiria a tela com numeração interna do programa.
+//
+// Política:
+//   • Sempre tenta Item PRIMEIRO.
+//   • Se vazio E for FOLHA (não-sumário) → fallback no <WBS> (cobre WBS
+//     customizado de templates que não usam Texto1).
+//   • Se vazio E for SUMÁRIO → retorna vazio (cabeçalho fica sem código,
+//     limpa visual da tela de import).
+function lerCodigoEapDaTask(task: Element, isSummary: boolean): string {
+  const item = lerItemDaTask(task);
+  if (item) return item;
+  if (isSummary) return "";
   return task.querySelector("WBS")?.textContent?.trim() ?? "";
 }
 
@@ -364,17 +375,17 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
   const taskEls = Array.from(doc.querySelectorAll("Task"));
 
   // First pass: build UID → CÓDIGO map so we can resolve predecessor UIDs.
-  // Rev. 1822: chave agora é o código ITEM (Texto1) do template FC, com
-  // fallback para WBS automático. Importante: usamos `task.children` para
-  // pegar APENAS o UID direto da tarefa (não os UIDs de PredecessorLink/
-  // Assignment, que são filhos aninhados).
+  // Rev. 1822: chave é o código resolvido (Item → fallback WBS em folhas).
+  // Predecessores no MSP sempre apontam pra folhas reais (sumários não são
+  // predecessores), então o fallback WBS é seguro aqui.
   const uidToWbs = new Map<string, string>();
   for (const task of taskEls) {
     let uid = "";
     for (const child of Array.from(task.children)) {
       if (child.tagName === "UID") { uid = child.textContent ?? ""; break; }
     }
-    const codigo = lerCodigoItemDaTask(task);
+    const isSummary = task.querySelector("Summary")?.textContent === "1";
+    const codigo = lerCodigoEapDaTask(task, isSummary);
     if (uid && codigo) uidToWbs.set(uid, codigo);
   }
 
@@ -387,15 +398,15 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
       if (child.tagName === "UID") { uid = child.textContent ?? ""; break; }
     }
     const name  = task.querySelector("Name")?.textContent?.trim() ?? "";
-    // Rev. 1822 — código EAP vindo do campo ITEM (Texto1) do template FC,
-    // fallback no <WBS> automático do MSP. Variável continua chamada "wbs"
-    // para minimizar diff (todos os usos abaixo permanecem corretos).
-    const wbs   = lerCodigoItemDaTask(task);
     const level = parseInt(task.querySelector("OutlineLevel")?.textContent ?? "0");
     const start = fmtDate(task.querySelector("Start")?.textContent ?? "");
     const fin   = fmtDate(task.querySelector("Finish")?.textContent ?? "");
     const durRaw= task.querySelector("Duration")?.textContent ?? "";
     const summ  = task.querySelector("Summary")?.textContent === "1";
+    // Rev. 1822 — código EAP: Item (Texto1) → fallback WBS SÓ em folhas.
+    // Sumário sem Item fica vazio (não polui visual com WBS automático
+    // tipo "1", "2", "3"). Variável segue chamada "wbs" pra minimizar diff.
+    const wbs   = lerCodigoEapDaTask(task, summ);
     const milestoneTag = task.querySelector("Milestone")?.textContent;
     const isMarco = milestoneTag === "1" || (!summ && parseDuration(durRaw) === 0 && durRaw !== "" && durRaw !== "0");
     const res   = task.querySelector("Assignment ResourceUID")?.textContent ?? "";
