@@ -27,9 +27,6 @@
 
 import { sql, inArray, and, eq, asc } from "drizzle-orm";
 import {
-  planejamentoAtividades,
-  planejamentoProjetos,
-  obras,
   terceiroContratos,
   terceiroContratoItens,
   empresasTerceiras,
@@ -157,37 +154,24 @@ export async function resolverResponsaveisBatch(
   const out = new Map<number, ResponsavelInfo>();
   if (!atividades.length) return out;
 
-  // Rev. 1818 — Decisão do usuário (15/05/2026): legado do MS Project
-  // populou `responsavel_lotus` com o NOME DO ENGENHEIRO da FC (ex.: "CAIO
-  // AUGUSTO C..."). Esses valores NÃO devem aparecer como "override manual"
-  // — a coluna RESPONSÁVEL deve mostrar "FC" por padrão e só sobrescrever
-  // quando houver contrato terceiro ativo OU input REAL via popover.
-  // Pegamos o nome do engenheiro do projeto (obras.responsavel) em UMA
-  // query única e ignoramos qualquer `responsavelLotus` que case com ele
-  // (case/trim-insensitive). Também tratamos como legado valores genéricos
-  // tipo "FC", "FC ENGENHARIA" e o próprio companies.name (se igual).
-  let engenheiroNome: string | null = null;
-  try {
-    const [proj] = await db
-      .select({ engenheiro: obras.responsavel })
-      .from(planejamentoProjetos)
-      .leftJoin(obras, eq(obras.id, planejamentoProjetos.obraId))
-      .where(eq(planejamentoProjetos.id, projetoId))
-      .limit(1);
-    engenheiroNome = (proj?.engenheiro || "").trim() || null;
-  } catch (e: any) {
-    console.error(
-      "[resolverResponsaveisBatch] falha ao buscar engenheiro do projeto:",
-      e?.message || e,
-    );
-  }
-
+  // Rev. 1846 — A heurística runtime de Rev. 1818 (que filtrava valores iguais
+  // ao nome do engenheiro do projeto) foi MOVIDA para um cleanup ONE-SHOT em
+  // `server/_core/index.ts` (SyncSchema+ Rev. 1846, marcador
+  // `planejamento_projetos.resp_lotus_legacy_cleaned`). Motivo: quando o
+  // engenheiro de uma obra é uma empresa terceira (ex.: 'Rohr') e o planejador
+  // digita esse mesmo nome no popover Responsável Manual, o filtro descartava
+  // silenciosamente — Programação Semanal mostrava 'FC' apesar do cronograma
+  // ter 'Rohr'. Agora a entrada do usuário é SAGRADA: só descartamos valores
+  // genéricos triviais ('', 'FC', 'FC ENGENHARIA') no runtime; o legado MSP
+  // (engenheiro) é purgado uma única vez no startup.
   const norm = (s: string | null | undefined) =>
     (s || "").trim().toLowerCase().replace(/\s+/g, " ");
-  const engNorm = norm(engenheiroNome);
-  const VALORES_LEGADO_PADRAO = new Set(
-    ["", "fc", "fc engenharia", "fcengenharia"].concat(engNorm ? [engNorm] : []),
-  );
+  const VALORES_LEGADO_PADRAO = new Set([
+    "",
+    "fc",
+    "fc engenharia",
+    "fcengenharia",
+  ]);
   const ehValorLegado = (v: string | null | undefined) =>
     VALORES_LEGADO_PADRAO.has(norm(v));
 

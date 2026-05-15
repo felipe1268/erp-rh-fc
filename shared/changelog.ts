@@ -25,6 +25,25 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1846,
+    titulo: "Planejamento · Programacao Semanal — Responsavel Manual sagrado (cleanup one-shot do legado MSP)",
+    descricao: "User (15/05/2026, 2 screenshots — cronograma com input cyan 'Rohr' preenchido em 'Montagem do escoramento Sub-Solo - Rohr' e 'Montagem do andaime - Rohr', e Programacao Semanal mostrando badge 'FC' nas mesmas atividades): \"indiquei no cronograma o responsavel é a rohr e mesmo assim na programação semanal esta mostrando como FC.. pq?\".\n\n" +
+      "Causa-raiz: a Rev. 1818 introduziu uma heuristica RUNTIME em server/_shared/responsavelAtividade.ts que ignorava qualquer responsavelLotus que casasse (case/trim/whitespace-insensitive) com o nome do engenheiro do projeto (obras.responsavel) — para limpar o legado das importacoes MS Project que populavam responsavel_lotus com Texto1/Texto5 (nome do engenheiro FC). PROBLEMA: quando o engenheiro registrado em obras.responsavel para um projeto especifico e uma empresa terceira (ex.: 'Rohr'), o input legitimo do planejador no popover Responsavel Manual era SILENCIOSAMENTE descartado e a Programacao Semanal exibia 'FC' por fallback. O save funcionava (responsavel_lotus='Rohr' persistia no banco), mas o read filtrava antes de devolver pro client. Bug invisivel: usuario digita, ve salvar, recarrega e ve 'FC'.\n\n" +
+      "Fix (2 arquivos, 3 hunks):\n" +
+      "(1) server/_core/index.ts L538-597 — novo bloco SyncSchema+ Rev. 1846 ANTES do bloco Rev. 1743 de compras_solicitacoes. (a) ADD COLUMN IF NOT EXISTS resp_lotus_legacy_cleaned BOOLEAN DEFAULT FALSE em planejamento_projetos (sentinela de execucao). (b) Single SQL CTE com 4 etapas: alvos (projetos com flag FALSE e obras.responsavel nao-vazio) -> contagem (COUNT FILTER de atividades cujo responsavel_lotus norm == eng_norm por projeto) -> ELEGIVEIS (qtd_match >= 10, GUARDA ANTI-DESTRUICAO sugerida pelo architect — protege overrides manuais esparsos como o caso 'Rohr' do user com so 2 atividades; imports MSP legados sempre afetam centenas de linhas) -> limpas (UPDATE planejamento_atividades SET responsavel_lotus = NULL apenas onde projeto in elegiveis AND match exato) -> UPDATE planejamento_projetos SET resp_lotus_legacy_cleaned=TRUE APENAS para elegiveis (achado v2 do architect: marcar todos os alvos perderia projetos com 1-9 matches reais de legado, deixando contaminacao permanente; agora projetos nao-elegiveis sao re-avaliados a cada startup ate atingirem o threshold ou serem limpos manualmente). Idempotente, so loga se rowCount>0.\n" +
+      "(2) server/_shared/responsavelAtividade.ts L163-182 — REMOVIDA toda a query de obras.responsavel + engNorm. VALORES_LEGADO_PADRAO agora tem APENAS literais triviais ['', 'fc', 'fc engenharia', 'fcengenharia']. ehValorLegado nao filtra mais nada que case com engenheiro. Comentario novo explica que a purga foi movida para o startup one-shot.\n" +
+      "(3) server/_shared/responsavelAtividade.ts L31-36 — removidos imports nao-usados (planejamentoAtividades, planejamentoProjetos, obras) que eram puxados so pra heuristica retirada.\n\n" +
+      "Comportamento esperado:\n" +
+      "(a) Apos restart, projetos com legado MSP (responsavel_lotus = nome do engenheiro) tem o campo NULLado uma vez e a flag resp_lotus_legacy_cleaned=TRUE.\n" +
+      "(b) A partir dai, qualquer input do planejador no popover Responsavel Manual e SAGRADO — mesmo que digite o nome do engenheiro, o valor persiste e e respeitado pela hierarquia (Externa > responsavelLotus manual > contrato terceiro > FC).\n" +
+      "(c) Caso particular do user: 'Rohr' digitado → persiste → ProgramacaoSemanalLotus exibe 'Rohr' na coluna RESPONSAVEL.\n\n" +
+      "Preservado: ZERO breaking change. Hierarquia 1817 intacta (isExterna > responsavelLotus > contrato > FC). Schema apenas ganha 1 coluna boolean default FALSE (nao quebra nenhum SELECT existente). DELETE/migration destrutiva: ZERO. Cleanup so toca atividades onde responsavel_lotus = engenheiro EXATO (norm) e o projeto ainda nao foi cleaned. Importer MSP: nao tocado (caso volte a popular Texto1/Texto5 no futuro, basta ressetar a flag pra purgar de novo). ResponsavelCell e PlanejamentoDetalhe input cyan: ZERO mudanca. Reversivel: dropar bloco SyncSchema+ Rev. 1846, reverter responsavelAtividade.ts pra Rev. 1818 (restaura imports + engNorm + Set com engNorm). R-001/R-007/R-010 OK.",
+    tipo: 'bugfix',
+    modulos: 'Planejamento (Programacao Semanal · Responsavel)',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 19:30:00',
+  },
+  {
     version: 1844,
     titulo: "Aviso Previo · Tendencia mes-a-mes — 'Valor Estimado das Aberturas' com centavos (R$ x.xxx,yy)",
     descricao: "User (15/05/2026, screenshot do bloco 'Tendencia mes-a-mes - 2026' em /dashboards/aviso-previo, linha 'Valor Estimado das Aberturas' mostrando R$ 1.689 / R$ 179.693 / R$ 53.006 / R$ 36.045 / R$ 20.872 - tudo sem centavos): \"coloca o valor em dinheiro no formato correto, quero com ponto e virgula..\".\n\n" +

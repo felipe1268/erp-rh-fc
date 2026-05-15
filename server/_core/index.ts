@@ -532,6 +532,68 @@ Regras:
           console.log(`[SyncSchema+] Colunas data_*_real + responsavel_lotus + previsto/realizado_msp_pct + msp_uid garantidas em planejamento_atividades.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA planejamento_atividades datas reais:`, e?.message || e); }
 
+        // Rev. 1846 — Cleanup ONE-SHOT do legado MSP em responsavel_lotus.
+        // Substitui a heurística runtime de Rev. 1818 (que comparava o valor com
+        // o nome do engenheiro do projeto a CADA leitura). Problema: quando o
+        // engenheiro do obras é uma empresa terceira (ex.: 'Rohr') e o
+        // planejador digita justamente esse nome no popover Responsável Manual,
+        // o filtro descartava silenciosamente, fazendo a Programação Semanal
+        // mostrar 'FC' apesar do cronograma ter 'Rohr'. Solução: limpar UMA VEZ
+        // por projeto os valores legado (== engenheiro), marcar projeto como
+        // limpo via flag no DB, e nas próximas leituras NÃO filtrar nada que
+        // case com o engenheiro — o input do usuário passa a ser sagrado.
+        try {
+          await db.execute(sql`ALTER TABLE planejamento_projetos ADD COLUMN IF NOT EXISTS resp_lotus_legacy_cleaned BOOLEAN DEFAULT FALSE`);
+          // Idempotente: só atualiza projetos com flag FALSE; após o UPDATE,
+          // o projeto fica com TRUE e fica imune a futuras execuções.
+          // GUARDA ANTI-DESTRUIÇÃO (achado de code review architect):
+          // só purga projetos com PADRÃO DE IMPORT EM MASSA — pelo menos 10
+          // atividades com responsavel_lotus EXATAMENTE igual ao engenheiro
+          // (norm). Isso protege overrides manuais esparsos (típico do popover:
+          // 1-5 atividades) — caso do usuário com 'Rohr' (engenheiro = 'Rohr',
+          // 2 atividades manuais). Imports MSP legados afetavam centenas de
+          // linhas em bloco, então o threshold separa com folga.
+          const r: any = await db.execute(sql`
+            WITH alvos AS (
+              SELECT p.id AS projeto_id,
+                     REGEXP_REPLACE(BTRIM(LOWER(o.responsavel)), '\\s+', ' ', 'g') AS eng_norm
+              FROM planejamento_projetos p
+              JOIN obras o ON o.id = p.obra_id
+              WHERE COALESCE(p.resp_lotus_legacy_cleaned, FALSE) = FALSE
+                AND o.responsavel IS NOT NULL
+                AND BTRIM(o.responsavel) <> ''
+            ),
+            contagem AS (
+              SELECT alvos.projeto_id, alvos.eng_norm,
+                     COUNT(*) FILTER (
+                       WHERE a.responsavel_lotus IS NOT NULL
+                         AND REGEXP_REPLACE(BTRIM(LOWER(a.responsavel_lotus)), '\\s+', ' ', 'g') = alvos.eng_norm
+                     ) AS qtd_match
+              FROM alvos
+              LEFT JOIN planejamento_atividades a ON a.projeto_id = alvos.projeto_id
+              GROUP BY alvos.projeto_id, alvos.eng_norm
+            ),
+            elegiveis AS (
+              SELECT projeto_id, eng_norm FROM contagem WHERE qtd_match >= 10
+            ),
+            limpas AS (
+              UPDATE planejamento_atividades a
+                 SET responsavel_lotus = NULL
+                FROM elegiveis
+               WHERE a.projeto_id = elegiveis.projeto_id
+                 AND a.responsavel_lotus IS NOT NULL
+                 AND REGEXP_REPLACE(BTRIM(LOWER(a.responsavel_lotus)), '\\s+', ' ', 'g') = elegiveis.eng_norm
+            )
+            UPDATE planejamento_projetos p
+               SET resp_lotus_legacy_cleaned = TRUE
+              WHERE p.id IN (SELECT projeto_id FROM elegiveis)
+          `);
+          const rows = (r as any)?.rowCount ?? (r as any)?.rows?.length ?? 0;
+          if (rows > 0) {
+            console.log(`[SyncSchema+] Rev. 1846: cleanup legado responsavel_lotus aplicado em ${rows} projeto(s).`);
+          }
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA cleanup responsavel_lotus legado:`, e?.message || e); }
+
         // Rev. 1743 — UNIQUE INDEX em compras_solicitacoes (company_id, numero_sc).
         // FORA do ColFix com version guard porque, em DBs onde a versão já estava aplicada,
         // o guard pula o bloco e duplicatas continuariam sendo criadas. Idempotente: cleanup
