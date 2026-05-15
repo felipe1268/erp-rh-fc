@@ -2092,6 +2092,17 @@ export const orcamentoRouter = router({
       cpusFaltantes.sort();
       const cpusReferenciadas = cpusReferenciadasMap;
 
+      // ── Rev. 1820 / Item 10 — recalcular pesos dos planejamentos vinculados.
+      // Pode haver projetos cadastrados antes do orçamento (raro no fluxo "importar"
+      // novo, comum em legado). Roda defensivo, nunca quebra a importação.
+      try {
+        const { recalcularPesosByOrcamento } = await import("../_shared/recalcularPesos");
+        const r = await recalcularPesosByOrcamento(db, orcamentoId);
+        if (r.projetosAfetados > 0) console.log(`[Importar→recalcPesos] orcamento=${orcamentoId} projetos=${r.projetosAfetados} revisões=${r.revisoesRecalculadas}`);
+      } catch (e: any) {
+        console.error("[Importar→recalcPesos] falhou (não bloqueia import)", e?.message ?? e);
+      }
+
       console.log(`[Importar] Concluído — orcamentoId: ${orcamentoId}, itens: ${itens.length}, CPUs: ${cpusParsed.composicoes.length}, CPUs referenciadas: ${cpusReferenciadas.size}, faltantes: ${cpusFaltantes.length}`);
       return {
         id: orcamentoId, codigo, totalVenda: totalVendaFinal, totalCusto, totalMeta,
@@ -2492,6 +2503,15 @@ export const orcamentoRouter = router({
       }
       cpusFaltantesRe.sort();
       const cpusReferenciadasRe = cpusReferenciadasReMap;
+
+      // ── Rev. 1820 / Item 10 — recalcular pesos dos planejamentos vinculados.
+      try {
+        const { recalcularPesosByOrcamento } = await import("../_shared/recalcularPesos");
+        const r = await recalcularPesosByOrcamento(db, input.orcamentoId);
+        if (r.projetosAfetados > 0) console.log(`[Reimportar→recalcPesos] orcamento=${input.orcamentoId} projetos=${r.projetosAfetados} revisões=${r.revisoesRecalculadas}`);
+      } catch (e: any) {
+        console.error("[Reimportar→recalcPesos] falhou (não bloqueia reimport)", e?.message ?? e);
+      }
 
       return {
         success: true,
