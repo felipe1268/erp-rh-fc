@@ -95,8 +95,8 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
 
   const isMaster = user?.role === 'admin_master';
 
-  const [editarBaixaDialog, setEditarBaixaDialog] = useState<{ open: boolean; avisoId: number | null; tipo: 'rescisao' | 'fgts'; valorAtual: string; obs: string }>({ open: false, avisoId: null, tipo: 'rescisao', valorAtual: '', obs: '' });
-  const [estornarBaixaDialog, setEstornarBaixaDialog] = useState<{ open: boolean; avisoId: number | null; tipo: 'rescisao' | 'fgts'; valor: string; motivo: string }>({ open: false, avisoId: null, tipo: 'rescisao', valor: '', motivo: '' });
+  const [editarBaixaDialog, setEditarBaixaDialog] = useState<{ open: boolean; avisoId: number | null; tipo: 'rescisao' | 'fgts' | 'complementar'; valorAtual: string; obs: string }>({ open: false, avisoId: null, tipo: 'rescisao', valorAtual: '', obs: '' });
+  const [estornarBaixaDialog, setEstornarBaixaDialog] = useState<{ open: boolean; avisoId: number | null; tipo: 'rescisao' | 'fgts' | 'complementar'; valor: string; motivo: string }>({ open: false, avisoId: null, tipo: 'rescisao', valor: '', motivo: '' });
 
   // Form state
   const [form, setForm] = useState<any>({});
@@ -3161,24 +3161,61 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
               return (
                 <>
                   {(rescisaoJaFeita || fgtsJaFeita || complementarJaFeita) && (
-                    <div className="rounded-lg border border-green-200 bg-green-50 p-3 space-y-1">
+                    <div className="rounded-lg border border-green-200 bg-green-50 p-3 space-y-1.5">
                       <p className="text-xs font-semibold text-green-700 uppercase">Baixas já registradas:</p>
+                      {/* Rev. 1823 — botões Editar/Estornar ao lado de cada baixa */}
                       {rescisaoJaFeita && (
-                        <div className="flex items-center gap-2 text-xs text-green-700">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          <span>Rescisão: <strong>{formatMoeda(ad.baixaRescisaoValor)}</strong> em {formatDate(ad.baixaRescisaoData)} por {ad.baixaRescisaoPor}</span>
+                        <div className="flex items-center justify-between gap-2 text-xs text-green-700">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">Rescisão: <strong>{formatMoeda(ad.baixaRescisaoValor)}</strong> em {formatDate(ad.baixaRescisaoData)} por {ad.baixaRescisaoPor}</span>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button size="icon" variant="ghost" className="h-6 w-6 text-blue-700 hover:bg-blue-100" title="Editar valor"
+                              onClick={() => setEditarBaixaDialog({ open: true, avisoId: ad.id, tipo: 'rescisao', valorAtual: String(ad.baixaRescisaoValor || ''), obs: '' })}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6 text-red-700 hover:bg-red-100" title="Estornar baixa"
+                              onClick={() => setEstornarBaixaDialog({ open: true, avisoId: ad.id, tipo: 'rescisao', valor: String(ad.baixaRescisaoValor || ''), motivo: '' })}>
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       )}
                       {fgtsJaFeita && (
-                        <div className="flex items-center gap-2 text-xs text-green-700">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          <span>Multa FGTS: <strong>{formatMoeda(ad.baixaFgtsValor)}</strong> em {formatDate(ad.baixaFgtsData)} por {ad.baixaFgtsPor}</span>
+                        <div className="flex items-center justify-between gap-2 text-xs text-green-700">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">Multa FGTS: <strong>{formatMoeda(ad.baixaFgtsValor)}</strong> em {formatDate(ad.baixaFgtsData)} por {ad.baixaFgtsPor}</span>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button size="icon" variant="ghost" className="h-6 w-6 text-blue-700 hover:bg-blue-100" title="Editar valor"
+                              onClick={() => setEditarBaixaDialog({ open: true, avisoId: ad.id, tipo: 'fgts', valorAtual: String(ad.baixaFgtsValor || ''), obs: '' })}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6 text-red-700 hover:bg-red-100" title="Estornar baixa"
+                              onClick={() => setEstornarBaixaDialog({ open: true, avisoId: ad.id, tipo: 'fgts', valor: String(ad.baixaFgtsValor || ''), motivo: '' })}>
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       )}
                       {complementarJaFeita && (
-                        <div className="flex items-center gap-2 text-xs text-green-700">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          <span>Rescisão Complementar: <strong>{formatMoeda(ad.baixaComplementarValor)}</strong> em {formatDate(ad.baixaComplementarData)} por {ad.baixaComplementarPor}</span>
+                        <div className="flex items-center justify-between gap-2 text-xs text-green-700">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">Rescisão Complementar: <strong>{formatMoeda(ad.baixaComplementarValor)}</strong> em {formatDate(ad.baixaComplementarData)} por {ad.baixaComplementarPor}</span>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button size="icon" variant="ghost" className="h-6 w-6 text-blue-700 hover:bg-blue-100" title="Editar valor"
+                              onClick={() => setEditarBaixaDialog({ open: true, avisoId: ad.id, tipo: 'complementar', valorAtual: String(ad.baixaComplementarValor || ''), obs: '' })}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6 text-red-700 hover:bg-red-100" title="Estornar baixa"
+                              onClick={() => setEstornarBaixaDialog({ open: true, avisoId: ad.id, tipo: 'complementar', valor: String(ad.baixaComplementarValor || ''), motivo: '' })}>
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -3447,7 +3484,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-blue-700">
-              <Pencil className="h-5 w-5" /> Editar Valor da Baixa — {editarBaixaDialog.tipo === 'rescisao' ? 'Rescisão' : 'Multa FGTS'}
+              <Pencil className="h-5 w-5" /> Editar Valor da Baixa — {editarBaixaDialog.tipo === 'rescisao' ? 'Rescisão' : editarBaixaDialog.tipo === 'fgts' ? 'Multa FGTS' : 'Rescisão Complementar'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -3498,7 +3535,7 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
-              <RotateCcw className="h-5 w-5" /> Estornar Baixa — {estornarBaixaDialog.tipo === 'rescisao' ? 'Rescisão' : 'Multa FGTS'}
+              <RotateCcw className="h-5 w-5" /> Estornar Baixa — {estornarBaixaDialog.tipo === 'rescisao' ? 'Rescisão' : estornarBaixaDialog.tipo === 'fgts' ? 'Multa FGTS' : 'Rescisão Complementar'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
