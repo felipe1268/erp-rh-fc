@@ -5288,6 +5288,16 @@ function FaltasReportModal(props: {
 }) {
   const { open, onClose, companyId, companyIds, dataInicio, dataFim, obraIds, obrasList, expandedIds, onToggleExpanded, search, onChangeSearch } = props;
   const [obraPopoverOpen, setObraPopoverOpen] = useState(false);
+  // Rev. 1839 — Filtro por KPI (clique em card filtra a tabela). 'all' = sem filtro.
+  type KpiKey = "all" | "injustificadas" | "justificadas" | "dsrPerdido" | "atrasos" | "saidasAntecipadas";
+  const [kpiFilter, setKpiFilter] = useState<KpiKey>("all");
+  // Mapa KPI → tipo do detalhe (para filtrar também os badges expandidos)
+  const kpiToDetalheTipo: Record<Exclude<KpiKey, "all" | "dsrPerdido">, string> = {
+    injustificadas: "injustificada",
+    justificadas: "justificada",
+    atrasos: "atraso",
+    saidasAntecipadas: "saida_antecipada",
+  };
 
   const enabled = open && companyId > 0 && !!dataInicio && !!dataFim;
   const report = trpc.fechamentoPonto.getFaltasReport.useQuery(
@@ -5297,13 +5307,20 @@ function FaltasReportModal(props: {
 
   const filtered = useMemo(() => {
     const list = report.data?.funcionarios || [];
-    if (!search.trim()) return list;
-    const q = removeAccents(search.trim().toLowerCase());
-    return list.filter((f: any) =>
-      removeAccents(String(f.nomeCompleto || "").toLowerCase()).includes(q)
-      || String(f.matricula || "").toLowerCase().includes(q)
-    );
-  }, [report.data, search]);
+    let out = list;
+    // Rev. 1839 — Filtro por KPI: só mantém funcionários com ocorrência > 0 do tipo escolhido
+    if (kpiFilter !== "all") {
+      out = out.filter((f: any) => Number(f[kpiFilter] ?? 0) > 0);
+    }
+    if (search.trim()) {
+      const q = removeAccents(search.trim().toLowerCase());
+      out = out.filter((f: any) =>
+        removeAccents(String(f.nomeCompleto || "").toLowerCase()).includes(q)
+        || String(f.matricula || "").toLowerCase().includes(q)
+      );
+    }
+    return out;
+  }, [report.data, search, kpiFilter]);
 
   const totais = report.data?.totais;
 
@@ -5478,29 +5495,62 @@ function FaltasReportModal(props: {
           </div>
         </div>
 
-        {/* Totais — Rev. 1836: 2col mobile · 3col sm · 5col lg, padding/tipografia fluidos */}
-        {totais && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-3">
-            <div className="bg-rose-50 border border-rose-200 rounded-lg p-2 sm:p-3 text-center min-w-0">
-              <p className="text-xl sm:text-2xl font-bold text-rose-700 leading-tight tabular-nums">{totais.injustificadas}</p>
-              <p className="text-[11px] sm:text-xs text-rose-700 leading-tight">Faltas Injustificadas</p>
+        {/* Totais — Rev. 1836: 2col mobile · 3col sm · 5col lg, padding/tipografia fluidos
+            Rev. 1839: cards viram BOTÕES — clique filtra a tabela; clique no ativo limpa */}
+        {totais && (() => {
+          const cards: Array<{ key: KpiKey; value: number; label: string; bg: string; border: string; text: string; ring: string; activeBg: string; testid: string; extraClass?: string }> = [
+            { key: "injustificadas",    value: totais.injustificadas,    label: "Faltas Injustificadas", bg: "bg-rose-50",   border: "border-rose-200",   text: "text-rose-700",   ring: "ring-rose-500",   activeBg: "bg-rose-100",   testid: "kpi-injustificadas" },
+            { key: "justificadas",      value: totais.justificadas,      label: "Faltas Justificadas",  bg: "bg-cyan-50",   border: "border-cyan-200",   text: "text-cyan-700",   ring: "ring-cyan-500",   activeBg: "bg-cyan-100",   testid: "kpi-justificadas" },
+            { key: "dsrPerdido",        value: totais.dsrPerdido,        label: "DSR Perdido",          bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700", ring: "ring-purple-500", activeBg: "bg-purple-100", testid: "kpi-dsr" },
+            { key: "atrasos",           value: totais.atrasos,           label: "Atrasos",              bg: "bg-yellow-50", border: "border-yellow-200", text: "text-yellow-700", ring: "ring-yellow-500", activeBg: "bg-yellow-100", testid: "kpi-atrasos" },
+            { key: "saidasAntecipadas", value: totais.saidasAntecipadas, label: "Saídas Antecipadas",   bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700", ring: "ring-orange-500", activeBg: "bg-orange-100", testid: "kpi-saidas", extraClass: "col-span-2 sm:col-span-1" },
+          ];
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-3">
+              {cards.map(c => {
+                const active = kpiFilter === c.key;
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => setKpiFilter(active ? "all" : c.key)}
+                    title={active ? `Clique para limpar o filtro` : `Filtrar somente funcionários com ${c.label}`}
+                    data-testid={`btn-${c.testid}`}
+                    aria-pressed={active}
+                    className={[
+                      "rounded-lg p-2 sm:p-3 text-center min-w-0 border transition-all",
+                      "hover:shadow-sm hover:-translate-y-[1px] active:translate-y-0 cursor-pointer",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
+                      c.border,
+                      active ? `${c.activeBg} ring-2 ${c.ring}` : c.bg,
+                      c.extraClass || "",
+                    ].join(" ")}
+                  >
+                    <p className={`text-xl sm:text-2xl font-bold leading-tight tabular-nums ${c.text}`}>{c.value}</p>
+                    <p className={`text-[11px] sm:text-xs leading-tight ${c.text}`}>{c.label}</p>
+                  </button>
+                );
+              })}
             </div>
-            <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-2 sm:p-3 text-center min-w-0">
-              <p className="text-xl sm:text-2xl font-bold text-cyan-700 leading-tight tabular-nums">{totais.justificadas}</p>
-              <p className="text-[11px] sm:text-xs text-cyan-700 leading-tight">Faltas Justificadas</p>
-            </div>
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 sm:p-3 text-center min-w-0">
-              <p className="text-xl sm:text-2xl font-bold text-purple-700 leading-tight tabular-nums">{totais.dsrPerdido}</p>
-              <p className="text-[11px] sm:text-xs text-purple-700 leading-tight">DSR Perdido</p>
-            </div>
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 sm:p-3 text-center min-w-0">
-              <p className="text-xl sm:text-2xl font-bold text-yellow-700 leading-tight tabular-nums">{totais.atrasos}</p>
-              <p className="text-[11px] sm:text-xs text-yellow-700 leading-tight">Atrasos</p>
-            </div>
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 sm:p-3 text-center min-w-0 col-span-2 sm:col-span-1">
-              <p className="text-xl sm:text-2xl font-bold text-orange-700 leading-tight tabular-nums">{totais.saidasAntecipadas}</p>
-              <p className="text-[11px] sm:text-xs text-orange-700 leading-tight">Saídas Antecipadas</p>
-            </div>
+          );
+        })()}
+
+        {/* Rev. 1839 — Banner do filtro KPI ativo (mostra qual KPI está filtrando + botão limpar) */}
+        {kpiFilter !== "all" && (
+          <div className="flex items-center justify-between gap-2 mb-3 px-3 py-2 rounded-md bg-slate-100 border border-slate-200 text-xs sm:text-sm" data-testid="banner-kpi-filter">
+            <span className="text-slate-700 truncate">
+              <span className="font-medium">Filtro ativo:</span> mostrando apenas funcionários com{" "}
+              <span className="font-semibold">
+                {kpiFilter === "injustificadas" && "Faltas Injustificadas"}
+                {kpiFilter === "justificadas" && "Faltas Justificadas"}
+                {kpiFilter === "dsrPerdido" && "DSR Perdido"}
+                {kpiFilter === "atrasos" && "Atrasos"}
+                {kpiFilter === "saidasAntecipadas" && "Saídas Antecipadas"}
+              </span>
+            </span>
+            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs shrink-0" onClick={() => setKpiFilter("all")} data-testid="btn-limpar-kpi">
+              Limpar filtro
+            </Button>
           </div>
         )}
 
@@ -5589,11 +5639,20 @@ function FaltasReportModal(props: {
                         <td></td>
                         <td colSpan={8} className="p-3">
                           <div className="text-xs text-muted-foreground mb-2">Datas com ocorrência:</div>
-                          {(f.detalhes || []).length === 0 ? (
-                            <div className="text-xs text-muted-foreground italic">Sem detalhes.</div>
-                          ) : (
+                          {(() => {
+                            // Rev. 1839 — Quando filtrando por KPI específico (exceto DSR, que é derivado),
+                            // os badges também são filtrados pelo tipo correspondente.
+                            const detalhes = (f.detalhes || []) as any[];
+                            const tipoAlvo = kpiFilter !== "all" && kpiFilter !== "dsrPerdido"
+                              ? kpiToDetalheTipo[kpiFilter as Exclude<KpiKey, "all" | "dsrPerdido">]
+                              : null;
+                            const detalhesView = tipoAlvo ? detalhes.filter(d => d.tipo === tipoAlvo) : detalhes;
+                            if (detalhesView.length === 0) {
+                              return <div className="text-xs text-muted-foreground italic">Sem detalhes.</div>;
+                            }
+                            return (
                             <div className="flex flex-wrap gap-2">
-                              {f.detalhes.map((d: any, idx: number) => {
+                              {detalhesView.map((d: any, idx: number) => {
                                 const cfg: any = {
                                   injustificada: { color: "border-rose-400 bg-rose-50 text-rose-800", icon: <UserX className="h-3 w-3" />, label: "Falta Inj." },
                                   justificada:   { color: "border-cyan-400 bg-cyan-50 text-cyan-800", icon: <CalendarX className="h-3 w-3" />, label: "Falta Just." },
@@ -5613,7 +5672,8 @@ function FaltasReportModal(props: {
                                 );
                               })}
                             </div>
-                          )}
+                            );
+                          })()}
                         </td>
                       </tr>
                     )}

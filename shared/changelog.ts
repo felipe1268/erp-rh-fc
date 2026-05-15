@@ -13362,4 +13362,22 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-16 01:15:00",
   },
+  {
+    version: 1839,
+    titulo: "Fechamento de Ponto · Relatório Faltas/Atrasos — KPIs viram filtros clicáveis",
+    descricao:
+      "User (15/05/2026, screenshot do modal Relatório de Faltas/Atrasos/Saídas Antecipadas com os 5 cards de totais (474 Inj. / 28 Just. / 163 DSR / 128 Atr. / 85 Saí.Ant.)): 'quero os filtros resolsivos [responsivos] que quando clicar, filtre a informação..'.\n\n" +
+      "Causa pré-existente: Em `client/src/pages/FechamentoPonto.tsx` L5481-5505 (modal `RelatorioFaltasModal`), os 5 cards de totais eram puramente decorativos (`<div>` estático). Não havia forma rápida de o usuário ver SÓ quem teve atrasos, ou SÓ injustificadas, etc. — precisava ler a tabela inteira (87 funcionários no exemplo) procurando coluna por coluna.\n\n" +
+      "Fix (1 arquivo, 3 hunks):\n" +
+      "  1) L5292-5326 — adiciona estado `kpiFilter: 'all' | 'injustificadas' | 'justificadas' | 'dsrPerdido' | 'atrasos' | 'saidasAntecipadas'` (default 'all') + mapa `kpiToDetalheTipo` para corresponder KPI → `tipo` do detalhe (`injustificada`/`justificada`/`atraso`/`saida_antecipada`). O `useMemo` de `filtered` ganha um filtro extra ANTES do search: quando `kpiFilter !== 'all'`, mantém só funcionários cujo `f[kpiFilter]` (que é exatamente o nome do campo no payload do tRPC `getFaltasReport.funcionarios[]`) seja > 0. Search é aplicado depois (composição correta). Dependência `kpiFilter` adicionada à lista deps.\n" +
+      "  2) L5501-5539 — converte os 5 cards em `<button type='button'>` em loop a partir de array de config (key/value/label/cores/testid). Visual preservado (mesmas cores rose/cyan/purple/yellow/orange, mesma grid `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5`, mesmo padding/typography fluida da Rev. 1836, último card mantém `col-span-2 sm:col-span-1`). Ganha estado ATIVO: `bg-{cor}-100` + `ring-2 ring-{cor}-500` + título dinâmico ('Filtrar somente funcionários com X' / 'Clique para limpar o filtro'). Microinterações: `hover:shadow-sm hover:-translate-y-[1px] active:translate-y-0` + `focus-visible:ring-2 focus-visible:ring-offset-1` (acessibilidade teclado). Toggle: clicar no card ativo limpa o filtro (volta a 'all'). `aria-pressed={active}` para screen readers.\n" +
+      "  3) L5541-5559 — banner abaixo dos cards (visível apenas quando `kpiFilter !== 'all'`): `bg-slate-100` + texto 'Filtro ativo: mostrando apenas funcionários com X' + botão 'Limpar filtro' (`variant='ghost'`). Garante que o usuário sempre saiba que está vendo uma lista filtrada e como sair.\n" +
+      "  4) L5645-5679 — quando expande um funcionário, os badges de detalhes também são filtrados pelo tipo correspondente ao KPI ativo (exceto `dsrPerdido`, que é derivado de faltas — mantém todos os detalhes). Ex.: filtro 'Atrasos' ativo → expandir mostra só os badges 'Atraso', omitindo Falta Inj./Just./Saída Ant. mesmo se existirem.\n\n" +
+      "Por que é seguro: ZERO mudança em backend / contrato tRPC / payload (`getFaltasReport` continua retornando todos os funcionários e tipos de detalhe — filtragem é client-side). ZERO mudança em export PDF/Excel: ambos já consomem `filtered` (L5337/L5418 do exportarPDF e do exportarExcel), então automaticamente respeitam o filtro KPI escolhido (bônus consistente: usuário filtra na tela e o PDF/Excel sai filtrado também). Search e filtro KPI compõem (search dentro do subset KPI). Estado é local ao modal — fechar e reabrir reseta para 'all' (re-mount). Mantém todos os `data-testid` existentes + adiciona novos (`btn-kpi-injustificadas`/`-justificadas`/`-dsr`/`-atrasos`/`-saidas`, `banner-kpi-filter`, `btn-limpar-kpi`). Mantém comportamento de expansão (`onToggleExpanded`/`expandedIds` continuam externos). Não altera `colSpan={9}` nem layout responsivo da Rev. 1836. Reversível em 4 hunks. R-001 OK (sem schema/migration/DELETE/contrato).\n\n" +
+      "Esperado: usuário clica em '128 Atrasos' → tabela colapsa para mostrar só os funcionários com atrasos > 0; banner aparece confirmando o filtro; clica de novo no card OU em 'Limpar filtro' → volta a ver todos. Funciona em mobile (cards já são responsivos da Rev. 1836).",
+    tipo: "melhoria",
+    modulos: "Fechamento de Ponto · Relatório · UX",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-16 02:00:00",
+  },
 ];
