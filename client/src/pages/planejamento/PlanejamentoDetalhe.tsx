@@ -5414,9 +5414,10 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
         doc.querySelectorAll("Task").forEach(task => {
           const uid = task.querySelector("UID")?.textContent ?? "";
           if (uid === "0") return;
-          // Rev. 1822 — código EAP vem do campo ITEM (Texto1, FieldID=188743731)
-          // do template FC; fallback no <WBS> automático do MSP. Mantém paridade
-          // com o parser de ImportarCronograma.tsx (mesma ordem de leitura).
+          // Rev. 1822 — código EAP vem APENAS do campo ITEM (Texto1,
+          // FieldID=188743731). SEM fallback no <WBS> automático (mesma
+          // política do parser de ImportarCronograma.tsx). Sumários sem Item
+          // são pulados naturalmente pelo `if (!wbs) return` abaixo.
           let wbs = "";
           for (const child of Array.from(task.children)) {
             if (child.tagName !== "ExtendedAttribute") continue;
@@ -5425,7 +5426,6 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
             const val = (child.querySelector("Value")?.textContent ?? "").trim();
             if (val) { wbs = val; break; }
           }
-          if (!wbs) wbs = task.querySelector("WBS")?.textContent?.trim() ?? "";
           if (!wbs) return;
 
           // 1ª prioridade: Texto7 (%Reali AUX, FieldID 188743747) — 4 casas, vírgula BR

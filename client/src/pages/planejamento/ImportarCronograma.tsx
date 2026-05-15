@@ -336,17 +336,18 @@ export function parseMSProjectXML(text: string): TarefaImportada[] {
   return parseMSProjectTasksFromDoc(doc);
 }
 
-// Rev. 1822 — Lê o código EAP REAL da atividade (campo "Item" do template FC,
-// digitado pelo engenheiro: "01.01", "02.16.02.01", etc). É um ExtendedAttribute
-// com FieldID=188743731 (Texto1, Alias="ITEM").
+// Rev. 1822 — Lê o código EAP da atividade APENAS do campo "Item" (Texto1) do
+// template FC, digitado pelo engenheiro: "01.01", "02.16.02.01", etc. É um
+// ExtendedAttribute com FieldID=188743731 (Alias="ITEM").
 //
-// Antes: o ERP lia <WBS>, que no MSP é numeração AUTOMÁTICA por hierarquia
-// (1, 2, 2.1, 2.2…). Resultado: cronograma virava "renumerado" e nunca casava
-// com o orçamento (que tem "01.01" / "02.16.02.01"). A normalização canônica
-// da Rev. 1821 não resolvia: "1" jamais vira "01.01" por mais que se tire zero.
+// SEM FALLBACK no <WBS> automático: o WBS do MSP é uma régua interna do
+// programa (1, 2, 2.1…) que não tem nada a ver com o código do orçamento.
+// User (16/05/2026): "precisa aparecer somente o que esta na coluna ITEM".
+// Tarefas SUMÁRIAS (cabeçalhos sem item de orçamento) ficam com `eap_codigo`
+// vazio — a validação R-013 abaixo só estoura erro pra FOLHAS reais.
 //
-// Ordem: ITEM (Texto1) → fallback <WBS>. Filhos diretos do <Task> (não dos
-// Assignment aninhados) pra evitar pegar Texto1 de outro contexto.
+// Filhos diretos do <Task> (não `querySelectorAll`) pra evitar pegar Texto1
+// de Assignment aninhado.
 function lerCodigoItemDaTask(task: Element): string {
   for (const child of Array.from(task.children)) {
     if (child.tagName !== "ExtendedAttribute") continue;
@@ -355,7 +356,7 @@ function lerCodigoItemDaTask(task: Element): string {
     const val = (child.querySelector("Value")?.textContent ?? "").trim();
     if (val) return val;
   }
-  return task.querySelector("WBS")?.textContent?.trim() ?? "";
+  return "";
 }
 
 function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
@@ -462,13 +463,16 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     // Pula a tarefa de nível 0 (cabeçalho do projeto)
     if (uid === "0" || name === "" || level === 0) continue;
 
-    // Rev. 1797 / R-013 — EAP do orçamento é IMUTÁVEL: toda tarefa real
-    // (não-cabeçalho) DEVE ter <WBS> preenchido no XML. Sem fallback silencioso.
-    if (!wbs) {
+    // Rev. 1822 / R-013 — Validação dura SOMENTE em folhas reais (não-sumário,
+    // não-marco). Sumários e marcos podem ficar com `eap_codigo` vazio porque
+    // não têm item no orçamento (são só cabeçalhos hierárquicos do MSP).
+    // Folha sem Item = erro de cadastro no Project que precisa ser corrigido
+    // pelo engenheiro antes de importar.
+    if (!wbs && !summ && !isMarco) {
       throw new Error(
-        `Tarefa "${name.substring(0, 60)}" (nível ${level}) SEM código EAP no XML do MS Project. ` +
-        `Toda atividade deve ter o campo "Item" (Texto1) preenchido OU a coluna WBS ativada. ` +
-        `Rev. 1822: tentamos primeiro Item (Texto1/FieldID=188743731), fallback no WBS automático (R-013).`
+        `Atividade "${name.substring(0, 60)}" (nível ${level}) SEM código no campo "Item" do MS Project. ` +
+        `Toda FOLHA do cronograma precisa ter o Item (coluna Texto1) preenchido — esse é o EAP que casa com o orçamento. ` +
+        `Sumários e marcos não precisam. Corrija no Project e reimporte (R-013).`
       );
     }
 
