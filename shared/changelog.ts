@@ -25,6 +25,15 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1847,
+    titulo: "Fechamento de Ponto · Modal de Ranking (Mais Horas Extras / Atrasados / Pontuais / Faltas) — Tela cheia",
+    descricao: "User (15/05/2026, screenshot do modal 'Mais Horas Extras' sobre /fechamento-ponto, dialog ocupando ~96vw x 92vh com bordas escuras visiveis): \"coloque esta tela full screen para melhor visualização..\".\n\nFix (1 arquivo, 1 hunk): client/src/pages/FechamentoPonto.tsx L2078 — DialogContent do modal de ranking (compartilhado por 'pontuais', 'atrasados', 'extras', 'faltas') trocou `w-[96vw] max-w-7xl h-[92vh]` por `w-screen h-screen max-w-none sm:max-w-none rounded-none border-0`. Agora ocupa 100% da viewport, sem cantos arredondados nem borda — cabecalho, filtros (busca + obra), tabela de colaboradores e footer aproveitam toda a area visivel. Estrutura interna intacta: flex-col + p-0 gap-0, header shrink-0 com DialogTitle/DialogDescription, area scroll do meio, footer fixo. ResizableWidth segue desabilitado via resizable={false}.\n\nPreservado: ZERO mudanca em handlers (setRankingModal, setRankingSearch, setRankingObraFilter, exportar CSV, imprimir/PDF), backend, contrato tRPC, schema. Outros DialogContent da pagina (L570 confirmacao, L4095 detalhes individuais, L4748 edicao, L5060/L5125 sub-modais) NAO foram tocados. Reversivel em 1 hunk. R-001 OK.",
+    tipo: 'melhoria',
+    modulos: 'Fechamento de Ponto',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 19:50:00',
+  },
+  {
     version: 1846,
     titulo: "Planejamento · Programacao Semanal — Responsavel Manual sagrado (cleanup one-shot do legado MSP)",
     descricao: "User (15/05/2026, 2 screenshots — cronograma com input cyan 'Rohr' preenchido em 'Montagem do escoramento Sub-Solo - Rohr' e 'Montagem do andaime - Rohr', e Programacao Semanal mostrando badge 'FC' nas mesmas atividades): \"indiquei no cronograma o responsavel é a rohr e mesmo assim na programação semanal esta mostrando como FC.. pq?\".\n\n" +

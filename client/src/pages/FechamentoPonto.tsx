@@ -2075,7 +2075,7 @@ export default function FechamentoPonto() {
                 {/* ===== MODAL DETALHADO DE RANKING ===== */}
                 {rankingModal && rankings && (
                   <Dialog open={true} onOpenChange={(open) => { if (!open) { setRankingModal(null); setRankingSearch(""); setRankingObraFilter("all"); } }}>
-                    <DialogContent resizable={false} className="flex flex-col p-0 gap-0 w-[96vw] max-w-7xl h-[92vh]">
+                    <DialogContent resizable={false} className="flex flex-col p-0 gap-0 w-screen h-screen max-w-none sm:max-w-none rounded-none border-0">
 
                       {/* ── Cabeçalho ── */}
                       <DialogHeader className="shrink-0 px-6 py-3 border-b bg-white">
