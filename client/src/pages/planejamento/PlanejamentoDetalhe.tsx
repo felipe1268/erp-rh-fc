@@ -535,7 +535,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     let refStr: string;
     if (semanaVisualizacao) {
       const semFim = new Date(new Date(semanaVisualizacao + "T12:00:00").getTime() + 7 * 86400000).toISOString().slice(0, 10);
-      refStr = (cutoffOficialAt && cutoffOficialAt >= semanaVisualizacao && cutoffOficialAt < semFim) ? cutoffOficialAt : semFim;
+      refStr = (cutoffOficialAt && cutoffOficialAt < semFim) ? cutoffOficialAt : semFim;
     } else {
       refStr = cutoffOficialAt ?? refDateStr;
       if (cutoffOficialAt && refDateStr < cutoffOficialAt) refStr = refDateStr;
@@ -584,7 +584,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     let refStr: string;
     if (semanaVisualizacao) {
       const semFim = new Date(new Date(semanaVisualizacao + "T12:00:00").getTime() + 7 * 86400000).toISOString().slice(0, 10);
-      refStr = (cutoffOficial && cutoffOficial >= semanaVisualizacao && cutoffOficial < semFim) ? cutoffOficial : semFim;
+      refStr = (cutoffOficial && cutoffOficial < semFim) ? cutoffOficial : semFim;
     } else {
       refStr = cutoffOficial ?? refDateStr;
       if (cutoffOficial && refDateStr < cutoffOficial) refStr = refDateStr;
@@ -5200,12 +5200,17 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       return { previsto: 0, previstoAcumulado: 0, realizado: 0, realizadoAcumulado: 0, aderencia: null, debitoAcumulado: 0, metaRecuperacao: 0, semIniDate, semFimDate };
     }
     if (pvMacro) {
-      // Para semana corrente (que contém o cutoff oficial), encurta o fim ao
-      // cutoff (PV exigível) — bate com o top card no modo Oficial.
-      // Rev. 1655 — fonte do cutoff = dataCorteInfo (refetched por mutations).
+      // Rev. 1810 — convergência absoluta com o top card "Avanço Físico":
+      // sempre que o cutoff oficial existir e cair ANTES do fim da semana
+      // selecionada (corrente OU futura), o ref é o cutoff. Antes só clipava
+      // quando o cutoff caía DENTRO da semana — para semanas futuras, o ref
+      // ia para semanaFim e o pvMacro saturava em 100% (pvMacro clampa em
+      // [0,100]), criando o cenário "PREVISTO (SEMANA) 100% vs topo 31.48%"
+      // reportado pelo usuário no projeto QIU 2 - FASE 4 (id 29).
       const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
-      const refFim = (cutoffStr && cutoffStr >= semanaAtual && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
-      prev = Math.max(0, pvMacro(refFim) - pvMacro(semanaAtual));
+      const refFim = (cutoffStr && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
+      const refIni = (cutoffStr && cutoffStr < semanaAtual) ? cutoffStr : semanaAtual;
+      prev = Math.max(0, pvMacro(refFim) - pvMacro(refIni));
     } else {
       // Fallback (sem MSP): interp linear por datas + pesoFinanceiro (Rev. 1540).
       folhas.forEach((a: any) => {
@@ -5223,10 +5228,12 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
       });
     }
     // ── Previsto ACUMULADO até a janela cobrável da semana ──────────────────
-    // Mesma fonte/fórmula do top bar (Rev. 1656.1) e do card "PREVISTO (SEMANA)":
-    // semana CORRENTE → refStr = cutoff; passada/futura → refStr = semFim.
+    // Rev. 1810 — convergência absoluta com o top bar "Avanço Físico":
+    // sempre que cutoff existir e for ANTES do fim da semana selecionada
+    // (corrente OU futura), refFimAcum = cutoff. Para semana passada (já
+    // fechada) usa o fim da semana — preserva PV histórico.
     const cutoffStrAcum = dataCorteInfo?.dataCorteOficial ?? null;
-    const refFimAcum = (cutoffStrAcum && cutoffStrAcum >= semanaAtual && cutoffStrAcum < semanaFim) ? cutoffStrAcum : semanaFim;
+    const refFimAcum = (cutoffStrAcum && cutoffStrAcum < semanaFim) ? cutoffStrAcum : semanaFim;
     let previstoAcumulado = 0;
     if (folhas.length > 0 && pvMacro) {
       previstoAcumulado = pvMacro(refFimAcum);
@@ -5326,9 +5333,11 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     // o ref ao cutoff (PV exigível). Caso contrário, usa o fim da semana
     // (acumulado projetado para aquela semana — funciona p/ semanas futuras).
     if (pvMacro) {
-      // Rev. 1655 — fonte do cutoff = dataCorteInfo (refetched por mutations).
+      // Rev. 1810 — converge com o top card: cutoff manda sempre que cair
+      // antes do fim da semana selecionada. Antes saturava em 100% para
+      // semanas futuras (cenário do bug reportado em 15/05/2026).
       const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
-      const ref = (cutoffStr && cutoffStr >= semanaAtual && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
+      const ref = (cutoffStr && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
       return pvMacro(ref);
     }
     // Fallback (sem calMSP/envelope): rolagem ponderada legado (Rev. 1538).
@@ -5382,9 +5391,9 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
     // indiretas não fazem distinção em macro. Converge com o top card e o card
     // "PREVISTO (SEMANA)" sem indiretas.
     if (pvMacro) {
-      // Rev. 1655 — fonte do cutoff = dataCorteInfo (refetched por mutations).
+      // Rev. 1810 — mesma convergência (cutoff sempre que < semanaFim).
       const cutoffStr = dataCorteInfo?.dataCorteOficial ?? null;
-      const ref = (cutoffStr && cutoffStr >= semanaAtual && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
+      const ref = (cutoffStr && cutoffStr < semanaFim) ? cutoffStr : semanaFim;
       return pvMacro(ref);
     }
     // Fallback (sem MSP): rolagem ponderada legado.
@@ -6003,7 +6012,7 @@ function AvancoSemanal({ projetoId, proj, revisaoAtiva, atividades, avancos, uti
               {delta >= 0 ? "Adiantado" : "Atrasado"} em relação ao planejado
             </p>
           </div>
-          <p className="text-[10px] text-slate-400 mt-0.5">Semana {semanaAtual}</p>
+          <p className="text-[10px] text-slate-400 mt-0.5">{semanaNum}ª Semana — {fmtBR(semanaAtual)} a {fmtBR(semanaFim)}</p>
         </div>
       </div>
 
