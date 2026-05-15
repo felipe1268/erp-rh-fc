@@ -243,15 +243,15 @@ export function fracaoDecorridaMs(iniMs: number, refMs: number, fimMs: number, c
   return fracaoDecorrida(toIsoLocal(iniMs), toIsoLocal(refMs), toIsoLocal(fimMs), cal);
 }
 
-// ── Rev. 1811 — PREVISTO oficial: curva S por atividade ─────────────────────
+// ── Rev. 1811/1812 — PREVISTO oficial: curva S por atividade ────────────────
 // PMI Practice Standard for Scheduling §6.2 / Mattos "Planejamento e Controle
 // de Obras" §7.4 / Vargas "Gerenciamento de Tempo": para CADA atividade-folha
 // com datas, % esperado em `refStr` =
 //   fracaoDecorridaMs(dataInicio_atv → ref, dataFim_atv, calendario) × 100.
-// Pondera por pesoFinanceiro (ou por duração quando usarPesoPorDuracao=true)
-// e soma. É a "linha de base" do cronograma físico — leva em conta a curva S
-// real do trabalho (mobilização leve, MEPF/acabamento pesados no fim) e o
-// peso de cada atividade.
+// Pondera por pesoFinanceiro (Earned Value clássico) e soma. É a "linha de
+// base" do cronograma físico — leva em conta a curva S real do trabalho
+// (mobilização leve, MEPF/acabamento pesados no fim) e o peso de cada
+// atividade.
 //
 // **NÃO confundir** com EVM linear do envelope contratual:
 //   fracaoDecorridaMs(projIni → ref, projFim) × 100,
@@ -260,6 +260,20 @@ export function fracaoDecorridaMs(iniMs: number, refMs: number, fimMs: number, c
 // Previsto físico. Usar pra Previsto físico produz divergência em curvas S
 // não-lineares (ex.: HOTEL DO PAPA - AMPLIAÇÃO DO 5 PAV: pvMacro 84.68% vs
 // curva S real 53.25%).
+//
+// **Rev. 1812 — Hierarquia automática de peso (PMI EVM Practice Standard
+// §5.2 / Mattos §7.4 / Vargas)**, garantindo a MESMA lógica funcionando
+// em obras NOVAS (sem orçamento) e ANTIGAS (com peso financeiro):
+//   1º) `usarPesoPorDuracao=true` (escolha explícita do usuário) → duração;
+//   2º) Σ pesoFinanceiro > 0 → peso financeiro (EV clássico);
+//   3º) Σ duracaoDias > 0 → duração (Schedule-Based EV / Time-Phased Budget,
+//       Vargas §10.3) — fallback automático quando orçamento ainda não foi
+//       importado / vinculado;
+//   4º) uniforme (1 por atividade-folha) — último recurso (cronograma sem
+//       datas E sem peso, raríssimo).
+// QIU 2 - FASE 4 caía no 4º antes da Rev. 1812 (todos pesos = 0) — atividade
+// curta valia igual a longa, distorcia PV. Rev. 1812 detecta e usa duração
+// automaticamente, sem o usuário precisar configurar nada.
 //
 // FONTE ÚNICA de PREVISTO em todo o módulo Planejamento (top bar, cards de
 // Avanço Semanal, REFIS, ProgramacaoSemanalLotus). Função pura, sem hooks.
@@ -272,9 +286,12 @@ export function pvPonderadoPorAtividade(
   if (!folhasArr || folhasArr.length === 0) return 0;
   const folhasComDatas = folhasArr.filter((a: any) => a.dataInicio && a.dataFim);
   if (folhasComDatas.length === 0) return 0;
-  const pesoBruto = usarPesoPorDuracao
-    ? folhasArr.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0)
-    : folhasArr.reduce((s: number, a: any) => s + (parseFloat(a.pesoFinanceiro || "0") || 0), 0);
+  const somaCusto = folhasArr.reduce((s: number, a: any) => s + (parseFloat(a.pesoFinanceiro || "0") || 0), 0);
+  const somaDur   = folhasArr.reduce((s: number, a: any) => s + (a.duracaoDias ?? 0), 0);
+  // Hierarquia (ver bloco doc acima): explícito por duração > custo > duração
+  // automática > uniforme.
+  const usarDur = usarPesoPorDuracao || somaCusto === 0;
+  const pesoBruto = usarDur ? somaDur : somaCusto;
   const semPeso = pesoBruto === 0;
   const denom = semPeso ? (folhasComDatas.length || 1) : pesoBruto;
   const ref = new Date(refStr + "T12:00:00").getTime();
@@ -285,7 +302,7 @@ export function pvPonderadoPorAtividade(
     const exp = fracaoDecorridaMs(ini, ref, fim, cal) * 100;
     const peso = semPeso
       ? 1
-      : (usarPesoPorDuracao ? (a.duracaoDias ?? 0) : (parseFloat(a.pesoFinanceiro || "0") || 0));
+      : (usarDur ? (a.duracaoDias ?? 0) : (parseFloat(a.pesoFinanceiro || "0") || 0));
     soma += (exp * peso) / denom;
   }
   return Math.min(100, Math.max(0, soma));
