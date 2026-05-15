@@ -336,20 +336,44 @@ export function parseMSProjectXML(text: string): TarefaImportada[] {
   return parseMSProjectTasksFromDoc(doc);
 }
 
+// Rev. 1822 — Lê o código EAP REAL da atividade (campo "Item" do template FC,
+// digitado pelo engenheiro: "01.01", "02.16.02.01", etc). É um ExtendedAttribute
+// com FieldID=188743731 (Texto1, Alias="ITEM").
+//
+// Antes: o ERP lia <WBS>, que no MSP é numeração AUTOMÁTICA por hierarquia
+// (1, 2, 2.1, 2.2…). Resultado: cronograma virava "renumerado" e nunca casava
+// com o orçamento (que tem "01.01" / "02.16.02.01"). A normalização canônica
+// da Rev. 1821 não resolvia: "1" jamais vira "01.01" por mais que se tire zero.
+//
+// Ordem: ITEM (Texto1) → fallback <WBS>. Filhos diretos do <Task> (não dos
+// Assignment aninhados) pra evitar pegar Texto1 de outro contexto.
+function lerCodigoItemDaTask(task: Element): string {
+  for (const child of Array.from(task.children)) {
+    if (child.tagName !== "ExtendedAttribute") continue;
+    const fid = child.querySelector("FieldID")?.textContent ?? "";
+    if (fid !== "188743731") continue;
+    const val = (child.querySelector("Value")?.textContent ?? "").trim();
+    if (val) return val;
+  }
+  return task.querySelector("WBS")?.textContent?.trim() ?? "";
+}
+
 function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
   const taskEls = Array.from(doc.querySelectorAll("Task"));
 
-  // First pass: build UID → WBS map so we can resolve predecessor UIDs to WBS codes.
-  // Importante: usamos `task.children` para pegar APENAS o UID direto da tarefa
-  // (não os UIDs de PredecessorLink/Assignment, que são filhos aninhados).
+  // First pass: build UID → CÓDIGO map so we can resolve predecessor UIDs.
+  // Rev. 1822: chave agora é o código ITEM (Texto1) do template FC, com
+  // fallback para WBS automático. Importante: usamos `task.children` para
+  // pegar APENAS o UID direto da tarefa (não os UIDs de PredecessorLink/
+  // Assignment, que são filhos aninhados).
   const uidToWbs = new Map<string, string>();
   for (const task of taskEls) {
     let uid = "";
     for (const child of Array.from(task.children)) {
       if (child.tagName === "UID") { uid = child.textContent ?? ""; break; }
     }
-    const wbs = task.querySelector("WBS")?.textContent?.trim() ?? "";
-    if (uid && wbs) uidToWbs.set(uid, wbs);
+    const codigo = lerCodigoItemDaTask(task);
+    if (uid && codigo) uidToWbs.set(uid, codigo);
   }
 
   const result: TarefaImportada[] = [];
@@ -361,7 +385,10 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
       if (child.tagName === "UID") { uid = child.textContent ?? ""; break; }
     }
     const name  = task.querySelector("Name")?.textContent?.trim() ?? "";
-    const wbs   = task.querySelector("WBS")?.textContent?.trim() ?? "";
+    // Rev. 1822 — código EAP vindo do campo ITEM (Texto1) do template FC,
+    // fallback no <WBS> automático do MSP. Variável continua chamada "wbs"
+    // para minimizar diff (todos os usos abaixo permanecem corretos).
+    const wbs   = lerCodigoItemDaTask(task);
     const level = parseInt(task.querySelector("OutlineLevel")?.textContent ?? "0");
     const start = fmtDate(task.querySelector("Start")?.textContent ?? "");
     const fin   = fmtDate(task.querySelector("Finish")?.textContent ?? "");
@@ -439,8 +466,9 @@ function parseMSProjectTasksFromDoc(doc: Document): TarefaImportada[] {
     // (não-cabeçalho) DEVE ter <WBS> preenchido no XML. Sem fallback silencioso.
     if (!wbs) {
       throw new Error(
-        `Tarefa "${name.substring(0, 60)}" (nível ${level}) SEM código WBS no XML do MS Project. ` +
-        `Toda atividade deve ter EAP — ative a coluna WBS no MSP antes de exportar (R-013).`
+        `Tarefa "${name.substring(0, 60)}" (nível ${level}) SEM código EAP no XML do MS Project. ` +
+        `Toda atividade deve ter o campo "Item" (Texto1) preenchido OU a coluna WBS ativada. ` +
+        `Rev. 1822: tentamos primeiro Item (Texto1/FieldID=188743731), fallback no WBS automático (R-013).`
       );
     }
 
