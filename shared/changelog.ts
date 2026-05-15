@@ -25,6 +25,20 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1841,
+    titulo: "Apontamentos de Campo · Modal 'Detalhes da ocorrencia' — modal maior, sem barras de rolagem",
+    descricao: "User (15/05/2026, screenshot do modal aberto sobre a tela Apontamentos de Campo, com barra de rolagem horizontal visivel no rodape do dialog): \"arrume esta tela, quero ela maior, nao quero precisar das barras de rolagem..\".\n\n" +
+      "Causa pre-existente: client/src/pages/ApontamentosCampo.tsx L820 (modal de Detalhes, criado na Rev. 1755) usava DialogContent com largura max-w-2xl (672px) + max-h-[92vh] overflow-y-auto, sem overflow-x-hidden. Em viewports de ~1024px, os 3 chips coloridos (Status/Tipo/Prioridade) somados ao header, mais a grid 2x4 de batidas e o footer com 4 botoes (Resolver/Editar/Excluir/Fechar) ultrapassavam horizontalmente o conteudo, fazendo o navegador exibir uma barra de rolagem horizontal no rodape do dialog. Ainda nao havia overflow-x-hidden e a largura era pequena demais para acomodar conforto visual.\n\n" +
+      "Fix (1 arquivo, 2 hunks):\n" +
+      "(1) L820 DialogContent: adicionado prop resizable={false} (override do default useResizableWidth(512) em components/ui/dialog.tsx que injeta inline style 'width: min(512px, calc(100vw - 1rem))' com precedencia sobre Tailwind classes — sem isso o modal continuaria abrindo em 512px). Trocada largura para 'w-[min(1100px,96vw)] sm:max-w-[min(1100px,96vw)]' (1100px em desktop, ate 96vw em telas menores) — quase dobra a largura util. max-h passa para 94dvh (dvh respeita barras de UI mobile melhor que vh). Adicionado overflow-x-hidden explicito para impedir qualquer barra horizontal mesmo em casos de chip muito longo. p-0 gap-0 mantidos.\n" +
+      "(2) L882 grid de batidas: gap-2 -> gap-3 (folga visual proporcional a nova largura).\n\n" +
+      "Preservado: ZERO mudanca em logica/handlers (Resolver, Editar, Reabrir, Excluir, Fechar todos intactos), ZERO mudanca em backend/contrato tRPC, ZERO schema/migration. selectedNote, mutations e estados (showDetalhesDialog, showResolverDialog, showEditDialog, etc.) inalterados. Header com gradiente, chips Status/Tipo/Prioridade, grid 2x4 de batidas, descricao, resposta do RH, metadados de rodape e footer com acoes — tudo permanece identico, apenas se acomoda em uma largura maior. Reversivel em 2 hunks. R-001 OK.",
+    tipo: 'melhoria',
+    modulos: 'Apontamentos de Campo',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 18:30:00',
+  },
+  {
     version: 1829,
     titulo: "Planejamento · Auditoria MSP — UID nativo do MS Project como chave única de identidade + distribuição diária do peso (curva S dia-a-dia)",
     descricao: "User (15/05/2026, após auditoria do ERP contra as regras MSP que ele entregou): pediu duas correções.\n\n" +

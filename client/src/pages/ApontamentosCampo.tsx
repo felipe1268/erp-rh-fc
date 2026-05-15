@@ -817,7 +817,7 @@ export default function ApontamentosCampo() {
             de Status/Tipo/Prioridade, grid visual de batidas de ponto, descrição em card e
             footer com ações primárias (verde/azul) separadas das destrutivas (Excluir). */}
         <Dialog open={showDetalhesDialog} onOpenChange={setShowDetalhesDialog}>
-          <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto p-0 gap-0">
+          <DialogContent resizable={false} className="w-[min(1100px,96vw)] sm:max-w-[min(1100px,96vw)] max-h-[94dvh] overflow-y-auto overflow-x-hidden p-0 gap-0">
             {selectedNote && (() => {
               const isPendente = selectedNote.status === 'pendente' || selectedNote.status === 'em_analise';
               const isResolvido = selectedNote.status === 'resolvido' || selectedNote.status === 'arquivado';
@@ -873,13 +873,13 @@ export default function ApontamentosCampo() {
 
                   {/* Body */}
                   <div className="px-6 py-5 space-y-4 text-sm">
-                    {/* Horário do ponto — grid visual 2x2 */}
+                    {/* Horário do ponto — grid visual 2x4 (Rev. 1841: largura folgada) */}
                     <div>
                       <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
                         <Clock className="h-3.5 w-3.5" /> Horário do ponto
                       </div>
                       {temBatidas ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                           {[
                             { label: "Entrada 1", val: selectedNote.entrada1, on: "border-emerald-200 bg-emerald-50", txt: "text-emerald-700" },
                             { label: "Saída 1", val: selectedNote.saida1, on: "border-rose-200 bg-rose-50", txt: "text-rose-700" },

@@ -1,3 +1,3 @@
-export const APP_VERSION = "Rev. 1840";
+export const APP_VERSION = "Rev. 1841";
 export const APP_VERSION_DATE = "15/05/2026";
-export const APP_VERSION_NUMBER = 1840;
+export const APP_VERSION_NUMBER = 1841;
