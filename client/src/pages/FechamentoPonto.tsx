@@ -21,7 +21,7 @@ import {
   PenLine, Eye, ChevronLeft, ChevronRight, CheckCircle, CheckCircle2, XCircle, Shield, Search,
   Trash2, Building2, AlertCircle, MapPin, Info, Wifi, Lock, Unlock, UserCheck, Printer, FileDown, ArrowLeft,
   ListChecks, Filter, ChevronDown, ChevronUp, Zap, ArrowRightLeft, ArrowRight, FileText, Copy,
-  ChevronsUpDown, Check, Plus, X, ClipboardList, UserX, CalendarX, Timer, LogOut, ExternalLink
+  ChevronsUpDown, Check, Plus, X, ClipboardList, UserX, CalendarX, Timer, LogOut, ExternalLink, ShieldCheck
 } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -4532,17 +4532,20 @@ export default function FechamentoPonto() {
                 <>
                 <div className="grid grid-cols-2 gap-3">
                   <button onClick={() => { setShowReplaceAllConfirm(true); setReplaceAllPassword(""); setReplaceAllPasswordError(""); }}
-                    className="border-2 border-red-200 bg-white rounded-xl p-4 hover:bg-red-50 hover:border-red-400 transition-all text-left group">
+                    className="border-2 border-emerald-200 bg-white rounded-xl p-4 hover:bg-emerald-50 hover:border-emerald-400 transition-all text-left group">
                     <div className="flex items-center gap-3 mb-2">
-                      <div className="h-10 w-10 rounded-lg bg-red-100 group-hover:bg-red-200 flex items-center justify-center transition-colors">
-                        <ArrowRightLeft className="h-5 w-5 text-red-600" />
+                      <div className="h-10 w-10 rounded-lg bg-emerald-100 group-hover:bg-emerald-200 flex items-center justify-center transition-colors">
+                        <ShieldCheck className="h-5 w-5 text-emerald-600" />
                       </div>
-                      <div>
-                        <p className="font-bold text-red-800">Substituir Tudo</p>
-                        <p className="text-xs text-red-600">Apaga todos os dados DIXI e reimporta</p>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-bold text-emerald-800">Substituir DIXI</p>
+                          <Badge className="bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0 h-4 font-semibold">SEGURO</Badge>
+                        </div>
+                        <p className="text-xs text-emerald-700">Preserva marcações manuais e apontamentos de campo</p>
                       </div>
                     </div>
-                    <p className="text-[11px] text-gray-500 ml-[52px]">Registros manuais são preservados. Apenas dados DIXI são substituídos.</p>
+                    <p className="text-[11px] text-gray-600 ml-[52px] leading-snug">Substitui apenas os dias importados anteriormente do relógio. Dias com edição manual do RH ou apontamento de campo <strong>não são tocados</strong>.</p>
                   </button>
 
                   <div className="border-2 border-blue-300 bg-blue-50/50 rounded-xl p-4 text-left ring-2 ring-blue-200">
@@ -4659,28 +4662,33 @@ export default function FechamentoPonto() {
         {showReplaceAllConfirm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center" style={{ zIndex: 99999 }}>
             <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
-              <div className="bg-gradient-to-r from-red-700 to-red-500 px-6 py-4">
+              <div className="bg-gradient-to-r from-emerald-700 to-emerald-500 px-6 py-4">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center">
-                    <AlertTriangle className="h-5 w-5 text-white" />
+                    <ShieldCheck className="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-white font-bold text-lg">Confirmação de Segurança</h3>
-                    <p className="text-red-100 text-xs">Ação destrutiva — requer autenticação</p>
+                    <h3 className="text-white font-bold text-lg">Substituir DIXI — Confirmação</h3>
+                    <p className="text-emerald-100 text-xs">Ação segura — preserva manuais e apontamentos</p>
                   </div>
                 </div>
               </div>
               <div className="p-6 space-y-4">
-                <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 space-y-2">
-                  <p className="text-sm font-bold text-red-800 flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4" /> ATENÇÃO: Você irá PERDER TODOS os ajustes realizados
+                <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-4 space-y-2">
+                  <p className="text-sm font-bold text-emerald-800 flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4" /> O que acontece ao confirmar
                   </p>
-                  <ul className="text-xs text-red-700 space-y-1 ml-6 list-disc">
-                    <li>Todos os registros DIXI existentes serão <strong>apagados permanentemente</strong></li>
-                    <li>Ajustes manuais de horários DIXI serão <strong>perdidos</strong></li>
-                    <li>Abonos realizados em registros DIXI serão <strong>removidos</strong></li>
-                    <li>Registros de fonte <strong>manual</strong> serão preservados</li>
+                  <ul className="text-xs text-emerald-800 space-y-1 ml-6 list-disc">
+                    <li>Os registros antigos vindos do <strong>DIXI</strong> deste período serão substituídos pelos novos</li>
+                    <li>Marcações editadas manualmente pelo RH (<strong>fonte = manual</strong>) <strong>permanecem intactas</strong></li>
+                    <li>Apontamentos de campo (<strong>fonte = apontamento</strong>) <strong>permanecem intactos</strong></li>
+                    <li>Dias em branco passam a receber as batidas do novo arquivo</li>
                   </ul>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-[11px] text-amber-800">
+                    <strong>Senha solicitada</strong> apenas como dupla checagem — nada será apagado sem a sua confirmação.
+                  </p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700">Digite sua senha para confirmar:</label>
@@ -4708,12 +4716,12 @@ export default function FechamentoPonto() {
                   <Button
                     onClick={handleReplaceAllConfirm}
                     disabled={verifyingPassword || !replaceAllPassword.trim()}
-                    className="bg-red-600 hover:bg-red-700 text-white shadow-md"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
                   >
                     {verifyingPassword ? (
                       <><div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" /> Verificando...</>
                     ) : (
-                      <><ArrowRightLeft className="h-4 w-4 mr-2" /> Confirmar Substituição</>
+                      <><ShieldCheck className="h-4 w-4 mr-2" /> Confirmar Substituição</>
                     )}
                   </Button>
                 </div>

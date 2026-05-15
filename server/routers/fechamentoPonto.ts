@@ -844,11 +844,13 @@ export const fechamentoPontoRouter = router({
 
       const mesesArr = Array.from(mesesDetectados).sort();
       let existingByEmployee: Record<number, number> = {};
-      let existingRecordsByEmployee: Record<number, Array<{ data: string; entrada1: string; saida1: string; entrada2: string; saida2: string; horasTrabalhadas: string; horasExtras: string; faltas: string; fonte: string }>> = {};
+      let existingRecordsByEmployee: Record<number, Array<{ data: string; entrada1: string; saida1: string; entrada2: string; saida2: string; horasTrabalhadas: string; horasExtras: string; faltas: string; fonte: string; obraId: number | null; obraNome: string; createdAt: string }>> = {};
       const obraIdsToCheck = isSharedSn && sharedSnObras.length > 1
         ? sharedSnObras.map(o => o.obraId)
         : obraId ? [obraId] : [];
       if (mesesArr.length > 0 && obraIdsToCheck.length > 0) {
+        const obraNomeById: Record<number, string> = {};
+        for (const o of obrasList) obraNomeById[o.id] = o.nome;
         for (const mesRef of mesesArr) {
           const existingRecs = await db.select({
             employeeId: timeRecords.employeeId,
@@ -861,6 +863,8 @@ export const fechamentoPontoRouter = router({
             horasExtras: timeRecords.horasExtras,
             faltas: timeRecords.faltas,
             fonte: timeRecords.fonte,
+            obraId: timeRecords.obraId,
+            createdAt: timeRecords.createdAt,
           })
             .from(timeRecords)
             .where(and(
@@ -883,6 +887,9 @@ export const fechamentoPontoRouter = router({
               horasExtras: r.horasExtras || "0:00",
               faltas: r.faltas || "0",
               fonte: r.fonte || "dixi",
+              obraId: r.obraId ?? null,
+              obraNome: r.obraId ? (obraNomeById[r.obraId] || `Obra #${r.obraId}`) : "",
+              createdAt: r.createdAt || "",
             });
           }
         }

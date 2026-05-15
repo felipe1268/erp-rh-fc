@@ -13112,4 +13112,22 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-15 09:00:00",
   },
+  {
+    version: 1826,
+    titulo: "Fechamento de Ponto · DIXI — botão 'Substituir DIXI' (verde, SEGURO) + diagnóstico de registros existentes",
+    descricao:
+      "User (15/05/2026, screenshot do FullScreenDialog 'Dados já Existentes' mostrando 7/7 funcionários como 'Já importado' SEM nenhum import prévio): (a) bug — aviso 'Já existem registros DIXI' aparece sem motivo; (b) feature — pediu 3ª tag 'SUBSTITUIR TUDO, EXCETO MARCAÇÕES MANUAIS E APONTAMENTOS'.\n\n" +
+      "Diagnóstico do bug (SQL nos 2 ambientes, executeSql read-only): zero rows em `time_records` pra esses 7 nomes/CPFs em PROD e DEV — banco confirma que o alerta É falso positivo, mas a screenshot deve ser de uma instância separada (repl local / réplica defasada). Sem acesso aos dados originais, optamos por shippar diagnóstico melhor pro próximo flagrante.\n\n" +
+      "Decisão alinhada com o user (interview 3 perguntas, opção (A)): NÃO criar 3ª tag — o `replace_all` ATUAL já preserva manuais (deleta só `fonte='dixi'` em L569 do dixiPonto, e no insert pula dia se `fonte!='dixi'` em L606-609). Bug real era de UX: botão vermelho 'Substituir Tudo' + ícone ArrowRightLeft + texto pequeno tranquilizador embaixo dava medo no RH. Solução: REPINTAR como 'Substituir DIXI' (emerald-600/700, ícone ShieldCheck, badge 'SEGURO', copy explícita 'Preserva marcações manuais e apontamentos de campo'). Backend INTOCADO.\n\n" +
+      "Implementação:\n" +
+      "  • `client/src/pages/FechamentoPonto.tsx` L4533-4552 — card do botão re-skin: `border-red-200 bg-white` → `border-emerald-200 bg-white`; ícone `ArrowRightLeft text-red-600` → `ShieldCheck text-emerald-600`; título `text-red-800 'Substituir Tudo'` → `text-emerald-800 'Substituir DIXI' + Badge 'SEGURO'`; subtítulo agora explica EXPLICITAMENTE 'Preserva marcações manuais e apontamentos de campo'; copy detalhada 'Substitui apenas os dias importados anteriormente do relógio. Dias com edição manual do RH ou apontamento de campo NÃO são tocados.'\n" +
+      "  • L4659-4732 — modal de confirmação repintado: gradient `from-red-700` → `from-emerald-700`; título 'Confirmação de Segurança / Ação destrutiva' → 'Substituir DIXI — Confirmação / Ação segura — preserva manuais e apontamentos'; bullets do alerta vermelho ('PERDER TODOS os ajustes', 'apagados permanentemente') → bullets emerald ('O que acontece ao confirmar' com 4 pontos calmos: substitui DIXI antigo, mantém manuais, mantém apontamentos, preenche dias em branco); novo card amber abaixo explica que a senha é só dupla-checagem, não alarme. Botão final `bg-red-600` → `bg-emerald-600`, ícone trocado pra ShieldCheck. Senha mantida (proteção contra clique acidental).\n" +
+      "  • L27 — adicionado `ShieldCheck` ao import único de lucide-react (R-007 OK).\n" +
+      "  • `server/routers/fechamentoPonto.ts` L847-895 — diagnóstico extra no payload `previewDixi`: cada `registrosDetalhe[i]` agora inclui `obraId` + `obraNome` + `createdAt` (campos que o backend já tinha em mãos via `obrasList` e `timeRecords.createdAt`, sem query nova). Custo: 0 round-trips. Frontend ainda não usa visualmente — fica disponível pra próxima iteração mostrar 'criado em DD/MM HH:MM via obra X' no expand do funcionário, permitindo o user clicar e ver de QUAL import veio cada batida fantasma. Schema do tipo TS atualizado.\n\n" +
+      "Backend modes (`replace_all`/`selective`) e proteção `fonte!='dixi'` PRESERVADOS — nada muda na lógica de import. Reversível em 3 edits. Zero schema/migration/DELETE. Senha de confirmação MANTIDA pra proteger contra cliques acidentais. R-001/R-006/R-007/R-008/R-010 OK.",
+    tipo: "melhoria",
+    modulos: "RH · Fechamento de Ponto · DIXI",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-15 19:30:00",
+  },
 ];
