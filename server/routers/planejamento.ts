@@ -5527,13 +5527,20 @@ REGRAS TÉCNICAS:
       const db = await getDb();
 
       const [projeto] = await db.select({
-        id:            planejamentoProjetos.id,
-        orcamentoId:   planejamentoProjetos.orcamentoId,
-        valorContrato: planejamentoProjetos.valorContrato,
+        id:                    planejamentoProjetos.id,
+        orcamentoId:           planejamentoProjetos.orcamentoId,
+        valorContrato:         planejamentoProjetos.valorContrato,
+        // Rev. 1835 — calendário MSP para distribuir o R$ em working time
+        // (AACE 80R-13 §5.3 / Mattos), em vez de distribuição linear retangular.
+        calendarioJson:        planejamentoProjetos.calendarioJson,
+        dataInicio:            planejamentoProjetos.dataInicio,
+        dataTerminoContratual: planejamentoProjetos.dataTerminoContratual,
       })
         .from(planejamentoProjetos)
         .where(eq(planejamentoProjetos.id, input.projetoId))
         .limit(1);
+      // Rev. 1835 — Calendário MSP (parser unificado, mesmo da getCurvaS).
+      const calMspFin = parseCalendarioJson(projeto?.calendarioJson ?? null);
 
       const todasAtividades = await db.select({
         id:             planejamentoAtividades.id,
@@ -5579,50 +5586,91 @@ REGRAS TÉCNICAS:
       const usarIgual   = pesoBruto === 0 || ativComPeso < folhas.length * 0.2;
       const pesoTotal   = usarIgual ? folhas.length : pesoBruto;
 
-      const dates: Map<string, number> = new Map();
-      folhas.forEach(a => {
-        const parseDate = (v: any): Date => {
-          const s = toDateStr(v).slice(0, 10);
-          return new Date(s + "T12:00:00Z");
-        };
-        const inicio = parseDate(a.dataInicio);
-        const fim    = parseDate(a.dataFim);
-        if (isNaN(inicio.getTime()) || isNaN(fim.getTime())) return;
-
-        const inicioSeg  = new Date(toMondayStr(inicio) + "T12:00:00Z");
-        const fimSeg     = new Date(toMondayStr(fim)    + "T12:00:00Z");
-        const weeksDiff  = (fimSeg.getTime() - inicioSeg.getTime()) / (7 * 86400000);
-        const dur        = Math.max(1, weeksDiff + 1);
-
-        const pesoAtiv   = usarIgual ? 1 : n(a.pesoFinanceiro);
-        const valorAtiv  = (pesoAtiv / pesoTotal) * totalVenda;
-        const semValor   = valorAtiv / dur;
-
-        let cur = new Date(inicioSeg);
-        for (let i = 0; i < dur; i++) {
-          const key = toMondayStr(cur);
-          dates.set(key, (dates.get(key) ?? 0) + semValor);
-          cur = new Date(cur.getTime() + 7 * 86400000);
-        }
-      });
-
+      // Rev. 1835 — `valorPorAtiv` continua mapeando R$ total por atividade
+      // (BAC_i = peso_i × totalVenda / pesoTotal). É reusado pelo BCWP.
       const valorPorAtiv = new Map<number, number>();
+      // Estrutura per-folha pré-parseada (R$, ini/fim em ms) — alimenta tanto
+      // a distribuição MSP quanto o fallback legado.
+      type FolhaFin = { id: number; valor: number; iniMs: number; fimMs: number };
+      const folhasFin: FolhaFin[] = [];
       folhas.forEach(a => {
-        const pesoAtiv = usarIgual ? 1 : n(a.pesoFinanceiro);
-        valorPorAtiv.set(a.id, (pesoAtiv / pesoTotal) * totalVenda);
+        const iniIso = toDateStr(a.dataInicio).slice(0, 10);
+        const fimIso = toDateStr(a.dataFim).slice(0, 10);
+        const iniMs  = new Date(iniIso + "T12:00:00Z").getTime();
+        const fimMs  = new Date(fimIso + "T12:00:00Z").getTime();
+        if (!Number.isFinite(iniMs) || !Number.isFinite(fimMs)) return;
+        const pesoAtiv  = usarIgual ? 1 : n(a.pesoFinanceiro);
+        const valorAtiv = (pesoAtiv / pesoTotal) * totalVenda;
+        valorPorAtiv.set(a.id, valorAtiv);
+        folhasFin.push({ id: a.id, valor: valorAtiv, iniMs, fimMs });
       });
 
-      const sorted = [...dates.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-      let acum = 0;
-      const pontos = sorted.map(([semana, val]) => {
-        acum += val;
-        return { semana, acumulado: +acum.toFixed(2) };
-      });
-
-      if (pontos.length > 0) {
-        const primeiraDate = new Date(pontos[0].semana + "T12:00:00Z");
-        const semanaAntes  = new Date(primeiraDate.getTime() - 7 * 86400000);
-        pontos.unshift({ semana: toMondayStr(semanaAntes), acumulado: 0 });
+      // Rev. 1835 — Curva BCWS via working time MSP (per-activity).
+      // Para cada Monday W do envelope: BCWS(W) = Σ valor_i × frac_i(W),
+      // onde frac_i = fracaoDecorridaMs(ini_i, min(sun_W, fim_i), fim_i, calMSP).
+      // Atividades pontuais (ini==fim ou marco) saltam 0→100% no dia. Quando
+      // não há calMSP (XML sem calendário), cai no algoritmo legado de
+      // distribuição linear retangular (preserva comportamento histórico).
+      let pontos: { semana: string; acumulado: number }[] = [];
+      if (calMspFin && folhasFin.length > 0) {
+        const minIniMs = Math.min(...folhasFin.map(f => f.iniMs));
+        const maxFimMs = Math.max(...folhasFin.map(f => f.fimMs));
+        const startMonday = toMondayStr(new Date(minIniMs));
+        const endMonday   = toMondayStr(new Date(maxFimMs));
+        const semZero = toMondayStr(new Date(new Date(startMonday + "T12:00:00Z").getTime() - 7 * 86_400_000));
+        pontos = [{ semana: semZero, acumulado: 0 }];
+        const semanasEnvelope = Math.ceil((maxFimMs - minIniMs) / (7 * 86_400_000)) + 8;
+        const maxIters = Math.max(8, semanasEnvelope);
+        let cur = startMonday;
+        for (let i = 0; i < maxIters && cur <= endMonday; i++) {
+          const sunMs = new Date(cur + "T12:00:00Z").getTime() + 6 * 86_400_000;
+          let soma = 0;
+          for (const f of folhasFin) {
+            let frac: number;
+            if (f.fimMs <= f.iniMs) {
+              frac = sunMs >= f.iniMs ? 1 : 0;
+            } else {
+              const refMs = Math.min(sunMs, f.fimMs);
+              if (refMs <= f.iniMs) frac = 0;
+              else frac = Math.min(1, Math.max(0, fracaoDecorridaMs(f.iniMs, refMs, f.fimMs, calMspFin)));
+            }
+            soma += frac * f.valor;
+          }
+          pontos.push({ semana: cur, acumulado: +Math.min(totalVenda, Math.max(0, soma)).toFixed(2) });
+          cur = toMondayStr(new Date(new Date(cur + "T12:00:00Z").getTime() + 7 * 86_400_000));
+        }
+        // Garante ponto final = totalVenda quando a iteração parou logo antes
+        // do término da última atividade (espelha gerarCurvaPlanejadaMSP).
+        if (pontos.length > 1 && pontos[pontos.length - 1].acumulado < totalVenda) {
+          pontos.push({ semana: endMonday, acumulado: +totalVenda.toFixed(2) });
+        }
+      } else {
+        // Fallback legado — distribuição linear retangular (XML sem calendário).
+        const dates: Map<string, number> = new Map();
+        folhasFin.forEach(f => {
+          const inicioSeg  = new Date(toMondayStr(new Date(f.iniMs)) + "T12:00:00Z");
+          const fimSeg     = new Date(toMondayStr(new Date(f.fimMs)) + "T12:00:00Z");
+          const weeksDiff  = (fimSeg.getTime() - inicioSeg.getTime()) / (7 * 86400000);
+          const dur        = Math.max(1, weeksDiff + 1);
+          const semValor   = f.valor / dur;
+          let cur = new Date(inicioSeg);
+          for (let i = 0; i < dur; i++) {
+            const key = toMondayStr(cur);
+            dates.set(key, (dates.get(key) ?? 0) + semValor);
+            cur = new Date(cur.getTime() + 7 * 86400000);
+          }
+        });
+        const sorted = [...dates.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+        let acum = 0;
+        pontos = sorted.map(([semana, val]) => {
+          acum += val;
+          return { semana, acumulado: +acum.toFixed(2) };
+        });
+        if (pontos.length > 0) {
+          const primeiraDate = new Date(pontos[0].semana + "T12:00:00Z");
+          const semanaAntes  = new Date(primeiraDate.getTime() - 7 * 86400000);
+          pontos.unshift({ semana: toMondayStr(semanaAntes), acumulado: 0 });
+        }
       }
 
       const allSemanas = pontos.map(p => p.semana);

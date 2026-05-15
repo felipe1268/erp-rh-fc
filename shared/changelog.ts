@@ -13270,4 +13270,31 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-16 00:00:00",
   },
+  {
+    version: 1835,
+    titulo: "Planejamento · Curva S Financeira — distribuição working time MSP (AACE 80R-13 §5.3 / Mattos), elimina retangular",
+    descricao:
+      "User (15/05/2026, screenshots Curva S Financeira vs Curva S de Trabalho do REVTE-CIVIL): 'pq a curva S financeira está diferente da física? o formato não deveria ser igual?'. Após discussão da literatura (PMBOK 7ª/EVM Practice Std 2019, AACE 27R-03/80R-13, MSP, Mattos 'Planejamento e Controle de Obras' 3ª ed., Vargas), user pediu 'implante a leitura correta'.\n\n" +
+      "Causa pré-existente (desde Rev. inicial): `getCurvaSFinanceira` (`server/routers/planejamento.ts` L5582-5607) distribuía o R$ de cada atividade LINEARMENTE pelas semanas que ela ocupava (`semValor = valorAtiv / dur`), gerando uma curva RETANGULAR (não-S). Isso violava AACE 80R-13 §5.3 (PV deve seguir resource loading real, não distribuição uniforme) e divergia do MSP nativo (que usa working time do calendário). Atividades caras concentradas no início do cronograma (REVTE-CIVIL: Tapumes/Mobilização ~28% peso) inflavam a Financeira nos primeiros meses, criando 'early hump' artificial que não refletia desembolso real nem progresso físico. Forma divergente da Curva S de Trabalho (que usa `gerarCurvaPlanejadaMSP` / `fracaoDecorridaMs` desde Rev. 1689.1) sem motivo técnico defensável.\n\n" +
+      "Fix (1 arquivo, 2 hunks): `server/routers/planejamento.ts` L5521-5650.\n" +
+      "  • Hunk 1 (L5532-5546) — query do projeto agora seleciona também `calendarioJson`, `dataInicio`, `dataTerminoContratual`. Parser unificado `parseCalendarioJson` (mesmo do `getCurvaS` Rev. 1689.1) gera `calMspFin`. Imports `parseCalendarioJson` + `fracaoDecorridaMs` já existiam no topo do arquivo (L6 — usados pela `getCurvaS`).\n" +
+      "  • Hunk 2 (L5582-5650) — bloco de distribuição reescrito. Estrutura `FolhaFin` per-leaf pré-parseada (`{id, valor, iniMs, fimMs}`) alimenta os dois caminhos. `valorPorAtiv` Map preservado (BCWP loop L5655-5666 intocado). Caminho principal (calMSP presente): para cada Monday W do envelope, BCWS(W) = Σ valor_i × frac_i(W) onde `frac_i = fracaoDecorridaMs(ini_i, min(sun_W, fim_i), fim_i, calMSP)`. Atividades pontuais (ini==fim, marcos) saltam 0→1 no dia. Mesma estrutura iterativa do `gerarCurvaPlanejadaMSP` (L2562-2640): startMonday/endMonday/semZero, `maxIters = max(8, semanasEnvelope+8)`, ponto final cravado em `totalVenda` se a iteração parou antes do término. Caminho fallback (XML sem calendário): mantém o algoritmo legado de distribuição linear retangular IDÊNTICO ao anterior — preserva comportamento histórico para projetos sem calMSP.\n\n" +
+      "Por que é seguro:\n" +
+      "  • BCWP, receita (Faturamento), tendência linear (regressão), tendenciaMap e curvaCompleta (L5670-5768) INTOCADOS. Só BCWS muda.\n" +
+      "  • `valorPorAtiv` map mantém os MESMOS valores (BAC_i = peso_i × totalVenda / pesoTotal) — BCWP continua produzindo R$ corretos.\n" +
+      "  • `pontos[]` mantém o MESMO contrato `{semana, acumulado}` — frontend (PlanejamentoDetalhe.tsx L4429+ + curvaFinanceira) consome igual.\n" +
+      "  • `totalVenda` continua sendo o teto (mesma fonte: orcamento.totalVenda || projeto.valorContrato).\n" +
+      "  • Fallback retangular preservado para XMLs sem calendário (zero regressão histórica).\n" +
+      "  • Zero schema/migration. Zero contrato tRPC. Zero DELETE. Reversível em 2 hunks.\n\n" +
+      "Compliance literatura:\n" +
+      "  • AACE RP 80R-13 §5.3 — PV distribuído conforme work pattern real (não uniforme).\n" +
+      "  • PMBOK 7ª / EVM Practice Std 2019 — PV é integração temporal do BAC ao longo do cronograma seguindo resource/work pattern.\n" +
+      "  • Mattos (cap. 12) — Curva S Financeira tem formato S natural quando segue working time, não retangular.\n" +
+      "  • MSP nativo — `Cumulative Cost` time-phased segue calendário do projeto (working time).\n\n" +
+      "Esperado para REVTE-CIVIL: Curva S Financeira ganha forma de S real (lenta no início, acelera no miolo, desacelera no fim) muito mais próxima da Curva S de Trabalho — divergindo apenas pela diferença de eixo (R$ vs %) e por mobilização cara antecipada (que CONTINUA aparecendo, mas distribuída em working time, não retangular). Coerência conceitual entre as duas curvas. R-001/R-007/R-010 OK.",
+    tipo: "melhoria",
+    modulos: "Planejamento · Curva S Financeira · EVM",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-16 00:15:00",
+  },
 ];
