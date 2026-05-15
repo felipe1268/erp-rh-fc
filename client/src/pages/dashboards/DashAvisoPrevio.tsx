@@ -24,7 +24,7 @@ const AP_INDICADORES: LinhaInd[] = [
     acoes: ["Listar avisos com mais de 60 dias em aberto.", "Conferir se há reduções de jornada não controladas (Art. 488 CLT).", "Validar previsão de pagamento das rescisões."] },
   { chave: "valorIniciados", label: "Valor Estimado das Aberturas", icone: DollarIcon, cor: "purple", lowerIsBetter: true,
     pegar: r => Number(r.valorIniciados) || 0,
-    format: v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }),
+    format: v => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     alertaPct: 50, hint: "Soma das rescisões projetadas dos avisos abertos no mês — impacto em fluxo de caixa.",
     acoes: ["Garantir provisão financeira para o mês de pagamento.", "Cruzar com fluxo de caixa de 30/45 dias.", "Avaliar impacto na DRE (rescisões viram despesa não-recorrente)."] },
 ];

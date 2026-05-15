@@ -25,6 +25,19 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1844,
+    titulo: "Aviso Previo · Tendencia mes-a-mes — 'Valor Estimado das Aberturas' com centavos (R$ x.xxx,yy)",
+    descricao: "User (15/05/2026, screenshot do bloco 'Tendencia mes-a-mes - 2026' em /dashboards/aviso-previo, linha 'Valor Estimado das Aberturas' mostrando R$ 1.689 / R$ 179.693 / R$ 53.006 / R$ 36.045 / R$ 20.872 - tudo sem centavos): \"coloca o valor em dinheiro no formato correto, quero com ponto e virgula..\".\n\n" +
+      "Causa-raiz: client/src/pages/dashboards/DashAvisoPrevio.tsx L27 — formatador do indicador valorIniciados usado pela TabelaComparativaAnual estava com `maximumFractionDigits: 0`, suprimindo a parte decimal. Como `style: 'currency'` aplica o simbolo R$ e o `pt-BR` ja usa ponto como separador de milhar, faltava apenas mostrar os centavos com virgula (formato BR contabil padrao R$ 1.689,00).\n\n" +
+      "Fix (1 arquivo, 1 hunk):\n" +
+      "(1) DashAvisoPrevio.tsx L27 — substituido `{ style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }` por `{ style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }`. Agora R$ 1.689 vira R$ 1.689,00, R$ 179.693 vira R$ 179.693,00 etc. Mesma convencao do helper fmtBRL (L42) usado em outros KPIs do dashboard.\n\n" +
+      "Preservado: ZERO mudanca em outros formatadores (fmtBRL ja usa default 2 casas, fmtBRLShort para eixos de grafico mantem 1 casa decimal porque exibe 'mil'/'mi' sufixo). ZERO backend / contrato tRPC / schema. Outros indicadores da tabela (Avisos Iniciados, Concluidos, Em Andamento) seguem com `${v}` integer puro pois sao contagens. Reversivel em 1 hunk. R-001 OK.",
+    tipo: 'bugfix',
+    modulos: 'Aviso Previo (Dashboard)',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 19:25:00',
+  },
+  {
     version: 1843,
     titulo: "Impressao/PDF · Toggle Retrato/Paisagem global + matar pagina em branco em definitivo",
     descricao: "User (15/05/2026, screenshot do dialog de Impressao do navegador sobre /dashboards/controle-documentos mostrando '5 folhas de papel' onde a maioria estava em branco): \"melhore a pagina de impressao, dando a opcao de fazer em paisagem ou retrato e nao quero pagina em branco arrume isso de vez..\".\n\n" +
