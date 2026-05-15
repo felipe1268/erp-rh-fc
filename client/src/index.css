@@ -544,6 +544,51 @@ img, video {
     white-space: pre-wrap !important;
     line-height: 1.55 !important;
   }
+
+  /* ============================================================ */
+  /* Rev. 1843 — Anti pagina em branco DEFINITIVO + orientacao    */
+  /* ------------------------------------------------------------ */
+  /* PrintActions injeta @page com orientation (portrait/landscape) */
+  /* e seta data-print-orientation no <body>. As regras abaixo    */
+  /* complementam matando residuos que ainda geravam paginas      */
+  /* trailing em branco (DashControleDocumentos: 5 paginas, sendo */
+  /* 3-4 vazias).                                                  */
+  /* ============================================================ */
+
+  /* Containers vazios viram display:none — nao reservam pagina */
+  .print-area div:empty,
+  .print-area section:empty,
+  .print-area article:empty,
+  .print-area aside:empty,
+  .print-area p:empty {
+    display: none !important;
+  }
+
+  /* Ultimo filho de qualquer area imprimivel: sem margem trailing */
+  .print-area > *:last-child,
+  body > *:last-child,
+  main > *:last-child,
+  #root > *:last-child {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    page-break-after: avoid !important;
+    break-after: avoid-page !important;
+  }
+
+  /* space-y-6 etc deixam um margin-top que somado com page-break  */
+  /* gera quebra trailing — neutralizar no ultimo elemento.        */
+  .print-area .space-y-2 > :last-child,
+  .print-area .space-y-3 > :last-child,
+  .print-area .space-y-4 > :last-child,
+  .print-area .space-y-5 > :last-child,
+  .print-area .space-y-6 > :last-child,
+  .print-area .space-y-8 > :last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* Em paisagem, tabelas grandes podem usar fonte um pouco menor */
+  body[data-print-orientation="landscape"] table { font-size: 9.5px !important; }
+  body[data-print-orientation="landscape"] .print-area .grid { gap: 6px !important; }
 }
 
 /* Espaçamento na tela também (caso prose não esteja totalmente carregado) */

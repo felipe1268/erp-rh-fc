@@ -25,6 +25,28 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1843,
+    titulo: "Impressao/PDF · Toggle Retrato/Paisagem global + matar pagina em branco em definitivo",
+    descricao: "User (15/05/2026, screenshot do dialog de Impressao do navegador sobre /dashboards/controle-documentos mostrando '5 folhas de papel' onde a maioria estava em branco): \"melhore a pagina de impressao, dando a opcao de fazer em paisagem ou retrato e nao quero pagina em branco arrume isso de vez..\".\n\n" +
+      "Causas pre-existentes:\n" +
+      "(a) PrintActions.tsx (componente global presente em todas as telas via 'REGRA DE OURO') so tinha botoes Imprimir/PDF que disparavam window.print() sem nenhum controle de orientacao — o usuario tinha que escolher na propria UI do navegador, com risco de tabelas largas estourarem em retrato e cards pequenos desperdicarem espaco em paisagem.\n" +
+      "(b) Apesar das regras anti-pagina-em-branco em index.css L256-490 (Rev. anterior, R-012), DashControleDocumentos ainda gerava 5 paginas com 3-4 vazias. Causa: containers vazios (div:empty), e elementos com space-y-* deixando margin-bottom no ultimo filho que somado com page-break-after default gerava nova pagina trailing.\n\n" +
+      "Fix (2 arquivos, 3 hunks):\n" +
+      "(1) client/src/components/PrintActions.tsx — reescrito (componente compacto, ainda exporta default). Adicionado ToggleGroup Retrato/Paisagem (controlled, default='portrait', icones RectangleVertical/RectangleHorizontal de lucide). Funcao applyOrientationAndPrint(orientation) injeta <style id='__print_orientation_runtime__' media='print'> com '@page { size: A4 ${orientation}; margin: ${margins}; }' (margens menores em paisagem: 8mm 8mm 14mm 8mm vs 10mm 8mm 14mm 8mm em retrato) + reforco anti-blank (page-break-after: avoid em body/main/#root e ultimos filhos, div:empty -> display:none). Seta atributo data-print-orientation no <body>. Listener 'afterprint' faz cleanup automatico (remove style + atributo). useEffect de cleanup no unmount cobre o caso do usuario fechar a tela antes do dialog. setTimeout 60ms antes do print() garante reflow do CSS antes do snapshot.\n" +
+      "(2) client/src/index.css L549-595 — bloco 'Rev. 1843' adicionado dentro do @media print existente. Inclui: (i) `.print-area div:empty | section:empty | article:empty | aside:empty | p:empty { display: none !important }` matando containers vazios; (ii) ultimos filhos de .print-area / body / main / #root com margin-bottom:0, padding-bottom:0, page-break-after: avoid !important e break-after: avoid-page (CSS3 + legacy); (iii) ultimos filhos de containers .space-y-{2,3,4,5,6,8} com margin-bottom:0 (Tailwind aplica margin-top no filho via :not(:first-child) — mas em alguns layouts o ultimo elemento ainda carrega bottom space residual); (iv) ajustes seletivos para landscape (table font-size:9.5px, grid gap:6px) usando seletor body[data-print-orientation='landscape'].\n" +
+      "(3) Demais telas: ZERO mudanca — o componente PrintActions e usado em todo o sistema (DashControleDocumentos, RelatorioHabilidadesObra, Equipes, Comunicados, etc.) e a melhoria propaga automaticamente. Implementacoes especificas com window.print() inline (PlanejamentoDetalhe atrasos-print-area / refis-print-area, ProgramacaoSemanalLotus lotus-print-area) NAO sao tocadas — elas usam o pattern visibility:visible isolando print-area, que nao sofre do problema relatado.\n\n" +
+      "Comportamento esperado pos-fix:\n" +
+      "- DashControleDocumentos com Retrato selecionado: 1-2 paginas (KPIs + categorias + graficos), sem paginas trailing em branco.\n" +
+      "- DashControleDocumentos com Paisagem selecionado: tabelas com fonte ligeiramente menor, melhor aproveitamento da largura, ainda sem paginas em branco.\n" +
+      "- Cleanup garantido: ao fechar o dialog, o <style> injetado some (afterprint listener); ao desmontar o componente, idem (useEffect cleanup).\n" +
+      "- Regras pre-existentes de R-012 (h-screen, overflow-hidden, overlays Radix, sticky etc.) intactas — esta revisao COMPLEMENTA, nao substitui.\n\n" +
+      "Preservado: ZERO mudanca em backend / contrato tRPC / schema / migration / DELETE. Componentes PrintHeader e PrintFooterLGPD intactos. Outras telas que ja usavam PrintActions ganham o toggle automaticamente. Reversivel revertendo PrintActions.tsx para versao anterior + removendo bloco 'Rev. 1843' do index.css. R-001 OK.",
+    tipo: 'melhoria',
+    modulos: 'Impressao/PDF (global)',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 19:10:00',
+  },
+  {
     version: 1842,
     titulo: "Planejamento · Avanco Fisico (top bar) - paridade absoluta com card 'Previsto (Semana)' do Avanco Semanal",
     descricao: "User (15/05/2026, 2 screenshots): primeiro reclamou que a barra do topo mostrava info diferente do card abaixo (Sem 3: top 1.39%/4.86% × bottom 4.86%/-1.55%); apos explicacao, pediu: \"quero que seja a mesma informacao lida para os dois, considerando a data cutoff\".\n\n" +
