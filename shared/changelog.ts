@@ -13321,4 +13321,28 @@ export const CHANGELOG: RevisionEntry[] = [
     criadoPor: "Replit Agent",
     dataPublicacao: "2026-05-16 00:30:00",
   },
+  {
+    version: 1837,
+    titulo: "Folha de Pagamento · Memorial de Cálculo HE — redesign moderno (header gradiente, KPIs, tabela com badges)",
+    descricao:
+      "User (15/05/2026, screenshot do modal 'Memorial de Cálculo — Hora Extra' aberto sobre a tela Folha de Pagamento): 'melhore esta tela com um layout moderno, e seguindos nossas regras de ouro'.\n\n" +
+      "Causa pré-existente: `client/src/pages/FolhaPagamento.tsx` tinha DUAS instâncias byte-idênticas do modal Memorial HE (L3165-3282 modal principal + L5031-5148 viewMode 'horas_extras') com layout antigo: DialogContent simples (`max-w-3xl max-h-[90vh] overflow-y-auto`), header genérico só com ícone+título, card roxo monolítico misturando nome+4 dados em grid apertado, tabela com bordas pesadas (`border` em <table> + `border-t` em <tr>) e estilo de planilha clássica (sem hover, fonte 'border' grosseira, header `bg-gray-100 text-left` plano), sem KPIs de topo (nenhum resumo visual rápido), e bloco de fórmula final em `bg-gray-50 rounded-lg p-3` cinza-sobre-cinza ilegível.\n\n" +
+      "Fix (1 arquivo, 1 hunk com `replace_all: true` — ambas as instâncias atualizadas em sincronia):\n" +
+      "  • DialogContent: `max-w-4xl max-h-[92dvh] flex flex-col p-0 gap-0 overflow-hidden` (mesma técnica da Rev. 1831 do AvisoPrevio — header/body/scroll separados, footer fora aqui pois o original não tinha).\n" +
+      "  • Header: gradiente `from-purple-700 via-purple-600 to-fuchsia-600` com texto branco, ícone `Calculator` em pill `bg-white/15 backdrop-blur` (h-10 w-10 rounded-xl), título principal + subtítulo 'Hora Extra — detalhamento dia a dia'. `shrink-0` fixa o header.\n" +
+      "  • Body scrollable: `flex-1 overflow-y-auto min-h-0 bg-slate-50/60` (bg sutil para destacar os cards brancos).\n" +
+      "  • Loading state: substitui texto plano por spinner `border-4 border-purple-100 border-t-purple-600 animate-spin h-10 w-10` + label.\n" +
+      "  • Error state: vira alert pill `border-red-200 bg-red-50` com `AlertCircle` icon, mensagem ao lado.\n" +
+      "  • Card funcionário: header roxo gradiente + 4 chips em `divide-x` (Período / Valor-hora / Adic. útil / Adic. dom-fer) com label uppercase tracking-wide e valor destacado. Truncate no nome com `title` para tooltip.\n" +
+      "  • KPIs de topo (NOVO — 3 cards): Total HE (azul, ícone Clock, mostra 'líquido (após atrasos)' se houver desconto), Valor Total (roxo, ícone Wallet), Dias com HE (esmeralda, ícone CalendarDays, mostra 'X / Y total'). Grid `grid-cols-2 sm:grid-cols-3` com 5º card `col-span-2 sm:col-span-1` para mobile.\n" +
+      "  • Tabela: wrapper `bg-white rounded-xl border shadow-sm overflow-hidden` com header próprio mostrando 'Detalhamento por dia' + contador de dias à direita. `<table className='w-full min-w-[760px] text-xs'>` (força scroll-x em mobile em vez de quebra). Header `bg-slate-100/80 text-[11px] uppercase tracking-wide`, padding `py-2 px-3` (vs `py-1.5 px-2`).\n" +
+      "  • Linhas: zebra `bg-slate-50/40` (em vez de `bg-gray-50/50`), Dom em `bg-red-50/60`, hover `bg-purple-50/40`. Coluna 'Dia' vira BADGE colorido (`min-w-[32px] px-1.5 py-0.5 rounded-md text-[10px] font-bold` — Dom red-100, Sáb orange-100, demais slate-100). Todas as colunas numéricas com `tabular-nums whitespace-nowrap`. Coluna Fonte: badges com cores mais vivas (`bg-emerald-100`/`bg-purple-100`/`bg-slate-100`).\n" +
+      "  • Footer da tabela (tfoot): linha TOTAL com `bg-gradient-to-r from-purple-50 to-fuchsia-50 border-t-2 border-purple-200`, label uppercase, valor com `text-base sm:text-lg`. Linhas HE Bruto e (−) Atrasos descontados (quando há atraso) preservadas com mesma lógica condicional.\n" +
+      "  • Fórmula: card branco com `Calculator` icon + título 'Fórmula aplicada'; expressão genérica vira `<p>` com fundo `bg-slate-50` (chip mono); breakdowns Dias úteis / Dom-Feriados em layout label-fixo (`min-w-[110px]`) + monospace + resultado em destaque roxo; Total geral em footer com `border-t` separador.\n\n" +
+      "Por que é seguro: ZERO mudança em lógica/dados. Mesmo `m = memorialQ.data`, mesmas funções `minsToHM`, mesmas referências (`m.dias`, `m.totalHEMins`, `m.totalHEUtilMins`, `m.totalHEFimMins`, `m.totalHEGrossMins`, `m.totalHEUtilGrossMins`, `m.totalHEFimGrossMins`, `m.descontoAtrasoMins`, `m.totalAtrasoMins`, `m.valorTotal`, `m.valorTotalUtil`, `m.valorTotalFim`, `m.valorHora`, `m.percentualUtil`, `m.percentualFim`, `m.nome`, `m.periodo`, `d.data`, `d.diaSemana`, `d.horarios`, `d.trabalhado`, `d.jornada`, `d.heMins`, `d.percentual`, `d.fonte`, `d.fator`, `d.valorDia`). Mesma condicional `(m.descontoAtrasoMins ?? 0) > 0` para HE Bruto + Atrasos descontados. Imports: usa só ícones já presentes no top-level (`Calculator`, `Clock`, `Wallet`, `CalendarDays`, `User`, `AlertCircle` — todos já importados na linha 8-15). Usa `replace_all: true` para sincronizar as DUAS instâncias do modal (viewMode resumo + viewMode horas_extras) em um único hunk — evita drift entre elas. ZERO schema/migration/DELETE/contrato tRPC. Reversível em 1 hunk.",
+    tipo: "melhoria",
+    modulos: "Folha de Pagamento · Memorial HE · UX",
+    criadoPor: "Replit Agent",
+    dataPublicacao: "2026-05-16 00:45:00",
+  },
 ];

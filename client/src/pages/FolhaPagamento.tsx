@@ -3163,121 +3163,219 @@ export default function FolhaPagamento() {
           </Dialog>
 
           <Dialog open={!!memorialHePeriodId && !!memorialEmployeeId} onOpenChange={(open) => { if (!open) { setMemorialHePeriodId(null); setMemorialEmployeeId(null); } }}>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" resizable={false}>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-purple-600" />
-                  Memorial de Cálculo — Hora Extra
+            {/* Rev. 1837 — Memorial HE redesign: header gradiente, KPIs de topo, tabela com sticky header e zebra moderna, fórmula em chips. */}
+            <DialogContent className="max-w-4xl max-h-[92dvh] flex flex-col p-0 gap-0 overflow-hidden" resizable={false}>
+              <DialogHeader className="px-5 sm:px-6 py-4 border-b shrink-0 bg-gradient-to-r from-purple-700 via-purple-600 to-fuchsia-600 text-white">
+                <DialogTitle className="flex items-center gap-3 text-white">
+                  <div className="h-10 w-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0">
+                    <Calculator className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-base sm:text-lg font-semibold leading-tight">Memorial de Cálculo</div>
+                    <div className="text-xs font-normal text-purple-100/90 leading-tight">Hora Extra — detalhamento dia a dia</div>
+                  </div>
                 </DialogTitle>
               </DialogHeader>
-              {memorialQ.isLoading ? (
-                <div className="flex items-center justify-center py-8 text-muted-foreground">Carregando memorial...</div>
-              ) : memorialQ.error ? (
-                <div className="text-red-600 text-sm py-4">Erro ao carregar memorial: {memorialQ.error.message}</div>
-              ) : memorialQ.data ? (() => {
-                const m = memorialQ.data;
-                const minsToHM = (mins: number) => `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, "0")}min`;
-                return (
-                  <div className="space-y-4">
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm space-y-1">
-                      <p className="font-bold text-purple-900">{m.nome}</p>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-purple-800">
-                        <div><span className="text-purple-500">Período:</span> {m.periodo.replace(/(\d{4})-(\d{2})-(\d{2})/g, (_: any, y: string, mo: string, d: string) => `${d}/${mo}/${y}`)}</div>
-                        <div><span className="text-purple-500">Valor/hora:</span> R$ {m.valorHora.toFixed(2).replace(".", ",")}</div>
-                        <div><span className="text-purple-500">Adic. útil:</span> {m.percentualUtil}%</div>
-                        <div><span className="text-purple-500">Adic. dom/fer:</span> {m.percentualFim}%</div>
+
+              <div className="flex-1 overflow-y-auto min-h-0 bg-slate-50/60">
+                {memorialQ.isLoading ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+                    <div className="h-10 w-10 rounded-full border-4 border-purple-100 border-t-purple-600 animate-spin" />
+                    <p className="text-sm">Carregando memorial...</p>
+                  </div>
+                ) : memorialQ.error ? (
+                  <div className="m-4 sm:m-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>Erro ao carregar memorial: {memorialQ.error.message}</span>
+                  </div>
+                ) : memorialQ.data ? (() => {
+                  const m = memorialQ.data;
+                  const minsToHM = (mins: number) => `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, "0")}min`;
+                  const periodoFmt = m.periodo.replace(/(\d{4})-(\d{2})-(\d{2})/g, (_: any, y: string, mo: string, d: string) => `${d}/${mo}/${y}`);
+                  const diasComHE = m.dias.filter((d: any) => d.heMins > 0).length;
+                  return (
+                    <div className="p-4 sm:p-6 space-y-4">
+                      {/* Card funcionário + 4 chips */}
+                      <div className="bg-white rounded-xl border border-purple-200 shadow-sm overflow-hidden">
+                        <div className="bg-gradient-to-r from-purple-50 to-fuchsia-50 px-4 py-3 border-b border-purple-200 flex items-center gap-2 min-w-0">
+                          <User className="h-4 w-4 text-purple-700 shrink-0" />
+                          <p className="font-bold uppercase tracking-wide text-sm text-purple-900 truncate" title={m.nome}>{m.nome}</p>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 sm:divide-x divide-purple-100">
+                          <div className="px-4 py-3 min-w-0">
+                            <p className="text-[10px] uppercase tracking-wide text-purple-500 font-medium">Período</p>
+                            <p className="text-xs font-semibold text-purple-900 truncate" title={periodoFmt}>{periodoFmt}</p>
+                          </div>
+                          <div className="px-4 py-3 min-w-0">
+                            <p className="text-[10px] uppercase tracking-wide text-purple-500 font-medium">Valor/hora</p>
+                            <p className="text-xs font-semibold text-purple-900 tabular-nums">R$ {m.valorHora.toFixed(2).replace(".", ",")}</p>
+                          </div>
+                          <div className="px-4 py-3 min-w-0">
+                            <p className="text-[10px] uppercase tracking-wide text-purple-500 font-medium">Adic. útil</p>
+                            <p className="text-xs font-semibold text-purple-900 tabular-nums">{m.percentualUtil}%</p>
+                          </div>
+                          <div className="px-4 py-3 min-w-0">
+                            <p className="text-[10px] uppercase tracking-wide text-purple-500 font-medium">Adic. dom/fer</p>
+                            <p className="text-xs font-semibold text-purple-900 tabular-nums">{m.percentualFim}%</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* KPIs de topo */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div className="bg-white rounded-xl border border-blue-200 p-3 sm:p-4 shadow-sm">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="text-[10px] sm:text-xs uppercase tracking-wide font-medium text-blue-600">Total HE</p>
+                            <Clock className="h-4 w-4 text-blue-400 shrink-0" />
+                          </div>
+                          <p className="text-xl sm:text-2xl font-bold text-blue-700 tabular-nums leading-tight">{minsToHM(m.totalHEMins)}</p>
+                          {(m.descontoAtrasoMins ?? 0) > 0 && (
+                            <p className="text-[10px] text-amber-700 mt-1">líquido (após atrasos)</p>
+                          )}
+                        </div>
+                        <div className="bg-white rounded-xl border border-purple-200 p-3 sm:p-4 shadow-sm">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="text-[10px] sm:text-xs uppercase tracking-wide font-medium text-purple-600">Valor Total</p>
+                            <Wallet className="h-4 w-4 text-purple-400 shrink-0" />
+                          </div>
+                          <p className="text-xl sm:text-2xl font-bold text-purple-700 tabular-nums leading-tight">R$ {m.valorTotal.toFixed(2).replace(".", ",")}</p>
+                        </div>
+                        <div className="bg-white rounded-xl border border-emerald-200 p-3 sm:p-4 shadow-sm col-span-2 sm:col-span-1">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="text-[10px] sm:text-xs uppercase tracking-wide font-medium text-emerald-600">Dias com HE</p>
+                            <CalendarDays className="h-4 w-4 text-emerald-400 shrink-0" />
+                          </div>
+                          <p className="text-xl sm:text-2xl font-bold text-emerald-700 tabular-nums leading-tight">{diasComHE}<span className="text-sm font-medium text-emerald-500"> / {m.dias.length}</span></p>
+                        </div>
+                      </div>
+
+                      {/* Tabela detalhada */}
+                      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                        <div className="px-4 py-3 border-b bg-slate-50 flex items-center gap-2">
+                          <CalendarDays className="h-4 w-4 text-slate-500" />
+                          <h3 className="text-sm font-semibold text-slate-700">Detalhamento por dia</h3>
+                          <span className="ml-auto text-[10px] text-slate-500">{m.dias.length} {m.dias.length === 1 ? "dia" : "dias"} no período</span>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[760px] text-xs">
+                            <thead>
+                              <tr className="bg-slate-100/80 text-slate-700 text-[11px] uppercase tracking-wide">
+                                <th className="py-2 px-3 font-semibold text-left">Data</th>
+                                <th className="py-2 px-3 font-semibold text-center">Dia</th>
+                                <th className="py-2 px-3 font-semibold text-center">Horários</th>
+                                <th className="py-2 px-3 font-semibold text-right">Trab.</th>
+                                <th className="py-2 px-3 font-semibold text-right">Jornada</th>
+                                <th className="py-2 px-3 font-semibold text-right">HE</th>
+                                <th className="py-2 px-3 font-semibold text-center">Adic.</th>
+                                <th className="py-2 px-3 font-semibold text-center">Fonte</th>
+                                <th className="py-2 px-3 font-semibold text-right">Cálculo</th>
+                                <th className="py-2 px-3 font-semibold text-right">Valor</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {m.dias.map((d: any, i: number) => (
+                                <tr key={i} className={`border-t border-slate-100 ${d.diaSemana === "Dom" ? "bg-red-50/60" : i % 2 === 0 ? "" : "bg-slate-50/40"} hover:bg-purple-50/40 transition-colors`}>
+                                  <td className="py-1.5 px-3 font-mono whitespace-nowrap">{d.data.split("-").reverse().join("/")}</td>
+                                  <td className="py-1.5 px-3 text-center">
+                                    <span className={`inline-flex items-center justify-center min-w-[32px] px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                                      d.diaSemana === "Dom" ? "bg-red-100 text-red-700" :
+                                      d.diaSemana === "Sáb" ? "bg-orange-100 text-orange-700" :
+                                      "bg-slate-100 text-slate-700"
+                                    }`}>{d.diaSemana}</span>
+                                  </td>
+                                  <td className="py-1.5 px-3 text-center font-mono text-[11px] text-muted-foreground whitespace-nowrap">{d.horarios}</td>
+                                  <td className="py-1.5 px-3 text-right font-mono tabular-nums whitespace-nowrap">{d.trabalhado}</td>
+                                  <td className="py-1.5 px-3 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">{d.jornada}</td>
+                                  <td className="py-1.5 px-3 text-right font-mono tabular-nums font-bold text-blue-700 whitespace-nowrap">{Math.floor(d.heMins / 60)}:{String(d.heMins % 60).padStart(2, "0")}</td>
+                                  <td className="py-1.5 px-3 text-center tabular-nums">{d.percentual}%</td>
+                                  <td className="py-1.5 px-3 text-center">
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                                      d.fonte === "dixi" ? "bg-emerald-100 text-emerald-700" :
+                                      d.fonte === "manual" ? "bg-purple-100 text-purple-700" :
+                                      "bg-slate-100 text-slate-600"
+                                    }`}>
+                                      {d.fonte || "—"}
+                                    </span>
+                                  </td>
+                                  <td className="py-1.5 px-3 text-right text-[10px] text-muted-foreground font-mono whitespace-nowrap">
+                                    ({d.heMins}÷60)×{m.valorHora.toFixed(2)}×{d.fator.toFixed(1)}
+                                  </td>
+                                  <td className="py-1.5 px-3 text-right font-bold text-purple-700 tabular-nums whitespace-nowrap">R$ {d.valorDia.toFixed(2).replace(".", ",")}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              {(m.descontoAtrasoMins ?? 0) > 0 ? (
+                                <>
+                                  <tr className="border-t-2 border-slate-200 bg-slate-50 text-xs">
+                                    <td colSpan={5} className="py-2 px-3 text-right text-slate-700 font-medium">HE Bruto</td>
+                                    <td className="py-2 px-3 text-right font-mono tabular-nums text-blue-700">{minsToHM(m.totalHEGrossMins ?? m.totalHEMins)}</td>
+                                    <td colSpan={3} className="py-2 px-3 text-right text-[10px] font-mono text-muted-foreground">
+                                      {(m.totalHEUtilGrossMins ?? 0) > 0 && <span>Úteis: {minsToHM(m.totalHEUtilGrossMins)} </span>}
+                                      {(m.totalHEFimGrossMins ?? 0) > 0 && <span>Dom/Fer: {minsToHM(m.totalHEFimGrossMins)}</span>}
+                                    </td>
+                                    <td className="py-2 px-3 text-right" />
+                                  </tr>
+                                  <tr className="bg-amber-50 text-xs">
+                                    <td colSpan={5} className="py-2 px-3 text-right text-amber-800 font-medium" title={`Atrasos do período: ${minsToHM(m.totalAtrasoMins)} (descontados ${minsToHM(m.descontoAtrasoMins)} do HE)`}>
+                                      (−) Atrasos descontados
+                                    </td>
+                                    <td className="py-2 px-3 text-right font-mono tabular-nums text-amber-800">−{minsToHM(m.descontoAtrasoMins)}</td>
+                                    <td colSpan={3} className="py-2 px-3 text-right text-[10px] text-muted-foreground">
+                                      Atraso total: {minsToHM(m.totalAtrasoMins)}
+                                    </td>
+                                    <td className="py-2 px-3 text-right" />
+                                  </tr>
+                                </>
+                              ) : null}
+                              <tr className="border-t-2 border-purple-200 bg-gradient-to-r from-purple-50 to-fuchsia-50 font-bold">
+                                <td colSpan={5} className="py-2.5 px-3 text-right text-purple-900 uppercase text-[11px] tracking-wide">{(m.descontoAtrasoMins ?? 0) > 0 ? "Total Líquido" : "Total"}</td>
+                                <td className="py-2.5 px-3 text-right font-mono tabular-nums text-blue-700">{minsToHM(m.totalHEMins)}</td>
+                                <td colSpan={3} className="py-2.5 px-3 text-right text-[11px] font-mono text-muted-foreground">
+                                  {m.totalHEUtilMins > 0 && <span>Úteis: {minsToHM(m.totalHEUtilMins)} </span>}
+                                  {m.totalHEFimMins > 0 && <span>Dom/Fer: {minsToHM(m.totalHEFimMins)}</span>}
+                                </td>
+                                <td className="py-2.5 px-3 text-right text-base sm:text-lg text-purple-700 tabular-nums whitespace-nowrap">R$ {m.valorTotal.toFixed(2).replace(".", ",")}</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* Fórmula */}
+                      <div className="bg-white rounded-xl border p-4 text-xs space-y-2 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <Calculator className="h-4 w-4 text-slate-500" />
+                          <p className="font-semibold text-slate-700 text-sm">Fórmula aplicada</p>
+                        </div>
+                        <p className="text-muted-foreground font-mono bg-slate-50 rounded px-2 py-1.5 border border-slate-100">Valor HE = (minutos HE ÷ 60) × Valor/Hora × (1 + Adicional% ÷ 100)</p>
+                        <div className="space-y-1.5 pt-1">
+                          {m.totalHEUtilMins > 0 && (
+                            <p className="text-muted-foreground">
+                              <span className="inline-block min-w-[110px] font-medium text-slate-600">Dias úteis:</span>
+                              <span className="font-mono">({m.totalHEUtilMins}÷60) × R$ {m.valorHora.toFixed(2).replace(".",",")} × {(1 + m.percentualUtil / 100).toFixed(1)}</span>
+                              <span className="mx-1.5">=</span>
+                              <strong className="text-purple-700 tabular-nums">R$ {m.valorTotalUtil.toFixed(2).replace(".",",")}</strong>
+                            </p>
+                          )}
+                          {m.totalHEFimMins > 0 && (
+                            <p className="text-muted-foreground">
+                              <span className="inline-block min-w-[110px] font-medium text-slate-600">Dom/Feriados:</span>
+                              <span className="font-mono">({m.totalHEFimMins}÷60) × R$ {m.valorHora.toFixed(2).replace(".",",")} × {(1 + m.percentualFim / 100).toFixed(1)}</span>
+                              <span className="mx-1.5">=</span>
+                              <strong className="text-purple-700 tabular-nums">R$ {m.valorTotalFim.toFixed(2).replace(".",",")}</strong>
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 pt-2 border-t mt-2">
+                            <span className="font-semibold text-slate-800 text-sm">Total geral:</span>
+                            <span className="ml-auto font-bold text-purple-700 text-base tabular-nums">R$ {m.valorTotal.toFixed(2).replace(".",",")}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs border">
-                        <thead>
-                          <tr className="bg-gray-100 text-left">
-                            <th className="py-1.5 px-2 font-semibold">Data</th>
-                            <th className="py-1.5 px-2 font-semibold text-center">Dia</th>
-                            <th className="py-1.5 px-2 font-semibold text-center">Horários</th>
-                            <th className="py-1.5 px-2 font-semibold text-right">Trabalhado</th>
-                            <th className="py-1.5 px-2 font-semibold text-right">Jornada</th>
-                            <th className="py-1.5 px-2 font-semibold text-right">HE</th>
-                            <th className="py-1.5 px-2 font-semibold text-center">Adic.</th>
-                            <th className="py-1.5 px-2 font-semibold text-center">Fonte</th>
-                            <th className="py-1.5 px-2 font-semibold text-right">Cálculo</th>
-                            <th className="py-1.5 px-2 font-semibold text-right">Valor</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {m.dias.map((d: any, i: number) => (
-                            <tr key={i} className={`border-t ${d.diaSemana === "Dom" ? "bg-red-50" : i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
-                              <td className="py-1 px-2 font-mono">{d.data.split("-").reverse().join("/")}</td>
-                              <td className={`py-1 px-2 text-center font-bold ${d.diaSemana === "Dom" ? "text-red-600" : d.diaSemana === "Sáb" ? "text-orange-600" : ""}`}>{d.diaSemana}</td>
-                              <td className="py-1 px-2 text-center font-mono text-muted-foreground">{d.horarios}</td>
-                              <td className="py-1 px-2 text-right font-mono">{d.trabalhado}</td>
-                              <td className="py-1 px-2 text-right font-mono text-muted-foreground">{d.jornada}</td>
-                              <td className="py-1 px-2 text-right font-mono font-bold text-blue-700">{Math.floor(d.heMins / 60)}:{String(d.heMins % 60).padStart(2, "0")}</td>
-                              <td className="py-1 px-2 text-center">{d.percentual}%</td>
-                              <td className="py-1 px-2 text-center">
-                                <span className={`text-[10px] px-1 py-0.5 rounded ${d.fonte === "dixi" ? "bg-green-100 text-green-700" : d.fonte === "manual" ? "bg-purple-100 text-purple-700" : "bg-gray-100"}`}>
-                                  {d.fonte || "—"}
-                                </span>
-                              </td>
-                              <td className="py-1 px-2 text-right text-[10px] text-muted-foreground font-mono">
-                                ({d.heMins}÷60)×{m.valorHora.toFixed(2)}×{d.fator.toFixed(1)}
-                              </td>
-                              <td className="py-1 px-2 text-right font-bold text-purple-700">R$ {d.valorDia.toFixed(2).replace(".", ",")}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          {(m.descontoAtrasoMins ?? 0) > 0 ? (
-                            <>
-                              <tr className="border-t-2 border-gray-300 bg-gray-50 text-xs">
-                                <td colSpan={5} className="py-1.5 px-2 text-right">HE Bruto</td>
-                                <td className="py-1.5 px-2 text-right font-mono text-blue-700">{minsToHM(m.totalHEGrossMins ?? m.totalHEMins)}</td>
-                                <td colSpan={3} className="py-1.5 px-2 text-right text-[10px] font-mono text-muted-foreground">
-                                  {(m.totalHEUtilGrossMins ?? 0) > 0 && <span>Úteis: {minsToHM(m.totalHEUtilGrossMins)} </span>}
-                                  {(m.totalHEFimGrossMins ?? 0) > 0 && <span>Dom/Fer: {minsToHM(m.totalHEFimGrossMins)}</span>}
-                                </td>
-                                <td className="py-1.5 px-2 text-right" />
-                              </tr>
-                              <tr className="bg-amber-50 text-xs">
-                                <td colSpan={5} className="py-1.5 px-2 text-right text-amber-800" title={`Atrasos do período: ${minsToHM(m.totalAtrasoMins)} (descontados ${minsToHM(m.descontoAtrasoMins)} do HE)`}>
-                                  (−) Atrasos descontados
-                                </td>
-                                <td className="py-1.5 px-2 text-right font-mono text-amber-800">−{minsToHM(m.descontoAtrasoMins)}</td>
-                                <td colSpan={3} className="py-1.5 px-2 text-right text-[10px] text-muted-foreground">
-                                  Atraso total: {minsToHM(m.totalAtrasoMins)}
-                                </td>
-                                <td className="py-1.5 px-2 text-right" />
-                              </tr>
-                            </>
-                          ) : null}
-                          <tr className="border-t-2 border-gray-300 bg-gray-100 font-bold">
-                            <td colSpan={5} className="py-2 px-2 text-right">{(m.descontoAtrasoMins ?? 0) > 0 ? "TOTAL LÍQUIDO" : "TOTAL"}</td>
-                            <td className="py-2 px-2 text-right font-mono text-blue-700">{minsToHM(m.totalHEMins)}</td>
-                            <td colSpan={3} className="py-2 px-2 text-right text-xs font-mono text-muted-foreground">
-                              {m.totalHEUtilMins > 0 && <span>Úteis: {minsToHM(m.totalHEUtilMins)} </span>}
-                              {m.totalHEFimMins > 0 && <span>Dom/Fer: {minsToHM(m.totalHEFimMins)}</span>}
-                            </td>
-                            <td className="py-2 px-2 text-right text-lg text-purple-700">R$ {m.valorTotal.toFixed(2).replace(".", ",")}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-
-                    <div className="bg-gray-50 rounded-lg p-3 text-xs text-muted-foreground space-y-1 border">
-                      <p className="font-semibold text-foreground">Fórmula:</p>
-                      <p>Valor HE = (minutos HE ÷ 60) × Valor/Hora × (1 + Adicional%÷100)</p>
-                      {m.totalHEUtilMins > 0 && (
-                        <p>Dias úteis: ({m.totalHEUtilMins}÷60) × R$ {m.valorHora.toFixed(2).replace(".",",")} × {(1 + m.percentualUtil / 100).toFixed(1)} = <strong className="text-purple-700">R$ {m.valorTotalUtil.toFixed(2).replace(".",",")}</strong></p>
-                      )}
-                      {m.totalHEFimMins > 0 && (
-                        <p>Dom/Feriados: ({m.totalHEFimMins}÷60) × R$ {m.valorHora.toFixed(2).replace(".",",")} × {(1 + m.percentualFim / 100).toFixed(1)} = <strong className="text-purple-700">R$ {m.valorTotalFim.toFixed(2).replace(".",",")}</strong></p>
-                      )}
-                      <p className="font-bold text-foreground pt-1">Total: R$ {m.valorTotal.toFixed(2).replace(".",",")}</p>
-                    </div>
-                  </div>
-                );
-              })() : null}
+                  );
+                })() : null}
+              </div>
             </DialogContent>
           </Dialog>
 
@@ -5029,121 +5127,219 @@ export default function FolhaPagamento() {
           )}
 
           <Dialog open={!!memorialHePeriodId && !!memorialEmployeeId} onOpenChange={(open) => { if (!open) { setMemorialHePeriodId(null); setMemorialEmployeeId(null); } }}>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" resizable={false}>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-purple-600" />
-                  Memorial de Cálculo — Hora Extra
+            {/* Rev. 1837 — Memorial HE redesign: header gradiente, KPIs de topo, tabela com sticky header e zebra moderna, fórmula em chips. */}
+            <DialogContent className="max-w-4xl max-h-[92dvh] flex flex-col p-0 gap-0 overflow-hidden" resizable={false}>
+              <DialogHeader className="px-5 sm:px-6 py-4 border-b shrink-0 bg-gradient-to-r from-purple-700 via-purple-600 to-fuchsia-600 text-white">
+                <DialogTitle className="flex items-center gap-3 text-white">
+                  <div className="h-10 w-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center shrink-0">
+                    <Calculator className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-base sm:text-lg font-semibold leading-tight">Memorial de Cálculo</div>
+                    <div className="text-xs font-normal text-purple-100/90 leading-tight">Hora Extra — detalhamento dia a dia</div>
+                  </div>
                 </DialogTitle>
               </DialogHeader>
-              {memorialQ.isLoading ? (
-                <div className="flex items-center justify-center py-8 text-muted-foreground">Carregando memorial...</div>
-              ) : memorialQ.error ? (
-                <div className="text-red-600 text-sm py-4">Erro ao carregar memorial: {memorialQ.error.message}</div>
-              ) : memorialQ.data ? (() => {
-                const m = memorialQ.data;
-                const minsToHM = (mins: number) => `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, "0")}min`;
-                return (
-                  <div className="space-y-4">
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm space-y-1">
-                      <p className="font-bold text-purple-900">{m.nome}</p>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-purple-800">
-                        <div><span className="text-purple-500">Período:</span> {m.periodo.replace(/(\d{4})-(\d{2})-(\d{2})/g, (_: any, y: string, mo: string, d: string) => `${d}/${mo}/${y}`)}</div>
-                        <div><span className="text-purple-500">Valor/hora:</span> R$ {m.valorHora.toFixed(2).replace(".", ",")}</div>
-                        <div><span className="text-purple-500">Adic. útil:</span> {m.percentualUtil}%</div>
-                        <div><span className="text-purple-500">Adic. dom/fer:</span> {m.percentualFim}%</div>
+
+              <div className="flex-1 overflow-y-auto min-h-0 bg-slate-50/60">
+                {memorialQ.isLoading ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+                    <div className="h-10 w-10 rounded-full border-4 border-purple-100 border-t-purple-600 animate-spin" />
+                    <p className="text-sm">Carregando memorial...</p>
+                  </div>
+                ) : memorialQ.error ? (
+                  <div className="m-4 sm:m-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>Erro ao carregar memorial: {memorialQ.error.message}</span>
+                  </div>
+                ) : memorialQ.data ? (() => {
+                  const m = memorialQ.data;
+                  const minsToHM = (mins: number) => `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, "0")}min`;
+                  const periodoFmt = m.periodo.replace(/(\d{4})-(\d{2})-(\d{2})/g, (_: any, y: string, mo: string, d: string) => `${d}/${mo}/${y}`);
+                  const diasComHE = m.dias.filter((d: any) => d.heMins > 0).length;
+                  return (
+                    <div className="p-4 sm:p-6 space-y-4">
+                      {/* Card funcionário + 4 chips */}
+                      <div className="bg-white rounded-xl border border-purple-200 shadow-sm overflow-hidden">
+                        <div className="bg-gradient-to-r from-purple-50 to-fuchsia-50 px-4 py-3 border-b border-purple-200 flex items-center gap-2 min-w-0">
+                          <User className="h-4 w-4 text-purple-700 shrink-0" />
+                          <p className="font-bold uppercase tracking-wide text-sm text-purple-900 truncate" title={m.nome}>{m.nome}</p>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 sm:divide-x divide-purple-100">
+                          <div className="px-4 py-3 min-w-0">
+                            <p className="text-[10px] uppercase tracking-wide text-purple-500 font-medium">Período</p>
+                            <p className="text-xs font-semibold text-purple-900 truncate" title={periodoFmt}>{periodoFmt}</p>
+                          </div>
+                          <div className="px-4 py-3 min-w-0">
+                            <p className="text-[10px] uppercase tracking-wide text-purple-500 font-medium">Valor/hora</p>
+                            <p className="text-xs font-semibold text-purple-900 tabular-nums">R$ {m.valorHora.toFixed(2).replace(".", ",")}</p>
+                          </div>
+                          <div className="px-4 py-3 min-w-0">
+                            <p className="text-[10px] uppercase tracking-wide text-purple-500 font-medium">Adic. útil</p>
+                            <p className="text-xs font-semibold text-purple-900 tabular-nums">{m.percentualUtil}%</p>
+                          </div>
+                          <div className="px-4 py-3 min-w-0">
+                            <p className="text-[10px] uppercase tracking-wide text-purple-500 font-medium">Adic. dom/fer</p>
+                            <p className="text-xs font-semibold text-purple-900 tabular-nums">{m.percentualFim}%</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* KPIs de topo */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div className="bg-white rounded-xl border border-blue-200 p-3 sm:p-4 shadow-sm">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="text-[10px] sm:text-xs uppercase tracking-wide font-medium text-blue-600">Total HE</p>
+                            <Clock className="h-4 w-4 text-blue-400 shrink-0" />
+                          </div>
+                          <p className="text-xl sm:text-2xl font-bold text-blue-700 tabular-nums leading-tight">{minsToHM(m.totalHEMins)}</p>
+                          {(m.descontoAtrasoMins ?? 0) > 0 && (
+                            <p className="text-[10px] text-amber-700 mt-1">líquido (após atrasos)</p>
+                          )}
+                        </div>
+                        <div className="bg-white rounded-xl border border-purple-200 p-3 sm:p-4 shadow-sm">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="text-[10px] sm:text-xs uppercase tracking-wide font-medium text-purple-600">Valor Total</p>
+                            <Wallet className="h-4 w-4 text-purple-400 shrink-0" />
+                          </div>
+                          <p className="text-xl sm:text-2xl font-bold text-purple-700 tabular-nums leading-tight">R$ {m.valorTotal.toFixed(2).replace(".", ",")}</p>
+                        </div>
+                        <div className="bg-white rounded-xl border border-emerald-200 p-3 sm:p-4 shadow-sm col-span-2 sm:col-span-1">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="text-[10px] sm:text-xs uppercase tracking-wide font-medium text-emerald-600">Dias com HE</p>
+                            <CalendarDays className="h-4 w-4 text-emerald-400 shrink-0" />
+                          </div>
+                          <p className="text-xl sm:text-2xl font-bold text-emerald-700 tabular-nums leading-tight">{diasComHE}<span className="text-sm font-medium text-emerald-500"> / {m.dias.length}</span></p>
+                        </div>
+                      </div>
+
+                      {/* Tabela detalhada */}
+                      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+                        <div className="px-4 py-3 border-b bg-slate-50 flex items-center gap-2">
+                          <CalendarDays className="h-4 w-4 text-slate-500" />
+                          <h3 className="text-sm font-semibold text-slate-700">Detalhamento por dia</h3>
+                          <span className="ml-auto text-[10px] text-slate-500">{m.dias.length} {m.dias.length === 1 ? "dia" : "dias"} no período</span>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[760px] text-xs">
+                            <thead>
+                              <tr className="bg-slate-100/80 text-slate-700 text-[11px] uppercase tracking-wide">
+                                <th className="py-2 px-3 font-semibold text-left">Data</th>
+                                <th className="py-2 px-3 font-semibold text-center">Dia</th>
+                                <th className="py-2 px-3 font-semibold text-center">Horários</th>
+                                <th className="py-2 px-3 font-semibold text-right">Trab.</th>
+                                <th className="py-2 px-3 font-semibold text-right">Jornada</th>
+                                <th className="py-2 px-3 font-semibold text-right">HE</th>
+                                <th className="py-2 px-3 font-semibold text-center">Adic.</th>
+                                <th className="py-2 px-3 font-semibold text-center">Fonte</th>
+                                <th className="py-2 px-3 font-semibold text-right">Cálculo</th>
+                                <th className="py-2 px-3 font-semibold text-right">Valor</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {m.dias.map((d: any, i: number) => (
+                                <tr key={i} className={`border-t border-slate-100 ${d.diaSemana === "Dom" ? "bg-red-50/60" : i % 2 === 0 ? "" : "bg-slate-50/40"} hover:bg-purple-50/40 transition-colors`}>
+                                  <td className="py-1.5 px-3 font-mono whitespace-nowrap">{d.data.split("-").reverse().join("/")}</td>
+                                  <td className="py-1.5 px-3 text-center">
+                                    <span className={`inline-flex items-center justify-center min-w-[32px] px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                                      d.diaSemana === "Dom" ? "bg-red-100 text-red-700" :
+                                      d.diaSemana === "Sáb" ? "bg-orange-100 text-orange-700" :
+                                      "bg-slate-100 text-slate-700"
+                                    }`}>{d.diaSemana}</span>
+                                  </td>
+                                  <td className="py-1.5 px-3 text-center font-mono text-[11px] text-muted-foreground whitespace-nowrap">{d.horarios}</td>
+                                  <td className="py-1.5 px-3 text-right font-mono tabular-nums whitespace-nowrap">{d.trabalhado}</td>
+                                  <td className="py-1.5 px-3 text-right font-mono tabular-nums text-muted-foreground whitespace-nowrap">{d.jornada}</td>
+                                  <td className="py-1.5 px-3 text-right font-mono tabular-nums font-bold text-blue-700 whitespace-nowrap">{Math.floor(d.heMins / 60)}:{String(d.heMins % 60).padStart(2, "0")}</td>
+                                  <td className="py-1.5 px-3 text-center tabular-nums">{d.percentual}%</td>
+                                  <td className="py-1.5 px-3 text-center">
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                                      d.fonte === "dixi" ? "bg-emerald-100 text-emerald-700" :
+                                      d.fonte === "manual" ? "bg-purple-100 text-purple-700" :
+                                      "bg-slate-100 text-slate-600"
+                                    }`}>
+                                      {d.fonte || "—"}
+                                    </span>
+                                  </td>
+                                  <td className="py-1.5 px-3 text-right text-[10px] text-muted-foreground font-mono whitespace-nowrap">
+                                    ({d.heMins}÷60)×{m.valorHora.toFixed(2)}×{d.fator.toFixed(1)}
+                                  </td>
+                                  <td className="py-1.5 px-3 text-right font-bold text-purple-700 tabular-nums whitespace-nowrap">R$ {d.valorDia.toFixed(2).replace(".", ",")}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              {(m.descontoAtrasoMins ?? 0) > 0 ? (
+                                <>
+                                  <tr className="border-t-2 border-slate-200 bg-slate-50 text-xs">
+                                    <td colSpan={5} className="py-2 px-3 text-right text-slate-700 font-medium">HE Bruto</td>
+                                    <td className="py-2 px-3 text-right font-mono tabular-nums text-blue-700">{minsToHM(m.totalHEGrossMins ?? m.totalHEMins)}</td>
+                                    <td colSpan={3} className="py-2 px-3 text-right text-[10px] font-mono text-muted-foreground">
+                                      {(m.totalHEUtilGrossMins ?? 0) > 0 && <span>Úteis: {minsToHM(m.totalHEUtilGrossMins)} </span>}
+                                      {(m.totalHEFimGrossMins ?? 0) > 0 && <span>Dom/Fer: {minsToHM(m.totalHEFimGrossMins)}</span>}
+                                    </td>
+                                    <td className="py-2 px-3 text-right" />
+                                  </tr>
+                                  <tr className="bg-amber-50 text-xs">
+                                    <td colSpan={5} className="py-2 px-3 text-right text-amber-800 font-medium" title={`Atrasos do período: ${minsToHM(m.totalAtrasoMins)} (descontados ${minsToHM(m.descontoAtrasoMins)} do HE)`}>
+                                      (−) Atrasos descontados
+                                    </td>
+                                    <td className="py-2 px-3 text-right font-mono tabular-nums text-amber-800">−{minsToHM(m.descontoAtrasoMins)}</td>
+                                    <td colSpan={3} className="py-2 px-3 text-right text-[10px] text-muted-foreground">
+                                      Atraso total: {minsToHM(m.totalAtrasoMins)}
+                                    </td>
+                                    <td className="py-2 px-3 text-right" />
+                                  </tr>
+                                </>
+                              ) : null}
+                              <tr className="border-t-2 border-purple-200 bg-gradient-to-r from-purple-50 to-fuchsia-50 font-bold">
+                                <td colSpan={5} className="py-2.5 px-3 text-right text-purple-900 uppercase text-[11px] tracking-wide">{(m.descontoAtrasoMins ?? 0) > 0 ? "Total Líquido" : "Total"}</td>
+                                <td className="py-2.5 px-3 text-right font-mono tabular-nums text-blue-700">{minsToHM(m.totalHEMins)}</td>
+                                <td colSpan={3} className="py-2.5 px-3 text-right text-[11px] font-mono text-muted-foreground">
+                                  {m.totalHEUtilMins > 0 && <span>Úteis: {minsToHM(m.totalHEUtilMins)} </span>}
+                                  {m.totalHEFimMins > 0 && <span>Dom/Fer: {minsToHM(m.totalHEFimMins)}</span>}
+                                </td>
+                                <td className="py-2.5 px-3 text-right text-base sm:text-lg text-purple-700 tabular-nums whitespace-nowrap">R$ {m.valorTotal.toFixed(2).replace(".", ",")}</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* Fórmula */}
+                      <div className="bg-white rounded-xl border p-4 text-xs space-y-2 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <Calculator className="h-4 w-4 text-slate-500" />
+                          <p className="font-semibold text-slate-700 text-sm">Fórmula aplicada</p>
+                        </div>
+                        <p className="text-muted-foreground font-mono bg-slate-50 rounded px-2 py-1.5 border border-slate-100">Valor HE = (minutos HE ÷ 60) × Valor/Hora × (1 + Adicional% ÷ 100)</p>
+                        <div className="space-y-1.5 pt-1">
+                          {m.totalHEUtilMins > 0 && (
+                            <p className="text-muted-foreground">
+                              <span className="inline-block min-w-[110px] font-medium text-slate-600">Dias úteis:</span>
+                              <span className="font-mono">({m.totalHEUtilMins}÷60) × R$ {m.valorHora.toFixed(2).replace(".",",")} × {(1 + m.percentualUtil / 100).toFixed(1)}</span>
+                              <span className="mx-1.5">=</span>
+                              <strong className="text-purple-700 tabular-nums">R$ {m.valorTotalUtil.toFixed(2).replace(".",",")}</strong>
+                            </p>
+                          )}
+                          {m.totalHEFimMins > 0 && (
+                            <p className="text-muted-foreground">
+                              <span className="inline-block min-w-[110px] font-medium text-slate-600">Dom/Feriados:</span>
+                              <span className="font-mono">({m.totalHEFimMins}÷60) × R$ {m.valorHora.toFixed(2).replace(".",",")} × {(1 + m.percentualFim / 100).toFixed(1)}</span>
+                              <span className="mx-1.5">=</span>
+                              <strong className="text-purple-700 tabular-nums">R$ {m.valorTotalFim.toFixed(2).replace(".",",")}</strong>
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 pt-2 border-t mt-2">
+                            <span className="font-semibold text-slate-800 text-sm">Total geral:</span>
+                            <span className="ml-auto font-bold text-purple-700 text-base tabular-nums">R$ {m.valorTotal.toFixed(2).replace(".",",")}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs border">
-                        <thead>
-                          <tr className="bg-gray-100 text-left">
-                            <th className="py-1.5 px-2 font-semibold">Data</th>
-                            <th className="py-1.5 px-2 font-semibold text-center">Dia</th>
-                            <th className="py-1.5 px-2 font-semibold text-center">Horários</th>
-                            <th className="py-1.5 px-2 font-semibold text-right">Trabalhado</th>
-                            <th className="py-1.5 px-2 font-semibold text-right">Jornada</th>
-                            <th className="py-1.5 px-2 font-semibold text-right">HE</th>
-                            <th className="py-1.5 px-2 font-semibold text-center">Adic.</th>
-                            <th className="py-1.5 px-2 font-semibold text-center">Fonte</th>
-                            <th className="py-1.5 px-2 font-semibold text-right">Cálculo</th>
-                            <th className="py-1.5 px-2 font-semibold text-right">Valor</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {m.dias.map((d: any, i: number) => (
-                            <tr key={i} className={`border-t ${d.diaSemana === "Dom" ? "bg-red-50" : i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
-                              <td className="py-1 px-2 font-mono">{d.data.split("-").reverse().join("/")}</td>
-                              <td className={`py-1 px-2 text-center font-bold ${d.diaSemana === "Dom" ? "text-red-600" : d.diaSemana === "Sáb" ? "text-orange-600" : ""}`}>{d.diaSemana}</td>
-                              <td className="py-1 px-2 text-center font-mono text-muted-foreground">{d.horarios}</td>
-                              <td className="py-1 px-2 text-right font-mono">{d.trabalhado}</td>
-                              <td className="py-1 px-2 text-right font-mono text-muted-foreground">{d.jornada}</td>
-                              <td className="py-1 px-2 text-right font-mono font-bold text-blue-700">{Math.floor(d.heMins / 60)}:{String(d.heMins % 60).padStart(2, "0")}</td>
-                              <td className="py-1 px-2 text-center">{d.percentual}%</td>
-                              <td className="py-1 px-2 text-center">
-                                <span className={`text-[10px] px-1 py-0.5 rounded ${d.fonte === "dixi" ? "bg-green-100 text-green-700" : d.fonte === "manual" ? "bg-purple-100 text-purple-700" : "bg-gray-100"}`}>
-                                  {d.fonte || "—"}
-                                </span>
-                              </td>
-                              <td className="py-1 px-2 text-right text-[10px] text-muted-foreground font-mono">
-                                ({d.heMins}÷60)×{m.valorHora.toFixed(2)}×{d.fator.toFixed(1)}
-                              </td>
-                              <td className="py-1 px-2 text-right font-bold text-purple-700">R$ {d.valorDia.toFixed(2).replace(".", ",")}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          {(m.descontoAtrasoMins ?? 0) > 0 ? (
-                            <>
-                              <tr className="border-t-2 border-gray-300 bg-gray-50 text-xs">
-                                <td colSpan={5} className="py-1.5 px-2 text-right">HE Bruto</td>
-                                <td className="py-1.5 px-2 text-right font-mono text-blue-700">{minsToHM(m.totalHEGrossMins ?? m.totalHEMins)}</td>
-                                <td colSpan={3} className="py-1.5 px-2 text-right text-[10px] font-mono text-muted-foreground">
-                                  {(m.totalHEUtilGrossMins ?? 0) > 0 && <span>Úteis: {minsToHM(m.totalHEUtilGrossMins)} </span>}
-                                  {(m.totalHEFimGrossMins ?? 0) > 0 && <span>Dom/Fer: {minsToHM(m.totalHEFimGrossMins)}</span>}
-                                </td>
-                                <td className="py-1.5 px-2 text-right" />
-                              </tr>
-                              <tr className="bg-amber-50 text-xs">
-                                <td colSpan={5} className="py-1.5 px-2 text-right text-amber-800" title={`Atrasos do período: ${minsToHM(m.totalAtrasoMins)} (descontados ${minsToHM(m.descontoAtrasoMins)} do HE)`}>
-                                  (−) Atrasos descontados
-                                </td>
-                                <td className="py-1.5 px-2 text-right font-mono text-amber-800">−{minsToHM(m.descontoAtrasoMins)}</td>
-                                <td colSpan={3} className="py-1.5 px-2 text-right text-[10px] text-muted-foreground">
-                                  Atraso total: {minsToHM(m.totalAtrasoMins)}
-                                </td>
-                                <td className="py-1.5 px-2 text-right" />
-                              </tr>
-                            </>
-                          ) : null}
-                          <tr className="border-t-2 border-gray-300 bg-gray-100 font-bold">
-                            <td colSpan={5} className="py-2 px-2 text-right">{(m.descontoAtrasoMins ?? 0) > 0 ? "TOTAL LÍQUIDO" : "TOTAL"}</td>
-                            <td className="py-2 px-2 text-right font-mono text-blue-700">{minsToHM(m.totalHEMins)}</td>
-                            <td colSpan={3} className="py-2 px-2 text-right text-xs font-mono text-muted-foreground">
-                              {m.totalHEUtilMins > 0 && <span>Úteis: {minsToHM(m.totalHEUtilMins)} </span>}
-                              {m.totalHEFimMins > 0 && <span>Dom/Fer: {minsToHM(m.totalHEFimMins)}</span>}
-                            </td>
-                            <td className="py-2 px-2 text-right text-lg text-purple-700">R$ {m.valorTotal.toFixed(2).replace(".", ",")}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-
-                    <div className="bg-gray-50 rounded-lg p-3 text-xs text-muted-foreground space-y-1 border">
-                      <p className="font-semibold text-foreground">Fórmula:</p>
-                      <p>Valor HE = (minutos HE ÷ 60) × Valor/Hora × (1 + Adicional%÷100)</p>
-                      {m.totalHEUtilMins > 0 && (
-                        <p>Dias úteis: ({m.totalHEUtilMins}÷60) × R$ {m.valorHora.toFixed(2).replace(".",",")} × {(1 + m.percentualUtil / 100).toFixed(1)} = <strong className="text-purple-700">R$ {m.valorTotalUtil.toFixed(2).replace(".",",")}</strong></p>
-                      )}
-                      {m.totalHEFimMins > 0 && (
-                        <p>Dom/Feriados: ({m.totalHEFimMins}÷60) × R$ {m.valorHora.toFixed(2).replace(".",",")} × {(1 + m.percentualFim / 100).toFixed(1)} = <strong className="text-purple-700">R$ {m.valorTotalFim.toFixed(2).replace(".",",")}</strong></p>
-                      )}
-                      <p className="font-bold text-foreground pt-1">Total: R$ {m.valorTotal.toFixed(2).replace(".",",")}</p>
-                    </div>
-                  </div>
-                );
-              })() : null}
+                  );
+                })() : null}
+              </div>
             </DialogContent>
           </Dialog>
 
