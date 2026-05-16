@@ -25,6 +25,22 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1866,
+    titulo: "UI · Sidebar visível em iPad portrait/tablets — breakpoint md → xs (768px → 480px)",
+    descricao: "User (16/05/2026, screenshot DDS no iPad portrait): 'Mantenha a barra lateral visível nesta tela'. Screenshot mostra DDS Guia em iPad portrait sem nenhum vestígio da barra lateral — content full-bleed da borda esquerda.\n\n" +
+      "Causa raiz: `client/src/components/ui/sidebar.tsx` L211 (wrapper `<div>`) e L236 (sidebar-container) usavam `hidden md:block` e `hidden ... md:flex`. O breakpoint `md:` do Tailwind é 768px. Em iPad portrait (744-768px) o sidebar caía na faixa hidden e desaparecia completamente. iPad mini portrait (744px) sempre escondido.\n\n" +
+      "Conflito com Rev. 1813: aquela revisão já tinha reduzido `useMobile` (MOBILE_BREAKPOINT) para 480px e o `TABLET_BREAKPOINT` (sidebarDefaultOpen) para 1024px — exatamente para 'manter a barra visível em todas as telas, em modo ícone-collapse'. Mas as classes CSS `md:block`/`md:flex` no shadcn/ui sidebar.tsx ficaram intactas, ainda usando 768px. Resultado: gap de 480-768px onde o useMobile dizia 'não é mobile' (não vira Sheet) MAS o CSS `hidden md:block` escondia tudo → barra invisível em vez de icon-collapsed.\n\n" +
+      "Fix (sidebar.tsx, 2 hunks de 1 linha cada):\n" +
+      "  • L214 e L239: `md:` → `xs:` (que está definido em `client/src/index.css` como `--breakpoint-xs: 480px` no tema Tailwind v4).\n" +
+      "  • Agora coerente com Rev. 1813: <480px = mobile (Sheet overlay via openMobile); ≥480px = sidebar fixed visível (icon-collapse em <1024px, expandida em ≥1024px).\n\n" +
+      "Cobre todos os tablets (iPad mini, iPad standard, iPad Pro, Android tablets) em portrait E landscape.\n\n" +
+      "Preservado: ZERO mudança em layout/estrutura/SidebarProvider; comportamento desktop e mobile (Sheet) intactos; tema, cookies, keyboard shortcut intactos. Reversível em 2 hunks de 1 linha. R-001 OK.",
+    tipo: "fix",
+    modulos: "UI/Layout",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 11:55:00",
+  },
+  {
     version: 1865,
     titulo: "Cronograma · Cascata Responsável Manual — fix detecção de descendentes em EAP 'flat' (ex.: 02.0 → 02.01)",
     descricao: "User (16/05/2026, screenshot pós Rev. 1862): 'Não está propagando o responsável para os filhos abaixo DA ATIVIDADE PAI'. Cenário do screenshot: linha 'INFRA ESTRUTURA E TUBULAÇÃO' (eap 02.0) com 'Xxxx' digitado, e os Tubos de PVC abaixo (eap 02.01, 02.02...) NÃO recebem cascata.\n\n" +
