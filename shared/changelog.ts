@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1936 — RH · Dash Aviso Prévio · Tabela CDM · Tag laranja "CIPA" ao lado do nome para sinalizar estabilidade (não exclui da lista).
+ * User (16/05/2026, screenshot tabela CDM): "marque uma tag de quem faz parte da cipa e não podemos fazer aviso devido a estabilidade.. so demarca para saber quem é...".
+ * Base legal: CF Art. 10 II 'a' ADCT + CLT Art. 165 + Súm. 339 TST — membro eleito da CIPA (titular ou suplente) NÃO pode ser dispensado sem justa causa desde o registro da candidatura até 1 ano após o fim do mandato. User explicitou que NÃO quer excluir da lista (diferente dos Reclusos/Afastados Rev. 1923 — onde demitir é inviável e a provisão de caixa não bate); CIPA é marcador informativo: usuário precisa SABER quem é, mas o custo teórico ainda compõe a provisão "se pudessemos demitir TODO o quadro hoje".
+ * Mudança server (`dashboards.ts` `getDashCustoDemissaoMassa`): novo batch query `DISTINCT ON ("employeeId")` em `cipa_members` filtrando `statusMembro='Ativo'` E `fimEstabilidade IS NULL OR >= dataRef` (só pega quem está com estabilidade vigente na data-base). Map `cipaByEmp` populado em O(N) (sem N+1). Linha retorna `isCipa: boolean`, `cipaCargo: string | null`, `cipaFimEstabilidade: ISO | null`.
+ * Mudança client (`DashAvisoPrevio.tsx`): célula do nome reembrulhada em `<div flex items-center gap-1.5>` — botão Raio-X (Rev. 1935) preserva `flex-1 min-w-0 truncate`, tag CIPA aparece à direita quando `isCipa=true` (`<span>` laranja `bg-orange-100 text-orange-800 border-orange-300`, `text-[9px] font-bold`, `shrink-0`). Tooltip mostra cargo CIPA + data fim estabilidade pt-BR + citação da base legal.
+ * version → 1936.
+ * Resultado: linhas de membros CIPA mostram "ANDERSON DOS ANJOS [CIPA]" em laranja — visualmente óbvio que demissão sem justa causa é vedada. Custo permanece na soma (provisão de caixa intacta). Funcionários sem mandato vigente: zero impacto.
+ * Preservado: Raio-X Rev. 1935, tempo a/m/d Rev. 1934, idade Rev. 1931, filtros Rev. 1915/1923, queries Rev. 1911/1927, projeção Rev. 1909-fix, complementar Rev. 1919, diasAvisoEstimado Rev. 1930, tipo Rev. 1921, sort Rev. 1909, top-3, KPIs, truncate visual. Zero ALTER/DROP/DELETE — 1 SELECT batch adicional. Reversível em 3 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1935 — RH · Dash Aviso Prévio · Tabela CDM · Clicar no nome do funcionário abre o Raio-X.
  * User (16/05/2026, screenshot tabela CDM): "quando clicar no nome do funcionario, abra a tela de raiox dele... para saber quem é..".
  * Motivação: o usuário precisa do contexto completo (histórico, documentos, férias, etc.) antes de tomar decisão sobre quem demitir — e o Raio-X já existe e é usado em Colaboradores, AvisoPrevio, Ferias, FechamentoPonto, ControleDocumentos, DashControleDocumentos. Padronização da UX.

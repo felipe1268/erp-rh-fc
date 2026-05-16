@@ -413,14 +413,28 @@ export default function DashAvisoPrevio() {
                                 <td className="py-1.5 px-2 text-muted-foreground tabular-nums border-b border-border/50">{idx + 1}</td>
                                 {/* Rev. 1935 — Clicar no nome abre o Raio-X do funcionário (mesmo modal usado em Colaboradores/AvisoPrevio/Ferias/etc.). */}
                                 <td className="py-1.5 px-2 font-medium truncate max-w-[200px] border-b border-border/50">
-                                  <button
-                                    type="button"
-                                    onClick={() => setRaioXEmployeeId(l.id)}
-                                    className="text-left text-blue-700 hover:text-blue-900 hover:underline truncate w-full"
-                                    title={`Abrir Raio-X de ${l.nomeCompleto}`}
-                                  >
-                                    {l.nomeCompleto}
-                                  </button>
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => setRaioXEmployeeId(l.id)}
+                                      className="text-left text-blue-700 hover:text-blue-900 hover:underline truncate flex-1 min-w-0"
+                                      title={`Abrir Raio-X de ${l.nomeCompleto}`}
+                                    >
+                                      {l.nomeCompleto}
+                                    </button>
+                                    {/* Rev. 1936 — Tag CIPA (estabilidade — CF Art. 10 II 'a' ADCT).
+                                        User 16/05/2026: "marque uma tag de quem faz parte da cipa e não
+                                        podemos fazer aviso devido a estabilidade.. so demarca para saber
+                                        quem é..". Não exclui da lista, apenas sinaliza. */}
+                                    {l.isCipa && (
+                                      <span
+                                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-100 text-orange-800 border border-orange-300 shrink-0"
+                                        title={`CIPA — estável até ${l.cipaFimEstabilidade ? new Date(l.cipaFimEstabilidade + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}${l.cipaCargo ? ` (${l.cipaCargo})` : ''}. Dispensa sem justa causa vedada — CF Art. 10 II 'a' ADCT.`}
+                                      >
+                                        CIPA
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[140px] border-b border-border/50" title={l.funcao || l.cargo}>{l.funcao || l.cargo || '-'}</td>
                                 <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[160px] border-b border-border/50" title={l.obra}>{l.obra || <span className="italic text-muted-foreground/60">sem alocação</span>}</td>

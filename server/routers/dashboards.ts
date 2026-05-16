@@ -2387,6 +2387,34 @@ async function getDashCustoDemissaoMassa(
     console.error('[getDashCustoDemissaoMassa] falha meal_benefit_configs (assumindo VR=0):', (e as any)?.message ?? e);
   }
 
+  // Rev. 1936 — Batch: membros ATIVOS da CIPA com estabilidade ainda VIGENTE
+  // na dataRef. Marcador visual apenas (NÃO exclui da lista — user explicitou:
+  // "so demarca para saber quem é"). Estabilidade CIPA: CF Art. 10 II 'a' ADCT
+  // + CLT Art. 165 / Súm. 339 TST — não pode dispensar sem justa causa desde
+  // registro da candidatura até 1 ano após o fim do mandato.
+  const cipaByEmp = new Map<number, { cargo: string; fimEstabilidade: string | null }>();
+  if (empIds.length > 0) {
+    try {
+      const dataRefIso = dtRef.toISOString().slice(0, 10);
+      const cipaRows = ((await db.execute(sql`
+        SELECT DISTINCT ON ("employeeId") "employeeId", "cargoCipa", "fimEstabilidade"
+        FROM cipa_members
+        WHERE "employeeId" IN (${sql.join(empIds.map(id => sql`${id}`), sql`, `)})
+          AND "statusMembro" = 'Ativo'
+          AND ("fimEstabilidade" IS NULL OR "fimEstabilidade" >= ${dataRefIso})
+        ORDER BY "employeeId", "fimEstabilidade" DESC NULLS LAST, id DESC
+      `)) as any).rows || [];
+      for (const r of cipaRows) {
+        cipaByEmp.set(Number(r.employeeId), {
+          cargo: String(r.cargoCipa ?? ''),
+          fimEstabilidade: r.fimEstabilidade ? String(r.fimEstabilidade) : null,
+        });
+      }
+    } catch (e) {
+      console.error('[getDashCustoDemissaoMassa] falha cipa_members (assumindo vazio):', (e as any)?.message ?? e);
+    }
+  }
+
   // Batch: períodos de férias agendados/em_gozo/concluídos que podem cair no
   // mês da saída de qualquer funcionário. Janela: dataRef → dataRef+90d
   // (teto Lei 12.506 = aviso máximo 90 dias indenizado).
@@ -2585,6 +2613,10 @@ async function getDashCustoDemissaoMassa(
         tempoAnos,
         tempoMeses,
         tempoDias,
+        // Rev. 1936 — CIPA: estabilidade (CF Art. 10 II 'a' ADCT).
+        isCipa: cipaByEmp.has(r.id),
+        cipaCargo: cipaByEmp.get(r.id)?.cargo ?? null,
+        cipaFimEstabilidade: cipaByEmp.get(r.id)?.fimEstabilidade ?? null,
         // Rev. 1930 — Devolve `diasAvisoEstimado` (que respeita o `tipo` —
         // 30 fixos no Trabalhado / 30+3·ano no Indenizado conforme L2476),
         // não `previsao.diasAvisoTotal` (que SEMPRE retorna o cálculo legal
