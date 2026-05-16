@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1895 — Planejamento · Programação Semanal LOTUS · EXPORT EXCEL · Removido espelhamento que pintava AZUL nas DUAS faixas (topo + baixo) quando só havia previsto.
+ * User (16/05/2026, 2 screenshots — image_1778948554050.png semana 01/05 com cells totalmente azuis em Seg-Qui e image_1778948582015.png semana 10/11 com algumas cells parcialmente azuis): "TEM UM ERRO CONCEITUAL, O PREVISTO EM AZUL EM CIMA ESTA CORRETO, POREM ABAIXO A COR IRÁ VARIAR CONFORME INDICADO NA LEGENDA.. MAS NÃO TEM COR AZUL E EM CIMA COMO ESTA ACONTECENDO HOJE.. O AZUL É AO PREVISTO.. QUE FICA NO TOPO, ABAIXO FICA O STATUS CONFORME A LEGENDA..."
+ * Causa: bloco legado no `handleExportExcel` (ProgramacaoSemanalLotus.tsx L1419-1424) espelhava a ÚNICA faixa existente nas DUAS linhas do slot (r0+1 e r0+2). Caso típico: dia previsto sem realizado tinha `top=blue, bottom=null` → o espelho copiava o azul para r0+2, produzindo uma barra cheia azul de 2 linhas. Isso violava o conceito LOTUS: TOPO = PLANO (azul), BAIXO = STATUS (verde/vermelho/laranja/amarelo) ou VAZIO. O comportamento "barra cheia" só fazia sentido antes da Rev. 1886, quando o realizado fora do envelope (laranja/amarelo) vinha apenas em `bottom`; após a Rev. 1886 forçar TOP=azul para tudo que tem previsto, o espelho virou prejudicial.
+ * Mudança (em client/src/components/planejamento/ProgramacaoSemanalLotus.tsx L1416-1431):
+ *   • REMOVIDO o bloco `if (corTop && !corBot) { r0+2 fill = corTop }` e seu simétrico `else if (!corTop && corBot) { r0+1 fill = corBot }`.
+ *   • Mantido: `if (corTop) fill r0+1`; `if (corBot) fill r0+2`. Cada faixa pinta APENAS sua linha — topo=plano, baixo=status (ou vazio).
+ *   • Comentário in-line documentando a remoção e o conceito LOTUS.
+ *   • version → 1895.
+ * Preservado/Seguro: ZERO mudança em backend/DB/schema/tela. Rev. 1886 (TOP sempre azul + atrasado migra p/ BOTTOM=vermelho) intacta — ela já garante que a célula nunca fica com APENAS bottom (sempre top=azul precede). Rev. 1893 (cinza Sáb/Dom) intacta — pintaCinzaFds roda antes do loop, faixas azul/verde sobrescrevem quando há trabalho. Rev. 1894 (guard cutoff) intacta. Rev. 1875 (dias_trabalhados_extras) intacta. Tela (UI) usa CSS classes via JSX dedicado e NUNCA tinha o espelho — só o export. Reversível em 1 hunk + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1894 — Planejamento · Programação Semanal LOTUS · Pintura de PREVISTO (azul) e REALIZADO (verde/vermelho/laranja/amarelo) agora RESPEITA o CUTOFF oficial do projeto em AMBOS a tela e o export Excel.
  * User (16/05/2026, screenshot do export Excel mostrando blue paint em Mon/Ter/Qua/Qui mesmo quando o cutoff é Seg): "TEM OUTRO ERRO, A PINTURA DEVE DO PREVISTO E REALIZADO REVE RESPEITAR O CUTOFF.."
  * Causa: a função `faixasCelula(...)` (compartilhada por tela e export) pintava o ENVELOPE PREVISTO COMPLETO + qualquer REAL no horizonte, ignorando o status-date oficial. Padrão LOTUS / PMBOK: o relatório é uma fotografia da obra ATÉ o cutoff — dias > cutoff devem ficar EM BRANCO (entram no próximo relatório semanal). A função tinha `hoje` e `inicioSemanaCorrente` mas NÃO tinha cutoff.

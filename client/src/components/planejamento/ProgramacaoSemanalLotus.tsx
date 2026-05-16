@@ -1410,17 +1410,21 @@ export default function ProgramacaoSemanalLotus(props: Props) {
               }
               const corTop = corClassToHex(topCls);
               const corBot = corClassToHex(botCls);
+              // Rev. 1895 — User (16/05/2026, 2 screenshots): "O PREVISTO EM
+              // AZUL EM CIMA ESTA CORRETO, POREM ABAIXO A COR IRÁ VARIAR
+              // CONFORME INDICADO NA LEGENDA.. MAS NÃO TEM COR AZUL E EM CIMA
+              // COMO ESTA ACONTECENDO HOJE". O bloco anterior espelhava a
+              // ÚNICA faixa existente nas DUAS linhas (barra cheia 2-rows)
+              // — isso violava o conceito LOTUS: TOPO = PLANO (azul) + BAIXO
+              // = STATUS (verde/vermelho/laranja/amarelo) ou VAZIO. Agora:
+              // r0+1 (topo) recebe APENAS corTop; r0+2 (baixo) recebe APENAS
+              // corBot. Sem espelhamento — célula com só previsto fica meia
+              // pintada (faixa superior azul + faixa inferior branca).
               if (corTop) {
                 ws.getCell(r0 + 1, cIdx).fill = { type: "pattern", pattern: "solid", fgColor: { argb: corTop } } as any;
               }
               if (corBot) {
                 ws.getCell(r0 + 2, cIdx).fill = { type: "pattern", pattern: "solid", fgColor: { argb: corBot } } as any;
-              }
-              // Se só tem uma das faixas, espelha pra ocupar as 2 linhas (barra cheia)
-              if (corTop && !corBot) {
-                ws.getCell(r0 + 2, cIdx).fill = { type: "pattern", pattern: "solid", fgColor: { argb: corTop } } as any;
-              } else if (!corTop && corBot) {
-                ws.getCell(r0 + 1, cIdx).fill = { type: "pattern", pattern: "solid", fgColor: { argb: corBot } } as any;
               }
             });
           }
