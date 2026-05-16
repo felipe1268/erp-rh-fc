@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1942 — RH · Dash Aviso Prévio · KPIs do topo (Total / Vencendo 7d / Vencendo 30d) agora CLICÁVEIS — drill-down lista QUAIS avisos compõem o número.
+ * User (16/05/2026, screenshot cards "Vencendo em 7 dias = 1" e "Vencendo em 30 dias = 3"): "QUERO QUE TODOS OS CARDS SEJAM RESPONSIVOS PARA FACILITAR A VIDA NO DIA A DIA.. E ANALISAR DA ONDE VEM A INFORMAÇÃO..".
+ * Motivação: KPIs mostravam só o número agregado — RH precisava saber QUEM são os funcionários por trás do "1" e "3" pra agir (homologação, pagamento da rescisão, comunicação). Demais cards (Em Andamento / Concluídos / Cancelados) já eram clicáveis desde Rev. anteriores; só Total + Vencendo 7d/30d ficaram de fora.
+ * Mudança (`DashAvisoPrevio.tsx`):
+ *   (a) Card "Total de Avisos" (L320) ganha wrapper `<div className="cursor-pointer" onClick=...>` com drill-down `{ type: 'finTotal', label: 'Todos os Avisos' }` — `finTotal` já existia no `drillDownAvisos` (retorna `true` p/ todos), só faltava o trigger.
+ *   (b) Cards "Vencendo em 7 dias" e "Vencendo em 30 dias" (L607-608) idem, novos drill-down types `venc7`/`venc30`.
+ *   (c) Novo bloco no `drillDownAvisos` (L272-280): aplica MESMA regra do server (`dashboards.ts` L2864-2865) — `status='em_andamento'` AND `dataFim BETWEEN hoje AND hoje+N` (N=7 ou 30). Garante paridade absoluta com o número exibido no card (zero risco de divergência).
+ *   (d) Dialog title (L977-986): novos casos com ícones próprios (ShieldAlert vermelho p/ venc7, CalendarDays âmbar p/ venc30) e títulos com a contagem entre parênteses ("Avisos vencendo em até 7 dias (1)").
+ *   (e) Sub-label dos cards venc7/venc30 ganha "· clique para ver" pra afordância (descobrabilidade — antes era só "Atenção imediata" / "Planejamento" sem indicação de interatividade).
+ * version → 1942.
+ * Resultado: clique em qualquer KPI do topo abre modal com a lista de avisos que compõem o número, com nome do funcionário + dataInicio→dataFim + valor estimado + status. Triagem em 1 clique.
+ * Preservado: drill-down já existente p/ status/tipo/setor/etc., Raio-X Rev. 1935, foto Rev. 1941, tag CIPA Rev. 1936, redim. colunas Rev. 1939, sticky Rev. 1924, sort Rev. 1909. Zero backend/DB. Reversível em 4 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1941 — RH · Dash Aviso Prévio · Tabela CDM · Foto do funcionário ao lado do nome + modal de ampliação ao clicar.
  * User (16/05/2026, 2 mensagens encadeadas): "COLOCA A FOTO DO FUNCIONARIO AO LADO DO NOME.." + "QUANDO EU CLICAR NA FOTO, QUERO QUE AUMENTE O TAMANHO PARA PODER VER MELHOR.. QUEM É O COLABORADOR.".
  * Motivação: identificação visual rápida na tabela de provisão de demissão — engenheiro/RH lê 100+ nomes mas reconhece rostos. Padrão idêntico ao RaioXFuncionario (que já tem foto ampliável L3752+).

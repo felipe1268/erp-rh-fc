@@ -266,6 +266,15 @@ export default function DashAvisoPrevio() {
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         return key === drillDown.label;
       }
+      if (drillDown.type === 'venc7' || drillDown.type === 'venc30') {
+        // Rev. 1942 — Mesma regra do server (dashboards.ts L2864-2865): apenas
+        // avisos em_andamento, dataFim entre hoje e +7/+30 dias.
+        if (a.status !== 'em_andamento' || !a.dataFim) return false;
+        const fim = new Date(a.dataFim + 'T00:00:00');
+        const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+        const limite = new Date(hoje); limite.setDate(limite.getDate() + (drillDown.type === 'venc7' ? 7 : 30));
+        return fim >= hoje && fim <= limite;
+      }
       if (drillDown.type === 'reducao') {
         const r = a.reducaoJornada || 'nenhuma';
         if (drillDown.label === '2h por dia') return r === '2h_dia';
@@ -316,8 +325,12 @@ export default function DashAvisoPrevio() {
         ) : (
           <>
             {/* ===== SEÇÃO 1: RESUMO QUANTITATIVO ===== */}
+            {/* Rev. 1942 — Card "Total de Avisos" agora clicável (drill-down `finTotal`
+                já existente — abre lista de TODOS os avisos do ano, fonte da info). */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <DashKpi label="Total de Avisos" value={data.total} icon={AlertTriangle} color="blue" />
+              <div className="cursor-pointer" onClick={() => setDrillDown({ type: 'finTotal', label: 'Todos os Avisos' })}>
+                <DashKpi label="Total de Avisos" value={data.total} icon={AlertTriangle} color="blue" />
+              </div>
               <div className="cursor-pointer" onClick={() => setDrillDown({ type: 'status', label: 'em_andamento' })}>
                 <DashKpi label="Em Andamento" value={data.emAndamento} icon={Clock} color="orange" />
               </div>
@@ -603,9 +616,16 @@ export default function DashAvisoPrevio() {
             </Card>
 
             {/* ===== SEÇÃO 3: ALERTAS ===== */}
+            {/* Rev. 1942 — Cards "Vencendo em 7/30 dias" agora clicáveis: abrem
+                drill-down listando QUAIS avisos (em_andamento) com dataFim dentro
+                da janela. Mesmo critério do server (dashboards.ts L2864-2865). */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <DashKpi label="Vencendo em 7 dias" value={data.vencendo7dias} icon={ShieldAlert} color="red" sub="Atenção imediata" />
-              <DashKpi label="Vencendo em 30 dias" value={data.vencendo30dias} icon={CalendarDays} color="yellow" sub="Planejamento" />
+              <div className="cursor-pointer" onClick={() => setDrillDown({ type: 'venc7', label: 'Vencendo em 7 dias' })}>
+                <DashKpi label="Vencendo em 7 dias" value={data.vencendo7dias} icon={ShieldAlert} color="red" sub="Atenção imediata · clique para ver" />
+              </div>
+              <div className="cursor-pointer" onClick={() => setDrillDown({ type: 'venc30', label: 'Vencendo em 30 dias' })}>
+                <DashKpi label="Vencendo em 30 dias" value={data.vencendo30dias} icon={CalendarDays} color="yellow" sub="Planejamento · clique para ver" />
+              </div>
             </div>
 
             {/* ===== SEÇÃO 4: GRÁFICOS — Tipo + Redução ===== */}
@@ -951,11 +971,16 @@ export default function DashAvisoPrevio() {
                      drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? <Building2 className="h-5 w-5 text-blue-500" /> :
                      drillDown?.type === 'status' || drillDown?.type === 'finStatus' ? <BarChart3 className="h-5 w-5 text-blue-500" /> :
                      drillDown?.type === 'finTotal' ? <DollarSign className="h-5 w-5 text-blue-500" /> :
+                     drillDown?.type === 'venc7' ? <ShieldAlert className="h-5 w-5 text-red-500" /> :
+                     drillDown?.type === 'venc30' ? <CalendarDays className="h-5 w-5 text-yellow-600" /> :
                      <AlertTriangle className="h-5 w-5 text-amber-500" />}
                     {drillDown?.type === 'funcao' ? `Função: ${drillDown?.label}` :
                      drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? `Setor: ${drillDown?.label}` :
                      drillDown?.type === 'status' ? `Status: ${fmtStatus(drillDown?.label || '')}` :
+                     drillDown?.type === 'finTotal' && drillDown?.label === 'Todos os Avisos' ? `Todos os Avisos do Ano (${data.total})` :
                      drillDown?.type === 'finTotal' ? 'Custo Total Estimado — Todos os Avisos' :
+                     drillDown?.type === 'venc7' ? `Avisos vencendo em até 7 dias (${data.vencendo7dias})` :
+                     drillDown?.type === 'venc30' ? `Avisos vencendo em até 30 dias (${data.vencendo30dias})` :
                      drillDown?.type === 'finStatus' ? `Custo ${fmtStatus(drillDown?.label || '')}` :
                      drillDown?.type === 'tipo' ? `Tipo: ${fmtTipoLabel(drillDown?.label || '')}` :
                      drillDown?.type === 'dias' ? `Dias de Aviso: ${drillDown?.label}` :
