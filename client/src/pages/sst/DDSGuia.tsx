@@ -349,21 +349,54 @@ export default function DDSGuia() {
   const gerarIAMut = trpc.dds.gerarRoteiroComIA.useMutation();
 
   // Rev. 1953 — gerar LOTE de novos temas com IA (expande biblioteca além das NRs/campanhas padrão)
+  // Rev. 1954.1 — progresso estimado 0-100% (chamada é única sem streaming; aproximamos pelo
+  // tempo decorrido contra ETA = qtd * 1.5s, com curva log para chegar suavemente em 95% no fim
+  // do ETA e travar até a resposta real — então salta pra 100%).
   const [gerarMaisOpen, setGerarMaisOpen] = useState(false);
   const [gerarMaisQtd, setGerarMaisQtd] = useState<number>(20);
   const [gerarMaisFoco, setGerarMaisFoco] = useState<string>("");
+  const [gerarMaisProgress, setGerarMaisProgress] = useState<number>(0);
+  const gerarMaisStartedAt = useRef<number>(0);
+  const gerarMaisTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopGerarMaisTimer = () => {
+    if (gerarMaisTimerRef.current) { clearInterval(gerarMaisTimerRef.current); gerarMaisTimerRef.current = null; }
+  };
   const gerarMaisMut = trpc.dds.gerarMaisTemasIA.useMutation({
+    onMutate: () => {
+      // inicia cronômetro + barra; ETA estimado = qtd * 1500ms (cap 95% até resposta real)
+      gerarMaisStartedAt.current = Date.now();
+      setGerarMaisProgress(2);
+      stopGerarMaisTimer();
+      const etaMs = Math.max(8000, gerarMaisQtd * 1500);
+      gerarMaisTimerRef.current = setInterval(() => {
+        const elapsed = Date.now() - gerarMaisStartedAt.current;
+        const ratio = Math.min(1, elapsed / etaMs);
+        // curva sigmoide-ish (rápida no início, desacelera ao chegar perto de 95%)
+        const pct = Math.min(95, Math.round(95 * (1 - Math.pow(1 - ratio, 1.6))));
+        setGerarMaisProgress(pct);
+      }, 200);
+    },
     onSuccess: (r: any) => {
+      stopGerarMaisTimer();
+      setGerarMaisProgress(100);
       const partes = [`${r.inseridos} novo(s) tema(s) adicionado(s)`];
       if (r.ignorados > 0) partes.push(`${r.ignorados} ignorado(s) por duplicidade`);
       if (r.falhas > 0) partes.push(`${r.falhas} com falha`);
       toast.success(partes.join(" · "));
-      setGerarMaisOpen(false);
-      setGerarMaisFoco("");
+      // breve delay pra ver o 100% antes de fechar
+      setTimeout(() => {
+        setGerarMaisOpen(false);
+        setGerarMaisFoco("");
+        setGerarMaisProgress(0);
+      }, 600);
       utils.dds.listTemas.invalidate();
       utils.dds.calendarioAnual.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      stopGerarMaisTimer();
+      setGerarMaisProgress(0);
+      toast.error(e.message);
+    },
   });
   const atualizarSessaoMut = trpc.dds.atualizarSessao.useMutation({
     onSuccess: () => { utils.dds.getSessao?.invalidate?.(); utils.dds.listSessoes.invalidate(); },
@@ -1328,6 +1361,29 @@ export default function DDSGuia() {
                 botão {Math.ceil(200 / gerarMaisQtd)}x (variando o foco ajuda na diversidade).
               </p>
             </div>
+            {/* Rev. 1955 — Barra de progresso 0-100% (estimada pelo tempo decorrido vs ETA) */}
+            {gerarMaisMut.isPending && (
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span className="text-slate-700 flex items-center gap-1.5">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
+                    Gerando {gerarMaisQtd} temas com IA...
+                  </span>
+                  <span className="text-emerald-700 font-mono tabular-nums">{gerarMaisProgress}%</span>
+                </div>
+                <div className="h-2.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 transition-all duration-300 ease-out rounded-full"
+                    style={{ width: `${gerarMaisProgress}%` }}
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 italic">
+                  {gerarMaisProgress < 95
+                    ? "Conectando ao modelo, gerando JSON e validando títulos contra duplicatas..."
+                    : "Quase lá — salvando no banco..."}
+                </p>
+              </div>
+            )}
             <div>
               <label className="text-xs font-semibold text-slate-700 mb-1 block">
                 Foco opcional (deixe em branco para diversidade geral)

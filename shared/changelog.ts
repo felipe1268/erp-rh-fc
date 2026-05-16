@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1955 — SST · DDS Guia · Modal "Gerar mais temas com IA" · Barra de PROGRESSO 0–100% (estimada pelo tempo decorrido vs ETA = qtd × 1,5s).
+ * User (16/05/2026, screenshot do modal mid-loading "Gerando 30 temas..."): "Coloca % de 0 a 100%".
+ * Contexto: a mutation `dds.gerarMaisTemasIA` (Rev. 1953) é uma única chamada HTTP sem streaming — não há sinal real do progresso do LLM. Aproximamos com um cronômetro client-side baseado no ETA conhecido (~1,5s por tema). UX vital: lote de 30 leva ~45s e o "Gerando temas..." sem feedback parecia travado.
+ * Mudança (`client/src/pages/sst/DDSGuia.tsx`, único arquivo):
+ *   (a) Imports já tinham `useRef`/`useEffect`.
+ *   (b) Novo state `gerarMaisProgress: number` (0–100) + refs `gerarMaisStartedAt` (timestamp ms) e `gerarMaisTimerRef` (id do setInterval p/ cleanup).
+ *   (c) Helper `stopGerarMaisTimer()` clearInterval + null.
+ *   (d) `onMutate` do `gerarMaisMut.useMutation`: inicia cronômetro, seta 2% imediato, dispara setInterval(200ms) calculando `pct = min(95, round(95 * (1 - (1 - elapsed/ETA)^1.6)))` — curva sigmoide-ish (sobe rápido no início, desacelera perto de 95%) com cap 95% até a resposta real chegar. ETA = max(8000ms, qtd × 1500ms).
+ *   (e) `onSuccess`: stop timer → seta 100% → toast → `setTimeout(600ms, fechar modal+resetar progress)` (delay pra usuário ver o 100% chegar).
+ *   (f) `onError`: stop timer + reset 0% + toast.
+ *   (g) Visual (dentro do modal, antes do input "Foco"): bloco condicional `{isPending && ...}` com header `<Loader2 spin>` + "Gerando N temas com IA..." + percentual `<span tabular-nums>{N}%</span>`; barra `<div h-2.5 bg-slate-200 rounded-full>` com filho `bg-gradient-to-r from-emerald-500 to-emerald-600 transition-all duration-300` controlado por `style.width: ${gerarMaisProgress}%`; legenda muda em <95%: "Conectando ao modelo, gerando JSON e validando títulos..." vs ≥95%: "Quase lá — salvando no banco...".
+ * version → 1955.
+ * Resultado: usuário vê feedback contínuo (0% → 95% suavemente conforme decorre o ETA, trava em 95% se atrasar, salta pra 100% no sucesso). Botão continua bloqueado durante isPending (já fazia desde Rev. 1953). Erro reseta a barra.
+ * Preservado: mutation backend `gerarMaisTemasIA` Rev. 1953 INTACTA (não precisou streaming), todos os 80 temas seed Rev. 1954, modal layout Rev. 1953 (seletor pill 10/20/25/30 + input foco), invalidate de listTemas+calendarioAnual. Zero backend/DB/tRPC. Reversível em 2 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1954 — SST · DDS Guia · Biblioteca de Temas · Pacote EXTRA de 80 temas curados salvos PERMANENTEMENTE como seed estático (NÃO via IA em runtime).
  * User (16/05/2026, logo após Rev. 1953): "Cria já mais itens né, salva na biblioteca e deixa salvo, vários temas importantes da construção civil".
  * Contexto: Rev. 1953 deu ao usuário o BOTÃO de gerar mais temas via IA sob demanda — mas o usuário queria também já receber um pacote pronto, curado por engenheiro de segurança humano, salvo no seed para QUALQUER company nova já ter +80 temas relevantes sem precisar rodar IA. IA gasta tokens; seed é grátis e determinístico.
