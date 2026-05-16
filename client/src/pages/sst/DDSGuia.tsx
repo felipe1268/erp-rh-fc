@@ -16,7 +16,10 @@ import {
   CalendarDays, BookOpen, Megaphone, Plus, Trash2, Pencil, Users, FileSignature,
   ClipboardCheck, Check, X as XIcon, ChevronRight, Sparkles, MapPin, UserCheck,
   ChevronDown, ChevronUp, Search, Wand2, Loader2, PenLine, Eraser, BarChart3,
+  Filter,
 } from "lucide-react";
+// Rev. 1960 — Catálogo de áreas temáticas (sub-classificação dos temas DDS).
+import { DDS_AREAS, DDS_AREA_VALUES } from "../../../../shared/ddsAreas";
 // Rev. 1746 — Pad de assinatura digital (canvas) usado no DDS.
 // Funciona com touch (iPad/celular) e mouse. Salva como PNG dataURL.
 function AssinaturaPad({
@@ -473,7 +476,10 @@ export default function DDSGuia() {
               normaReferencia: t.normaReferencia ?? undefined,
               categoria: t.categoria ?? undefined,
             });
-            await atualizarTemaMut.mutateAsync({ companyId, id: t.id, conteudoMd: r.conteudoMd } as any);
+            // Rev. 1960 — salva areaTema retornada pela IA SE o tema ainda não tinha (não sobrescreve manual)
+            const patchBulk: any = { companyId, id: t.id, conteudoMd: r.conteudoMd };
+            if (!t.areaTema && (r as any).areaTema) patchBulk.areaTema = (r as any).areaTema;
+            await atualizarTemaMut.mutateAsync(patchBulk);
             ok++;
           } catch (e: any) {
             fail++;
@@ -499,6 +505,7 @@ export default function DDSGuia() {
   const [temaForm, setTemaForm] = useState<any>({
     titulo: "", descricao: "", conteudoMd: "", normaReferencia: "",
     categoria: "LIVRE", codigo: "", duracaoMin: 15,
+    areaTema: null, // Rev. 1960
   });
   // Rev. 1864 — IA gera tema completo a partir de prompt curto
   const [iaPrompt, setIaPrompt] = useState("");
@@ -516,6 +523,7 @@ export default function DDSGuia() {
         normaReferencia: r.normaReferencia,
         duracaoMin: r.duracaoMin,
         conteudoMd: r.conteudoMd,
+        areaTema: (r as any).areaTema ?? null, // Rev. 1960 — IA classifica área automaticamente
       });
       toast.success("Tema gerado pela IA — revise e clique em Criar");
     } catch (e: any) {
@@ -524,7 +532,7 @@ export default function DDSGuia() {
   };
   const abrirNovoTema = () => {
     setEditTema(null);
-    setTemaForm({ titulo: "", descricao: "", conteudoMd: "", normaReferencia: "", categoria: "LIVRE", codigo: "", duracaoMin: 15 });
+    setTemaForm({ titulo: "", descricao: "", conteudoMd: "", normaReferencia: "", categoria: "LIVRE", codigo: "", duracaoMin: 15, areaTema: null });
     setIaPrompt("");
     setShowTema(true);
   };
@@ -534,6 +542,7 @@ export default function DDSGuia() {
       titulo: t.titulo ?? "", descricao: t.descricao ?? "", conteudoMd: t.conteudoMd ?? "",
       normaReferencia: t.normaReferencia ?? "", categoria: t.categoria ?? "LIVRE",
       codigo: t.codigo ?? "", duracaoMin: t.duracaoMin ?? 15,
+      areaTema: t.areaTema ?? null, // Rev. 1960
     });
     setShowTema(true);
   };
@@ -768,6 +777,32 @@ export default function DDSGuia() {
   // Rev. 1957 — filtros/ordenação da Biblioteca em relação ao uso
   const [bibEsconderUsados, setBibEsconderUsados] = useState(false);
   const [bibOrdenarPorUso, setBibOrdenarPorUso] = useState(true);  // não-usados primeiro
+
+  // Rev. 1960 — Filtro por ÁREA TEMÁTICA (compartilhado entre Biblioteca e Uso por Obra).
+  // null = mostra todas as áreas; valor = só temas daquela área (ou áreas múltiplas no Set).
+  const [areaFiltro, setAreaFiltro] = useState<Set<string>>(new Set());
+  const toggleAreaFiltro = (a: string) => {
+    setAreaFiltro(prev => {
+      const next = new Set(prev);
+      if (next.has(a)) next.delete(a); else next.add(a);
+      return next;
+    });
+  };
+  const limparAreaFiltro = () => setAreaFiltro(new Set());
+  // Contagem de temas por área (para mostrar nas chips)
+  const temasPorArea = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of temas) {
+      const a = t.areaTema || "GERAL";
+      map.set(a, (map.get(a) ?? 0) + 1);
+    }
+    return map;
+  }, [temas]);
+  // Helper: passa pelo filtro de área? (Set vazio = passa tudo)
+  const passaFiltroArea = (t: any) => {
+    if (areaFiltro.size === 0) return true;
+    return areaFiltro.has(t.areaTema || "GERAL");
+  };
 
   // Rev. 1959 — Aba "Uso por Obra": seletor de obra (null = todas as obras com permissão).
   // `obrasQ` já vem filtrado por allowedObras no server (Rev. 1731), então respeita permissão do user.
@@ -1155,8 +1190,51 @@ export default function DDSGuia() {
               <Button size="sm" onClick={abrirNovoTema}><Plus className="h-4 w-4 mr-1" /> Novo tema</Button>
             </div>
           </div>
+          {/* Rev. 1960 — Filtro por ÁREA TEMÁTICA (chips toggle multi-seleção) */}
+          {temas.length > 0 && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Filter className="h-3.5 w-3.5 text-slate-600" />
+                <span className="text-xs font-semibold text-slate-700">Filtrar por área temática</span>
+                {areaFiltro.size > 0 && (
+                  <button type="button" onClick={limparAreaFiltro}
+                    className="text-[11px] text-slate-500 hover:text-slate-800 underline ml-1">
+                    limpar ({areaFiltro.size})
+                  </button>
+                )}
+                <span className="text-[11px] text-slate-400 ml-auto">
+                  {areaFiltro.size === 0
+                    ? `mostrando ${temas.length} tema(s)`
+                    : `${temas.filter(passaFiltroArea).length} de ${temas.length} tema(s)`}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {DDS_AREA_VALUES.map(av => {
+                  const info = DDS_AREAS[av];
+                  const count = temasPorArea.get(av) ?? 0;
+                  if (count === 0) return null;
+                  const ativo = areaFiltro.has(av);
+                  return (
+                    <button
+                      key={av}
+                      type="button"
+                      onClick={() => toggleAreaFiltro(av)}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-medium border transition ${
+                        ativo
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : info.chip + " hover:opacity-80"
+                      }`}
+                      title={info.hint}
+                    >
+                      {info.emoji} {info.label} <span className="opacity-70">·{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {["NR", "CAMPANHA", "VACINACAO", "LIVRE"].map(cat => {
-            let lista = temas.filter((t: any) => t.categoria === cat);
+            let lista = temas.filter((t: any) => t.categoria === cat && passaFiltroArea(t));
             // Rev. 1957 — esconder já usados
             if (bibEsconderUsados) {
               lista = lista.filter((t: any) => (usoPorTema.get(t.id)?.count ?? 0) === 0);
@@ -1217,6 +1295,15 @@ export default function DDSGuia() {
                         <h4 className={`font-semibold text-sm leading-tight ${cor.text}`}>{t.titulo}</h4>
                         {t.descricao && <p className="text-xs text-slate-600 mt-1 line-clamp-3">{t.descricao}</p>}
                         {t.normaReferencia && <p className="text-[10px] text-slate-500 italic mt-1">{t.normaReferencia}</p>}
+                        {/* Rev. 1960 — badge de ÁREA TEMÁTICA (auto-classificada pela IA) */}
+                        {t.areaTema && DDS_AREAS[t.areaTema as keyof typeof DDS_AREAS] && (
+                          <span
+                            className={`mt-1.5 inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded text-[10px] font-bold border ${DDS_AREAS[t.areaTema as keyof typeof DDS_AREAS].chip}`}
+                            title={DDS_AREAS[t.areaTema as keyof typeof DDS_AREAS].hint}
+                          >
+                            {DDS_AREAS[t.areaTema as keyof typeof DDS_AREAS].emoji} {DDS_AREAS[t.areaTema as keyof typeof DDS_AREAS].label}
+                          </span>
+                        )}
                         {/* Rev. 1957 — badge de uso (já usado N×, há Yd) ou "✨ Novo" */}
                         {(() => {
                           const uso = usoPorTema.get(t.id);
@@ -1279,6 +1366,8 @@ export default function DDSGuia() {
                                   categoria: t.categoria ?? "LIVRE",
                                   codigo: t.codigo ?? "",
                                   duracaoMin: t.duracaoMin ?? 15,
+                                  // Rev. 1960 — só preenche areaTema se ainda não tinha (não sobrescreve manual)
+                                  ...((!t.areaTema && (r as any).areaTema) ? { areaTema: (r as any).areaTema } : {}),
                                 } as any);
                                 toast.success("Roteiro gerado com IA e salvo no tema.");
                                 setExpandedTemaId(t.id);
@@ -1327,8 +1416,10 @@ export default function DDSGuia() {
               .filter((o: any) => !o.status || o.status === "Em_Andamento")
               .sort((a: any, b: any) => String(a.nome ?? "").localeCompare(String(b.nome ?? ""), "pt-BR"));
             const obraSel = usoObraSelId !== null ? obrasList.find((o: any) => Number(o.id) === usoObraSelId) : null;
-            const usados = temas.filter((t: any) => (usoPorTemaObra.get(t.id)?.count ?? 0) > 0);
-            const naoUsados = temas.filter((t: any) => (usoPorTemaObra.get(t.id)?.count ?? 0) === 0);
+            // Rev. 1960 — aplicar filtro de área temática também nesta aba
+            const temasFiltro = temas.filter(passaFiltroArea);
+            const usados = temasFiltro.filter((t: any) => (usoPorTemaObra.get(t.id)?.count ?? 0) > 0);
+            const naoUsados = temasFiltro.filter((t: any) => (usoPorTemaObra.get(t.id)?.count ?? 0) === 0);
             // ordena usados por data de última (mais recente primeiro), não-usados por categoria+título
             const usadosOrd = [...usados].sort((a: any, b: any) => {
               const da = usoPorTemaObra.get(a.id)?.diasAtras ?? 99999;
@@ -1387,6 +1478,49 @@ export default function DDSGuia() {
 
             return (
               <div className="space-y-4">
+                {/* Rev. 1960 — Filtro por ÁREA TEMÁTICA (mesmo controle da Biblioteca, compartilhado) */}
+                {temas.length > 0 && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Filter className="h-3.5 w-3.5 text-slate-600" />
+                      <span className="text-xs font-semibold text-slate-700">Filtrar por área temática</span>
+                      {areaFiltro.size > 0 && (
+                        <button type="button" onClick={limparAreaFiltro}
+                          className="text-[11px] text-slate-500 hover:text-slate-800 underline ml-1">
+                          limpar ({areaFiltro.size})
+                        </button>
+                      )}
+                      <span className="text-[11px] text-slate-400 ml-auto">
+                        {areaFiltro.size === 0
+                          ? `${temas.length} tema(s)`
+                          : `${temasFiltro.length} de ${temas.length} tema(s)`}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {DDS_AREA_VALUES.map(av => {
+                        const info = DDS_AREAS[av];
+                        const count = temasPorArea.get(av) ?? 0;
+                        if (count === 0) return null;
+                        const ativo = areaFiltro.has(av);
+                        return (
+                          <button
+                            key={av}
+                            type="button"
+                            onClick={() => toggleAreaFiltro(av)}
+                            className={`px-2 py-0.5 rounded-full text-[11px] font-medium border transition ${
+                              ativo
+                                ? "bg-indigo-600 text-white border-indigo-600"
+                                : info.chip + " hover:opacity-80"
+                            }`}
+                            title={info.hint}
+                          >
+                            {info.emoji} {info.label} <span className="opacity-70">·{count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 {/* Seletor de obra */}
                 <div className="bg-white border border-slate-200 rounded-xl p-3">
                   <div className="flex items-center gap-2 mb-2">
@@ -1954,6 +2088,24 @@ export default function DDSGuia() {
                         <SelectItem value="NR">⚠️ NR</SelectItem>
                         <SelectItem value="CAMPANHA">🎗️ Campanha</SelectItem>
                         <SelectItem value="VACINACAO">💉 Vacinação (PNI/MS)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Rev. 1960 — Área temática (auto-preenchida pela IA, editável) */}
+                  <div className="col-span-12">
+                    <label className="text-[11px] font-medium text-slate-600">Área temática <span className="text-slate-400">(IA classifica automaticamente)</span></label>
+                    <Select
+                      value={temaForm.areaTema ?? "__none__"}
+                      onValueChange={v => setTemaForm({ ...temaForm, areaTema: v === "__none__" ? null : v })}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Não classificada" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">— Não classificada —</SelectItem>
+                        {DDS_AREA_VALUES.map(av => (
+                          <SelectItem key={av} value={av}>
+                            {DDS_AREAS[av].emoji} {DDS_AREAS[av].label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

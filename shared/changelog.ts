@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1960 — SST · DDS Guia · Classificação automática por ÁREA TEMÁTICA via IA + filtros de chip nas abas Biblioteca e Uso por Obra.
+ * User (16/05/2026, após Rev. 1959): "Já classifica cada DDS automaticamente por ia quando fizer o roteiro por categoria e faças filtros separando por categoria fica mais fácil escolher os temas".
+ * Motivação: `categoria` (NR | CAMPANHA | VACINACAO | LIVRE) é grossa demais — 252+ temas dentro de "NR" vira pajadão. Usuário precisa de dimensão ortogonal pra navegar (ex.: "me mostra só os de Altura" ou "Elétrica + Espaço confinado").
+ * Decisão de design: nova coluna `dds_temas.area_tema VARCHAR(40)` com vocabulário FECHADO de 17 valores (em `shared/ddsAreas.ts`) — ALTURA, ELETRICA, MAQUINAS, ESCAVACAO, ESPACO_CONFINADO, SOLDAGEM, QUIMICOS, INCENDIO, ERGONOMIA, EPI, SAUDE, TRANSITO, EMERGENCIA, CONDUTA, DOCUMENTACAO, AMBIENTE, GERAL. Vocabulário curto + fechado = IA precisa, filtro usável, escala bem. Ortogonal a `categoria` (não substitui).
+ * Mudança em 6 arquivos:
+ *   (1) `shared/ddsAreas.ts` (NOVO ~90 linhas): type `DDSAreaTema` + array `DDS_AREA_VALUES` + record `DDS_AREAS` com {label, emoji, hint, chip-tailwind} + helpers `coerceDDSArea` (uppercase, trim, retorna null se inválido) e `DDS_AREAS_PROMPT_TEXT` (linhas formatadas pra prompt da IA).
+ *   (2) `drizzle/schema.ts`: nova coluna `areaTema: varchar("area_tema", { length: 40 })` em `ddsTemas` + índice `idx_dds_temas_area_tema`. Nullable (legado/temas antigos sem classificação).
+ *   (3) `server/_core/index.ts`: bloco ColFix-GD existente da Rev. 1873 ganha 2 linhas — `ALTER TABLE dds_temas ADD COLUMN IF NOT EXISTS area_tema VARCHAR(40)` + `CREATE INDEX IF NOT EXISTS idx_dds_temas_area_tema`. Idempotente, additivo (compatível R-001/R-007/R-010 — ADD COLUMN IF NOT EXISTS é o padrão estabelecido na codebase via dezenas de SyncSchema+).
+ *   (4) `server/routers/dds.ts`:
+ *       - import `coerceDDSArea`, `DDS_AREAS_PROMPT_TEXT` de `shared/ddsAreas`.
+ *       - `criarTema`/`atualizarTema` Zod inputs ganham `areaTema: z.string().max(40).nullable().optional()`. `atualizarTema` aplica coerção condicional: undefined preserva, null limpa, valor é coercido (uppercase + valida).
+ *       - `gerarRoteiroComIA`: prompt ganha "Regra 8 — CLASSIFICAÇÃO OBRIGATÓRIA": IA deve EMITIR a PRIMEIRA LINHA da resposta como `<!-- AREA_TEMA: XXX -->` com X de DDS_AREAS_PROMPT_TEXT. Server parsea via regex `/^\\s*<!--\\s*AREA_TEMA\\s*:\\s*([A-Z_]+)\\s*-->\\s*\\n?/i` ANTES de validar o restante do markdown, remove a linha do conteudoMd, retorna `{conteudoMd, areaTema}`. Se IA omitir, areaTema vem null (não quebra fluxo).
+ *       - `gerarTemaIA`: JSON-schema do prompt ganha chave `"areaTema"` listando os valores. Sanitização chama `coerceDDSArea(parsed.areaTema)`. Retorno inclui `areaTema`.
+ *       - `gerarMaisTemasIA`: prompt do array `temas` ganha campo `"areaTema"` + bloco "Áreas válidas (Rev. 1960)". `insert` em ddsTemas grava `areaTema` coercido por item.
+ *   (5) `client/src/pages/sst/DDSGuia.tsx` (~9 edits):
+ *       - import `DDS_AREAS`, `DDS_AREA_VALUES` + ícone `Filter`.
+ *       - `temaForm` ganha `areaTema: null` (init/reset/edit).
+ *       - `handleGerarTemaIA`: `setTemaForm({...r, areaTema: r.areaTema})`.
+ *       - bulk IA (worker pool Rev. 1956): patch envia `areaTema` SOMENTE se tema atual ainda não tinha (não sobrescreve manual).
+ *       - botão "Gerar com IA" individual: mesma regra anti-sobrescrita.
+ *       - Novos states: `areaFiltro: Set<string>` + helpers `toggleAreaFiltro`/`limparAreaFiltro` + `useMemo temasPorArea` (contagem por área) + helper `passaFiltroArea` (Set vazio = passa tudo, senão checa área do tema com fallback "GERAL").
+ *       - Biblioteca: chip-row acima das seções de categoria (Filter icon + label + botão "limpar" + contador "X de Y temas" + chips por área com count usando cores DDS_AREAS[av].chip; chip ativo vira indigo-600/white). Filtra `lista` chamando `passaFiltroArea(t)` dentro do `temas.filter`.
+ *       - Cards: novo badge entre `normaReferencia` e badge de uso — mostra `{emoji} {label}` com cor da área. Apenas quando t.areaTema preenchida.
+ *       - Modal Novo/Editar tema: novo campo `<Select>` col-span-12 abaixo de categoria/código/duração — "Área temática (IA classifica automaticamente)" com opção "— Não classificada —" (value=__none__→null) + uma SelectItem por área. handleSalvarTema já enviava `...temaForm`, sem mudança.
+ *       - Aba "Uso por Obra" (Rev. 1959): chip-row idêntico acima do seletor de obras (mesmo state `areaFiltro` — compartilhado). `temasFiltro = temas.filter(passaFiltroArea)` antes de derivar usados/naoUsados — filtro afeta as 2 colunas.
+ *   (6) `shared/version.ts` → 1960.
+ * Resultado:
+ *   - IA passa a classificar automaticamente cada novo tema/roteiro gerado em 1 das 17 áreas, sem chamada extra (vai junto na mesma requisição que gera o markdown — 1ª linha no caso de gerarRoteiroComIA, campo "areaTema" no JSON dos demais).
+ *   - Temas antigos (sem area_tema) caem em "GERAL" e ganham classificação automática NA PRÓXIMA vez que rodar "Regerar com IA" (ou edição manual via Select no modal).
+ *   - Biblioteca e Uso por Obra ganham filtro de chip multi-seleção: clicar em "🪜 Trabalho em altura" filtra; clicar em mais áreas adiciona ao filtro; "limpar (N)" zera. Filtro compartilhado entre as abas.
+ *   - Badge colorido no card mostra a área de imediato.
+ *   - Permite engenheiro localizar tema em segundos ("queremos falar de andaime amanhã" → chip Altura → 8 temas).
+ * Preservado:
+ *   - Rev. 1959 (aba Uso por Obra), Rev. 1957 (uso por company), Rev. 1956 (bulk IA worker pool), Rev. 1955 (barra modal), Rev. 1954 (seed 80 temas), Rev. 1953 (gerarMaisTemasIA).
+ *   - `categoria` field INTACTO (continua agrupando seções na Biblioteca).
+ *   - Templates de markdown da IA (6 seções: Objetivo/Por que importa/Pontos-chave/Aplicação prática/Perguntas/Reforço final) INTACTOS — só ganhou regra #8 sobre 1ª linha.
+ *   - Backwards-compatible: clients antigos sem `areaTema` no payload continuam funcionando (campo opcional/nullable).
+ *   - Tema existentes ficam com area_tema = NULL até regeneração ou edição manual.
+ * Zero DROP/DELETE/ALTER destrutivo (apenas ADD COLUMN IF NOT EXISTS — padrão estabelecido). R-001/R-007/R-010 OK.
+ * Reversível em 9 hunks; coluna pode ser removida em rev futura sem perda de dado (informação derivável da IA via regerar).
+ *
  * Rev. 1959 — SST · DDS Guia · Nova aba "Uso por Obra" (já usados vs ainda não usados, respeitando permissão).
  * User (16/05/2026, screenshot 19h06 da tela DDS com Biblioteca aberta no meio de "Gerando com IA — 4/56 6%"): "Cria uma aba dizendo o tema já usado na obra que o usuário tem permissão e o que ainda não foram usados".
  * Diferença vs Rev. 1957 (que conta uso por COMPANY): nova aba conta uso POR OBRA, com seletor que respeita exatamente as obras às quais o user tem permissão (via `obras.listActive` que aplica `allowedObras` no server — Rev. 1731).

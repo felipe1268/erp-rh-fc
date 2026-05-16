@@ -8188,6 +8188,12 @@ export const ddsTemas = pgTable("dds_temas", {
   conteudoMd: text("conteudo_md"),                    // texto completo do DDS (markdown)
   normaReferencia: varchar("norma_referencia", { length: 120 }),
   categoria: varchar({ length: 30 }).default("LIVRE").notNull(), // 'NR' | 'CAMPANHA' | 'LIVRE'
+  // Rev. 1960 — Sub-classificação por ÁREA TEMÁTICA (vocabulário fechado em `shared/ddsAreas.ts`:
+  // ALTURA, ELETRICA, MAQUINAS, ESCAVACAO, ESPACO_CONFINADO, SOLDAGEM, QUIMICOS, INCENDIO,
+  // ERGONOMIA, EPI, SAUDE, TRANSITO, EMERGENCIA, CONDUTA, DOCUMENTACAO, AMBIENTE, GERAL).
+  // Atribuída automaticamente pela IA ao gerar roteiro/tema. Pode ser editada manualmente.
+  // Null = não classificado (UI trata como "GERAL"). Ortogonal a `categoria`.
+  areaTema: varchar("area_tema", { length: 40 }),
   mesCampanha: integer("mes_campanha"),               // 1..12 quando categoria='CAMPANHA'
   corCampanha: varchar("cor_campanha", { length: 30 }), // ex.: amarelo, rosa, azul
   duracaoMin: integer("duracao_min").default(15),
@@ -8199,6 +8205,7 @@ export const ddsTemas = pgTable("dds_temas", {
 }, (t) => [
   index("idx_dds_temas_company").on(t.companyId),
   index("idx_dds_temas_categoria").on(t.categoria),
+  index("idx_dds_temas_area_tema").on(t.areaTema),
 ]);
 
 export const ddsSessoes = pgTable("dds_sessoes", {

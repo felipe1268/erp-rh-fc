@@ -8,6 +8,7 @@ import {
 import { eq, and, sql, desc, isNull, inArray, notInArray, gte, lte, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { invokeLLM } from "../_core/llm";
+import { coerceDDSArea, DDS_AREAS_PROMPT_TEXT, DDS_AREA_VALUES } from "../../shared/ddsAreas";
 import { TEMAS_BIBLIOTECA, buildRoteiroLib } from "../_shared/temasBiblioteca";
 import { TEMAS_BIBLIOTECA_EXTRA } from "../_shared/temasBibliotecaExtra";
 
@@ -889,6 +890,8 @@ export const ddsRouter = router({
       conteudoMd: z.string().optional(),
       normaReferencia: z.string().max(120).optional(),
       categoria: z.enum(["NR", "CAMPANHA", "VACINACAO", "LIVRE"]).default("LIVRE"),
+      // Rev. 1960 — Sub-classificação por área temática (vocabulário fechado em shared/ddsAreas.ts).
+      areaTema: z.string().max(40).nullable().optional(),
       mesCampanha: z.number().int().min(1).max(12).optional(),
       corCampanha: z.string().max(30).optional(),
       duracaoMin: z.number().int().positive().optional(),
@@ -904,6 +907,7 @@ export const ddsRouter = router({
         conteudoMd: input.conteudoMd ?? null,
         normaReferencia: input.normaReferencia ?? null,
         categoria: input.categoria,
+        areaTema: coerceDDSArea(input.areaTema),
         mesCampanha: input.mesCampanha ?? null,
         corCampanha: input.corCampanha ?? null,
         duracaoMin: input.duracaoMin ?? 15,
@@ -921,6 +925,8 @@ export const ddsRouter = router({
       conteudoMd: z.string().optional(),
       normaReferencia: z.string().max(120).optional(),
       categoria: z.enum(["NR", "CAMPANHA", "VACINACAO", "LIVRE"]).optional(),
+      // Rev. 1960 — sub-classificação por área (string|null; null limpa, undefined preserva).
+      areaTema: z.string().max(40).nullable().optional(),
       mesCampanha: z.number().int().min(1).max(12).nullable().optional(),
       corCampanha: z.string().max(30).optional(),
       duracaoMin: z.number().int().positive().optional(),
@@ -930,7 +936,15 @@ export const ddsRouter = router({
       assertCompanyAccess(ctx, input.companyId);
       const db = (await getDb())!;
       const { id, companyId, ...patch } = input;
-      const [row] = await db.update(ddsTemas).set({ ...patch, updatedAt: sql`NOW()` } as any)
+      // Rev. 1960 — coerção segura da área temática (string→enum|null).
+      // - undefined: não toca na coluna (preserva valor atual).
+      // - null ou valor inválido: limpa a coluna.
+      // - valor válido: persiste em uppercase.
+      const patchFinal: any = { ...patch };
+      if ("areaTema" in patch) {
+        patchFinal.areaTema = patch.areaTema === null ? null : coerceDDSArea(patch.areaTema);
+      }
+      const [row] = await db.update(ddsTemas).set({ ...patchFinal, updatedAt: sql`NOW()` } as any)
         .where(and(eq(ddsTemas.id, id), eq(ddsTemas.companyId, companyId)))
         .returning();
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Tema não encontrado" });
@@ -1140,13 +1154,16 @@ Regras OBRIGATÓRIAS:
 4. **Seja específico pra construção civil**: exemplos reais (andaime, betoneira, escavação, EPI, içamento, etc.).
 5. **NÃO** invente dados; quando não tiver certeza, omita o número/estatística.
 6. Tamanho total: ENTRE 800 E 1.500 caracteres (sem contar markdown). Conciso.
-7. Retorne APENAS o markdown do roteiro — sem preâmbulo ("Aqui está...") nem encerramento ("Espero ter ajudado...").`;
+7. Retorne APENAS o markdown do roteiro — sem preâmbulo ("Aqui está...") nem encerramento ("Espero ter ajudado...").
+8. **CLASSIFICAÇÃO OBRIGATÓRIA (Rev. 1960)**: PRIMEIRA LINHA da resposta deve ser EXATAMENTE no formato \`<!-- AREA_TEMA: XXX -->\` onde XXX é UMA das áreas abaixo (escolha a MAIS específica e relevante pro tema):
+${DDS_AREAS_PROMPT_TEXT}
+   Após essa linha, deixe uma linha em branco e então inicie o markdown do roteiro normalmente.`;
 
       const userPrompt = `Tema do DDS: **${input.titulo}**
 
 ${contexto.join("\n")}
 
-Gere o roteiro detalhado seguindo EXATAMENTE o formato exigido.`;
+Gere o roteiro detalhado seguindo EXATAMENTE o formato exigido (lembre da 1ª linha com <!-- AREA_TEMA: XXX -->).`;
 
       try {
         const response = await invokeLLM({
@@ -1157,9 +1174,17 @@ Gere o roteiro detalhado seguindo EXATAMENTE o formato exigido.`;
           maxTokens: 1200,
         });
         const content = response.choices?.[0]?.message?.content;
-        const text = (typeof content === "string" ? content : Array.isArray(content)
+        let text = (typeof content === "string" ? content : Array.isArray(content)
           ? content.map((c: any) => c?.text ?? "").join("")
           : "").trim();
+
+        // Rev. 1960 — extrai a 1ª linha "<!-- AREA_TEMA: XXX -->" e remove do markdown.
+        let areaTema: string | null = null;
+        const mArea = text.match(/^\s*<!--\s*AREA_TEMA\s*:\s*([A-Z_]+)\s*-->\s*\n?/i);
+        if (mArea) {
+          areaTema = coerceDDSArea(mArea[1]);
+          text = text.slice(mArea[0].length).trimStart();
+        }
 
         // Validação de contrato (Rev. 1740): exige as 6 seções fixas e tamanho razoável.
         const SECOES_OBRIGATORIAS = ["Objetivo", "Por que importa", "Pontos-chave", "Aplicação prática", "Perguntas", "Reforço final"];
@@ -1176,9 +1201,9 @@ Gere o roteiro detalhado seguindo EXATAMENTE o formato exigido.`;
         if (tamSemMd > 2500) {
           // Trunca de forma conservadora preservando o último cabeçalho.
           const cut = text.slice(0, 3500);
-          return { conteudoMd: cut };
+          return { conteudoMd: cut, areaTema };
         }
-        return { conteudoMd: text };
+        return { conteudoMd: text, areaTema };
       } catch (err: any) {
         if (err instanceof TRPCError) throw err;
         const msg = err?.message ?? String(err);
@@ -1206,6 +1231,8 @@ Regras OBRIGATÓRIAS:
 1. **Idioma**: Português brasileiro, linguagem direta (escolaridade média 5ª a 8ª série).
 2. **Formato de saída**: APENAS JSON válido (sem preâmbulo, sem markdown ao redor) com EXATAMENTE estas chaves:
    - "categoria": uma das strings "NR", "CAMPANHA", "VACINACAO" ou "LIVRE" — escolha "NR" se o tema for ligado a uma Norma Regulamentadora; "CAMPANHA" para campanhas governamentais (Outubro Rosa, Novembro Azul, Maio Amarelo etc); "VACINACAO" para imunização (PNI/MS); "LIVRE" caso contrário.
+   - "areaTema": UMA das áreas temáticas abaixo (escolha a MAIS específica e relevante — Rev. 1960):
+${DDS_AREAS_PROMPT_TEXT}
    - "codigo": código curto (ex.: "NR-35", "OUT-ROSA", "DDS-001"). Se NR, use "NR-XX". Se livre, gere um slug curto.
    - "titulo": 5 a 80 caracteres, claro e específico.
    - "descricao": resumo de 1 a 2 frases (máx 280 chars) — diz do que se trata.
@@ -1254,6 +1281,7 @@ Gere o JSON do tema seguindo EXATAMENTE o esquema acima.`;
         // Saneamento + defaults seguros
         const allowedCat = ["NR", "CAMPANHA", "VACINACAO", "LIVRE"];
         const categoria = allowedCat.includes(parsed.categoria) ? parsed.categoria : "LIVRE";
+        const areaTema = coerceDDSArea(parsed.areaTema); // Rev. 1960 — null se inválido
         const codigo = String(parsed.codigo ?? "").trim().slice(0, 30);
         const titulo = String(parsed.titulo ?? "").trim().slice(0, 200);
         const descricao = String(parsed.descricao ?? "").trim().slice(0, 280);
@@ -1269,7 +1297,7 @@ Gere o JSON do tema seguindo EXATAMENTE o esquema acima.`;
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA gerou roteiro muito curto — tente reformular o pedido." });
         }
 
-        return { categoria, codigo, titulo, descricao, normaReferencia, duracaoMin, conteudoMd };
+        return { categoria, areaTema, codigo, titulo, descricao, normaReferencia, duracaoMin, conteudoMd };
       } catch (err: any) {
         if (err instanceof TRPCError) throw err;
         const msg = err?.message ?? String(err);
@@ -1315,9 +1343,11 @@ Regras OBRIGATÓRIAS:
 2. **Formato de saída**: APENAS JSON válido (sem preâmbulo, sem cercas \`\`\`json) com EXATAMENTE esta estrutura:
    {
      "temas": [
-       { "titulo": "...", "descricao": "...", "normaReferencia": "...", "categoria": "NR" | "LIVRE" }
+       { "titulo": "...", "descricao": "...", "normaReferencia": "...", "categoria": "NR" | "LIVRE", "areaTema": "<UMA das áreas listadas abaixo>" }
      ]
    }
+   Áreas válidas (Rev. 1960 — use EXATAMENTE um destes valores em "areaTema"):
+${DDS_AREAS_PROMPT_TEXT}
 3. **titulo**: 8 a 90 caracteres, claro e ESPECÍFICO (evite genérico tipo "Segurança no trabalho"). Quando for tema ligado a NR, comece com o número (ex.: "NR-35 — Resgate em altura").
 4. **descricao**: 1 frase de 80 a 220 caracteres descrevendo do que se trata.
 5. **normaReferencia**: NR/lei/portaria brasileira oficial (ex.: "NR-18 (Portaria MTP 3.733/2020)"). Se não houver norma específica, use string vazia "".
@@ -1395,6 +1425,7 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
         const normaReferencia = String(t?.normaReferencia ?? "").trim().slice(0, 120);
         const catRaw = String(t?.categoria ?? "LIVRE").trim().toUpperCase();
         const categoria = (catRaw === "NR" || catRaw === "CAMPANHA" || catRaw === "VACINACAO") ? catRaw : "LIVRE";
+        const areaTema = coerceDDSArea(t?.areaTema); // Rev. 1960 — null se inválido/ausente
 
         if (titulo.length < 5 || descricao.length < 20) { falhas++; continue; }
         const norm = normalizar(titulo);
@@ -1410,6 +1441,7 @@ ${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas d
             conteudoMd: null,
             normaReferencia: normaReferencia || null,
             categoria,
+            areaTema, // Rev. 1960
             duracaoMin: 15,
             createdBy: (ctx.user as any)?.id ?? null,
           } as any);

@@ -852,8 +852,11 @@ Regras:
           await db.execute(sql`ALTER TABLE dds_sessoes ADD COLUMN IF NOT EXISTS instrutor_codigo_interno VARCHAR(50)`);
           // Rev. 1876 — Categoria override por sessão (null = herda do tema).
           await db.execute(sql`ALTER TABLE dds_sessoes ADD COLUMN IF NOT EXISTS categoria VARCHAR(30)`);
-          console.log(`[SyncSchema+] Rev. 1873: coluna instrutor_codigo_interno garantida em dds_sessoes.`);
-        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.1873 instrutor_codigo_interno:`, e?.message || e); }
+          // Rev. 1960 — Sub-classificação por área temática em dds_temas (auto-preenchida pela IA).
+          await db.execute(sql`ALTER TABLE dds_temas ADD COLUMN IF NOT EXISTS area_tema VARCHAR(40)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dds_temas_area_tema ON dds_temas(area_tema)`);
+          console.log(`[SyncSchema+] Rev. 1873/1960: coluna instrutor_codigo_interno + area_tema garantidas em dds_sessoes/dds_temas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.1873/1960 colunas DDS:`, e?.message || e); }
         // Rev. 1874 — CLT Art. 62: inciso (I/II/III) + observação/justificativa em employees.
         try {
           await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS cargo_confianca_inciso VARCHAR(5)`);
