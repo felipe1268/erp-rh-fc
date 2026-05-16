@@ -2271,6 +2271,32 @@ async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: str
   // Critério idêntico ao avisoPrevioFerias.ts L494-503 (fonte de verdade
   // do módulo Aviso Prévio que o user usa pra conferir os números oficiais).
   const empIds = rows.map(r => r.id);
+
+  // Rev. 1916 — Carrega obra ATIVA mais recente por employeeId em UMA query
+  // (DISTINCT ON), evitando N+1. Critério: `obra_funcionarios.isActive=1`,
+  // ordenado por dataInicio DESC (alocação mais recente vence em caso de
+  // múltiplas obras simultâneas — comum em encarregados/engenheiros que
+  // visitam várias frentes). Funcionários sem nenhuma alocação ativa caem
+  // no fallback "—" no client.
+  const obraByEmp = new Map<number, string>();
+  if (empIds.length > 0) {
+    try {
+      const obraRows = ((await db.execute(sql`
+        SELECT DISTINCT ON (ofu."employeeId") ofu."employeeId", o.nome
+        FROM obra_funcionarios ofu
+        INNER JOIN obras o ON o.id = ofu."obraId"
+        WHERE ofu."employeeId" IN (${sql.join(empIds.map(id => sql`${id}`), sql`, `)})
+          AND ofu."isActive" = 1
+        ORDER BY ofu."employeeId", ofu."dataInicio" DESC NULLS LAST, ofu.id DESC
+      `)) as any).rows || [];
+      for (const r of obraRows) {
+        obraByEmp.set(Number(r.employeeId), String(r.nome ?? ''));
+      }
+    } catch (e) {
+      console.error('[getDashCustoDemissaoMassa] falha ao carregar obra_funcionarios (assumindo vazio):', (e as any)?.message ?? e);
+    }
+  }
+
   const vpCountByEmp = new Map<number, number>();
   if (empIds.length > 0) {
     try {
@@ -2326,7 +2352,9 @@ async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: str
         nomeCompleto: r.nomeCompleto,
         cpf: r.cpf,
         cargo: r.cargo || r.funcao || '',
+        funcao: r.funcao || '',
         setor: r.setor || '',
+        obra: obraByEmp.get(r.id) || '',
         dataAdmissao: r.dataAdmissao!,
         salarioBase: salario,
         anosServico: previsao.anosServico,

@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1916 — RH · Dash Aviso Prévio · Tabela CDM · Adicionar colunas FUNÇÃO e OBRA (alocação ativa mais recente).
+ * User (16/05/2026): "Quero o nome, função e qual obra ele está a trabalhando". A tabela CDM exibia Funcionário, Cargo e Setor mas não a OBRA atual de alocação — info crítica pra dimensionar custo de demissão por frente de trabalho. Mudança no server (`server/routers/dashboards.ts` getDashCustoDemissaoMassa):
+ *   • Nova query batch SINGLE com `DISTINCT ON (of."employeeId")` + INNER JOIN `obras` filtrada por `isActive=1`, ordenada por `dataInicio DESC NULLS LAST, id DESC` (alocação mais recente vence em caso de múltiplas frentes simultâneas — comum em encarregados/engenheiros que cobrem várias obras). Map `obraByEmp` populado em O(N).
+ *   • Linha do .map ganha 2 novos campos: `funcao: r.funcao || ''` (separado do `cargo` legado pra exibição fiel) e `obra: obraByEmp.get(r.id) || ''`.
+ *   • Try/catch envolvendo a query — falha silenciosa retorna mapa vazio (linhas exibem "sem alocação"), não derruba o dashboard inteiro.
+ * Mudança no client (`client/src/pages/dashboards/DashAvisoPrevio.tsx`):
+ *   • `CdmSortKey` ganha `'funcao' | 'obra'`; `toggleCdmSort` trata ambas como sort asc default (texto).
+ *   • Header da tabela: novo `<th>` "Função" (substitui "Cargo" anterior) + novo `<th>` "Obra" entre Função e Setor, ambos com SortIcon clicável. Reordenado pra ficar: # | Funcionário | Função | Obra | Setor | Admissão | Anos | Dias Aviso | Salário | Aviso Indeniz. | Multa 40% | Custo Total (11 cols + TOTAL GERAL).
+ *   • Body: célula Função usa `l.funcao || l.cargo || '-'` (fallback pro cargo se função vazia, preserva info legado); célula Obra usa `l.obra || <italic>sem alocação</italic>` (não-quebra visual quando funcionário não tem `obra_funcionarios` ativo, p.ex. escritório central).
+ *   • Tfoot: `colSpan={10}` → `colSpan={11}` pra acompanhar nova coluna do TOTAL GERAL.
+ *   version → 1916.
+ * Resultado: diretoria vê instantaneamente em qual obra cada custo de rescisão estaria sendo aplicado. Permite filtrar mentalmente "se fechar obra X, qual o impacto" via sort por Obra+desempate por Total.
+ * Preservado: filtro PJ/Socio Rev. 1915, query batch vacation_periods Rev. 1911, projeção dataFimAviso Rev. 1909-fix, sort por total desc default, ordenação clicável Rev. 1909 em todas as colunas (estendida pras 2 novas), destaque top-3 bg-red-50/40, KPIs topo, disclaimer composição. Zero ALTER/DROP/DELETE — apenas 1 SELECT adicional. Reversível em 5 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1915 — RH · Dash Aviso Prévio · Tabela "Custo de Demissão em Massa" — EXCLUIR funcionários PJ e Sócios da lista.
  * User (16/05/2026, screenshot tabela CDM): "Quem é PJ é sócio não entra nesta lista". PJ (Pessoa Jurídica) e Sócios não são CLT — não geram rescisão trabalhista (aviso prévio, férias, 13º, multa 40% FGTS). Inflavam o "custo total estimado" de demissão em massa com valores contabilmente incorretos. KPIs Visão Geral RH (`dashboards.ts` L94) e módulo Aviso Prévio (`avisoPrevioFerias.ts` L2291/2463/2486/2558) já filtravam corretamente — somente esta função CDM (Rev. 1908) tinha sido criada sem o filtro.
  * Mudança (em `server/routers/dashboards.ts` L2235-2244 — `getDashCustoDemissaoMassa` `activeWhere`): adicionado `sql\`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))\`` ao AND existente. Critério IDÊNTICO ao do `KpisRH` (L94) e ao filtro server-side do módulo Aviso Prévio — paridade absoluta entre tabela CDM e detalhe oficial de Aviso Prévio do mesmo funcionário. `tipoContrato IS NULL` continua sendo tratado como CLT (default histórico) — preserva centenas de funcionários antigos sem o campo populado.
