@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1889 — Planejamento · Programação Semanal LOTUS · EXPORT EXCEL: (1) remove cinza herdado do TEMPLATE nas linhas de grupo e (2) força largura 12 nas 4 colunas de data (E/F/G/H).
+ * User (16/05/2026, após Rev. 1886, screenshot export atual): "o ERP ainda esta pintando de cinza as celulas tire isso e deixa sem preenchimento.., as colunas das datas não foram ajustadas.. arrume isso deixa elas mais largas, adota a largura de 12.. ISSO VAI FUNCIONAR.."
+ * Causa: (a) Rev. 1886 removeu o nosso fill manual `FFE7E6E6` nas linhas de grupo MAS o TEMPLATE original `.xlsx` do cliente já vem com cinza nessas linhas — ExcelJS preserva a formatação do template quando NÃO sobrescrevemos, então o cinza persistia. (b) `minWidths` E/F/G/H estavam em 10 e usavam comparador `if (!col.width || col.width < minW)` — como o template tinha valor (ex: 7.x) maior que 0 mas menor que 10, em alguns casos o early-return do "se já existe" não bastava, e ainda assim 10 era estreito demais p/ "22-abr"/"3-nov" + padding.
+ * Mudanças (todas em `client/src/components/planejamento/ProgramacaoSemanalLotus.tsx` DENTRO de `handleExportExcel` — zero impacto na tela/cálculos):
+ *   (1) L1311-1322: nas linhas de GRUPO (`if (l.tipo === "grupo")`) loop em B-P (cols 2-16) força `fill = { type: "pattern", pattern: "none" }` p/ sobrescrever o cinza herdado do template. Linhas de tarefa (atividade) NÃO são tocadas — as faixas dos dias J-P (Previsto/Realizado/Atrasado/etc) continuam sendo pintadas normalmente pelo bloco `faixasCelula` mais abaixo.
+ *   (2) L1150-1164: `minWidths` E/F/G/H de 10 → 12 (exato valor pedido pelo user) e I (RESPONSÁVEL) de 14 → 16 p/ ficar proporcional. Comparador `if (!col.width || col.width < minW)` removido — agora SEMPRE força `col.width = minW`, garantindo que template não vença mais.
+ *   (3) version → 1889.
+ * Preservado: Rev. 1886 INTACTA — fmtCurto ("22-abr"/"3-nov"), override TOP=azul/BOTTOM=status no export, cores oficiais (`COR_PREVISTO/REALIZADO/ATRASADO/ANTECIP/NAO_PROG`), 3 logos, merges, cabeçalho, espelhamento "se só tem top, ocupa 2 linhas", cálculos PV/EV, semáforos, KPIs, render da TELA, abas extras. Sáb/Dom (já pintados pelo template em cinza distinto via styling de coluna) NÃO afetados pois nosso loop só limpa LINHAS DE GRUPO. Reversível em ~2 hunks + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1888 — Frotas · Sidebar · Dashboards específicos SAÍRAM da seção "Painel" e ganharam ABA PRÓPRIA "Dashboards" (mesmo padrão usado em RH-DP/SST).
  * User (16/05/2026, após Rev. 1887, screenshot sidebar Frotas): "Separe os dash na aba de dash, não do painel. Faça conforme fizemos nos outros módulos."
  * Causa: Rev. 1881 (hot-patch) adicionou "Dash Manutenção", "Dash Combustível" e "Dash Pedágios" diretamente DENTRO da seção "Painel" do menu Frotas — solução rápida na época que poluía a seção (5 itens, 3 deles dashboards específicos). Padrão estabelecido em outros módulos (RH-DP L127, SST L208) é "Painel" = visão geral + "Dashboards" = drill-down por área.

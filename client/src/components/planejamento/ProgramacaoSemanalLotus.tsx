@@ -1144,17 +1144,21 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         // valores maiores que o template já tenha.
         // D=TAREFA, E/F=Data Prev. Inicio/Fim, G/H=Data Real Inicio/Fim,
         // I=Responsável, J..P=7 dias da semana.
+        // Rev. 1889 — user pediu explicitamente largura 12 nas 4 colunas de
+        // data (E/F/G/H). Aumentado de 10 → 12 e agora FORÇADO (sem o "se
+        // menor que" — o template tinha 7.x e ficava cortado mesmo após
+        // Rev. 1886). I (RESPONSÁVEL) também ganhou +2.
         const minWidths: Record<number, number> = {
           4: 50,   // D — TAREFA
-          5: 10,   // E — Prev. Início (caber "22-abr")
-          6: 10,   // F — Prev. Fim
-          7: 10,   // G — Real Início
-          8: 10,   // H — Real Fim
-          9: 14,   // I — RESPONSÁVEL
+          5: 12,   // E — Prev. Início (caber "22-abr")
+          6: 12,   // F — Prev. Fim
+          7: 12,   // G — Real Início
+          8: 12,   // H — Real Fim
+          9: 16,   // I — RESPONSÁVEL
         };
         for (const [colStr, minW] of Object.entries(minWidths)) {
           const col = ws.getColumn(parseInt(colStr, 10));
-          if (!col.width || col.width < minW) col.width = minW;
+          col.width = minW;  // FORÇA — ignora largura do template
         }
 
         // 10a. Cabeçalho (D2 é a âncora do merge D2:K5) — mantém formatação do template
@@ -1301,10 +1305,18 @@ export default function ProgramacaoSemanalLotus(props: Props) {
           if (l.tipo === "grupo") {
             ws.getCell(r0, 2).value = l.eap;
             ws.getCell(r0, 4).value = l.nome.toUpperCase();
-            // Rev. 1886 — Modelo do cliente NÃO tem fundo cinza nos grupos
-            // (apenas Sábado/Domingo são cinza, e isso já vem do template).
-            // Removido o preenchimento E7E6E6 que sobrescrevia o estilo do
-            // template — agora o grupo se diferencia só pelo negrito.
+            // Rev. 1889 — User: "o ERP ainda esta pintando de cinza as celulas
+            // tire isso e deixa sem preenchimento". O TEMPLATE original do
+            // cliente vem com cinza nas linhas de grupo (mesmo após Rev. 1886
+            // ter removido nosso fill manual). Aqui forçamos `fill: none` em
+            // B-P (cols 2-16) das linhas de grupo p/ sobrescrever o template.
+            // ATENÇÃO: NÃO tocamos em J-P das colunas Sáb/Dom específicas
+            // pois isso é tratado por linha (não pelo template), e as faixas
+            // dos dias só são pintadas em linhas de tarefa (não de grupo).
+            for (let cIdx = 2; cIdx <= 16; cIdx++) {
+              const c = ws.getCell(r0, cIdx);
+              (c as any).fill = { type: "pattern", pattern: "none" };
+            }
             // Fonte negrito no nome
             const fontDst = ws.getCell(r0, 4).font || {};
             ws.getCell(r0, 4).font = { ...fontDst, bold: true };
