@@ -12267,6 +12267,16 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // `expandedEtapas` = nós cujos filhos estão visíveis (qualquer nível).
   // Default: tudo recolhido — usuário abre manualmente para identificar gargalos.
   const [expandedEtapas, setExpandedEtapas] = useState<Set<string | number>>(new Set());
+  // Rev. 1947 — cards (NAVE) cujo bloco "Detalhamento Pai→Filho" está visível.
+  // Default = fechado (só bar chart). Toggle único por card abre/fecha a tabela.
+  const [cardsDetalheAberto, setCardsDetalheAberto] = useState<Set<string | number>>(new Set());
+  const toggleCardDetalhe = (gid: string | number) => {
+    setCardsDetalheAberto((prev) => {
+      const n = new Set(prev);
+      if (n.has(gid)) n.delete(gid); else n.add(gid);
+      return n;
+    });
+  };
 
   function toggleEtapa(id: string | number) {
     setExpandedEtapas(prev => {
@@ -14365,58 +14375,49 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 </ResponsiveContainer>
               </div>
 
-              {/* Rev. 1945 — DETALHAMENTO PAI→FILHO integrado no card (substitui
-                  o BLOCO 5B separado). Tree recursivo com expand/collapse por
-                  nó + botões "Expandir/Recolher tudo" desta NAVE. */}
+              {/* Rev. 1947 — DETALHAMENTO PAI→FILHO opcional: 1 toggle por card
+                  (default = fechado, só bar chart visível). Quando aberto,
+                  reusa o mesmo tree renderRow (Rev. 1945) — sem reinventar. */}
               <div className="border-t border-slate-200">
-                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase text-slate-500 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-2 flex-wrap">
-                  <span className="flex items-center gap-1.5">
-                    <ListTree className="h-3 w-3 text-slate-400" />
-                    Detalhamento — Pai → Filho
-                    <span className="normal-case font-normal text-slate-400 hidden sm:inline">
-                      · clique nas setas para descer pelos níveis e achar o atraso
-                    </span>
-                  </span>
-                  {hasAnyChildren && (
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={(ev) => { ev.stopPropagation(); expandirTudoCard(); }}
-                        disabled={cardAllOpen}
-                        className="text-[10px] font-semibold bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded px-2 py-0.5 transition-colors normal-case text-slate-700"
-                        title="Abrir todos os sub-níveis desta NAVE"
-                      >
-                        Expandir tudo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(ev) => { ev.stopPropagation(); recolherTudoCard(); }}
-                        disabled={!cardSomeOpen}
-                        className="text-[10px] font-semibold bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded px-2 py-0.5 transition-colors normal-case text-slate-700"
-                        title="Fechar todos os sub-níveis desta NAVE"
-                      >
-                        Recolher tudo
-                      </button>
+                <button
+                  type="button"
+                  onClick={(ev) => { ev.stopPropagation(); toggleCardDetalhe(g.id); }}
+                  className="w-full px-3 py-1.5 text-[11px] font-semibold uppercase text-slate-600 bg-slate-50 hover:bg-slate-100 transition-colors flex items-center justify-center gap-1.5 select-none"
+                  title={cardsDetalheAberto.has(g.id) ? "Ocultar tabela detalhada desta NAVE" : "Mostrar tabela detalhada desta NAVE (pai → filho)"}
+                >
+                  {cardsDetalheAberto.has(g.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                  <ListTree className="h-3 w-3 text-slate-400" />
+                  <span>{cardsDetalheAberto.has(g.id) ? "Ocultar detalhamento" : "Mostrar detalhamento (Pai → Filho)"}</span>
+                </button>
+                {cardsDetalheAberto.has(g.id) && (
+                  <div className="border-t border-slate-200">
+                    {hasAnyChildren && (
+                      <div className="px-3 py-1 bg-slate-50/60 border-b border-slate-100 flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(ev) => { ev.stopPropagation(); expandirTudoCard(); }}
+                          disabled={cardAllOpen}
+                          className="text-[10px] font-medium bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded px-2 py-0.5 transition-colors text-slate-700"
+                          title="Abrir todos os sub-níveis"
+                        >
+                          Expandir tudo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(ev) => { ev.stopPropagation(); recolherTudoCard(); }}
+                          disabled={!cardSomeOpen}
+                          className="text-[10px] font-medium bg-white border border-slate-300 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded px-2 py-0.5 transition-colors text-slate-700"
+                          title="Fechar todos os sub-níveis"
+                        >
+                          Recolher tudo
+                        </button>
+                      </div>
+                    )}
+                    <div>
+                      {g.etapas.map((e: any) => renderRow(e, 0))}
                     </div>
-                  )}
-                  <span className="hidden md:flex items-center gap-3 normal-case font-normal text-slate-400 text-[10px] w-full sm:w-auto">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-blue-400/60"></span>Previsto
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400"></span>Realiz. ≥ Prev.
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-amber-400"></span>Atraso ≤10pp
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-red-400"></span>Atraso &gt;10pp
-                    </span>
-                  </span>
-                </div>
-                <div>
-                  {g.etapas.map((e: any) => renderRow(e, 0))}
-                </div>
+                  </div>
+                )}
               </div>
 
               {/* Mini legenda desvios */}

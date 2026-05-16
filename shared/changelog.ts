@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1947 — Planejamento · PlanejamentoDetalhe · REFIS · BLOCO 5 · Tabela "Detalhamento Pai→Filho" agora é OPCIONAL (toggle único por card, default = fechado).
+ * User (16/05/2026, screenshots NAVE NORTE com bar chart só + tabela 01.01.01 expandida): "quero que a tabela abaixo fique abaixo da barras laterais, com opção de fazer a expanção ou não, é facil vc entender isso.. não tem o pq de reinventar a roda..".
+ * Causa: Rev. 1945 integrou a tabela detalhada (renderRow) dentro de cada card mas SEMPRE visível, com header "pesado" (Expandir tudo + Recolher tudo + legenda de 4 cores + sub-título explicativo). User queria simples: bar chart sempre + 1 botão para mostrar/ocultar a tabela quando quiser ver detalhe. "Não reinventar a roda" = reaproveitar o mesmo renderRow Rev. 1945, só envolver em toggle.
+ * Mudança (`PlanejamentoDetalhe.tsx`):
+ *   (a) Novo state `cardsDetalheAberto: Set<string|number>` + helper `toggleCardDetalhe(gid)` (~L12275). Default vazio = todos os cards fechados (apenas bar chart visível ao entrar na aba).
+ *   (b) BLOCO 5 (~L14381-14424): substituído o header "Detalhamento — Pai → Filho" + 4 botões + legenda de 4 cores por:
+ *       - Botão único `w-full` cinza com ícone Chevron + ListTree + texto "Mostrar/Ocultar detalhamento (Pai → Filho)" — alterna `cardsDetalheAberto`.
+ *       - Quando aberto: renderiza `renderRow` (mesmo de Rev. 1945, intocado) + 2 botões secundários "Expandir tudo / Recolher tudo" alinhados à direita em barra fina cinza-50 (mantidos pq são úteis quando o detalhamento já está visível).
+ *   (c) Toggle por card usa `g.id` como chave → cada NAVE mantém seu estado independente. `stopPropagation()` no onClick impede colapsar o card pai.
+ *   (d) Estado `expandedEtapas` (Rev. 1945) intacto — controla expansão por nó dentro da tabela quando está aberta.
+ * version → 1947.
+ * Resultado: ao entrar em REFIS, só bar chart visível em cada card (visão macro limpa). Click "Mostrar detalhamento" → tabela aparece embaixo. Click novamente → some. Sem header poluído, sem legenda redundante. Tabela detalhada é EXATAMENTE a mesma de Rev. 1945 (zero reinventa).
+ * Preservado: Rev. 1946 legenda CDM, Rev. 1945 renderRow + collectIds + cascata expand/collapse, Rev. 1944 modal drill-down, Rev. 1943 Lei 12.506, BLOCO 4 chart, collapsedGrupos (collapse do card inteiro pelo header escuro), modo máscara, print. Zero backend/DB. Reversível em 2 hunks (remover state + restaurar header antigo). R-001/R-007/R-010 OK.
+ *
  * Rev. 1946 — RH · Dash Aviso Prévio · Tabela CDM · LEGENDA explicativa "Por que Trabalhado e Indenizado dão valores diferentes?" + correção de texto enganoso no header.
  * User (16/05/2026, screenshots Indenizado R$ 1.440.152,25 vs Trabalhado R$ 1.165.025,64 — diferença 24%): "o valor não poderia ser diferente.. pq o calculo não é o mesmo?" → após explicação técnica (Lei 12.506 unificou DIAS mas natureza financeira difere por CLT Art. 487/488), user: "matenha como esta, so coloca uma legenda explicando isso ok..".
  * Causa-raiz da confusão: header da seção CDM dizia "Valor total tende a ser similar — a diferença operacional é 'trabalha vs recebe sem trabalhar'", o que é FALSO. Em Trabalhado a "Aviso Indeniz." paga só os dias EXTRAS da Lei 12.506 (Anderson 10 anos = 30 dias extras, R$ 12.469); em Indenizado paga TODOS os dias (60, R$ 24.938). Diferença pode chegar a 24%+ no agregado da folha. Texto antigo levava usuário a desconfiar de bug onde só há aplicação correta da CLT.
