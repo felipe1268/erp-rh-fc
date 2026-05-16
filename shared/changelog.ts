@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1894 — Planejamento · Programação Semanal LOTUS · Pintura de PREVISTO (azul) e REALIZADO (verde/vermelho/laranja/amarelo) agora RESPEITA o CUTOFF oficial do projeto em AMBOS a tela e o export Excel.
+ * User (16/05/2026, screenshot do export Excel mostrando blue paint em Mon/Ter/Qua/Qui mesmo quando o cutoff é Seg): "TEM OUTRO ERRO, A PINTURA DEVE DO PREVISTO E REALIZADO REVE RESPEITAR O CUTOFF.."
+ * Causa: a função `faixasCelula(...)` (compartilhada por tela e export) pintava o ENVELOPE PREVISTO COMPLETO + qualquer REAL no horizonte, ignorando o status-date oficial. Padrão LOTUS / PMBOK: o relatório é uma fotografia da obra ATÉ o cutoff — dias > cutoff devem ficar EM BRANCO (entram no próximo relatório semanal). A função tinha `hoje` e `inicioSemanaCorrente` mas NÃO tinha cutoff.
+ * Mudanças (em client/src/components/planejamento/ProgramacaoSemanalLotus.tsx):
+ *   (1) L168-174: novo parâmetro `cutoffStr: string | null = null` em `faixasCelula` (YYYY-MM-DD). Default null preserva chamadas legadas.
+ *   (2) L177-178: guard imediato — `if (cutoffStr && ds > cutoffStr) return { top:null, bottom:null }` — corta TODA pintura para dias após o cutoff (nem azul, nem verde, nem vermelho, nem laranja, nem amarelo).
+ *   (3) L326-335: novo memo `cutoffStrGlobal` = `cutoffIso?.slice(0,10) ?? null` acessível tanto pela tela quanto pelo `handleExportExcel`.
+ *   (4) L1399 (export): passa `cutoffStrGlobal` como último argumento de `faixasCelula`.
+ *   (5) L1798 (tela): passa `cutoffStrGlobal` como último argumento de `faixasCelula` — paridade absoluta tela↔export.
+ *   (6) version → 1894.
+ * Preservado/Seguro: ZERO mudança em backend/DB/schema. Toda a lógica anterior (Rev. 1785 inicioSemanaCorrente / PPC fechamento semana, Rev. 1875 dias_trabalhados_extras override sáb/dom, Rev. 1664.1 auto-derivação real a partir de avanço FC, Rev. 1677/1688 antecipado/não-programado, Rev. 1886 override TOP=azul/BOTTOM=status no export, Rev. 1893 cinza Sáb/Dom) INTACTA — o cutoff só REMOVE pintura de dias após corte; quando ds <= cutoff o algoritmo roda exatamente como antes. Sem cutoff (cutoffIso nulo) cai no comportamento anterior (pinta envelope completo). Reversível em 4 hunks + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1893 — Planejamento · Programação Semanal LOTUS · EXPORT EXCEL · Sábado (col 15) e Domingo (col 16) agora SAEM PREENCHIDOS DE CINZA conforme o padrão do cliente.
  * User (16/05/2026, após Rev. 1892, 2 screenshots — template do cliente com cinza contínuo nos sáb/dom vs. export atual com sáb/dom brancos): "FALTA PREENCHER DE CINZA OS DIAS DE SABADO E DOMINGO CONFOREM O PADRAO DO CLIENTE..AJUSTE ISSO..."
  * Causa: Rev. 1889 forçou `fill: none` em B-P (cols 2-16) das LINHAS DE GRUPO para tirar o cinza herdado do template — limpou demais e arrancou também o cinza Sáb/Dom dessas linhas. Nas linhas de TAREFA, o template original não vinha com cinza confiável em sáb/dom (variava por slot/aba clonada), e o loop de pintura dos dias só preenche quando há previsto/realizado naquele dia — fim de semana sem trabalho ficava branco.

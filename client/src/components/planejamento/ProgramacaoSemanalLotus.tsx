@@ -162,8 +162,17 @@ function faixasCelula(
   // teve trabalho em sáb/dom (engenheiro marcou manualmente clicando na
   // célula). Tratadas como `ehUtil=true` apenas para esta atividade.
   diasExtras: Set<string> | null = null,
+  // Rev. 1894 — Cutoff oficial do projeto (YYYY-MM-DD). Quando informado,
+  // NENHUM dia posterior ao cutoff é pintado (nem previsto azul, nem
+  // realizado verde/vermelho/etc). Padrão LOTUS / status-date PMBOK: o
+  // relatório fotografa a obra ATÉ o cutoff; o futuro fica em branco e
+  // entra no próximo relatório semanal. Sem cutoff (null), comportamento
+  // anterior é preservado (pinta envelope completo).
+  cutoffStr: string | null = null,
 ): { top: string | null; bottom: string | null } {
   const ds = dateStr(dia);
+  // Rev. 1894 — Guard de cutoff: dias > cutoff não recebem pintura alguma.
+  if (cutoffStr && ds > cutoffStr) return { top: null, bottom: null };
   const ehUtilCal = cal ? ehDiaUtil(ds, cal) : (dia.getDay() !== 0 && dia.getDay() !== 6);
   const ehUtil = ehUtilCal || (!!diasExtras && diasExtras.has(ds));
   const inPrev = ehUtil && !!(prevIni && prevFim && ds >= prevIni && ds <= prevFim);
@@ -311,6 +320,16 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     const found = semanas.find((s) => dateStr(s.ini) <= hStr && dateStr(s.fim) >= hStr);
     return found ? found.ini : null;
   }, [semanas, hoje]);
+  // Rev. 1894 — Cutoff oficial (YYYY-MM-DD) usado por `faixasCelula` para
+  // BLOQUEAR pintura de previsto/realizado em dias FUTUROS (> cutoff).
+  // Pedido do usuário (16/05/2026, screenshot LOTUS export Excel): "A
+  // PINTURA DEVE DO PREVISTO E REALIZADO REVE RESPEITAR O CUTOFF". O LOTUS
+  // é um snapshot fotografado até a data de corte; o futuro fica em branco
+  // e aparece no próximo relatório.
+  const cutoffStrGlobal = useMemo(
+    () => (cutoffIso ? cutoffIso.slice(0, 10) : null),
+    [cutoffIso],
+  );
 
   // Filtra atividades que tocam a semana (previsto OU real dentro do range)
   const semIniStr = dias.length ? dateStr(dias[0]) : "";
@@ -1374,7 +1393,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
               const f = faixasCelula(
                 d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP,
                 m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSemX, acumAteSemX, inicioSemanaCorrente,
-                diasExtrasAtvExp,
+                diasExtrasAtvExp, cutoffStrGlobal,
               );
               // Rev. 1886 — PARA EXPORT: TOP sempre azul quando há previsto p/ o
               // dia (= o cliente pediu "previsto sempre vem azul na célula
@@ -1773,7 +1792,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                       const acumAteSem = m?.acumPct ?? 0;
                       const diasExtrasAtv = diasExtrasPorAtv.get(a.id) ?? null;
                       return diasDisplay.map((d, idx) => {
-                        const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSem, acumAteSem, inicioSemanaCorrente, diasExtrasAtv);
+                        const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSem, acumAteSem, inicioSemanaCorrente, diasExtrasAtv, cutoffStrGlobal);
                         // Rev. 1875 — Sáb/dom é clicável para alternar
                         // "trabalhado nesta atividade". Dias úteis padrão
                         // ficam não-clicáveis (cor/pintura é dirigida por
