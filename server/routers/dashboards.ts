@@ -2278,6 +2278,7 @@ async function getDashCustoDemissaoMassa(
 
   const rows = await db.select({
     id: employees.id,
+    companyId: employees.companyId,
     nomeCompleto: employees.nomeCompleto,
     cpf: employees.cpf,
     cargo: employees.cargo,
@@ -2321,10 +2322,11 @@ async function getDashCustoDemissaoMassa(
   // visitam várias frentes). Funcionários sem nenhuma alocação ativa caem
   // no fallback "—" no client.
   const obraByEmp = new Map<number, string>();
+  const obraIdByEmp = new Map<number, number>();
   if (empIds.length > 0) {
     try {
       const obraRows = ((await db.execute(sql`
-        SELECT DISTINCT ON (ofu."employeeId") ofu."employeeId", o.nome
+        SELECT DISTINCT ON (ofu."employeeId") ofu."employeeId", ofu."obraId", o.nome
         FROM obra_funcionarios ofu
         INNER JOIN obras o ON o.id = ofu."obraId"
         WHERE ofu."employeeId" IN (${sql.join(empIds.map(id => sql`${id}`), sql`, `)})
@@ -2333,10 +2335,105 @@ async function getDashCustoDemissaoMassa(
       `)) as any).rows || [];
       for (const r of obraRows) {
         obraByEmp.set(Number(r.employeeId), String(r.nome ?? ''));
+        if (r.obraId != null) obraIdByEmp.set(Number(r.employeeId), Number(r.obraId));
       }
     } catch (e) {
       console.error('[getDashCustoDemissaoMassa] falha ao carregar obra_funcionarios (assumindo vazio):', (e as any)?.message ?? e);
     }
+  }
+
+  // Rev. 1927 — Paridade total com módulo Aviso Prévio:
+  //   (a) vrDiario por funcionário (via meal_benefit_configs da obra dele),
+  //       espelhando avisoPrevioFerias.ts L840-870 (`comparativo`). CDM antes
+  //       passava 0 → `vrProporcional` zerava no total. Diferença real em
+  //       obras com VR/VA configurado (cafeManhaDia, lancheTardeDia, valeAlimMes).
+  //   (b) diasTrabalhadosMes = `dataFimAviso.getDate() − diasFeriasAgendadasNoMes`,
+  //       espelhando avisoPrevioFerias.ts L922-923/L948-949. CDM antes usava
+  //       `dataRef.getDate()` (mês errado quando aviso indenizado cruzava
+  //       virada de mês — ex.: Anderson dataRef=16/05 + 60d → dataFim=15/07
+  //       → official passava 15, CDM passava 16 → saldoSalario divergente).
+  // Ambas com batch queries (sem N+1).
+
+  // Batch: meal_benefit_configs por companyId — obraId específica > default da empresa.
+  const vrDiarioByObra = new Map<number, number>();
+  const vrDiarioDefaultByCompany = new Map<number, number>();
+  const cfgCompanyIds = companyIds && companyIds.length > 0 ? companyIds : [companyId];
+  try {
+    const cfgRows = ((await db.execute(sql`
+      SELECT "companyId", "obraId", "cafeManhaDia", "lancheTardeDia",
+             "valeAlimentacaoMes", "diasUteisRef", "cafeAtivo", "lancheAtivo"
+      FROM meal_benefit_configs
+      WHERE "companyId" IN (${sql.join(cfgCompanyIds.map(id => sql`${id}`), sql`, `)})
+        AND ativo = 1
+    `)) as any).rows || [];
+    for (const cfg of cfgRows) {
+      const cafe = parseBRL(cfg.cafeManhaDia);
+      const lanche = parseBRL(cfg.lancheTardeDia);
+      const vaMes = parseBRL(cfg.valeAlimentacaoMes);
+      const diasUteis = Number(cfg.diasUteisRef) || 22;
+      const cafeAtivo = cfg.cafeAtivo === 1 || cfg.cafeAtivo === true;
+      const lancheAtivo = cfg.lancheAtivo === 1 || cfg.lancheAtivo === true;
+      const totalVAMensal = (cafeAtivo ? cafe * diasUteis : 0)
+                          + (lancheAtivo ? lanche * diasUteis : 0)
+                          + vaMes;
+      const vrDia = totalVAMensal / 30;
+      if (cfg.obraId != null) vrDiarioByObra.set(Number(cfg.obraId), vrDia);
+      else vrDiarioDefaultByCompany.set(Number(cfg.companyId), vrDia);
+    }
+  } catch (e) {
+    console.error('[getDashCustoDemissaoMassa] falha meal_benefit_configs (assumindo VR=0):', (e as any)?.message ?? e);
+  }
+
+  // Batch: períodos de férias agendados/em_gozo/concluídos que podem cair no
+  // mês da saída de qualquer funcionário. Janela: dataRef → dataRef+90d
+  // (teto Lei 12.506 = aviso máximo 90 dias indenizado).
+  const dtMaxFimWin = new Date(dtRef.getTime() + 90 * 86400000);
+  const dataMaxFimWin = dtMaxFimWin.toISOString().slice(0, 10);
+  const vpAgendadasByEmp = new Map<number, Array<{ ini: string; fim: string }>>();
+  if (empIds.length > 0) {
+    try {
+      const vpAgRows = ((await db.execute(sql`
+        SELECT "employeeId", "dataInicio", "dataFim"
+        FROM vacation_periods
+        WHERE "employeeId" IN (${sql.join(empIds.map(id => sql`${id}`), sql`, `)})
+          AND "deletedAt" IS NULL
+          AND status IN ('agendada','em_gozo','concluida')
+          AND "dataInicio" IS NOT NULL
+          AND "dataFim" IS NOT NULL
+          AND "dataInicio" <= ${dataMaxFimWin}
+          AND "dataFim" >= ${dataRef}
+      `)) as any).rows || [];
+      for (const r of vpAgRows) {
+        const arr = vpAgendadasByEmp.get(Number(r.employeeId)) ?? [];
+        arr.push({ ini: String(r.dataInicio).slice(0, 10), fim: String(r.dataFim).slice(0, 10) });
+        vpAgendadasByEmp.set(Number(r.employeeId), arr);
+      }
+    } catch (e) {
+      console.error('[getDashCustoDemissaoMassa] falha vacation_periods agendadas (assumindo 0):', (e as any)?.message ?? e);
+    }
+  }
+  // Helper espelha avisoPrevioFerias.ts `diasFeriasNoMesDaSaida` (L169-207).
+  function diasFeriasNoMesDaSaidaCdm(empId: number, dataFimAvisoStr: string): number {
+    const ano = parseInt(dataFimAvisoStr.slice(0, 4));
+    const mes = parseInt(dataFimAvisoStr.slice(5, 7));
+    if (!ano || !mes) return 0;
+    const saidaNum = parseInt(dataFimAvisoStr.slice(8, 10));
+    const periodos = vpAgendadasByEmp.get(empId) ?? [];
+    if (periodos.length === 0) return 0;
+    const dias = new Set<string>();
+    for (const p of periodos) {
+      const di = new Date(p.ini + 'T00:00:00');
+      const df = new Date(p.fim + 'T00:00:00');
+      const d = new Date(di);
+      while (d <= df) {
+        if (d.getFullYear() === ano && d.getMonth() + 1 === mes) {
+          const dia = d.getDate();
+          if (dia <= saidaNum) dias.add(d.toISOString().slice(0, 10));
+        }
+        d.setDate(d.getDate() + 1);
+      }
+    }
+    return dias.size;
   }
 
   const vpCountByEmp = new Map<number, number>();
@@ -2383,14 +2480,29 @@ async function getDashCustoDemissaoMassa(
       // nenhum período vencido em vacation_periods — caso normal de empresa
       // que mantém férias em dia). Bloqueia o fallback matemático tóxico.
       const periodosVencidosReal = vpCountByEmp.get(r.id) ?? 0;
+      // Rev. 1927 — diasTrabalhadosMes do MÊS da dataFimAviso (não da dataRef).
+      // Quando aviso indenizado cruza virada de mês (ex.: 16/05 + 60d = 15/07),
+      // saldoSalario do oficial usa dia 15 (Jul); CDM antes usava 16 (Mai).
+      // Subtrai férias agendadas DENTRO desse mês até o dia da saída (idem
+      // avisoPrevioFerias.ts L922-923/948-949).
+      const diaSaidaReal = dtFimProjetada.getDate();
+      const diasFeriasMesSaida = diasFeriasNoMesDaSaidaCdm(r.id, dataFimProjetada);
+      const diasTrabMesReal = Math.max(0, diaSaidaReal - diasFeriasMesSaida);
+      // Rev. 1927 — vrDiario real do funcionário (config da obra > default da
+      // empresa > 0). Sem isso, `vrProporcional = vrDiario × diasTrabMes` era
+      // zero no CDM e contribuía pra divergência vs módulo oficial.
+      const obraIdEmp = obraIdByEmp.get(r.id);
+      const vrDiarioReal = (obraIdEmp != null ? vrDiarioByObra.get(obraIdEmp) : undefined)
+        ?? vrDiarioDefaultByCompany.get(Number(r.companyId))
+        ?? 0;
       const previsao = calcularRescisaoCompleta({
         salarioBase: salario,
         dataAdmissao: r.dataAdmissao!,
         dataDesligamento: dataRef,
         dataFimAviso: dataFimProjetada,
         tipo,
-        vrDiario: 0,
-        diasTrabalhadosMes: diasTrabMes,
+        vrDiario: vrDiarioReal,
+        diasTrabalhadosMes: diasTrabMesReal,
         periodosVencidosOverride: periodosVencidosReal,
       });
       // Rev. 1919 — Rescisão COMPLEMENTAR ("por fora" / uso interno).
@@ -2409,7 +2521,7 @@ async function getDashCustoDemissaoMassa(
           dataDesligamento: dataRef,
           dataFimAviso: dataFimProjetada,
           tipo,
-          diasTrabalhadosMes: diasTrabMes,
+          diasTrabalhadosMes: diasTrabMesReal,
           periodosVencidosOverride: periodosVencidosReal,
         });
         if (compl) {
