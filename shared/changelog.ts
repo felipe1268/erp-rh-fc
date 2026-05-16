@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1905 — Planejamento · Programação Semanal LOTUS · PREVISTO (top azul) renderiza em TODAS as semanas até o último dia do projeto · cutoff vira "snapshot só do realizado".
+ * User (16/05/2026, screenshot image_1778951089413.png — UI Programação Semanal SEMANA 3 [15-21/05/2026] com header "Oficial (14/05/2026)" como cutoff oficial; grid de dias completamente em BRANCO apesar das atividades terem previsto 04/05-22/05): "O PREVISTO DEVE APARECER TODAS AS SEMANAS DO CRONOGRAMA, ATÉ O ULTIMO DIA DO PROJETO....".
+ * Causa-raiz (em client/src/components/planejamento/ProgramacaoSemanalLotus.tsx L173-175 — função `faixasCelula`):
+ *   • Rev. 1894 introduziu o cutoff oficial do projeto (Padrão LOTUS / status-date PMBOK). O guard original era agressivo demais: `if (cutoffStr && ds > cutoffStr) return { top: null, bottom: null };` — matava AMBAS as faixas (previsto + realizado) para qualquer dia além do cutoff.
+ *   • Semântica esperada do cutoff: "fotografia da OBRA até a data" — congela o REALIZADO até a data oficial. Não tem relação com o PLANEJAMENTO, que é fixo do início ao fim do projeto independente do progresso.
+ *   • Bug visível: cutoff oficial em 14/05; Semana 3 começa em 15/05 (sex) → todos os 7 dias da semana são > cutoff → guard retorna {null,null} → grid 100% branco para a Semana 3 e todas as semanas seguintes. O usuário não vê NENHUMA indicação de plano nas semanas futuras, perdendo a visão LOTUS de "azul previsto se estendendo até o fim do projeto".
+ * Mudança (em L176-190 + L266-270):
+ *   • Removido o early-return do guard. Substituído por uma flag `passouCutoff = !!cutoffStr && ds > cutoffStr` calculada no início, mas SEM bloquear o cálculo.
+ *   • TODA a lógica de `faixasCelula` (inPrev/inReal/auto-derivação/passou/aderência) continua rodando normalmente. Resultado: top recebe "bg-blue-800" (azul previsto) quando inPrev=true para o dia, mesmo se ds > cutoff.
+ *   • Post-process antes do return: `if (passouCutoff) bottom = null;` — zera APENAS o bottom (realizado). O top (previsto) é preservado.
+ *   • Semântica nova preservada na UI e Excel: dias > cutoff exibem o PLANO (azul/vermelho) mas NUNCA exibem REALIZADO (que ainda não aconteceu na perspectiva da fotografia oficial).
+ *   • Comportamento "previsto que passou sem execução = vermelho" (L233) continua intacto pra semanas FECHADAS antes do cutoff (passou=true && !inReal && metaPct>0 && ds <= cutoff).
+ *   version → 1905.
+ * Resultado: na Semana 3+ (todas após o cutoff oficial), o grid mostra agora azul de previsto onde há envelope cobrindo o dia, em vez de branco. Plano LOTUS fica visível do início ao fim do projeto. Cutoff continua restringindo o realizado (status-date PMBOK respeitado). Sem cutoffIso configurado, comportamento idêntico ao anterior (passouCutoff sempre false).
+ * Preservado: Rev. 1894 cutoff guard SEMÂNTICA preservada pra realizado (bottom); Rev. 1886 migração red→bottom intacta (executada antes do post-process); Rev. 1875/1893 diasExtras intacta; Rev. 1851 indiretas auto-progredindo intactas; init L1206 da preencherAba intacto; Rev. 1897/1904 reset BRANCO 4-linhas intacto (continua zerando residual template). Painting UI/Excel idêntico no fluxo, só com mais células azuis em semanas futuras. Zero backend/DB/schema/tRPC/cores. Reversível em 2 hunks + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1904 — Planejamento · Programação Semanal LOTUS · Export Excel · FIX DEFINITIVO de azul previsto na 2ª célula + cutoff (template-bleed em r0+1/r0+2).
  * User (16/05/2026, screenshot image_1778950985770.png — Excel cols J-O da Semana 01 [01/05-07/05], pré-clipada a Mon-Thu): "O ERP AINDA NÃO TA RESPEITANDO A COR NA SEGUNDA CELULA EM AZUL DE PREVSITO.. E TBM NÃO ESTA RESPEITANDO A LINHA DE CORTE (CUTOFF).. RESOLVA ISSO EM DEFINITIVO.. FORA ESTES DOIS PONTOS O RESTO FICOU PERFEITO..".
  * Causa-raiz (em client/src/components/planejamento/ProgramacaoSemanalLotus.tsx L1339-1456 — preencherAba/dias.forEach/defensive):

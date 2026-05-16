@@ -171,8 +171,20 @@ function faixasCelula(
   cutoffStr: string | null = null,
 ): { top: string | null; bottom: string | null } {
   const ds = dateStr(dia);
-  // Rev. 1894 — Guard de cutoff: dias > cutoff não recebem pintura alguma.
-  if (cutoffStr && ds > cutoffStr) return { top: null, bottom: null };
+  // Rev. 1894/1905 — Guard de cutoff REVISADO: dias > cutoff bloqueiam
+  // APENAS a faixa REALIZADO (bottom). O PREVISTO (top azul) continua
+  // sendo computado e exibido pra que o PLANO apareça em TODAS as semanas
+  // do cronograma até o último dia do projeto. User (16/05/2026, screenshot
+  // LOTUS Sem.3 [15-21/05] toda em branco com "Oficial 14/05" como cutoff):
+  // "O PREVISTO DEVE APARECER TODAS AS SEMANAS DO CRONOGRAMA, ATÉ O ULTIMO
+  // DIA DO PROJETO". Antes (Rev. 1894), o guard zerava TOP+BOTTOM matando
+  // o previsto futuro — semanas após o cutoff oficial apareciam totalmente
+  // brancas (sem nenhuma indicação de plano).
+  // O zeramento do bottom (snapshot da execução até a data de fotografia)
+  // é aplicado ao final do cálculo, preservando toda a lógica de inPrev,
+  // inReal auto-derivado, passou/aderência, e a regra "previsto passou sem
+  // execução = vermelho" pra semanas FECHADAS antes do cutoff.
+  const passouCutoff = !!cutoffStr && ds > cutoffStr;
   const ehUtilCal = cal ? ehDiaUtil(ds, cal) : (dia.getDay() !== 0 && dia.getDay() !== 6);
   const ehUtil = ehUtilCal || (!!diasExtras && diasExtras.has(ds));
   const inPrev = ehUtil && !!(prevIni && prevFim && ds >= prevIni && ds <= prevFim);
@@ -248,6 +260,11 @@ function faixasCelula(
       else bottom = aderenciaPct >= ADERENCIA_THRESHOLD ? "bg-green-500" : "bg-red-500";
     }
   }
+
+  // Rev. 1905 — Post-process do cutoff: zera APENAS o bottom (realizado)
+  // pra dias > cutoff. O top (previsto azul/vermelho) continua exibido
+  // pra que o PLANO se estenda em todas as semanas até o fim do projeto.
+  if (passouCutoff) bottom = null;
 
   return { top, bottom };
 }
