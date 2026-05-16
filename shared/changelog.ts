@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1914 — Planejamento · Programação Semanal LOTUS · REVERT total da Rev. 1912 parte A: voltar a respeitar 100% o calendário do MS Project (calendarioJson). Sáb/Dom são úteis se o MSP disser que são; folga se o MSP disser que é folga.
+ * User (16/05/2026, 3ª revisão da regra de FDS no mesmo dia): "Respeite o calendário que veio do project para não ter erros". Decisão FINAL: o calendarioJson importado do MS Project é a FONTE DE VERDADE absoluta sobre o que é dia útil. ERP não deve sobrepor regras de FDS sobre o calendário do projeto. Cada obra tem suas regras (algumas trabalham sáb manhã, algumas têm escalas diferenciadas) e o MSP representa isso fielmente.
+ * Mudança (em `client/src/components/planejamento/ProgramacaoSemanalLotus.tsx`):
+ *   • L188-200 (Rev. 1912-A reescrita revertida): bloco `dow/ehFds/ehUtilCal=ehFds?false:...` removido. Volta à linha original `const ehUtilCal = cal ? ehDiaUtil(ds, cal) : (dia.getDay() !== 0 && dia.getDay() !== 6);`. Comentário Rev. 1914 cita explicitamente a decisão do user e os fallbacks.
+ *   • L1894-1901 (Rev. 1912-A no rendering): `calMarcaUtil = ehFds ? false : (calMSP ? ehDiaUtil : true)` revertido pra `calMarcaUtil = calMSP ? ehDiaUtil(dsIso, calMSP) : !ehFds`. Resultado: se MSP marca sáb como útil, célula não recebe fundo cinza (continua disponível pra azul/verde). `podeAlternar` naturalmente bloqueia o clique manual em dias úteis (já são úteis — não faz sentido marcar).
+ *   • Comportamento de cutoff Rev. 1913 (só zera bottom) PRESERVADO — independente desta mudança.
+ *   • Mecanismo `diasExtras` Rev. 1875 PRESERVADO — continua sendo override manual pra atividade específica em sáb/dom não-úteis pelo calendário.
+ *   version → 1914.
+ * Resultado: ERP volta a respeitar a fonte de verdade do MSP. Se o cronograma do projeto FC tinha sábado útil 0-12h, sábado é pintado. Se a obra Santuário tem domingo de folga total, domingo fica cinza. Sem hardcode de "FDS é sempre folga" — tudo do calendarioJson.
+ * Preservado: `pintaCinzaFds` Rev. 1893 (pinta cinza nas cols físicas 15-16 do Excel — independente do calendário, é só uma marcação visual de FDS no cabeçalho); cutoff Rev. 1913; reset BRANCO Rev. 1904; migração Rev. 1886; diasExtras Rev. 1875; regra vermelho-passou-sem-real; aderência; auto-derivação Rev. 1677/1688/1785. Zero backend/DB/schema. Reversível em 2 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1913 — Planejamento · Programação Semanal LOTUS · REVERT parcial da Rev. 1912 parte B: cutoff volta a bloquear APENAS realizado (previsto azul aparece em todas as semanas até fim do cronograma). Correção FDS da Rev. 1912 parte A preservada.
  * User (16/05/2026, screenshot Sem.18 [28/08-03/09/2026] com tabela vazia em cinza vazia + texto "Pq vc retirou o previsto das demais semanas, ela deve aparecer até ao final do cronograma, o cutoff deve ser respeitado para definir a linha de corte da semana mas o resto deve ser mantido."): user mudou de ideia sobre o modelo HÍBRIDO escolhido HÁ MINUTOS atrás na Rev. 1912 (user_query confirmava "cutoff bloqueia tudo EXCETO sáb/dom"). Pediu volta ao modelo da Rev. 1905: cronograma mostra PLANO inteiro até fim do projeto + SNAPSHOT do realizado até data de corte. Decisão prévia documentada quando user reclamou no início do dia "O PREVISTO DEVE APARECER TODAS AS SEMANAS DO CRONOGRAMA, ATÉ O ULTIMO DIA DO PROJETO".
  * Mudança (em `client/src/components/planejamento/ProgramacaoSemanalLotus.tsx` L267-291 substituídas por L267-278):

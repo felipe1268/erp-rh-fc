@@ -185,17 +185,15 @@ function faixasCelula(
   // inReal auto-derivado, passou/aderência, e a regra "previsto passou sem
   // execução = vermelho" pra semanas FECHADAS antes do cutoff.
   const passouCutoff = !!cutoffStr && ds > cutoffStr;
-  // Rev. 1912 — Sáb/Dom NUNCA são úteis pelo calendário herdado do MSP.
-  // Decisão do usuário (16/05/2026): o `calendarioJson` importado do MS
-  // Project frequentemente marca sábado como dia útil padrão (cultura de
-  // obra de construção civil), o que fazia o ERP pintar azul de previsto
-  // em cima do cinza de FDS. Agora a regra é: fim-de-semana só "abre" pra
-  // pintura quando o engenheiro marcar EXPLICITAMENTE aquele dia via
-  // `diasExtras` (mecanismo manual da Rev. 1875 — `dias_trabalhados_extras`).
-  // Dia útil "normal" (seg-sex) continua respeitando feriados do calMSP.
-  const dow = dia.getDay();
-  const ehFds = dow === 0 || dow === 6;
-  const ehUtilCal = ehFds ? false : (cal ? ehDiaUtil(ds, cal) : true);
+  // Rev. 1914 — RESTAURADO: respeitar 100% o calendário do projeto (MSP).
+  // Reverte a Rev. 1912 parte A. Decisão do usuário (16/05/2026): "Respeite
+  // o calendário que veio do project para não ter erros". Quem dita se um
+  // sáb/dom (ou qualquer feriado) é útil é o `calendarioJson` importado do
+  // MS Project. Se o MSP marca sáb como útil → ERP pinta. Se MSP marca como
+  // folga → não pinta. O fallback (sem cal) mantém o padrão clássico
+  // seg-sex. `diasExtras` (Rev. 1875) continua sendo um override manual
+  // pra atividade específica.
+  const ehUtilCal = cal ? ehDiaUtil(ds, cal) : (dia.getDay() !== 0 && dia.getDay() !== 6);
   const ehUtil = ehUtilCal || (!!diasExtras && diasExtras.has(ds));
   const inPrev = ehUtil && !!(prevIni && prevFim && ds >= prevIni && ds <= prevFim);
   // Rev. 1875 — Respeitar calendário MSP TAMBÉM no REAL explícito. Antes,
@@ -1884,14 +1882,14 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                         const dow = d.getDay();
                         const dsIso = dateStr(d);
                         const ehFds = dow === 0 || dow === 6;
-                        // Rev. 1912 — Alinhado com `faixasCelula` L188-202: sáb/dom
-                        // NUNCA são "úteis pelo calendário", mesmo que o calMSP marque
-                        // (cultura de obra que MSP frequentemente herda). Isso garante
-                        // (a) fundo cinza consistente nas cols FDS da grade e
-                        // (b) `podeAlternar` (L1893) habilita o clique manual em todo
-                        // sáb/dom — caso contrário, sábado herdado como útil bloqueava
-                        // o engenheiro de marcar/desmarcar a célula via Rev. 1875.
-                        const calMarcaUtil = ehFds ? false : (calMSP ? ehDiaUtil(dsIso, calMSP) : true);
+                        // Rev. 1914 — RESTAURADO: respeitar 100% o calendário MSP.
+                        // Reverte a Rev. 1912 parte A. Se o calMSP marca sáb como útil,
+                        // a célula NÃO ganha o fundo cinza (continua branca/colorida) e
+                        // o clique manual via `podeAlternar` fica naturalmente bloqueado
+                        // (não faz sentido "marcar como trabalhado" um dia que já é útil
+                        // pelo calendário do projeto). Decisão do usuário 16/05/2026:
+                        // "Respeite o calendário que veio do project para não ter erros".
+                        const calMarcaUtil = calMSP ? ehDiaUtil(dsIso, calMSP) : !ehFds;
                         const marcadoExtra = !!diasExtrasAtv && diasExtrasAtv.has(dsIso);
                         const podeAlternar = ehFds && !calMarcaUtil; // só sáb/dom não-úteis pelo calendário
                         const tipoCel = marcadoExtra
