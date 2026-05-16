@@ -1300,6 +1300,22 @@ export default function ProgramacaoSemanalLotus(props: Props) {
           if (isNaN(di) || isNaN(mi) || mi < 1 || mi > 12) return "";
           return `${di}-${MESES_ABREV[mi - 1]}`;
         };
+        // Rev. 1893 — Cinza dos fins de semana (Sábado=col 15, Domingo=col 16)
+        // do PADRÃO do cliente. Forçamos #D9D9D9 (cinza claro Excel padrão) em
+        // TODAS as 4 linhas de cada slot de tarefa, para AMBAS as colunas. O
+        // loop de pintura dos dias logo abaixo só sobrescreve quando há
+        // previsto/realizado naquele dia (Rev. 1875 dias_trabalhados_extras),
+        // preservando o cinza nos sáb/dom NÃO trabalhados.
+        const CINZA_FDS = "FFD9D9D9";
+        const pintaCinzaFds = (r0: number) => {
+          for (let dr = 0; dr < ROWS_PER_TASK; dr++) {
+            for (const cIdx of [15, 16]) {
+              ws.getCell(r0 + dr, cIdx).fill = {
+                type: "pattern", pattern: "solid", fgColor: { argb: CINZA_FDS },
+              } as any;
+            }
+          }
+        };
         linhasExp.forEach((l, idx) => {
           const r0 = FIRST_TASK_ROW + idx * ROWS_PER_TASK;
           if (l.tipo === "grupo") {
@@ -1309,19 +1325,25 @@ export default function ProgramacaoSemanalLotus(props: Props) {
             // tire isso e deixa sem preenchimento". O TEMPLATE original do
             // cliente vem com cinza nas linhas de grupo (mesmo após Rev. 1886
             // ter removido nosso fill manual). Aqui forçamos `fill: none` em
-            // B-P (cols 2-16) das linhas de grupo p/ sobrescrever o template.
-            // ATENÇÃO: NÃO tocamos em J-P das colunas Sáb/Dom específicas
-            // pois isso é tratado por linha (não pelo template), e as faixas
-            // dos dias só são pintadas em linhas de tarefa (não de grupo).
-            for (let cIdx = 2; cIdx <= 16; cIdx++) {
+            // B-N (cols 2-14) das linhas de grupo p/ sobrescrever o template.
+            // Rev. 1893 — limite mudou de 16 → 14 para PRESERVAR o cinza de
+            // Sáb/Dom (cols 15-16), que é exigência do padrão do cliente.
+            for (let cIdx = 2; cIdx <= 14; cIdx++) {
               const c = ws.getCell(r0, cIdx);
               (c as any).fill = { type: "pattern", pattern: "none" };
             }
+            // Rev. 1893 — força cinza nos sáb/dom da linha de grupo também.
+            pintaCinzaFds(r0);
             // Fonte negrito no nome
             const fontDst = ws.getCell(r0, 4).font || {};
             ws.getCell(r0, 4).font = { ...fontDst, bold: true };
           } else {
             const a = l.ativ;
+            // Rev. 1893 — pinta cinza Sáb/Dom ANTES do loop de dias; assim,
+            // quando NÃO há previsto/realizado no fim de semana (caso normal),
+            // o cinza fica visível, e quando há (Rev. 1875 dias_trabalhados_extras)
+            // a pintura colorida do loop sobrescreve naturalmente.
+            pintaCinzaFds(r0);
             ws.getCell(r0, 2).value = a.eapCodigo ?? "";
             ws.getCell(r0, 4).value = a.nome;
             ws.getCell(r0, 5).value = fmtCurto(a.dataInicio);
@@ -1342,11 +1364,17 @@ export default function ProgramacaoSemanalLotus(props: Props) {
             const m = mts.get(a.id);
             const temAvSemX = !!m && m.somaSemanal > 0;
             const acumAteSemX = m?.acumPct ?? 0;
+            // Rev. 1893 — passa diasExtrasAtv ao faixasCelula no EXPORT, mesma
+            // estratégia da UI L1768-1770. Sem isso, fim de semana marcado
+            // como dia trabalhado (Rev. 1875 dias_trabalhados_extras) saía
+            // apenas com o cinza de fundo no Excel, divergindo da tela.
+            const diasExtrasAtvExp = diasExtrasPorAtv.get(a.id) ?? null;
             dias.forEach((d, di) => {
               const cIdx = 10 + di; // J=10
               const f = faixasCelula(
                 d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP,
                 m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSemX, acumAteSemX, inicioSemanaCorrente,
+                diasExtrasAtvExp,
               );
               // Rev. 1886 — PARA EXPORT: TOP sempre azul quando há previsto p/ o
               // dia (= o cliente pediu "previsto sempre vem azul na célula

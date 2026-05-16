@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1893 — Planejamento · Programação Semanal LOTUS · EXPORT EXCEL · Sábado (col 15) e Domingo (col 16) agora SAEM PREENCHIDOS DE CINZA conforme o padrão do cliente.
+ * User (16/05/2026, após Rev. 1892, 2 screenshots — template do cliente com cinza contínuo nos sáb/dom vs. export atual com sáb/dom brancos): "FALTA PREENCHER DE CINZA OS DIAS DE SABADO E DOMINGO CONFOREM O PADRAO DO CLIENTE..AJUSTE ISSO..."
+ * Causa: Rev. 1889 forçou `fill: none` em B-P (cols 2-16) das LINHAS DE GRUPO para tirar o cinza herdado do template — limpou demais e arrancou também o cinza Sáb/Dom dessas linhas. Nas linhas de TAREFA, o template original não vinha com cinza confiável em sáb/dom (variava por slot/aba clonada), e o loop de pintura dos dias só preenche quando há previsto/realizado naquele dia — fim de semana sem trabalho ficava branco.
+ * Mudança (em client/src/components/planejamento/ProgramacaoSemanalLotus.tsx dentro de handleExportExcel):
+ *   (1) L1306-1321: novo helper `pintaCinzaFds(r0)` que aplica fill `#FFD9D9D9` (cinza claro padrão Excel) nas 4 linhas do slot da tarefa, AMBAS as colunas 15 e 16.
+ *   (2) L1334: o range do strip da linha de grupo mudou de `cIdx <= 16` para `cIdx <= 14` — não toca mais em Sáb/Dom (não arranca o cinza herdado quando existir).
+ *   (3) L1339: após o strip, chama `pintaCinzaFds(r0)` na linha de grupo para GARANTIR o cinza Sáb/Dom independente do que o template traga.
+ *   (4) L1345-1349: na linha de TAREFA, chama `pintaCinzaFds(r0)` ANTES do loop de pintura dos dias. Assim o cinza fica de fundo padrão; quando há previsto/realizado em sáb/dom (caso raro Rev. 1875 `dias_trabalhados_extras`), o `dias.forEach` sobrescreve naturalmente com a cor da faixa (azul/verde/vermelho/etc).
+ *   (5) version → 1893.
+ * Preservado/Seguro: ZERO mudança em backend/DB/schema/PSEM tela/cálculos. Rev. 1886 (fmtCurto + override TOP=azul/BOTTOM=status) intacta. Rev. 1889 (strip do cinza do template em colunas 2-14 das linhas de grupo + minWidths E/F/G/H=12 + minWidth I=16) preservada. Rev. 1818 (`responsavel.labelCurto`) intacta. Rev. 1875 (dias_trabalhados_extras) continua funcionando pois o `dias.forEach` sobrescreve o cinza quando há faixa colorida. Cabeçalho, merges, logos, fonte: nada tocado. Reversível em 1 hunk (mesmo arquivo) + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1892 — Planejamento · Cronograma · UX · Quando o RESPONSÁVEL ciano é definido em uma linha marcada como GRUPO/RESUMO, a cascata para descendentes vira AUTOMÁTICA (sem modal).
  * User (16/05/2026, após Rev. 1891, screenshot mostrando "NAVE NORTE" como grupo): "QUERO OUTRA MELHORIA, QUANDO EU CLICAR NO BOTÃO DE ATRIBUIR RESPONSAVEL NO ITEM QUE TBM FOI DEMARCADO COMO GRUPO, E DEFINIR O RESPONSAVEL NELE, TODAS ATIVIDADES ABAIXO DEVEM SER PREENCHIDAS AUTOMATICAMENTE POR ELES. CASO TENHA ALGUMA QUE O NÃO FAÇA PARTE O USUÁRIO MUDARA AUTOMATICAMENTE DEPOIS."
  * Contexto: Rev. 1860/1865 introduziu modal de cascata com 3 opções (Cancelar / Só vazios / Sobrescrever todos) sempre que o usuário digitava um responsável em pai com descendentes. Para itens marcados explicitamente como GRUPO (a.isGrupo=true), esse extra-clique é fricção pura — marcar grupo já é declarar "isso aqui é resumo, tudo abaixo segue junto".
