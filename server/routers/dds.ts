@@ -1306,7 +1306,45 @@ Gere o JSON do tema seguindo EXATAMENTE o esquema acima.`;
       const conds: any[] = [eq(ddsSessoes.companyId, input.companyId), isNull(ddsSessoes.deletedAt)];
       if (input.obraId) conds.push(eq(ddsSessoes.obraId, input.obraId));
       if (input.status) conds.push(eq(ddsSessoes.status, input.status));
-      const sessoes = await db.select().from(ddsSessoes)
+      // Rev. 1876 — LEFT JOIN com ddsTemas pra expor `categoriaTema` (fonte
+      // herdada). Mantemos `categoria` da própria sessão como override; o
+      // cliente prioriza `s.categoria ?? s.categoriaTema ?? "SEM_TEMA"` p/
+      // exibir badge e dashboard.
+      const sessoes = await db.select({
+        // Todas colunas relevantes da sessão (snapshot do que era retornado por `select()`)
+        id: ddsSessoes.id,
+        companyId: ddsSessoes.companyId,
+        obraId: ddsSessoes.obraId,
+        obraNome: ddsSessoes.obraNome,
+        data: ddsSessoes.data,
+        hora: ddsSessoes.hora,
+        temaId: ddsSessoes.temaId,
+        tituloTema: ddsSessoes.tituloTema,
+        conteudoMd: ddsSessoes.conteudoMd,
+        instrutor: ddsSessoes.instrutor,
+        instrutorCpf: ddsSessoes.instrutorCpf,
+        instrutorCodigoInterno: ddsSessoes.instrutorCodigoInterno,
+        categoria: ddsSessoes.categoria,
+        local: ddsSessoes.local,
+        observacoes: ddsSessoes.observacoes,
+        status: ddsSessoes.status,
+        envelopeId: ddsSessoes.envelopeId,
+        createdBy: ddsSessoes.createdBy,
+        finalizadaEm: ddsSessoes.finalizadaEm,
+        createdAt: ddsSessoes.createdAt,
+        updatedAt: ddsSessoes.updatedAt,
+        // herdado do tema
+        categoriaTema: ddsTemas.categoria,
+      }).from(ddsSessoes)
+        // Rev. 1876 — tenant-scoped join: garante que `categoriaTema` só venha
+        // de temas da MESMA empresa e não-deletados. Sem esse guard, um `temaId`
+        // que aponte por engano para tema de outra company vazaria a categoria
+        // cross-tenant via COALESCE/categoriaEfetiva.
+        .leftJoin(ddsTemas, and(
+          eq(ddsTemas.id, ddsSessoes.temaId),
+          eq(ddsTemas.companyId, input.companyId),
+          isNull(ddsTemas.deletedAt),
+        ))
         .where(and(...conds))
         .orderBy(desc(ddsSessoes.data), desc(ddsSessoes.id))
         .limit(input.limit);
@@ -1324,6 +1362,8 @@ Gere o JSON do tema seguindo EXATAMENTE o esquema acima.`;
       const byId = new Map(counts.map((c: any) => [c.sessaoId, c]));
       return sessoes.map((s: any) => ({
         ...s,
+        // categoria efetiva (override → tema → null/SEM_TEMA tratado no client)
+        categoriaEfetiva: s.categoria ?? s.categoriaTema ?? null,
         totalParticipantes: Number(byId.get(s.id)?.total ?? 0),
         presentes: Number(byId.get(s.id)?.presentes ?? 0),
         assinados: Number(byId.get(s.id)?.assinados ?? 0),
@@ -1559,6 +1599,9 @@ Gere o JSON do tema seguindo EXATAMENTE o esquema acima.`;
       if (input.obraId) condsBase.push(eq(ddsSessoes.obraId, input.obraId));
 
       // 1) Sessões no período (com tema p/ categoria)
+      // Rev. 1876 — `categoria` prioriza override da sessão (s.categoria) e cai
+      // para a do tema vinculado (t.categoria). Assim o dashboard reflete o
+      // que o engenheiro definiu por linha no botão Editar Categoria.
       const sessoesPeriodo = await db.select({
         id: ddsSessoes.id,
         data: ddsSessoes.data,
@@ -1568,9 +1611,14 @@ Gere o JSON do tema seguindo EXATAMENTE o esquema acima.`;
         tituloTema: ddsSessoes.tituloTema,
         instrutor: ddsSessoes.instrutor,
         status: ddsSessoes.status,
-        categoria: ddsTemas.categoria,
+        categoria: sql<string | null>`COALESCE(${ddsSessoes.categoria}, ${ddsTemas.categoria})`,
       }).from(ddsSessoes)
-        .leftJoin(ddsTemas, eq(ddsTemas.id, ddsSessoes.temaId))
+        // Rev. 1876 — join tenant-scoped (ver listSessoes acima).
+        .leftJoin(ddsTemas, and(
+          eq(ddsTemas.id, ddsSessoes.temaId),
+          eq(ddsTemas.companyId, input.companyId),
+          isNull(ddsTemas.deletedAt),
+        ))
         .where(and(...condsBase));
 
       const sessaoIds = sessoesPeriodo.map((s: any) => s.id);
@@ -1802,6 +1850,8 @@ Gere o JSON do tema seguindo EXATAMENTE o esquema acima.`;
           instrutor: ddsSessoes.instrutor,
           instrutorCpf: ddsSessoes.instrutorCpf,
           instrutorCodigoInterno: ddsSessoes.instrutorCodigoInterno,
+          // Rev. 1876 — override de categoria por sessão.
+          categoria: ddsSessoes.categoria,
           local: ddsSessoes.local,
           observacoes: ddsSessoes.observacoes,
           status: ddsSessoes.status,
@@ -1944,6 +1994,9 @@ Gere o JSON do tema seguindo EXATAMENTE o esquema acima.`;
       local: z.string().optional(),
       observacoes: z.string().optional(),
       status: z.enum(["aberta", "finalizada", "cancelada"]).optional(),
+      // Rev. 1876 — override de categoria por sessão.
+      // `null` explícito limpa o override (volta a herdar do tema).
+      categoria: z.enum(["NR", "CAMPANHA", "VACINACAO", "LIVRE"]).nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       assertCompanyAccess(ctx, input.companyId);

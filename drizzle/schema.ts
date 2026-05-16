@@ -8210,6 +8210,11 @@ export const ddsSessoes = pgTable("dds_sessoes", {
   instrutor: varchar({ length: 255 }),
   instrutorCpf: varchar("instrutor_cpf", { length: 14 }),
   instrutorCodigoInterno: varchar("instrutor_codigo_interno", { length: 50 }),
+  // Rev. 1876 — Override de categoria por sessão (NR | CAMPANHA | VACINACAO | LIVRE).
+  // Null = herda da categoria do tema vinculado (`dds_temas.categoria` via temaId).
+  // Permite ao engenheiro "informar a categoria" diretamente na linha da sessão,
+  // sem precisar editar o tema (que afetaria TODAS as outras sessões dele).
+  categoria: varchar({ length: 30 }),
   local: varchar({ length: 255 }),
   observacoes: text(),
   status: varchar({ length: 20 }).default("aberta").notNull(), // 'aberta' | 'finalizada' | 'cancelada'

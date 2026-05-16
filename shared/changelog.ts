@@ -44,6 +44,30 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1876,
+    titulo: "DDS · Sessões · Botão Editar Categoria por linha (override granular: sessão > tema)",
+    descricao: "User (16/05/2026, screenshot iPad da lista de Sessões DDS — legenda 'Campanhas Governamentais / Normas Regulamentadoras / Sem tema vinculado'): 'precisa ter um botão de editar para poder informar as categorias'.\n\n" +
+      "CONTEXTO: A categoria de uma sessão era 100% derivada do `dds_temas.categoria` via `temaId` (JOIN read-only no `listSessoes` e no `dashboardKpis`). Sessão sem tema vinculado → 'SEM_TEMA' sem opção de classificar manualmente. Editar a categoria do tema afetaria TODAS as outras sessões dele. Solução: snapshot/override por sessão (não destrói a herança padrão).\n\n" +
+      "MUDANÇAS:\n" +
+      "(1) Schema (`drizzle/schema.ts` L8216-8220): nova coluna `dds_sessoes.categoria VARCHAR(30)` nullable. Null = herda do tema; valor explícito (NR/CAMPANHA/VACINACAO/LIVRE) = override só dessa sessão.\n" +
+      "(2) SyncSchema+ (`server/_core/index.ts` L856-857): `ALTER TABLE dds_sessoes ADD COLUMN IF NOT EXISTS categoria VARCHAR(30)` (idempotente, no mesmo bloco da Rev. 1873).\n" +
+      "(3) Backend (`server/routers/dds.ts`):\n" +
+      "    - `listSessoes` (L1296-1366): reescrito de `select()` para projeção explícita + `leftJoin(ddsTemas)`. Devolve `categoria` (override próprio, pode ser null), `categoriaTema` (herdado) e `categoriaEfetiva = override ?? tema`. UI usa o coalesce direto, mas mantém ambos pra mostrar dica 'padrão do tema: X' no modal de edição.\n" +
+      "    - `atualizarSessao` (L1986): aceita `categoria: z.enum(['NR','CAMPANHA','VACINACAO','LIVRE']).nullable().optional()`. `null` explícito limpa o override (volta a herdar do tema).\n" +
+      "    - `getSessao` (L1840-1841): projeção explícita ganha `categoria` (mantém parity com listSessoes).\n" +
+      "    - `dashboardKpis` sessoesPeriodo (L1609): mudou `categoria: ddsTemas.categoria` → `categoria: COALESCE(s.categoria, t.categoria)`. Dashboard (pie por categoria, dia da semana, drill) passa a refletir overrides imediatamente.\n" +
+      "(4) Frontend (`client/src/pages/sst/DDSGuia.tsx`):\n" +
+      "    - Nova coluna 'Categoria' na tabela da aba Sessões (L1132); colSpan do empty state ajustado de 8→9.\n" +
+      "    - Badge clicável colorido por categoria (NR=azul, CAMPANHA=âmbar, VACINACAO=esmeralda, LIVRE=cinza, Sem categoria=cinza claro itálico) com ícone Pencil interno e hover-ring para affordance.\n" +
+      "    - State `editarCategoriaId` + mutation `editarCategoriaMut = trpc.dds.atualizarSessao.useMutation` (invalida listSessoes + dashboardKpis no onSuccess).\n" +
+      "    - Modal `<Dialog max-w-md>` com Select de 4 opções (cada SelectItem mostra label + descrição curta da regra), dica 'padrão do tema: X' quando há temaId, aviso amarelo quando NÃO há temaId, e botão 'Limpar (herdar do tema)' que envia `categoria: null` (visível só quando override está ativo).\n\n" +
+      "PRESERVADO: ZERO mudança em criação de sessão, finalizar/assinar, lista de presença, biblioteca de temas, drilldowns DDSDashboard (que já usa s.categoria coalesçada), calendário anual, sidebar. Sessões antigas sem override continuam herdando do tema como sempre. Reversível em ~6 hunks (1 schema + 1 SyncSchema+ + 4 backend + 4 frontend hunks). R-001/R-007/R-010 OK (apenas ADD COLUMN, nenhum dado apagado).",
+    tipo: "feature",
+    modulos: "SST/DDS",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 17:00:00",
+  },
+  {
     version: 1875,
     titulo: "Programação Semanal LOTUS · Fim de semana respeita calendário MSP por padrão + override granular por atividade (click em sáb/dom)",
     descricao: "User (16/05/2026, screenshot iPad da Programação Semanal — Semana 2 08-14/mai/2026, várias atividades pintando barras automaticamente em sáb 09/mai e dom 10/mai): 'Não houve atividade no domingo, se houve será lançado manualmente. Então o ERP precisa deixar para o engenheiro preencher manualmente as atividades que foram feitas no sábado e domingo, caso contrário deve seguir o calendário do project'.\n\n" +

@@ -850,6 +850,8 @@ Regras:
         // Rev. 1873 — LGPD: substitui CPF do instrutor pelo Código Interno do funcionário no modal Nova Sessão DDS.
         try {
           await db.execute(sql`ALTER TABLE dds_sessoes ADD COLUMN IF NOT EXISTS instrutor_codigo_interno VARCHAR(50)`);
+          // Rev. 1876 — Categoria override por sessão (null = herda do tema).
+          await db.execute(sql`ALTER TABLE dds_sessoes ADD COLUMN IF NOT EXISTS categoria VARCHAR(30)`);
           console.log(`[SyncSchema+] Rev. 1873: coluna instrutor_codigo_interno garantida em dds_sessoes.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.1873 instrutor_codigo_interno:`, e?.message || e); }
         // Rev. 1874 — CLT Art. 62: inciso (I/II/III) + observação/justificativa em employees.
