@@ -1052,7 +1052,10 @@ export default function GestaoDocumentos() {
               nome: d.nome,
               sigla: d.sigla,
               cor: d.cor,
-              subpastas: newDiscForm.subpastas,
+              // Rev. 1882 — categorias de "documento" nascem vazias (sem
+              // DWG/PDF/IFC/DOC default que faz sentido só para projetos).
+              subpastas: acervoAtivo === "documento" ? [] : newDiscForm.subpastas,
+              tipoAcervo: acervoAtivo,
             });
             okCount++;
           } catch (e: any) {
@@ -1084,7 +1087,9 @@ export default function GestaoDocumentos() {
         nome: newDiscForm.nome.trim(),
         sigla: newDiscForm.sigla.trim().toUpperCase(),
         cor: newDiscForm.cor,
-        subpastas: newDiscForm.subpastas,
+        // Rev. 1882 — vide nota acima: documento nasce sem sub-pastas padrão.
+        subpastas: acervoAtivo === "documento" ? [] : newDiscForm.subpastas,
+        tipoAcervo: acervoAtivo,
       });
       toast.success("Pasta criada!");
       utils.gestaoDocumentos.getFicheiroDetail.invalidate();
@@ -1687,13 +1692,22 @@ export default function GestaoDocumentos() {
                       <Plus className="w-3 h-3" /> Nova
                     </button>
                   ) : (
-                    <button
-                      onClick={() => { window.dispatchEvent(new CustomEvent("navParamsUpdated")); setViewMode("configuracoes"); }}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-emerald-700 hover:bg-emerald-50 font-medium"
-                      title="Gerenciar catálogo central"
-                    >
-                      <Settings className="w-3 h-3" /> Catálogo
-                    </button>
+                    // Rev. 1882 — antes só existia o botão "Catálogo" (configurações).
+                    // No iPad o usuário não tinha como criar pasta direto da árvore.
+                    // Agora: "Nova" (inline, abre o mesmo modal já com tipoAcervo
+                    // = "documento") + "Catálogo" (gerenciamento central).
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setShowNewDiscModal(true)} className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-emerald-700 hover:bg-emerald-50 font-medium" title="Nova pasta (categoria) de documento">
+                        <Plus className="w-3 h-3" /> Nova
+                      </button>
+                      <button
+                        onClick={() => { window.dispatchEvent(new CustomEvent("navParamsUpdated")); setViewMode("configuracoes"); }}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] text-gray-500 hover:bg-gray-100 font-medium"
+                        title="Gerenciar catálogo central"
+                      >
+                        <Settings className="w-3 h-3" /> Catálogo
+                      </button>
+                    </div>
                   )}
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
@@ -1719,11 +1733,11 @@ export default function GestaoDocumentos() {
                           </button>
                           <button
                             onClick={() => downloadAllFromDiscipline(disc.id)}
-                            className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-500 transition-all"
+                            className="p-1 rounded text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors shrink-0"
                             title={`Baixar todos de ${disc.sigla}`}
                             disabled={downloading}
                           >
-                            <FolderDown className="w-3 h-3" />
+                            <FolderDown className="w-4 h-4" />
                           </button>
                           {/* Rev. 1776 — criar nova sub-pasta dentro desta disciplina */}
                           <button
@@ -1738,10 +1752,10 @@ export default function GestaoDocumentos() {
                                 },
                               });
                             }}
-                            className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-gray-400 hover:text-emerald-600 transition-all"
+                            className="p-1 rounded text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors shrink-0"
                             title="Nova sub-pasta"
                           >
-                            <FolderPlus className="w-3 h-3" />
+                            <FolderPlus className="w-4 h-4" />
                           </button>
                           {/* Rev. 1717 — Renomear pasta principal (Disciplina) direto da árvore.
                               Pede sigla (até 10 chars, vira maiúscula) e nome. Reaproveita
@@ -1760,10 +1774,10 @@ export default function GestaoDocumentos() {
                               if (sigla === disc.sigla && nome === disc.nome) return;
                               renameDisciplinaFicheiro.mutate({ id: disc.id, companyId, sigla, nome });
                             }}
-                            className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-600 transition-all"
+                            className="p-1 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors shrink-0"
                             title="Renomear pasta"
                           >
-                            <Pencil className="w-3 h-3" />
+                            <Pencil className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => askConfirm({
@@ -1773,9 +1787,10 @@ export default function GestaoDocumentos() {
                               destructive: true,
                               onConfirm: () => deleteDiscFicheiro.mutate({ id: disc.id, companyId, ficheiroId: activeFicheiroId! }),
                             })}
-                            className="p-0.5 rounded opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"
+                            className="p-1 rounded text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
+                            title="Excluir pasta"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                         {isExpanded && discPastas.length > 0 && (
@@ -1803,10 +1818,10 @@ export default function GestaoDocumentos() {
                                       if (nome === sp.nome) return;
                                       renamePasta.mutate({ id: sp.id, companyId, nome });
                                     }}
-                                    className="p-0.5 rounded opacity-0 group-hover/sp:opacity-100 text-gray-400 hover:text-blue-600 transition-all shrink-0"
+                                    className="p-1 rounded text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors shrink-0"
                                     title="Renomear sub-pasta"
                                   >
-                                    <Pencil className="w-2.5 h-2.5" />
+                                    <Pencil className="w-3.5 h-3.5" />
                                   </button>
                                   <button
                                     onClick={() => askConfirm({
@@ -1816,9 +1831,10 @@ export default function GestaoDocumentos() {
                                       destructive: true,
                                       onConfirm: () => deletePasta.mutate({ id: sp.id, companyId }),
                                     })}
-                                    className="p-0.5 rounded opacity-0 group-hover/sp:opacity-100 text-gray-400 hover:text-red-500 transition-all shrink-0"
+                                    className="p-1 rounded text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
+                                    title="Excluir sub-pasta"
                                   >
-                                    <Trash2 className="w-2.5 h-2.5" />
+                                    <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
                               );
@@ -2288,15 +2304,26 @@ export default function GestaoDocumentos() {
       </div>
 
       {/* Modal — Nova Pasta (Disciplina) */}
-      <Dialog open={showNewDiscModal} onOpenChange={setShowNewDiscModal}>
+      <Dialog open={showNewDiscModal} onOpenChange={(open) => {
+        setShowNewDiscModal(open);
+        // Rev. 1882 — ao fechar o modal por qualquer caminho (Esc, click-out,
+        // botão), zerar atalhos selecionados. Sem isso, atalhos marcados em
+        // "projeto" vazavam para "documento" e disparavam o batch create
+        // com siglas técnicas (ARQ/EST…) num acervo onde a UI nem aparece.
+        if (!open) setSelectedShortcuts(new Set());
+      }}>
         <DialogContent className="max-w-lg bg-white border-gray-200 text-gray-900">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FolderPlus className="w-5 h-5 text-blue-600" />
-              Nova Pasta
+              <FolderPlus className={`w-5 h-5 ${acervoAtivo === "documento" ? "text-emerald-600" : "text-blue-600"}`} />
+              {acervoAtivo === "documento" ? "Nova Pasta de Documento" : "Nova Pasta"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Rev. 1882 — Atalhos de disciplinas técnicas só fazem sentido no
+                acervo "projeto". Em "documento" o usuário cria categorias
+                livres (CTR, ART, PRO, etc.) preenchendo Nome+Sigla manualmente. */}
+            {acervoAtivo !== "documento" && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-xs text-gray-500">Atalhos — clique para selecionar (múltiplas pastas de uma vez)</Label>
@@ -2345,14 +2372,15 @@ export default function GestaoDocumentos() {
                 </p>
               )}
             </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-gray-500">Nome *</Label>
-                <Input value={newDiscForm.nome} onChange={(e) => setNewDiscForm({ ...newDiscForm, nome: e.target.value })} placeholder="Ex: Arquitetura" className="bg-gray-50 border-gray-300 text-gray-900" />
+                <Input value={newDiscForm.nome} onChange={(e) => setNewDiscForm({ ...newDiscForm, nome: e.target.value })} placeholder={acervoAtivo === "documento" ? "Ex: Contratos & Aditivos" : "Ex: Arquitetura"} className="bg-gray-50 border-gray-300 text-gray-900" />
               </div>
               <div>
                 <Label className="text-gray-500">Sigla *</Label>
-                <Input value={newDiscForm.sigla} onChange={(e) => setNewDiscForm({ ...newDiscForm, sigla: e.target.value.toUpperCase() })} placeholder="Ex: ARQ" maxLength={10} className="bg-gray-50 border-gray-300 text-gray-900" />
+                <Input value={newDiscForm.sigla} onChange={(e) => setNewDiscForm({ ...newDiscForm, sigla: e.target.value.toUpperCase() })} placeholder={acervoAtivo === "documento" ? "Ex: CTR" : "Ex: ARQ"} maxLength={10} className="bg-gray-50 border-gray-300 text-gray-900" />
               </div>
             </div>
             <div>

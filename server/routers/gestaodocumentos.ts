@@ -401,6 +401,11 @@ export const gestaoDocumentosRouter = router({
       sigla: z.string().min(1).max(10),
       cor: z.string().optional(),
       subpastas: z.array(z.string()).optional(),
+      // Rev. 1882 — separa categorias do acervo "documento" (Contratos,
+      // Atas, ARTs…) das disciplinas técnicas "projeto" (ARQ, EST…). Sem
+      // isto, qualquer pasta criada pelo modal caía sempre em "projeto" e
+      // não aparecia na aba Documentos da Obra.
+      tipoAcervo: z.enum(["projeto", "documento"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -412,15 +417,22 @@ export const gestaoDocumentosRouter = router({
         nome: input.nome,
         sigla: input.sigla,
         cor: input.cor,
+        tipoAcervo: input.tipoAcervo || "projeto",
       }).returning();
-      const selectedPastas = input.subpastas && input.subpastas.length > 0 ? input.subpastas : PASTAS_PADRAO;
-      const pastasValues = selectedPastas.map(nome => ({
-        companyId: input.companyId,
-        ficheiroId: input.ficheiroId,
-        disciplinaId: disc.id,
-        nome,
-      }));
-      await db.insert(gdPastas).values(pastasValues);
+      // Rev. 1882 — categorias de "documento" não precisam de DWG/PDF/IFC/DOC
+      // pré-criadas. Só cria sub-pastas se vier algo explícito do front.
+      const selectedPastas = input.subpastas && input.subpastas.length > 0
+        ? input.subpastas
+        : (input.tipoAcervo === "documento" ? [] : PASTAS_PADRAO);
+      if (selectedPastas.length > 0) {
+        const pastasValues = selectedPastas.map(nome => ({
+          companyId: input.companyId,
+          ficheiroId: input.ficheiroId,
+          disciplinaId: disc.id,
+          nome,
+        }));
+        await db.insert(gdPastas).values(pastasValues);
+      }
       return disc;
     }),
 
