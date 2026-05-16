@@ -2906,7 +2906,8 @@ async function getDashAvisoPrevio(companyId: number, ano?: number, companyIds?: 
     setorDist, funcaoDist, evolucaoMensal, diasAvisoDist, anosServicoDist,
     custoPorSetor, breakdownRescisao, vencendo7dias, vencendo30dias,
     avisos: recalculated.map(n => ({
-      id: n.id, nomeCompleto: n.nomeCompleto || 'Funcionário não encontrado',
+      id: n.id, employeeId: n.employeeId,
+      nomeCompleto: n.nomeCompleto || 'Funcionário não encontrado',
       tipo: n.tipo, dataInicio: n.dataInicio, dataFim: n.dataFim,
       diasAviso: n.diasAviso, anosServico: n.anosServico,
       reducaoJornada: n.reducaoJornada, salarioBase: n.salarioBase || n.empSalarioBase,

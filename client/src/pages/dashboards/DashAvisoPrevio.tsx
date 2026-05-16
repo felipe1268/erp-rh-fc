@@ -286,6 +286,36 @@ export default function DashAvisoPrevio() {
     });
   }, [drillDown, data]);
 
+  // Rev. 1944 — para venc7/venc30 a ordenação por dataFim ASC coloca o mais
+  // urgente no topo (vence amanhã antes de vence em 6 dias). Para os demais,
+  // mantém ordem natural (insert).
+  const drillDownAvisosOrdenados = useMemo(() => {
+    if (!drillDown) return drillDownAvisos;
+    if (drillDown.type === 'venc7' || drillDown.type === 'venc30') {
+      return [...drillDownAvisos].sort((a: any, b: any) => {
+        const fa = a.dataFim || '9999-12-31';
+        const fb = b.dataFim || '9999-12-31';
+        return fa.localeCompare(fb);
+      });
+    }
+    return drillDownAvisos;
+  }, [drillDown, drillDownAvisos]);
+
+  // Rev. 1944 — paleta consistente p/ tipo (Trabalhado=azul / Indenizado=vermelho)
+  const tipoChipColor = (tipo: string) => {
+    if (tipo?.includes('indenizado')) return 'bg-red-50 text-red-700 border-red-200';
+    if (tipo?.includes('trabalhado')) return 'bg-blue-50 text-blue-700 border-blue-200';
+    return 'bg-gray-50 text-gray-700 border-gray-200';
+  };
+
+  // Rev. 1944 — dias até vencer (negativo = atrasado)
+  const diasAteVencer = (dataFim: string | null | undefined): number | null => {
+    if (!dataFim) return null;
+    const fim = new Date(dataFim + 'T00:00:00');
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    return Math.round((fim.getTime() - hoje.getTime()) / (24 * 60 * 60 * 1000));
+  };
+
   if (isLoading) return (
     <DashboardLayout>
       <div className="flex items-center justify-center h-64">
@@ -962,69 +992,169 @@ export default function DashAvisoPrevio() {
               </CardContent>
             </Card>
 
-            {/* ===== DRILL-DOWN DIALOG ===== */}
+            {/* ===== DRILL-DOWN DIALOG (Rev. 1944 — layout redesenhado) ===== */}
             <Dialog open={!!drillDown} onOpenChange={(open) => !open && setDrillDown(null)}>
-              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 text-lg">
-                    {drillDown?.type === 'funcao' ? <Briefcase className="h-5 w-5 text-purple-500" /> :
-                     drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? <Building2 className="h-5 w-5 text-blue-500" /> :
-                     drillDown?.type === 'status' || drillDown?.type === 'finStatus' ? <BarChart3 className="h-5 w-5 text-blue-500" /> :
-                     drillDown?.type === 'finTotal' ? <DollarSign className="h-5 w-5 text-blue-500" /> :
-                     drillDown?.type === 'venc7' ? <ShieldAlert className="h-5 w-5 text-red-500" /> :
-                     drillDown?.type === 'venc30' ? <CalendarDays className="h-5 w-5 text-yellow-600" /> :
-                     <AlertTriangle className="h-5 w-5 text-amber-500" />}
-                    {drillDown?.type === 'funcao' ? `Função: ${drillDown?.label}` :
-                     drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? `Setor: ${drillDown?.label}` :
-                     drillDown?.type === 'status' ? `Status: ${fmtStatus(drillDown?.label || '')}` :
-                     drillDown?.type === 'finTotal' && drillDown?.label === 'Todos os Avisos' ? `Todos os Avisos do Ano (${data.total})` :
-                     drillDown?.type === 'finTotal' ? 'Custo Total Estimado — Todos os Avisos' :
-                     drillDown?.type === 'venc7' ? `Avisos vencendo em até 7 dias (${data.vencendo7dias})` :
-                     drillDown?.type === 'venc30' ? `Avisos vencendo em até 30 dias (${data.vencendo30dias})` :
-                     drillDown?.type === 'finStatus' ? `Custo ${fmtStatus(drillDown?.label || '')}` :
-                     drillDown?.type === 'tipo' ? `Tipo: ${fmtTipoLabel(drillDown?.label || '')}` :
-                     drillDown?.type === 'dias' ? `Dias de Aviso: ${drillDown?.label}` :
-                     drillDown?.type === 'anos' ? `Anos de Serviço: ${drillDown?.label === '0' ? '< 1 ano' : drillDown?.label + ' ano(s)'}` :
-                     drillDown?.type === 'mes' ? `Mês: ${drillDown?.label}` :
-                     drillDown?.type === 'reducao' ? `Redução: ${drillDown?.label}` :
-                     drillDown?.label}
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="mt-2">
-                  <p className="text-sm text-muted-foreground mb-3">
-                    {drillDownAvisos.length} aviso(s) prévio(s) encontrado(s)
-                    {drillDownAvisos.length > 0 && (
-                      <span className="ml-2 font-semibold text-red-600">
-                        Total: {fmtBRL(drillDownAvisos.reduce((sum: number, a: any) => sum + parseFloat(a.valorEstimadoTotal || '0'), 0))}
-                      </span>
-                    )}
-                  </p>
-                  {drillDownAvisos.length === 0 ? (
-                    <p className="text-center py-8 text-muted-foreground">Nenhum aviso encontrado para este filtro.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {drillDownAvisos.map((a: any) => (
-                        <div key={a.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-sm truncate">{a.nomeCompleto}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {fmtTipoLabel(a.tipo)} · {a.diasAviso} dias · {fmtReducaoLabel(a.reducaoJornada || 'nenhuma')}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {a.dataInicio ? new Date(a.dataInicio + 'T00:00:00').toLocaleDateString('pt-BR') : '-'} → {a.dataFim ? new Date(a.dataFim + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}
-                            </p>
+              <DialogContent className="max-w-3xl max-h-[85vh] p-0 overflow-hidden flex flex-col gap-0">
+                {(() => {
+                  const isVenc7 = drillDown?.type === 'venc7';
+                  const isVenc30 = drillDown?.type === 'venc30';
+                  const isUrgente = isVenc7 || isVenc30;
+                  const headerBg = isVenc7 ? 'bg-red-50 border-red-200' : isVenc30 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200';
+                  const headerIcon =
+                    drillDown?.type === 'funcao' ? <Briefcase className="h-5 w-5 text-purple-600" /> :
+                    drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? <Building2 className="h-5 w-5 text-blue-600" /> :
+                    drillDown?.type === 'status' || drillDown?.type === 'finStatus' ? <BarChart3 className="h-5 w-5 text-blue-600" /> :
+                    drillDown?.type === 'finTotal' ? <DollarSign className="h-5 w-5 text-blue-600" /> :
+                    isVenc7 ? <ShieldAlert className="h-5 w-5 text-red-600" /> :
+                    isVenc30 ? <CalendarDays className="h-5 w-5 text-amber-600" /> :
+                    <AlertTriangle className="h-5 w-5 text-amber-600" />;
+                  const headerTitle =
+                    drillDown?.type === 'funcao' ? `Função: ${drillDown?.label}` :
+                    drillDown?.type === 'setor' || drillDown?.type === 'custoSetor' ? `Setor: ${drillDown?.label}` :
+                    drillDown?.type === 'status' ? `Status: ${fmtStatus(drillDown?.label || '')}` :
+                    drillDown?.type === 'finTotal' && drillDown?.label === 'Todos os Avisos' ? `Todos os Avisos do Ano` :
+                    drillDown?.type === 'finTotal' ? 'Custo Total Estimado' :
+                    isVenc7 ? 'Avisos vencendo em até 7 dias' :
+                    isVenc30 ? 'Avisos vencendo em até 30 dias' :
+                    drillDown?.type === 'finStatus' ? `Custo ${fmtStatus(drillDown?.label || '')}` :
+                    drillDown?.type === 'tipo' ? `Tipo: ${fmtTipoLabel(drillDown?.label || '')}` :
+                    drillDown?.type === 'dias' ? `Dias de Aviso: ${drillDown?.label}` :
+                    drillDown?.type === 'anos' ? `Anos de Serviço: ${drillDown?.label === '0' ? '< 1 ano' : drillDown?.label + ' ano(s)'}` :
+                    drillDown?.type === 'mes' ? `Mês: ${drillDown?.label}` :
+                    drillDown?.type === 'reducao' ? `Redução: ${drillDown?.label}` :
+                    drillDown?.label;
+                  const headerSubtitle =
+                    isVenc7 ? 'Atenção imediata — providenciar acerto/encaminhamento antes do prazo' :
+                    isVenc30 ? 'Planejamento de caixa do próximo mês' :
+                    null;
+                  const total = drillDownAvisosOrdenados.reduce((sum: number, a: any) => sum + parseFloat(a.valorEstimadoTotal || '0'), 0);
+                  return (
+                    <>
+                      {/* Header colorido por urgência */}
+                      <DialogHeader className={`px-5 py-3 border-b ${headerBg} space-y-1`}>
+                        <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+                          <span className="h-8 w-8 rounded-md bg-white border border-current/20 flex items-center justify-center shrink-0">
+                            {headerIcon}
+                          </span>
+                          <span className="flex-1 min-w-0 truncate">{headerTitle}</span>
+                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${isVenc7 ? 'bg-red-600 text-white' : isVenc30 ? 'bg-amber-600 text-white' : 'bg-slate-700 text-white'}`}>
+                            {drillDownAvisosOrdenados.length} {drillDownAvisosOrdenados.length === 1 ? 'aviso' : 'avisos'}
+                          </span>
+                        </DialogTitle>
+                        {headerSubtitle && (
+                          <p className="text-[11px] text-muted-foreground pl-10">{headerSubtitle}</p>
+                        )}
+                      </DialogHeader>
+
+                      {/* Lista scroll */}
+                      <div className="flex-1 overflow-y-auto px-5 py-3">
+                        {drillDownAvisosOrdenados.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-12 text-center">
+                            <div className="h-12 w-12 rounded-full bg-green-50 flex items-center justify-center mb-2">
+                              <ShieldAlert className="h-6 w-6 text-green-600" />
+                            </div>
+                            <p className="text-sm font-medium text-foreground">Nenhum aviso neste filtro</p>
+                            <p className="text-xs text-muted-foreground mt-1">Não há avisos prévios que correspondam aos critérios selecionados.</p>
                           </div>
-                          <div className="text-right ml-3 shrink-0">
-                            <p className="font-bold text-sm text-red-600">{fmtValorStr(a.valorEstimadoTotal)}</p>
-                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${statusColor(a.status)}`}>
-                              {fmtStatus(a.status)}
-                            </span>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {drillDownAvisosOrdenados.map((a: any) => {
+                              const diasFim = diasAteVencer(a.dataFim);
+                              const iniciais = (a.nomeCompleto || '?').split(' ').map((p: string) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+                              const corBadgeUrg = diasFim === null ? '' :
+                                diasFim < 0 ? 'bg-red-600 text-white' :
+                                diasFim <= 7 ? 'bg-red-100 text-red-800 border border-red-300' :
+                                diasFim <= 30 ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                                'bg-slate-100 text-slate-700 border border-slate-200';
+                              const labelUrg = diasFim === null ? null :
+                                diasFim < 0 ? `Atrasado ${Math.abs(diasFim)}d` :
+                                diasFim === 0 ? 'Vence hoje' :
+                                diasFim === 1 ? 'Vence amanhã' :
+                                `Vence em ${diasFim}d`;
+                              return (
+                                <div key={a.id} className="group flex items-stretch gap-3 p-2.5 rounded-lg border border-border bg-white hover:border-foreground/20 hover:shadow-sm transition-all">
+                                  {/* Avatar com inicial */}
+                                  <div className="h-10 w-10 rounded-md bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center shrink-0 self-start mt-0.5">
+                                    <span className="text-[11px] font-bold text-slate-600">{iniciais}</span>
+                                  </div>
+
+                                  {/* Bloco central */}
+                                  <div className="min-w-0 flex-1 space-y-1">
+                                    {/* Linha 1: Nome (clica → Raio-X) + chips */}
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <button
+                                        type="button"
+                                        onClick={() => { setRaioXEmployeeId(a.employeeId || a.funcionarioId || null); }}
+                                        className="text-sm font-semibold text-foreground hover:text-blue-700 hover:underline truncate text-left"
+                                        title="Clique para ver o raio-X do funcionário"
+                                      >
+                                        {a.nomeCompleto}
+                                      </button>
+                                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${tipoChipColor(a.tipo)}`}>
+                                        {fmtTipoLabel(a.tipo)}
+                                      </span>
+                                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                        {a.diasAviso}d
+                                      </span>
+                                      {a.reducaoJornada && a.reducaoJornada !== 'nenhuma' && (
+                                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200" title="Redução de jornada (Art. 488 CLT)">
+                                          ⏱ {fmtReducaoLabel(a.reducaoJornada)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {/* Linha 2: período + função/obra se houver */}
+                                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                      <CalendarDays className="h-3 w-3 shrink-0" />
+                                      <span className="tabular-nums">
+                                        {a.dataInicio ? new Date(a.dataInicio + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                                        <span className="mx-1 text-muted-foreground/60">→</span>
+                                        {a.dataFim ? new Date(a.dataFim + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                                      </span>
+                                      {(a.funcao || a.setor) && (
+                                        <span className="truncate text-muted-foreground/80">· {a.funcao || a.setor}</span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Bloco direito: valor + status + urgência */}
+                                  <div className="flex flex-col items-end gap-1 shrink-0 self-center">
+                                    <p className={`font-bold text-sm tabular-nums ${isUrgente ? 'text-red-700' : 'text-foreground'}`}>
+                                      {fmtValorStr(a.valorEstimadoTotal)}
+                                    </p>
+                                    <div className="flex items-center gap-1">
+                                      {labelUrg && isUrgente && (
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${corBadgeUrg}`}>
+                                          {labelUrg}
+                                        </span>
+                                      )}
+                                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${statusColor(a.status)}`}>
+                                        {fmtStatus(a.status)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
+                        )}
+                      </div>
+
+                      {/* Footer sticky com total */}
+                      {drillDownAvisosOrdenados.length > 0 && (
+                        <div className={`px-5 py-2.5 border-t flex items-center justify-between ${isVenc7 ? 'bg-red-50/60' : isVenc30 ? 'bg-amber-50/60' : 'bg-slate-50'}`}>
+                          <span className="text-[11px] text-muted-foreground">
+                            <strong className="text-foreground">{drillDownAvisosOrdenados.length}</strong> {drillDownAvisosOrdenados.length === 1 ? 'aviso prévio' : 'avisos prévios'}
+                            {isUrgente && <span className="ml-1">· ordenados por proximidade do vencimento</span>}
+                          </span>
+                          <span className="text-sm">
+                            <span className="text-[11px] text-muted-foreground mr-1.5">Total:</span>
+                            <strong className={`tabular-nums ${isVenc7 ? 'text-red-700' : isVenc30 ? 'text-amber-800' : 'text-foreground'}`}>{fmtBRL(total)}</strong>
+                          </span>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                      )}
+                    </>
+                  );
+                })()}
               </DialogContent>
             </Dialog>
 

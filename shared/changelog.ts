@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1944 — RH · Dash Aviso Prévio · Modal drill-down (Vencendo 7d/30d/Total/Status) REDESENHADO com hierarquia visual, urgência colorida, avatar, badges e ordenação por prazo.
+ * User (16/05/2026, screenshot modal "Avisos vencendo em até 7 dias (1)"): "melhore este layout conforme nossas regras de ouro..". Layout antigo (Rev. 1942) tinha cards genéricos sem cor por urgência, sem hierarquia clara, sem ordenação, sem countdown ("vence em X dias").
+ * Mudança (`DashAvisoPrevio.tsx`):
+ *   (a) novo `drillDownAvisosOrdenados` useMemo — para venc7/venc30 ordena por `dataFim ASC` (mais urgente no topo); demais types mantêm ordem natural.
+ *   (b) novos helpers `tipoChipColor` (Trab=azul / Ind=vermelho) e `diasAteVencer` (negativo=atrasado).
+ *   (c) Dialog reescrito (max-w-3xl, p-0, flex-col, header+body+footer separados):
+ *       - **Header colorido por urgência** (vermelho p/ venc7, âmbar p/ venc30, slate p/ demais) — ícone em badge branco, título compacto, contagem em badge pill colorido à direita, subtítulo contextual abaixo ("Atenção imediata — providenciar acerto" / "Planejamento de caixa do próximo mês").
+ *       - **Cards de funcionário** redesenhados: (1) avatar com inicial em gradient, (2) nome em destaque clicável → abre Raio-X, (3) chips coloridos tipo+dias+redução em linha, (4) período com ícone calendar, (5) função/setor sutil, (6) à direita: valor + badge urgência ("Vence hoje" / "Vence amanhã" / "Vence em Xd" / "Atrasado Xd" em vermelho-amarelo-cinza por proximidade) + badge status.
+ *       - **Empty state** elaborado (ícone verde shield-alert + mensagem contextual).
+ *       - **Footer sticky** com cor temática mostrando contagem + total destacado em tabular-nums.
+ *   (d) Reaproveita helpers existentes (`fmtTipoLabel`, `fmtReducaoLabel`, `fmtStatus`, `statusColor`, `fmtBRL`, `fmtValorStr`) — zero duplicação.
+ * version → 1944.
+ * Resultado: triagem instantânea — RH vê em 1 olhada quem vence primeiro (vermelho), quem tem redução de jornada (chip roxo ⏱), Trab vs Ind por cor. Total grande no rodapé pra decisão de caixa. Click no nome → Raio-X.
+ * Preservado: Rev. 1942 (KPIs Total/Venc7/Venc30 clicáveis), Rev. 1943 (Lei 12.506 corrente majoritária), foto Rev. 1941, CIPA Rev. 1936, sort Rev. 1909, todas as queries server. Zero backend/DB. Reversível em 2 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1943 — RH · Aviso Prévio + CDM · CORREÇÃO JURÍDICA: Lei 12.506/2011 +3d/ano aplica nas DUAS modalidades (Trabalhado E Indenizado).
  * User (16/05/2026, screenshots CDM Trab R$ 1.131k vs Ind R$ 1.440k): "tem um erro conceitual aqui.. o juridico aconselhou que a lei não fala que so acrescenta 3 dias por ano, para quando o aviso for indenizado, a lei não deixa claro, então tem varios entendimentos que deve ser considerado 3 dias a cada ano, para as duas situações.. o que diz a lei esta correto isso?". Confirmado: a Lei 12.506 Art. 1º Parágrafo único fala "ao aviso prévio... serão acrescidos 3 dias por ano" sem distinguir trabalhado/indenizado. Corrente majoritária TST (Súm. 441 + doutrina Maurício Godinho Delgado) aplica às DUAS. Antes (Rev. 1921) usávamos 30 fixos pra trabalhado (MTE NT 184/2012, revogada em 2014, minoritária) — risco de condenação retroativa em reclamatória. User escolheu opção A no menu (corrente majoritária TST).
  * Mudança server:
