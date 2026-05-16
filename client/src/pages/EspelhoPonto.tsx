@@ -75,7 +75,10 @@ function getBatidas(r: any): string[] {
   return [r.entrada1, r.saida1, r.entrada2, r.saida2, r.entrada3, r.saida3].filter(Boolean);
 }
 
-type DayStatus = "normal" | "he" | "falta" | "ferias" | "incompleto" | "atraso" | "sabado" | "domingo" | "desligado" | "escuro" | "apontamento" | "feriado" | "atestado" | "bh";
+// Rev. 1877 — novo status `cargo_confianca` p/ funcionários isentos de controle
+// de jornada (CLT Art. 62, I/II/III). Substitui "falta"/"incompleto" em todos os
+// dias úteis sem batida, e zera faltas/atrasos/HE nos cards de resumo.
+type DayStatus = "normal" | "he" | "falta" | "ferias" | "incompleto" | "atraso" | "sabado" | "domingo" | "desligado" | "escuro" | "apontamento" | "feriado" | "atestado" | "bh" | "cargo_confianca";
 
 function nextDay(d: string): string {
   const dt = new Date(d + "T12:00:00Z");
@@ -83,7 +86,7 @@ function nextDay(d: string): string {
   return dt.toISOString().slice(0, 10);
 }
 
-function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string>, dataDesligamento?: string | null, empStatus?: string | null, feriadosSet?: Set<string>): DayStatus {
+function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string>, dataDesligamento?: string | null, empStatus?: string | null, feriadosSet?: Set<string>, isCargoConfianca?: boolean): DayStatus {
   // Só marca como "desligado" se o status atual do cadastro for Desligado E a data
   // for posterior ao desligamento. Isso evita que uma dataDesligamentoEfetiva
   // residual (de um desligamento cancelado) mascare dias de funcionário Ativo.
@@ -106,13 +109,21 @@ function getDayStatus(dateStr: string, rec: any | null, feriasDates?: Set<string
   if (feriadosSet?.has(dateStr) && noBatidas) return "feriado";
   if (noBatidas) {
     if ((rec?.fonte === "apontamento" || rec?.fonte === "dixi+apontamento") && rec?.justificativa) return "apontamento";
+    // Rev. 1877 — Funcionário Art. 62 CLT (cargo de confiança/externo): dia útil
+    // sem batida NÃO é falta, é isenção legal. Não conta no card de Faltas, nem
+    // gera atraso/HE/desconto (o backend já zera em fechamentoPonto.ts L626).
+    if (isCargoConfianca) return "cargo_confianca";
     return "falta";
   }
   const bat = getBatidas(rec);
-  if (bat.length > 0 && bat.length % 2 !== 0) return "incompleto";
-  if (parseHHMM(rec.horasExtras) > 0) return "he";
-  if (parseHHMM(rec.atrasos) > 0) return "atraso";
-  return "normal";
+  if (bat.length > 0 && bat.length % 2 !== 0) {
+    // Mesmo cargo de confiança que bata por engano: incompleto vira informativo,
+    // mas tratamos como cargo_confianca pra não gerar alerta de desconto.
+    return isCargoConfianca ? "cargo_confianca" : "incompleto";
+  }
+  if (parseHHMM(rec.horasExtras) > 0) return isCargoConfianca ? "cargo_confianca" : "he";
+  if (parseHHMM(rec.atrasos) > 0) return isCargoConfianca ? "cargo_confianca" : "atraso";
+  return isCargoConfianca ? "cargo_confianca" : "normal";
 }
 
 const STATUS_STYLE: Record<DayStatus, { row: string; badge: string; label: string }> = {
@@ -130,6 +141,8 @@ const STATUS_STYLE: Record<DayStatus, { row: string; badge: string; label: strin
   feriado:    { row: "bg-orange-50/40", badge: "bg-orange-100 text-orange-700", label: "Feriado" },
   atestado:   { row: "bg-purple-50/40", badge: "bg-purple-100 text-purple-700", label: "Atestado" },
   bh:         { row: "bg-blue-50/40",   badge: "bg-blue-100 text-blue-700",     label: "BH" },
+  // Rev. 1877 — CLT Art. 62 (cargo de confiança / sem controle de jornada).
+  cargo_confianca: { row: "bg-indigo-50/40", badge: "bg-indigo-100 text-indigo-700", label: "Art. 62 CLT" },
 };
 
 function initials(name: string) {
@@ -643,6 +656,29 @@ export default function EspelhoPonto() {
   const dataDesligamento: string | null =
     empStatus === "Desligado" ? (empData?.dataDesligamentoEfetiva ?? null) : null;
 
+  // Rev. 1877 — Isenção de controle de jornada (CLT Art. 62). Vem do backend
+  // (`getEspelhoPontoRange` projeta `cargoConfianca` + inciso/desde/observação).
+  // Quando true: tabela troca "Falta" por "Art. 62 CLT", cards Faltas/Atrasos/HE
+  // ficam zerados/Isento e um banner azul aparece após o cabeçalho do colaborador.
+  const isCargoConfianca: boolean = !!empData?.cargoConfianca;
+  const cargoConfiancaInciso: string | null = (empData?.cargoConfiancaInciso ?? null) as string | null;
+  const cargoConfiancaDesde: string | null = empData?.cargoConfiancaDesde
+    ? String(empData.cargoConfiancaDesde).slice(0, 10)
+    : null;
+  const cargoConfiancaObs: string | null = (empData?.cargoConfiancaObservacao ?? null) as string | null;
+
+  // Rev. 1877 (fix architect SEV) — Isenção é date-aware: vale só a partir de
+  // `cargoConfiancaDesde`. Sem esse cuidado, dias anteriores ao enquadramento
+  // (que tinham obrigação de bater ponto) eram tratados como Art. 62 e faltas/
+  // HE/atrasos reais ficavam mascarados. Quando `desde` é null, vale o período
+  // inteiro (enquadrado desde sempre).
+  const cargoConfiancaAtivoEm = (dateStr: string): boolean =>
+    isCargoConfianca && (!cargoConfiancaDesde || dateStr >= cargoConfiancaDesde);
+  // "Integral" = todos os dias do período são isentos (cards mostram "Isento").
+  // Se a isenção começa no meio, cards mostram números reais do trecho anterior.
+  const cargoConfiancaIntegralNoPeriodo: boolean =
+    isCargoConfianca && (!cargoConfiancaDesde || !queryParams?.dataInicio || cargoConfiancaDesde <= queryParams.dataInicio);
+
   const summary = useMemo(() => {
     let trabalhados = 0, diasFalta = 0, diasFerias = 0, totalHEMins = 0, totalAtrasoMins = 0, totalTrabMins = 0;
     for (const d of allDays) {
@@ -659,7 +695,9 @@ export default function EspelhoPonto() {
       const hasBatidasFeriadoNac = isFeriadoNac && !!(r && r.horasTrabalhadas && r.horasTrabalhadas !== "0:00" && r.horasTrabalhadas !== "");
       const isFeriadoNacAbonado = isFeriadoNac && !hasBatidasFeriadoNac;
       const isAbonado = isAbonadoManual || isFeriadoNacAbonado;
-      if (r && !isFerias && !isAbonado) { totalHEMins += parseHHMM(r.horasExtras); totalAtrasoMins += parseHHMM(r.atrasos); }
+      // Rev. 1877 (fix SEV) — date-aware: dia isento (Art. 62) não soma HE/atraso/falta.
+      const isCcDia = cargoConfiancaAtivoEm(d);
+      if (r && !isFerias && !isAbonado && !isCcDia) { totalHEMins += parseHHMM(r.horasExtras); totalAtrasoMins += parseHHMM(r.atrasos); }
       if (isWeekendDay) continue;
       if (isFerias) { diasFerias++; continue; }
       // Dias abonados (feriado/atestado manual OU feriado nacional sem batida)
@@ -671,13 +709,14 @@ export default function EspelhoPonto() {
       if (d > today) continue;
       if (!r?.horasTrabalhadas || r.horasTrabalhadas === "0:00" || r.horasTrabalhadas === "") {
         if ((r?.fonte === "apontamento" || r?.fonte === "dixi+apontamento") && r?.justificativa) { trabalhados++; }
+        else if (isCcDia) { /* Art. 62: dia útil sem batida NÃO é falta */ }
         else diasFalta++;
       }
       else { trabalhados++; totalTrabMins += parseHHMM(r.horasTrabalhadas); }
     }
     const saldoHEMins = totalHEMins - totalAtrasoMins;
     return { trabalhados, diasFalta, diasFerias, totalHEMins, totalAtrasoMins, totalTrabMins, saldoHEMins };
-  }, [allDays, recordMap, feriasDatesSet, feriadosSet, dataDesligamento]);
+  }, [allDays, recordMap, feriasDatesSet, feriadosSet, dataDesligamento, isCargoConfianca, cargoConfiancaDesde]);
 
   // Hide Ent.3/Saí.3 column when no records have a third shift
   const hasThirdShift = useMemo(
@@ -973,13 +1012,47 @@ export default function EspelhoPonto() {
               </div>
             </div>
 
+            {/* Rev. 1877 — Banner CLT Art. 62 (isento de controle de jornada).
+                Aparece apenas quando o colaborador está marcado como cargoConfianca.
+                Mostra a base legal + inciso + data de enquadramento + observação,
+                pra deixar claro pra RH/auditoria por que não há batidas/HE/faltas. */}
+            {isCargoConfianca && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 flex items-start gap-3">
+                <Lock className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" />
+                <div className="text-sm text-indigo-900 leading-relaxed flex-1 min-w-0">
+                  <p className="font-semibold">
+                    Isento de controle de jornada — CLT Art. 62
+                    {cargoConfiancaInciso ? `, inciso ${cargoConfiancaInciso}` : ""}
+                  </p>
+                  <p className="text-xs text-indigo-800 mt-0.5">
+                    {cargoConfiancaInciso === "I"   && "Atividade externa incompatível com fixação de horário."}
+                    {cargoConfiancaInciso === "II"  && "Cargo de gestão / confiança (gerente, diretor) — gratificação mínima 40%."}
+                    {cargoConfiancaInciso === "III" && "Trabalho em regime de teletrabalho por produção/tarefa."}
+                    {!cargoConfiancaInciso && "Funcionário sem controle de jornada / sem horas extras."}
+                    {" "}Por força legal, o cartão de ponto NÃO é exigido — não há faltas, atrasos, banco de horas, adicional noturno padrão nem inconsistências por dias sem registro.
+                  </p>
+                  {(cargoConfiancaDesde || cargoConfiancaObs) && (
+                    <p className="text-[11px] text-indigo-700 mt-1">
+                      {cargoConfiancaDesde && <>Enquadrado em <strong>{fmtDate(String(cargoConfiancaDesde).slice(0,10))}</strong>. </>}
+                      {cargoConfiancaObs && <>Observação: <em>{cargoConfiancaObs}</em></>}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* ── RESUMO ───────────────────────────────────────────── */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { icon: Clock,       label: "Dias Trabalhados", value: `${summary.trabalhados}`, sub: minsToHHMM(summary.totalTrabMins, "0h") + " total", color: "text-slate-700", border: "border-t-slate-400" },
-                { icon: Clock,       label: "Saldo HE",          value: summary.saldoHEMins !== 0 ? `${summary.saldoHEMins > 0 ? "+" : "-"}${minsToHHMM(Math.abs(summary.saldoHEMins))}` : "—", sub: summary.totalHEMins > 0 || summary.totalAtrasoMins > 0 ? `HE ${minsToHHMM(summary.totalHEMins, "0h")} − Atr. ${minsToHHMM(summary.totalAtrasoMins, "0h")}` : "nenhuma ocorrência", color: summary.saldoHEMins > 0 ? "text-blue-600" : summary.saldoHEMins < 0 ? "text-red-600" : "text-slate-400", border: summary.saldoHEMins > 0 ? "border-t-blue-400" : summary.saldoHEMins < 0 ? "border-t-red-400" : "border-t-slate-200" },
-                { icon: CalendarOff, label: "Faltas",            value: `${summary.diasFalta}`, sub: summary.diasFalta > 0 ? "dias sem registro" : "sem faltas", color: summary.diasFalta > 0 ? "text-red-600" : "text-slate-400", border: summary.diasFalta > 0 ? "border-t-red-400" : "border-t-slate-200" },
-                { icon: AlertCircle, label: "Atrasos",           value: summary.totalAtrasoMins > 0 ? minsToHHMM(summary.totalAtrasoMins) : "—", sub: summary.totalAtrasoMins > 0 ? "total acumulado" : "nenhum no período", color: summary.totalAtrasoMins > 0 ? "text-amber-600" : "text-slate-400", border: summary.totalAtrasoMins > 0 ? "border-t-amber-400" : "border-t-slate-200" },
+                // Rev. 1877 — Cargo de confiança (Art. 62 CLT). Os cards mostram
+                // "Isento" APENAS se a isenção cobre todo o período (cargoConfiancaIntegralNoPeriodo).
+                // Se o enquadramento começou no meio do período, o summary já reflete
+                // corretamente faltas/HE/atrasos do trecho anterior — exibimos os
+                // números reais e o banner explica a data de enquadramento.
+                { icon: Clock,       label: "Dias Trabalhados", value: `${summary.trabalhados}`, sub: cargoConfiancaIntegralNoPeriodo ? "Isento de controle (Art. 62)" : minsToHHMM(summary.totalTrabMins, "0h") + " total", color: cargoConfiancaIntegralNoPeriodo ? "text-indigo-600" : "text-slate-700", border: cargoConfiancaIntegralNoPeriodo ? "border-t-indigo-400" : "border-t-slate-400" },
+                { icon: Clock,       label: "Saldo HE",          value: cargoConfiancaIntegralNoPeriodo ? "—" : (summary.saldoHEMins !== 0 ? `${summary.saldoHEMins > 0 ? "+" : "-"}${minsToHHMM(Math.abs(summary.saldoHEMins))}` : "—"), sub: cargoConfiancaIntegralNoPeriodo ? "Sem hora extra (Art. 62)" : (summary.totalHEMins > 0 || summary.totalAtrasoMins > 0 ? `HE ${minsToHHMM(summary.totalHEMins, "0h")} − Atr. ${minsToHHMM(summary.totalAtrasoMins, "0h")}` : "nenhuma ocorrência"), color: cargoConfiancaIntegralNoPeriodo ? "text-indigo-600" : (summary.saldoHEMins > 0 ? "text-blue-600" : summary.saldoHEMins < 0 ? "text-red-600" : "text-slate-400"), border: cargoConfiancaIntegralNoPeriodo ? "border-t-indigo-400" : (summary.saldoHEMins > 0 ? "border-t-blue-400" : summary.saldoHEMins < 0 ? "border-t-red-400" : "border-t-slate-200") },
+                { icon: CalendarOff, label: "Faltas",            value: cargoConfiancaIntegralNoPeriodo ? "—" : `${summary.diasFalta}`, sub: cargoConfiancaIntegralNoPeriodo ? "Não se aplica (Art. 62)" : (summary.diasFalta > 0 ? "dias sem registro" : "sem faltas"), color: cargoConfiancaIntegralNoPeriodo ? "text-indigo-600" : (summary.diasFalta > 0 ? "text-red-600" : "text-slate-400"), border: cargoConfiancaIntegralNoPeriodo ? "border-t-indigo-400" : (summary.diasFalta > 0 ? "border-t-red-400" : "border-t-slate-200") },
+                { icon: AlertCircle, label: "Atrasos",           value: cargoConfiancaIntegralNoPeriodo ? "—" : (summary.totalAtrasoMins > 0 ? minsToHHMM(summary.totalAtrasoMins) : "—"), sub: cargoConfiancaIntegralNoPeriodo ? "Não se aplica (Art. 62)" : (summary.totalAtrasoMins > 0 ? "total acumulado" : "nenhum no período"), color: cargoConfiancaIntegralNoPeriodo ? "text-indigo-600" : (summary.totalAtrasoMins > 0 ? "text-amber-600" : "text-slate-400"), border: cargoConfiancaIntegralNoPeriodo ? "border-t-indigo-400" : (summary.totalAtrasoMins > 0 ? "border-t-amber-400" : "border-t-slate-200") },
               ].map(({ icon: Icon, label, value, sub, color, border }) => (
                 <div key={label} className={`bg-white rounded-xl border border-slate-200 border-t-2 ${border} px-4 py-3`}>
                   <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">{label}</p>
@@ -1031,7 +1104,7 @@ export default function EspelhoPonto() {
               {allDays.map((dateStr) => {
                 const { name, num, monthNum, isSun, isSat } = dayInfo(dateStr);
                 const rec = recordMap[dateStr] || null;
-                const s = getDayStatus(dateStr, rec, feriasDatesSet, dataDesligamento, empStatus, feriadosSet);
+                const s = getDayStatus(dateStr, rec, feriasDatesSet, dataDesligamento, empStatus, feriadosSet, cargoConfiancaAtivoEm(dateStr));
                 const cfg = STATUS_STYLE[s];
                 // Dia em férias só bloqueia edição quando NÃO há registro. Se existe
                 // batida (ainda que ímpar), permitimos editar para corrigir/excluir —
@@ -1043,6 +1116,36 @@ export default function EspelhoPonto() {
                 const isWeekend = isSun || isSat;
                 const heM = rec ? parseHHMM(rec.horasExtras) : 0;
                 const atrasM = rec ? parseHHMM(rec.atrasos) : 0;
+
+                // Rev. 1877 — Cargo de Confiança (Art. 62 CLT) sem batida: linha
+                // compacta com a mensagem legal cobrindo as colunas de batida,
+                // em vez de mostrar travessões que parecem falta. Mantém edição
+                // disponível (pode haver lançamento manual eventual).
+                if (s === "cargo_confianca" && !rec) return (
+                  <div key={dateStr}
+                    className={`group grid border-b border-slate-200 hover:brightness-97 transition-all ${cfg.row} cursor-pointer`}
+                    style={{ gridTemplateColumns: gridCols }}
+                    onClick={() => openEdit(dateStr, rec)}
+                    title="CLT Art. 62 — sem obrigação de marcar ponto. Clique para lançar manualmente se necessário."
+                  >
+                    <div className="px-4 py-2 flex items-center gap-2">
+                      <span className={`text-xs font-bold uppercase tracking-wide ${isWeekend ? "text-slate-300" : "text-slate-400"}`}>{name}</span>
+                      <span className={`text-base font-bold ml-1.5 ${isWeekend ? "text-slate-300" : "text-slate-800"}`}>{String(num).padStart(2,"0")}/{monthNum}</span>
+                    </div>
+                    <div className="px-2 py-2 flex items-center justify-center text-xs italic text-indigo-700"
+                         style={{ gridColumn: hasThirdShift ? "span 8" : "span 7" }}>
+                      Isento de controle de jornada — CLT Art. 62{cargoConfiancaInciso ? `, ${cargoConfiancaInciso}` : ""}
+                    </div>
+                    <div className="px-2 py-2 flex items-center justify-center">
+                      <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${cfg.badge}`}>{cfg.label}</span>
+                    </div>
+                    <div className="px-1 py-2 flex items-center justify-center no-print">
+                      <button onClick={(e) => { e.stopPropagation(); openEdit(dateStr, rec); }} className="p-1.5 rounded-md hover:bg-blue-50 text-slate-300 hover:text-blue-600 transition-colors" title="Lançar manualmente">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
 
                 // Very compact weekend (sunday with no record)
                 if (isSun && !rec) return (

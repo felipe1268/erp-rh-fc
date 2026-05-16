@@ -607,9 +607,14 @@ export const horasExtrasRouter = router({
       const ids = resolveCompanyIds(input);
 
       // Get employee info
+      // Rev. 1877 — projeta cargo_confianca + inciso/desde/observacao p/ o frontend exibir
+      // banner "Isento Art. 62 CLT" e zerar faltas/HE/atrasos no Espelho de Ponto.
       const empRows = ((await db.execute(sql`
         SELECT id, "nomeCompleto", funcao, "codigoInterno", cpf, "salarioBase", "valorHora", "horasMensais",
-               "heNormal50", "he100", "heFeriado", "heNoturna", status, "dataDesligamentoEfetiva"
+               "heNormal50", "he100", "heFeriado", "heNoturna", status, "dataDesligamentoEfetiva",
+               "cargoConfianca", "cargoConfiancaDesde",
+               "cargo_confianca_inciso" AS "cargoConfiancaInciso",
+               "cargo_confianca_observacao" AS "cargoConfiancaObservacao"
         FROM employees
         WHERE id = ${input.employeeId}
           AND "companyId" IN (${sql.join(ids.map(id => sql`${id}`), sql`,`)})

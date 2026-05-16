@@ -44,6 +44,27 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1877,
+    titulo: "Espelho de Ponto · Cargo de Confiança (CLT Art. 62) — banner legal + cards 'Isento' + linhas 'Sem obrigação de bater ponto'",
+    descricao: "User (16/05/2026, 2 screenshots: ANDERSON DOS ANJOS ALKMIN — MESTRE DE OBRAS — período 01/01-31/05/2026 mostrando '32 FALTAS · dias sem registro' MESMO ele estando marcado como Isenção Art. 62 II): 'se o funcionário é de cargo de confiança o cartão de ponto não precisa ser considerado, ele deve ser preenchido automaticamente com uma mensagem que ele é de cargo de confiança conforme a lei'.\n\n" +
+      "CONTEXTO: O backend (`server/routers/fechamentoPonto.ts` L624-630) já zerava faltas/atrasos/HE no `processRecords` quando `cargoConfianca=true`, e a Rev. 1771 já filtrava inconsistências 'sem_registro' do dashboard de SST/RH (L1750). MAS o Espelho de Ponto Individual (`/espelho-ponto`) usava sua própria `getDayStatus` no frontend que ignorava completamente a flag — qualquer dia útil sem batida virava 'Falta' vermelha, o card 'FALTAS' inflava com dias sem registro, e não havia indicação visual da isenção legal.\n\n" +
+      "MUDANÇAS:\n" +
+      "(1) Backend (`server/routers/horasExtras.ts` L611-620): `getEspelhoPontoRange.empRows` agora projeta `cargoConfianca`, `cargoConfiancaDesde`, `cargo_confianca_inciso AS cargoConfiancaInciso` e `cargo_confianca_observacao AS cargoConfiancaObservacao` (as 2 últimas adicionadas na Rev. 1874).\n" +
+      "(2) Frontend (`client/src/pages/EspelhoPonto.tsx`):\n" +
+      "    - Novo `DayStatus = 'cargo_confianca'` + entrada em `STATUS_STYLE` (badge índigo 'Art. 62 CLT').\n" +
+      "    - `getDayStatus` (L92-130) ganha 7º parâmetro `isCargoConfianca`. Quando true, todo dia útil sem batida (e até dias com batidas/HE/atraso) retorna `cargo_confianca` em vez de 'falta'/'incompleto'/'he'/'atraso' — coerente com backend que zera tudo.\n" +
+      "    - State `isCargoConfianca`/`cargoConfiancaInciso`/`Desde`/`Obs` extraídos de `empData` (L662-669).\n" +
+      "    - `summary` (L703-710): se `isCargoConfianca`, retorna `{ diasFalta: 0, totalHEMins: 0, totalAtrasoMins: 0, saldoHEMins: 0 }` (preserva trabalhados se houver batida manual).\n" +
+      "    - Banner azul-índigo `<Lock />` (L1006-1032) entre cabeçalho do colaborador e cards de resumo: 'Isento de controle de jornada — CLT Art. 62, inciso X' + descrição do inciso (I=atividade externa / II=gestão grat. 40% / III=teletrabalho por produção) + 'Por força legal o cartão de ponto NÃO é exigido — não há faltas, atrasos, banco de horas, adicional noturno padrão nem inconsistências por dias sem registro' + data de enquadramento + observação CTPS (Rev. 1874).\n" +
+      "    - Os 4 KPI cards (Dias Trabalhados / Saldo HE / Faltas / Atrasos) mostram '—' com sublabel 'Isento de controle (Art. 62)' / 'Sem hora extra (Art. 62)' / 'Não se aplica (Art. 62)' em cor índigo, em vez de '32 dias sem registro' vermelho.\n" +
+      "    - Linhas da tabela: dias sem batida viram fileira compacta clicável com mensagem em itálico 'Isento de controle de jornada — CLT Art. 62, X' atravessando as 7 (ou 8 se hasThirdShift) colunas de batida, badge 'Art. 62 CLT' no Ocorrência e ícone Pencil mantido (permite lançamento manual eventual).\n\n" +
+      "PRESERVADO: Backend processRecords intacto (já estava correto desde Rev. 1771). Funcionários SEM cargoConfianca veem exatamente o mesmo Espelho de antes — `isCargoConfianca=false` mantém todos os branches originais. Edição de batidas, recalcular período, limpar ponto, lançamento manual, impressão/PDF, dialog editar — tudo intacto. Reversível em ~9 hunks (1 backend + 7 frontend). R-001/R-007/R-010 OK (zero ALTER/DELETE).",
+    tipo: "feature",
+    modulos: "RH/DP · Ponto Eletrônico",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 17:45:00",
+  },
+  {
     version: 1876,
     titulo: "DDS · Sessões · Botão Editar Categoria por linha (override granular: sessão > tema)",
     descricao: "User (16/05/2026, screenshot iPad da lista de Sessões DDS — legenda 'Campanhas Governamentais / Normas Regulamentadoras / Sem tema vinculado'): 'precisa ter um botão de editar para poder informar as categorias'.\n\n" +
