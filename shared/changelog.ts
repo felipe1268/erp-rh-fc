@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1935 — RH · Dash Aviso Prévio · Tabela CDM · Clicar no nome do funcionário abre o Raio-X.
+ * User (16/05/2026, screenshot tabela CDM): "quando clicar no nome do funcionario, abra a tela de raiox dele... para saber quem é..".
+ * Motivação: o usuário precisa do contexto completo (histórico, documentos, férias, etc.) antes de tomar decisão sobre quem demitir — e o Raio-X já existe e é usado em Colaboradores, AvisoPrevio, Ferias, FechamentoPonto, ControleDocumentos, DashControleDocumentos. Padronização da UX.
+ * Mudança (`client/src/pages/dashboards/DashAvisoPrevio.tsx`):
+ *   (a) Import `RaioXFuncionario` de `@/components/RaioXFuncionario` (mesmo componente reutilizável usado nos demais módulos).
+ *   (b) Novo state `raioXEmployeeId: number | null` (null = fechado).
+ *   (c) Célula do nome (truncate) substituída por `<button>` (semântico, sem `<a>` sem href) com `onClick={() => setRaioXEmployeeId(l.id)}`, estilo link azul + hover:underline + `text-left w-full truncate` p/ preservar layout.
+ *   (d) `<RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />` renderizado ao final, fora do scroll/printable.
+ * version → 1935.
+ * Resultado: clique no nome → modal full Raio-X abre (dados pessoais, contratuais, histórico, documentos, alertas). Fechamento por ESC, X ou clique fora. Zero impacto em ordenação, scroll, sort, print.
+ * Preservado: filtros Rev. 1915/1923, tempo a/m/d Rev. 1934, idade Rev. 1931, queries Rev. 1911/1927, projeção Rev. 1909-fix, complementar Rev. 1919, diasAvisoEstimado Rev. 1930, tipo Rev. 1921, sort Rev. 1909, top-3, KPIs, truncate visual. Zero backend/DB. Reversível em 4 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1934 — RH · Dash Aviso Prévio · Tabela CDM · Coluna "Tempo de empresa" agora exibe anos/meses/dias (não só anos).
  * User (16/05/2026, screenshot coluna mostrando "14 / 13 / 13 / 12 / 10..."): "quero anos, meses e dias..".
  * Motivação: Rev. 1931 renomeou "Anos" → "Tempo de empresa" mas o valor continuava sendo só `anosServico` (anos completos truncados via Math.floor). Diretoria/RH precisa do detalhe pra decisões de aviso prévio proporcional (Lei 12.506) e estabilidade (1 ano + 1 dia troca a faixa indenizatória).

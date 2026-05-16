@@ -40,6 +40,7 @@ import { Link } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import RaioXFuncionario from "@/components/RaioXFuncionario";
 
 /** Formata número para moeda brasileira: R$ 3.561,47 */
 function fmtBRL(v: number) {
@@ -127,6 +128,8 @@ export default function DashAvisoPrevio() {
   // Rev. 1909 — ordenação clicável da tabela de custo de demissão em massa
   type CdmSortKey = 'nomeCompleto' | 'cargo' | 'funcao' | 'obra' | 'dataAdmissao' | 'anosServico' | 'idade' | 'diasAvisoTotal' | 'salarioBase' | 'avisoPrevioIndenizado' | 'multaFGTS' | 'total';
   const [cdmSort, setCdmSort] = useState<{ key: CdmSortKey; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' });
+  // Rev. 1935 — Raio-X do funcionário ao clicar no nome (mesma UX dos demais módulos RH).
+  const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
   const toggleCdmSort = (key: CdmSortKey) => setCdmSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: (key === 'nomeCompleto' || key === 'cargo' || key === 'funcao' || key === 'obra' || key === 'dataAdmissao') ? 'asc' : 'desc' });
   const cdmLinhasOrdenadas = useMemo(() => {
     if (!cdm?.linhas) return [];
@@ -408,7 +411,17 @@ export default function DashAvisoPrevio() {
                             {cdmLinhasOrdenadas.map((l: any, idx: number) => (
                               <tr key={l.id} className={`hover:bg-muted/30 ${cdmSort.key === 'total' && cdmSort.dir === 'desc' && idx < 3 ? 'bg-red-50/40' : 'bg-white'}`}>
                                 <td className="py-1.5 px-2 text-muted-foreground tabular-nums border-b border-border/50">{idx + 1}</td>
-                                <td className="py-1.5 px-2 font-medium truncate max-w-[200px] border-b border-border/50" title={l.nomeCompleto}>{l.nomeCompleto}</td>
+                                {/* Rev. 1935 — Clicar no nome abre o Raio-X do funcionário (mesmo modal usado em Colaboradores/AvisoPrevio/Ferias/etc.). */}
+                                <td className="py-1.5 px-2 font-medium truncate max-w-[200px] border-b border-border/50">
+                                  <button
+                                    type="button"
+                                    onClick={() => setRaioXEmployeeId(l.id)}
+                                    className="text-left text-blue-700 hover:text-blue-900 hover:underline truncate w-full"
+                                    title={`Abrir Raio-X de ${l.nomeCompleto}`}
+                                  >
+                                    {l.nomeCompleto}
+                                  </button>
+                                </td>
                                 <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[140px] border-b border-border/50" title={l.funcao || l.cargo}>{l.funcao || l.cargo || '-'}</td>
                                 <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[160px] border-b border-border/50" title={l.obra}>{l.obra || <span className="italic text-muted-foreground/60">sem alocação</span>}</td>
                                 <td className="py-1.5 px-2 text-right tabular-nums border-b border-border/50">{l.dataAdmissao ? new Date(l.dataAdmissao + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</td>
@@ -886,6 +899,8 @@ export default function DashAvisoPrevio() {
         )}
       </div>
           <PrintFooterLGPD />
+      {/* Rev. 1935 — Modal Raio-X do funcionário (abre ao clicar no nome na tabela CDM). */}
+      <RaioXFuncionario employeeId={raioXEmployeeId} open={!!raioXEmployeeId} onClose={() => setRaioXEmployeeId(null)} />
     </DashboardLayout>
   );
 }
