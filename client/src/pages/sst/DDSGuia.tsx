@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -13,7 +14,7 @@ import { toast } from "sonner";
 import {
   CalendarDays, BookOpen, Megaphone, Plus, Trash2, Pencil, Users, FileSignature,
   ClipboardCheck, Check, X as XIcon, ChevronRight, Sparkles, MapPin, UserCheck,
-  ChevronDown, ChevronUp, Search, Wand2, Loader2, PenLine, Eraser,
+  ChevronDown, ChevronUp, Search, Wand2, Loader2, PenLine, Eraser, BarChart3,
 } from "lucide-react";
 // Rev. 1746 — Pad de assinatura digital (canvas) usado no DDS.
 // Funciona com touch (iPad/celular) e mouse. Salva como PNG dataURL.
@@ -295,6 +296,7 @@ export default function DDSGuia() {
   // Rev. 1728: useCompany().selectedCompanyId é STRING — converter pra number antes de mandar pro tRPC
   const { selectedCompanyId } = useCompany();
   const companyId = parseInt(selectedCompanyId || "0") || 0;
+  const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   // Rev. 1730 — usuário logado para auto-fill do instrutor
   const { user } = useAuth() as any;
@@ -606,6 +608,15 @@ export default function DDSGuia() {
           </p>
         </div>
         <div className="flex gap-2">
+          {/* Rev. 1863 — atalho pro novo Dashboard de DDS */}
+          <Button
+            variant="outline"
+            onClick={() => navigate("/sst/dds-dashboard")}
+            className="border-cyan-300 text-cyan-700 hover:bg-cyan-50"
+          >
+            <BarChart3 className="h-4 w-4 mr-1" />
+            Dashboard
+          </Button>
           {temas.length === 0 && (
             <Button
               variant="outline"

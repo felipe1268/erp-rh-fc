@@ -482,6 +482,7 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/controle-documentos":        "aso_documentos",
     "/sst/acidentes":              "acidentes",
     "/sst/dds":                    "dds",
+    "/sst/dds-dashboard":          "dds",
     "/programas-sst?tab=PGR":      "pgr",
     "/programas-sst?tab=PCMSO":    "pcmso",
     "/programas-sst?tab=LTCAT":    "ltcat",

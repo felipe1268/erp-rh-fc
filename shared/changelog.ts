@@ -25,6 +25,39 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1863,
+    titulo: "DDS · Dashboard de KPIs — nova tela com volume, qualidade, cobertura e gaps",
+    descricao: "User (16/05/2026, screenshot Painel SST com 4 KPIs de ASO): 'Cria um dash de DDS COMVRIOS KPIS importantes que devem ser analisados'. Antes: módulo DDS tinha só guia (calendário+biblioteca+sessões) — sem visão analítica.\n\n" +
+      "Solução (1 endpoint backend + 1 página frontend + rota + atalho UI):\n\n" +
+      "BACKEND (server/routers/dds.ts L1445-1645): novo query `dashboardKpis(companyId, dataInicio?, dataFim?, obraId?)` — agregação em UMA chamada (não-N+1, evita waterfall). Default: últimos 365 dias em America/Sao_Paulo. assertCompanyAccess preservado.\n\n" +
+      "Computa em memória após 4 SELECTs (sessões+tema via leftJoin / participantes inArray / temas ativos groupBy / funcionários ativos):\n" +
+      "  - kpis: totalSessoes, sessoesFinalizadas/abertas/canceladas, sessoes30d (sub-período fixo), totalTemasAtivos, totalParticipantes/Presentes/Assinados, taxaPresenca% (presentes/convocados), taxaAssinatura% (assinados/presentes), funcionariosAtendidos (Set único de presentes), totalFuncAtivos, coberturaPct% (atendidos/ativos), funcionariosSemDDS (gap)\n" +
+      "  - temasPorCategoria[] (NR/CAMPANHA/VACINACAO/LIVRE)\n" +
+      "  - sessoesPorMes[] (bucket YYYY-MM com sessoes+participantes)\n" +
+      "  - porCategoria[] (sessões por categoria do tema)\n" +
+      "  - porObra[] (top 10)\n" +
+      "  - topTemas[] (10 mais aplicados por título)\n" +
+      "  - topInstrutores[] (top 10)\n" +
+      "  - porDiaSemana[] (Dom..Sáb — frequência semanal)\n" +
+      "  - semDDS[] (até 50 funcionários ativos sem nenhum DDS no período — gap prioritário)\n\n" +
+      "FRONTEND (client/src/pages/sst/DDSDashboard.tsx, novo, ~340 linhas): página completa com DashboardLayout, filtro de período (default últimos 12 meses), botão Atualizar/Voltar, 8 KPI cards em 2 linhas (volume + qualidade) com cores semânticas, e 7 gráficos recharts:\n" +
+      "  - LineChart sessões+presentes por mês (12m)\n" +
+      "  - PieChart por categoria (cores fixas: NR=cyan, CAMPANHA=âmbar, VACINACAO=verde, LIVRE=violeta)\n" +
+      "  - BarChart horizontal top obras\n" +
+      "  - BarChart horizontal top 10 temas (truncate 25 chars)\n" +
+      "  - BarChart horizontal top instrutores\n" +
+      "  - BarChart vertical frequência por dia da semana\n" +
+      "  - Lista visual de até 50 funcionários sem DDS (cards rose) + Badge contador\n" +
+      "Empty states em cada gráfico. Componente KPI local (CardCard com ícone + valor + sub).\n\n" +
+      "ROTA (client/src/App.tsx): lazy import + Route /sst/dds-dashboard com RouteGuard.\n\n" +
+      "ATALHO UI (DDSGuia.tsx): botão 'Dashboard' (cyan, ícone BarChart3) no header, ao lado dos botões 'Carregar biblioteca'/'Vacinação'. Hook useLocation de wouter adicionado.\n\n" +
+      "Preservado: ZERO mudança em schema/migração; ZERO mutation existente alterada; outras queries do dds router intactas; UI DDSGuia restante não tocada (só novo botão); PainelSST não tocado. Reversível em 4 hunks (delete arquivo + 1 hunk no router + 2 hunks no App.tsx + 3 hunks no DDSGuia). R-001 OK.",
+    tipo: "feature",
+    modulos: "SST/DDS",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 10:15:00",
+  },
+  {
     version: 1862,
     titulo: "Cronograma · Cascata Responsável Manual — fix detecção de descendentes (EAP-prefix em vez de nivel)",
     descricao: "User (16/05/2026, após Rev. 1860 ser entregue): 'Não tá funcionando' — o modal de cascata do Responsável Manual em pai → descendentes simplesmente não aparecia ao sair do campo no Cronograma.\n\n" +

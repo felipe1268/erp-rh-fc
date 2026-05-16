@@ -1439,6 +1439,223 @@ Gere o roteiro detalhado seguindo EXATAMENTE o formato exigido.`;
       }
     }),
 
+  // Rev. 1863 — Dashboard DDS: KPIs agregados em uma chamada (não-N+1).
+  // Filtros: companyId, dataInicio/dataFim (default últimos 365 dias), obraId opcional.
+  // Retorna: kpis[], sessoesPorMes[], porCategoria[], porObra[], topTemas[],
+  // topInstrutores[], statusBreakdown[], coberturaFuncionarios{...}, semDDS[].
+  dashboardKpis: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      dataInicio: z.string().optional(), // YYYY-MM-DD
+      dataFim: z.string().optional(),
+      obraId: z.number().int().positive().optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+      // Janela default: últimos 365 dias até hoje (America/Sao_Paulo)
+      const fmtSP = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+      const hojeIso = fmtSP(new Date());
+      const ini = input.dataInicio || (() => { const d = new Date(); d.setDate(d.getDate() - 364); return fmtSP(d); })();
+      const fim = input.dataFim || hojeIso;
+
+      const condsBase: any[] = [
+        eq(ddsSessoes.companyId, input.companyId),
+        isNull(ddsSessoes.deletedAt),
+        gte(ddsSessoes.data, ini),
+        lte(ddsSessoes.data, fim),
+      ];
+      if (input.obraId) condsBase.push(eq(ddsSessoes.obraId, input.obraId));
+
+      // 1) Sessões no período (com tema p/ categoria)
+      const sessoesPeriodo = await db.select({
+        id: ddsSessoes.id,
+        data: ddsSessoes.data,
+        obraId: ddsSessoes.obraId,
+        obraNome: ddsSessoes.obraNome,
+        temaId: ddsSessoes.temaId,
+        tituloTema: ddsSessoes.tituloTema,
+        instrutor: ddsSessoes.instrutor,
+        status: ddsSessoes.status,
+        categoria: ddsTemas.categoria,
+      }).from(ddsSessoes)
+        .leftJoin(ddsTemas, eq(ddsTemas.id, ddsSessoes.temaId))
+        .where(and(...condsBase));
+
+      const sessaoIds = sessoesPeriodo.map((s: any) => s.id);
+
+      // 2) Participantes das sessões do período
+      const participantes = sessaoIds.length > 0 ? await db.select({
+        sessaoId: ddsSessaoFuncionarios.sessaoId,
+        employeeId: ddsSessaoFuncionarios.employeeId,
+        presente: ddsSessaoFuncionarios.presente,
+        assinadoEm: ddsSessaoFuncionarios.assinadoEm,
+      }).from(ddsSessaoFuncionarios)
+        .where(inArray(ddsSessaoFuncionarios.sessaoId, sessaoIds)) : [];
+
+      // 3) Temas ativos da empresa (count + por categoria)
+      const temasAtivos = await db.select({
+        categoria: ddsTemas.categoria,
+        total: sql<number>`COUNT(*)`,
+      }).from(ddsTemas)
+        .where(and(
+          eq(ddsTemas.companyId, input.companyId),
+          eq(ddsTemas.ativo, 1),
+          isNull(ddsTemas.deletedAt),
+        ))
+        .groupBy(ddsTemas.categoria);
+      const totalTemasAtivos = temasAtivos.reduce((s: number, r: any) => s + Number(r.total || 0), 0);
+
+      // 4) Funcionários ativos da empresa (universo p/ cobertura)
+      const funcAtivosRows = await db.select({ id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao })
+        .from(employees)
+        .where(and(
+          eq(employees.companyId, input.companyId),
+          isNull(employees.deletedAt),
+          notInArray(employees.status, ["Desligado", "Lista_Negra", "ListaNegra"]),
+        ));
+      const totalFuncAtivos = funcAtivosRows.length;
+      const funcAtivosIds = new Set(funcAtivosRows.map((f: any) => f.id));
+
+      // ===== Agregações em memória =====
+      const totalSessoes = sessoesPeriodo.length;
+      const sessoesFinalizadas = sessoesPeriodo.filter((s: any) => s.status === "finalizada").length;
+      const sessoesAbertas = sessoesPeriodo.filter((s: any) => s.status === "aberta").length;
+      const sessoesCanceladas = sessoesPeriodo.filter((s: any) => s.status === "cancelada").length;
+
+      // Janela últimos 30 dias (sub-período fixo p/ KPI)
+      const ini30 = (() => { const d = new Date(); d.setDate(d.getDate() - 29); return fmtSP(d); })();
+      const sessoes30d = sessoesPeriodo.filter((s: any) => s.data >= ini30).length;
+
+      // Total participantes / presentes / assinados
+      const totalParticipantes = participantes.length;
+      const totalPresentes = participantes.filter((p: any) => p.presente === 1).length;
+      const totalAssinados = participantes.filter((p: any) => p.assinadoEm !== null).length;
+      const taxaPresenca = totalParticipantes > 0 ? (totalPresentes / totalParticipantes) * 100 : 0;
+      const taxaAssinatura = totalPresentes > 0 ? (totalAssinados / totalPresentes) * 100 : 0;
+
+      // Funcionários únicos atendidos (presentes) no período
+      const funcsAtendidos = new Set<number>();
+      participantes.forEach((p: any) => { if (p.presente === 1 && p.employeeId) funcsAtendidos.add(p.employeeId); });
+      const funcionariosAtendidos = funcsAtendidos.size;
+
+      // Funcionários ativos sem NENHUM DDS no período (gap de cobertura)
+      const semDDSIds: number[] = [];
+      funcAtivosIds.forEach((id) => { if (!funcsAtendidos.has(id)) semDDSIds.push(id); });
+      const semDDSLista = funcAtivosRows
+        .filter((f: any) => !funcsAtendidos.has(f.id))
+        .slice(0, 50)
+        .map((f: any) => ({ id: f.id, nome: f.nome, funcao: f.funcao }));
+
+      // Sessões por mês (bucket YYYY-MM)
+      const porMesMap = new Map<string, { sessoes: number; participantes: number }>();
+      sessoesPeriodo.forEach((s: any) => {
+        const ym = (s.data || "").slice(0, 7);
+        if (!ym) return;
+        const cur = porMesMap.get(ym) || { sessoes: 0, participantes: 0 };
+        cur.sessoes += 1;
+        porMesMap.set(ym, cur);
+      });
+      participantes.forEach((p: any) => {
+        const sess = sessoesPeriodo.find((s: any) => s.id === p.sessaoId);
+        if (!sess) return;
+        const ym = (sess.data || "").slice(0, 7);
+        if (!ym) return;
+        const cur = porMesMap.get(ym) || { sessoes: 0, participantes: 0 };
+        cur.participantes += (p.presente === 1 ? 1 : 0);
+        porMesMap.set(ym, cur);
+      });
+      const sessoesPorMes = Array.from(porMesMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([mes, v]) => ({ mes, sessoes: v.sessoes, participantes: v.participantes }));
+
+      // Por categoria (do tema)
+      const porCatMap = new Map<string, number>();
+      sessoesPeriodo.forEach((s: any) => {
+        const cat = (s.categoria || "SEM_TEMA") as string;
+        porCatMap.set(cat, (porCatMap.get(cat) || 0) + 1);
+      });
+      const porCategoria = Array.from(porCatMap.entries())
+        .map(([categoria, sessoes]) => ({ categoria, sessoes }))
+        .sort((a, b) => b.sessoes - a.sessoes);
+
+      // Por obra (top 10)
+      const porObraMap = new Map<string, number>();
+      sessoesPeriodo.forEach((s: any) => {
+        const k = s.obraNome || "(sem obra)";
+        porObraMap.set(k, (porObraMap.get(k) || 0) + 1);
+      });
+      const porObra = Array.from(porObraMap.entries())
+        .map(([obra, sessoes]) => ({ obra, sessoes }))
+        .sort((a, b) => b.sessoes - a.sessoes)
+        .slice(0, 10);
+
+      // Top 10 temas mais aplicados
+      const porTemaMap = new Map<string, number>();
+      sessoesPeriodo.forEach((s: any) => {
+        const k = s.tituloTema || "(sem título)";
+        porTemaMap.set(k, (porTemaMap.get(k) || 0) + 1);
+      });
+      const topTemas = Array.from(porTemaMap.entries())
+        .map(([tema, sessoes]) => ({ tema, sessoes }))
+        .sort((a, b) => b.sessoes - a.sessoes)
+        .slice(0, 10);
+
+      // Top instrutores
+      const porInstrutorMap = new Map<string, number>();
+      sessoesPeriodo.forEach((s: any) => {
+        const k = (s.instrutor || "").trim() || "(sem instrutor)";
+        porInstrutorMap.set(k, (porInstrutorMap.get(k) || 0) + 1);
+      });
+      const topInstrutores = Array.from(porInstrutorMap.entries())
+        .map(([instrutor, sessoes]) => ({ instrutor, sessoes }))
+        .sort((a, b) => b.sessoes - a.sessoes)
+        .slice(0, 10);
+
+      // Heatmap dia da semana × hora (simples: por dia da semana)
+      const dows = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+      const porDowMap = new Map<number, number>();
+      sessoesPeriodo.forEach((s: any) => {
+        if (!s.data) return;
+        const d = new Date(s.data + "T12:00:00-03:00");
+        const dow = d.getDay();
+        porDowMap.set(dow, (porDowMap.get(dow) || 0) + 1);
+      });
+      const porDiaSemana = dows.map((label, i) => ({ dia: label, sessoes: porDowMap.get(i) || 0 }));
+
+      // Cobertura: % de funcionários ativos que receberam ao menos 1 DDS no período
+      const coberturaPct = totalFuncAtivos > 0 ? (funcionariosAtendidos / totalFuncAtivos) * 100 : 0;
+
+      return {
+        periodo: { dataInicio: ini, dataFim: fim },
+        kpis: {
+          totalSessoes,
+          sessoesFinalizadas,
+          sessoesAbertas,
+          sessoesCanceladas,
+          sessoes30d,
+          totalTemasAtivos,
+          totalParticipantes,
+          totalPresentes,
+          totalAssinados,
+          taxaPresenca: Number(taxaPresenca.toFixed(1)),
+          taxaAssinatura: Number(taxaAssinatura.toFixed(1)),
+          funcionariosAtendidos,
+          totalFuncAtivos,
+          coberturaPct: Number(coberturaPct.toFixed(1)),
+          funcionariosSemDDS: semDDSIds.length,
+        },
+        temasPorCategoria: temasAtivos.map((r: any) => ({ categoria: r.categoria, total: Number(r.total) })),
+        sessoesPorMes,
+        porCategoria,
+        porObra,
+        topTemas,
+        topInstrutores,
+        porDiaSemana,
+        semDDS: semDDSLista,
+      };
+    }),
+
   getSessao: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive(), id: z.number().int().positive() }))
     .query(async ({ input, ctx }) => {
