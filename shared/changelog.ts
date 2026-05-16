@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1939 — RH · Dash Aviso Prévio · Tabela CDM · REWRITE redimensionamento estilo EXCEL (window listeners, não React Pointer Events).
+ * User (16/05/2026): "esta pessima a navegabildiade para arurmar a largura da coluna.. melhore isso, use o mesmo sistema que usamos no excel.. o basico bem feito..".
+ * Causa-raiz Rev. 1937/1938 (porque não funcionava): o componente `CdmResizeHandle` era declarado INLINE dentro do componente pai → uma referência NOVA a cada render → React re-monta o `<div>` toda vez que `setCdmColW` dispara durante o drag → `setPointerCapture` perde a referência do elemento → drag trava após 1 frame. Mesmo padrão do bug clássico React de "componente declarado dentro de componente".
+ * Solução (padrão Excel/AG-Grid/TanStack):
+ *   (a) `startCdmResize(key)` registra listeners NATIVOS de `window` (`pointermove`/`pointerup`/`pointercancel`) no `pointerDown` — esses sobrevivem a re-renders porque ficam atachados na window, não no JSX que re-renderiza.
+ *   (b) Handle agora é JSX INLINE no `<th>` (não componente filho), via `.map(['nome','funcao','obra'])` p/ DRY — sem remount durante drag.
+ *   (c) `cdmStartCdmColWRef` sincronizado com `cdmColW` em cada render — usado p/ persistir o estado FINAL no localStorage (1 write apenas no pointer-up, não a cada frame de movimento).
+ *   (d) `finalW` capturada no closure do `onUp` p/ persistir o valor exato.
+ *   (e) `userSelect:none` no body durante drag (impede seleção de texto acidental quando arrasta rápido — Excel faz igual).
+ *   (f) Visual neutro estilo Excel: linha vertical fina cinza-400 (1px) na borda, hover ganha fundo âmbar-100 sutil. Cursor `col-resize` ao passar. SEM barra âmbar gritante (Rev. 1938 era exagerado).
+ *   (g) Header dividido: `<span>` clicável p/ sort (com hover azul) + `<div>` handle separado — `stopPropagation` no click do handle impede o sort.
+ * version → 1939.
+ * Resultado: passa o mouse na borda direita do header → cursor vira ↔ → clique e segure → arrasta → solta. Comportamento idêntico ao Excel/Google Sheets. Persiste em localStorage. Duplo-clique restaura padrão. Funciona em desktop/tablet/celular (Pointer Events cobrem mouse+touch+pen). Não dispara sort por acidente.
+ * Preservado: state cdmColW Rev. 1937 (defaults 200/140/160, MIN 80/MAX 600), th+td `style={{width,minWidth,maxWidth}}` Rev. 1937, CIPA Rev. 1936, Raio-X Rev. 1935, sticky thead Rev. 1924, sort Rev. 1909. Zero backend/DB. Reversível em 2 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1938 — RH · Dash Aviso Prévio · Tabela CDM · FIX UX do redimensionamento (Rev. 1937) — handle invisível + click acionava sort.
  * User (16/05/2026, screenshot pós-Rev. 1937 com colunas ainda truncadas "CARAMURU - HH - CA..."): "nao ficou bom para ajudar a largura da tela, considera que precisa clicar, segurar e arraastar para modificar a largura..".
  * Causa-raiz Rev. 1937: (a) handle só 8px (w-2) com barra cinza interna 0.5×5 — visualmente quase invisível, usuário não percebia que existia algo pra arrastar. (b) `stopPropagation` no `pointerDown` NÃO impede o evento `click` sintético do React que dispara depois do pointer up (são eventos distintos no DOM) — então qualquer toque/clique no handle disparava `toggleCdmSort` no th pai, alternando ordenação em vez de redimensionar.

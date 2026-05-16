@@ -153,57 +153,54 @@ export default function DashAvisoPrevio() {
     } catch {}
     return CDM_COL_DEFAULT;
   });
-  const cdmDragRef = useRef<{ key: CdmColKey; startX: number; startW: number } | null>(null);
-  const onCdmColPointerDown = (key: CdmColKey) => (e: React.PointerEvent<HTMLDivElement>) => {
+  // Rev. 1939 — Reescrita do redimensionamento estilo EXCEL: listeners NATIVOS
+  // de window (mousemove/mouseup/touchmove/touchend), não React pointer events.
+  // Causa-raiz das Rev. 1937/1938 não terem funcionado bem: o componente
+  // `CdmResizeHandle` era definido INLINE dentro do componente pai → re-criado
+  // a cada render → React desmontava/remontava o <div> a cada setState do drag
+  // → setPointerCapture perdia a referência → drag travava após 1 frame.
+  // Solução: 1 único `onPointerDown` no handle (inline JSX, sem subcomponente),
+  // que anexa listeners GLOBAIS de window em pointermove/pointerup. Sobrevive a
+  // re-renders. Persistência apenas no end (não a cada frame).
+  const cdmStartCdmColWRef = useRef<typeof cdmColW>(cdmColW);
+  cdmStartCdmColWRef.current = cdmColW;
+  const startCdmResize = (key: CdmColKey) => (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-    cdmDragRef.current = { key, startX: e.clientX, startW: cdmColW[key] };
+    const startX = e.clientX;
+    const startW = cdmStartCdmColWRef.current[key];
     document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    let finalW = startW;
+    const onMove = (ev: PointerEvent) => {
+      const w = Math.min(CDM_COL_MAX, Math.max(CDM_COL_MIN, startW + (ev.clientX - startX)));
+      if (w !== finalW) {
+        finalW = w;
+        setCdmColW(prev => prev[key] === w ? prev : { ...prev, [key]: w });
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      try {
+        const persist = { ...cdmStartCdmColWRef.current, [key]: finalW };
+        window.localStorage.setItem(CDM_COL_LS_KEY, JSON.stringify(persist));
+      } catch {}
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   };
-  const onCdmColPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const d = cdmDragRef.current;
-    if (!d) return;
-    const w = Math.min(CDM_COL_MAX, Math.max(CDM_COL_MIN, d.startW + (e.clientX - d.startX)));
-    setCdmColW(prev => prev[d.key] === w ? prev : { ...prev, [d.key]: w });
-  };
-  const onCdmColPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    const d = cdmDragRef.current;
-    if (!d) return;
-    cdmDragRef.current = null;
-    document.body.style.cursor = '';
-    try { (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId); } catch {}
-    try { window.localStorage.setItem(CDM_COL_LS_KEY, JSON.stringify(cdmColW)); } catch {}
-  };
-  const resetCdmCol = (key: CdmColKey) => () => {
+  const resetCdmCol = (key: CdmColKey) => {
     setCdmColW(prev => {
       const next = { ...prev, [key]: CDM_COL_DEFAULT[key] };
       try { window.localStorage.setItem(CDM_COL_LS_KEY, JSON.stringify(next)); } catch {}
       return next;
     });
   };
-  // Rev. 1938 — Handle visual MAIS LARGO e SEMPRE VISÍVEL (Rev. 1937 era 8px e quase
-  // invisível). Agora 16px com barra âmbar sempre visível + onClick stopPropagation
-  // (impede que o click pós-drag dispare o sort do th, que era o "não funciona bem"
-  // reportado). role=separator pra a11y.
-  const CdmResizeHandle = ({ colKey, label }: { colKey: CdmColKey; label: string }) => (
-    <div
-      role="separator"
-      aria-orientation="vertical"
-      aria-label={`Redimensionar coluna ${label}`}
-      onPointerDown={onCdmColPointerDown(colKey)}
-      onPointerMove={onCdmColPointerMove}
-      onPointerUp={onCdmColPointerUp}
-      onPointerCancel={onCdmColPointerUp}
-      onClick={(e) => { e.stopPropagation(); }}
-      onDoubleClick={(e) => { e.stopPropagation(); resetCdmCol(colKey)(); }}
-      title={`Clique, segure e arraste para redimensionar a coluna "${label}" · duplo-clique restaura padrão (${CDM_COL_DEFAULT[colKey]}px)`}
-      style={{ touchAction: 'none' }}
-      className="absolute top-0 -right-2 z-30 h-full w-4 cursor-col-resize flex items-center justify-center group"
-    >
-      <div className="w-[3px] h-6 bg-amber-400 group-hover:bg-amber-600 group-active:bg-amber-700 rounded shadow-sm" />
-    </div>
-  );
   const toggleCdmSort = (key: CdmSortKey) => setCdmSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: (key === 'nomeCompleto' || key === 'cargo' || key === 'funcao' || key === 'obra' || key === 'dataAdmissao') ? 'asc' : 'desc' });
   const cdmLinhasOrdenadas = useMemo(() => {
     if (!cdm?.linhas) return [];
@@ -465,12 +462,31 @@ export default function DashAvisoPrevio() {
                           <thead className="sticky top-0 z-20">
                             <tr className="text-left">
                               <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm">#</th>
-                              {/* Rev. 1937 — colunas de texto redimensionáveis (Funcionário/Função/Obra).
-                                  Handle âmbar na borda direita do th; drag p/ ajustar (mouse+touch+pen via Pointer Events);
-                                  duplo-clique restaura padrão; persistido em localStorage. */}
-                              <th style={{ width: cdmColW.nome, minWidth: cdmColW.nome, maxWidth: cdmColW.nome }} className="relative py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('nomeCompleto')}>Funcionário<SortIcon k="nomeCompleto" /><CdmResizeHandle colKey="nome" label="Funcionário" /></th>
-                              <th style={{ width: cdmColW.funcao, minWidth: cdmColW.funcao, maxWidth: cdmColW.funcao }} className="relative py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('funcao')}>Função<SortIcon k="funcao" /><CdmResizeHandle colKey="funcao" label="Função" /></th>
-                              <th style={{ width: cdmColW.obra, minWidth: cdmColW.obra, maxWidth: cdmColW.obra }} className="relative py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('obra')}>Obra<SortIcon k="obra" /><CdmResizeHandle colKey="obra" label="Obra" /></th>
+                              {/* Rev. 1939 — Colunas de texto redimensionáveis estilo EXCEL.
+                                  Handle inline (sem subcomponente p/ não remontar durante drag);
+                                  listeners de window pointermove/up no startCdmResize. */}
+                              {(['nome','funcao','obra'] as const).map((ck) => {
+                                const sortKey = ck === 'nome' ? 'nomeCompleto' : ck;
+                                const label = ck === 'nome' ? 'Funcionário' : ck === 'funcao' ? 'Função' : 'Obra';
+                                return (
+                                  <th key={ck} style={{ width: cdmColW[ck], minWidth: cdmColW[ck], maxWidth: cdmColW[ck] }} className="relative py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm select-none">
+                                    <span className="cursor-pointer hover:text-blue-700" onClick={() => toggleCdmSort(sortKey as CdmSortKey)}>{label}<SortIcon k={sortKey as CdmSortKey} /></span>
+                                    <div
+                                      role="separator"
+                                      aria-orientation="vertical"
+                                      aria-label={`Redimensionar coluna ${label}`}
+                                      title={`Clique, segure e arraste para redimensionar · duplo-clique restaura (${CDM_COL_DEFAULT[ck]}px)`}
+                                      onPointerDown={startCdmResize(ck)}
+                                      onDoubleClick={(e) => { e.stopPropagation(); resetCdmCol(ck); }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      style={{ touchAction: 'none' }}
+                                      className="absolute top-0 right-0 h-full w-3 cursor-col-resize flex items-center justify-center hover:bg-amber-100"
+                                    >
+                                      <div className="w-px h-full bg-slate-400" />
+                                    </div>
+                                  </th>
+                                );
+                              })}
                               <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('dataAdmissao')}>Admissão<SortIcon k="dataAdmissao" /></th>
                               {/* Rev. 1931 — "Anos" renomeado p/ "Tempo de empresa" (mais claro p/ leigo) + nova coluna "Idade" (anos completos
                                   do funcionário até a data-base do dash). User 16/05/2026: "melhore o texto onde ta escrito idade, coloque
