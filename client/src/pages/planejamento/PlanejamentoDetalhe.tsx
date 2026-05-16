@@ -1127,6 +1127,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
         )}
         {canViewTab(aba) && aba === "gantt" && (
           <GanttCronograma
+            projetoId={projetoId}
             revisaoAtiva={revisaoAtiva}
             atividades={atividades}
             loadingAtiv={loadingAtiv}
@@ -5011,7 +5012,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
 // ═════════════════════════════════════════════════════════════════════════════
 type ZoomGantt = "semana" | "mes" | "trimestre";
 
-function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any) {
+function GanttCronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos }: any) {
   const [collapsed,  setCollapsed]  = useState<Set<string>>(new Set());
   const [nivelAtivo, setNivelAtivo] = useState<number | null>(null);
   const [zoom,       setZoom]       = useState<ZoomGantt>("mes");

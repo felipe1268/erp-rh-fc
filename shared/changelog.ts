@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1932 — Planejamento · PlanejamentoDetalhe · Gantt · FIX `ReferenceError: projetoId is not defined` ao abrir aba Gantt (regressão Rev. 1929).
+ * User (16/05/2026, screenshot tela branca "Ocorreu um erro inesperado" + stack `at GanttCronograma`): "erro na tela".
+ * Causa-raiz: Rev. 1929 (coluna "Atividade / Item" redimensionável + persistência em localStorage por obra) introduziu `const LEFT_W_KEY = \`planej-leftw-${projetoId}\`` dentro do componente `GanttCronograma`, mas esse componente NÃO recebe `projetoId` como prop — a referência ficou indefinida no escopo da função → React explode no render da aba Gantt → ErrorBoundary mostra tela branca. A aba Cronograma (linha 3211, que também usa LEFT_W mas sem persistência por obra) não foi afetada porque lá o valor é uma const fixa. Não pegamos no QA porque o teste pós-edição foi numa obra que tinha o key no localStorage de uma sessão anterior (mascarava o bug em alguns navegadores), e o erro só dispara quando o componente renderiza pela 1ª vez na sessão.
+ * Mudança (`PlanejamentoDetalhe.tsx`):
+ *   (a) Call site L1129 — adiciona `projetoId={projetoId}` na chamada `<GanttCronograma ... />` (variável já existia no escopo do componente pai `PlanejamentoDetalhe`).
+ *   (b) Assinatura L5014 — `function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos })` → adiciona `projetoId` ao destructuring.
+ * version → 1932.
+ * Resultado: aba Gantt volta a abrir; largura da coluna persiste por obra (Rev. 1929 funciona corretamente agora).
+ * Preservado: TODA a lógica Rev. 1929 (LEFT_W_MIN/MAX/DEFAULT, pointer handlers, handle âmbar, doubleClick reset, localStorage), Rev. 1928 (clearResp/cancelarResp), Rev. 1922 (cascadeResp). Zero backend/DB. Reversível em 2 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1931 — RH · Dash Aviso Prévio · Tabela CDM · Renomeia "Anos" → "Tempo de empresa" + nova coluna "Idade" (idade real do funcionário).
  * User (16/05/2026, screenshot CDM com header "Anos"): "melhore o texto onde ta escrito idade, coloque tempo de empresa.. e coloca outra coluna com a idade real do funcionario.. quero saber".
  * (NOTA: user falou "onde ta escrito idade" — na verdade o header era "Anos" referindo-se a anos de serviço. Renomeação p/ "Tempo de empresa" remove a ambiguidade. Adiciona Idade como coluna ao lado.)
