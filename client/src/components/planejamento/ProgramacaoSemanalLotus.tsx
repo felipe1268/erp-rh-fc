@@ -185,7 +185,17 @@ function faixasCelula(
   // inReal auto-derivado, passou/aderência, e a regra "previsto passou sem
   // execução = vermelho" pra semanas FECHADAS antes do cutoff.
   const passouCutoff = !!cutoffStr && ds > cutoffStr;
-  const ehUtilCal = cal ? ehDiaUtil(ds, cal) : (dia.getDay() !== 0 && dia.getDay() !== 6);
+  // Rev. 1912 — Sáb/Dom NUNCA são úteis pelo calendário herdado do MSP.
+  // Decisão do usuário (16/05/2026): o `calendarioJson` importado do MS
+  // Project frequentemente marca sábado como dia útil padrão (cultura de
+  // obra de construção civil), o que fazia o ERP pintar azul de previsto
+  // em cima do cinza de FDS. Agora a regra é: fim-de-semana só "abre" pra
+  // pintura quando o engenheiro marcar EXPLICITAMENTE aquele dia via
+  // `diasExtras` (mecanismo manual da Rev. 1875 — `dias_trabalhados_extras`).
+  // Dia útil "normal" (seg-sex) continua respeitando feriados do calMSP.
+  const dow = dia.getDay();
+  const ehFds = dow === 0 || dow === 6;
+  const ehUtilCal = ehFds ? false : (cal ? ehDiaUtil(ds, cal) : true);
   const ehUtil = ehUtilCal || (!!diasExtras && diasExtras.has(ds));
   const inPrev = ehUtil && !!(prevIni && prevFim && ds >= prevIni && ds <= prevFim);
   // Rev. 1875 — Respeitar calendário MSP TAMBÉM no REAL explícito. Antes,
@@ -261,10 +271,21 @@ function faixasCelula(
     }
   }
 
-  // Rev. 1905 — Post-process do cutoff: zera APENAS o bottom (realizado)
-  // pra dias > cutoff. O top (previsto azul/vermelho) continua exibido
-  // pra que o PLANO se estenda em todas as semanas até o fim do projeto.
-  if (passouCutoff) bottom = null;
+  // Rev. 1912 — Cutoff PMBOK "status date" (revogando Rev. 1905):
+  // decisão do usuário (16/05/2026, modelo HÍBRIDO) — pra dias > cutoff,
+  // zera TANTO previsto QUANTO realizado, deixando a semana 100% branca
+  // (ou cinza nas colunas de sáb/dom, que são pintadas independentemente
+  // pelo `pintaCinzaFds`/CSS da grid). A Rev. 1905 tinha mantido o azul
+  // do previsto aparecendo em semanas futuras pós-cutoff por pedido
+  // anterior do usuário ("plano deve aparecer até o fim do projeto"),
+  // mas isso confundia leitura semanal: usuário lê semana futura e vê
+  // azul como se houvesse compromisso ATIVO daquela semana, quando na
+  // verdade o cronograma só foi rebatido até a data do cutoff. Voltando
+  // ao comportamento PMBOK original da Rev. 1894.
+  if (passouCutoff) {
+    top = null;
+    bottom = null;
+  }
 
   return { top, bottom };
 }
@@ -1867,7 +1888,14 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                         const dow = d.getDay();
                         const dsIso = dateStr(d);
                         const ehFds = dow === 0 || dow === 6;
-                        const calMarcaUtil = calMSP ? ehDiaUtil(dsIso, calMSP) : !ehFds;
+                        // Rev. 1912 — Alinhado com `faixasCelula` L188-202: sáb/dom
+                        // NUNCA são "úteis pelo calendário", mesmo que o calMSP marque
+                        // (cultura de obra que MSP frequentemente herda). Isso garante
+                        // (a) fundo cinza consistente nas cols FDS da grade e
+                        // (b) `podeAlternar` (L1893) habilita o clique manual em todo
+                        // sáb/dom — caso contrário, sábado herdado como útil bloqueava
+                        // o engenheiro de marcar/desmarcar a célula via Rev. 1875.
+                        const calMarcaUtil = ehFds ? false : (calMSP ? ehDiaUtil(dsIso, calMSP) : true);
                         const marcadoExtra = !!diasExtrasAtv && diasExtrasAtv.has(dsIso);
                         const podeAlternar = ehFds && !calMarcaUtil; // só sáb/dom não-úteis pelo calendário
                         const tipoCel = marcadoExtra

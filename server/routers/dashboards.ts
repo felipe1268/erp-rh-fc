@@ -2252,6 +2252,38 @@ async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: str
   const dtFimAviso = new Date(dataRef + 'T00:00:00');
   const diasTrabMes = isNaN(dtFimAviso.getTime()) ? 30 : dtFimAviso.getDate();
 
+  // Rev. 1911 — Carrega contagem REAL de períodos de férias vencidos por
+  // employeeId em UMA única query (batch), evitando N+1. Necessário porque
+  // `calcularRescisaoCompleta` SEM `periodosVencidosOverride` cai no fallback
+  // matemático `calcularFeriasVencidas() - 1` — proibido pelo BUG-001
+  // (rescisaoCalc.ts L292-296): "Sempre passar periodosVencidosOverride com
+  // contagem real do banco. Nunca usar o cálculo matemático puro". Sem este
+  // override, funcionários com muitos anos de casa (ex.: Enivaldo, 13 anos)
+  // recebem ~12 períodos VENCIDOS fictícios, inflando o total em ~R$ 56k.
+  // Critério idêntico ao avisoPrevioFerias.ts L494-503 (fonte de verdade
+  // do módulo Aviso Prévio que o user usa pra conferir os números oficiais).
+  const empIds = rows.map(r => r.id);
+  const vpCountByEmp = new Map<number, number>();
+  if (empIds.length > 0) {
+    try {
+      const vpRows = ((await db.execute(sql`
+        SELECT "employeeId", COUNT(*)::int AS total
+        FROM vacation_periods
+        WHERE "employeeId" IN (${sql.join(empIds.map(id => sql`${id}`), sql`, `)})
+          AND status NOT IN ('concluida', 'cancelada', 'em_gozo')
+          AND "periodoAquisitivoFim" IS NOT NULL
+          AND "periodoAquisitivoFim" < ${dataRef}
+          AND "deletedAt" IS NULL
+        GROUP BY "employeeId"
+      `)) as any).rows || [];
+      for (const r of vpRows) {
+        vpCountByEmp.set(Number(r.employeeId), Number(r.total ?? 0));
+      }
+    } catch (e) {
+      console.error('[getDashCustoDemissaoMassa] falha ao carregar vacation_periods (assumindo 0):', (e as any)?.message ?? e);
+    }
+  }
+
   const linhas = rows
     .filter(r => !!r.dataAdmissao && parseBRL(r.salarioBase) > 0 && r.dataAdmissao! <= dataRef)
     .map(r => {
@@ -2267,6 +2299,10 @@ async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: str
       const diasAvisoEstimado = calcularDiasAvisoTotal(anosBase);
       const dtFimProjetada = new Date(dtFimAviso.getTime() + diasAvisoEstimado * 24 * 60 * 60 * 1000);
       const dataFimProjetada = dtFimProjetada.toISOString().slice(0, 10);
+      // Rev. 1911 — Passa override real (default 0 quando funcionário não tem
+      // nenhum período vencido em vacation_periods — caso normal de empresa
+      // que mantém férias em dia). Bloqueia o fallback matemático tóxico.
+      const periodosVencidosReal = vpCountByEmp.get(r.id) ?? 0;
       const previsao = calcularRescisaoCompleta({
         salarioBase: salario,
         dataAdmissao: r.dataAdmissao!,
@@ -2275,6 +2311,7 @@ async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: str
         tipo: 'empregador_indenizado',
         vrDiario: 0,
         diasTrabalhadosMes: diasTrabMes,
+        periodosVencidosOverride: periodosVencidosReal,
       });
       return {
         id: r.id,
