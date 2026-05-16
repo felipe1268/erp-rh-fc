@@ -334,8 +334,11 @@ function ModalEntrada({ companyId, onClose, onSuccess }:
     if (!it.fotos.length) { toast.error("Tire ao menos 1 foto antes."); return; }
     setItens(prev => prev.map((p, i) => i === idx ? { ...p, detectandoIA: true } : p));
     try {
-      const capa = it.fotos[0];
-      const res = await detectarIA.mutateAsync({ fotoBase64: capa.base64, fotoMime: capa.mime });
+      // Rev. 1884 (hotfix) — manda TODAS as fotos do item (até 4) para a IA
+      // ter mais ângulos/contexto. Aumenta muito a chance de identificar
+      // ferramentas em fotos com iluminação ruim ou ângulo desfavorável.
+      const fotosParaIA = it.fotos.slice(0, 4).map(f => ({ base64: f.base64, mime: f.mime }));
+      const res = await detectarIA.mutateAsync({ fotos: fotosParaIA });
       if (!res.ok) {
         toast.warning(res.erro || "IA não conseguiu identificar.");
       } else if (!res.descricao) {

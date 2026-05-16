@@ -482,39 +482,77 @@ export const ferramentasTerceirosRouter = router({
   // da IA, devolve sugestão vazia + mensagem amigável (não derruba o fluxo).
   detectarProdutoPorFoto: protectedProcedure
     .input(z.object({
-      fotoBase64: z.string().min(1),
-      fotoMime: z.string(),
+      // Rev. 1884 (hotfix pós-feedback do user) — agora aceita ATÉ 4 fotos do
+      // mesmo item; manda todas pro Claude (multi-image vision) p/ aumentar
+      // muito a chance de acerto. Campo `fotoBase64/fotoMime` mantido p/
+      // retrocompatibilidade com a 1ª versão do endpoint (single-photo).
+      fotoBase64: z.string().optional(),
+      fotoMime: z.string().optional(),
+      fotos: z.array(z.object({ base64: z.string().min(1), mime: z.string().min(1) })).min(1).max(4).optional(),
+    }).refine(i => (i.fotos && i.fotos.length > 0) || (i.fotoBase64 && i.fotoMime), {
+      message: "Envie ao menos 1 foto.",
     }))
     .mutation(async ({ input }) => {
-      // valida payload (mesmas regras do upload).
-      decodeFoto(input.fotoBase64, input.fotoMime, "Foto p/ detecção");
+      // Normaliza para array (compat single-foto antiga).
+      const fotos = (input.fotos && input.fotos.length > 0)
+        ? input.fotos
+        : [{ base64: input.fotoBase64!, mime: input.fotoMime! }];
 
-      const systemPrompt = `Você é assistente de almoxarifado de obra. Analisa fotos de FERRAMENTAS DE CONSTRUÇÃO (martelete, furadeira, serra circular, esmerilhadeira, betoneira, andaime, escada, gerador, compressor, etc.) e devolve metadados em JSON estrito.`;
-      const userPrompt = `Olhe a foto e responda APENAS com um JSON válido (sem markdown, sem texto extra) no formato:
-{"descricao":"<nome curto da ferramenta em português, até 80 chars>","marca":"<marca legível na foto ou vazio>","modelo":"<modelo legível ou vazio>","confianca":"alta|media|baixa"}
+      // Valida cada foto (mesmas regras do upload — 8MB + mime allowlist).
+      fotos.forEach((f, i) => decodeFoto(f.base64, f.mime, `Foto p/ detecção #${i + 1}`));
 
-Regras:
-- "descricao" deve ser um nome USÁVEL como item de inventário (ex: "Martelete perfurador", "Serra circular 7.1/4", "Furadeira de impacto").
-- Se não conseguir identificar a ferramenta, devolva descricao="" e confianca="baixa".
-- "marca"/"modelo" só se estiverem VISÍVEIS na foto (etiqueta, plaqueta). Caso contrário, vazio.
-- NUNCA invente marca/modelo.`;
+      // Rev. 1884 hotfix — prompt RELAXADO: sempre tenta o melhor palpite com
+      // nível de confiança apropriado, em vez de devolver vazio quando incerto.
+      // Operador da portaria prefere uma sugestão revisável a um campo em branco.
+      const systemPrompt = `Você é um especialista em ferramentas de construção civil brasileiras. Analisa fotos tiradas no canteiro de obra (frequentemente em ambientes mal iluminados, com ângulos ruins, fundo bagunçado) e identifica a ferramenta com o melhor palpite possível. Devolve metadados em JSON estrito, em português do Brasil.`;
+      const userPrompt = `Você está vendo ${fotos.length === 1 ? 'UMA foto' : `${fotos.length} fotos do MESMO item`} (combine as informações de todas para identificar melhor). Responda APENAS com um JSON válido (sem markdown, sem texto antes/depois) neste formato exato:
+{"descricao":"<nome curto da ferramenta em pt-BR, até 80 chars>","marca":"<marca visível ou vazio>","modelo":"<modelo visível ou vazio>","confianca":"alta|media|baixa"}
+
+REGRAS:
+1. SEMPRE faça seu melhor palpite. Se ver qualquer ferramenta/equipamento de obra, mesmo que parcialmente, dê uma descrição USÁVEL como item de inventário (ex: "Martelete perfurador", "Furadeira de impacto", "Serra circular 7.1/4", "Esmerilhadeira angular", "Betoneira 400L", "Andaime tubular", "Escada de alumínio extensiva", "Gerador a gasolina", "Compressor de ar").
+2. Use "confianca":
+   - "alta" → você tem certeza do tipo da ferramenta.
+   - "media" → tipo provável, mas pode estar errado.
+   - "baixa" → palpite genérico, ou foto muito ruim. Mesmo assim DÊ uma descrição (ex: "Ferramenta elétrica de impacto").
+3. "marca" e "modelo": SÓ se você consegue LER claramente o texto na etiqueta/plaqueta. Caso contrário, vazio. NUNCA invente.
+4. Só devolva descricao="" se a foto realmente não tiver NADA identificável (foto preta, totalmente borrada, foto de uma parede, etc.) — nesse caso confianca="baixa".`;
 
       let raw = "";
       try {
-        raw = await invokeAnthropicVision({
-          prompt: userPrompt,
-          base64: input.fotoBase64,
-          mimeType: input.fotoMime,
-          systemPrompt,
-          maxTokens: 300,
+        // Chamada direta ao SDK p/ suportar multi-image (invokeAnthropicVision
+        // só aceita 1 imagem). Reusa client/modelo via dynamic import.
+        const { default: Anthropic } = await import("@anthropic-ai/sdk");
+        const apiKey = process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
+        const baseURL = process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL;
+        if (!apiKey) throw new Error("Anthropic não configurado");
+        const client = new Anthropic({ apiKey, ...(baseURL ? { baseURL } : {}) });
+
+        const contentBlocks: any[] = fotos.map(f => ({
+          type: "image",
+          source: { type: "base64", media_type: f.mime, data: f.base64 },
+        }));
+        contentBlocks.push({ type: "text", text: userPrompt });
+
+        const response = await client.messages.create({
+          model: "claude-sonnet-4-6",
+          max_tokens: 400,
+          system: systemPrompt,
+          messages: [{ role: "user", content: contentBlocks }],
         });
+        raw = response.content
+          .filter((c: any) => c.type === "text")
+          .map((c: any) => c.text)
+          .join("");
+        // Log curto para diagnosticar falhas de identificação em produção.
+        console.log(`[FerramentasTerceiros.detectarProdutoPorFoto] ${fotos.length} foto(s) → raw=${raw.slice(0, 200)}`);
       } catch (e: any) {
+        console.error(`[FerramentasTerceiros.detectarProdutoPorFoto] erro:`, e?.message || e);
         return {
           ok: false,
           descricao: "", marca: "", modelo: "", confianca: "baixa" as const,
           erro: e?.message?.includes("não configurado")
             ? "IA não configurada neste ambiente."
-            : "Falha ao consultar a IA. Preencha manualmente.",
+            : `Falha ao consultar a IA: ${e?.message || "desconhecido"}`,
         };
       }
 
@@ -530,7 +568,8 @@ Regras:
           modelo: String(parsed.modelo || "").slice(0, 100),
           confianca: (["alta", "media", "baixa"].includes(parsed.confianca) ? parsed.confianca : "media") as "alta" | "media" | "baixa",
         };
-      } catch {
+      } catch (e: any) {
+        console.error(`[FerramentasTerceiros.detectarProdutoPorFoto] parse JSON falhou. raw=${raw.slice(0, 500)}`);
         return {
           ok: false, descricao: "", marca: "", modelo: "", confianca: "baixa" as const,
           erro: "Não consegui interpretar a resposta da IA. Preencha manualmente.",
