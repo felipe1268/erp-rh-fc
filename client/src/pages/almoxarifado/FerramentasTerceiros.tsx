@@ -19,8 +19,42 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Wrench, Plus, ArrowDownCircle, ArrowUpCircle, Camera, Trash2, X, Search,
   Building2, User, Phone, FileText, Eye, AlertTriangle, CheckCircle2, Package,
-  ArrowLeftRight, Loader2, ImageOff, RotateCcw, Sparkles,
+  ArrowLeftRight, Loader2, ImageOff, RotateCcw, Sparkles, UserCheck, IdCard,
 } from "lucide-react";
+
+// ════════════════════════════════════════════════════════════════
+// Rev. 1885 — Badge "Lançado por" automático (read-only).
+// Mostra nome + código interno do usuário ERP logado. O backend
+// também grava esses dados (snapshot em lancado_por_*) — este componente
+// é só apresentação; quem persiste é o servidor.
+// ════════════════════════════════════════════════════════════════
+function LancadorBadge({ companyId }: { companyId: number }) {
+  const q = trpc.ferramentasTerceiros.meuLancador.useQuery({ companyId }, { enabled: !!companyId });
+  const data: any = q.data;
+  return (
+    <div className="flex items-center gap-2 bg-slate-100 border border-slate-300 rounded-md px-3 py-2 text-xs">
+      <IdCard className="h-4 w-4 text-slate-500 shrink-0" />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 min-w-0">
+        <span className="text-slate-600 font-semibold uppercase tracking-wide text-[10px]">Lançado por</span>
+        {q.isLoading ? (
+          <span className="text-slate-400 italic">carregando…</span>
+        ) : (
+          <span className="text-slate-800 font-medium truncate">
+            {data?.codigoInterno && (
+              <span className="bg-emerald-600 text-white px-1.5 py-0.5 rounded text-[10px] mr-1.5 font-bold">
+                {data.codigoInterno}
+              </span>
+            )}
+            {data?.nome || "—"}
+            {!data?.codigoInterno && (
+              <span className="text-slate-400 text-[10px] ml-1.5 italic">(sem código RH)</span>
+            )}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ─── Util: comprime imagem para JPEG ≤ ~800px, qualidade 0.78. Retorna base64 puro
 //   (sem prefixo data:). Evita enviar 4-8MB direto da câmera do iPad.
@@ -404,8 +438,13 @@ function KpiCard({ icon, label, value, cor }: { icon: any; label: string; value:
 // ════════════════════════════════════════════════════════════════
 function ModalEntrada({ companyId, onClose, onSuccess }:
   { companyId: number; onClose: () => void; onSuccess: () => void }) {
+  // Rev. 1885 — empresa/funcionário agora são selecionados a partir do cadastro
+  // (terceiros.empresas + terceiros.funcionarios). Mantemos `empresa` (string)
+  // e `respNome` para o payload do backend (snapshot legível) + IDs vinculados.
+  const [empresaTerceiraId, setEmpresaTerceiraId] = useState<string>("");
   const [empresa, setEmpresa] = useState("");
   const [cnpj, setCnpj] = useState("");
+  const [funcionarioTerceiroId, setFuncionarioTerceiroId] = useState<string>("");
   const [respNome, setRespNome] = useState("");
   const [respCpf, setRespCpf] = useState("");
   const [respTel, setRespTel] = useState("");
@@ -420,6 +459,44 @@ function ModalEntrada({ companyId, onClose, onSuccess }:
   const obras = trpc.obras.list.useQuery({ companyId }, { enabled: !!companyId });
   const [obraId, setObraId] = useState<string>("none");
   const obraNome = obraId !== "none" ? (obras.data || []).find((o: any) => String(o.id) === obraId)?.nome : null;
+
+  // Rev. 1885 — listagens do cadastro (terceiros já existe — reuso).
+  const empresasQ = trpc.terceiros.empresas.list.useQuery({ companyId }, { enabled: !!companyId });
+  const empresasAtivas = useMemo(
+    () => ((empresasQ.data as any[]) || []).filter((e) => (e.status || "ativa") === "ativa"),
+    [empresasQ.data]
+  );
+  const funcionariosQ = trpc.terceiros.funcionarios.list.useQuery(
+    { companyId, empresaTerceiraId: empresaTerceiraId ? Number(empresaTerceiraId) : undefined },
+    { enabled: !!companyId && !!empresaTerceiraId }
+  );
+  const funcionariosAtivos = useMemo(
+    () => ((funcionariosQ.data as any[]) || []).filter((f) => (f.status || "ativo") === "ativo"),
+    [funcionariosQ.data]
+  );
+
+  // Auto-fill ao escolher empresa do cadastro.
+  function handleEmpresaChange(id: string) {
+    setEmpresaTerceiraId(id);
+    const emp = empresasAtivas.find((e: any) => String(e.id) === id);
+    if (emp) {
+      setEmpresa(emp.nomeFantasia || emp.razaoSocial || "");
+      setCnpj(emp.cnpj || "");
+    }
+    // ao trocar empresa, limpa funcionário (não pertence mais a essa empresa).
+    setFuncionarioTerceiroId("");
+    setRespNome(""); setRespCpf(""); setRespTel("");
+  }
+  // Auto-fill ao escolher funcionário do cadastro.
+  function handleFuncionarioChange(id: string) {
+    setFuncionarioTerceiroId(id);
+    const fun = funcionariosAtivos.find((f: any) => String(f.id) === id);
+    if (fun) {
+      setRespNome(fun.nome || "");
+      setRespCpf(fun.cpf || "");
+      setRespTel(fun.telefone || "");
+    }
+  }
 
   const criar = trpc.ferramentasTerceiros.criarEntrada.useMutation();
   const detectarIA = trpc.ferramentasTerceiros.detectarProdutoPorFoto.useMutation();
@@ -505,8 +582,10 @@ function ModalEntrada({ companyId, onClose, onSuccess }:
         obraId: obraId !== "none" ? Number(obraId) : undefined,
         obraNome: obraNome || undefined,
         empresaTerceira: empresa.trim(),
+        empresaTerceiraId: empresaTerceiraId ? Number(empresaTerceiraId) : undefined, // Rev. 1885
         cnpj: cnpj.trim() || undefined,
         responsavelNome: respNome.trim(),
+        funcionarioTerceiroId: funcionarioTerceiroId ? Number(funcionarioTerceiroId) : undefined, // Rev. 1885
         responsavelCpf: respCpf.trim() || undefined,
         responsavelTelefone: respTel.trim() || undefined,
         quemEntregou: quemEntregou.trim() || undefined,
@@ -535,10 +614,14 @@ function ModalEntrada({ companyId, onClose, onSuccess }:
     <Dialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="!fixed !inset-0 !translate-x-0 !translate-y-0 !max-w-none !w-screen !h-screen !rounded-none" style={{ top: 0, left: 0, transform: 'none', display: 'flex', flexDirection: 'column' }}>
         <DialogHeader className="border-b pb-3 shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <ArrowDownCircle className="h-5 w-5 text-emerald-600" />
-            Nova Entrada de Ferramentas de Terceiro
-          </DialogTitle>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowDownCircle className="h-5 w-5 text-emerald-600" />
+              Nova Entrada de Ferramentas de Terceiro
+            </DialogTitle>
+            {/* Rev. 1885 — quem está lançando (auto, read-only) */}
+            <LancadorBadge companyId={companyId} />
+          </div>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* Identificação do terceiro */}
@@ -546,12 +629,27 @@ function ModalEntrada({ companyId, onClose, onSuccess }:
             <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1.5"><Building2 className="h-4 w-4" />Empresa Terceira</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <div className="md:col-span-2">
-                <label className="text-xs font-medium text-muted-foreground">Empresa *</label>
-                <Input value={empresa} onChange={(e) => setEmpresa(e.target.value)} placeholder="Ex: Locadora ABC Ltda" />
+                <label className="text-xs font-medium text-muted-foreground">Empresa * <span className="text-[10px] text-emerald-700">(cadastradas em Terceiros)</span></label>
+                <Select value={empresaTerceiraId} onValueChange={handleEmpresaChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={empresasQ.isLoading ? "Carregando…" : "Selecione a empresa terceirizada…"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {empresasAtivas.length === 0 && !empresasQ.isLoading && (
+                      <SelectItem value="__none__" disabled>Nenhuma empresa terceirizada ativa cadastrada.</SelectItem>
+                    )}
+                    {empresasAtivas.map((e: any) => (
+                      <SelectItem key={e.id} value={String(e.id)}>
+                        {e.nomeFantasia || e.razaoSocial}
+                        {e.cnpj ? ` · ${e.cnpj}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground">CNPJ</label>
-                <Input value={cnpj} onChange={(e) => setCnpj(e.target.value)} placeholder="00.000.000/0001-00" />
+                <label className="text-xs font-medium text-muted-foreground">CNPJ <span className="text-[10px] text-slate-400">(auto)</span></label>
+                <Input value={cnpj} readOnly className="bg-slate-100 text-slate-600" placeholder="—" />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Obra</label>
@@ -566,6 +664,12 @@ function ModalEntrada({ companyId, onClose, onSuccess }:
                 </Select>
               </div>
             </div>
+            {empresasAtivas.length === 0 && !empresasQ.isLoading && (
+              <p className="text-[11px] text-amber-700 mt-2 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Nenhuma empresa cadastrada. Vá em <strong className="mx-0.5">Terceiros → Empresas Terceiras</strong> para cadastrar antes.
+              </p>
+            )}
           </section>
 
           {/* Responsável + quem entregou/recebeu */}
@@ -573,16 +677,45 @@ function ModalEntrada({ companyId, onClose, onSuccess }:
             <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1.5"><User className="h-4 w-4" />Responsável pela Entrega</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Nome do Responsável *</label>
-                <Input value={respNome} onChange={(e) => setRespNome(e.target.value)} placeholder="Quem assina a entrega" />
+                <label className="text-xs font-medium text-muted-foreground">
+                  Responsável * <span className="text-[10px] text-emerald-700">(funcionários cadastrados)</span>
+                </label>
+                <Select
+                  value={funcionarioTerceiroId}
+                  onValueChange={handleFuncionarioChange}
+                  disabled={!empresaTerceiraId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={
+                      !empresaTerceiraId ? "Escolha a empresa primeiro…" :
+                      funcionariosQ.isLoading ? "Carregando…" :
+                      "Selecione o funcionário responsável…"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {funcionariosAtivos.length === 0 && empresaTerceiraId && !funcionariosQ.isLoading && (
+                      <SelectItem value="__none__" disabled>Nenhum funcionário ativo nessa empresa.</SelectItem>
+                    )}
+                    {funcionariosAtivos.map((f: any) => (
+                      <SelectItem key={f.id} value={String(f.id)}>
+                        {f.nome}{f.funcao ? ` · ${f.funcao}` : ""}{f.cpf ? ` · ${f.cpf}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {empresaTerceiraId && funcionariosAtivos.length === 0 && !funcionariosQ.isLoading && (
+                  <p className="text-[10px] text-amber-700 mt-1">
+                    Cadastre em <strong>Terceiros → Funcionários</strong>.
+                  </p>
+                )}
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground">CPF</label>
-                <Input value={respCpf} onChange={(e) => setRespCpf(e.target.value)} placeholder="000.000.000-00" />
+                <label className="text-xs font-medium text-muted-foreground">CPF <span className="text-[10px] text-slate-400">(auto)</span></label>
+                <Input value={respCpf} readOnly className="bg-slate-100 text-slate-600" placeholder="—" />
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground"><Phone className="h-3 w-3 inline" /> Telefone</label>
-                <Input value={respTel} onChange={(e) => setRespTel(e.target.value)} placeholder="(00) 00000-0000" />
+                <label className="text-xs font-medium text-muted-foreground"><Phone className="h-3 w-3 inline" /> Telefone <span className="text-[10px] text-slate-400">(auto)</span></label>
+                <Input value={respTel} readOnly className="bg-slate-100 text-slate-600" placeholder="—" />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Quem ENTREGOU (terceiro)</label>
@@ -795,6 +928,9 @@ function ItemFotoInput({ preview, onPick, onClear }: { preview: string; onPick: 
 function ModalSaida({ companyId, onClose, onSuccess }:
   { companyId: number; onClose: () => void; onSuccess: () => void }) {
   const [registroPaiId, setRegistroPaiId] = useState<number | null>(null);
+  // Rev. 1885 — responsável da retirada vem do cadastro de funcionários terceiros
+  // da MESMA empresa do registro pai (herda empresa_terceira_id).
+  const [funcionarioTerceiroId, setFuncionarioTerceiroId] = useState<string>("");
   const [respNome, setRespNome] = useState("");
   const [respCpf, setRespCpf] = useState("");
   const [quemEntregou, setQuemEntregou] = useState("");
@@ -812,6 +948,29 @@ function ModalSaida({ companyId, onClose, onSuccess }:
     { enabled: !!registroPaiId }
   );
   const criar = trpc.ferramentasTerceiros.criarSaida.useMutation();
+
+  // Rev. 1885 — descobre empresa_terceira_id do registro pai e filtra funcionários.
+  const entradaPai = useMemo(
+    () => ((entradas.data as any[]) || []).find((e) => e.id === registroPaiId),
+    [entradas.data, registroPaiId]
+  );
+  const empresaTerceiraIdPai: number | undefined = entradaPai?.empresa_terceira_id || undefined;
+  const funcionariosQ = trpc.terceiros.funcionarios.list.useQuery(
+    { companyId, empresaTerceiraId: empresaTerceiraIdPai },
+    { enabled: !!companyId && !!empresaTerceiraIdPai }
+  );
+  const funcionariosAtivos = useMemo(
+    () => ((funcionariosQ.data as any[]) || []).filter((f) => (f.status || "ativo") === "ativo"),
+    [funcionariosQ.data]
+  );
+  function handleFuncionarioSaidaChange(id: string) {
+    setFuncionarioTerceiroId(id);
+    const fun = funcionariosAtivos.find((f: any) => String(f.id) === id);
+    if (fun) {
+      setRespNome(fun.nome || "");
+      setRespCpf(fun.cpf || "");
+    }
+  }
 
   async function handleFoto(itemId: number, file: File) {
     try {
@@ -852,6 +1011,7 @@ function ModalSaida({ companyId, onClose, onSuccess }:
         companyId,
         registroPaiId,
         responsavelNome: respNome.trim(),
+        funcionarioTerceiroId: funcionarioTerceiroId ? Number(funcionarioTerceiroId) : undefined, // Rev. 1885
         responsavelCpf: respCpf.trim() || undefined,
         quemEntregou: quemEntregou.trim() || undefined,
         quemRecebeu: quemRecebeu.trim() || undefined,
@@ -879,10 +1039,13 @@ function ModalSaida({ companyId, onClose, onSuccess }:
     <Dialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="!fixed !inset-0 !translate-x-0 !translate-y-0 !max-w-none !w-screen !h-screen !rounded-none" style={{ top: 0, left: 0, transform: 'none', display: 'flex', flexDirection: 'column' }}>
         <DialogHeader className="border-b pb-3 shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <ArrowUpCircle className="h-5 w-5 text-blue-600" />
-            Registrar Saída de Ferramentas de Terceiro
-          </DialogTitle>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowUpCircle className="h-5 w-5 text-red-600" />
+              Registrar Saída de Ferramentas de Terceiro
+            </DialogTitle>
+            <LancadorBadge companyId={companyId} />
+          </div>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* Seleção da entrada pai */}
@@ -915,12 +1078,42 @@ function ModalSaida({ companyId, onClose, onSuccess }:
             <section className="bg-slate-50 border rounded-lg p-3">
               <h3 className="text-sm font-semibold text-slate-700 mb-2"><User className="h-4 w-4 inline mr-1" />Responsável pela Retirada</h3>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                <div>
-                  <label className="text-xs text-muted-foreground">Nome *</label>
-                  <Input value={respNome} onChange={(e) => setRespNome(e.target.value)} placeholder="Quem assina a retirada" />
+                <div className="md:col-span-2">
+                  <label className="text-xs text-muted-foreground">
+                    Responsável * <span className="text-[10px] text-red-700">(funcionários cadastrados da empresa)</span>
+                  </label>
+                  <Select value={funcionarioTerceiroId} onValueChange={handleFuncionarioSaidaChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={
+                        funcionariosQ.isLoading ? "Carregando…" :
+                        "Selecione o funcionário que está retirando…"
+                      } />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {funcionariosAtivos.length === 0 && !funcionariosQ.isLoading && (
+                        <SelectItem value="__none__" disabled>Nenhum funcionário ativo dessa empresa.</SelectItem>
+                      )}
+                      {funcionariosAtivos.map((f: any) => (
+                        <SelectItem key={f.id} value={String(f.id)}>
+                          {f.nome}{f.funcao ? ` · ${f.funcao}` : ""}{f.cpf ? ` · ${f.cpf}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {funcionariosAtivos.length === 0 && !funcionariosQ.isLoading && (
+                    <p className="text-[10px] text-amber-700 mt-1 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      Cadastre em <strong className="mx-0.5">Terceiros → Funcionários</strong> ou digite manualmente abaixo.
+                    </p>
+                  )}
+                  <Input
+                    value={respNome} onChange={(e) => { setRespNome(e.target.value); setFuncionarioTerceiroId(""); }}
+                    placeholder="…ou digite o nome manualmente"
+                    className="mt-1 text-xs"
+                  />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">CPF</label>
+                  <label className="text-xs text-muted-foreground">CPF <span className="text-[10px] text-slate-400">(auto)</span></label>
                   <Input value={respCpf} onChange={(e) => setRespCpf(e.target.value)} placeholder="000.000.000-00" />
                 </div>
                 <div>

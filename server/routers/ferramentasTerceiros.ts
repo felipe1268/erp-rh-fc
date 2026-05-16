@@ -72,7 +72,49 @@ function assertSameCompany(ctx: { user: { companyId?: number | null } }, company
   }
 }
 
+// Rev. 1885 — Lookup do código interno do usuário ERP logado para snapshot na
+// auditoria. Faz join users(id=ctx.user.id).email → employees.email do mesmo
+// tenant (companyId). Falha-aberta: retorna null se não encontrar (usuário ERP
+// pode não ter cadastro de RH — ex.: admin_master que não é funcionário).
+async function lookupCodigoInterno(
+  db: any,
+  userId: number,
+  companyId: number
+): Promise<string | null> {
+  try {
+    const res = await db.execute(sql`
+      SELECT e.codigo_interno AS codigo
+      FROM users u
+      JOIN employees e ON LOWER(e.email) = LOWER(u.email)
+      WHERE u.id = ${userId}
+        AND e.company_id = ${companyId}
+        AND e.codigo_interno IS NOT NULL
+      LIMIT 1
+    `);
+    const codigo = (res.rows?.[0] as any)?.codigo;
+    return codigo ? String(codigo) : null;
+  } catch { return null; }
+}
+
 export const ferramentasTerceirosRouter = router({
+
+  // ─── Rev. 1885 — "Lançado por" automático ───────────────────────
+  // Frontend chama para mostrar badge read-only no topo dos modais com
+  // nome + código interno do usuário ERP logado. Persistência continua
+  // sendo derivada server-side em criarEntrada/criarSaida (não confia
+  // no client). Retorna shape estável mesmo sem cadastro RH.
+  meuLancador: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      assertSameCompany(ctx, input.companyId);
+      const db = (await getDb())!;
+      const codigoInterno = await lookupCodigoInterno(db, ctx.user.id, input.companyId);
+      return {
+        userId: ctx.user.id,
+        nome: ctx.user.name || "—",
+        codigoInterno, // pode ser null (admin sem cadastro RH)
+      };
+    }),
 
   // ─── KPIs do topo ───────────────────────────────────────────────
   kpis: protectedProcedure
@@ -207,7 +249,7 @@ export const ferramentasTerceirosRouter = router({
       assertSameCompany(ctx, input.companyId);
       const db = (await getDb())!;
       const res = await db.execute(sql`
-        SELECT r.id, r.empresa_terceira, r.responsavel_nome, r.data_hora, r.obra_nome,
+        SELECT r.id, r.empresa_terceira, r.empresa_terceira_id, r.responsavel_nome, r.data_hora, r.obra_nome,
                COUNT(i.id) FILTER (WHERE i.status_item = 'na_obra') AS qtd_na_obra
         FROM ferramentas_terceiros_registros r
         JOIN ferramentas_terceiros_itens i ON i.registro_id = r.id
@@ -229,8 +271,10 @@ export const ferramentasTerceirosRouter = router({
       obraId: z.number().optional().nullable(),
       obraNome: z.string().max(255).optional().nullable(),
       empresaTerceira: z.string().min(1).max(255),
+      empresaTerceiraId: z.number().int().optional().nullable(),       // Rev. 1885
       cnpj: z.string().max(20).optional().nullable(),
       responsavelNome: z.string().min(1).max(255),
+      funcionarioTerceiroId: z.number().int().optional().nullable(),    // Rev. 1885
       responsavelCpf: z.string().max(14).optional().nullable(),
       responsavelTelefone: z.string().max(20).optional().nullable(),
       quemEntregou: z.string().max(255).optional().nullable(),
@@ -281,18 +325,45 @@ export const ferramentasTerceirosRouter = router({
       }
 
       // 2) Persiste header + itens com status_item='na_obra'.
+      // Rev. 1885 — derivação server-side do código interno do lançador.
+      // Rev. 1885 (hardening) — valida que empresa/funcionário terceiro pertencem à company
+      // e que o funcionário pertence à empresa selecionada (evita refs cruzadas).
+      if (input.empresaTerceiraId != null) {
+        const empOk = await db.execute(sql`
+          SELECT 1 FROM empresas_terceiras
+          WHERE id = ${input.empresaTerceiraId} AND company_id = ${input.companyId}
+            AND deleted_at IS NULL LIMIT 1
+        `);
+        if (!empOk.rows?.length) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Empresa terceirizada inválida para esta empresa." });
+        }
+      }
+      if (input.funcionarioTerceiroId != null) {
+        const funcOk = await db.execute(sql`
+          SELECT 1 FROM funcionarios_terceiros
+          WHERE id = ${input.funcionarioTerceiroId} AND company_id = ${input.companyId}
+            ${input.empresaTerceiraId != null ? sql`AND empresa_terceira_id = ${input.empresaTerceiraId}` : sql``}
+            AND deleted_at IS NULL LIMIT 1
+        `);
+        if (!funcOk.rows?.length) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Funcionário terceirizado inválido ou não pertence à empresa selecionada." });
+        }
+      }
+      const codigoInternoLancador = await lookupCodigoInterno(db, ctx.user.id, input.companyId);
       const regRes = await db.execute(sql`
         INSERT INTO ferramentas_terceiros_registros (
-          company_id, obra_id, obra_nome, tipo, empresa_terceira, cnpj,
-          responsavel_nome, responsavel_cpf, responsavel_telefone,
-          quem_entregou, quem_recebeu, lancado_por_user_id, lancado_por_nome,
+          company_id, obra_id, obra_nome, tipo, empresa_terceira, empresa_terceira_id, cnpj,
+          responsavel_nome, funcionario_terceiro_id, responsavel_cpf, responsavel_telefone,
+          quem_entregou, quem_recebeu,
+          lancado_por_user_id, lancado_por_nome, lancado_por_codigo_interno,
           foto_documento_url, observacoes, status
         ) VALUES (
           ${input.companyId}, ${input.obraId ?? null}, ${input.obraNome ?? null}, 'ENTRADA',
-          ${input.empresaTerceira}, ${input.cnpj ?? null},
-          ${input.responsavelNome}, ${input.responsavelCpf ?? null}, ${input.responsavelTelefone ?? null},
+          ${input.empresaTerceira}, ${input.empresaTerceiraId ?? null}, ${input.cnpj ?? null},
+          ${input.responsavelNome}, ${input.funcionarioTerceiroId ?? null},
+          ${input.responsavelCpf ?? null}, ${input.responsavelTelefone ?? null},
           ${input.quemEntregou ?? null}, ${input.quemRecebeu ?? null},
-          ${ctx.user.id}, ${ctx.user.name},
+          ${ctx.user.id}, ${ctx.user.name}, ${codigoInternoLancador},
           ${fotoDocUrl}, ${input.observacoes ?? null}, 'em_obra'
         ) RETURNING id
       `);
@@ -337,6 +408,7 @@ export const ferramentasTerceirosRouter = router({
       quemEntregou: z.string().max(255).optional().nullable(),  // pessoa do terceiro que veio buscar
       quemRecebeu: z.string().max(255).optional().nullable(),   // pessoa da obra que entregou
       responsavelNome: z.string().min(1).max(255),
+      funcionarioTerceiroId: z.number().int().optional().nullable(),    // Rev. 1885
       responsavelCpf: z.string().max(14).optional().nullable(),
       observacoes: z.string().max(2000).optional().nullable(),
       itensDevolvidos: z.array(z.object({
@@ -361,7 +433,7 @@ export const ferramentasTerceirosRouter = router({
 
       // 1) Valida pai pertence à company.
       const paiRes = await db.execute(sql`
-        SELECT id, empresa_terceira, obra_id, obra_nome
+        SELECT id, empresa_terceira, empresa_terceira_id, obra_id, obra_nome
         FROM ferramentas_terceiros_registros
         WHERE id = ${input.registroPaiId} AND company_id = ${input.companyId}
           AND tipo = 'ENTRADA' AND deleted_at IS NULL LIMIT 1
@@ -393,18 +465,35 @@ export const ferramentasTerceirosRouter = router({
         fotosSaida.push(url);
       }
 
-      // 4) Cria header SAIDA.
+      // 4) Cria header SAIDA. Rev. 1885 — herda empresa_terceira_id do pai e
+      // registra funcionario_terceiro_id (se selecionado) + código interno.
+      // Rev. 1885 (hardening) — se funcionário foi escolhido, valida que pertence
+      // à mesma company e à empresa terceira do pai (impede ref cruzada).
+      if (input.funcionarioTerceiroId != null) {
+        const funcOk = await db.execute(sql`
+          SELECT 1 FROM funcionarios_terceiros
+          WHERE id = ${input.funcionarioTerceiroId} AND company_id = ${input.companyId}
+            ${pai.empresa_terceira_id != null ? sql`AND empresa_terceira_id = ${pai.empresa_terceira_id}` : sql``}
+            AND deleted_at IS NULL LIMIT 1
+        `);
+        if (!funcOk.rows?.length) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Funcionário terceirizado inválido ou não pertence à empresa da entrada." });
+        }
+      }
+      const codigoInternoLancador = await lookupCodigoInterno(db, ctx.user.id, input.companyId);
       const regRes = await db.execute(sql`
         INSERT INTO ferramentas_terceiros_registros (
-          company_id, obra_id, obra_nome, tipo, empresa_terceira,
-          responsavel_nome, responsavel_cpf, quem_entregou, quem_recebeu,
-          lancado_por_user_id, lancado_por_nome,
+          company_id, obra_id, obra_nome, tipo, empresa_terceira, empresa_terceira_id,
+          responsavel_nome, funcionario_terceiro_id, responsavel_cpf,
+          quem_entregou, quem_recebeu,
+          lancado_por_user_id, lancado_por_nome, lancado_por_codigo_interno,
           registro_pai_id, observacoes, status
         ) VALUES (
           ${input.companyId}, ${pai.obra_id ?? null}, ${pai.obra_nome ?? null}, 'SAIDA',
-          ${pai.empresa_terceira}, ${input.responsavelNome}, ${input.responsavelCpf ?? null},
+          ${pai.empresa_terceira}, ${pai.empresa_terceira_id ?? null},
+          ${input.responsavelNome}, ${input.funcionarioTerceiroId ?? null}, ${input.responsavelCpf ?? null},
           ${input.quemEntregou ?? null}, ${input.quemRecebeu ?? null},
-          ${ctx.user.id}, ${ctx.user.name},
+          ${ctx.user.id}, ${ctx.user.name}, ${codigoInternoLancador},
           ${input.registroPaiId}, ${input.observacoes ?? null}, 'concluido'
         ) RETURNING id
       `);

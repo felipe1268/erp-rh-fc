@@ -935,7 +935,13 @@ Regras:
           // (primeira foto) para retrocompat com queries antigas e fluxo de saída;
           // `fotos_urls` carrega TODAS (capa inclusa) para exibição em galeria.
           await db.execute(sql`ALTER TABLE ferramentas_terceiros_itens ADD COLUMN IF NOT EXISTS fotos_urls TEXT[]`);
-          console.log(`[SyncSchema+] Rev. 1880/1884: tabelas ferramentas_terceiros_registros/itens garantidas (+ fotos_urls).`);
+          // Rev. 1885 — vínculos com cadastros (empresas_terceiras + funcionarios_terceiros)
+          // e snapshot do código interno do usuário lançador, para auditoria/relatório.
+          // Todas idempotentes — zero risco de quebrar produção (R-001/R-007/R-010).
+          await db.execute(sql`ALTER TABLE ferramentas_terceiros_registros ADD COLUMN IF NOT EXISTS empresa_terceira_id INTEGER`);
+          await db.execute(sql`ALTER TABLE ferramentas_terceiros_registros ADD COLUMN IF NOT EXISTS funcionario_terceiro_id INTEGER`);
+          await db.execute(sql`ALTER TABLE ferramentas_terceiros_registros ADD COLUMN IF NOT EXISTS lancado_por_codigo_interno VARCHAR(20)`);
+          console.log(`[SyncSchema+] Rev. 1880/1884/1885: tabelas ferramentas_terceiros_registros/itens garantidas (+ fotos_urls + vínculos cadastro).`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS cc_cliente ON cliente_comentarios (cliente_id)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS cc_obra ON cliente_comentarios (obra_id)`);
           await db.execute(sql`CREATE TABLE IF NOT EXISTS cliente_avaliacoes (
