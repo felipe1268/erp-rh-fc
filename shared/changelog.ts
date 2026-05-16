@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1888 — Frotas · Sidebar · Dashboards específicos SAÍRAM da seção "Painel" e ganharam ABA PRÓPRIA "Dashboards" (mesmo padrão usado em RH-DP/SST).
+ * User (16/05/2026, após Rev. 1887, screenshot sidebar Frotas): "Separe os dash na aba de dash, não do painel. Faça conforme fizemos nos outros módulos."
+ * Causa: Rev. 1881 (hot-patch) adicionou "Dash Manutenção", "Dash Combustível" e "Dash Pedágios" diretamente DENTRO da seção "Painel" do menu Frotas — solução rápida na época que poluía a seção (5 itens, 3 deles dashboards específicos). Padrão estabelecido em outros módulos (RH-DP L127, SST L208) é "Painel" = visão geral + "Dashboards" = drill-down por área.
+ * Mudanças (em `client/src/components/DashboardLayout.tsx` L569-587, dentro de `menuSectionsFrotas`):
+ *   (1) Seção "Painel" enxuta para 2 itens: Dashboard Frotas (`/frotas/painel`, ícone LayoutDashboard) e Analítico (`/frotas/analitico`, ícone BarChart3).
+ *   (2) NOVA seção "Dashboards" com 3 itens: Dash Manutenção (`/frotas/manutencoes-dashboard`, Wrench), Dash Combustível (`/frotas/combustivel-dashboard`, Fuel), Dash Pedágios (`/frotas/pedagios-dashboard`, Receipt). Ordem preservada da versão anterior.
+ *   (3) Comentário interno explica decisão arquitetural (Painel = macro / Dashboards = por área).
+ *   (4) version → 1888.
+ * Preservado: TODAS as rotas (`/frotas/manutencoes-dashboard`, `combustivel-dashboard`, `pedagios-dashboard`) inalteradas — apenas mudou onde aparece no menu. Permissões/feature-keys (`frotas-manutencoes-dash`, `frotas-combustivel-dash`, `frotas-pedagios-dash` em `shared/modules.ts` L511-513) intactas. `shared/modulePages.ts` mapping intacto. Components, RouteGuards, App.tsx routes — tudo intocado. Zero backend/DB/schema/permissões. Reversível em 1 hunk + version bump.
+ *
  * Rev. 1887 — Planejamento · Detalhe da Obra · REFIS · BLOCO 5 (Avanço por Etapa) agora aceita DRILL-DOWN PAI → FILHO igual à estrutura do cronograma — usuário expande quantos níveis quiser para identificar gargalos em qualquer profundidade da EAP.
  * User (16/05/2026, após Rev. 1886, 2 screenshots — cronograma EAP 03.02→03.02.01→03.02.02… vs. REFIS lateral "NAVE NORTE" mostrando só nivel+1 categorias): "Gostaria de detalhar um pouco mais o REFIS, abrir até a camada que coloquei na lateral... fica mais fácil identificar gargalos. Quero ter a opção de abrir como pais e filhos, igual a estrutura do cronograma."
  * Causa: o BarChart de etapas no BLOCO 5 só mostrava sub-grupos de NÍVEL exatamente `gNivel + 1` (filhos diretos do pavimento/categoria raiz). Quem analisava o REFIS via os macros (ex: "PROTEÇÕES DE PISO/ESCADAS/ELEVADOR" 4.2%/6.8%) mas não conseguia abrir e ver onde dentro daquele bloco estava o atraso — tinha que sair do REFIS e ir ao cronograma. A função `descendentes()` já existia (caminha por `ordem` parando em nivel <= pai), só faltava chamada recursiva e UI de drill-down.

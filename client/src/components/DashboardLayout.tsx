@@ -569,12 +569,17 @@ const menuSectionsFrotas: MenuSection[] = [
     items: [
       { icon: LayoutDashboard, label: "Dashboard Frotas", path: "/frotas/painel" },
       { icon: BarChart3, label: "Analítico", path: "/frotas/analitico" },
-      { icon: Wrench, label: "Dash Manutenção", path: "/frotas/manutencoes-dashboard" },
-      // Rev. 1881 hot-patch — sidebar precisa listar os 2 dashboards novos.
-      // Sem isso o usuário só vê "Dash Manutenção" embora rotas/permissões
-      // já existam (shared/modules.ts L512-513 + shared/modulePages.ts L676-677).
-      { icon: Fuel, label: "Dash Combustível", path: "/frotas/combustivel-dashboard" },
-      { icon: Receipt, label: "Dash Pedágios", path: "/frotas/pedagios-dashboard" },
+    ],
+  },
+  {
+    // Rev. 1888 — Dashboards específicos saíram da seção "Painel" e ganharam
+    // aba própria (mesmo padrão de RH-DP/SST). Painel = visão geral macro;
+    // Dashboards = drill-down por área (manutenção/combustível/pedágios).
+    title: "Dashboards",
+    items: [
+      { icon: Wrench,  label: "Dash Manutenção",  path: "/frotas/manutencoes-dashboard" },
+      { icon: Fuel,    label: "Dash Combustível", path: "/frotas/combustivel-dashboard" },
+      { icon: Receipt, label: "Dash Pedágios",    path: "/frotas/pedagios-dashboard" },
     ],
   },
   {
