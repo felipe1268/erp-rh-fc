@@ -271,21 +271,17 @@ function faixasCelula(
     }
   }
 
-  // Rev. 1912 — Cutoff PMBOK "status date" (revogando Rev. 1905):
-  // decisão do usuário (16/05/2026, modelo HÍBRIDO) — pra dias > cutoff,
-  // zera TANTO previsto QUANTO realizado, deixando a semana 100% branca
-  // (ou cinza nas colunas de sáb/dom, que são pintadas independentemente
-  // pelo `pintaCinzaFds`/CSS da grid). A Rev. 1905 tinha mantido o azul
-  // do previsto aparecendo em semanas futuras pós-cutoff por pedido
-  // anterior do usuário ("plano deve aparecer até o fim do projeto"),
-  // mas isso confundia leitura semanal: usuário lê semana futura e vê
-  // azul como se houvesse compromisso ATIVO daquela semana, quando na
-  // verdade o cronograma só foi rebatido até a data do cutoff. Voltando
-  // ao comportamento PMBOK original da Rev. 1894.
-  if (passouCutoff) {
-    top = null;
-    bottom = null;
-  }
+  // Rev. 1913 — RESTAURADA a semântica da Rev. 1905 (revoga Rev. 1912 parte B):
+  // pra dias > cutoff, zera APENAS o `bottom` (realizado). O `top` (previsto
+  // azul/vermelho) continua exibido em TODAS as semanas até o fim do projeto.
+  // Decisão do usuário (16/05/2026, msg "o previsto deve aparecer até o final
+  // do cronograma, o cutoff deve ser respeitado para definir a linha de corte
+  // da semana mas o resto deve ser mantido"). Modelo de leitura: o cronograma
+  // mostra o PLANO inteiro (até o fim do projeto) com SNAPSHOT do realizado
+  // até a data de corte. PMBOK status-date estrito (Rev. 1894/1912-B) volta a
+  // ficar revogado. A correção do FDS da Rev. 1912 parte A (`ehUtilCal`) e do
+  // `calMarcaUtil` permanecem intactas — sáb/dom continuam cinza vazio sempre.
+  if (passouCutoff) bottom = null;
 
   return { top, bottom };
 }
