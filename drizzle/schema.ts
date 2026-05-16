@@ -8199,6 +8199,7 @@ export const ddsSessoes = pgTable("dds_sessoes", {
   conteudoMd: text("conteudo_md"),                    // snapshot do tema na hora da sessão
   instrutor: varchar({ length: 255 }),
   instrutorCpf: varchar("instrutor_cpf", { length: 14 }),
+  instrutorCodigoInterno: varchar("instrutor_codigo_interno", { length: 50 }),
   local: varchar({ length: 255 }),
   observacoes: text(),
   status: varchar({ length: 20 }).default("aberta").notNull(), // 'aberta' | 'finalizada' | 'cancelada'

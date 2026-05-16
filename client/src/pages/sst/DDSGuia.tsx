@@ -484,7 +484,7 @@ export default function DDSGuia() {
   const [sessaoForm, setSessaoForm] = useState<any>({
     obraId: "", obraIds: [] as number[], data: new Date().toISOString().slice(0, 10), hora: "07:30",
     temaId: "", tituloTema: "", conteudoMd: "",
-    instrutor: "", instrutorCpf: "", local: "", observacoes: "",
+    instrutor: "", instrutorCpf: "", instrutorCodigoInterno: "", local: "", observacoes: "",
     funcionarioIds: [] as number[],
   });
   // Rev. 1730 — abrir modal já preenchendo instrutor (usuário logado), data hoje, hora 07:30
@@ -504,7 +504,16 @@ export default function DDSGuia() {
       tituloTema: temaEscolhido?.titulo ?? "",
       conteudoMd: temaEscolhido?.conteudoMd ?? temaEscolhido?.descricao ?? "",
       instrutor: user?.nome ?? user?.name ?? user?.loginName ?? user?.email ?? "",
-      instrutorCpf: user?.cpf ? maskCpf(String(user.cpf)) : "",
+      instrutorCpf: "",
+      // Rev. 1873 — LGPD: substitui CPF por Código Interno. Auto-fill via lookup do nome do user na lista de employees.
+      instrutorCodigoInterno: (() => {
+        const nomeUser = user?.nome ?? user?.name ?? user?.loginName ?? user?.email ?? "";
+        if (!nomeUser) return "";
+        const emp = (employeesQ.data as any[] | undefined)?.find((e: any) =>
+          String(e.nomeCompleto || "").trim().toLowerCase() === String(nomeUser).trim().toLowerCase()
+        );
+        return emp?.codigoInterno ? String(emp.codigoInterno) : "";
+      })(),
       local: "",
       observacoes: "",
       funcionarioIds: [] as number[],
@@ -555,6 +564,19 @@ export default function DDSGuia() {
   );
   // Reseta busca/roteiro ao reabrir
   useEffect(() => { if (showSessao) { setShowRoteiro(false); setBuscaFunc(""); setBuscaObra(""); } }, [showSessao]);
+  // Rev. 1873 — backfill do Código Interno quando employeesQ chega DEPOIS do modal abrir
+  // (abrirNovaSessao roda 1x; se employeesQ ainda estava loading, codigoInterno fica vazio).
+  useEffect(() => {
+    if (!showSessao || !sessaoForm.instrutor || sessaoForm.instrutorCodigoInterno) return;
+    const list = employeesQ.data as any[] | undefined;
+    if (!list || list.length === 0) return;
+    const emp = list.find((e: any) =>
+      String(e.nomeCompleto || "").trim().toLowerCase() === String(sessaoForm.instrutor).trim().toLowerCase()
+    );
+    if (emp?.codigoInterno) {
+      setSessaoForm((s: any) => ({ ...s, instrutorCodigoInterno: String(emp.codigoInterno) }));
+    }
+  }, [showSessao, sessaoForm.instrutor, sessaoForm.instrutorCodigoInterno, employeesQ.data]);
   useEffect(() => { if (showTransferir) setBuscaTransferir(""); }, [showTransferir]);
 
   const handleSalvarSessao = () => {
@@ -571,7 +593,7 @@ export default function DDSGuia() {
       tituloTema: sessaoForm.tituloTema,
       conteudoMd: sessaoForm.conteudoMd || undefined,
       instrutor: sessaoForm.instrutor || undefined,
-      instrutorCpf: sessaoForm.instrutorCpf || undefined,
+      instrutorCodigoInterno: sessaoForm.instrutorCodigoInterno || undefined,
       local: sessaoForm.local || undefined,
       observacoes: sessaoForm.observacoes || undefined,
       funcionarioIds: sessaoForm.funcionarioIds,
@@ -1774,7 +1796,17 @@ export default function DDSGuia() {
                         if (!nomeUser || sessaoForm.instrutor === nomeUser) return null;
                         return (
                           <button type="button"
-                            onClick={() => setSessaoForm({ ...sessaoForm, instrutor: nomeUser, instrutorCpf: (user as any)?.cpf ? maskCpf(String((user as any).cpf)) : sessaoForm.instrutorCpf })}
+                            onClick={() => {
+                              // Rev. 1873 — LGPD: auto-fill Código Interno via lookup do nome do user na lista de employees.
+                              const emp = (employeesQ.data as any[] | undefined)?.find((e: any) =>
+                                String(e.nomeCompleto || "").trim().toLowerCase() === String(nomeUser).trim().toLowerCase()
+                              );
+                              setSessaoForm({
+                                ...sessaoForm,
+                                instrutor: nomeUser,
+                                instrutorCodigoInterno: emp?.codigoInterno ? String(emp.codigoInterno) : "",
+                              });
+                            }}
                             className="text-[10px] text-emerald-700 font-semibold hover:underline">
                             ✓ Sou eu ({nomeUser})
                           </button>
@@ -1784,13 +1816,35 @@ export default function DDSGuia() {
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
                       <div className="md:col-span-7">
                         <Input value={sessaoForm.instrutor}
-                          onChange={e => setSessaoForm({ ...sessaoForm, instrutor: e.target.value })}
-                          placeholder="Nome do instrutor" />
+                          onChange={e => {
+                            // Rev. 1873 — ao digitar/escolher nome, auto-fill Código Interno se houver match exato em employees.
+                            // Se não há match, limpa o código (evita pares nome+código inconsistentes salvos no banco).
+                            const novoNome = e.target.value;
+                            const emp = (employeesQ.data as any[] | undefined)?.find((emp: any) =>
+                              String(emp.nomeCompleto || "").trim().toLowerCase() === novoNome.trim().toLowerCase()
+                            );
+                            setSessaoForm({
+                              ...sessaoForm,
+                              instrutor: novoNome,
+                              instrutorCodigoInterno: emp?.codigoInterno ? String(emp.codigoInterno) : "",
+                            });
+                          }}
+                          placeholder="Nome do instrutor"
+                          list="dds-instrutor-list" />
+                        <datalist id="dds-instrutor-list">
+                          {((employeesQ.data as any[] | undefined) ?? [])
+                            .filter((e: any) => e.codigoInterno)
+                            .slice(0, 200)
+                            .map((e: any) => (
+                              <option key={e.id} value={e.nomeCompleto}>{e.codigoInterno}</option>
+                            ))}
+                        </datalist>
                       </div>
                       <div className="md:col-span-5">
-                        <Input value={sessaoForm.instrutorCpf}
-                          onChange={e => setSessaoForm({ ...sessaoForm, instrutorCpf: maskCpf(e.target.value) })}
-                          placeholder="CPF (000.000.000-00)" inputMode="numeric" maxLength={14} />
+                        <Input value={sessaoForm.instrutorCodigoInterno}
+                          onChange={e => setSessaoForm({ ...sessaoForm, instrutorCodigoInterno: e.target.value.trim().slice(0, 50) })}
+                          placeholder="Código interno do funcionário" maxLength={50}
+                          title="Preenchido automaticamente quando o nome do instrutor confere com um colaborador cadastrado (LGPD: substitui CPF)." />
                       </div>
                     </div>
                   </div>

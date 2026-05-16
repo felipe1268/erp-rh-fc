@@ -844,6 +844,11 @@ Regras:
         )`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dds_sf_sessao ON dds_sessao_funcionarios(sessao_id)`);
         await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_dds_sf_emp ON dds_sessao_funcionarios(employee_id)`);
+        // Rev. 1873 — LGPD: substitui CPF do instrutor pelo Código Interno do funcionário no modal Nova Sessão DDS.
+        try {
+          await db.execute(sql`ALTER TABLE dds_sessoes ADD COLUMN IF NOT EXISTS instrutor_codigo_interno VARCHAR(50)`);
+          console.log(`[SyncSchema+] Rev. 1873: coluna instrutor_codigo_interno garantida em dds_sessoes.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.1873 instrutor_codigo_interno:`, e?.message || e); }
         console.log(`[SyncSchema+] Tabelas DDS (dds_temas/dds_sessoes/dds_sessao_funcionarios) garantidas.`);
 
         // Tabelas do Portal do Cliente (comentários cliente↔FC e avaliações NPS)

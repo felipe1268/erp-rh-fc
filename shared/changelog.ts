@@ -25,6 +25,32 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1873,
+    titulo: "DDS · Nova Sessão · Substitui campo CPF do instrutor por Código Interno do funcionário (LGPD) + auto-fill",
+    descricao: "User (16/05/2026, screenshot iPad modal Nova Sessão DDS — campo 'CPF (000.000.000-00)' visível ao lado de 'Felipe Costa Alves'): 'Quero que mude o campo CPF PARA CODIGO interno do funcionário, para garantir o lgpd, de forma automática ok'.\n\n" +
+      "Motivação LGPD: CPF é dado pessoal sensível — usar Código Interno (matrícula interna definida pelo RH na ficha do colaborador, varchar 50, já existente em `employees.codigoInterno`) elimina exposição desnecessária do CPF do instrutor no formulário e no banco.\n\n" +
+      "SCHEMA (`drizzle/schema.ts` L8205 + SyncSchema+ `server/_core/index.ts` L850-854):\n" +
+      "  - Nova coluna `dds_sessoes.instrutor_codigo_interno VARCHAR(50)` (nullable).\n" +
+      "  - SyncSchema+ idempotente com ALTER TABLE ... ADD COLUMN IF NOT EXISTS (segue padrão Rev. 1829/1846 do repo).\n" +
+      "  - Coluna antiga `instrutor_cpf` PRESERVADA (não dropada) — backward-compat com sessões antigas. Apenas deixa de ser populada pelo formulário.\n\n" +
+      "BACKEND (`server/routers/dds.ts`):\n" +
+      "  - `criarSessao` (L1877): aceita zod `instrutorCodigoInterno: z.string().max(50).optional()` + persiste em insert.\n" +
+      "  - `atualizarSessao` (L1946): mesmo zod opcional (auto-spread via `patch` no update).\n" +
+      "  - `getSessao` (L1807): projeta `instrutorCodigoInterno` no select explícito (padrão Rev. 1753).\n\n" +
+      "FRONTEND (`client/src/pages/sst/DDSGuia.tsx`):\n" +
+      "  - Form state (L490): adicionado `instrutorCodigoInterno: ''`.\n" +
+      "  - `abrirNovaSessao` (L510-519): zera `instrutorCpf` e auto-preenche `instrutorCodigoInterno` via lookup do nome do user logado na lista `employeesQ.data` (match case-insensitive em `nomeCompleto`).\n" +
+      "  - `handleSalvarSessao` (L586): envia `instrutorCodigoInterno` em vez de `instrutorCpf`.\n" +
+      "  - Botão 'Sou eu' (L1788-1802): além de preencher o nome, faz lookup do colaborador e auto-fill do código interno.\n" +
+      "  - Input nome do instrutor (L1807-1830): agora tem `<datalist>` com os 200 primeiros colaboradores com codigoInterno; ao escolher/digitar nome com match exato, auto-fill do código.\n" +
+      "  - Input código interno (L1832-1837): substitui o input CPF — placeholder 'Código interno do funcionário', maxLength 50, sem máscara (CPF), com tooltip explicando LGPD.\n\n" +
+      "Preservado: ZERO mudança em finalizar/exportar/assinar sessão, lista de funcionários, lookup do efetivo, biblioteca de temas, dashboard, sidebar. Sessões antigas com `instrutor_cpf` continuam visíveis na detalhe (campo retornado pelo backend, apenas não editável pelo novo modal). Reversível em 7 hunks (3 backend + 4 frontend + 2 metadados). R-001 OK (apenas ADD COLUMN, nada apagado).",
+    tipo: "feature",
+    modulos: "SST/DDS/LGPD",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 14:30:00",
+  },
+  {
     version: 1872,
     titulo: "DDS Dashboard · Todos os gráficos clicáveis com drill-down fullscreen (regra de ouro) + responsividade reforçada",
     descricao: "User (16/05/2026, 2 screenshots Dashboard de DDS iPad): 'Quero todos os gráficos responsivos e quando clicar quero ver cada informação detalhada conforme nossas regras de ouro'.\n\n" +
