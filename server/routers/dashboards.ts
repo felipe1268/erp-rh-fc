@@ -2235,6 +2235,14 @@ async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: str
   const activeWhere = and(
     baseWhere,
     sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
+    // Rev. 1915 — Excluir PJ e Sócios da lista de Custo de Demissão em Massa.
+    // Decisão do usuário (16/05/2026, screenshot tabela CDM): "Quem é PJ é sócio
+    // não entra nesta lista". PJ e Sócio não são CLT, não geram rescisão
+    // trabalhista (aviso prévio, férias, 13º, multa FGTS) — incluí-los na
+    // provisão de caixa de demissão era contabilmente incorreto. Critério
+    // idêntico ao usado em avisoPrevioFerias.ts L2291/2463/2486/2558 e em
+    // dashboards.ts L94 (KPIs Visão Geral RH) — fonte de verdade do módulo.
+    sql`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))`,
   );
 
   const rows = await db.select({

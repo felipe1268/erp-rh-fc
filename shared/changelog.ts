@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1915 — RH · Dash Aviso Prévio · Tabela "Custo de Demissão em Massa" — EXCLUIR funcionários PJ e Sócios da lista.
+ * User (16/05/2026, screenshot tabela CDM): "Quem é PJ é sócio não entra nesta lista". PJ (Pessoa Jurídica) e Sócios não são CLT — não geram rescisão trabalhista (aviso prévio, férias, 13º, multa 40% FGTS). Inflavam o "custo total estimado" de demissão em massa com valores contabilmente incorretos. KPIs Visão Geral RH (`dashboards.ts` L94) e módulo Aviso Prévio (`avisoPrevioFerias.ts` L2291/2463/2486/2558) já filtravam corretamente — somente esta função CDM (Rev. 1908) tinha sido criada sem o filtro.
+ * Mudança (em `server/routers/dashboards.ts` L2235-2244 — `getDashCustoDemissaoMassa` `activeWhere`): adicionado `sql\`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))\`` ao AND existente. Critério IDÊNTICO ao do `KpisRH` (L94) e ao filtro server-side do módulo Aviso Prévio — paridade absoluta entre tabela CDM e detalhe oficial de Aviso Prévio do mesmo funcionário. `tipoContrato IS NULL` continua sendo tratado como CLT (default histórico) — preserva centenas de funcionários antigos sem o campo populado.
+ *   version → 1915.
+ * Resultado: tabela CDM exibe SOMENTE funcionários CLT/horistas ativos. PJ/Sócios ficam fora da provisão de caixa. KPIs "Funcionários Ativos" e "Folha Mensal Total" também caem proporcionalmente (já que os mesmos rows são reusados pra contagem e somatório). Disclaimer "+N ignorados" continua válido — passa a englobar também PJ/Sócios além de funcionários sem salário/admissão.
+ * Preservado: query batch vacation_periods Rev. 1911 (filtra pelo mesmo `empIds` reduzido), projeção dataFimAviso Rev. 1909-fix, sort por total desc, ordenação clicável Rev. 1909 no frontend, demais 10 seções do dashboard, UI react. Zero ALTER/DROP/DELETE. Reversível em 1 hunk de 3 linhas. R-001/R-007/R-010 OK.
+ *
  * Rev. 1914 — Planejamento · Programação Semanal LOTUS · REVERT total da Rev. 1912 parte A: voltar a respeitar 100% o calendário do MS Project (calendarioJson). Sáb/Dom são úteis se o MSP disser que são; folga se o MSP disser que é folga.
  * User (16/05/2026, 3ª revisão da regra de FDS no mesmo dia): "Respeite o calendário que veio do project para não ter erros". Decisão FINAL: o calendarioJson importado do MS Project é a FONTE DE VERDADE absoluta sobre o que é dia útil. ERP não deve sobrepor regras de FDS sobre o calendário do projeto. Cada obra tem suas regras (algumas trabalham sáb manhã, algumas têm escalas diferenciadas) e o MSP representa isso fielmente.
  * Mudança (em `client/src/components/planejamento/ProgramacaoSemanalLotus.tsx`):
