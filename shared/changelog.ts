@@ -25,6 +25,20 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1862,
+    titulo: "Cronograma · Cascata Responsável Manual — fix detecção de descendentes (EAP-prefix em vez de nivel)",
+    descricao: "User (16/05/2026, após Rev. 1860 ser entregue): 'Não tá funcionando' — o modal de cascata do Responsável Manual em pai → descendentes simplesmente não aparecia ao sair do campo no Cronograma.\n\n" +
+      "Causa raiz: `client/src/pages/planejamento/PlanejamentoDetalhe.tsx` L4048-4055 (Rev. 1860) detectava descendentes via `nivel` — `for (let i=idx+1; i<linhas.length; i++) { if ((l.nivel ?? 1) <= parentNivel) break; descIdxs.push(i); }`. PROBLEMA: o campo `nivel` vem `undefined` em muitos imports MSP/legado (só projetos novos via UI populam consistentemente). Quando `parentNivel = a.nivel ?? 1` e `(l.nivel ?? 1) <= 1` para o primeiro filho, o loop quebra IMEDIATAMENTE → `descIdxs.length === 0` → `return` precoce → modal nunca abre. Sintoma: usuário preenche 'Rohr' em pai com 30 filhos visíveis, sai do campo, NADA acontece.\n\n" +
+      "Diagnóstico (rg em PlanejamentoDetalhe.tsx): o resto do arquivo detecta hierarquia via PREFIXO DE EAP, não via nivel. Exemplos: L3902 `hasChildren = displayAtiv.some(b => b.eapCodigo && a.eapCodigo && b.eapCodigo.startsWith(a.eapCodigo + '.'))`; L3489-3493 (busca) usa `parts = String(a.eapCodigo).split('.'); parts.pop(); parentEaps.add(parts.join('.'))`. EAP é o backbone confiável da hierarquia (sempre populado em qualquer import porque é o identificador estrutural).\n\n" +
+      "Fix (1 hunk em PlanejamentoDetalhe.tsx L4047-4072 onBlur do input Responsável Manual): substituí a detecção por nivel-only por estratégia híbrida: (1) Se `parentEap = a.eapCodigo` existe → `linhas.forEach((l,i) => if (l.eapCodigo.startsWith(parentEap + '.')) descIdxs.push(i))` — pega TODA linha (qualquer profundidade) cujo EAP começa com `parentEap + '.'`. Isso cobre toda subárvore (filhos, netas, bisnetas) independente de nivel ser preenchido ou não. (2) Fallback para o loop antigo por nivel quando `eapCodigo` ausente (atividades sem EAP — raras mas possíveis). Loop posiciona no idx+1 e quebra ao subir de nível, comportamento original preservado.\n\n" +
+      "Preservado: ZERO mudança em backend/schema/contratos; particionamento `semValorIdxs`/`comValorIdxs`/`descIdxs` intacto; AlertDialog 3-ações intacto; cascata `setLinhas(... responsavelLotus + _respManual=true)` intacto; mutações de Salvar idem; outras lógicas que usam `nivel` (Gantt, Cronograma render, indent visual) NÃO tocadas (escopo é só o onBlur). Reversível em 1 hunk. R-001 OK.\n\n" +
+      "Resultado: agora pai com EAP '5' (5° PAVIMENTO) detecta corretamente descendentes '5.01', '5.01.01', '5.01.01.01' etc., abre modal com contagens corretas, e cascata funciona até as folhas conforme especificado na Rev. 1860.",
+    tipo: "bugfix",
+    modulos: "Planejamento/Cronograma",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 09:45:00",
+  },
+  {
     version: 1861,
     titulo: "DDS · Biblioteca expandida — 172 novos temas únicos (total 200+)",
     descricao: "User (16/05/2026, screenshot DDSGuia.tsx mostrando '33 tema(s) cadastrado(s)' em 3 categorias - 13 NRs / 12 Campanhas / 8 Vacinações): 'Cria mais o temas, importantes a serem tratados, quero uma biblioteca grande com 200 temas, não repetidos ok...'. Pedido: ampliar a biblioteca de DDS (Diálogo Diário de Segurança) de 33 para ~200 temas únicos, sem repetição.\n\n" +

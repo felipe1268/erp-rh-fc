@@ -4045,13 +4045,27 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                               const valorAtual = (e.target.value ?? "").trim();
                               const original = (respOriginalRef.current[idx] ?? "").trim();
                               if (!valorAtual || valorAtual === original) return;
-                              // Detecta descendentes (recursivo até folhas) via nivel/ordem
+                              // Rev. 1862 — Detecta descendentes via PREFIXO DE EAP (mesma
+                              // lógica do resto do arquivo, ex.: L3902 hasChildren). Fallback
+                              // por `nivel` quando EAP ausente. `nivel` cru NÃO é confiável
+                              // (vem undefined em muitos imports MSP), por isso EAP primeiro.
+                              const parentEap = (a.eapCodigo ?? "").trim();
                               const parentNivel = a.nivel ?? 1;
                               const descIdxs: number[] = [];
-                              for (let i = idx + 1; i < linhas.length; i++) {
-                                const l = linhas[i];
-                                if ((l.nivel ?? 1) <= parentNivel) break;
-                                descIdxs.push(i);
+                              if (parentEap) {
+                                // Modo EAP: pega TODA linha cujo eapCodigo começa com `parentEap + "."`
+                                linhas.forEach((l: any, i: number) => {
+                                  if (i === idx) return;
+                                  const eap = (l.eapCodigo ?? "").trim();
+                                  if (eap && eap.startsWith(parentEap + ".")) descIdxs.push(i);
+                                });
+                              } else {
+                                // Fallback por nivel + ordem sequencial
+                                for (let i = idx + 1; i < linhas.length; i++) {
+                                  const l = linhas[i];
+                                  if ((l.nivel ?? 1) <= parentNivel) break;
+                                  descIdxs.push(i);
+                                }
                               }
                               if (descIdxs.length === 0) return; // não é pai — segue o jogo
                               const semValorIdxs: number[] = [];
