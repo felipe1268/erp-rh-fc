@@ -9679,7 +9679,14 @@ export function EfetivoObraView({ equipeRaw, isLoading, docsMap = {} }: { equipe
                       </td>
                       <td className="px-4 py-2 text-slate-500 text-[13px]">{(() => {
                         if (!e.dataAdmissao) return "—";
-                        const adm = new Date(e.dataAdmissao);
+                        // Rev. 1849 — fatiar pra "YYYY-MM-DD" antes do Date():
+                        // timestamps PG ("2026-04-22 14:44:06.518812") quebram
+                        // new Date() no iOS Safari ("The string did not match the
+                        // expected pattern."). Idem padrão de FinanceiroContasAPagar L154.
+                        const admStr = String(e.dataAdmissao).slice(0, 10);
+                        if (!/^\d{4}-\d{2}-\d{2}$/.test(admStr)) return "—";
+                        const adm = new Date(admStr + "T00:00:00");
+                        if (isNaN(adm.getTime())) return "—";
                         const hoje = new Date();
                         let anos = hoje.getFullYear() - adm.getFullYear();
                         let meses = hoje.getMonth() - adm.getMonth();
@@ -11465,26 +11472,15 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       };
     }
 
-    // Rev. 1848 — Detecção ESTRUTURAL de grupos-raiz (não depende de `nivel`
-    // nem de `!includes('.')`, ambos frágeis pós-reimport MSP).
-    // Um grupo é "top-level" se NENHUM outro grupo no dataset é seu ancestral
-    // (i.e., não existe outro grupo cujo eapCodigo seja prefixo estrito do dele).
-    // Isso suporta hierarquias heterogêneas — projetos onde alguns ramos começam
-    // em "1" e outros em "2.1" são tratados corretamente, todos os tópicos
-    // aparecem no gráfico "Avanço Físico por Grupo".
-    const gruposComEap = atividades.filter((a: any) => a.isGrupo && a.eapCodigo);
-    const eapsGruposSet = new Set<string>(gruposComEap.map((a: any) => String(a.eapCodigo)));
-    const g1 = gruposComEap
-      .filter((a: any) => {
-        const eap = String(a.eapCodigo);
-        const partes = eap.split('.');
-        // Itera sobre todos os ancestrais EAP possíveis (ex.: "1.2.3" → "1.2", "1")
-        // e verifica se algum deles existe como grupo. Se sim, NÃO é raiz.
-        for (let i = partes.length - 1; i >= 1; i--) {
-          if (eapsGruposSet.has(partes.slice(0, i).join('.'))) return false;
-        }
-        return true;
-      })
+    // Rev. 1849 — "Todos os tópicos" no REFIS:
+    // A Rev. 1848 (filtro estrutural de raiz) ainda exibia só um grupo na obra 29
+    // porque o projeto tem UMA raiz EAP ('01' = ESGOTO) com vários sub-grupos
+    // ('01.01', '01.02', '01.07', '01.15' …). User pediu "todos os tópicos".
+    // Solução: pegar TODOS os grupos com eapCodigo (qualquer profundidade).
+    // O filtro final `g.nLeaves > 0` (linha abaixo do map) já remove containers
+    // sem folhas, evitando duplicação de bars vazios.
+    const g1 = atividades
+      .filter((a: any) => a.isGrupo && a.eapCodigo)
       .sort((a: any, b: any) => String(a.eapCodigo ?? '').localeCompare(String(b.eapCodigo ?? '')));
 
     return g1.map((g: any) => {

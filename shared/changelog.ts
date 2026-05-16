@@ -25,6 +25,26 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1849,
+    titulo: "Planejamento · REFIS gráfico mostra TODOS os grupos (qualquer profundidade) + iOS Safari date fix em Equipe",
+    descricao: "User (15/05/2026, após Rev. 1848 não resolver): \"No\" (REFIS ainda só ESGOTO) + \"No\" (erro 'The string did not match the expected pattern' começou após Rev. 1848 no iPhone, tela LOTUS REVTE-CIVIL).\n\n" +
+      "Diagnóstico: Rev. 1848 (detecção estrutural de raiz) não ajudou na obra 29 porque o projeto tem UMA raiz EAP ('01' = ESGOTO) com vários sub-grupos ('01.01', '01.02', '01.07', '01.15'…) — o filtro 'sem ancestral grupo' produzia o MESMO resultado do filtro original (`nivel===1 || !includes('.')`). User pediu literalmente 'todos os tópicos', incluindo os sub-grupos.\n\n" +
+      "Fix 1 (REFIS chart, client/src/pages/planejamento/PlanejamentoDetalhe.tsx L11471-11480): substituí filtro de raiz por filtro mínimo — pegar TODOS os grupos com eapCodigo (qualquer profundidade), ordenados por eapCodigo:\n" +
+      "  const g1 = atividades.filter((a) => a.isGrupo && a.eapCodigo).sort(...);\n" +
+      "Bloco 4 ('Avanço Físico por Grupo') agora exibe ESGOTO + 01.01 + 01.02 + 01.07 + 01.15 etc. Filtro final `g.nLeaves > 0` (linha L11503) preservado — descarta containers sem folhas evitando ruído. Bloco 5 (etapas dentro de cada grupo) intacto: itera sobre `g1.map(...).etapas` usando `gDepth+1` derivado do gEap real do grupo, então sub-níveis ainda são extraídos corretamente para grupos do nível raso.\n\n" +
+      "Fix 2 (iOS Safari date crash, mesmo arquivo L9683-9692): coluna 'Tempo de casa' na seção Equipe usava `new Date(e.dataAdmissao)` cru. Quando o backend devolve admissão como timestamp completo ('2026-04-22 14:44:06.518812'), iOS Safari lança 'The string did not match the expected pattern.' (toast capturado por error boundary). Patch defensivo idêntico ao padrão de FinanceiroContasAPagar.tsx L154:\n" +
+      "  const admStr = String(e.dataAdmissao).slice(0, 10);\n" +
+      "  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(admStr)) return '—';\n" +
+      "  const adm = new Date(admStr + 'T00:00:00');\n" +
+      "  if (isNaN(adm.getTime())) return '—';\n" +
+      "Fatiar pra 'YYYY-MM-DD' antes de parsear elimina o crash em qualquer Safari ou navegador strict. Render fallback retorna '—' em vez de quebrar.\n\n" +
+      "Preservado: ZERO mudança em backend, contrato tRPC, schema, migration, DELETE; calc()/prevInd()/blocos 4/5 render intactos; outros usos de `nivel===1` em gruposEap (L3123, L4025 — Gantt/Cronograma) NÃO alterados. Reversível em 2 hunks. Outros `new Date(...)` não-ISO em PlanejamentoDetalhe (L1797-1799, L5159-5161) NÃO foram tocados pois usam dataInicio/dataFim que são DATE columns ('YYYY-MM-DD') seguros no iOS — só patches reativos onde o crash foi confirmado. R-001 OK.",
+    tipo: 'bugfix',
+    modulos: 'Planejamento',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 21:00:00',
+  },
+  {
     version: 1848,
     titulo: "Planejamento · REFIS Análise Detalhada — gráfico 'Avanço Físico por Grupo' mostra TODOS os tópicos (não só ESGOTO)",
     descricao: "User (15/05/2026, screenshot /planejamento/29 aba REFIS, gráfico 'Avanço Físico por Grupo' mostrando UNICA barra ESGOTO 19.30%/33.30% + bloco de etapas só com sub-bars 'ESGOTO:' a 0%): \"o refis esta fugado preciso que gere grafico de todo os topicos analise detalhada como estava anteriormente.. porque vc mudou isso?\" + \"hoje so apareceu o topico esgoto.. não da\".\n\n" +
