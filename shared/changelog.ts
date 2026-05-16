@@ -25,6 +25,22 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1851,
+    titulo: "Programação Semanal LOTUS · Indiretas/LoE auto-progridem (PMBOK §6.4.2) — coluna Real e status corrigidos",
+    descricao: "User (15/05/2026, screenshot LOTUS Semana 1 obra REVTE-CIVIL): 'As atividades indiretas foram medidas tbm, pq está apresentando que não teve atividade?'. Atividades 01.01-01.05 marcadas INDIRETA (LoE) — Equipe técnica, Refeições, Canteiro, Máquinas, ASO/EPI — apareciam com Prev. preenchido (0,01-0,04%) mas Real=0% e status 'Não exec.' (vermelho), distorcendo PPC do Last Planner.\n\n" +
+      "Causa-raiz: `client/src/components/planejamento/ProgramacaoSemanalLotus.tsx` L495 (memo `metricas`) e L1011 (memo de export PDF) — `realPct = peso * (somaSemanal / 100)` onde somaSemanal vem de `planejamento_avancos.percentualSemanal`. Indiretas/LoE NÃO têm entradas em planejamento_avancos por design (são auto-progressivas), então realPct ficava sempre 0 → status 'Não exec.' indevido.\n\n" +
+      "Fundamento PMBOK 7ª §6.4.2 / DCMA Assessment #6: Level of Effort tasks (apoio/overhead que cresce linearmente com o calendário) por DEFINIÇÃO realizam = planejado — não exigem medição manual e não compõem caminho crítico (já tratado em Rev. 1641/1786 para SPI/aderência globais, mas faltava no detalhe linha-a-linha do LOTUS).\n\n" +
+      "Fix (1 arquivo, 2 hunks idênticos):\n" +
+      "1. L498-522 (memo `metricas` da tela): após cálculo padrão de realPct, se `a.isIndireta`: realPct = metaPct (auto = planejado), somaSemanal recalculado pra coerência do tooltip ((metaPct/peso)*100), e acumPct sintetizado como `min(100, duDecorrido/duEnv * 100)` — fração de dias úteis decorridos do envelope até o cutoff (semFim ou hoje, se semana corrente). Permite que o status vire 'Concluída' (acumPct >= 100) no fim do envelope.\n" +
+      "2. L1014-1037 (memo do export PDF): mesmo tratamento espelhado pra paridade tela ↔ PDF impresso pelo cliente.\n\n" +
+      "Esperado: 01.01-01.05 agora exibem Real ≈ Prev. (~0,01-0,04% por semana), Δ ≈ 0, status 'No prazo' (verde) em vez de 'Não exec.'. PPC do Last Planner deixa de penalizar overhead. Diretas (02.01.01.01 etc) inalteradas — continuam dependendo da medição manual em avancos.\n\n" +
+      "Preservado: ZERO mudança em backend/contrato tRPC/schema/migration/DELETE; statusLabel/aderenciaPct intactos; outros memos (analiseSemana, totaisSemana etc) não tocados — já filtravam indiretas implicitamente via folhas. Reversível em 2 hunks. R-001 OK.",
+    tipo: 'bugfix',
+    modulos: 'Planejamento',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 22:00:00',
+  },
+  {
     version: 1850,
     titulo: "Planejamento · REFIS Análise Detalhada — gráfico organizado por CATEGORIA (5°/6° PAVIMENTO etc) usando hierarquia MSP nivel/ordem",
     descricao: "User (15/05/2026, screenshot da Rev. 1849 mostrando ESGOTO/INFRA ESTRUTURA E TUBULAÇÃO/VENTILAÇÃO repetidos 4-5x cada): 'Faça o ajuste de REFIS, quero ver por grupo de categoria, 5 pavimento, 6 pavimento. Etc... melhora nesta estrutura'.\n\n" +

@@ -492,7 +492,31 @@ export default function ProgramacaoSemanalLotus(props: Props) {
           if (acu > acumPct) acumPct = acu;
         }
       }
-      const realPct = peso * (somaSemanal / 100);
+      let realPct = peso * (somaSemanal / 100);
+      // Rev. 1851 — Indiretas/LoE auto-progridem por definição (PMBOK §6.4.2 /
+      // DCMA #6): realizado = planejado por construção, sem entrada manual em
+      // planejamento_avancos. Sem este tratamento, a coluna Real fica sempre 0
+      // e o status colore "Não exec." indevidamente para 01.01-01.05 (equipe
+      // técnica, refeições, canteiro, máquinas, ASO/EPI), distorcendo PPC.
+      // acumPct sintetizado como fração de dias úteis decorridos do envelope —
+      // permite o status virar "Concluída" no fim do projeto.
+      if (a.isIndireta) {
+        if (metaPct > 0) {
+          realPct = metaPct;
+          if (peso > 0) somaSemanal = (metaPct / peso) * 100;
+        }
+        if (ini && fim) {
+          const duEnv = diasUteisEntre(ini, fim, calMSP);
+          if (duEnv > 0) {
+            const cutoffAcum = cutoffStr < fim ? cutoffStr : fim;
+            if (cutoffAcum >= ini) {
+              const duDecorrido = diasUteisEntre(ini, cutoffAcum, calMSP);
+              const acumAuto = Math.min(100, (duDecorrido / duEnv) * 100);
+              if (acumAuto > acumPct) acumPct = acumAuto;
+            }
+          }
+        }
+      }
       const aderenciaPct = metaPct > 0 ? (realPct / metaPct) * 100 : null;
       out.set(a.id, { metaPct, realPct, aderenciaPct, acumPct, somaSemanal });
     }
@@ -984,7 +1008,27 @@ export default function ProgramacaoSemanalLotus(props: Props) {
               if (acu > acumPct) acumPct = acu;
             }
           }
-          const realPct = peso * (somaSemanal / 100);
+          let realPct = peso * (somaSemanal / 100);
+          // Rev. 1851 — Indiretas/LoE auto-progridem (PMBOK §6.4.2). Mesmo
+          // tratamento do bloco `metricas` ~L498-522: realPct = metaPct e
+          // acumPct sintetizado por dias úteis decorridos do envelope.
+          if (a.isIndireta) {
+            if (metaPct > 0) {
+              realPct = metaPct;
+              if (peso > 0) somaSemanal = (metaPct / peso) * 100;
+            }
+            if (ini && fim) {
+              const duEnv = diasUteisEntre(ini, fim, calMSP);
+              if (duEnv > 0) {
+                const cutoffAcum = cutoffStr < fim ? cutoffStr : fim;
+                if (cutoffAcum >= ini) {
+                  const duDecorrido = diasUteisEntre(ini, cutoffAcum, calMSP);
+                  const acumAuto = Math.min(100, (duDecorrido / duEnv) * 100);
+                  if (acumAuto > acumPct) acumPct = acumAuto;
+                }
+              }
+            }
+          }
           const aderenciaPct = metaPct > 0 ? (realPct / metaPct) * 100 : null;
           mts.set(a.id, { metaPct, realPct, aderenciaPct, acumPct, somaSemanal });
         }
