@@ -571,7 +571,7 @@ export default function DDSGuia() {
   });
   // Rev. 1730 — abrir modal já preenchendo instrutor (usuário logado), data hoje, hora 07:30
   // Se nenhum tema vier, sugere o tema do mês atual (campanha ou vacinação) automaticamente.
-  const abrirNovaSessao = (temaPre?: any) => {
+  const abrirNovaSessao = (temaPre?: any, obraPre?: { id: number; ids?: number[] } | null) => {
     let temaEscolhido = temaPre;
     if (!temaEscolhido) {
       const mesAtual = new Date().getMonth() + 1;
@@ -580,8 +580,11 @@ export default function DDSGuia() {
       );
       if (sugerido) temaEscolhido = sugerido;
     }
+    // Rev. 1959 — opcionalmente pre-seleciona obra (vinda da aba "Uso por Obra")
+    const obraIdPre = obraPre?.id ? String(obraPre.id) : "";
+    const obraIdsPre = obraPre?.ids && obraPre.ids.length > 0 ? obraPre.ids : (obraPre?.id ? [obraPre.id] : []);
     setSessaoForm({
-      obraId: "", obraIds: [] as number[], data: new Date().toISOString().slice(0, 10), hora: "07:30",
+      obraId: obraIdPre, obraIds: obraIdsPre as number[], data: new Date().toISOString().slice(0, 10), hora: "07:30",
       temaId: temaEscolhido?.id ? String(temaEscolhido.id) : "",
       tituloTema: temaEscolhido?.titulo ?? "",
       conteudoMd: temaEscolhido?.conteudoMd ?? temaEscolhido?.descricao ?? "",
@@ -766,6 +769,40 @@ export default function DDSGuia() {
   const [bibEsconderUsados, setBibEsconderUsados] = useState(false);
   const [bibOrdenarPorUso, setBibOrdenarPorUso] = useState(true);  // não-usados primeiro
 
+  // Rev. 1959 — Aba "Uso por Obra": seletor de obra (null = todas as obras com permissão).
+  // `obrasQ` já vem filtrado por allowedObras no server (Rev. 1731), então respeita permissão do user.
+  const [usoObraSelId, setUsoObraSelId] = useState<number | null>(null);
+  // Map de uso por TEMA filtrado por OBRA escolhida (ou todas as obras permitidas).
+  const usoPorTemaObra = useMemo(() => {
+    const map = new Map<number, { count: number; ultimaData: string | null; diasAtras: number | null }>();
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const obrasPermitIds = new Set<number>(((obrasQ.data as any[]) ?? []).map((o: any) => Number(o.id)));
+    for (const s of sessoes) {
+      const tid = s.temaId ? Number(s.temaId) : null;
+      if (!tid) continue;
+      const oid = s.obraId ? Number(s.obraId) : null;
+      // Se obra escolhida: só conta essa. Se não: só conta sessões em obras permitidas (ou sessões sem obra/avulsas).
+      if (usoObraSelId !== null) {
+        if (oid !== usoObraSelId) continue;
+      } else {
+        if (oid !== null && !obrasPermitIds.has(oid)) continue;
+      }
+      const prev = map.get(tid) ?? { count: 0, ultimaData: null, diasAtras: null };
+      prev.count += 1;
+      const d = s.data ?? null;
+      if (d && (!prev.ultimaData || d > prev.ultimaData)) prev.ultimaData = d;
+      map.set(tid, prev);
+    }
+    for (const [, v] of map) {
+      if (v.ultimaData) {
+        const dt = new Date(v.ultimaData + "T12:00:00");
+        dt.setHours(0, 0, 0, 0);
+        v.diasAtras = Math.max(0, Math.round((hoje.getTime() - dt.getTime()) / 86_400_000));
+      }
+    }
+    return map;
+  }, [sessoes, usoObraSelId, obrasQ.data]);
+
   return (
     <DashboardLayout>
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-4">
@@ -920,6 +957,8 @@ export default function DDSGuia() {
         <TabsList>
           <TabsTrigger value="calendario"><CalendarDays className="h-4 w-4 mr-1" /> Calendário Anual</TabsTrigger>
           <TabsTrigger value="biblioteca"><BookOpen className="h-4 w-4 mr-1" /> Biblioteca de Temas</TabsTrigger>
+          {/* Rev. 1959 — nova aba: tema já usado vs não usado por obra (respeita permissão do user) */}
+          <TabsTrigger value="usoobra"><BookOpen className="h-4 w-4 mr-1" /> Uso por Obra</TabsTrigger>
           <TabsTrigger value="sessoes"><Users className="h-4 w-4 mr-1" /> Sessões ({sessoes.length})</TabsTrigger>
         </TabsList>
 
@@ -1279,6 +1318,163 @@ export default function DDSGuia() {
               Nenhum tema cadastrado. Use "Carregar biblioteca padrão" no topo da página.
             </div>
           )}
+        </TabsContent>
+
+        {/* =================== USO POR OBRA (Rev. 1959) =================== */}
+        <TabsContent value="usoobra" className="mt-4">
+          {(() => {
+            const obrasList = ((obrasQ.data as any[]) ?? [])
+              .filter((o: any) => !o.status || o.status === "Em_Andamento")
+              .sort((a: any, b: any) => String(a.nome ?? "").localeCompare(String(b.nome ?? ""), "pt-BR"));
+            const obraSel = usoObraSelId !== null ? obrasList.find((o: any) => Number(o.id) === usoObraSelId) : null;
+            const usados = temas.filter((t: any) => (usoPorTemaObra.get(t.id)?.count ?? 0) > 0);
+            const naoUsados = temas.filter((t: any) => (usoPorTemaObra.get(t.id)?.count ?? 0) === 0);
+            // ordena usados por data de última (mais recente primeiro), não-usados por categoria+título
+            const usadosOrd = [...usados].sort((a: any, b: any) => {
+              const da = usoPorTemaObra.get(a.id)?.diasAtras ?? 99999;
+              const db = usoPorTemaObra.get(b.id)?.diasAtras ?? 99999;
+              return da - db;
+            });
+            const naoUsadosOrd = [...naoUsados].sort((a: any, b: any) =>
+              String(a.categoria ?? "").localeCompare(String(b.categoria ?? "")) ||
+              String(a.titulo ?? "").localeCompare(String(b.titulo ?? ""), "pt-BR")
+            );
+
+            const ColunaTema = ({ t, usado }: { t: any; usado: boolean }) => {
+              const uso = usoPorTemaObra.get(t.id);
+              const corCat =
+                t.categoria === "NR" ? "bg-rose-50 border-rose-200 text-rose-800" :
+                t.categoria === "CAMPANHA" ? "bg-blue-50 border-blue-200 text-blue-800" :
+                t.categoria === "VACINACAO" ? "bg-violet-50 border-violet-200 text-violet-800" :
+                "bg-slate-50 border-slate-200 text-slate-700";
+              const obraDeAcao = obraSel
+                ? { id: Number(obraSel.id), ids: obrasList.filter((o: any) => o.nome === obraSel.nome).map((o: any) => Number(o.id)) }
+                : null;
+              return (
+                <div className={`rounded-lg border p-2.5 flex items-start justify-between gap-2 ${usado ? "bg-amber-50/40 border-amber-200" : "bg-emerald-50/30 border-emerald-200"}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${corCat}`}>
+                        {t.codigo ?? t.categoria ?? "—"}
+                      </span>
+                      <span className="font-semibold text-sm text-slate-800 leading-tight">{t.titulo}</span>
+                    </div>
+                    {usado && uso && (
+                      <p className="text-[11px] text-amber-800 mt-1">
+                        ✓ Usado {uso.count}× ·
+                        {uso.ultimaData
+                          ? ` última em ${new Date(uso.ultimaData + "T12:00:00").toLocaleDateString("pt-BR")}`
+                          + (uso.diasAtras === 0 ? " (hoje)" : ` (há ${uso.diasAtras}d)`)
+                          : ""}
+                      </p>
+                    )}
+                    {!usado && (
+                      <p className="text-[11px] text-emerald-700 mt-1">✨ Ainda não apresentado {obraSel ? "nesta obra" : "nas suas obras"}</p>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-[11px] h-7 px-2 flex-shrink-0"
+                    onClick={() => abrirNovaSessao(t, obraDeAcao)}
+                    title={obraSel ? `Iniciar sessão com este tema na obra ${obraSel.nome}` : "Iniciar sessão com este tema"}
+                  >
+                    <Plus className="h-3 w-3 mr-0.5" /> Sessão
+                  </Button>
+                </div>
+              );
+            };
+
+            return (
+              <div className="space-y-4">
+                {/* Seletor de obra */}
+                <div className="bg-white border border-slate-200 rounded-xl p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <BookOpen className="h-4 w-4 text-slate-600" />
+                    <span className="text-sm font-semibold text-slate-700">Escolha a obra para ver quais temas DDS já foram apresentados</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-2">
+                    Você vê apenas as obras às quais tem permissão de acesso ({obrasList.length} obra{obrasList.length === 1 ? "" : "s"} ativa{obrasList.length === 1 ? "" : "s"}).
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setUsoObraSelId(null)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition ${
+                        usoObraSelId === null
+                          ? "bg-emerald-600 text-white border-emerald-600"
+                          : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      🌐 Todas minhas obras
+                    </button>
+                    {obrasList.map((o: any) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        onClick={() => setUsoObraSelId(Number(o.id))}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition ${
+                          usoObraSelId === Number(o.id)
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                        }`}
+                      >
+                        🏗️ {o.nome}
+                      </button>
+                    ))}
+                    {obrasList.length === 0 && (
+                      <span className="text-xs italic text-slate-400">Nenhuma obra ativa com permissão.</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Resumo + 2 colunas */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* COLUNA: JÁ USADOS */}
+                  <div className="bg-amber-50/30 border border-amber-200 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-bold text-amber-900 flex items-center gap-1">
+                        ✓ Já usados {obraSel ? `nesta obra` : `nas minhas obras`}
+                      </h3>
+                      <span className="text-xs font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">
+                        {usadosOrd.length}
+                      </span>
+                    </div>
+                    {usadosOrd.length === 0 ? (
+                      <p className="text-xs italic text-slate-500 py-4 text-center">
+                        Nenhum tema apresentado ainda {obraSel ? "nesta obra" : "nas suas obras"}.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5 max-h-[600px] overflow-auto pr-1">
+                        {usadosOrd.map((t: any) => <ColunaTema key={t.id} t={t} usado={true} />)}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* COLUNA: NÃO USADOS */}
+                  <div className="bg-emerald-50/30 border border-emerald-200 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-bold text-emerald-900 flex items-center gap-1">
+                        ✨ Ainda não usados {obraSel ? `nesta obra` : `nas minhas obras`}
+                      </h3>
+                      <span className="text-xs font-bold bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full">
+                        {naoUsadosOrd.length}
+                      </span>
+                    </div>
+                    {naoUsadosOrd.length === 0 ? (
+                      <p className="text-xs italic text-slate-500 py-4 text-center">
+                        Todos os {temas.length} temas da biblioteca já foram apresentados {obraSel ? "nesta obra" : "nas suas obras"}. 🎉
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5 max-h-[600px] overflow-auto pr-1">
+                        {naoUsadosOrd.map((t: any) => <ColunaTema key={t.id} t={t} usado={false} />)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </TabsContent>
 
         {/* =================== SESSÕES =================== */}

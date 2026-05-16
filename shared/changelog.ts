@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1959 — SST · DDS Guia · Nova aba "Uso por Obra" (já usados vs ainda não usados, respeitando permissão).
+ * User (16/05/2026, screenshot 19h06 da tela DDS com Biblioteca aberta no meio de "Gerando com IA — 4/56 6%"): "Cria uma aba dizendo o tema já usado na obra que o usuário tem permissão e o que ainda não foram usados".
+ * Diferença vs Rev. 1957 (que conta uso por COMPANY): nova aba conta uso POR OBRA, com seletor que respeita exatamente as obras às quais o user tem permissão (via `obras.listActive` que aplica `allowedObras` no server — Rev. 1731).
+ * Mudança (`client/src/pages/sst/DDSGuia.tsx`, único arquivo):
+ *   (1) `abrirNovaSessao` ganha 2º parâmetro opcional `obraPre?: { id, ids? }` — quando vier, pre-seleciona a obra no formulário de Nova Sessão (passa `obraId` + `obraIds` ao `setSessaoForm`). Compatível com todas as 6 chamadas antigas (param opcional).
+ *   (2) Novo state `usoObraSelId: number|null` (null = "Todas minhas obras") + novo `useMemo usoPorTemaObra` paralelo ao Rev. 1957 mas que filtra `sessoes` por `s.obraId`. Quando obra escolhida: só conta sessões DAQUELA obra. Quando "Todas": conta sessões em qualquer obra permitida (Set de IDs vindos de `obrasQ.data`).
+ *   (3) Nova `TabsTrigger value="usoobra"` entre Biblioteca e Sessões, com ícone BookOpen e label "Uso por Obra".
+ *   (4) Nova `TabsContent value="usoobra"`:
+ *       - Cabeçalho: card com chips de obras (uma pílula por obra ativa permitida) + chip "🌐 Todas minhas obras" (default, verde). Filtragem por `status === "Em_Andamento"` (mesmo critério Rev. 1731). Mensagem informando quantidade de obras permitidas.
+ *       - Layout 2 colunas (`grid md:grid-cols-2`):
+ *         - **Amber "✓ Já usados"**: lista cards ordenados por `diasAtras ASC` (mais recente primeiro). Cada card mostra código/categoria + título + linha "✓ Usado N× · última em DD/MM/AAAA (há Yd)" + botão "Sessão" (Plus icon) que chama `abrirNovaSessao(tema, obraSel)` — pre-selecionando obra atual no formulário.
+ *         - **Emerald "✨ Ainda não usados"**: lista cards ordenados por categoria + título. Cada card mesma estrutura mas com texto "✨ Ainda não apresentado nesta obra/nas suas obras" + botão "Sessão" idem.
+ *       - Empty states: "Nenhum tema apresentado ainda" (amber) e "Todos os N temas já foram apresentados 🎉" (emerald).
+ *       - Contador por coluna no header (pill com count).
+ *       - Cores por categoria nos cards (NR=rose, CAMPANHA=blue, VACINACAO=violet, LIVRE=slate).
+ *       - max-h 600px + overflow auto pra não estourar a tela em obras com muitas sessões.
+ * version → 1959.
+ * Resultado:
+ *   - Engenheiro abre aba, escolhe sua obra (ex.: "NAVE NORTE"), vê IMEDIATAMENTE os 30 temas que já foram apresentados ali e os 220+ que ainda não.
+ *   - 1 click no botão "Sessão" abre Nova Sessão já com obra pré-selecionada — fluxo "qual o próximo DDS dessa obra?" vira óbvio.
+ *   - "🌐 Todas minhas obras" agrega visão pessoal — útil pra coordenadores SST com várias obras.
+ * Preservado:
+ *   - Rev. 1957 (`usoPorTema` por company, badges, alerta no modal, toggles biblioteca) INTACTOS — usoPorTemaObra é independente.
+ *   - `obras.listActive` permission filter (Rev. 1731) INTACTO — backend respeita allowedObras.
+ *   - Rev. 1956 (paralelização bulk IA), Rev. 1955 (barra modal), Rev. 1954 (80 temas seed), Rev. 1953 (gerar mais IA).
+ *   - Modal Nova Sessão Rev. 1731 (sidebar obras), `criarSessao` mutation, listSessoes, calendarioAnual — INTACTOS.
+ *   - Zero ALTER/DROP/DELETE, zero backend, zero schema, zero tRPC novo. R-001/R-007/R-010 OK.
+ * Reversível em 4 hunks. Conta sessões em qualquer status (incluindo abertas) — coerente com badge da Biblioteca Rev. 1957.
+ *
  * Rev. 1958 — Infra · Faxina do replit.md + reforço da convenção top-5.
  * User (16/05/2026): "tem outros 10+ blocos truncados antigos no meio do arquivo. Quando quiser, faço uma rev de manutenção só pra essa faxina... Arruma isso para nunca mais acontecer".
  * Causa-raiz: revisões anteriores ao colapsar blocos antigos no `replit.md` deixaram resíduos:
