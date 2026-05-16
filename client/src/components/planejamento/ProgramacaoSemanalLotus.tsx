@@ -1398,6 +1398,35 @@ export default function ProgramacaoSemanalLotus(props: Props) {
             // como dia trabalhado (Rev. 1875 dias_trabalhados_extras) saía
             // apenas com o cinza de fundo no Excel, divergindo da tela.
             const diasExtrasAtvExp = diasExtrasPorAtv.get(a.id) ?? null;
+            // Rev. 1904 — Reset DEFINITIVO de BRANCO em TODAS as 4 linhas ×
+            // 5 dias úteis (cols J=10..N=14) ANTES do loop de pintura.
+            // Resolve 2 bugs reportados (user 16/05/2026, screenshot LOTUS
+            // Sem.01 com Mon-Thu):
+            //   (1) "BLUE não respeita 2ª célula" — quando inPrev=false,
+            //       r0+1 herdava cor residual (azul/verde) do template; a
+            //       Rev. 1897 só cobriu r0/r0+3 com solid BRANCO, deixando
+            //       r0+1/r0+2 em pattern:none que MANTÉM fgColor herdado em
+            //       LibreOffice/Excel Online.
+            //   (2) "CUTOFF não respeitado" — dias além da janela `dias`
+            //       (ex: semana clipped por projetoStart pra 4 dias úteis,
+            //       cIdx=14/N sem data) ficavam com r0+1/r0+2 coloridos por
+            //       residual, simulando "paint vazando além do cutoff
+            //       visível da semana".
+            // Fix DEFINITIVO: solid BRANCO em r0/r0+1/r0+2/r0+3 cols J-N
+            // ANTES do loop. O dias.forEach a seguir SOBRESCREVE r0+1/r0+2
+            // só quando há corTop/corBot. Resultado: dias sem previsto OU
+            // além do cutoff ficam 100% brancos; dias com previsto recebem
+            // azul (r0+1) + status (r0+2); sem template-bleed.
+            // Mantém cols 15-16 (Sáb/Dom) intactas — o cinza_fds Rev. 1893
+            // foi aplicado antes via pintaCinzaFds(r0) (L1361/1365).
+            const BRANCO = "FFFFFFFF";
+            for (let cIdx = 10; cIdx <= 14; cIdx++) {
+              for (let dr = 0; dr < ROWS_PER_TASK; dr++) {
+                ws.getCell(r0 + dr, cIdx).fill = {
+                  type: "pattern", pattern: "solid", fgColor: { argb: BRANCO },
+                } as any;
+              }
+            }
             dias.forEach((d, di) => {
               const cIdx = 10 + di; // J=10
               const f = faixasCelula(
@@ -1437,23 +1466,13 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                 ws.getCell(r0 + 2, cIdx).fill = { type: "pattern", pattern: "solid", fgColor: { argb: corBot } } as any;
               }
             });
-            // Rev. 1897 — Reforço defensivo: força margens BRANCAS SÓLIDAS
-            // em r0 e r0+3 para TODAS as cols de dias úteis (10=J Seg ..
-            // 14=N Sex). Não toca 15-16 (Sáb/Dom) para preservar o
-            // cinza_fds. O init (L1202-1207) aplica `pattern:"none"`, mas
-            // alguns templates trazem fills herdados em `pattern:"solid"`
-            // com `fgColor` que sobrevivem ao reset por `pattern:"none"` em
-            // certas builds do ExcelJS (o fgColor persiste no XML e alguns
-            // viewers — LibreOffice, Excel Online — reaplicam a cor).
-            // Solução: pintar SÓLIDO BRANCO (FFFFFFFF) sobrescreve o fgColor
-            // herdado de forma determinística cross-viewer (architect Rev.
-            // 1897). Garante a convenção LOTUS branco/azul/status/branco
-            // 100% das vezes, independente do template de entrada.
-            const BRANCO = "FFFFFFFF";
-            for (let cIdx = 10; cIdx <= 14; cIdx++) {
-              ws.getCell(r0,     cIdx).fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRANCO } } as any;
-              ws.getCell(r0 + 3, cIdx).fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRANCO } } as any;
-            }
+            // Rev. 1897/1904 — O reforço defensivo de margens BRANCAS em
+            // r0/r0+3 foi PROMOVIDO p/ ANTES do loop (Rev. 1904 acima),
+            // cobrindo r0/r0+1/r0+2/r0+3 — não precisa mais aqui (o paint
+            // do dias.forEach sobrescreve r0+1/r0+2 quando há corTop/corBot,
+            // r0/r0+3 sempre permanecem BRANCAS porque o loop não toca
+            // elas). Mantida a regra "não toca 15-16 (Sáb/Dom) p/ preservar
+            // cinza_fds Rev. 1893" — o reset Rev. 1904 também é cIdx 10-14.
           }
         });
 
