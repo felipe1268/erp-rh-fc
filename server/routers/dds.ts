@@ -1178,13 +1178,16 @@ Gere o roteiro detalhado seguindo EXATAMENTE o formato exigido (lembre da 1ª li
           ? content.map((c: any) => c?.text ?? "").join("")
           : "").trim();
 
-        // Rev. 1960 — extrai a 1ª linha "<!-- AREA_TEMA: XXX -->" e remove do markdown.
+        // Rev. 1960 — extrai a tag "<!-- AREA_TEMA: XXX -->" e REMOVE do markdown.
+        // Regex resiliente: aceita a tag em qualquer posição (não só 1ª linha) caso a IA
+        // adicione preâmbulo. Match global p/ remover múltiplas ocorrências (se IA insistir).
         let areaTema: string | null = null;
-        const mArea = text.match(/^\s*<!--\s*AREA_TEMA\s*:\s*([A-Z_]+)\s*-->\s*\n?/i);
+        const reArea = /<!--\s*AREA_TEMA\s*:\s*([A-Z_]+)\s*-->/gi;
+        const mArea = reArea.exec(text);
         if (mArea) {
           areaTema = coerceDDSArea(mArea[1]);
-          text = text.slice(mArea[0].length).trimStart();
         }
+        text = text.replace(reArea, "").replace(/^\s*\n+/, "").trim();
 
         // Validação de contrato (Rev. 1740): exige as 6 seções fixas e tamanho razoável.
         const SECOES_OBRIGATORIAS = ["Objetivo", "Por que importa", "Pontos-chave", "Aplicação prática", "Perguntas", "Reforço final"];
