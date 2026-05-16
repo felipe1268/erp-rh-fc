@@ -25,6 +25,26 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1872,
+    titulo: "DDS Dashboard · Todos os gráficos clicáveis com drill-down fullscreen (regra de ouro) + responsividade reforçada",
+    descricao: "User (16/05/2026, 2 screenshots Dashboard de DDS iPad): 'Quero todos os gráficos responsivos e quando clicar quero ver cada informação detalhada conforme nossas regras de ouro'.\n\n" +
+      "Backend (`server/routers/dds.ts` dashboardKpis L1750-1781): adicionado campo `sessoesDetalhe` ao retorno — array com {id, data, obraNome, tituloTema, categoria, instrutor, status, mes, dow, totalParticipantes, presentes, assinados} de cada sessão do período. Pré-agregado em memória sobre os mesmos `sessoesPeriodo` e `participantes` já consultados (sem N+1, sem queries extras). Permite filtrar por qualquer dimensão clicada no client.\n\n" +
+      "Frontend (`client/src/pages/sst/DDSDashboard.tsx` reescrito):\n" +
+      "  - **Responsividade**: cada gráfico agora envolto em wrapper com altura fixa (260px ou proporcional ao count) + ResponsiveContainer 100%/100% (antes era altura inline sem container — quebrava em iPad portrait).\n" +
+      "  - **Drill-down** em 6 gráficos: Sessões por mês (line), Sessões por categoria (pie), Top obras (bar), Top temas (bar), Top instrutores (bar), Frequência por dia da semana (bar). Cada onClick chama `openDrill(title, filterFn)` que filtra `sessoesDetalhe`.\n" +
+      "  - **Modal fullscreen** seguindo padrão Rev. 1869/1731: `<DialogContent resizable={false} className='w-screen sm:w-[98vw] sm:max-w-[1600px] h-[100dvh] sm:h-[95vh]...'>`. Header sticky (gradiente cyan→violet) com título + badge contagem + busca + botão CSV + fechar; body scroll com tabela responsiva (colunas Categoria/Instrutor escondidas em mobile via `hidden md:table-cell`); footer sticky com contadores.\n" +
+      "  - **Tabela drill**: Data, Obra, Tema, Categoria, Instrutor, Status, Convocados, Presentes, Assinados + botão 'Abrir' que navega pra `/sst/dds?sessaoId=X`.\n" +
+      "  - **Export CSV** com BOM UTF-8, separador ';' compatível Excel pt-BR.\n" +
+      "  - **Busca em tempo real** no drill (obra + tema + instrutor).\n" +
+      "  - Hint no subtítulo: 'Clique em qualquer barra/fatia para detalhar'.\n\n" +
+      "Recharts onClick: Pie passa o item direto (`p.payload.categoria`); Bar/Line passam via `activePayload[0].payload`. Implementado helper `onChartClick(payload, builder)` que extrai o item e delega para builder específico de cada gráfico.\n\n" +
+      "Preservado: ZERO mudança em KPIs, biblioteca de temas, lista 'Sem DDS no período', filtros de período, navegação. Reversível em 2 hunks (1 backend + 1 frontend). R-001 OK.",
+    tipo: "feat",
+    modulos: "SST/DDS/Dashboard",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 13:50:00",
+  },
+  {
     version: 1871,
     titulo: "DDS · Página DDSGuia agora envolvida em DashboardLayout (sidebar finalmente aparece)",
     descricao: "User (16/05/2026, dois screenshots — DDS sem sidebar vs sidebar correta de outra tela): 'Porque não colocou a barra lateral ainda, qual a dificuldade em incluir'.\n\n" +

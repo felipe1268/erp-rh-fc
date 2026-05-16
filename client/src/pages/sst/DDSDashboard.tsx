@@ -5,13 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useLocation } from "wouter";
 import {
   ShieldCheck, Users, FileSignature, Calendar, BookOpen, Activity,
   TrendingUp, AlertTriangle, ClipboardCheck, UserCheck, Clock, ArrowLeft,
-  Building2, GraduationCap, BarChart3,
+  Building2, GraduationCap, BarChart3, Download, Search, X as XIcon,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -33,6 +34,12 @@ const CAT_LABELS: Record<string, string> = {
   LIVRE: "Tema Livre",
   SEM_TEMA: "Sem tema vinculado",
 };
+const STATUS_LABELS: Record<string, string> = {
+  aberta: "Aberta",
+  finalizada: "Finalizada",
+  cancelada: "Cancelada",
+};
+const DOW_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 function fmtNum(v: number) {
   return (v ?? 0).toLocaleString("pt-BR");
@@ -51,6 +58,11 @@ function defaultIni() {
 }
 function defaultFim() {
   return new Date().toISOString().slice(0, 10);
+}
+function fmtDataBR(iso: string) {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
 }
 
 function KPI({
@@ -75,6 +87,21 @@ function KPI({
   );
 }
 
+type SessaoDet = {
+  id: number;
+  data: string;
+  obraNome: string;
+  tituloTema: string;
+  categoria: string;
+  instrutor: string;
+  status: string;
+  mes: string;
+  dow: number;
+  totalParticipantes: number;
+  presentes: number;
+  assinados: number;
+};
+
 export default function DDSDashboard() {
   const { selectedCompanyId } = useCompany();
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
@@ -83,12 +110,19 @@ export default function DDSDashboard() {
   const [dataInicio, setDataInicio] = useState(defaultIni());
   const [dataFim, setDataFim] = useState(defaultFim());
 
+  // Rev. 1872 — drill-down state (regra de ouro: modal fullscreen)
+  const [drillOpen, setDrillOpen] = useState(false);
+  const [drillTitle, setDrillTitle] = useState("");
+  const [drillRows, setDrillRows] = useState<SessaoDet[]>([]);
+  const [drillSearch, setDrillSearch] = useState("");
+
   const { data, isLoading, refetch, isFetching } = trpc.dds.dashboardKpis.useQuery(
     { companyId, dataInicio, dataFim },
     { enabled: companyId > 0 },
   );
 
   const k = data?.kpis;
+  const sessoesDetalhe: SessaoDet[] = (data as any)?.sessoesDetalhe ?? [];
 
   const porCategoriaChart = useMemo(() => {
     if (!data?.porCategoria) return [];
@@ -98,6 +132,65 @@ export default function DDSDashboard() {
       categoria: r.categoria,
     }));
   }, [data?.porCategoria]);
+
+  // Rev. 1872 — abre drill com lista filtrada
+  function openDrill(title: string, filterFn: (s: SessaoDet) => boolean) {
+    const rows = sessoesDetalhe.filter(filterFn);
+    setDrillTitle(title);
+    setDrillRows(rows);
+    setDrillSearch("");
+    setDrillOpen(true);
+  }
+
+  // recharts: payload do click vem em diferentes shapes (Pie passa direto o item; Bar/Line passa o data point)
+  function onPieClick(p: any) {
+    const cat = p?.categoria || p?.payload?.categoria;
+    if (!cat) return;
+    openDrill(`Sessões — ${CAT_LABELS[cat] || cat}`, (s) => s.categoria === cat);
+  }
+  function onLineMonthClick(_e: any, payload: any) {
+    const ym = payload?.activeLabel ? null : payload?.mes; // ResponsiveContainer onClick → activeLabel
+    const mes = payload?.activePayload?.[0]?.payload?.mes ?? payload?.mes;
+    if (!mes) return;
+    openDrill(`Sessões em ${mesLabel(mes)}`, (s) => s.mes === mes);
+  }
+  function onChartClick(payload: any, builder: (clicked: any) => { title: string; fn: (s: SessaoDet) => boolean } | null) {
+    const item = payload?.activePayload?.[0]?.payload ?? payload?.payload ?? payload;
+    if (!item) return;
+    const built = builder(item);
+    if (!built) return;
+    openDrill(built.title, built.fn);
+  }
+
+  function exportDrillCSV() {
+    if (drillRows.length === 0) return;
+    const head = ["ID", "Data", "Obra", "Tema", "Categoria", "Instrutor", "Status", "Participantes", "Presentes", "Assinados"];
+    const lines = [head.join(";")];
+    drillRows.forEach((s) => {
+      lines.push([
+        s.id, fmtDataBR(s.data), s.obraNome, s.tituloTema,
+        CAT_LABELS[s.categoria] || s.categoria,
+        s.instrutor, STATUS_LABELS[s.status] || s.status,
+        s.totalParticipantes, s.presentes, s.assinados,
+      ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";"));
+    });
+    const csv = "\uFEFF" + lines.join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `dds-drill-${drillTitle.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const drillFiltered = useMemo(() => {
+    const q = drillSearch.trim().toLowerCase();
+    if (!q) return drillRows;
+    return drillRows.filter((s) =>
+      (s.obraNome + " " + s.tituloTema + " " + s.instrutor).toLowerCase().includes(q),
+    );
+  }, [drillRows, drillSearch]);
 
   if (companyId <= 0) {
     return (
@@ -130,6 +223,7 @@ export default function DDSDashboard() {
             </h1>
             <p className="text-xs text-gray-500 mt-0.5">
               Diálogo Diário de Segurança — KPIs, cobertura, frequência e qualidade dos registros.
+              <span className="hidden md:inline"> Clique em qualquer barra/fatia para detalhar.</span>
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
@@ -194,17 +288,23 @@ export default function DDSDashboard() {
                   {data.sessoesPorMes.length === 0 ? (
                     <div className="h-64 flex items-center justify-center text-xs text-gray-400">Sem sessões no período</div>
                   ) : (
-                    <ResponsiveContainer width="100%" height={260}>
-                      <LineChart data={data.sessoesPorMes.map((r: any) => ({ ...r, mesLabel: mesLabel(r.mes) }))}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis dataKey="mesLabel" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Line type="monotone" dataKey="sessoes" name="Sessões" stroke="#0891b2" strokeWidth={2} dot={{ r: 3 }} />
-                        <Line type="monotone" dataKey="participantes" name="Presentes" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    <div className="w-full h-[260px] min-h-[220px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={data.sessoesPorMes.map((r: any) => ({ ...r, mesLabel: mesLabel(r.mes) }))}
+                          onClick={(e: any) => onLineMonthClick(null, e)}
+                          style={{ cursor: "pointer" }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="mesLabel" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                          <Tooltip />
+                          <Legend wrapperStyle={{ fontSize: 11 }} />
+                          <Line type="monotone" dataKey="sessoes" name="Sessões" stroke="#0891b2" strokeWidth={2} dot={{ r: 3 }} />
+                          <Line type="monotone" dataKey="participantes" name="Presentes" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -219,18 +319,22 @@ export default function DDSDashboard() {
                   {porCategoriaChart.length === 0 ? (
                     <div className="h-64 flex items-center justify-center text-xs text-gray-400">Sem sessões no período</div>
                   ) : (
-                    <ResponsiveContainer width="100%" height={260}>
-                      <PieChart>
-                        <Pie data={porCategoriaChart} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85}
-                          label={(e: any) => `${e.value}`} labelLine={false}>
-                          {porCategoriaChart.map((entry: any, i: number) => (
-                            <Cell key={i} fill={CAT_COLORS[entry.categoria] || COLORS[i % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: 10 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <div className="w-full h-[260px] min-h-[220px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={porCategoriaChart} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85}
+                            label={(e: any) => `${e.value}`} labelLine={false}
+                            onClick={(p: any) => onPieClick(p)}
+                            style={{ cursor: "pointer" }}>
+                            {porCategoriaChart.map((entry: any, i: number) => (
+                              <Cell key={i} fill={CAT_COLORS[entry.categoria] || COLORS[i % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                          <Legend wrapperStyle={{ fontSize: 10 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -248,15 +352,23 @@ export default function DDSDashboard() {
                   {data.porObra.length === 0 ? (
                     <div className="h-64 flex items-center justify-center text-xs text-gray-400">Sem sessões no período</div>
                   ) : (
-                    <ResponsiveContainer width="100%" height={Math.max(220, data.porObra.length * 28)}>
-                      <BarChart data={data.porObra} layout="vertical" margin={{ left: 8, right: 16 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-                        <YAxis type="category" dataKey="obra" tick={{ fontSize: 10 }} width={150} />
-                        <Tooltip />
-                        <Bar dataKey="sessoes" fill="#f59e0b" />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <div className="w-full" style={{ height: Math.max(220, data.porObra.length * 28) }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={data.porObra}
+                          layout="vertical"
+                          margin={{ left: 8, right: 16 }}
+                          onClick={(e: any) => onChartClick(e, (it) => it?.obra ? ({ title: `Sessões em ${it.obra}`, fn: (s) => s.obraNome === it.obra }) : null)}
+                          style={{ cursor: "pointer" }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                          <YAxis type="category" dataKey="obra" tick={{ fontSize: 10 }} width={150} />
+                          <Tooltip />
+                          <Bar dataKey="sessoes" fill="#f59e0b" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -271,16 +383,24 @@ export default function DDSDashboard() {
                   {data.topTemas.length === 0 ? (
                     <div className="h-64 flex items-center justify-center text-xs text-gray-400">Sem sessões no período</div>
                   ) : (
-                    <ResponsiveContainer width="100%" height={Math.max(220, data.topTemas.length * 28)}>
-                      <BarChart data={data.topTemas} layout="vertical" margin={{ left: 8, right: 16 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-                        <YAxis type="category" dataKey="tema" tick={{ fontSize: 10 }} width={180}
-                          tickFormatter={(s) => (s.length > 25 ? s.slice(0, 24) + "…" : s)} />
-                        <Tooltip />
-                        <Bar dataKey="sessoes" fill="#0891b2" />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <div className="w-full" style={{ height: Math.max(220, data.topTemas.length * 28) }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={data.topTemas}
+                          layout="vertical"
+                          margin={{ left: 8, right: 16 }}
+                          onClick={(e: any) => onChartClick(e, (it) => it?.tema ? ({ title: `Sessões do tema "${it.tema}"`, fn: (s) => s.tituloTema === it.tema }) : null)}
+                          style={{ cursor: "pointer" }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                          <YAxis type="category" dataKey="tema" tick={{ fontSize: 10 }} width={180}
+                            tickFormatter={(s) => (s.length > 25 ? s.slice(0, 24) + "…" : s)} />
+                          <Tooltip />
+                          <Bar dataKey="sessoes" fill="#0891b2" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -298,16 +418,24 @@ export default function DDSDashboard() {
                   {data.topInstrutores.length === 0 ? (
                     <div className="h-64 flex items-center justify-center text-xs text-gray-400">Sem sessões no período</div>
                   ) : (
-                    <ResponsiveContainer width="100%" height={Math.max(220, data.topInstrutores.length * 28)}>
-                      <BarChart data={data.topInstrutores} layout="vertical" margin={{ left: 8, right: 16 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-                        <YAxis type="category" dataKey="instrutor" tick={{ fontSize: 10 }} width={140}
-                          tickFormatter={(s) => (s.length > 20 ? s.slice(0, 19) + "…" : s)} />
-                        <Tooltip />
-                        <Bar dataKey="sessoes" fill="#10b981" />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <div className="w-full" style={{ height: Math.max(220, data.topInstrutores.length * 28) }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={data.topInstrutores}
+                          layout="vertical"
+                          margin={{ left: 8, right: 16 }}
+                          onClick={(e: any) => onChartClick(e, (it) => it?.instrutor ? ({ title: `Sessões do instrutor ${it.instrutor}`, fn: (s) => s.instrutor === it.instrutor }) : null)}
+                          style={{ cursor: "pointer" }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                          <YAxis type="category" dataKey="instrutor" tick={{ fontSize: 10 }} width={140}
+                            tickFormatter={(s) => (s.length > 20 ? s.slice(0, 19) + "…" : s)} />
+                          <Tooltip />
+                          <Bar dataKey="sessoes" fill="#10b981" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -319,15 +447,26 @@ export default function DDSDashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={data.porDiaSemana}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis dataKey="dia" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                      <Tooltip />
-                      <Bar dataKey="sessoes" fill="#8b5cf6" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <div className="w-full h-[260px] min-h-[220px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={data.porDiaSemana}
+                        onClick={(e: any) => onChartClick(e, (it) => {
+                          if (!it?.dia) return null;
+                          const dow = DOW_LABELS.indexOf(it.dia);
+                          if (dow < 0) return null;
+                          return { title: `Sessões — ${it.dia}`, fn: (s) => s.dow === dow };
+                        })}
+                        style={{ cursor: "pointer" }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="dia" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                        <Tooltip />
+                        <Bar dataKey="sessoes" fill="#8b5cf6" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -391,6 +530,109 @@ export default function DDSDashboard() {
           </>
         )}
       </div>
+
+      {/* Rev. 1872 — Drill-down fullscreen (regra de ouro) */}
+      <Dialog open={drillOpen} onOpenChange={setDrillOpen}>
+        <DialogContent
+          resizable={false}
+          className="w-screen sm:w-[98vw] sm:max-w-[1600px] h-[100dvh] sm:h-[95vh] max-h-[100dvh] sm:max-h-[95vh] p-0 gap-0 flex flex-col overflow-hidden rounded-none sm:rounded-lg"
+        >
+          <DialogHeader className="px-4 sm:px-6 py-3 border-b bg-gradient-to-r from-cyan-50 to-violet-50 sticky top-0 z-10">
+            <div className="flex items-center justify-between gap-3">
+              <DialogTitle className="text-base sm:text-lg font-bold text-gray-800 flex items-center gap-2 min-w-0">
+                <BarChart3 className="h-5 w-5 text-cyan-600 flex-shrink-0" />
+                <span className="truncate">{drillTitle}</span>
+                <Badge variant="outline" className="ml-1 flex-shrink-0">{drillRows.length}</Badge>
+              </DialogTitle>
+              <Button size="sm" variant="ghost" onClick={() => setDrillOpen(false)} className="h-8 w-8 p-0 flex-shrink-0">
+                <XIcon className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                <Input
+                  value={drillSearch}
+                  onChange={(e) => setDrillSearch(e.target.value)}
+                  placeholder="Buscar obra, tema ou instrutor..."
+                  className="pl-7 h-8 text-xs"
+                />
+              </div>
+              <Button size="sm" variant="outline" onClick={exportDrillCSV} disabled={drillRows.length === 0} className="h-8 text-xs">
+                <Download className="h-3.5 w-3.5 mr-1" /> CSV
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-auto px-4 sm:px-6 py-3">
+            {drillFiltered.length === 0 ? (
+              <div className="text-center text-sm text-gray-400 py-10">Nenhuma sessão.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-white border-b">
+                    <tr className="text-left text-gray-600">
+                      <th className="py-2 px-2">Data</th>
+                      <th className="py-2 px-2">Obra</th>
+                      <th className="py-2 px-2">Tema</th>
+                      <th className="py-2 px-2 hidden md:table-cell">Categoria</th>
+                      <th className="py-2 px-2 hidden md:table-cell">Instrutor</th>
+                      <th className="py-2 px-2">Status</th>
+                      <th className="py-2 px-2 text-right">Conv.</th>
+                      <th className="py-2 px-2 text-right">Pres.</th>
+                      <th className="py-2 px-2 text-right">Assin.</th>
+                      <th className="py-2 px-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {drillFiltered.map((s) => (
+                      <tr key={s.id} className="border-b hover:bg-gray-50">
+                        <td className="py-2 px-2 whitespace-nowrap">{fmtDataBR(s.data)}</td>
+                        <td className="py-2 px-2 max-w-[200px] truncate" title={s.obraNome}>{s.obraNome}</td>
+                        <td className="py-2 px-2 max-w-[280px] truncate" title={s.tituloTema}>{s.tituloTema}</td>
+                        <td className="py-2 px-2 hidden md:table-cell">
+                          <Badge variant="outline" className="text-[10px]"
+                            style={{ borderColor: CAT_COLORS[s.categoria] || "#cbd5e1", color: CAT_COLORS[s.categoria] || "#475569" }}>
+                            {CAT_LABELS[s.categoria] || s.categoria}
+                          </Badge>
+                        </td>
+                        <td className="py-2 px-2 hidden md:table-cell max-w-[160px] truncate" title={s.instrutor}>{s.instrutor}</td>
+                        <td className="py-2 px-2">
+                          <Badge variant="outline" className={
+                            s.status === "finalizada" ? "text-[10px] border-emerald-300 text-emerald-700" :
+                            s.status === "cancelada" ? "text-[10px] border-gray-300 text-gray-600" :
+                            "text-[10px] border-orange-300 text-orange-700"
+                          }>
+                            {STATUS_LABELS[s.status] || s.status}
+                          </Badge>
+                        </td>
+                        <td className="py-2 px-2 text-right">{s.totalParticipantes}</td>
+                        <td className="py-2 px-2 text-right">{s.presentes}</td>
+                        <td className="py-2 px-2 text-right">{s.assinados}</td>
+                        <td className="py-2 px-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-[11px]"
+                            onClick={() => { setDrillOpen(false); navigate(`/sst/dds?sessaoId=${s.id}`); }}
+                          >
+                            Abrir
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="px-4 sm:px-6 py-2 border-t bg-gray-50 text-[10px] text-gray-500 flex justify-between">
+            <span>{drillFiltered.length} de {drillRows.length} sessão(ões)</span>
+            <span>Clique em "Abrir" para ir à sessão no DDS</span>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

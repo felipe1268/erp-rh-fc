@@ -1744,6 +1744,38 @@ Gere o JSON do tema seguindo EXATAMENTE o esquema acima.`;
         topInstrutores,
         porDiaSemana,
         semDDS: semDDSLista,
+        // Rev. 1872 — lista bruta para drill-down dos gráficos do Dashboard DDS.
+        // Inclui contagens de participantes/presentes/assinados pré-agregadas para evitar N+1 no client.
+        sessoesDetalhe: (() => {
+          const contByS = new Map<number, { total: number; presentes: number; assinados: number }>();
+          participantes.forEach((p: any) => {
+            const cur = contByS.get(p.sessaoId) || { total: 0, presentes: 0, assinados: 0 };
+            cur.total += 1;
+            if (p.presente === 1) cur.presentes += 1;
+            if (p.assinadoEm) cur.assinados += 1;
+            contByS.set(p.sessaoId, cur);
+          });
+          return sessoesPeriodo.map((s: any) => {
+            const c = contByS.get(s.id) || { total: 0, presentes: 0, assinados: 0 };
+            const mes = (s.data || "").slice(0, 7);
+            let dow = -1;
+            if (s.data) { try { dow = new Date(s.data + "T12:00:00-03:00").getDay(); } catch { /* noop */ } }
+            return {
+              id: s.id,
+              data: s.data,
+              obraNome: s.obraNome || "(sem obra)",
+              tituloTema: s.tituloTema || "(sem título)",
+              categoria: (s.categoria || "SEM_TEMA") as string,
+              instrutor: (s.instrutor || "").trim() || "(sem instrutor)",
+              status: s.status,
+              mes,
+              dow,
+              totalParticipantes: c.total,
+              presentes: c.presentes,
+              assinados: c.assinados,
+            };
+          });
+        })(),
       };
     }),
 
