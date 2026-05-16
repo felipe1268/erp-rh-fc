@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1953 — SST · DDS Guia · Biblioteca de Temas · Novo botão "✨ Gerar mais temas com IA" + modal (quantidade 10/20/25/30 + foco opcional) + nova mutation `dds.gerarMaisTemasIA` que cria LOTE de N temas novos via Anthropic/Gemini evitando duplicar títulos já cadastrados.
+ * User (16/05/2026, screenshot da aba Biblioteca de Temas com 33 temas — NRs+Campanhas): "Coloca um botão para gerar mais assuntos quero uma biblioteca com mais 200 temas pertinentes a construção civil....".
+ * Contexto: a biblioteca já tinha seeds estáticos (CAMPANHAS_GOV 12 + NRS_CONSTRUCAO 13 + VACINACAO_PNI + TEMAS_BIBLIOTECA Rev. 1861 172 itens), totalizando ~210 temas — mas o usuário queria poder GERAR MAIS sob demanda, especialmente focado em construção civil real (atividades de obra, equipamentos, EPI específico, saúde física/mental). O botão `gerarTemaIA` Rev. 1864 só criava 1 tema a partir de prompt curto; faltava gerar em LOTE.
+ * Mudança backend (`server/routers/dds.ts` ~L1264):
+ *   (a) Nova mutation `gerarMaisTemasIA` com input `{ companyId, quantidade: 5..30 default 20, foco?: string }`.
+ *   (b) Lê SELECT codigo+titulo de TODOS temas existentes da company, normaliza títulos (lower+NFD+strip-acentos+strip-pontuação) num `Set` p/ dedup e gera amostra de até 60 títulos pro contexto da IA "NÃO REPITA estes".
+ *   (c) System prompt detalhado exige JSON `{ "temas": [{ titulo, descricao, normaReferencia, categoria }] }`, com regras: tamanho 8-90 chars título, 80-220 chars descrição, NR oficial só se real, distribuição obrigatória entre 10 blocos (riscos físicos, EPI específico, atividades de obra, equipamentos, saúde física, saúde mental, trânsito, emergência, cultura/comportamento, documentação).
+ *   (d) `invokeLLM` com `response_format: json_object` e `maxTokens = 400 + quantidade*200` (capped 8000).
+ *   (e) Parsing tolerante: strip de cercas ```json```, recorte do primeiro `{` ao último `}`.
+ *   (f) Saneamento por tema: trim+slice de tamanho, categoria whitelist (NR/CAMPANHA/VACINACAO/LIVRE → fallback LIVRE), guard título≥5/descrição≥20 chars.
+ *   (g) Dedup case-insensitive contra `titulosExistentesSet` — duplicatas viram `ignorados`, não erram.
+ *   (h) Código auto-gerado `IA-0001`, `IA-0002`... colidindo→pula via `codigosExistentesSet`.
+ *   (i) Inserção sem `conteudoMd` (NULL) — usuário pode rodar "🤖 Gerar todos os roteiros com IA" depois (botão Rev. 1747 já existente) pra preencher.
+ *   (j) Retorna `{ inseridos, ignorados, falhas, totalIa }`.
+ *   (k) Tratamento de erro: ANTHROPIC/GOOGLE_API_KEY ausente → PRECONDITION_FAILED com mensagem clara; outras falhas → INTERNAL_SERVER_ERROR.
+ * Mudança frontend (`client/src/pages/sst/DDSGuia.tsx`):
+ *   (a) State `gerarMaisOpen` + `gerarMaisQtd` (default 20) + `gerarMaisFoco`.
+ *   (b) `trpc.dds.gerarMaisTemasIA.useMutation` com onSuccess toast composto (inseridos · ignorados · falhas) + invalidate de listTemas + calendarioAnual + fecha modal + limpa foco.
+ *   (c) Novo botão `<Button>` verde-esmeralda na toolbar da Biblioteca (~L760), ao lado de "Regerar tudo", com ícone Plus + label "✨ Gerar mais temas com IA" / "Gerando temas..." quando isPending.
+ *   (d) Novo `<Dialog>` (~L1296) ao lado do MODAL EDITAR CATEGORIA: header com Sparkles esmeralda, texto explicativo citando "{N} temas já cadastrados", seletor de quantidade (4 botões pill 10/20/25/30), input de texto p/ foco opcional, footer com Cancelar + Gerar.
+ *   (e) Texto auxiliar mostra ETA estimado e cálculo de "rode Nx para chegar nos 200+".
+ * version → 1953.
+ * Resultado: usuário clica botão verde → modal → escolhe 20 + "trabalho em altura" (ou deixa em branco) → IA gera ~20 novos temas únicos em ~30s → toast confirma + biblioteca atualiza. Pode rodar várias vezes variando foco. Códigos `IA-0001+` distinguem dos seeds NR-XX/MAIO-AMARELO. Sem roteiro inicial — botão "Gerar todos os roteiros com IA" Rev. 1747 já existente preenche depois.
+ * Preservado: `seedTemasPadrao` Rev. 1740/1861 (seeds estáticos), `enriquecerTemasPadrao` (backfill ROTEIROS_DETALHADOS), `gerarTemaIA` Rev. 1864 (1 tema sob prompt), `gerarRoteiroComIA` Rev. 1740 (roteiro p/ tema existente), `gerarTodosComIA` Rev. 1747 (bulk de roteiros), modal EDITAR CATEGORIA Rev. 1876, calendário, sessões. Zero ALTER/DROP/DELETE em schema (usa colunas existentes da tabela `dds_temas`). Reversível em 3 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1952 — Planejamento · PlanejamentoDetalhe · PERF · Input "Responsável Lotus" agora é UNCONTROLLED (defaultValue + key + commit no onBlur) — elimina trava de 1-2s por keystroke ao digitar nome do responsável.
  * User (16/05/2026, screenshot mid-typing "promate" em 04.01 TUBULAÇÃO E CONEXÕES + botões Replicar/Cancelar visíveis): "ESTA EXTREMAMENTE LENTO A TELA, NAÕ QUERO ISSO. PRECISO QUE ARRUME ISSO.. ESTA TRAVANDO IMPOSSIVEL DE TRABALHAR NELE..TEM COMO ACELERAR ESTA NAVEGAÇÃO..". Confirmou em query: "Digitando nos inputs (cada letra trava 1-2s) — tela do print".
  * Causa-raiz: o input do responsável manual em `PlanejamentoDetalhe.tsx` L4588-4590 era **controlled** (`value={a.responsavelLotus ?? ""}` + `onChange={e => updateLinha(idx, "responsavelLotus", e.target.value)}`). Cada keystroke disparava `updateLinha` → `setLinhas(prev.map(...))` → React re-renderizava todo o componente de 18.258 linhas — que itera ~600 atividades + sub-árvores REFIS, modais, gráficos, headers. Resultado: 1-2s de freeze por letra (FPS ~3, longtasks 1500ms+).

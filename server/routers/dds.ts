@@ -1258,6 +1258,146 @@ Gere o JSON do tema seguindo EXATAMENTE o esquema acima.`;
       }
     }),
 
+  // Rev. 1953 — Gera N temas NOVOS de uma vez via IA (biblioteca expandida).
+  // User: "Coloca um botão para gerar mais assuntos quero uma biblioteca com mais 200 temas
+  // pertinentes a construção civil". Diferente de `gerarTemaIA` (1 tema a partir de prompt curto),
+  // este gera um LOTE de N temas únicos, evitando duplicar os títulos/códigos já existentes na
+  // company. Idempotente: títulos repetidos (case-insensitive, normalizados) são pulados.
+  // Não gera roteiro detalhado aqui (mais rápido/barato) — usuário pode rodar "Gerar todos os
+  // roteiros com IA" depois pra preencher o conteúdo dos novos temas.
+  gerarMaisTemasIA: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      quantidade: z.number().int().min(5).max(30).default(20),
+      foco: z.string().max(200).optional(), // ex.: "trabalho em altura", "saúde mental", "trânsito"
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+      const db = (await getDb())!;
+
+      // Lê títulos/códigos existentes pra IA evitar repetir
+      const existentes = await db.select({
+        codigo: ddsTemas.codigo, titulo: ddsTemas.titulo,
+      }).from(ddsTemas)
+        .where(and(eq(ddsTemas.companyId, input.companyId), isNull(ddsTemas.deletedAt)));
+      const normalizar = (s: string) => (s ?? "").toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+      const titulosExistentesSet = new Set(existentes.map((e: any) => normalizar(e.titulo)));
+      const codigosExistentesSet = new Set(existentes.map((e: any) => (e.codigo ?? "").toUpperCase()).filter(Boolean));
+      const amostraTitulos = existentes.slice(0, 60).map((e: any) => `- ${e.titulo}`).join("\n");
+
+      const systemPrompt = `Você é Engenheiro de Segurança do Trabalho (CREA) especialista em construção civil brasileira. Sua tarefa é sugerir uma LISTA de NOVOS TEMAS de Diálogo Diário de Segurança (DDS) para enriquecer a biblioteca de uma construtora.
+
+Regras OBRIGATÓRIAS:
+1. **Idioma**: Português brasileiro, linguagem direta e técnica.
+2. **Formato de saída**: APENAS JSON válido (sem preâmbulo, sem cercas \`\`\`json) com EXATAMENTE esta estrutura:
+   {
+     "temas": [
+       { "titulo": "...", "descricao": "...", "normaReferencia": "...", "categoria": "NR" | "LIVRE" }
+     ]
+   }
+3. **titulo**: 8 a 90 caracteres, claro e ESPECÍFICO (evite genérico tipo "Segurança no trabalho"). Quando for tema ligado a NR, comece com o número (ex.: "NR-35 — Resgate em altura").
+4. **descricao**: 1 frase de 80 a 220 caracteres descrevendo do que se trata.
+5. **normaReferencia**: NR/lei/portaria brasileira oficial (ex.: "NR-18 (Portaria MTP 3.733/2020)"). Se não houver norma específica, use string vazia "".
+6. **categoria**: "NR" se ligado a Norma Regulamentadora; "LIVRE" para temas de comportamento, saúde, cultura, qualidade de vida.
+7. **DIVERSIDADE OBRIGATÓRIA**: distribua os temas entre os blocos abaixo (proporcional):
+   - Riscos físicos da obra (queda, soterramento, eletricidade, máquinas, içamento, projeção, ruído, calor, frio)
+   - EPI específico (capacete jugular, cinto paraquedista, óculos para soldador, luva química, bota dielétrica, protetor auricular)
+   - Atividades específicas (forma, ferragem, concretagem, alvenaria, reboco, gesso, pintura, hidráulica, elétrica, cobertura, demolição, escavação, fundação)
+   - Equipamentos (esmerilhadeira, serra circular, makita, serra mármore, betoneira, vibrador, compactador, bomba de concreto, grua, manipulador, plataforma elevatória)
+   - Saúde física (LER/DORT, coluna, joelho, ombro, dermatite, silicose, perda auditiva, insolação, desidratação)
+   - Saúde mental (estresse, sono, álcool, drogas, suicídio, depressão, conflito interpessoal)
+   - Trânsito (caminhão, betoneira, motociclista, deslocamento casa-obra)
+   - Emergência (primeiros socorros, queimadura, fratura, hemorragia, parada cardíaca, evacuação, incêndio, choque elétrico)
+   - Cultura e comportamento (5S, observação de comportamento, pertencer ao time, denúncia, exemplo do líder)
+   - Documentação (PT, APR, OS, check-list, LV, DDS, CIPA)
+8. **NÃO REPITA** títulos já presentes na biblioteca (lista abaixo).
+9. **NÃO INVENTE** normas — só cite NR/lei brasileira real.
+10. Gere EXATAMENTE ${input.quantidade} temas no array "temas". Nem mais nem menos.`;
+
+      const userPrompt = `Biblioteca atual da empresa tem ${existentes.length} temas. Amostra dos títulos já cadastrados (NÃO repita):
+${amostraTitulos}
+
+${input.foco ? `Foco solicitado pelo usuário: "${input.foco}". Priorize temas dentro desse foco mas mantenha alguma diversidade.\n` : ""}Gere ${input.quantidade} NOVOS temas únicos e relevantes para construção civil brasileira, seguindo EXATAMENTE o esquema JSON exigido.`;
+
+      let parsed: any;
+      try {
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          maxTokens: Math.min(8000, 400 + input.quantidade * 200),
+          response_format: { type: "json_object" },
+        });
+        const content = response.choices?.[0]?.message?.content;
+        let raw = (typeof content === "string" ? content : Array.isArray(content)
+          ? content.map((c: any) => c?.text ?? "").join("")
+          : "").trim();
+        const m = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (m) raw = m[1].trim();
+        const fi = raw.indexOf("{"); const li = raw.lastIndexOf("}");
+        if (fi >= 0 && li > fi) raw = raw.slice(fi, li + 1);
+        try { parsed = JSON.parse(raw); }
+        catch { throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA retornou JSON inválido — tente novamente." }); }
+      } catch (err: any) {
+        if (err instanceof TRPCError) throw err;
+        const msg = err?.message ?? String(err);
+        if (msg.includes("Nenhuma chave de IA")) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Nenhuma IA configurada (ANTHROPIC_API_KEY ou GOOGLE_API_KEY ausente)." });
+        }
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao gerar temas com IA: ${msg.slice(0, 200)}` });
+      }
+
+      const lista = Array.isArray(parsed?.temas) ? parsed.temas : [];
+      if (lista.length === 0) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA não retornou nenhum tema. Tente novamente." });
+      }
+
+      // Gera código único curto pra cada tema novo: IA-<seq> com padding (evita colisão com NR-XX/etc)
+      let seq = 1;
+      const proximoCodigo = (): string => {
+        let cod: string;
+        do {
+          cod = `IA-${String(seq).padStart(4, "0")}`;
+          seq++;
+        } while (codigosExistentesSet.has(cod) && seq < 99999);
+        codigosExistentesSet.add(cod);
+        return cod;
+      };
+
+      let inseridos = 0; let ignorados = 0; let falhas = 0;
+      for (const t of lista) {
+        const titulo = String(t?.titulo ?? "").trim().slice(0, 200);
+        const descricao = String(t?.descricao ?? "").trim().slice(0, 280);
+        const normaReferencia = String(t?.normaReferencia ?? "").trim().slice(0, 120);
+        const catRaw = String(t?.categoria ?? "LIVRE").trim().toUpperCase();
+        const categoria = (catRaw === "NR" || catRaw === "CAMPANHA" || catRaw === "VACINACAO") ? catRaw : "LIVRE";
+
+        if (titulo.length < 5 || descricao.length < 20) { falhas++; continue; }
+        const norm = normalizar(titulo);
+        if (titulosExistentesSet.has(norm)) { ignorados++; continue; }
+        titulosExistentesSet.add(norm);
+
+        try {
+          await db.insert(ddsTemas).values({
+            companyId: input.companyId,
+            codigo: proximoCodigo(),
+            titulo,
+            descricao,
+            conteudoMd: null,
+            normaReferencia: normaReferencia || null,
+            categoria,
+            duracaoMin: 15,
+            createdBy: (ctx.user as any)?.id ?? null,
+          } as any);
+          inseridos++;
+        } catch { falhas++; }
+      }
+
+      return { inseridos, ignorados, falhas, totalIa: lista.length };
+    }),
+
   // ================= CALENDÁRIO ANUAL =================
   // Retorna estrutura pronta para a aba "Calendário": 12 meses com a
   // campanha governamental do mês + temas (NR/livres) sugeridos.

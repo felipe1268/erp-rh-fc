@@ -347,6 +347,24 @@ export default function DDSGuia() {
 
   // Rev. 1740 — gerar roteiro com IA (usado em Biblioteca, Nova Sessão modal e Detalhe da Sessão)
   const gerarIAMut = trpc.dds.gerarRoteiroComIA.useMutation();
+
+  // Rev. 1953 — gerar LOTE de novos temas com IA (expande biblioteca além das NRs/campanhas padrão)
+  const [gerarMaisOpen, setGerarMaisOpen] = useState(false);
+  const [gerarMaisQtd, setGerarMaisQtd] = useState<number>(20);
+  const [gerarMaisFoco, setGerarMaisFoco] = useState<string>("");
+  const gerarMaisMut = trpc.dds.gerarMaisTemasIA.useMutation({
+    onSuccess: (r: any) => {
+      const partes = [`${r.inseridos} novo(s) tema(s) adicionado(s)`];
+      if (r.ignorados > 0) partes.push(`${r.ignorados} ignorado(s) por duplicidade`);
+      if (r.falhas > 0) partes.push(`${r.falhas} com falha`);
+      toast.success(partes.join(" · "));
+      setGerarMaisOpen(false);
+      setGerarMaisFoco("");
+      utils.dds.listTemas.invalidate();
+      utils.dds.calendarioAnual.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const atualizarSessaoMut = trpc.dds.atualizarSessao.useMutation({
     onSuccess: () => { utils.dds.getSessao?.invalidate?.(); utils.dds.listSessoes.invalidate(); },
     onError: (e) => toast.error(e.message),
@@ -735,6 +753,20 @@ export default function DDSGuia() {
               >
                 <Wand2 className="h-4 w-4 mr-1" />
                 Regerar tudo
+              </Button>
+              {/* Rev. 1953 — Gerar LOTE de NOVOS temas (expande biblioteca além das NRs/campanhas padrão).
+                  User: "Coloca um botão para gerar mais assuntos quero uma biblioteca com mais 200 temas
+                  pertinentes a construção civil". Diferente dos botões acima (que enriquecem roteiro dos
+                  temas EXISTENTES), este CRIA temas novos via IA evitando duplicar títulos já cadastrados. */}
+              <Button
+                variant="outline"
+                onClick={() => setGerarMaisOpen(true)}
+                disabled={enriquecerMut.isPending || gerarMaisMut.isPending}
+                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-semibold"
+                title="Gera com IA um lote de NOVOS temas para enriquecer a biblioteca. Não duplica títulos já cadastrados."
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                {gerarMaisMut.isPending ? "Gerando temas..." : "✨ Gerar mais temas com IA"}
               </Button>
             </>
           )}
@@ -1257,6 +1289,78 @@ export default function DDSGuia() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* ===== MODAL: GERAR MAIS TEMAS COM IA (Rev. 1953) ===== */}
+      <Dialog open={gerarMaisOpen} onOpenChange={(v) => { if (!gerarMaisMut.isPending) setGerarMaisOpen(v); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-emerald-600" /> Gerar mais temas com IA
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-slate-600">
+              A IA vai gerar uma lista de <strong>novos</strong> temas de DDS para construção civil,
+              evitando duplicar os <strong>{(temasQ.data as any[] ?? []).length}</strong> temas já
+              cadastrados. Os roteiros detalhados podem ser gerados depois com o botão
+              "🤖 Gerar todos os roteiros com IA".
+            </p>
+            <div>
+              <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                Quantos temas gerar?
+              </label>
+              <div className="flex gap-1">
+                {[10, 20, 25, 30].map(n => (
+                  <button key={n} type="button"
+                    onClick={() => setGerarMaisQtd(n)}
+                    disabled={gerarMaisMut.isPending}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold border transition ${
+                      gerarMaisQtd === n
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                        : "bg-white text-slate-600 border-slate-300 hover:bg-slate-100"
+                    }`}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1 italic">
+                Cada lote leva ~{Math.ceil(gerarMaisQtd * 1.5)}s. Pra chegar nos 200+ você roda o
+                botão {Math.ceil(200 / gerarMaisQtd)}x (variando o foco ajuda na diversidade).
+              </p>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                Foco opcional (deixe em branco para diversidade geral)
+              </label>
+              <input
+                type="text"
+                value={gerarMaisFoco}
+                onChange={e => setGerarMaisFoco(e.target.value)}
+                disabled={gerarMaisMut.isPending}
+                placeholder="ex.: trabalho em altura, saúde mental, equipamentos elétricos..."
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
+                maxLength={200}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGerarMaisOpen(false)} disabled={gerarMaisMut.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => gerarMaisMut.mutate({ companyId, quantidade: gerarMaisQtd, foco: gerarMaisFoco.trim() || undefined })}
+              disabled={gerarMaisMut.isPending}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {gerarMaisMut.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Gerando {gerarMaisQtd} temas...</>
+              ) : (
+                <><Sparkles className="h-4 w-4 mr-1" /> Gerar {gerarMaisQtd} temas</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ===== MODAL: EDITAR CATEGORIA (Rev. 1876 — override granular por sessão) ===== */}
       <Dialog open={!!editarCategoriaId} onOpenChange={(v) => { if (!v) setEditarCategoriaId(null); }}>
