@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1940 — Planejamento · ProgramacaoSemanalLotus · Excel · Coluna TAREFA (D) com largura AUTO-AJUSTÁVEL ao texto mais longo.
+ * User (16/05/2026, screenshots Sem.04 Santuário N.S. Conceição Aparecida): "precisia ter uma regra para a coluna TAREFA, que a largura dela é variavel em função do texto que esta dentro dela, para que ele não fique oculto na tela.. arrume isso..".
+ * Comparação dos 2 screenshots: o primeiro mostra TAREFA truncada ("MOBILIZAÇÃO DE EQUIPES, EQUIPAMENTOS...", "TAPUMES METÁLICOS PARA ISOLAMENTO D...", "Saúde e segurança do trabalho - ASO, EPI's e EPC's, con..."); o segundo mostra o mesmo Excel com a col D alargada e todos os textos visíveis ("MOBILIZAÇÃO DE EQUIPES, EQUIPAMENTOS E FERRAMENTAS", "TAPUMES METÁLICOS PARA ISOLAMENTO DAS ÁREAS DE ATUAÇÃO DE APOIO - PADRÃO SANTUÁRIO", etc).
+ * Causa Rev. 1886/1889: largura hardcoded em `4: 50` no `minWidths` — funcionava em projetos com nomes curtos mas cortava obras como Santuário onde nomes de grupos chegam a ~85 chars.
+ * Mudança (`ProgramacaoSemanalLotus.tsx preencherAba`):
+ *   (a) Removido `4: 50` do `minWidths` (que tratava col D igual às colunas de data — agora ela tem regra própria).
+ *   (b) Novo bloco logo após `minWidths`: itera `buildLinhas(ats)` (cobre AMBAS as fontes do col D — `l.nome.toUpperCase()` p/ grupos L1397 e `a.nome` p/ atividades L1422), acha `maxLen` de chars.
+ *   (c) Fórmula: `tarefaW = clamp(Math.ceil(maxLen * 1.05) + 4, 50, 120)`. Fator 1.05 + padding 4 cobre fonte bold (grupos são bold) sem exagerar. MIN 50 preserva o comportamento das obras pequenas (não regride). MAX 120 evita aba absurdamente larga em casos patológicos.
+ *   (d) Executa por aba (preencherAba é chamado 1×/semana), então cada semana ganha sua própria largura ótima — semana sem grupos longos fica compacta, semana com grupos longos fica larga.
+ * version → 1940.
+ * Resultado: textos nunca mais ficam ocultos no Excel exportado; layout do template do cliente preservado em tudo mais. Comportamento idêntico ao que o user mostrou no 2º screenshot.
+ * Preservado: dowToExcelCol Rev. 1926, cinza_fds Rev. 1893, reset BRANCO Rev. 1904, ehUtilCal Rev. 1914, diasExtras Rev. 1875, cutoff Rev. 1913, faixa azul topo+status baixo Rev. 1895, larguras E/F/G/H/I Rev. 1889, template xlsx do cliente intacto. Zero backend/DB. Reversível em 1 hunk. R-001/R-007/R-010 OK.
+ *
  * Rev. 1939 — RH · Dash Aviso Prévio · Tabela CDM · REWRITE redimensionamento estilo EXCEL (window listeners, não React Pointer Events).
  * User (16/05/2026): "esta pessima a navegabildiade para arurmar a largura da coluna.. melhore isso, use o mesmo sistema que usamos no excel.. o basico bem feito..".
  * Causa-raiz Rev. 1937/1938 (porque não funcionava): o componente `CdmResizeHandle` era declarado INLINE dentro do componente pai → uma referência NOVA a cada render → React re-monta o `<div>` toda vez que `setCdmColW` dispara durante o drag → `setPointerCapture` perde a referência do elemento → drag trava após 1 frame. Mesmo padrão do bug clássico React de "componente declarado dentro de componente".

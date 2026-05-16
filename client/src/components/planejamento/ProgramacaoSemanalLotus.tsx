@@ -1210,7 +1210,6 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         // menor que" — o template tinha 7.x e ficava cortado mesmo após
         // Rev. 1886). I (RESPONSÁVEL) também ganhou +2.
         const minWidths: Record<number, number> = {
-          4: 50,   // D — TAREFA
           5: 12,   // E — Prev. Início (caber "22-abr")
           6: 12,   // F — Prev. Fim
           7: 12,   // G — Real Início
@@ -1220,6 +1219,22 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         for (const [colStr, minW] of Object.entries(minWidths)) {
           const col = ws.getColumn(parseInt(colStr, 10));
           col.width = minW;  // FORÇA — ignora largura do template
+        }
+        // Rev. 1940 — TAREFA (col D) com largura AUTO-AJUSTÁVEL pelo conteúdo
+        // mais longo desta aba (grupo nome.toUpperCase + atividade nome), ao
+        // invés do hardcoded 50 das Rev. 1886/1889 que cortava textos como
+        // "TAPUMES METÁLICOS PARA ISOLAMENTO DAS ÁREAS DE ATUAÇÃO DE APOIO...".
+        // Unidade de width do ExcelJS ≈ chars na fonte default — fator 1.05
+        // + 4 chars de padding empírico cobre bold (grupos) sem exagerar.
+        // MIN 50 (não regride), MAX 120 (evita aba ficar absurdamente larga).
+        {
+          let maxLen = 0;
+          for (const l of buildLinhas(ats)) {
+            const t = l.tipo === "grupo" ? (l.nome || "").toUpperCase() : (l.ativ.nome || "");
+            if (t.length > maxLen) maxLen = t.length;
+          }
+          const tarefaW = Math.min(120, Math.max(50, Math.ceil(maxLen * 1.05) + 4));
+          ws.getColumn(4).width = tarefaW;
         }
 
         // 10a. Cabeçalho (D2 é a âncora do merge D2:K5) — mantém formatação do template
