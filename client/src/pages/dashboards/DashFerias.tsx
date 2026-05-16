@@ -852,16 +852,24 @@ export default function DashFerias() {
                                     )}
                                     {(() => {
                                       const np = f.numeroPeriodo || 1;
-                                      const cls = np >= 3
-                                        ? "bg-red-100 text-red-700"
-                                        : np === 2
-                                          ? "bg-orange-100 text-orange-700"
-                                          : "bg-slate-100 text-slate-600";
-                                      const title = np === 1
-                                        ? "1º período aquisitivo"
-                                        : `${np}º período aquisitivo — colaborador acumulou ${np - 1} período(s) anterior(es) sem gozo (passivo de pagamento em dobro Art. 137 CLT)`;
+                                      // Rev. 1965 — distingue contexto: no drill "Vencidas" o número
+                                      // do período é PASSIVO Art. 137 CLT (cor escalada + label "Nº Per.");
+                                      // nos demais drills (Finalizando/Iniciando/Concluídas/Em Gozo/etc.) é
+                                      // só o "Nº ano de serviço" — cinza neutro, label menos jurídico.
+                                      const isVencidasDrill = (drillDialog?.title || "").toLowerCase().includes("vencidas");
+                                      const cls = isVencidasDrill
+                                        ? (np >= 3 ? "bg-red-100 text-red-700"
+                                            : np === 2 ? "bg-orange-100 text-orange-700"
+                                            : "bg-slate-100 text-slate-600")
+                                        : "bg-slate-100 text-slate-600";
+                                      const title = isVencidasDrill
+                                        ? (np === 1
+                                            ? "1º período aquisitivo"
+                                            : `${np}º período aquisitivo — colaborador acumulou ${np - 1} período(s) anterior(es) sem gozo (passivo de pagamento em dobro Art. 137 CLT)`)
+                                        : `${np}º ano de serviço (período aquisitivo nº ${np} desde a admissão)`;
+                                      const label = isVencidasDrill ? `${np}º Per.` : `${np}º ano`;
                                       return (
-                                        <Badge variant="secondary" className={`${cls} text-[9px] px-1.5 py-0 font-medium`} title={title}>{np}º Per.</Badge>
+                                        <Badge variant="secondary" className={`${cls} text-[9px] px-1.5 py-0 font-medium`} title={title}>{label}</Badge>
                                       );
                                     })()}
                                   </div>
