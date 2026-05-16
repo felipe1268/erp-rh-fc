@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1951 — Planejamento · PlanejamentoDetalhe · REFIS · Detalhamento Pai→Filho · LINHA INTEIRA clicável para expandir/recolher (não só o chevron 4×4px).
+ * User (16/05/2026, screenshots NAVE NORTE com detalhamento aberto Rev. 1948 mas 5 linhas 01.01-01.05 todas recolhidas): "faz assim quando clicar nas atividade, expande aas atividades que estão abaixo para saber o que facilitar a analise de cada atividade..".
+ * Causa: `renderRow` Rev. 1945 colocou o handler `toggleEtapa` SÓ no `<button>` interno de 16×16px (chevron). Em telas grandes o alvo táctil ficava microscópico e o usuário tinha que mirar exatamente na seta. A intenção sempre foi UX tipo árvore de arquivos: clica na linha → abre.
+ * Mudança (`PlanejamentoDetalhe.tsx` ~L14215 dentro de `renderRow`):
+ *   (a) onClick movido do `<button>` interno para o `<div>` da linha inteira.
+ *   (b) `<button>` interno virou `<span aria-hidden>` — chevron permanece apenas como afordância visual (não disputa o foco/click).
+ *   (c) Linha ganha `role="button"`, `tabIndex={0}`, `aria-expanded` quando tem filhos (acessibilidade — leitor de tela anuncia "expandido/recolhido").
+ *   (d) `onKeyDown`: Enter ou Space (sem scroll) também alterna (padrão WAI-ARIA Disclosure).
+ *   (e) `cursor-pointer` + `select-none` aplicados condicionalmente (só quando tem filhos — folhas continuam com cursor default).
+ *   (f) `aria-label` descritivo "<nome> — expandir/recolher filhos" para leitor de tela.
+ *   (g) Hover azul-50 preservado para feedback visual.
+ *   (h) Recursão `renderRow(c, depth + 1)` para netos/bisnetos preservada — funciona em todos os níveis.
+ * version → 1951.
+ * Resultado: clique em qualquer área de uma linha pai (código EAP, nome, barra Previsto/Realizado, % desvio) abre/fecha os filhos. Folhas (sem `e.children`) continuam não-clicáveis (sem cursor pointer, sem hover de botão). Acessível via teclado (Tab + Enter/Space).
+ * Preservado: Rev. 1948 (detalhamento default aberto por card), Rev. 1947 (toggle do card), Rev. 1945 (renderRow recursivo + collectIds + helpers expandirTudoCard/recolherTudoCard), Rev. 1944 (modal CDM drill-down), `expandedEtapas` global, bar chart macro, collapsedGrupos, modo máscara, print. Zero backend/DB. Reversível em 1 hunk (mover onClick de volta pro button). R-001/R-007/R-010 OK.
+ *
  * Rev. 1950 — RH · Dash Aviso Prévio · CDM · Botão "Imprimir / PDF" no header do card (imprime SÓ esta tabela).
  * User (16/05/2026, screenshot CDM ~R$ 1,16M / 98 funcionários ativos): "colcoa um botão para gear PDF e imprimir esta tabela somente, ela.. para uma analise gerencial..".
  * Mudança (`DashAvisoPrevio.tsx`):

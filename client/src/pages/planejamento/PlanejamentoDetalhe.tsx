@@ -14201,20 +14201,37 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
           const corBarReal = (e.realizado ?? 0) >= (e.previsto ?? 0) ? "#34d399" : desv < -10 ? "#f87171" : "#fbbf24";
           return (
             <React.Fragment key={e.id}>
+              {/* Rev. 1951 — LINHA INTEIRA clicável quando tem filhos.
+                  User (16/05/2026, screenshot NAVE NORTE detalhamento 01.01-01.05
+                  todos recolhidos): "faz assim quando clicar nas atividade,
+                  expande aas atividades que estão abaixo para saber o que
+                  facilitar a analise de cada atividade..". Antes só o chevron
+                  4×4px disparava o toggle — alvo táctil ruim. Agora o clique
+                  em qualquer lugar da linha (código EAP, nome, barra, %)
+                  expande/recolhe. Chevron preservado como afordância visual. */}
               <div
-                className="flex items-center gap-2 px-3 py-1.5 border-b border-slate-100 hover:bg-blue-50/40"
+                role={hasChildren ? "button" : undefined}
+                tabIndex={hasChildren ? 0 : undefined}
+                onClick={() => hasChildren && toggleEtapa(e.id)}
+                onKeyDown={(ev) => {
+                  if (hasChildren && (ev.key === "Enter" || ev.key === " ")) {
+                    ev.preventDefault();
+                    toggleEtapa(e.id);
+                  }
+                }}
+                className={`flex items-center gap-2 px-3 py-1.5 border-b border-slate-100 hover:bg-blue-50/40 select-none ${hasChildren ? "cursor-pointer" : ""}`}
                 style={{ paddingLeft: 12 + depth * 18 }}
+                aria-expanded={hasChildren ? isOpen : undefined}
+                aria-label={hasChildren ? `${e.nome} — ${isOpen ? "recolher" : "expandir"} filhos` : undefined}
               >
-                <button
-                  type="button"
-                  onClick={() => hasChildren && toggleEtapa(e.id)}
-                  className={`w-4 h-4 shrink-0 flex items-center justify-center rounded ${hasChildren ? "text-slate-500 hover:text-blue-600 hover:bg-blue-100" : "cursor-default"}`}
-                  aria-label={hasChildren ? (isOpen ? "Recolher" : "Expandir") : undefined}
+                <span
+                  className={`w-4 h-4 shrink-0 flex items-center justify-center rounded ${hasChildren ? "text-slate-500" : ""}`}
+                  aria-hidden="true"
                 >
                   {hasChildren
                     ? (isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />)
                     : <span className="h-3 w-3" />}
-                </button>
+                </span>
                 {e.eapCodigo && (
                   <span className="text-[10px] font-mono text-slate-400 w-16 shrink-0 truncate">
                     {e.eapCodigo}
