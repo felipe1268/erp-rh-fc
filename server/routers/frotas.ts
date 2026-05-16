@@ -4416,6 +4416,316 @@ IMPORTANTE:
       };
     }),
 
+  // Rev. 1881 — Dashboard dedicado de COMBUSTÍVEL. KPIs gerais, evolução
+  // mensal (litros + R$), por veículo (com consumo km/L derivado de km_atual),
+  // por motorista (ranking), por posto e por tipo de combustível.
+  getFuelDashboard: protectedProcedure
+    .input(z.object({ companyId: z.number(), ano: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user?.companyId !== undefined && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para acessar dados desta empresa" });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, ano } = input;
+      const anoFilter = ano || new Date().getFullYear();
+      const startDate = `${anoFilter}-01-01`;
+      const endDate = `${anoFilter + 1}-01-01`;
+
+      const kpiRes = await db.execute(sql`
+        SELECT
+          COUNT(*)::int as qtd,
+          COALESCE(SUM(litros::numeric), 0) as litros,
+          COALESCE(SUM(valor_total::numeric), 0) as valor,
+          COALESCE(SUM(desconto::numeric), 0) as desconto,
+          COUNT(DISTINCT vehicle_id)::int as veiculos,
+          COUNT(DISTINCT motorista)::int as motoristas,
+          COUNT(DISTINCT posto)::int as postos,
+          COALESCE(AVG(NULLIF(preco_litro::numeric, 0)), 0) as preco_medio,
+          COALESCE(MIN(NULLIF(preco_litro::numeric, 0)), 0) as preco_min,
+          COALESCE(MAX(NULLIF(preco_litro::numeric, 0)), 0) as preco_max,
+          COALESCE(AVG(NULLIF(consumo_km_l::numeric, 0)), 0) as consumo_medio
+        FROM fleet_fuel_records
+        WHERE company_id = ${companyId}
+          AND data >= ${startDate}::date AND data < ${endDate}::date
+      `);
+      const kpi = ((kpiRes as any).rows || kpiRes)[0] || {};
+
+      const porMesRes = await db.execute(sql`
+        SELECT EXTRACT(MONTH FROM data)::int as mes,
+               COUNT(*)::int as qtd,
+               COALESCE(SUM(litros::numeric), 0) as litros,
+               COALESCE(SUM(valor_total::numeric), 0) as valor,
+               COALESCE(AVG(NULLIF(preco_litro::numeric, 0)), 0) as preco_medio
+        FROM fleet_fuel_records
+        WHERE company_id = ${companyId}
+          AND data >= ${startDate}::date AND data < ${endDate}::date
+        GROUP BY mes ORDER BY mes
+      `);
+
+      const porVeiculoRes = await db.execute(sql`
+        SELECT fr.vehicle_id, v.placa, v.modelo, v.marca, v."tipoVeiculo" as tipo_veiculo,
+               COUNT(*)::int as qtd,
+               COALESCE(SUM(fr.litros::numeric), 0) as litros,
+               COALESCE(SUM(fr.valor_total::numeric), 0) as valor,
+               COALESCE(AVG(NULLIF(fr.preco_litro::numeric, 0)), 0) as preco_medio,
+               COALESCE(AVG(NULLIF(fr.consumo_km_l::numeric, 0)), 0) as consumo_medio,
+               COALESCE(MIN(NULLIF(fr.km_atual::numeric, 0)), 0) as km_min,
+               COALESCE(MAX(NULLIF(fr.km_atual::numeric, 0)), 0) as km_max,
+               MAX(fr.data) as ultimo_abastecimento
+        FROM fleet_fuel_records fr
+        JOIN vehicles v ON v.id = fr.vehicle_id AND v."companyId" = ${companyId}
+        WHERE fr.company_id = ${companyId}
+          AND fr.data >= ${startDate}::date AND fr.data < ${endDate}::date
+        GROUP BY fr.vehicle_id, v.placa, v.modelo, v.marca, v."tipoVeiculo"
+        ORDER BY valor DESC
+      `);
+
+      const porMotoristaRes = await db.execute(sql`
+        SELECT COALESCE(NULLIF(TRIM(motorista), ''), 'Não informado') as motorista,
+               COUNT(*)::int as qtd,
+               COALESCE(SUM(litros::numeric), 0) as litros,
+               COALESCE(SUM(valor_total::numeric), 0) as valor,
+               COUNT(DISTINCT vehicle_id)::int as veiculos
+        FROM fleet_fuel_records
+        WHERE company_id = ${companyId}
+          AND data >= ${startDate}::date AND data < ${endDate}::date
+        GROUP BY motorista ORDER BY litros DESC LIMIT 30
+      `);
+
+      const porPostoRes = await db.execute(sql`
+        SELECT COALESCE(NULLIF(TRIM(posto), ''), 'Não informado') as posto,
+               COUNT(*)::int as qtd,
+               COALESCE(SUM(litros::numeric), 0) as litros,
+               COALESCE(SUM(valor_total::numeric), 0) as valor,
+               COALESCE(AVG(NULLIF(preco_litro::numeric, 0)), 0) as preco_medio
+        FROM fleet_fuel_records
+        WHERE company_id = ${companyId}
+          AND data >= ${startDate}::date AND data < ${endDate}::date
+        GROUP BY posto ORDER BY valor DESC LIMIT 30
+      `);
+
+      const porTipoRes = await db.execute(sql`
+        SELECT COALESCE(NULLIF(TRIM(tipo_combustivel), ''), 'Não informado') as tipo,
+               COUNT(*)::int as qtd,
+               COALESCE(SUM(litros::numeric), 0) as litros,
+               COALESCE(SUM(valor_total::numeric), 0) as valor,
+               COALESCE(AVG(NULLIF(preco_litro::numeric, 0)), 0) as preco_medio
+        FROM fleet_fuel_records
+        WHERE company_id = ${companyId}
+          AND data >= ${startDate}::date AND data < ${endDate}::date
+        GROUP BY tipo ORDER BY valor DESC
+      `);
+
+      // Top 10 maiores notas individuais — útil pra detectar abuso/fraude.
+      const topNotasRes = await db.execute(sql`
+        SELECT fr.id, fr.data, fr.litros, fr.valor_total, fr.preco_litro,
+               fr.motorista, fr.posto, fr.km_atual, fr.tipo_combustivel,
+               v.placa, v.modelo
+        FROM fleet_fuel_records fr
+        JOIN vehicles v ON v.id = fr.vehicle_id AND v."companyId" = ${companyId}
+        WHERE fr.company_id = ${companyId}
+          AND fr.data >= ${startDate}::date AND fr.data < ${endDate}::date
+        ORDER BY fr.valor_total::numeric DESC LIMIT 15
+      `);
+
+      return {
+        kpi: {
+          qtd: parseInt(kpi.qtd) || 0,
+          litros: parseFloat(kpi.litros) || 0,
+          valor: parseFloat(kpi.valor) || 0,
+          desconto: parseFloat(kpi.desconto) || 0,
+          veiculos: parseInt(kpi.veiculos) || 0,
+          motoristas: parseInt(kpi.motoristas) || 0,
+          postos: parseInt(kpi.postos) || 0,
+          precoMedio: parseFloat(kpi.preco_medio) || 0,
+          precoMin: parseFloat(kpi.preco_min) || 0,
+          precoMax: parseFloat(kpi.preco_max) || 0,
+          consumoMedio: parseFloat(kpi.consumo_medio) || 0,
+        },
+        porMes: ((porMesRes as any).rows || []).map((r: any) => ({
+          mes: r.mes, qtd: parseInt(r.qtd), litros: parseFloat(r.litros),
+          valor: parseFloat(r.valor), precoMedio: parseFloat(r.preco_medio),
+        })),
+        porVeiculo: ((porVeiculoRes as any).rows || []).map((r: any) => {
+          const kmRodado = Math.max(parseFloat(r.km_max) - parseFloat(r.km_min), 0);
+          const litros = parseFloat(r.litros);
+          const consumoCalc = (kmRodado > 0 && litros > 0) ? (kmRodado / litros) : parseFloat(r.consumo_medio);
+          return {
+            vehicleId: r.vehicle_id, placa: r.placa, modelo: r.modelo, marca: r.marca, tipoVeiculo: r.tipo_veiculo,
+            qtd: parseInt(r.qtd), litros, valor: parseFloat(r.valor),
+            precoMedio: parseFloat(r.preco_medio),
+            consumoMedio: consumoCalc,
+            kmRodado,
+            custoPorKm: kmRodado > 0 ? parseFloat(r.valor) / kmRodado : 0,
+            ultimoAbastecimento: r.ultimo_abastecimento,
+          };
+        }),
+        porMotorista: ((porMotoristaRes as any).rows || []).map((r: any) => ({
+          motorista: r.motorista, qtd: parseInt(r.qtd),
+          litros: parseFloat(r.litros), valor: parseFloat(r.valor),
+          veiculos: parseInt(r.veiculos),
+        })),
+        porPosto: ((porPostoRes as any).rows || []).map((r: any) => ({
+          posto: r.posto, qtd: parseInt(r.qtd),
+          litros: parseFloat(r.litros), valor: parseFloat(r.valor),
+          precoMedio: parseFloat(r.preco_medio),
+        })),
+        porTipo: ((porTipoRes as any).rows || []).map((r: any) => ({
+          tipo: r.tipo, qtd: parseInt(r.qtd),
+          litros: parseFloat(r.litros), valor: parseFloat(r.valor),
+          precoMedio: parseFloat(r.preco_medio),
+        })),
+        topNotas: ((topNotasRes as any).rows || []).map((r: any) => ({
+          id: r.id, data: r.data, litros: parseFloat(r.litros),
+          valor: parseFloat(r.valor_total), precoLitro: parseFloat(r.preco_litro || 0),
+          motorista: r.motorista, posto: r.posto, kmAtual: parseFloat(r.km_atual || 0),
+          tipo: r.tipo_combustivel, placa: r.placa, modelo: r.modelo,
+        })),
+      };
+    }),
+
+  // Rev. 1881 — Dashboard dedicado de PEDÁGIOS / Sem Parar. KPIs + evolução
+  // mensal, ranking por veículo, por praça, por rodovia, e segmentação por
+  // categoria (pedagio vs sem_parar).
+  getPedagiosDashboard: protectedProcedure
+    .input(z.object({ companyId: z.number(), ano: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user?.companyId !== undefined && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para acessar dados desta empresa" });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, ano } = input;
+      const anoFilter = ano || new Date().getFullYear();
+      const startDate = `${anoFilter}-01-01`;
+      const endDate = `${anoFilter + 1}-01-01`;
+
+      const kpiRes = await db.execute(sql`
+        SELECT
+          COUNT(*)::int as qtd,
+          COALESCE(SUM(valor::numeric), 0) as valor,
+          COUNT(DISTINCT vehicle_id)::int as veiculos,
+          COUNT(DISTINCT praca_pedagio)::int as pracas,
+          COUNT(DISTINCT rodovia)::int as rodovias,
+          COUNT(DISTINCT tag_id)::int as tags,
+          COALESCE(AVG(NULLIF(valor::numeric, 0)), 0) as valor_medio,
+          COALESCE(MAX(valor::numeric), 0) as valor_max,
+          COUNT(CASE WHEN categoria = 'pedagio' THEN 1 END)::int as qtd_pedagio,
+          COUNT(CASE WHEN categoria = 'sem_parar' THEN 1 END)::int as qtd_sem_parar,
+          COALESCE(SUM(CASE WHEN categoria = 'pedagio' THEN valor::numeric ELSE 0 END), 0) as valor_pedagio,
+          COALESCE(SUM(CASE WHEN categoria = 'sem_parar' THEN valor::numeric ELSE 0 END), 0) as valor_sem_parar
+        FROM fleet_toll_records
+        WHERE company_id = ${companyId}
+          AND data >= ${startDate}::date AND data < ${endDate}::date
+      `);
+      const kpi = ((kpiRes as any).rows || kpiRes)[0] || {};
+
+      const porMesRes = await db.execute(sql`
+        SELECT EXTRACT(MONTH FROM data)::int as mes,
+               COUNT(*)::int as qtd,
+               COALESCE(SUM(valor::numeric), 0) as valor,
+               COALESCE(SUM(CASE WHEN categoria = 'pedagio' THEN valor::numeric ELSE 0 END), 0) as pedagio,
+               COALESCE(SUM(CASE WHEN categoria = 'sem_parar' THEN valor::numeric ELSE 0 END), 0) as sem_parar
+        FROM fleet_toll_records
+        WHERE company_id = ${companyId}
+          AND data >= ${startDate}::date AND data < ${endDate}::date
+        GROUP BY mes ORDER BY mes
+      `);
+
+      const porVeiculoRes = await db.execute(sql`
+        SELECT tr.vehicle_id, v.placa, v.modelo, v.marca, v."tipoVeiculo" as tipo_veiculo,
+               COUNT(*)::int as qtd,
+               COALESCE(SUM(tr.valor::numeric), 0) as valor,
+               COUNT(CASE WHEN tr.categoria = 'pedagio' THEN 1 END)::int as qtd_pedagio,
+               COUNT(CASE WHEN tr.categoria = 'sem_parar' THEN 1 END)::int as qtd_sem_parar,
+               COUNT(DISTINCT tr.praca_pedagio)::int as pracas,
+               MAX(tr.data) as ultimo
+        FROM fleet_toll_records tr
+        JOIN vehicles v ON v.id = tr.vehicle_id AND v."companyId" = ${companyId}
+        WHERE tr.company_id = ${companyId}
+          AND tr.data >= ${startDate}::date AND tr.data < ${endDate}::date
+        GROUP BY tr.vehicle_id, v.placa, v.modelo, v.marca, v."tipoVeiculo"
+        ORDER BY valor DESC
+      `);
+
+      const porPracaRes = await db.execute(sql`
+        SELECT COALESCE(NULLIF(TRIM(praca_pedagio), ''), 'Não informado') as praca,
+               COALESCE(NULLIF(TRIM(rodovia), ''), '—') as rodovia,
+               COUNT(*)::int as qtd,
+               COALESCE(SUM(valor::numeric), 0) as valor,
+               COUNT(DISTINCT vehicle_id)::int as veiculos
+        FROM fleet_toll_records
+        WHERE company_id = ${companyId}
+          AND data >= ${startDate}::date AND data < ${endDate}::date
+        GROUP BY praca, rodovia ORDER BY valor DESC LIMIT 30
+      `);
+
+      const porRodoviaRes = await db.execute(sql`
+        SELECT COALESCE(NULLIF(TRIM(rodovia), ''), 'Não informado') as rodovia,
+               COUNT(*)::int as qtd,
+               COALESCE(SUM(valor::numeric), 0) as valor,
+               COUNT(DISTINCT praca_pedagio)::int as pracas,
+               COUNT(DISTINCT vehicle_id)::int as veiculos
+        FROM fleet_toll_records
+        WHERE company_id = ${companyId}
+          AND data >= ${startDate}::date AND data < ${endDate}::date
+        GROUP BY rodovia ORDER BY valor DESC LIMIT 20
+      `);
+
+      // Top 15 passagens individuais mais caras — útil pra auditoria.
+      const topPassagensRes = await db.execute(sql`
+        SELECT tr.id, tr.data, tr.valor, tr.categoria, tr.praca_pedagio, tr.rodovia,
+               tr.tag_id, tr.eixos, tr.descricao, v.placa, v.modelo
+        FROM fleet_toll_records tr
+        JOIN vehicles v ON v.id = tr.vehicle_id AND v."companyId" = ${companyId}
+        WHERE tr.company_id = ${companyId}
+          AND tr.data >= ${startDate}::date AND tr.data < ${endDate}::date
+        ORDER BY tr.valor::numeric DESC LIMIT 15
+      `);
+
+      return {
+        kpi: {
+          qtd: parseInt(kpi.qtd) || 0,
+          valor: parseFloat(kpi.valor) || 0,
+          veiculos: parseInt(kpi.veiculos) || 0,
+          pracas: parseInt(kpi.pracas) || 0,
+          rodovias: parseInt(kpi.rodovias) || 0,
+          tags: parseInt(kpi.tags) || 0,
+          valorMedio: parseFloat(kpi.valor_medio) || 0,
+          valorMax: parseFloat(kpi.valor_max) || 0,
+          qtdPedagio: parseInt(kpi.qtd_pedagio) || 0,
+          qtdSemParar: parseInt(kpi.qtd_sem_parar) || 0,
+          valorPedagio: parseFloat(kpi.valor_pedagio) || 0,
+          valorSemParar: parseFloat(kpi.valor_sem_parar) || 0,
+        },
+        porMes: ((porMesRes as any).rows || []).map((r: any) => ({
+          mes: r.mes, qtd: parseInt(r.qtd), valor: parseFloat(r.valor),
+          pedagio: parseFloat(r.pedagio), semParar: parseFloat(r.sem_parar),
+        })),
+        porVeiculo: ((porVeiculoRes as any).rows || []).map((r: any) => ({
+          vehicleId: r.vehicle_id, placa: r.placa, modelo: r.modelo,
+          marca: r.marca, tipoVeiculo: r.tipo_veiculo,
+          qtd: parseInt(r.qtd), valor: parseFloat(r.valor),
+          qtdPedagio: parseInt(r.qtd_pedagio), qtdSemParar: parseInt(r.qtd_sem_parar),
+          pracas: parseInt(r.pracas), ultimo: r.ultimo,
+        })),
+        porPraca: ((porPracaRes as any).rows || []).map((r: any) => ({
+          praca: r.praca, rodovia: r.rodovia, qtd: parseInt(r.qtd),
+          valor: parseFloat(r.valor), veiculos: parseInt(r.veiculos),
+        })),
+        porRodovia: ((porRodoviaRes as any).rows || []).map((r: any) => ({
+          rodovia: r.rodovia, qtd: parseInt(r.qtd), valor: parseFloat(r.valor),
+          pracas: parseInt(r.pracas), veiculos: parseInt(r.veiculos),
+        })),
+        topPassagens: ((topPassagensRes as any).rows || []).map((r: any) => ({
+          id: r.id, data: r.data, valor: parseFloat(r.valor), categoria: r.categoria,
+          praca: r.praca_pedagio, rodovia: r.rodovia, tagId: r.tag_id,
+          eixos: r.eixos, descricao: r.descricao, placa: r.placa, modelo: r.modelo,
+        })),
+      };
+    }),
+
   getMaintenanceMonthSummary: protectedProcedure
     .input(z.object({ companyId: z.number(), mes: z.number(), ano: z.number() }))
     .query(async ({ input }) => {

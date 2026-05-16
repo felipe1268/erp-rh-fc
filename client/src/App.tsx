@@ -285,6 +285,8 @@ const FrotasLicenciamento = lazy(() => import("./pages/frotas/Licenciamento"));
 const FrotasSeguros = lazy(() => import("./pages/frotas/Seguros"));
 const FrotasAnalitico = lazy(() => import("./pages/frotas/FrotasAnalitico"));
 const ManutencoesDashboard = lazy(() => import("./pages/frotas/ManutencoesDashboard"));
+const CombustivelDashboard = lazy(() => import("./pages/frotas/CombustivelDashboard"));
+const PedagiosDashboard = lazy(() => import("./pages/frotas/PedagiosDashboard"));
 const PrecosCombustivel = lazy(() => import("./pages/frotas/PrecosCombustivel"));
 const FrotasPedagios = lazy(() => import("./pages/frotas/Pedagios"));
 const FrotasRaioX = lazy(() => import("./pages/frotas/RaioXVeiculo"));
@@ -540,6 +542,8 @@ function Router() {
         <Route path="/frotas/pedagios" component={() => <RouteGuard component={FrotasPedagios} route="/frotas/painel" />} />
         <Route path="/frotas/analitico" component={() => <RouteGuard component={FrotasAnalitico} route="/frotas/analitico" />} />
         <Route path="/frotas/manutencoes-dashboard" component={() => <RouteGuard component={ManutencoesDashboard} route="/frotas/manutencoes" />} />
+        <Route path="/frotas/combustivel-dashboard" component={() => <RouteGuard component={CombustivelDashboard} route="/frotas/combustivel" />} />
+        <Route path="/frotas/pedagios-dashboard" component={() => <RouteGuard component={PedagiosDashboard} route="/frotas/pedagios" />} />
         <Route path="/frotas/precos-combustivel" component={() => <RouteGuard component={PrecosCombustivel} route="/frotas/combustivel" />} />
         <Route path="/frotas/raio-x" component={() => <RouteGuard component={FrotasRaioX} route="/frotas/painel" />} />
         <Route path="/frotas/checklist" component={() => <RouteGuard component={FrotasChecklist} route="/frotas/painel" />} />

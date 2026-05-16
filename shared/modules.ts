@@ -509,6 +509,8 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "frotas-rastreamento",       label: "Rastreamento",         route: "/frotas/rastreamento",          icon: "MapPin" },
       { key: "frotas-analitico",          label: "Analítico",            route: "/frotas/analitico",             icon: "BarChart3" },
       { key: "frotas-manutencoes-dash",   label: "Dash Manutenções",     route: "/frotas/manutencoes-dashboard", icon: "BarChart3" },
+      { key: "frotas-combustivel-dash",   label: "Dash Combustível",     route: "/frotas/combustivel-dashboard", icon: "Fuel" },
+      { key: "frotas-pedagios-dash",      label: "Dash Pedágios",        route: "/frotas/pedagios-dashboard",    icon: "Receipt" },
       { key: "frotas-precos-combustivel", label: "Preços Combustível",   route: "/frotas/precos-combustivel",    icon: "DollarSign" },
       { key: "frotas-pedagios",           label: "Pedágios",             route: "/frotas/pedagios",              icon: "Receipt" },
       { key: "frotas-raio-x",             label: "Raio-X do Veículo",    route: "/frotas/raio-x",                icon: "UserSearch" },

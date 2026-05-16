@@ -673,6 +673,8 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/frotas/painel":                "painel",
     "/frotas/analitico":             "analitico",
     "/frotas/manutencoes-dashboard": "manutencoes_dashboard",
+    "/frotas/combustivel-dashboard": "combustivel",
+    "/frotas/pedagios-dashboard":    "pedagios",
     "/frotas/veiculos":              "veiculos",
     "/frotas/raio-x":                "raio_x_veiculo",
     "/frotas/manutencoes":           "manutencoes",
