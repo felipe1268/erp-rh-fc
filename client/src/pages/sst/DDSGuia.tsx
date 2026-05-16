@@ -2062,6 +2062,7 @@ export default function DDSGuia() {
         </DialogContent>
       </Dialog>
     </div>
+    </DashboardLayout>
   );
 }
 
@@ -2394,6 +2395,5 @@ function SessaoDetalhe({
         </Button>
       </div>
     </div>
-    </DashboardLayout>
   );
 }
