@@ -4,10 +4,11 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   Fuel, DollarSign, Droplet, Gauge, Truck, Users, Store, BarChart3,
   ChevronLeft, ChevronRight, TrendingUp, TrendingDown, ArrowUpDown,
-  ArrowUp, ArrowDown, AlertTriangle, Receipt,
+  ArrowUp, ArrowDown, AlertTriangle, Receipt, X, MousePointerClick, Info,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -16,21 +17,34 @@ import {
 
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1", "#14b8a6", "#e11d48"];
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fmtNum(v: number, d = 0) { return v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d }); }
 function fmtL(v: number) { return `${fmtNum(v, 1)} L`; }
 function fmtKmL(v: number) { return v > 0 ? `${fmtNum(v, 2)} km/L` : "—"; }
+function fmtData(s: any) { return s ? String(s).slice(0, 10).split("-").reverse().join("/") : "—"; }
+
+type DrillDim = "motorista" | "posto" | "tipo" | "mes" | "veiculo";
+type DrillKey = { dim: DrillDim; value: string; label: string; subtitle?: string };
 
 export default function CombustivelDashboard() {
   const { selectedCompanyId } = useCompany();
   const cId = parseInt(selectedCompanyId || "0");
   const [ano, setAno] = useState(new Date().getFullYear());
   const [sortVeic, setSortVeic] = useState<{ col: string; dir: "asc" | "desc" }>({ col: "valor", dir: "desc" });
+  // Rev. 1883 — drill-down clicável em todos os gráficos. `drill` aberto =
+  // modal fullscreen (Regra de Ouro tablet/iPad).
+  const [drill, setDrill] = useState<DrillKey | null>(null);
 
   const dash = trpc.frotas.getFuelDashboard.useQuery(
     { companyId: cId, ano },
     { enabled: cId > 0 },
+  );
+
+  const detail = trpc.frotas.getFuelDrilldown.useQuery(
+    { companyId: cId, ano, dim: drill?.dim || "motorista", value: drill?.value || "" },
+    { enabled: !!drill && cId > 0 },
   );
 
   const d = dash.data;
@@ -46,6 +60,7 @@ export default function CombustivelDashboard() {
     const m = porMes.find((x: any) => x.mes === i + 1);
     return {
       name: MESES[i],
+      mes: i + 1,
       valor: m?.valor || 0,
       litros: m?.litros || 0,
       preco: m?.precoMedio || 0,
@@ -64,6 +79,16 @@ export default function CombustivelDashboard() {
     if (sortVeic.col !== col) return <ArrowUpDown className="h-3 w-3 opacity-40" />;
     return sortVeic.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />;
   };
+
+  // Helper: dica visual de "clicável" no header dos cards.
+  const ClickHint = () => (
+    <span className="ml-auto text-[10px] text-muted-foreground inline-flex items-center gap-1 font-normal">
+      <MousePointerClick className="h-3 w-3" /> toque para detalhar
+    </span>
+  );
+
+  // Sentinela: mesmo string usado no backend para NULL/''.
+  const SEM_MOTORISTA = "Não informado";
 
   if (!d) {
     return (
@@ -85,7 +110,7 @@ export default function CombustivelDashboard() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-[#1e3a5f] dark:text-emerald-300">Dashboard de Combustível</h1>
-              <p className="text-sm text-muted-foreground">Análise de consumo, preço, postos, motoristas e tipos de combustível</p>
+              <p className="text-sm text-muted-foreground">Análise de consumo, preço, postos, motoristas e tipos · <span className="text-emerald-700 dark:text-emerald-400 font-medium">toque em qualquer gráfico para detalhar</span></p>
             </div>
           </div>
           <div className="flex items-center gap-2 bg-white dark:bg-slate-800 rounded-xl px-3 py-1.5 shadow-sm border">
@@ -138,12 +163,13 @@ export default function CombustivelDashboard() {
           </Card>
         )}
 
-        {/* Evolução mensal */}
+        {/* Evolução mensal — clicar em barra abre modal do mês */}
         <Card>
           <CardHeader className="pb-1">
             <CardTitle className="text-sm flex items-center gap-2">
               <BarChart3 className="h-4 w-4 text-emerald-500" />
               Evolução Mensal — Litros, Valor e Preço Médio
+              <ClickHint />
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -164,11 +190,16 @@ export default function CombustivelDashboard() {
                         const isLitros = p.dataKey === "litros";
                         return <p key={i} style={{ color: p.color }}>{p.name}: {isValor ? fmt(p.value) : isPreco ? `R$ ${fmtNum(p.value, 3)}/L` : isLitros ? fmtL(p.value) : fmtNum(p.value)}</p>;
                       })}
+                      <p className="text-[10px] text-muted-foreground pt-1 border-t">Toque para ver lançamentos</p>
                     </div>
                   );
                 }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar yAxisId="left" dataKey="valor" name="Valor (R$)" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="left" dataKey="valor" name="Valor (R$)" fill="#10b981" radius={[4, 4, 0, 0]} cursor="pointer"
+                  onClick={(data: any) => {
+                    const p = data?.payload ?? data;
+                    if (p?.qtd > 0) setDrill({ dim: "mes", value: String(p.mes), label: `${MESES_FULL[p.mes - 1]}/${ano}`, subtitle: "Mês" });
+                  }} />
                 <Line yAxisId="right" dataKey="litros" name="Litros" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
                 <Line yAxisId="right" dataKey="preco" name="Preço R$/L" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} strokeDasharray="4 4" />
               </ComposedChart>
@@ -180,32 +211,42 @@ export default function CombustivelDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card>
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm flex items-center gap-2"><Fuel className="h-4 w-4 text-emerald-500" /> Distribuição por Tipo de Combustível</CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Fuel className="h-4 w-4 text-emerald-500" /> Distribuição por Tipo de Combustível
+                <ClickHint />
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {porTipo.length > 0 ? (
                 <div className="flex flex-col items-center">
                   <ResponsiveContainer width="100%" height={220}>
                     <PieChart>
-                      <Pie data={porTipo} dataKey="valor" nameKey="tipo" cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2}>
+                      <Pie data={porTipo} dataKey="valor" nameKey="tipo" cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2}
+                        cursor="pointer"
+                        onClick={(data: any) => {
+                          const p = data?.payload ?? data;
+                          if (p?.tipo) setDrill({ dim: "tipo", value: p.tipo, label: p.tipo, subtitle: "Tipo de combustível" });
+                        }}>
                         {porTipo.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                       </Pie>
                       <Tooltip content={({ active, payload }) => {
                         if (!active || !payload?.length) return null;
                         const p = payload[0].payload;
-                        return <div className="bg-popover border rounded-lg shadow-lg p-2 text-xs"><strong>{p.tipo}</strong><br />{fmt(p.valor)} · {fmtL(p.litros)} · R$ {fmtNum(p.precoMedio, 3)}/L</div>;
+                        return <div className="bg-popover border rounded-lg shadow-lg p-2 text-xs"><strong>{p.tipo}</strong><br />{fmt(p.valor)} · {fmtL(p.litros)} · R$ {fmtNum(p.precoMedio, 3)}/L<br /><span className="text-[10px] text-muted-foreground">Toque para detalhar</span></div>;
                       }} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="w-full mt-2 space-y-1">
                     {porTipo.map((t: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between text-xs px-2 py-1 rounded hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <button key={i} type="button"
+                        onClick={() => setDrill({ dim: "tipo", value: t.tipo, label: t.tipo, subtitle: "Tipo de combustível" })}
+                        className="w-full flex items-center justify-between text-xs px-2 py-1 rounded hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors">
                         <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} /> {t.tipo}</span>
                         <span className="flex items-center gap-3 text-muted-foreground">
                           <span>{fmtL(t.litros)}</span>
                           <span className="font-bold text-emerald-700">{fmt(t.valor)}</span>
                         </span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -215,7 +256,10 @@ export default function CombustivelDashboard() {
 
           <Card>
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm flex items-center gap-2"><Store className="h-4 w-4 text-teal-500" /> Postos Mais Utilizados ({porPosto.length})</CardTitle>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Store className="h-4 w-4 text-teal-500" /> Postos Mais Utilizados ({porPosto.length})
+                <ClickHint />
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {porPosto.length > 0 ? (
@@ -233,10 +277,13 @@ export default function CombustivelDashboard() {
                           <p>{p.qtd} abastecimentos · {fmtL(p.litros)}</p>
                           <p>Preço médio: R$ {fmtNum(p.precoMedio, 3)}/L</p>
                           <p className="font-bold text-emerald-700">{fmt(p.valor)}</p>
+                          <p className="text-[10px] text-muted-foreground pt-1 border-t">Toque para detalhar</p>
                         </div>
                       );
                     }} />
-                    <Bar dataKey="valor" name="Valor" radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 9, formatter: (v: number) => fmt(v) }}>
+                    <Bar dataKey="valor" name="Valor" radius={[0, 4, 4, 0]} cursor="pointer"
+                      onClick={(data: any) => { const p = data?.payload ?? data; if (p?.posto) setDrill({ dim: "posto", value: p.posto, label: p.posto, subtitle: "Posto" }); }}
+                      label={{ position: "right", fontSize: 9, formatter: (v: number) => fmt(v) }}>
                       {porPosto.slice(0, 15).map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Bar>
                   </BarChart>
@@ -246,12 +293,21 @@ export default function CombustivelDashboard() {
           </Card>
         </div>
 
-        {/* Ranking motoristas */}
+        {/* Ranking motoristas — destaca "Não informado" e abre detalhe ao clicar */}
         <Card>
           <CardHeader className="pb-1">
-            <CardTitle className="text-sm flex items-center gap-2"><Users className="h-4 w-4 text-pink-500" /> Ranking de Motoristas — Litros e Valor ({porMotorista.length})</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Users className="h-4 w-4 text-pink-500" /> Ranking de Motoristas — Litros e Valor ({porMotorista.length})
+              <ClickHint />
+            </CardTitle>
           </CardHeader>
           <CardContent>
+            {porMotorista.some((m: any) => m.motorista === SEM_MOTORISTA) && (
+              <div className="mb-2 text-[11px] flex items-start gap-2 px-2.5 py-1.5 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300">
+                <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <span><strong>"Não informado"</strong> = abastecimentos sem o campo motorista preenchido. <strong>Toque na barra cinza</strong> para ver placa/data/posto de cada um e identificar quem foi (ex.: Camila).</span>
+              </div>
+            )}
             {porMotorista.length > 0 ? (
               <ResponsiveContainer width="100%" height={Math.max(220, Math.min(porMotorista.length, 15) * 30)}>
                 <BarChart data={porMotorista.slice(0, 15)} layout="vertical" margin={{ left: 0, right: 80 }}>
@@ -261,16 +317,23 @@ export default function CombustivelDashboard() {
                   <Tooltip content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const p = payload[0].payload;
+                    const isSem = p.motorista === SEM_MOTORISTA;
                     return (
                       <div className="bg-popover border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
                         <p className="font-bold">{p.motorista}</p>
+                        {isSem && <p className="text-amber-700 text-[10px]">Campo motorista vazio no lançamento</p>}
                         <p>{p.qtd} abastecimentos · {p.veiculos} veículo(s)</p>
                         <p>{fmtL(p.litros)} · <span className="font-bold text-emerald-700">{fmt(p.valor)}</span></p>
+                        <p className="text-[10px] text-muted-foreground pt-1 border-t">Toque para detalhar</p>
                       </div>
                     );
                   }} />
-                  <Bar dataKey="litros" name="Litros" radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 9, formatter: (v: number) => `${fmtNum(v, 0)} L` }}>
-                    {porMotorista.slice(0, 15).map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  <Bar dataKey="litros" name="Litros" radius={[0, 4, 4, 0]} cursor="pointer"
+                    onClick={(data: any) => { const p = data?.payload ?? data; if (p?.motorista) setDrill({ dim: "motorista", value: p.motorista, label: p.motorista, subtitle: "Motorista" }); }}
+                    label={{ position: "right", fontSize: 9, formatter: (v: number) => `${fmtNum(v, 0)} L` }}>
+                    {porMotorista.slice(0, 15).map((m: any, i: number) =>
+                      <Cell key={i} fill={m.motorista === SEM_MOTORISTA ? "#94a3b8" : COLORS[i % COLORS.length]} />
+                    )}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -278,10 +341,13 @@ export default function CombustivelDashboard() {
           </CardContent>
         </Card>
 
-        {/* Detalhamento por veículo */}
+        {/* Detalhamento por veículo — linha clicável */}
         <Card>
           <CardHeader className="pb-1">
-            <CardTitle className="text-sm flex items-center gap-2"><Truck className="h-4 w-4 text-violet-500" /> Detalhamento por Veículo ({porVeiculo.length})</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Truck className="h-4 w-4 text-violet-500" /> Detalhamento por Veículo ({porVeiculo.length})
+              <ClickHint />
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -304,7 +370,11 @@ export default function CombustivelDashboard() {
                   {veiculosSorted.map((v: any, idx: number) => {
                     const maxValor = Math.max(...porVeiculo.map((x: any) => x.valor), 1);
                     return (
-                      <tr key={v.vehicleId} className={`hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 ${idx % 2 === 0 ? "" : "bg-slate-50/50 dark:bg-slate-900/20"}`}>
+                      <tr key={v.vehicleId} role="button" tabIndex={0}
+                        onClick={() => setDrill({ dim: "veiculo", value: String(v.vehicleId), label: `${v.placa} · ${v.modelo || ""}`.trim(), subtitle: "Veículo" })}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDrill({ dim: "veiculo", value: String(v.vehicleId), label: `${v.placa} · ${v.modelo || ""}`.trim(), subtitle: "Veículo" }); } }}
+                        aria-label={`Ver abastecimentos de ${v.placa}`}
+                        className={`cursor-pointer hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${idx % 2 === 0 ? "" : "bg-slate-50/50 dark:bg-slate-900/20"}`}>
                         <td className="p-2.5">
                           <div className="flex flex-col">
                             <span className="font-mono font-bold text-[#1e3a5f] dark:text-emerald-300">{v.placa}</span>
@@ -330,7 +400,7 @@ export default function CombustivelDashboard() {
                         </td>
                         <td className="p-2.5 text-right tabular-nums text-muted-foreground">{v.kmRodado > 0 ? `${fmtNum(v.kmRodado, 0)} km` : "—"}</td>
                         <td className="p-2.5 text-right tabular-nums text-muted-foreground">{v.custoPorKm > 0 ? `R$ ${fmtNum(v.custoPorKm, 2)}` : "—"}</td>
-                        <td className="p-2.5 text-center text-[11px] text-muted-foreground">{v.ultimoAbastecimento ? String(v.ultimoAbastecimento).slice(0, 10).split("-").reverse().join("/") : "—"}</td>
+                        <td className="p-2.5 text-center text-[11px] text-muted-foreground">{fmtData(v.ultimoAbastecimento)}</td>
                       </tr>
                     );
                   })}
@@ -364,9 +434,9 @@ export default function CombustivelDashboard() {
                 <tbody>
                   {topNotas.map((r: any, i: number) => (
                     <tr key={r.id} className={i % 2 === 0 ? "" : "bg-slate-50/50 dark:bg-slate-900/20"}>
-                      <td className="p-2 text-muted-foreground">{r.data ? String(r.data).slice(0, 10).split("-").reverse().join("/") : "—"}</td>
+                      <td className="p-2 text-muted-foreground">{fmtData(r.data)}</td>
                       <td className="p-2 font-mono font-bold">{r.placa}<span className="ml-1 text-muted-foreground font-normal">{r.modelo}</span></td>
-                      <td className="p-2">{r.motorista || "—"}</td>
+                      <td className="p-2">{r.motorista || <span className="text-amber-700 italic">Não informado</span>}</td>
                       <td className="p-2">{r.posto || "—"}</td>
                       <td className="p-2"><Badge variant="outline" className="text-[10px]">{r.tipo || "—"}</Badge></td>
                       <td className="p-2 text-right tabular-nums">{fmtL(r.litros)}</td>
@@ -381,6 +451,108 @@ export default function CombustivelDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal de drill-down (Regra de Ouro: fullscreen no iPad) */}
+      <Dialog open={!!drill} onOpenChange={(o) => !o && setDrill(null)}>
+        <DialogContent className="!fixed !inset-0 !left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none !w-screen !h-screen !rounded-none !p-0 !gap-0 flex flex-col overflow-hidden">
+          {drill && (
+            <>
+              <div className="flex items-center justify-between px-4 py-3 border-b bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/30">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="p-2 rounded-lg bg-emerald-500 text-white shrink-0"><Fuel className="h-5 w-5" /></div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400 font-semibold">{drill.subtitle} · {ano}</div>
+                    <h2 className="text-lg font-bold text-[#1e3a5f] dark:text-emerald-300 truncate">{drill.label}</h2>
+                  </div>
+                </div>
+                <button onClick={() => setDrill(null)} className="p-2 rounded-lg hover:bg-white dark:hover:bg-slate-800 shrink-0" aria-label="Fechar">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {drill.dim === "motorista" && drill.value === SEM_MOTORISTA && (
+                <div className="px-4 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-[12px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                  <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>Estes são os abastecimentos cujo <strong>campo "Motorista" ficou em branco</strong> no lançamento (ou na importação Infleet). Use a coluna Veículo + Data + Posto para identificar quem foi (provavelmente Camila ou outro motorista com nome cadastrado diferente). Para corrigir: edite o lançamento no módulo Combustível, ou crie um <em>alias</em> em Cadastros de Motoristas.</span>
+                </div>
+              )}
+
+              {detail.isLoading && (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="animate-spin h-8 w-8 border-4 border-emerald-500 border-t-transparent rounded-full" />
+                </div>
+              )}
+
+              {!detail.isLoading && detail.data && (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 p-3 bg-slate-50 dark:bg-slate-900/50 border-b">
+                    {[
+                      { label: "Abastecimentos", value: fmtNum(detail.data.kpi.qtd), icon: Receipt },
+                      { label: "Litros", value: fmtL(detail.data.kpi.litros), icon: Droplet },
+                      { label: "Valor", value: fmt(detail.data.kpi.valor), icon: DollarSign },
+                      { label: "Preço Médio", value: detail.data.kpi.precoMedio > 0 ? `R$ ${fmtNum(detail.data.kpi.precoMedio, 3)}` : "—", icon: TrendingUp },
+                      { label: "Veículos", value: fmtNum(detail.data.kpi.veiculos), icon: Truck },
+                    ].map((k, i) => (
+                      <div key={i} className="bg-white dark:bg-slate-800 rounded-lg p-2 border">
+                        <div className="flex items-center gap-1.5"><k.icon className="h-3.5 w-3.5 text-emerald-600" /><span className="text-[9px] uppercase tracking-wider text-muted-foreground">{k.label}</span></div>
+                        <p className="text-base font-bold tabular-nums">{k.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex-1 overflow-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-100 dark:bg-slate-800 sticky top-0 z-10">
+                        <tr>
+                          <th className="p-2 text-left font-semibold">Data</th>
+                          <th className="p-2 text-left font-semibold">Veículo</th>
+                          {drill.dim !== "motorista" && <th className="p-2 text-left font-semibold">Motorista</th>}
+                          {drill.dim !== "posto" && <th className="p-2 text-left font-semibold">Posto</th>}
+                          {drill.dim !== "tipo" && <th className="p-2 text-left font-semibold">Tipo</th>}
+                          <th className="p-2 text-right font-semibold">Litros</th>
+                          <th className="p-2 text-right font-semibold">R$/L</th>
+                          <th className="p-2 text-right font-semibold">Km</th>
+                          <th className="p-2 text-right font-semibold">Total</th>
+                          <th className="p-2 text-left font-semibold hidden md:table-cell">Observações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detail.data.rows.map((r: any, i: number) => (
+                          <tr key={r.id} className={i % 2 === 0 ? "" : "bg-slate-50/50 dark:bg-slate-900/20"}>
+                            <td className="p-2 text-muted-foreground whitespace-nowrap">{fmtData(r.data)}</td>
+                            <td className="p-2">
+                              <div className="flex flex-col">
+                                <span className="font-mono font-bold text-[#1e3a5f] dark:text-emerald-300">{r.placa}</span>
+                                <span className="text-[10px] text-muted-foreground">{r.modelo}{r.marca ? ` · ${r.marca}` : ""}</span>
+                              </div>
+                            </td>
+                            {drill.dim !== "motorista" && <td className="p-2">{r.motorista || <span className="text-amber-700 italic">Não informado</span>}</td>}
+                            {drill.dim !== "posto" && <td className="p-2">{r.posto || "—"}</td>}
+                            {drill.dim !== "tipo" && <td className="p-2"><Badge variant="outline" className="text-[10px]">{r.tipo || "—"}</Badge></td>}
+                            <td className="p-2 text-right tabular-nums">{fmtL(r.litros)}</td>
+                            <td className="p-2 text-right tabular-nums">{r.precoLitro > 0 ? `R$ ${fmtNum(r.precoLitro, 3)}` : "—"}</td>
+                            <td className="p-2 text-right tabular-nums text-muted-foreground">{r.kmAtual > 0 ? fmtNum(r.kmAtual, 0) : "—"}</td>
+                            <td className="p-2 text-right font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{fmt(r.valor)}</td>
+                            <td className="p-2 text-[11px] text-muted-foreground hidden md:table-cell max-w-[200px] truncate">{r.observacoes || "—"}</td>
+                          </tr>
+                        ))}
+                        {detail.data.rows.length === 0 && (
+                          <tr><td colSpan={10} className="text-center text-muted-foreground py-8">Nenhum lançamento encontrado.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="px-4 py-2 text-[10px] text-muted-foreground border-t bg-slate-50 dark:bg-slate-900/50">
+                    {detail.data.rows.length === 500 && <span className="text-amber-700">⚠ Limite de 500 lançamentos atingido — refine por mês para ver mais. </span>}
+                    {detail.data.rows.length} {detail.data.rows.length === 1 ? "lançamento" : "lançamentos"}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

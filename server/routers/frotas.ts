@@ -4585,6 +4585,104 @@ IMPORTANTE:
       };
     }),
 
+  // Rev. 1883 — DRILL-DOWN do Dashboard de Combustível. Retorna a lista
+  // completa de abastecimentos filtrada por uma dimensão (motorista, posto,
+  // tipo, mes, veiculo). Usado pelos modais fullscreen do CombustivelDashboard
+  // — clicar em qualquer barra/fatia/linha abre os registros que compõem o
+  // agregado. Especialmente útil para resolver "Não informado": ao clicar,
+  // o usuário vê placa/data/posto de cada lançamento e identifica quem foi.
+  getFuelDrilldown: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ano: z.number().optional(),
+      dim: z.enum(["motorista", "posto", "tipo", "mes", "veiculo"]),
+      value: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user?.companyId !== undefined && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para acessar dados desta empresa" });
+      }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
+      const db = await getDb();
+      const { companyId, dim, value } = input;
+      const anoFilter = input.ano || new Date().getFullYear();
+      const startDate = `${anoFilter}-01-01`;
+      const endDate = `${anoFilter + 1}-01-01`;
+
+      // Filtro condicional por dimensão. Sentinela "Não informado" trata
+      // NULL/'' para os campos texto (motorista/posto/tipo) — mantém
+      // paridade exata com o COALESCE do dashboard.
+      const SENT = "Não informado";
+      let dimFilter;
+      if (dim === "motorista") {
+        dimFilter = value === SENT
+          ? sql`AND (fr.motorista IS NULL OR TRIM(fr.motorista) = '')`
+          : sql`AND TRIM(COALESCE(fr.motorista, '')) = ${value}`;
+      } else if (dim === "posto") {
+        dimFilter = value === SENT
+          ? sql`AND (fr.posto IS NULL OR TRIM(fr.posto) = '')`
+          : sql`AND TRIM(COALESCE(fr.posto, '')) = ${value}`;
+      } else if (dim === "tipo") {
+        dimFilter = value === SENT
+          ? sql`AND (fr.tipo_combustivel IS NULL OR TRIM(fr.tipo_combustivel) = '')`
+          : sql`AND TRIM(COALESCE(fr.tipo_combustivel, '')) = ${value}`;
+      } else if (dim === "mes") {
+        const mes = parseInt(value);
+        if (!(mes >= 1 && mes <= 12)) throw new TRPCError({ code: "BAD_REQUEST", message: "Mês inválido" });
+        dimFilter = sql`AND EXTRACT(MONTH FROM fr.data)::int = ${mes}`;
+      } else { // veiculo
+        const vid = parseInt(value);
+        if (!Number.isFinite(vid)) throw new TRPCError({ code: "BAD_REQUEST", message: "vehicleId inválido" });
+        dimFilter = sql`AND fr.vehicle_id = ${vid}`;
+      }
+
+      const rowsRes = await db.execute(sql`
+        SELECT fr.id, fr.data, fr.litros, fr.valor_total, fr.preco_litro,
+               fr.motorista, fr.posto, fr.km_atual, fr.tipo_combustivel,
+               fr.consumo_km_l, fr.desconto, fr.observacoes, fr.vehicle_id,
+               v.placa, v.modelo, v.marca, v."tipoVeiculo" as tipo_veiculo
+        FROM fleet_fuel_records fr
+        JOIN vehicles v ON v.id = fr.vehicle_id AND v."companyId" = ${companyId}
+        WHERE fr.company_id = ${companyId}
+          AND fr.data >= ${startDate}::date AND fr.data < ${endDate}::date
+          ${dimFilter}
+        ORDER BY fr.data DESC, fr.id DESC
+        LIMIT 500
+      `);
+
+      const rows = ((rowsRes as any).rows || []).map((r: any) => ({
+        id: r.id, data: r.data,
+        litros: parseFloat(r.litros) || 0,
+        valor: parseFloat(r.valor_total) || 0,
+        precoLitro: parseFloat(r.preco_litro) || 0,
+        consumoKmL: parseFloat(r.consumo_km_l) || 0,
+        desconto: parseFloat(r.desconto) || 0,
+        motorista: r.motorista || null,
+        posto: r.posto || null,
+        tipo: r.tipo_combustivel || null,
+        kmAtual: parseFloat(r.km_atual) || 0,
+        observacoes: r.observacoes || null,
+        vehicleId: r.vehicle_id, placa: r.placa, modelo: r.modelo,
+        marca: r.marca, tipoVeiculo: r.tipo_veiculo,
+      }));
+
+      const totLitros = rows.reduce((s: number, r: any) => s + r.litros, 0);
+      const totValor = rows.reduce((s: number, r: any) => s + r.valor, 0);
+      const precos = rows.map((r: any) => r.precoLitro).filter((p: number) => p > 0);
+      const precoMedio = precos.length > 0 ? precos.reduce((s: number, v: number) => s + v, 0) / precos.length : 0;
+
+      return {
+        kpi: {
+          qtd: rows.length,
+          litros: totLitros,
+          valor: totValor,
+          precoMedio,
+          veiculos: new Set(rows.map((r: any) => r.vehicleId)).size,
+        },
+        rows,
+      };
+    }),
+
   // Rev. 1881 — Dashboard dedicado de PEDÁGIOS / Sem Parar. KPIs + evolução
   // mensal, ranking por veículo, por praça, por rodovia, e segmentação por
   // categoria (pedagio vs sem_parar).

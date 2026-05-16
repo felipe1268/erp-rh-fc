@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1883 — Frotas · Dash Combustível · DRILL-DOWN CLICÁVEL em todos os gráficos + explicação de "Não informado" + destaque visual.
+ * User (16/05/2026, após Rev. 1882, screenshot do Dash Combustível com tooltip mostrando "Não informado · 7 abast · 4 veículos · 254,0 L · R$ 1.645,00"): "Quero todos gráficos responsivos se clicar abre a tela com os dados, seguindo as regras de ouro... e cadê o nome da Camila ela abasteceu, e quem é este não identificado?".
+ * Causa raiz das duas perguntas: o ranking de motoristas agrega pelo campo `motorista` (TEXT livre) de `fleet_fuel_records` via `COALESCE(NULLIF(TRIM(motorista),''), 'Não informado')`. Os 7 lançamentos categorizados como "Não informado" são abastecimentos sem motorista preenchido — ou (a) lançamento manual incompleto, ou (b) import Infleet sem `driver` resolvido (server/routers/frotas.ts L1485 já tenta `v.driver?.name || null`). Camila não aparecia como nome próprio porque seus abastecimentos provavelmente caíram nesse balde "Não informado" OU foram registrados com grafia diferente (apelido). Não há tabela de relacionamento employee↔fuel — só texto. Existe `fleet_driver_aliases` para canonicalização (server/routers/frotas.ts L263) mas a entrada da Camila não foi cadastrada. SOLUÇÃO: drill-down clicável permite ao usuário ver placa/data/posto dos 7 lançamentos órfãos e identificar quem foi, depois corrigir no módulo Combustível ou adicionar alias.
+ * Mudanças:
+ *   (1) Backend `server/routers/frotas.ts` L4591-4689: novo endpoint `getFuelDrilldown({companyId, ano, dim, value})` com 5 dimensões — `motorista|posto|tipo|mes|veiculo`. Para sentinela "Não informado" usa `(campo IS NULL OR TRIM(campo)='')` mantendo paridade EXATA com COALESCE do dashboard (sem dupla contagem). Mês valida 1-12; veiculo valida vehicleId numérico. Multi-tenant duplo: guard `ctx.user.companyId` + WHERE company_id + JOIN vehicles."companyId". LIMIT 500 (com aviso visual quando atingido). Retorna `kpi{qtd,litros,valor,precoMedio,veiculos}` + `rows[]` com todos os campos auditáveis (km_atual, desconto, observacoes, consumo_km_l).
+ *   (2) Frontend `client/src/pages/frotas/CombustivelDashboard.tsx` reescrito (~500L): novo estado `drill: {dim,value,label,subtitle}` + `Dialog` shadcn fullscreen com `className="!fixed !inset-0 !w-screen !h-screen !rounded-none !p-0"` (Regra de Ouro tablet/iPad). Hook trpc `getFuelDrilldown.useQuery({enabled: !!drill})` — só carrega quando modal aberto.
+ *   (3) Cliques implementados:
+ *     - ComposedChart mensal — `<Bar onClick={data=>setDrill({dim:'mes',value:String(data.mes),label:'Maio/2026'})}>` (gated por `qtd>0` evita meses vazios).
+ *     - PieChart tipos — `<Pie onClick={...}>` + lista lateral virou `<button>` clicável também.
+ *     - BarChart postos — `<Bar onClick={data=>setDrill({dim:'posto',value:data.posto})}>` + cursor:pointer.
+ *     - BarChart motoristas — `<Bar onClick={...})>` + Cells coloridos com gray-400 (#94a3b8) específico para "Não informado" (cinza visualmente neutro, sinaliza "dados faltantes").
+ *     - Tabela detalhamento por veículo — `<tr onClick={...} cursor-pointer>` (todas as 10 colunas viram clicáveis na linha).
+ *   (4) UX/educação:
+ *     - Subtitle do header agora diz "toque em qualquer gráfico para detalhar" em emerald.
+ *     - Cada CardTitle ganhou `<ClickHint>` ("toque para detalhar" com ícone MousePointerClick) à direita.
+ *     - Tooltips de todos os gráficos receberam linha "Toque para detalhar" no rodapé.
+ *     - Banner amber acima do ranking de motoristas quando "Não informado" presente: explica o que é + instrui a clicar.
+ *     - Modal mostra banner amber EXTRA quando dim=motorista + value=SEM_MOTORISTA: explica origem dos lançamentos órfãos e como corrigir (editar lançamento OU criar alias).
+ *     - Top Notas table: "Não informado" agora aparece em italic amber em vez de "—", reforçando que é dado faltante (não vazio).
+ *   (5) Modal layout fullscreen:
+ *     - Header gradient emerald com subtitle (tipo da dimensão), título grande (valor), botão X.
+ *     - Grid 5 KPIs (qtd, litros, valor, preço médio, veículos) recalculados pelo backend a partir do recordset filtrado.
+ *     - Tabela scrollable com colunas adaptativas — esconde a coluna da dimensão filtrada (ex.: drill por motorista esconde coluna motorista, que seria sempre igual).
+ *     - Footer com contagem + aviso se LIMIT 500 atingido (sugere refinar por mês).
+ *   (6) shared/version.ts → 1883.
+ * Preservado: getFuelDashboard inalterado (drill-down é endpoint ADITIVO, não substituiu nada); KPIs, sortVeic, formatadores, fmt/fmtL/fmtKmL, gradientes, layout responsivo grid-cols-2..8, faixa preço, top 15 notas. Schema intacto, zero ALTER/DROP/DELETE. Reversível em ~2 hunks (backend) + 1 arquivo (frontend) + version bump. R-001/R-007/R-010 OK — só SELECTs read-only.
+ *
  * Rev. 1882 — Gestão de Documentos · Documentos da Obra · BOTÕES DE GESTÃO DE PASTAS VISÍVEIS NO iPAD + criação inline de novas categorias.
  * User (16/05/2026, após Rev. 1881, screenshot iPad de "Documentos da Obra" mostrando árvore CTR/PRO/ATA/SEG/ART/COM/MTS/CRO/PROJ/REFIS/RFT sem nenhum botão visível): "Preciso de um botão para criar subpastas, editar nome, excluir e criar novas pastas tbm".
  * CAUSA: (a) os 5 botões já existiam (FolderPlus/Pencil/Trash2 por linha de disciplina + Pencil/Trash2 por sub-pasta) MAS estavam atrás de `opacity-0 group-hover:opacity-100` — em desktop aparecem ao passar o mouse, no iPad/touch NÃO existe hover e ficam invisíveis. (b) Para o acervo "documento" o header só tinha o botão "Catálogo" (que abre Configurações central) — não havia maneira de criar uma nova categoria direto da árvore. (c) Backend `createDisciplinaFicheiro` (`server/routers/gestaodocumentos.ts` L399) não aceitava `tipoAcervo` — toda pasta criada caía sempre em "projeto" e nunca aparecia na aba Documentos.
