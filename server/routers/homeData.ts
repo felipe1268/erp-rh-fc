@@ -562,8 +562,6 @@ export const homeDataRouter = router({
         const emp = allEmps.find(e => e.id === a.employeeId);
         const dataFimStr = toDateStr(a.dataFim!);
         const dataInicioStr = toDateStr(a.dataInicio!);
-        const dataFim = new Date(dataFimStr + 'T00:00:00');
-        const diasRestantes = Math.ceil((dataFim.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
         // Rev. 1764 — Último dia trabalhado:
         //   • tipo "trabalhado": funcionário cumpre o aviso, último dia = dataFim
         //   • tipo "indenizado": não cumpre o aviso, último dia = véspera do início
@@ -579,6 +577,15 @@ export const homeDataRouter = router({
         } else {
           ultimoDiaTrabalhadoStr = dataFimStr;
         }
+        // Rev. 1855 — `diasRestantes` mede quantos dias faltam para o funcionário
+        // PARAR de trabalhar efetivamente (último dia trabalhado), não até o fim
+        // contratual do aviso. Para aviso TRABALHADO os dois coincidem; para
+        // INDENIZADO o último dia já passou (véspera da comunicação) → fica
+        // negativo, e o badge mostra "VENCIDO!" (correto: ele já parou).
+        // O fim contratual (`dataFim`) continua exposto via `dataFim`/`dataLimitePagamento`
+        // para a régua financeira (prazo de baixa).
+        const refDiasFim = new Date((ultimoDiaTrabalhadoStr || dataFimStr) + 'T00:00:00');
+        const diasRestantes = Math.ceil((refDiasFim.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
         const aguardando = a.status === 'aguardando_pagamento';
         const baixaR = parseFloat(String((a as any).baixaRescisaoValor ?? '0')) || 0;
         const baixaF = parseFloat(String((a as any).baixaFgtsValor ?? '0')) || 0;

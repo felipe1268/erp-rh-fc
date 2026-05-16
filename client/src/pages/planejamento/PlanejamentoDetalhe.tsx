@@ -75,6 +75,39 @@ function fmtBR(iso: string | null | undefined): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
 
+// ── Rev. 1854 — Formata TIMESTAMP (Date|string) → dd/mm/aaaa iOS-safe ─────
+// Aceita Date object (drizzle/superjson) OU string vinda crua do Postgres
+// ("2026-05-15 21:46:00.123") OU ISO completo ("2026-05-15T21:46:00.123Z").
+// iOS Safari rejeita `new Date("2026-05-15 21:46:00")` (espaço em vez de T)
+// com "The string did not match the expected pattern" — substitui o espaço
+// por T e cai no parser ISO. Patch defensivo (igual Rev. 1849 fez na coluna
+// "Tempo de casa" do Equipe).
+function fmtTimestampBR(v: string | Date | null | undefined): string {
+  if (!v) return "—";
+  try {
+    if (v instanceof Date) {
+      if (isNaN(v.getTime())) return "—";
+      return v.toLocaleDateString("pt-BR");
+    }
+    const s = String(v).trim();
+    if (!s) return "—";
+    // Caminho rápido: já vem como YYYY-MM-DD (date column) → reusa fmtBR.
+    const mDate = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (mDate) return `${mDate[3]}/${mDate[2]}/${mDate[1]}`;
+    // Normaliza Postgres "YYYY-MM-DD HH:MM:SS[.fff][+TZ]" → ISO com T.
+    const iso = s.replace(" ", "T");
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) {
+      // Último fallback: extrai só a data se houver.
+      const mAny = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return mAny ? `${mAny[3]}/${mAny[2]}/${mAny[1]}` : "—";
+    }
+    return d.toLocaleDateString("pt-BR");
+  } catch {
+    return "—";
+  }
+}
+
 // ── Semana (segunda-feira) ────────────────────────────────────────────────────
 function toMonday(d: Date) {
   const day = d.getDay();
@@ -763,7 +796,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                   value={dataCorteInfo.diaCorteSemana ?? 4}
                   disabled={dataCorteInfo.cutoffConsolidado || setDiaCorteMut.isPending}
                   title={dataCorteInfo.cutoffConsolidado
-                    ? `Premissa consolidada em ${dataCorteInfo.cutoffConsolidadoEm ? new Date(dataCorteInfo.cutoffConsolidadoEm).toLocaleDateString("pt-BR") : "—"} por ${dataCorteInfo.cutoffConsolidadoPor || "—"}.`
+                    ? `Premissa consolidada em ${fmtTimestampBR(dataCorteInfo.cutoffConsolidadoEm)} por ${dataCorteInfo.cutoffConsolidadoPor || "—"}.`
                     : "Dia da semana do cutoff. Define a janela cobrável da Programação Semanal (dia seguinte ao cutoff anterior → próximo cutoff)."}
                   onChange={(e) => {
                     const novoDow = parseInt(e.target.value, 10);
@@ -781,7 +814,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
                 {dataCorteInfo.cutoffConsolidado ? (
                   <div className="inline-flex items-center gap-1">
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5"
-                      title={`Premissa consolidada em ${dataCorteInfo.cutoffConsolidadoEm ? new Date(dataCorteInfo.cutoffConsolidadoEm).toLocaleDateString("pt-BR") : "—"} por ${dataCorteInfo.cutoffConsolidadoPor || "—"}.`}>
+                      title={`Premissa consolidada em ${fmtTimestampBR(dataCorteInfo.cutoffConsolidadoEm)} por ${dataCorteInfo.cutoffConsolidadoPor || "—"}.`}>
                       🔒 Consolidado
                     </span>
                     {isAdminUser && (

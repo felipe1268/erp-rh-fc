@@ -25,6 +25,36 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1855,
+    titulo: "Painel RH · Avisos Prévios — 'Xd restantes' agora conta até o último dia trabalhado (não até o fim contratual)",
+    descricao: "User (15/05/2026, screenshot Painel RH card 'Avisos Prévios em Andamento'): 'No caso do aviso nos dias restantes. Deve contar quantos dias faltam para ele parar de trabalhar efetivamente.. e deve aparecer a data do último dia trabalhado'.\n\n" +
+      "Causa-raiz: server/routers/homeData.ts L566 — `diasRestantes = ceil((dataFim - hoje)/dia)` usava SEMPRE `dataFim` (fim contratual do aviso, que é também o prazo legal de baixa). Para aviso TRABALHADO os dois coincidem (funcionário cumpre até o fim). Mas para aviso INDENIZADO o funcionário PARA NA VÉSPERA DA COMUNICAÇÃO — o badge mostrava, p. ex., '15d restantes' quando ele já tinha parado há semanas. Conceitualmente errado: 'restantes' deve medir tempo até parar de trabalhar, não até o desembolso.\n\n" +
+      "Fix (1 arquivo, 1 hunk em server/routers/homeData.ts L564-591):\n" +
+      "1. Reordenado o cálculo: `ultimoDiaTrabalhadoStr` é computado PRIMEIRO (regras Rev. 1764 preservadas: dataDesligamentoEfetiva > véspera do dataInicio se indenizado > dataFim caso trabalhado).\n" +
+      "2. `diasRestantes` agora usa `ultimoDiaTrabalhadoStr` como referência (fallback `dataFimStr` por defesa). Para TRABALHADO: comportamento idêntico (último dia = dataFim). Para INDENIZADO: fica negativo → badge 'VENCIDO!' (correto, ele já parou).\n\n" +
+      "Preservado: ZERO mudança em schema/tabelas/contrato tRPC; campos `dataFim`/`dataLimitePagamento`/`saldoPendente` continuam expostos para a régua financeira (prazo de baixa, valor pendente). Linha 'Último dia trab.: dd/MM/aaaa' já existia no client (Rev. 1764, PainelRH.tsx L388) — atende a 2ª parte do pedido sem mudar nada. Reversível em 1 hunk. R-001/R-007 OK.",
+    tipo: 'bugfix',
+    modulos: 'RH/DP',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 23:30:00',
+  },
+  {
+    version: 1854,
+    titulo: "Planejamento · Consolidar Cutoff — toast 'string did not match expected pattern' no iOS Safari",
+    descricao: "User (15/05/2026, screenshot REVTE-CIVIL Programação Semanal Sem.1, toast vermelho bottom-left): 'Erro' — toast 'The string did not match the expected pattern' aparecia ao clicar 'Consolidar' no header do projeto (logo abaixo de Fechar Semana).\n\n" +
+      "Causa-raiz: client/src/pages/planejamento/PlanejamentoDetalhe.tsx L766/L784 — após `consolidarCutoffMut.onSuccess` rodar, `getDataCorte.refetch()` traz `cutoffConsolidadoEm` (TIMESTAMP do Postgres). Drizzle/superjson às vezes serializa como string crua 'YYYY-MM-DD HH:MM:SS.fff' (espaço, não T). O atributo `title` chamava `new Date(cutoffConsolidadoEm).toLocaleDateString('pt-BR')` direto na string com espaço — iOS Safari 17+ rejeita esse formato (ECMA exige ISO com T) e o `toLocaleDateString` num Invalid Date dispara 'RangeError: The string did not match the expected pattern' que sobe via React error boundary global e aparece como toast.\n\n" +
+      "Fix (1 arquivo, 3 hunks em PlanejamentoDetalhe.tsx):\n" +
+      "1. L81-112 novo helper `fmtTimestampBR(v: string | Date | null)` iOS-safe: aceita Date object (passa direto), string YYYY-MM-DD (caminho rápido reutilizando regex de fmtBR), e Postgres timestamp ('YYYY-MM-DD HH:MM:SS' → normaliza espaço→T antes do parse). Try/catch + isNaN guard + fallback regex extrai só a data se mesmo o ISO falhar. Retorna '—' em qualquer caso degenerado.\n" +
+      "2. L766: `new Date(cutoffConsolidadoEm).toLocaleDateString` → `fmtTimestampBR(cutoffConsolidadoEm)` (tooltip do select Cutoff).\n" +
+      "3. L784: idem (tooltip do badge '🔒 Consolidado').\n\n" +
+      "Esperado: usuário consolida cutoff → mutation roda → refetch traz timestamp em qualquer formato → tooltip renderiza data formatada sem throw → sem toast vermelho. Toast verde 'Premissa de cutoff consolidada' aparece normalmente.\n\n" +
+      "Preservado: ZERO mudança em backend/contrato tRPC/schema; outros usos de `new Date()` no arquivo NÃO tocados (escopo cirúrgico — só os 2 spots dessa tela). Padrão idêntico ao patch da Rev. 1849 (coluna 'Tempo de casa' no Equipe). Reversível em 3 hunks. R-001/R-007 OK.",
+    tipo: 'bugfix',
+    modulos: 'Planejamento',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 23:10:00',
+  },
+  {
     version: 1853,
     titulo: "Programação Semanal LOTUS · Responsável Manual aceita nome do engenheiro (terceira ≡ engenheiro do obra)",
     descricao: "User (15/05/2026, 2 screenshots: cronograma com 'Rohr' digitado em inputs cyan + LOTUS Sem.2 REVTE-CIVIL mostrando 'Montagem do andaime - Rohr' com RESPONSÁVEL=FC): 'Ainda está aparecendo como reeposanvel a FC, não a ROHR, eu coloquei a informação no campo mas o link não foi feito corretamente'.\n\n" +
