@@ -3679,49 +3679,52 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
   function marcarComoGrupo(idx: number, checked: boolean) {
     setLinhas(prev => {
       const out = prev.map(r => ({ ...r }));
-      out[idx] = { ...out[idx], isGrupo: checked };
-      if (!checked) return out; // desmarcar grupo não desfaz cascata (preserva trabalho do usuário)
-      const g = out[idx];
-      const parentEap = (g.eapCodigo ?? "").trim();
-      const parentNivel = g.nivel ?? 1;
+      // `idx` vem do `displayAtiv.map((a, idx))` mas em modo edição
+      // `displayAtiv === linhas` (L3838) — então o índice bate. Mesmo assim,
+      // confirmamos via id pra blindar qualquer mudança futura no displayAtiv.
+      let realIdx = idx;
+      if (out[idx]?.id != null && prev[idx]?.id !== out[idx]?.id) {
+        const found = out.findIndex(r => r.id === out[idx].id);
+        if (found >= 0) realIdx = found;
+      }
+      out[realIdx] = { ...out[realIdx], isGrupo: checked };
+      if (!checked) return out; // desmarcar grupo não desfaz cascata
+      const g = out[realIdx];
+      // Rev. 1919-fix — Semântica DIRETA e ROBUSTA (user 16/05/2026,
+      // screenshot Mosaico marcado como grupo + 4 filhas "Ajudante de
+      // pedreiro" mesmo EAP 03.05 sem nenhum checkbox ativado): "CLIQUEI NA
+      // ATIVIDADE DE GRUPO E OS FILHOS NÃO FORAM CLICADOS AUTOMATICAMENTE".
+      // A lógica anterior (Rev. 1918) tentava primeiro a detecção por prefixo
+      // EAP — em MSP denormalizado (filhos com mesmo EAP do pai) o loop
+      // dava `continue` em todos e nunca caía no fallback. Agora aplicamos
+      // a SEMÂNTICA INTUITIVA direta: "todas as atividades abaixo do grupo,
+      // até o PRÓXIMO grupo (ou fim da lista), são descendentes lógicos".
+      // Cobre 100% dos casos: EAP hierárquico, EAP flat, MSP denormalizado,
+      // ou planilhas sem EAP. Espelha exatamente o fallback do onBlur
+      // (L4539-4546) — única diferença: aqui rodamos SEM exigir prefixo
+      // pq o user acabou de marcar a linha como grupo (intenção explícita).
       const descIdxs: number[] = [];
-      for (let j = idx + 1; j < out.length; j++) {
+      for (let j = realIdx + 1; j < out.length; j++) {
         const l = out[j];
-        const ceap = (l.eapCodigo ?? "").trim();
-        const cnivel = l.nivel;
-        if (typeof cnivel === "number" && typeof g.nivel === "number" && cnivel <= parentNivel) break;
-        if (parentEap && ceap) {
-          if (ceap === parentEap) continue;
-          if (!ceap.startsWith(parentEap)) break;
-          const next = ceap.charAt(parentEap.length);
-          if (next === "." || (next >= "0" && next <= "9")) descIdxs.push(j);
-          else break;
-        } else {
-          if ((l.nivel ?? 1) <= parentNivel) break;
-          descIdxs.push(j);
-        }
+        if (l.isGrupo) break;       // próximo grupo = fim do escopo
+        if (l.disabled) continue;   // ignora desativadas
+        descIdxs.push(j);
       }
-      // Fallback Rev. 1902 — MSP denormalizado (filhos com mesmo EAP).
       if (descIdxs.length === 0) {
-        for (let j = idx + 1; j < out.length; j++) {
-          const l = out[j];
-          if (l.isGrupo) break;
-          if (l.disabled) continue;
-          descIdxs.push(j);
-        }
+        setTimeout(() => toast.info(`Grupo "${(g.nome ?? "").substring(0, 40)}" marcado — sem atividades abaixo para vincular.`), 0);
+        return out;
       }
-      if (descIdxs.length === 0) return out;
       const valor = (g.responsavelLotus ?? "").trim();
       descIdxs.forEach(j => {
         out[j] = {
           ...out[j],
           _respManual: true,
-          ...(valor ? { responsavelLotus: valor } : {}),
+          ...(valor ? { responsavelLotus: valor } : { responsavelLotus: out[j].responsavelLotus ?? "" }),
         };
       });
       const msg = valor
-        ? `Grupo "${(g.nome ?? "").substring(0, 40)}": ${descIdxs.length} descendente${descIdxs.length > 1 ? "s" : ""} ativado${descIdxs.length > 1 ? "s" : ""} com responsável "${valor}".`
-        : `Grupo "${(g.nome ?? "").substring(0, 40)}": ${descIdxs.length} descendente${descIdxs.length > 1 ? "s" : ""} ativado${descIdxs.length > 1 ? "s" : ""} — digite o responsável aqui para propagar o nome.`;
+        ? `Grupo "${(g.nome ?? "").substring(0, 40)}": ${descIdxs.length} atividade${descIdxs.length > 1 ? "s" : ""} ativada${descIdxs.length > 1 ? "s" : ""} com responsável "${valor}".`
+        : `Grupo "${(g.nome ?? "").substring(0, 40)}": ${descIdxs.length} atividade${descIdxs.length > 1 ? "s" : ""} ativada${descIdxs.length > 1 ? "s" : ""} — digite o responsável no grupo para propagar o nome.`;
       setTimeout(() => toast.success(msg), 0);
       return out;
     });
