@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1963 — RH · Dashboard de Férias · Drill "Vencidas" · Badge "Nº do período aquisitivo" agora aparece SEMPRE (não só 2º+).
+ * User (16/05/2026, screenshot IMG_0817 às 20:13): "Informe se é primeiro ou segundo período".
+ * Diagnóstico: no drill "Férias — Vencidas" (`DashFerias.tsx` L853-855), o badge `{numeroPeriodo}º Per.` só renderizava quando `np >= 2`. Resultado: EMERSON (1º período) não tinha badge nenhum, ANA BEATRIZ (11º) tinha "11º Per." âmbar — usuário não conseguia distinguir 1º de 2º só pelo card.
+ * Mudança (`client/src/pages/dashboards/DashFerias.tsx`, único arquivo, L856-869):
+ *   - Removida condicional `(numeroPeriodo || 1) >= 2`. Badge agora SEMPRE renderiza.
+ *   - Cor escalando com a gravidade do passivo (regra Art. 137 CLT — cada período sem gozo vira pagamento em dobro): 1º = `bg-slate-100 text-slate-600` (neutro, sem alerta), 2º = `bg-orange-100 text-orange-700` (atenção, 1 período de pagamento em dobro), 3º+ = `bg-red-100 text-red-700` (alarme, ≥2 períodos em dobro).
+ *   - Tooltip explicativo: "1º período aquisitivo" para os normais; "{N}º período aquisitivo — colaborador acumulou {N-1} período(s) anterior(es) sem gozo (passivo de pagamento em dobro Art. 137 CLT)" para os escalados.
+ *   version → 1963.
+ * Resultado: cada linha do drill mostra imediatamente em qual período aquisitivo a férias vencida está — engenheiro RH triagem visual rápida (cinza=primeira vez vencendo; laranja/vermelho=acúmulo crítico). EMERSON ganha "1º Per." cinza; ANA BEATRIZ mantém "11º Per." em vermelho (escalada).
+ * Preservado: `f.numeroPeriodo` no payload do backend (`server/routers/dashboards.ts` L2961+L3185) INTACTO — só client-side. Outros badges (RH/Abono) INTACTOS na mesma flex-wrap. Rev. 1962/1961/1960/1959/1958 INTACTAS. Zero schema, zero backend, zero tRPC. Reversível em 1 hunk. R-001/R-007/R-010 OK.
+ *
  * Rev. 1962 — RH · Dashboard de Férias · Bar chart "Colaboradores em Férias por Mês" relabeled "Em Gozo" + breakpoints responsivos apertados (`lg:` → `md:`).
  * User (16/05/2026, screenshot IMG_0813 às 20:06): "No grafico em coluna falta o indicador de em gozo, e quero todos os gráficos responsivos conforme a regra de ouro em todos os dash deste módulo".
  * Diagnóstico:

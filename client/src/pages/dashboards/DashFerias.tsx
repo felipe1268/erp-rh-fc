@@ -850,9 +850,20 @@ export default function DashFerias() {
                                     {f.abonoPecuniario === 1 && (
                                       <Badge variant="secondary" className="bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0 font-medium">Abono</Badge>
                                     )}
-                                    {(f.numeroPeriodo || 1) >= 2 && (
-                                      <Badge variant="secondary" className="bg-orange-100 text-orange-700 text-[9px] px-1.5 py-0 font-medium">{f.numeroPeriodo}º Per.</Badge>
-                                    )}
+                                    {(() => {
+                                      const np = f.numeroPeriodo || 1;
+                                      const cls = np >= 3
+                                        ? "bg-red-100 text-red-700"
+                                        : np === 2
+                                          ? "bg-orange-100 text-orange-700"
+                                          : "bg-slate-100 text-slate-600";
+                                      const title = np === 1
+                                        ? "1º período aquisitivo"
+                                        : `${np}º período aquisitivo — colaborador acumulou ${np - 1} período(s) anterior(es) sem gozo (passivo de pagamento em dobro Art. 137 CLT)`;
+                                      return (
+                                        <Badge variant="secondary" className={`${cls} text-[9px] px-1.5 py-0 font-medium`} title={title}>{np}º Per.</Badge>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                               </div>
