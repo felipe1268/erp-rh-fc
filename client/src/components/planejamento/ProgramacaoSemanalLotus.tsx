@@ -1376,10 +1376,20 @@ export default function ProgramacaoSemanalLotus(props: Props) {
             ws.getCell(r0, 9).value = a.responsavel?.labelCurto ?? a.responsavel?.label ?? "FC";
 
             // Pinta as barras dos dias (J-P) — esquema 4-linhas-por-tarefa do Lotus:
-            // r0   = margem branca (topo)
-            // r0+1 = faixa Previsto (azul)
-            // r0+2 = faixa Realizado (verde/vermelho/laranja/amarelo)
-            // r0+3 = margem branca (base)
+            // r0   = margem branca (topo)              ← NUNCA pintar
+            // r0+1 = faixa Previsto (azul)             ← UMA linha só
+            // r0+2 = faixa Realizado (verde/vermelho/laranja/amarelo) ← UMA linha só
+            // r0+3 = margem branca (base)              ← NUNCA pintar
+            // Rev. 1897 — User (16/05/2026, 3 screenshots zoom): "note que os
+            // dias da semana tem 4 ceculas, a primeira fica vazia, a segunda
+            // fica demarcado em azul como previsto, a terceira é preenchida
+            // se for executada/não executada/outro status conforme legenda,
+            // e a 4 fica em branco. Este detalhe é importante ser respeitado".
+            // Reforço defensivo abaixo (após o loop): força fill:none em r0 e
+            // r0+3 das cols 10-14 (Seg-Sex) — cols 15-16 (Sáb/Dom) mantêm o
+            // cinza_fds da Rev. 1893. Garante a convenção mesmo se o template
+            // original tiver algum fill residual nessas linhas, ou se alguma
+            // revisão futura adicionar pintura por engano nelas.
             const m = mts.get(a.id);
             const temAvSemX = !!m && m.somaSemanal > 0;
             const acumAteSemX = m?.acumPct ?? 0;
@@ -1427,6 +1437,23 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                 ws.getCell(r0 + 2, cIdx).fill = { type: "pattern", pattern: "solid", fgColor: { argb: corBot } } as any;
               }
             });
+            // Rev. 1897 — Reforço defensivo: força margens BRANCAS SÓLIDAS
+            // em r0 e r0+3 para TODAS as cols de dias úteis (10=J Seg ..
+            // 14=N Sex). Não toca 15-16 (Sáb/Dom) para preservar o
+            // cinza_fds. O init (L1202-1207) aplica `pattern:"none"`, mas
+            // alguns templates trazem fills herdados em `pattern:"solid"`
+            // com `fgColor` que sobrevivem ao reset por `pattern:"none"` em
+            // certas builds do ExcelJS (o fgColor persiste no XML e alguns
+            // viewers — LibreOffice, Excel Online — reaplicam a cor).
+            // Solução: pintar SÓLIDO BRANCO (FFFFFFFF) sobrescreve o fgColor
+            // herdado de forma determinística cross-viewer (architect Rev.
+            // 1897). Garante a convenção LOTUS branco/azul/status/branco
+            // 100% das vezes, independente do template de entrada.
+            const BRANCO = "FFFFFFFF";
+            for (let cIdx = 10; cIdx <= 14; cIdx++) {
+              ws.getCell(r0,     cIdx).fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRANCO } } as any;
+              ws.getCell(r0 + 3, cIdx).fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRANCO } } as any;
+            }
           }
         });
 
