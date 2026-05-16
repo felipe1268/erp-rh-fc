@@ -391,7 +391,7 @@ export default function DashAvisoPrevio() {
                         {fetchingCdm && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
                       </CardTitle>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Estimativa de quanto custaria <strong>demitir TODOS os funcionários ativos</strong> a partir da data-base, sem justa causa. <strong>Trabalhado</strong> = aviso prévio cumprido (30 dias) — paridade direta com o módulo Aviso Prévio oficial. <strong>Indenizado</strong> = pior cenário de caixa (paga aviso prévio completo da Lei 12.506 de uma vez).
+                        Estimativa de quanto custaria <strong>demitir TODOS os funcionários ativos</strong> a partir da data-base, sem justa causa. Ambas modalidades aplicam <strong>+3 dias/ano de serviço</strong> (Lei 12.506/2011 — corrente majoritária TST, alinhado ao jurídico). <strong>Trabalhado</strong> = empregado cumpre o aviso (30+3·ano dias) na empresa. <strong>Indenizado</strong> = paga o aviso completo de uma vez sem trabalho. <em>Valor total tende a ser similar — a diferença operacional é "trabalha vs recebe sem trabalhar".</em>
                       </p>
                     </div>
                   </div>
@@ -401,7 +401,7 @@ export default function DashAvisoPrevio() {
                       <button
                         onClick={() => setCdmTipo('empregador_trabalhado')}
                         className={`px-2.5 py-1 rounded transition-colors ${cdmTipo === 'empregador_trabalhado' ? 'bg-blue-600 text-white font-semibold' : 'text-muted-foreground hover:text-foreground'}`}
-                        title="30 dias trabalhados (paridade com módulo Aviso Prévio oficial)"
+                        title="Empregado cumpre o aviso (30 + 3 dias por ano) — Lei 12.506/2011 aplicada às duas modalidades (corrente majoritária TST)"
                       >Trabalhado</button>
                       <button
                         onClick={() => setCdmTipo('empregador_indenizado')}
@@ -1044,8 +1044,8 @@ export default function DashAvisoPrevio() {
                     <Briefcase className="h-4 w-4 text-blue-600" />
                   </div>
                   <div className="text-xs text-muted-foreground space-y-1">
-                    <p className="font-semibold text-foreground">Lei 12.506/2011 - Aviso Prévio Proporcional</p>
-                    <p>O aviso prévio é de 30 dias para empregados com até 1 ano de serviço, acrescido de 3 dias por ano adicional, até o máximo de 90 dias. A redução de jornada (Art. 488 CLT) permite ao empregado reduzir 2 horas diárias ou faltar 7 dias corridos durante o aviso trabalhado.</p>
+                    <p className="font-semibold text-foreground">Lei 12.506/2011 — Aviso Prévio Proporcional (aplicado às DUAS modalidades)</p>
+                    <p>O aviso prévio é de 30 dias para empregados com até 1 ano de serviço, acrescido de <strong>3 dias por ano adicional</strong>, até o máximo de 90 dias. <strong>A lei não distingue trabalhado de indenizado</strong> — pela corrente majoritária do TST (Súm. 441 e jurisprudência consolidada), os +3d/ano aplicam-se a AMBAS as modalidades; o trabalhador apenas escolhe se cumpre os dias na empresa ou recebe tudo indenizado. A redução de jornada (Art. 488 CLT) permite reduzir 2 horas diárias ou faltar 7 dias corridos durante o aviso trabalhado.</p>
                   </div>
                 </div>
               </CardContent>

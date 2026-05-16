@@ -2503,11 +2503,14 @@ async function getDashCustoDemissaoMassa(
       const anosBase = !isNaN(dtAdm.getTime())
         ? Math.max(0, Math.floor((dtFimAviso.getTime() - dtAdm.getTime()) / (1000 * 60 * 60 * 24 * 365.25)))
         : 0;
-      // Rev. 1921 — espelha exatamente avisoPrevioFerias.ts L919-920/L945-946:
-      //   diasAviso = tipo==='empregador_trabalhado' ? 30 : calcularDiasAvisoTotal(anos)
-      //   dataInicioAviso = dataDesligamento(=dataRef) + 1
-      //   dataFimAviso    = dataInicioAviso + diasAviso - 1 = dataRef + diasAviso
-      const diasAvisoEstimado = tipo === 'empregador_trabalhado' ? 30 : calcularDiasAvisoTotal(anosBase);
+      // Rev. 1943 — Corrente majoritária TST (Lei 12.506/2011 Art. 1º Parágrafo
+      // único): +3d/ano aplica nas DUAS modalidades (trabalhado E indenizado) —
+      // a lei NÃO distingue. Antes (Rev. 1921) usava 30 fixos pra trabalhado.
+      // Agora ambos = calcularDiasAvisoTotal(anos), espelhando avisoPrevioFerias
+      // L927+L953 (também atualizados na Rev. 1943). Resultado: Trabalhado e
+      // Indenizado têm a MESMA dataFimAviso → projeção de férias/13º/multa 40%
+      // bate (a diferença operacional fica só em "trabalha vs recebe sem trabalhar").
+      const diasAvisoEstimado = calcularDiasAvisoTotal(anosBase);
       const dtFimProjetada = new Date(dtFimAviso.getTime() + diasAvisoEstimado * 24 * 60 * 60 * 1000);
       const dataFimProjetada = dtFimProjetada.toISOString().slice(0, 10);
       // Rev. 1911 — Passa override real (default 0 quando funcionário não tem

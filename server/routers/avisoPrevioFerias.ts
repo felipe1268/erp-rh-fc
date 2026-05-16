@@ -915,7 +915,13 @@ export const avisoPrevioFeriasRouter = router({
         // ============================================================
         // CENÁRIO 1: AVISO TRABALHADO
         // ============================================================
-        const diasAvisoTrab = 30; // sempre 30 dias trabalhados
+        // Rev. 1943 — Corrente majoritária TST (Lei 12.506/2011 Art. 1º
+        // Parágrafo único — "ao aviso prévio... serão acrescidos 3 dias
+        // por ano"): a lei NÃO distingue trabalhado vs indenizado, então
+        // os +3d/ano aplicam-se às DUAS modalidades. Antes (Rev. 1921)
+        // usava 30 fixos pra trabalhado (corrente minoritária / MTE NT
+        // 184/2012 revogada). Jurídico FC Engenharia 16/05/2026 alinhado.
+        const diasAvisoTrab = calcularDiasAvisoTotal(anosServico);
         const dataInicioTrab = calcularDataInicioAviso(input.dataDesligamento);
         const dataFimTrab = calcularDataFim(dataInicioTrab, diasAvisoTrab);
         const dtFimTrab = new Date(dataFimTrab + 'T00:00:00');
@@ -932,9 +938,13 @@ export const avisoPrevioFeriasRouter = router({
         const totalLiquidoTrab = totalBrutoTrab - totalDescontos;
 
         // Custo total para empresa no trabalhado:
-        // Verbas rescisórias + salário dos 30 dias trabalhados (já incluso no saldo)
-        // + encargos sobre o período trabalhado (INSS patronal ~28.8%, FGTS 8%)
-        const custoSalarioTrab = salarioBase; // 30 dias de trabalho = 1 salário
+        // Verbas rescisórias + salário do período trabalhado (parcialmente no saldo)
+        // + encargos patronais (INSS patronal ~28.8%, FGTS 8%) sobre o período.
+        // Rev. 1943 — após aplicar Lei 12.506 nas DUAS modalidades, o trabalhado
+        // cumpre 30+3·ano dias (não mais 30 fixos). Salário e encargos do período
+        // são proporcionais: ex 10 anos = 60 dias = 2 salários cheios + 2× encargos.
+        const fatorPeriodoTrab = diasAvisoTrab / 30;
+        const custoSalarioTrab = salarioBase * fatorPeriodoTrab;
         const encargosPatronaisTrab = custoSalarioTrab * 0.368; // ~36.8% (INSS 28.8% + FGTS 8%)
         const custoTotalEmpresaTrab = totalBrutoTrab + encargosPatronaisTrab;
 
@@ -992,7 +1002,7 @@ export const avisoPrevioFeriasRouter = router({
             totalLiquido: totalLiquidoTrab.toFixed(2),
             custoTotalEmpresa: custoTotalEmpresaTrab.toFixed(2),
             encargosPatronais: encargosPatronaisTrab.toFixed(2),
-            observacao: `Funcionário trabalha 30 dias. Dias extras (${calcularDiasExtrasAviso(anosServico)}d) são indenizados separadamente. Empresa arca com encargos patronais (~36,8%) sobre o salário do período trabalhado.`,
+            observacao: `Funcionário trabalha ${diasAvisoTrab} dias (30 + ${calcularDiasExtrasAviso(anosServico)} dias pelos ${anosServico} anos de serviço — Lei 12.506/2011 corrente majoritária TST). Empresa arca com salário e encargos patronais (~36,8%) durante todo o período trabalhado.`,
           },
           indenizado: {
             tipo: 'empregador_indenizado',
