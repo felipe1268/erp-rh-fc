@@ -25,6 +25,26 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1864,
+    titulo: "DDS · Modal Novo Tema redesenhado + IA gera tema completo a partir de prompt curto",
+    descricao: "User (16/05/2026, screenshot do modal antigo): 'Faça o Layout novo e fácil lançamento e com ia para gerar novos temas altomaticos'.\n\n" +
+      "Antes: modal 'Novo tema' tinha 6 campos crus (Categoria/Código/Duração/Título/Descrição/Conteúdo/Norma) sem destaque visual e sem ajuda. Para criar um tema, o usuário precisava digitar tudo manualmente — barreira alta para registrar temas pontuais (acidentes, novas frentes, etc).\n\n" +
+      "Solução (1 endpoint backend novo + redesign de 1 modal):\n\n" +
+      "BACKEND (server/routers/dds.ts L1173-1268): novo `gerarTemaIA(companyId, prompt)` — recebe descrição curta (3-500 chars) e devolve JSON estruturado com TODOS os campos do tema (categoria/codigo/titulo/descricao/normaReferencia/duracaoMin/conteudoMd). Usa invokeLLM com `response_format: { type: 'json_object' }`. System prompt classifica categoria automaticamente (NR/CAMPANHA/VACINACAO/LIVRE), gera código, sugere duração e produz roteiro markdown nas 6 seções padrão (Objetivo / Por que importa / Pontos-chave / Aplicação prática / Perguntas / Reforço final). Saneamento defensivo: tolerância a cercas ```json, recorte do {...}, parse seguro com validação (categoria allowlist, lengths, duracaoMin clamp 5-60, conteudoMd ≥300 chars sem md). assertCompanyAccess preservado.\n\n" +
+      "FRONTEND (client/src/pages/sst/DDSGuia.tsx, redesign do modal Tema):\n" +
+      "  - Header colorido (gradient indigo→violet) com ícone BookOpen e subtítulo explicativo\n" +
+      "  - Bloco 'Gerar com IA' (só no modo Novo): card violeta tracejado com input + botão 'Gerar' + 6 chips de sugestão clicáveis (Trabalho em altura, Betoneira, Escavação, Protetor auricular, Içamento, Quedas mesmo nível). Enter no input dispara geração. Loading state. Auto-preenche todos os campos do form ao retornar.\n" +
+      "  - Form reorganizado: Título destacado em linha própria (font-medium, ring indigo); linha compacta Categoria(5)/Código(4)/Duração(3) com ícones nos selects; Descrição/Norma como inputs simples; Conteúdo em textarea mono com contador de caracteres.\n" +
+      "  - Footer com fundo cinza, botão primário indigo com ícone Check.\n" +
+      "  - Bloco IA não aparece em modo Editar (só em criar).\n\n" +
+      "Estado novo (DDSGuia.tsx): `iaPrompt` (string), `gerarTemaIAMut` (mutation), `handleGerarTemaIA` (validação + setTemaForm + toast). `abrirNovoTema` reseta `iaPrompt`.\n\n" +
+      "Preservado: ZERO mudança em schema; criarTema/atualizarTema/excluirTema intactos; ROTEIROS_DETALHADOS e biblioteca padrão não tocados; modo Editar continua funcionando exatamente igual; gerarRoteiroComIA (que gera só o roteiro de tema existente) também preservado — este novo endpoint é complementar, gera o tema inteiro do zero. Reversível em 2 hunks (1 no router, 2 no DDSGuia). R-001 OK. Requer ANTHROPIC_API_KEY ou GOOGLE_API_KEY (mesmo guard do gerarRoteiroComIA).",
+    tipo: "feature",
+    modulos: "SST/DDS",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 11:00:00",
+  },
+  {
     version: 1863,
     titulo: "DDS · Dashboard de KPIs — nova tela com volume, qualidade, cobertura e gaps",
     descricao: "User (16/05/2026, screenshot Painel SST com 4 KPIs de ASO): 'Cria um dash de DDS COMVRIOS KPIS importantes que devem ser analisados'. Antes: módulo DDS tinha só guia (calendário+biblioteca+sessões) — sem visão analítica.\n\n" +

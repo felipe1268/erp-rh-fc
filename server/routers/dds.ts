@@ -1167,6 +1167,97 @@ Gere o roteiro detalhado seguindo EXATAMENTE o formato exigido.`;
       }
     }),
 
+  // Rev. 1864 — Gera TEMA completo via IA a partir de um prompt curto.
+  // Retorna JSON com todos os campos preenchidos (titulo, codigo, categoria, descricao,
+  // normaReferencia, duracaoMin, conteudoMd) — UI auto-preenche o form do "Novo tema".
+  gerarTemaIA: protectedProcedure
+    .input(z.object({
+      companyId: z.number().int().positive(),
+      prompt: z.string().min(3).max(500),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompanyAccess(ctx, input.companyId);
+
+      const systemPrompt = `Você é Engenheiro de Segurança do Trabalho (CREA) especialista em construção civil brasileira. Sua tarefa é converter um pedido curto do usuário em um TEMA DE DDS (Diálogo Diário de Segurança) COMPLETO, em formato JSON.
+
+Regras OBRIGATÓRIAS:
+1. **Idioma**: Português brasileiro, linguagem direta (escolaridade média 5ª a 8ª série).
+2. **Formato de saída**: APENAS JSON válido (sem preâmbulo, sem markdown ao redor) com EXATAMENTE estas chaves:
+   - "categoria": uma das strings "NR", "CAMPANHA", "VACINACAO" ou "LIVRE" — escolha "NR" se o tema for ligado a uma Norma Regulamentadora; "CAMPANHA" para campanhas governamentais (Outubro Rosa, Novembro Azul, Maio Amarelo etc); "VACINACAO" para imunização (PNI/MS); "LIVRE" caso contrário.
+   - "codigo": código curto (ex.: "NR-35", "OUT-ROSA", "DDS-001"). Se NR, use "NR-XX". Se livre, gere um slug curto.
+   - "titulo": 5 a 80 caracteres, claro e específico.
+   - "descricao": resumo de 1 a 2 frases (máx 280 chars) — diz do que se trata.
+   - "normaReferencia": NR/lei/portaria oficial brasileira aplicável (ex.: "NR-35 (Portaria MTE 313/2012)"). Se não houver, use string vazia "".
+   - "duracaoMin": número inteiro entre 5 e 60 (típico DDS = 10 a 15 min).
+   - "conteudoMd": ROTEIRO em Markdown com EXATAMENTE estas 6 seções (cada uma com cabeçalho ## ):
+       ## Objetivo (1 frase)
+       ## Por que importa (2 a 3 bullets curtos com riscos/dados/contexto legal)
+       ## Pontos-chave a abordar (5 a 7 itens numerados, técnicos e específicos pra construção civil)
+       ## Aplicação prática na obra (2 a 4 bullets de ação concreta)
+       ## Perguntas pra equipe (2 a 3 perguntas de engajamento)
+       ## Reforço final (1 frase de impacto, em **negrito**)
+     Tamanho do conteudoMd: 800 a 1500 chars (sem contar markdown).
+3. **NÃO invente dados** numéricos; quando incerto, omita.
+4. Seja específico pra construção civil brasileira (andaime, betoneira, escavação, EPI, içamento, etc).
+5. Retorne APENAS o JSON — nada antes, nada depois, nem cercas \`\`\`json.`;
+
+      const userPrompt = `Pedido do usuário: "${input.prompt}"
+
+Gere o JSON do tema seguindo EXATAMENTE o esquema acima.`;
+
+      try {
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          maxTokens: 1500,
+          response_format: { type: "json_object" },
+        });
+        const content = response.choices?.[0]?.message?.content;
+        let raw = (typeof content === "string" ? content : Array.isArray(content)
+          ? content.map((c: any) => c?.text ?? "").join("")
+          : "").trim();
+        // Tolerância: se a IA cercou em ```json ... ```, despe.
+        const m = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (m) raw = m[1].trim();
+        // Tolerância: se vier algum lixo antes/depois do {...}, recorta o objeto.
+        const fi = raw.indexOf("{"); const li = raw.lastIndexOf("}");
+        if (fi >= 0 && li > fi) raw = raw.slice(fi, li + 1);
+
+        let parsed: any;
+        try { parsed = JSON.parse(raw); }
+        catch { throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA retornou JSON inválido — tente reformular o pedido." }); }
+
+        // Saneamento + defaults seguros
+        const allowedCat = ["NR", "CAMPANHA", "VACINACAO", "LIVRE"];
+        const categoria = allowedCat.includes(parsed.categoria) ? parsed.categoria : "LIVRE";
+        const codigo = String(parsed.codigo ?? "").trim().slice(0, 30);
+        const titulo = String(parsed.titulo ?? "").trim().slice(0, 200);
+        const descricao = String(parsed.descricao ?? "").trim().slice(0, 280);
+        const normaReferencia = String(parsed.normaReferencia ?? "").trim().slice(0, 200);
+        const dRaw = parseInt(String(parsed.duracaoMin ?? 15), 10);
+        const duracaoMin = Number.isFinite(dRaw) ? Math.min(60, Math.max(5, dRaw)) : 15;
+        const conteudoMd = String(parsed.conteudoMd ?? "").trim();
+
+        if (titulo.length < 3) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA não gerou título válido — tente reformular." });
+        }
+        if (conteudoMd.replace(/[#*\-`]/g, "").length < 300) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "IA gerou roteiro muito curto — tente reformular o pedido." });
+        }
+
+        return { categoria, codigo, titulo, descricao, normaReferencia, duracaoMin, conteudoMd };
+      } catch (err: any) {
+        if (err instanceof TRPCError) throw err;
+        const msg = err?.message ?? String(err);
+        if (msg.includes("Nenhuma chave de IA")) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Nenhuma IA configurada (ANTHROPIC_API_KEY ou GOOGLE_API_KEY ausente)." });
+        }
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao gerar tema com IA: ${msg.slice(0, 200)}` });
+      }
+    }),
+
   // ================= CALENDÁRIO ANUAL =================
   // Retorna estrutura pronta para a aba "Calendário": 12 meses com a
   // campanha governamental do mês + temas (NR/livres) sugeridos.

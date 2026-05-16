@@ -417,9 +417,32 @@ export default function DDSGuia() {
     titulo: "", descricao: "", conteudoMd: "", normaReferencia: "",
     categoria: "LIVRE", codigo: "", duracaoMin: 15,
   });
+  // Rev. 1864 — IA gera tema completo a partir de prompt curto
+  const [iaPrompt, setIaPrompt] = useState("");
+  const gerarTemaIAMut = trpc.dds.gerarTemaIA.useMutation();
+  const handleGerarTemaIA = async () => {
+    const p = iaPrompt.trim();
+    if (p.length < 3) { toast.error("Descreva o tema em poucas palavras"); return; }
+    try {
+      const r = await gerarTemaIAMut.mutateAsync({ companyId, prompt: p });
+      setTemaForm({
+        categoria: r.categoria,
+        codigo: r.codigo,
+        titulo: r.titulo,
+        descricao: r.descricao,
+        normaReferencia: r.normaReferencia,
+        duracaoMin: r.duracaoMin,
+        conteudoMd: r.conteudoMd,
+      });
+      toast.success("Tema gerado pela IA — revise e clique em Criar");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Falha ao gerar tema com IA");
+    }
+  };
   const abrirNovoTema = () => {
     setEditTema(null);
     setTemaForm({ titulo: "", descricao: "", conteudoMd: "", normaReferencia: "", categoria: "LIVRE", codigo: "", duracaoMin: 15 });
+    setIaPrompt("");
     setShowTema(true);
   };
   const abrirEditTema = (t: any) => {
@@ -1166,58 +1189,185 @@ export default function DDSGuia() {
         </TabsContent>
       </Tabs>
 
-      {/* ===== MODAL: TEMA ===== */}
+      {/* ===== MODAL: TEMA (Rev. 1864 — layout novo + IA gera tema completo) ===== */}
       <Dialog open={showTema} onOpenChange={setShowTema}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editTema ? "Editar tema" : "Novo tema"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-1">
-                <label className="text-xs font-medium text-slate-600">Categoria</label>
-                <Select value={temaForm.categoria} onValueChange={v => setTemaForm({ ...temaForm, categoria: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="LIVRE">Livre</SelectItem>
-                    <SelectItem value="NR">NR</SelectItem>
-                    <SelectItem value="CAMPANHA">Campanha</SelectItem>
-                    <SelectItem value="VACINACAO">💉 Vacinação (PNI/MS)</SelectItem>
-                  </SelectContent>
-                </Select>
+        <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-0">
+          {/* Header colorido */}
+          <div className="px-6 pt-5 pb-4 bg-gradient-to-r from-indigo-50 to-violet-50 border-b border-indigo-100 rounded-t-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-lg text-indigo-900">
+                <BookOpen className="h-5 w-5" />
+                {editTema ? "Editar tema" : "Novo tema"}
+              </DialogTitle>
+              <p className="text-xs text-indigo-700/80 mt-0.5">
+                {editTema
+                  ? "Ajuste os campos abaixo e salve."
+                  : "Descreva o tema em poucas palavras e a IA preenche tudo. Você ainda pode editar antes de criar."}
+              </p>
+            </DialogHeader>
+          </div>
+
+          <div className="px-6 pt-4 pb-3 space-y-4">
+            {/* === Bloco IA (só no modo "novo tema") === */}
+            {!editTema && (
+              <div className="rounded-xl border-2 border-dashed border-violet-300 bg-violet-50/50 p-4 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-bold text-violet-900">
+                  <Wand2 className="h-4 w-4" />
+                  Gerar com IA
+                  <span className="text-[10px] uppercase tracking-wider bg-violet-200 text-violet-800 px-2 py-0.5 rounded-full font-semibold">novo</span>
+                </div>
+                <p className="text-[11px] text-violet-700">
+                  Ex.: "trabalho em altura na fachada com balancim", "sinalização de área de escavação",
+                  "uso correto de óculos e máscara em esmerilhamento".
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    value={iaPrompt}
+                    onChange={e => setIaPrompt(e.target.value)}
+                    placeholder="Descreva o tema em uma frase..."
+                    className="flex-1 bg-white border-violet-200 focus-visible:ring-violet-400"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !gerarTemaIAMut.isPending) {
+                        e.preventDefault();
+                        handleGerarTemaIA();
+                      }
+                    }}
+                    disabled={gerarTemaIAMut.isPending}
+                  />
+                  <Button
+                    onClick={handleGerarTemaIA}
+                    disabled={gerarTemaIAMut.isPending || iaPrompt.trim().length < 3}
+                    className="bg-violet-600 hover:bg-violet-700 text-white shrink-0"
+                  >
+                    {gerarTemaIAMut.isPending ? (
+                      <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Gerando...</>
+                    ) : (
+                      <><Sparkles className="h-4 w-4 mr-1" /> Gerar</>
+                    )}
+                  </Button>
+                </div>
+                {/* Sugestões rápidas */}
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {[
+                    "Trabalho em altura com cinturão",
+                    "Operação de betoneira",
+                    "Escavação manual e sinalização",
+                    "Uso de protetor auricular",
+                    "Içamento de cargas com guincho",
+                    "Prevenção de quedas de mesmo nível",
+                  ].map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setIaPrompt(s)}
+                      disabled={gerarTemaIAMut.isPending}
+                      className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-violet-200 text-violet-700 hover:bg-violet-100 transition disabled:opacity-50"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="col-span-1">
-                <label className="text-xs font-medium text-slate-600">Código</label>
-                <Input value={temaForm.codigo} onChange={e => setTemaForm({ ...temaForm, codigo: e.target.value })} placeholder="ex.: NR-35" />
+            )}
+
+            {/* === Form do tema (linha compacta + título destacado) === */}
+            <div className="space-y-3">
+              {/* Título (campo principal — destacado) */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">Título *</label>
+                <Input
+                  value={temaForm.titulo}
+                  onChange={e => setTemaForm({ ...temaForm, titulo: e.target.value })}
+                  placeholder="ex.: Trabalho em altura — uso de cinturão tipo paraquedista"
+                  className="text-base font-medium border-slate-300 focus-visible:ring-indigo-400"
+                />
               </div>
-              <div className="col-span-1">
-                <label className="text-xs font-medium text-slate-600">Duração (min)</label>
-                <Input type="number" value={temaForm.duracaoMin}
-                  onChange={e => setTemaForm({ ...temaForm, duracaoMin: parseInt(e.target.value) || 15 })} />
+
+              {/* Linha compacta: categoria + código + duração */}
+              <div className="grid grid-cols-12 gap-3">
+                <div className="col-span-5">
+                  <label className="text-[11px] font-medium text-slate-600">Categoria</label>
+                  <Select value={temaForm.categoria} onValueChange={v => setTemaForm({ ...temaForm, categoria: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LIVRE">📋 Livre</SelectItem>
+                      <SelectItem value="NR">⚠️ NR</SelectItem>
+                      <SelectItem value="CAMPANHA">🎗️ Campanha</SelectItem>
+                      <SelectItem value="VACINACAO">💉 Vacinação (PNI/MS)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-4">
+                  <label className="text-[11px] font-medium text-slate-600">Código</label>
+                  <Input
+                    value={temaForm.codigo}
+                    onChange={e => setTemaForm({ ...temaForm, codigo: e.target.value })}
+                    placeholder="NR-35"
+                    className="font-mono"
+                  />
+                </div>
+                <div className="col-span-3">
+                  <label className="text-[11px] font-medium text-slate-600">Duração (min)</label>
+                  <Input
+                    type="number"
+                    min={5}
+                    max={60}
+                    value={temaForm.duracaoMin}
+                    onChange={e => setTemaForm({ ...temaForm, duracaoMin: parseInt(e.target.value) || 15 })}
+                    className="text-center"
+                  />
+                </div>
               </div>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600">Título *</label>
-              <Input value={temaForm.titulo} onChange={e => setTemaForm({ ...temaForm, titulo: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600">Descrição (resumo)</label>
-              <Textarea rows={2} value={temaForm.descricao} onChange={e => setTemaForm({ ...temaForm, descricao: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600">Conteúdo completo</label>
-              <Textarea rows={6} value={temaForm.conteudoMd} onChange={e => setTemaForm({ ...temaForm, conteudoMd: e.target.value })}
-                placeholder="Roteiro do DDS, riscos, recomendações, EPIs obrigatórios, normas..." />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600">Norma de referência</label>
-              <Input value={temaForm.normaReferencia} onChange={e => setTemaForm({ ...temaForm, normaReferencia: e.target.value })}
-                placeholder="ex.: NR-18 (Portaria MTP 3.733/2020)" />
+
+              <div>
+                <label className="text-[11px] font-medium text-slate-600">Descrição (resumo curto)</label>
+                <Textarea
+                  rows={2}
+                  value={temaForm.descricao}
+                  onChange={e => setTemaForm({ ...temaForm, descricao: e.target.value })}
+                  placeholder="Resumo de 1 a 2 linhas que aparece no card da biblioteca"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-medium text-slate-600">Norma de referência</label>
+                <Input
+                  value={temaForm.normaReferencia}
+                  onChange={e => setTemaForm({ ...temaForm, normaReferencia: e.target.value })}
+                  placeholder="ex.: NR-18 (Portaria MTP 3.733/2020)"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-medium text-slate-600">
+                    Conteúdo / Roteiro completo (markdown)
+                  </label>
+                  {temaForm.conteudoMd && (
+                    <span className="text-[10px] text-slate-500">
+                      {temaForm.conteudoMd.length.toLocaleString("pt-BR")} caracteres
+                    </span>
+                  )}
+                </div>
+                <Textarea
+                  rows={editTema ? 10 : 8}
+                  value={temaForm.conteudoMd}
+                  onChange={e => setTemaForm({ ...temaForm, conteudoMd: e.target.value })}
+                  placeholder="Roteiro do DDS, riscos, recomendações, EPIs obrigatórios, normas..."
+                  className="font-mono text-xs"
+                />
+              </div>
             </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="px-6 py-3 border-t bg-slate-50 rounded-b-lg">
             <Button variant="outline" onClick={() => setShowTema(false)}>Cancelar</Button>
-            <Button onClick={handleSalvarTema} disabled={salvarTemaMut.isPending || atualizarTemaMut.isPending}>
+            <Button
+              onClick={handleSalvarTema}
+              disabled={salvarTemaMut.isPending || atualizarTemaMut.isPending}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              <Check className="h-4 w-4 mr-1" />
               {editTema ? "Salvar alterações" : "Criar tema"}
             </Button>
           </DialogFooter>
