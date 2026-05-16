@@ -25,6 +25,23 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1871,
+    titulo: "DDS · Página DDSGuia agora envolvida em DashboardLayout (sidebar finalmente aparece)",
+    descricao: "User (16/05/2026, dois screenshots — DDS sem sidebar vs sidebar correta de outra tela): 'Porque não colocou a barra lateral ainda, qual a dificuldade em incluir'.\n\n" +
+      "Causa raiz (a real, não a CSS): `client/src/pages/sst/DDSGuia.tsx` nunca foi envolvida no `<DashboardLayout>` — o componente retornava `<div className='p-4 md:p-6 max-w-[1400px] mx-auto ...'>` direto, sem o wrapper que monta a sidebar + header. Todas as outras páginas do app (incluindo a DDSDashboard criada na Rev. 1863) usam `<DashboardLayout>` por fora. As tentativas das Revs 1866 (md→xs no sidebar.tsx) eram corretas mas não resolviam ESTA tela porque a sidebar nem existia na árvore React.\n\n" +
+      "Por que demorou pra detectar: a Rev. 1866 mexeu nos breakpoints do shadcn/ui sidebar achando que era CSS de viewport. Funcionou pra todas as outras páginas (que usam DashboardLayout). DDSGuia continuou quebrada porque o problema era estrutural, não de CSS — a página simplesmente renderizava sem layout.\n\n" +
+      "Fix (3 hunks pequenos em DDSGuia.tsx):\n" +
+      "  1) Import: `import DashboardLayout from '@/components/DashboardLayout';` (L3).\n" +
+      "  2) Wrapper aberto no return principal (L623-625): `<DashboardLayout>` antes do `<div className='p-4 md:p-6 max-w-[1400px] mx-auto'>`.\n" +
+      "  3) Wrapper fechado no final (L2346): `</DashboardLayout>` antes do `)` do return.\n\n" +
+      "Agora a página DDS herda: sidebar lateral (com modo icon-collapse em iPad portrait via Rev. 1866), header com Voltar/Início, contexto de empresa selecionada — mesmo comportamento das outras telas. ZERO mudança em backend, queries, mutations, modais (Sessão, Tema, etc), pad de assinatura. Reversível em 3 hunks. R-001 OK.\n\n" +
+      "Pendência observada (fora do escopo): `client/src/pages/sst/IntegracaoPublica.tsx` e `client/src/pages/sst/IntegracaoSST.tsx` também não usam DashboardLayout — provavelmente mesma situação, ficam pra próxima quando o usuário reportar.",
+    tipo: "fix",
+    modulos: "SST/DDS/Layout",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 13:25:00",
+  },
+  {
     version: 1870,
     titulo: "DashFerias · Gráfico mensal ganha 4ª série 'Concluídas' + drill-down por série (regra de ouro fullscreen)",
     descricao: "User (16/05/2026, screenshots do gráfico 'Colaboradores em Férias por Mês'): 'Coloca no gráficos em barras as férias concluídas e tbm, quero o gráfico responsivos e quando clicar quero ver as informações pertinentes, em tela conforme as regras de ouro de formatação'.\n\n" +

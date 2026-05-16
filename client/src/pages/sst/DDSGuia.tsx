@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
+import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -617,6 +618,7 @@ export default function DDSGuia() {
   const sessoes = (sessoesQ.data as any[]) ?? [];
 
   return (
+    <DashboardLayout>
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-4">
       {ConfirmDialog}
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -2338,5 +2340,6 @@ function SessaoDetalhe({
         </Button>
       </div>
     </div>
+    </DashboardLayout>
   );
 }
