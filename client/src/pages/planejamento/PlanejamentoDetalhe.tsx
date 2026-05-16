@@ -1861,12 +1861,23 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
   const [atrasosAberto, setAtrasosAberto] = useState(false);
   // Rev. 1858 — exclusão de REFIS direto da tabela "Histórico de REFIs"
   const [refisDelete, setRefisDelete] = useState<any | null>(null);
+  // Rev. 1859 — seleção múltipla para exclusão em lote
+  const [selectedRefisIds, setSelectedRefisIds] = useState<Set<number>>(new Set());
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const visaoUtils = trpc.useUtils();
   const isAdminVisao = (user as any)?.role === "admin" || (user as any)?.role === "admin_master";
   const deletarRefisVisaoMut = trpc.planejamento.deletarRefis.useMutation({
     onSuccess: () => {
       visaoUtils.planejamento.listarRefis.invalidate();
       setRefisDelete(null);
+    },
+    onError: (e) => alert(e.message),
+  });
+  const deletarRefisLoteMut = trpc.planejamento.deletarRefisLote.useMutation({
+    onSuccess: () => {
+      visaoUtils.planejamento.listarRefis.invalidate();
+      setSelectedRefisIds(new Set());
+      setConfirmBulkDelete(false);
     },
     onError: (e) => alert(e.message),
   });
@@ -2241,10 +2252,50 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
       {/* Últimos REFIs */}
       {refisLista.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 overflow-x-auto">
-          <p className="text-sm font-semibold text-slate-700 mb-3">Histórico de REFIs</p>
+          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+            <p className="text-sm font-semibold text-slate-700">Histórico de REFIs</p>
+            {isAdminVisao && selectedRefisIds.size > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-600">{selectedRefisIds.size} selecionado{selectedRefisIds.size > 1 ? "s" : ""}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRefisIds(new Set())}
+                  className="text-[11px] text-slate-500 hover:text-slate-700 underline"
+                >
+                  Limpar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmBulkDelete(true)}
+                  className="bg-red-600 hover:bg-red-700 text-white text-[11px] font-medium px-3 py-1 rounded flex items-center gap-1 transition-colors"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Excluir {selectedRefisIds.size} {selectedRefisIds.size > 1 ? "REFIs" : "REFIS"}
+                </button>
+              </div>
+            )}
+          </div>
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-slate-700 text-white">
+                {isAdminVisao && (
+                  <th className="py-2 px-2 text-center w-8">
+                    <input
+                      type="checkbox"
+                      aria-label="Selecionar todos os REFIs visíveis"
+                      checked={(() => {
+                        const visiveis = [...refisLista].sort((a: any, b: any) => (b.numero ?? 0) - (a.numero ?? 0)).slice(0, 8);
+                        return visiveis.length > 0 && visiveis.every((r: any) => selectedRefisIds.has(r.id));
+                      })()}
+                      onChange={(e) => {
+                        const visiveis = [...refisLista].sort((a: any, b: any) => (b.numero ?? 0) - (a.numero ?? 0)).slice(0, 8);
+                        if (e.target.checked) setSelectedRefisIds(new Set(visiveis.map((r: any) => r.id)));
+                        else setSelectedRefisIds(new Set());
+                      }}
+                      className="cursor-pointer accent-emerald-500"
+                    />
+                  </th>
+                )}
                 <th className="py-2 px-3 text-left">Nº</th>
                 <th className="py-2 px-3 text-left">Semana</th>
                 <th className="py-2 px-3 text-right">Prev. %</th>
@@ -2258,10 +2309,29 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
               {[...refisLista].sort((a: any, b: any) => (b.numero ?? 0) - (a.numero ?? 0)).slice(0, 8).map((r: any, i: number) => (
                 <tr
                   key={r.id}
-                  className={`cursor-pointer transition-colors ${i % 2 === 0 ? "bg-white hover:bg-blue-50" : "bg-slate-50 hover:bg-blue-50"}`}
+                  className={`cursor-pointer transition-colors ${selectedRefisIds.has(r.id) ? "bg-red-50 hover:bg-red-100" : i % 2 === 0 ? "bg-white hover:bg-blue-50" : "bg-slate-50 hover:bg-blue-50"}`}
                   onClick={() => setRefisAberto(r)}
                   title="Clique para visualizar este REFIS"
                 >
+                  {isAdminVisao && (
+                    <td className="py-1.5 px-2 text-center" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Selecionar REFIS nº ${String(r.numero ?? "").padStart(3, "0")}`}
+                        checked={selectedRefisIds.has(r.id)}
+                        onChange={(e) => {
+                          setSelectedRefisIds((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(r.id);
+                            else next.delete(r.id);
+                            return next;
+                          });
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="cursor-pointer accent-emerald-500"
+                      />
+                    </td>
+                  )}
                   <td className="py-1.5 px-3 font-mono text-slate-600">{String(r.numero ?? i+1).padStart(3, "0")}</td>
                   <td className="py-1.5 px-3 text-slate-700">{fmtBR(r.semana)}</td>
                   <td className="py-1.5 px-3 text-right text-slate-600">{fPct(n(r.avancoPrevisto))}</td>
@@ -2294,6 +2364,42 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
           </table>
         </div>
       )}
+
+      {/* Rev. 1859 — Confirmação de exclusão em lote de REFIs */}
+      <AlertDialog open={confirmBulkDelete} onOpenChange={(o) => { if (!o && !deletarRefisLoteMut.isPending) setConfirmBulkDelete(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir {selectedRefisIds.size} REFI{selectedRefisIds.size > 1 ? "s" : "S"}?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                <div className="mb-2">
+                  Esta ação <strong>não pode ser desfeita</strong>. Os relatórios abaixo serão removidos permanentemente do histórico:
+                </div>
+                <ul className="list-disc pl-5 max-h-40 overflow-y-auto text-xs space-y-0.5">
+                  {[...refisLista]
+                    .filter((r: any) => selectedRefisIds.has(r.id))
+                    .sort((a: any, b: any) => (b.numero ?? 0) - (a.numero ?? 0))
+                    .map((r: any) => (
+                      <li key={r.id}>
+                        <strong>Nº {String(r.numero ?? "").padStart(3, "0")}</strong> — semana de {fmtBR(r.semana)} ({r.status})
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletarRefisLoteMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deletarRefisLoteMut.isPending || selectedRefisIds.size === 0}
+              onClick={() => deletarRefisLoteMut.mutate({ projetoId: proj.id, ids: Array.from(selectedRefisIds) })}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deletarRefisLoteMut.isPending ? "Excluindo…" : `Excluir ${selectedRefisIds.size}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Rev. 1858 — Confirmação de exclusão de REFIS */}
       <AlertDialog open={!!refisDelete} onOpenChange={(o) => { if (!o) setRefisDelete(null); }}>

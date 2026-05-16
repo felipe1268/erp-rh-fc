@@ -25,6 +25,22 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1859,
+    titulo: "Visão Geral · Histórico de REFIs — seleção múltipla para exclusão em lote (admin)",
+    descricao: "User (16/05/2026, screenshot Visão Geral pós-Rev. 1858 mostrando coluna 'Ações' com lixeira por linha): 'Faz seleção múltipla para apagar várias juntas'. A Rev. 1858 já permitia delete um-a-um, mas para zerar o histórico (14 REFIs no caso do projeto QIU 2 - FASE 4) o usuário teria que confirmar 14 modais. Pedido legítimo de UX para operação em lote.\n\n" +
+      "Fix backend (server/routers/planejamento.ts): novo endpoint `deletarRefisLote` (protectedProcedure) — input `{ projetoId: number, ids: number[].min(1).max(100) }`, role check admin-only no início (paridade com `deletarRefis` Rev. 1858), validação de ownership do projeto contra `ctx.user.companyId` (admin_master bypass), e DELETE com `and(eq(projetoId, X), inArray(id, ids))` — defense-in-depth contra IDs de outros projetos no payload (achado de architect review: IDOR). Retorna `rowCount` real. Mesma camada de ownership aplicada ao `deletarRefis` (single).\n\n" +
+      "Fix client (client/src/pages/planejamento/PlanejamentoDetalhe.tsx, 3 hunks no componente VisaoGeral):\n" +
+      "  (1) State novo: `selectedRefisIds: Set<number>` + `confirmBulkDelete: boolean` + mutation `deletarRefisLoteMut` (onSuccess: invalida `listarRefis`, limpa seleção, fecha modal).\n" +
+      "  (2) Header da tabela ganha barra de ações condicional (admin + algum item selecionado): contador 'N selecionado(s)', botão 'Limpar', botão vermelho 'Excluir N REFIs' (Trash2 ícone) que abre o modal de confirmação.\n" +
+      "  (3) Nova primeira coluna 'checkbox' (admin-only) — checkbox no header faz select-all/clear-all dos REFIs visíveis (top 8 ordenados por nº DESC, mesma lista renderizada). Checkbox por linha com `accent-emerald-500`, `stopPropagation` no `<td>` e no input para não disparar modal de visualização. Linha selecionada ganha highlight `bg-red-50`.\n" +
+      "  (4) Novo `AlertDialog` (descrição via `asChild` para evitar invalid HTML — `<div>` dentro de `<AlertDialogDescription>` em vez de `<p>` aninhado). Lista os REFIs selecionados com Nº/semana BR/status (max-h-40 + overflow-y-auto se >5). Action vermelho disabled durante pending; Cancel disabled durante pending; `onOpenChange` ignorado durante pending para não fechar acidentalmente.\n\n" +
+      "Preservado: ZERO mudança em schema; `deletarRefis` (single) intacto; checkbox header só seleciona os 8 visíveis (não esconde REFIs além do top 8 da limitação `.slice(0,8)` original); ordem `numero DESC` mantida; aba REFIS interna não tocada; não-admins continuam sem ver checkbox/Ações. Reversível em 4 hunks (3 client + 1 server). R-001/R-007/R-010 OK.",
+    tipo: 'feat',
+    modulos: 'Planejamento',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-16 06:00:00',
+  },
+  {
     version: 1858,
     titulo: "Visão Geral · Histórico de REFIs — botão Excluir + ordenação por número (admin)",
     descricao: "User (15/05/2026, screenshot Visão Geral QIU 2 - FASE 4): 'Apague estes refis pq vamos gerar novamente e deixa organizado pela numeração sempre'. Tabela 'Histórico de REFIs' antes ordenava por `semana DESC` (vinda do backend), gerando linhas fora de ordem (014, 002, 003, 011, 010...) quando os REFIs foram emitidos fora da sequência cronológica. Não havia caminho na UI para excluir um REFIS antigo direto da Visão Geral — só na aba REFIS interna.\n\n" +

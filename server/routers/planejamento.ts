@@ -1980,8 +1980,42 @@ export const planejamentoRouter = router({
       // Rev. 1858 — exclusão de REFIS é sempre admin-only (paridade com UI)
       const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
       if (!isAdmin) throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem excluir um REFIS." });
+      // Rev. 1859 — valida ownership do projeto (cross-tenant guard)
+      const isMaster = ctx.user.role === "admin_master";
+      if (!isMaster) {
+        const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+          .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, refis.projetoId));
+        if (!proj || String(proj.companyId) !== String(ctx.user.companyId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "REFIS pertence a outra empresa." });
+        }
+      }
       await db.delete(planejamentoRefis).where(eq(planejamentoRefis.id, input.id));
       return { success: true };
+    }),
+
+  // Rev. 1859 — Exclusão em lote de REFIs (admin-only, escopo de projeto)
+  deletarRefisLote: protectedProcedure
+    .input(z.object({ projetoId: z.number(), ids: z.array(z.number()).min(1).max(100) }))
+    .mutation(async ({ input, ctx }) => {
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdmin) throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem excluir REFIs em lote." });
+      const db = await getDb();
+      // Valida ownership do projeto (cross-tenant guard) — admin_master ignora companyId
+      const isMaster = ctx.user.role === "admin_master";
+      if (!isMaster) {
+        const [proj] = await db.select({ companyId: planejamentoProjetos.companyId })
+          .from(planejamentoProjetos).where(eq(planejamentoProjetos.id, input.projetoId));
+        if (!proj || String(proj.companyId) !== String(ctx.user.companyId)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Projeto pertence a outra empresa." });
+        }
+      }
+      // Delete só IDs que ESTÃO nesse projeto (defense-in-depth contra IDs estranhos no payload)
+      const result: any = await db.delete(planejamentoRefis).where(and(
+        eq(planejamentoRefis.projetoId, input.projetoId),
+        inArray(planejamentoRefis.id, input.ids),
+      ));
+      const deleted = typeof result?.rowCount === "number" ? result.rowCount : input.ids.length;
+      return { success: true, deleted };
     }),
 
   // ── Data de Corte (Status Date PMBOK / EVM) ──────────────────────────────
