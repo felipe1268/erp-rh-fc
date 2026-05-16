@@ -159,7 +159,15 @@ function faixasCelula(
   const ds = dateStr(dia);
   const ehUtil = cal ? ehDiaUtil(ds, cal) : (dia.getDay() !== 0 && dia.getDay() !== 6);
   const inPrev = ehUtil && !!(prevIni && prevFim && ds >= prevIni && ds <= prevFim);
-  let inReal = !!(realIni && realFim && ds >= realIni && ds <= realFim);
+  // Rev. 1875 — Respeitar calendário MSP TAMBÉM no REAL explícito. Antes,
+  // se o engenheiro lançasse `dataInicioReal/dataFimReal` em uma janela que
+  // contivesse sáb/dom, esses dias eram pintados automaticamente — o que
+  // viola a regra "sem atividade em fim de semana por padrão". Agora sáb/dom
+  // só pintam quando o calendário do projeto (planejamento_projetos.calendario_json
+  // exceptions com working=true ou weekDays[6/0]=true) explicitamente marcar
+  // aquele dia como trabalhado. O engenheiro habilita pontualmente via
+  // exceção de calendário (mecanismo manual descrito na Rev. 1875).
+  let inReal = ehUtil && !!(realIni && realFim && ds >= realIni && ds <= realFim);
   // Rev. 1785 — `passou` agora = "dia pertence a uma semana JÁ FECHADA".
   // Se `inicioSemanaCorrente` não foi informado (compatibilidade com chamadas
   // antigas), cai no comportamento anterior (`dia ≤ hoje`).
