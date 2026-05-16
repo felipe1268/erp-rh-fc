@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1896 — Planejamento · Cronograma · NOVO badge do RESPONSÁVEL ao lado do nome de cada atividade.
+ * User (16/05/2026, screenshot do Cronograma): "Queria que aparece um card simples aqui indicando que a atividade é d responsabilidade de xx pessoa.. assim fica claro saber que se não foi indicado fica sendo de responsabilidade da construtora.."
+ * Contexto: o campo cyan `responsavelLotus` só aparece quando o usuário ativou a checkbox de "responsável manual" — para o leitor casual do cronograma não havia indicação visual de quem é responsável (resolução servidor Rev. 1817/1891 ficava só na Programação Semanal LOTUS). Sem indicação manual, a regra é "FC Engenharia (construtora)" mas isso era invisível.
+ * Mudança (em client/src/pages/planejamento/PlanejamentoDetalhe.tsx L4031-4084, dentro do flex container que renderiza o Input do nome da atividade):
+ *   • Renderiza um <span> badge IIFE logo após o Input, usando `a.responsavel` resolvido pelo servidor.
+ *   • Cor por tipo: FC=cinza, manual=ciano, contrato_terceiro=azul, externa=âmbar. Mesma paleta dos controles upstream (Rev. 1641/1823).
+ *   • Texto = `labelCurto` (truncado, padrão do servidor), title HTML e tooltip Radix com `label` completo + descrição contextualizada.
+ *   • Não renderiza em linhas de GRUPO/RESUMO (`a.isGrupo`), desabilitadas (`a.disabled`) NEM externas (`a.isExterna` — evita duplicidade com o Input âmbar de `externaResponsavel` da Rev. 1641).
+ *   • Sem custo adicional: `a.responsavel` já vem populado de `planejamento.listarAtividades` (Rev. 1891).
+ *   • Ajuste pós-architect: fallback local — quando `a.responsavel` ainda não chegou do backend (linha recém criada, refetch pendente, companyId não resolvido), deriva a partir do `responsavelLotus` digitado (tipo=manual). Evita inconsistência pré-refetch. Truncamento explícito `max-w-[140px] truncate whitespace-nowrap` blinda labels longas.
+ *   • version → 1896.
+ * Preservado/Seguro: ZERO mudança em backend/DB/schema. Input `responsavelLotus` (ciano), checkbox de responsável manual, cascata grupo (Rev. 1892), modal cascadeResp (Rev. 1860/1865), Input externa (Rev. 1641): tudo intacto. Lista de atividades sem `responsavel` populado (ex.: companyId ausente, projeto novo) cai no fallback FC silenciosamente. Reversível em 1 hunk + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1895 — Planejamento · Programação Semanal LOTUS · EXPORT EXCEL · Removido espelhamento que pintava AZUL nas DUAS faixas (topo + baixo) quando só havia previsto.
  * User (16/05/2026, 2 screenshots — image_1778948554050.png semana 01/05 com cells totalmente azuis em Seg-Qui e image_1778948582015.png semana 10/11 com algumas cells parcialmente azuis): "TEM UM ERRO CONCEITUAL, O PREVISTO EM AZUL EM CIMA ESTA CORRETO, POREM ABAIXO A COR IRÁ VARIAR CONFORME INDICADO NA LEGENDA.. MAS NÃO TEM COR AZUL E EM CIMA COMO ESTA ACONTECENDO HOJE.. O AZUL É AO PREVISTO.. QUE FICA NO TOPO, ABAIXO FICA O STATUS CONFORME A LEGENDA..."
  * Causa: bloco legado no `handleExportExcel` (ProgramacaoSemanalLotus.tsx L1419-1424) espelhava a ÚNICA faixa existente nas DUAS linhas do slot (r0+1 e r0+2). Caso típico: dia previsto sem realizado tinha `top=blue, bottom=null` → o espelho copiava o azul para r0+2, produzindo uma barra cheia azul de 2 linhas. Isso violava o conceito LOTUS: TOPO = PLANO (azul), BAIXO = STATUS (verde/vermelho/laranja/amarelo) ou VAZIO. O comportamento "barra cheia" só fazia sentido antes da Rev. 1886, quando o realizado fora do envelope (laranja/amarelo) vinha apenas em `bottom`; após a Rev. 1886 forçar TOP=azul para tudo que tem previsto, o espelho virou prejudicial.

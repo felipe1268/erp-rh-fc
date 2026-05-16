@@ -4025,6 +4025,83 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                           <Input value={a.nome} onChange={e => updateLinha(idx, "nome", e.target.value)}
                             className={`h-7 text-xs w-full ${a.isGrupo ? "font-semibold bg-yellow-50" : ""} ${a.disabled ? "line-through text-slate-400" : ""}`}
                             placeholder="Nome da atividade" />
+                          {/* Rev. 1896 — Badge do RESPONSÁVEL resolvido. User
+                              pediu (16/05/2026): "Queria que aparece um card
+                              simples aqui indicando que a atividade é d
+                              responsabilidade de xx pessoa.. assim fica claro
+                              saber que se não foi indicado fica sendo de
+                              responsabilidade da construtora". Usa o
+                              `a.responsavel` resolvido pelo servidor
+                              (Rev. 1817/1891 hierarquia
+                              externa→manual→contrato→FC). Cor por tipo,
+                              tooltip com label completo. Não aparece em
+                              linhas de marco (sem responsável real). */}
+                          {!a.isGrupo && !a.disabled && !a.isExterna && (() => {
+                            // Rev. 1896 — Badge do RESPONSÁVEL. Prioriza
+                            // `a.responsavel` (resolvido no servidor Rev.
+                            // 1817/1891). Ajuste pós-review do architect:
+                            //   • Ocultado em `a.isExterna` para evitar
+                            //     duplicidade com o Input âmbar de
+                            //     `externaResponsavel` (Rev. 1641).
+                            //   • Quando `a.responsavel` ainda não chegou do
+                            //     backend (linha recém criada / refetch
+                            //     pendente / companyId não resolvido),
+                            //     deriva localmente a partir do
+                            //     `responsavelLotus` digitado, mantendo a
+                            //     UI consistente sem esperar round-trip.
+                            const r = (a as any).responsavel as
+                              | { tipo?: string; label?: string; labelCurto?: string }
+                              | null
+                              | undefined;
+                            let tipo: string;
+                            let label: string;
+                            let labelFull: string;
+                            const manualLocal = (a.responsavelLotus ?? "").trim();
+                            if (r && r.tipo) {
+                              tipo = r.tipo;
+                              label = r.labelCurto || "—";
+                              labelFull = r.label || label;
+                            } else if (manualLocal) {
+                              tipo = "manual";
+                              label = manualLocal.length > 18 ? manualLocal.slice(0, 17) + "…" : manualLocal;
+                              labelFull = manualLocal;
+                            } else {
+                              tipo = "fc";
+                              label = "FC";
+                              labelFull = "FC ENGENHARIA (construtora — sem indicação manual)";
+                            }
+                            const cores: Record<string, string> = {
+                              fc: "bg-slate-100 text-slate-600 border-slate-300",
+                              manual: "bg-cyan-50 text-cyan-700 border-cyan-300",
+                              contrato_terceiro: "bg-blue-50 text-blue-700 border-blue-300",
+                              externa: "bg-amber-50 text-amber-700 border-amber-300",
+                            };
+                            const cor = cores[tipo] ?? cores.fc;
+                            return (
+                              <UiTooltipProvider delayDuration={250}>
+                                <UiTooltip>
+                                  <UiTooltipTrigger asChild>
+                                    <span
+                                      className={`inline-flex shrink-0 items-center max-w-[140px] truncate whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cor}`}
+                                      title={labelFull}
+                                      data-testid={`badge-responsavel-${a.id}`}
+                                    >
+                                      {label}
+                                    </span>
+                                  </UiTooltipTrigger>
+                                  <UiTooltipContent side="top" className="text-xs">
+                                    {tipo === "fc"
+                                      ? "Sem indicação manual — responsabilidade da construtora (FC Engenharia)"
+                                      : tipo === "manual"
+                                        ? `Responsável manual: ${labelFull}`
+                                        : tipo === "contrato_terceiro"
+                                          ? `Terceiro por contrato/OS: ${labelFull}`
+                                          : `Externa: ${labelFull}`}
+                                  </UiTooltipContent>
+                                </UiTooltip>
+                              </UiTooltipProvider>
+                            );
+                          })()}
                         </div>
                         {/* Rev. 1641 — Quando externa, mostra input livre pra digitar o responsável (concessionária, prefeitura, etc.) */}
                         {a.isExterna && (
