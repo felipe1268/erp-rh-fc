@@ -4395,6 +4395,74 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                               </UiTooltip>
                             </UiTooltipProvider>
                           )}
+                          {/* Rev. 1900 — Badge do RESPONSÁVEL na VISUALIZAÇÃO
+                              (modo leitura/cronograma). User (16/05/2026,
+                              screenshot): "ainda não apareceu aqui no
+                              cronograma que a atividade é de responsabilidade
+                              de outra empresa". Rev. 1898 colocou o badge
+                              apenas no modo EDIÇÃO; aqui replicamos a MESMA
+                              lógica para a tabela read-only. Inline (após
+                              EXTERNA) porque é layout tabular com colunas
+                              fixas — não há "linha abaixo". Mesmo critério de
+                              visibilidade: só renderiza quando há indicação
+                              EXPLÍCITA (manual / contrato_terceiro / externa).
+                              FC = padrão implícito sem tag. */}
+                          {!a.isGrupo && !a.disabled && !a.isExterna && (() => {
+                            // Rev. 1900 (pós-architect FAIL): short-circuit
+                            // ANTES do IIFE em `!a.isExterna` — externas têm
+                            // o chip âmbar "EXTERNA" dedicado logo acima e
+                            // NUNCA devem ganhar segundo badge (mesmo quando
+                            // o backend resolve `responsavel.tipo="externa"`).
+                            // Aqui sobram apenas manual e contrato_terceiro
+                            // (escopo Rev. 1900).
+                            const r = (a as any).responsavel as
+                              | { tipo?: string; label?: string; labelCurto?: string }
+                              | null
+                              | undefined;
+                            let tipo: string;
+                            let label: string;
+                            let labelFull: string;
+                            const manualLocal = (a.responsavelLotus ?? "").trim();
+                            if (r && r.tipo && r.tipo !== "fc" && r.tipo !== "externa") {
+                              tipo = r.tipo;
+                              label = r.labelCurto || "—";
+                              labelFull = r.label || label;
+                            } else if (manualLocal) {
+                              tipo = "manual";
+                              label = manualLocal.length > 22 ? manualLocal.slice(0, 21) + "…" : manualLocal;
+                              labelFull = manualLocal;
+                            } else {
+                              return null;
+                            }
+                            const cores: Record<string, string> = {
+                              manual: "bg-cyan-50 text-cyan-700 border-cyan-300",
+                              contrato_terceiro: "bg-blue-50 text-blue-700 border-blue-300",
+                              externa: "bg-amber-50 text-amber-700 border-amber-300",
+                            };
+                            const cor = cores[tipo] ?? "bg-slate-100 text-slate-600 border-slate-300";
+                            return (
+                              <UiTooltipProvider delayDuration={250}>
+                                <UiTooltip>
+                                  <UiTooltipTrigger asChild>
+                                    <span
+                                      className={`ml-1 inline-flex max-w-[180px] truncate whitespace-nowrap items-center rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide shrink-0 cursor-help ${cor}`}
+                                      title={labelFull}
+                                      data-testid={`badge-responsavel-leitura-${a.id}`}
+                                    >
+                                      {label}
+                                    </span>
+                                  </UiTooltipTrigger>
+                                  <UiTooltipContent side="top" className="text-xs">
+                                    {tipo === "manual"
+                                      ? `Responsável manual: ${labelFull}`
+                                      : tipo === "contrato_terceiro"
+                                        ? `Terceiro por contrato/OS: ${labelFull}`
+                                        : `Externa: ${labelFull}`}
+                                  </UiTooltipContent>
+                                </UiTooltip>
+                              </UiTooltipProvider>
+                            );
+                          })()}
                           {!editando && !isConsolidado && a.id && (
                             <UiTooltipProvider delayDuration={300}>
                               <UiTooltip>

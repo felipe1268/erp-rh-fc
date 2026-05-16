@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1900 — Planejamento · Cronograma · Badge do RESPONSÁVEL replicado na VISUALIZAÇÃO (modo leitura).
+ * User (16/05/2026, screenshot image_1778950143099.png — linha "Andaime disponível para trabalho- FC Engenharia" + outras): "ainda não apareceu aqui no cronograma que a atividade é de responsabilidade de outra empresa. como indicado.. coloca um card aqui..".
+ * Causa: a Rev. 1898 colocou o badge do responsável APENAS na renderização do modo EDIÇÃO (ramo `editando ? <> ... </> : <> ... </>` em PlanejamentoDetalhe.tsx). O ramo de VISUALIZAÇÃO (`!editando`, renderização tabular tradicional em L4356+) nunca recebeu o badge — então em modo leitura (que é o que o usuário vê 99% do tempo) só apareciam os chips legados Marco/Indireta/EXTERNA, sem identificação do responsável quando manual ou contrato_terceiro.
+ * Mudança (em client/src/pages/planejamento/PlanejamentoDetalhe.tsx L4401-4459, dentro do `<td>` do Nome, ramo !editando, logo após o chip "EXTERNA"):
+ *   • NOVO IIFE com mesma lógica de tipo/label/cor de Rev. 1898 (manual=ciano, contrato_terceiro=azul, externa=âmbar).
+ *   • Padrão FC permanece IMPLÍCITO (sem badge) — preserva limpeza visual do cronograma.
+ *   • Cliques rápidos defensivos: early return `null` quando `a.isExterna && externaLocal` — não duplica com o chip "EXTERNA" amarelo que já existe ali (única diferença vs Rev. 1898, que adicionava o tag externa também).
+ *   • Estilo INLINE com os outros chips (Marco/Indireta/EXTERNA) — diferente da edição (que é "abaixo do nome") porque aqui o layout é tabular com colunas estreitas e altura fixa de linha; uma linha extra quebraria o alinhamento da tabela inteira. Tag compacta (`text-[9px] uppercase max-w-[180px] truncate`) com tooltip Radix mostrando o nome completo + tipo.
+ *   • `data-testid="badge-responsavel-leitura-${a.id}"` para diferenciar do badge de edição.
+ *   • version → 1900.
+ * Ajuste pós-architect (FAIL na 1ª passada): architect identificou gap real — o ramo `if (r && r.tipo !== "fc")` ainda renderizava badge âmbar duplicado quando o backend resolvia `responsavel.tipo="externa"` (o early return `null` só protegia o fallback local). Fix: short-circuit `!a.isExterna` ANTES do IIFE + filtro extra `r.tipo !== "externa"` no primeiro ramo. Garantia absoluta: externas mostram APENAS o chip âmbar "EXTERNA" — nunca um segundo badge. No read view o badge novo cobre só manual e contrato_terceiro.
+ * Preservado: Rev. 1898 (badge da edição abaixo do nome) intacta — agora os dois modos têm paridade. Chips Marco/Indireta/EXTERNA Rev. anteriores intactos. Hierarquia visual (chip EXTERNA âmbar continua dominante quando aplicável; badge novo só aparece para manual/contrato_terceiro). Estrutura de dados (`a.responsavel`, `a.responsavelLotus`, `a.externaResponsavel`) sem mudanças — só consumo no read view. Zero backend/DB/schema/tRPC. Reversível em 1 hunk + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1899 — Planejamento · Atividades em Atraso · Impressão REDESENHADA com toggle Retrato/Paisagem + anti-sobreposição.
  * User (16/05/2026, screenshot image_1778949913962.png do preview de impressão Chrome): "tudo bagunçado na tela de impressão o ERP precisa garantir que a impressao deve ser redesenhada e garantir que não tera sobreposição de informação, que o usuário possa escolher os formatos, retro ou paisagem.. quero que isso seja definido de forma clara e objetiva".
  * Causa: a tela "Atividades em Atraso" (modal full-screen em PlanejamentoDetalhe.tsx L2047+) tinha 2 botões custom (Imprimir + Gerar PDF) com CSS de impressão primitivo, hardcoded em A4 retrato, sem orientação configurável e sem otimização anti-sobreposição (cards cortados entre páginas, header repetido sobre conteúdo, etc.).
