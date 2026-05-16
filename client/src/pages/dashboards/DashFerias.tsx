@@ -664,7 +664,7 @@ export default function DashFerias() {
       {/* Rev. 1612 — Drill-down Dialog: full-screen, layout moderno,
            busca, filtro de status, KPIs no topo, export CSV, sem cortes. */}
       <Dialog open={!!drillDialog} onOpenChange={(open) => { if (!open) { setDrillDialog(null); setDrillSearch(""); setDrillStatusFilter("todos"); } }}>
-        <DialogContent className="w-screen sm:w-[98vw] sm:max-w-[1600px] h-[100dvh] sm:h-[95vh] max-h-[100dvh] sm:max-h-[95vh] p-0 gap-0 flex flex-col overflow-hidden rounded-none sm:rounded-lg">
+        <DialogContent resizable={false} className="w-screen sm:w-[98vw] sm:max-w-[1600px] h-[100dvh] sm:h-[95vh] max-h-[100dvh] sm:max-h-[95vh] p-0 gap-0 flex flex-col overflow-hidden rounded-none sm:rounded-lg">
           {(() => {
             const fmtDate = (d: string | null | undefined) => {
               if (!d) return "—";

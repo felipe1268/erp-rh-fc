@@ -25,6 +25,19 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1869,
+    titulo: "DashFerias · Modal drill-down 'Colaboradores em Férias' agora abre fullscreen no iPad (regra de ouro)",
+    descricao: "User (16/05/2026, screenshot do iPad portrait com modal de Colaboradores em Férias apertado no centro da tela): 'Arrume esta tela, conforme nossa regra de ouro' (= modal fullscreen em tablet, padrão Rev. 1731/1868).\n\n" +
+      "Causa raiz: `DialogContent` do shadcn/ui (`client/src/components/ui/dialog.tsx` L183/L222) tem prop `resizable` default `true`, que injeta `style={{ width: 'min(512px, calc(100vw - 1rem))' }}` **inline**. Inline style vence Tailwind sem `!important` — então a className `w-screen sm:w-[98vw] sm:max-w-[1600px]` (DashFerias L670) era ignorada e o modal grudava em 512px centralizado.\n\n" +
+      "Pattern já estabelecido no codebase: 18+ outros DialogContents fullscreen usam explicitamente `resizable={false}` (ChartCard, EmployeeDetailDialog, DocumentPreviewDialog, DashEpis, DashFolhaPagamento, DashCartaoPonto, Solicitacoes, Fornecedores, etc). O drill da DashFerias foi a exceção que esqueceu o flag. O modal de Sessão DDS (Rev. 1731) e o modal Tema (Rev. 1868) funcionam porque usam `!w-screen` com `!important` (que vence inline style mesmo sem `resizable={false}`).\n\n" +
+      "Fix (1 linha em DashFerias.tsx L670): adicionado `resizable={false}` ao DialogContent. Agora o modal ocupa toda a tela em smartphone/iPad (`w-screen h-[100dvh]`) e 98vw com max-w-[1600px] em desktop, sem cortes nem centralização forçada. O architect já tinha sugerido essa hardening na revisão da Rev. 1868.\n\n" +
+      "Preservado: ZERO mudança em backend, dados, filtros, busca, export CSV, lógica do drill-down. Reversível em 1 linha. R-001 OK.",
+    tipo: "fix",
+    modulos: "Férias/Dashboard/UI",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 12:50:00",
+  },
+  {
     version: 1868,
     titulo: "DDS · Modal Novo/Editar Tema em fullscreen + layout 2 colunas (lançamento mais fluido em tablets)",
     descricao: "User (16/05/2026, screenshot do modal apertado no centro da tela em iPad portrait): 'Ajuste a tela full screen e deixa mais fácil e fluido o lançamento'. O modal antigo (Rev. 1864) usava `max-w-3xl max-h-[92vh]` — em iPad portrait ficava espremido, com inputs pequenos e scroll vertical longo, dificultando lançamento.\n\n" +
