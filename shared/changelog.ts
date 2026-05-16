@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1958 — Infra · Faxina do replit.md + reforço da convenção top-5.
+ * User (16/05/2026): "tem outros 10+ blocos truncados antigos no meio do arquivo. Quando quiser, faço uma rev de manutenção só pra essa faxina... Arruma isso para nunca mais acontecer".
+ * Causa-raiz: revisões anteriores ao colapsar blocos antigos no `replit.md` deixaram resíduos:
+ *   (1) Parágrafos órfãos no meio do arquivo — texto solto sem o prefixo `- **Rev. NNNN**:` (linhas começando com " User (...)" ou ": respeitar..." sem nenhum marcador de revisão).
+ *   (2) Placeholders HTML `<!-- DETALHES REVS ANTIGAS — ver shared/changelog.ts -->` injetados no meio de parágrafos de outras revisões, criando duplicação confusa entre `replit.md` e `shared/changelog.ts`.
+ *   (3) Mistura de revisões expandidas e colapsadas fora de ordem cronológica.
+ * Mudança (`replit.md` único arquivo, zero código de aplicação):
+ *   (a) Seção "Recent changes" reescrita do zero: 5 revisões expandidas (1958/1957/1956/1955/1954) + 49 revisões colapsadas (1953→1905) cada uma em UMA linha limpa no formato `- ~~Rev. NNNN~~ — ver \`shared/changelog.ts\`.`
+ *   (b) Bloco "Convenção" expandido com regra explícita ANTI-bug:
+ *       - cada linha do bloco deve começar com `- ` (hífen+espaço) — validação visual simples.
+ *       - placeholders HTML BANIDOS.
+ *       - fluxo step-by-step ao criar nova rev (add no topo → pop oldest expandido → NUNCA deletar parcialmente).
+ *   (c) Adicionada seção "User preferences" no fim com 3 regras críticas (idioma pt-BR, fluxo de revisão, R-001/R-007/R-010).
+ * version → 1958 (bump simbólico — apenas infra/docs).
+ * Resultado:
+ *   - replit.md cai de 111 linhas (~10400 tokens) para ~70 linhas (~3500 tokens).
+ *   - Sistema deixa de sinalizar "arquivo grande" automaticamente.
+ *   - Convenção reforçada protege contra regressão futura (qualquer linha "solta" sem `- ` agora é bug óbvio).
+ * Preservado:
+ *   - Cabeçalhos Run/Stack/Where things live do `replit.md` INTACTOS.
+ *   - `shared/changelog.ts` INTACTO como fonte única de detalhes históricos (causa-raiz, stack traces, comentários longos).
+ *   - Rev. 1957 (DDS uso/badge/alerta), Rev. 1956 (paralelização IA), Rev. 1955 (barra modal), Rev. 1954/1953 (80 temas + IA).
+ *   - Zero código aplicação, zero schema, zero backend, zero tRPC.
+ * Reversível em 1 hunk (sobrescrever o arquivo). R-001/R-007/R-010 OK.
+ *
  * Rev. 1957 — SST · DDS Guia · Biblioteca · Rastreio de USO + ordenação + alerta de repetição.
  * User (16/05/2026): "Seria bom ter uma regra para que evitasse repetir o tema na obra sem querer, o ideal é ter temas variados... os temas já tratados na obra vai sumindo para o usuário usar todas as orientações pertinentes, poderia ter uma aba indicando qual já foi usada e caso o usuário quiser falar de novo ele pode, só ficaria o alerta, sugerindo um tema novo".
  * Premissa: tudo CLIENT-SIDE (sem migração de schema/backend). A tabela `dds_sessoes` já tem `temaId` FK opcional desde o início — basta agregar no client a partir de `listSessoes`.
