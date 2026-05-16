@@ -36,6 +36,7 @@ import {
   Bot, Brain, Sparkles, MessageSquare, Send, Zap,
   Calendar, CalendarDays, CalendarCheck, History, ThumbsUp, ThumbsDown, BookOpen,
   ChevronLeft, RotateCcw, CloudLightning, Thermometer, Eye, EyeOff, Printer, CheckSquare,
+  RectangleVertical, RectangleHorizontal,
   TrendingDown, ArrowUpRight, ArrowDownRight, CalendarClock, Network,
   Users, HardHat, CheckCircle, Calculator, Info, Box,
   FileCheck2, FileX2, FileWarning, GraduationCap,
@@ -1937,6 +1938,9 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
   const { selectedCompany } = useCompany();
   const [refisAberto, setRefisAberto] = useState<any | null>(null);
   const [atrasosAberto, setAtrasosAberto] = useState(false);
+  // Rev. 1899 — orientação escolhida pelo usuário p/ imprimir o Relatório de
+  // Atividades em Atraso. Default portrait (compatível com formato A4 vertical).
+  const [atrasosOrient, setAtrasosOrient] = useState<"portrait" | "landscape">("portrait");
   // Rev. 1858 — exclusão de REFIS direto da tabela "Histórico de REFIs"
   const [refisDelete, setRefisDelete] = useState<any | null>(null);
   // Rev. 1859 — seleção múltipla para exclusão em lote
@@ -2067,36 +2071,154 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
                 {criticas.length} atividade{criticas.length !== 1 ? 's' : ''} identificada{criticas.length !== 1 ? 's' : ''}
               </p>
             </div>
+            {/* Rev. 1899 — Toggle de orientação (Retrato/Paisagem) + ação de
+                imprimir/gerar PDF unificadas. User (16/05/2026, screenshot do
+                preview): "tudo bagunçado na tela de impressão... que o
+                usuário possa escolher os formatos, retro ou paisagem". O CSS
+                injetado abaixo combina:
+                  (a) `visibility:hidden` global + `visibility:visible` SÓ no
+                      `#atrasos-print-area` (mantém comportamento "imprime
+                      apenas o relatório, não o resto da página");
+                  (b) `@page { size: A4 <orientation> }` com a orientação
+                      escolhida + margens otimizadas por orientação;
+                  (c) regras anti-sobreposição: cards com
+                      `break-inside:avoid`, grid 2-cols em paisagem, fontes
+                      ajustadas, margens trailing zeradas. */}
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
+              <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setAtrasosOrient("portrait")}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${
+                    atrasosOrient === "portrait"
+                      ? "bg-slate-800 text-white"
+                      : "bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                  title="Imprimir em retrato (vertical)"
+                  data-testid="btn-atrasos-orient-portrait"
+                >
+                  <RectangleVertical className="h-3.5 w-3.5" /> Retrato
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAtrasosOrient("landscape")}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-l border-slate-200 transition-colors ${
+                    atrasosOrient === "landscape"
+                      ? "bg-slate-800 text-white"
+                      : "bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                  title="Imprimir em paisagem (horizontal)"
+                  data-testid="btn-atrasos-orient-landscape"
+                >
+                  <RectangleHorizontal className="h-3.5 w-3.5" /> Paisagem
+                </button>
+              </div>
+              {(() => {
+                // Rev. 1899 (refactor pós-architect) — Rotina de impressão
+                // extraída p/ função local: elimina o querySelector+click
+                // frágil entre "Gerar PDF" → "Imprimir". Ambos os botões
+                // agora chamam a mesma função diretamente. Idempotente: se
+                // o usuário clicar 2x rápido, o style antigo é removido
+                // antes de appendar o novo (evita duplicação).
+                const dispararImpressao = () => {
+                  const margins = atrasosOrient === "landscape" ? "10mm 10mm 12mm 10mm" : "12mm 10mm 14mm 10mm";
+                  const gridCols = atrasosOrient === "landscape" ? "repeat(2, minmax(0, 1fr))" : "1fr";
+                  const cardFs = atrasosOrient === "landscape" ? "10.5px" : "11.5px";
+                  // Dedupe defensivo (architect hint Rev. 1899)
+                  document.getElementById("__atrasos_print__")?.remove();
                   const style = document.createElement("style");
-                  style.id = "__print_override__";
-                  style.textContent = `@media print { body * { visibility: hidden; } #atrasos-print-area, #atrasos-print-area * { visibility: visible; } #atrasos-print-area { position: fixed; inset: 0; padding: 24px; background: white; } }`;
+                  style.id = "__atrasos_print__";
+                  style.textContent = `
+                    @media print {
+                      @page { size: A4 ${atrasosOrient}; margin: ${margins}; }
+                      html, body { background: white !important; height: auto !important; overflow: visible !important; }
+                      body * { visibility: hidden !important; }
+                      #atrasos-print-area, #atrasos-print-area * { visibility: visible !important; }
+                      #atrasos-print-area {
+                        position: absolute !important;
+                        left: 0; top: 0; right: 0;
+                        width: 100% !important; max-width: none !important;
+                        padding: 0 !important; margin: 0 !important;
+                        background: white !important;
+                        font-size: ${cardFs} !important;
+                      }
+                      /* Word-break defensivo (architect hint Rev. 1899): nomes
+                         de atividade ou códigos EAP muito longos sem espaço
+                         podem estourar a célula em landscape 2-cols. */
+                      #atrasos-print-area, #atrasos-print-area * {
+                        overflow-wrap: anywhere !important;
+                        word-break: break-word !important;
+                      }
+                      #atrasos-print-area .grid {
+                        display: grid !important;
+                        grid-template-columns: ${gridCols} !important;
+                        gap: 8px !important;
+                      }
+                      #atrasos-print-area .grid > div {
+                        break-inside: avoid !important;
+                        page-break-inside: avoid !important;
+                        box-shadow: none !important;
+                      }
+                      /* Cards: bordas e padding compactos pra caber bem */
+                      #atrasos-print-area .grid > div > div { padding: 8px 12px !important; }
+                      /* Barras: altura levemente menor pra economizar espaço */
+                      #atrasos-print-area .h-5 { height: 16px !important; }
+                      /* Header de impressão sem quebra */
+                      #atrasos-print-area > div:first-child {
+                        break-inside: avoid !important;
+                        page-break-inside: avoid !important;
+                        margin-bottom: 8px !important;
+                      }
+                      /* Rodapé não fica órfão */
+                      #atrasos-print-area .print\\:block:last-child {
+                        break-before: avoid !important;
+                        page-break-before: avoid !important;
+                      }
+                      /* Mata margens trailing que geram página em branco */
+                      #atrasos-print-area > *:last-child {
+                        margin-bottom: 0 !important;
+                        padding-bottom: 0 !important;
+                      }
+                    }
+                  `;
                   document.head.appendChild(style);
-                  window.print();
-                  setTimeout(() => { document.getElementById("__print_override__")?.remove(); }, 1500);
-                }}
-                className="flex items-center gap-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-4 py-2 hover:bg-slate-50 transition-colors"
-              >
-                <Printer className="h-4 w-4" />
-                Imprimir
-              </button>
-              <button
-                onClick={() => {
-                  const style = document.createElement("style");
-                  style.id = "__pdf_override__";
-                  style.textContent = `@media print { body * { visibility: hidden; } #atrasos-print-area, #atrasos-print-area * { visibility: visible; } #atrasos-print-area { position: fixed; inset: 0; padding: 24px; background: white; } @page { size: A4; margin: 15mm; } }`;
-                  document.head.appendChild(style);
-                  window.print();
-                  setTimeout(() => { document.getElementById("__pdf_override__")?.remove(); }, 1500);
-                }}
-                className="flex items-center gap-2 text-sm font-semibold text-white rounded-lg px-4 py-2 transition-colors"
-                style={{ background: "#1B2A4A" }}
-              >
-                <FileText className="h-4 w-4" />
-                Gerar PDF
-              </button>
+                  document.body.setAttribute("data-print-orientation", atrasosOrient);
+                  const cleanup = () => {
+                    document.getElementById("__atrasos_print__")?.remove();
+                    document.body.removeAttribute("data-print-orientation");
+                  };
+                  window.addEventListener("afterprint", cleanup, { once: true });
+                  setTimeout(cleanup, 60_000);
+                  setTimeout(() => window.print(), 80);
+                };
+                return (
+                  <>
+                    <button
+                      onClick={dispararImpressao}
+                      className="flex items-center gap-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-4 py-2 hover:bg-slate-50 transition-colors"
+                      data-testid="btn-atrasos-imprimir"
+                    >
+                      <Printer className="h-4 w-4" />
+                      Imprimir
+                    </button>
+                    <button
+                      onClick={() => {
+                        toast.info(
+                          `Gerando PDF em ${atrasosOrient === "landscape" ? "paisagem" : "retrato"}... Selecione "Salvar como PDF" na janela.`,
+                          { duration: 4000 }
+                        );
+                        setTimeout(dispararImpressao, 350);
+                      }}
+                      className="flex items-center gap-2 text-sm font-semibold text-white rounded-lg px-4 py-2 transition-colors"
+                      style={{ background: "#1B2A4A" }}
+                      data-testid="btn-atrasos-pdf"
+                    >
+                      <FileText className="h-4 w-4" />
+                      Gerar PDF
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           </div>
 

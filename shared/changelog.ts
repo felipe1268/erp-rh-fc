@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1899 — Planejamento · Atividades em Atraso · Impressão REDESENHADA com toggle Retrato/Paisagem + anti-sobreposição.
+ * User (16/05/2026, screenshot image_1778949913962.png do preview de impressão Chrome): "tudo bagunçado na tela de impressão o ERP precisa garantir que a impressao deve ser redesenhada e garantir que não tera sobreposição de informação, que o usuário possa escolher os formatos, retro ou paisagem.. quero que isso seja definido de forma clara e objetiva".
+ * Causa: a tela "Atividades em Atraso" (modal full-screen em PlanejamentoDetalhe.tsx L2047+) tinha 2 botões custom (Imprimir + Gerar PDF) com CSS de impressão primitivo, hardcoded em A4 retrato, sem orientação configurável e sem otimização anti-sobreposição (cards cortados entre páginas, header repetido sobre conteúdo, etc.).
+ * Mudança (em client/src/pages/planejamento/PlanejamentoDetalhe.tsx):
+ *   • L1945 — NOVO state `atrasosOrient: "portrait" | "landscape"` (default portrait).
+ *   • L41 — adicionados imports `RectangleVertical, RectangleHorizontal` do lucide-react.
+ *   • L2076-2202 — Barra de ações COMPLETAMENTE refeita: (1) toggle visual Retrato/Paisagem (botões side-by-side, slate-800 quando ativo); (2) botão Imprimir injeta CSS dedicado com `@page { size: A4 <orient> }` + margens otimizadas por orientação (10mm em landscape, 12mm em portrait) + grid 2-cols em landscape vs 1-col em portrait + font-size adaptativo (10.5px landscape, 11.5px portrait) + `break-inside:avoid` reforçado nos cards + matar margens trailing pra evitar página em branco; (3) botão Gerar PDF reusa a mesma rotina via dispatch programático, mostra toast com a orientação escolhida.
+ *   • Tudo isolado via `body * { visibility: hidden }` + `#atrasos-print-area * { visibility: visible }` — só imprime o relatório, não o resto da página.
+ *   • Cleanup via `afterprint` listener + safety net de 60s.
+ *   • version → 1899.
+ * Ajustes pós-architect (PASS with caveats): (1) extraída rotina `dispararImpressao` como função local — ambos os botões (Imprimir + Gerar PDF) chamam direto, eliminando o querySelector+click frágil; (2) dedupe defensivo: remove `#__atrasos_print__` antigo antes de appendar novo, evitando estilos duplicados em cliques rápidos; (3) word-break/overflow-wrap nos descendentes do print-area pra proteger contra nomes/códigos longos sem espaço em landscape 2-cols.
+ * Preservado/Seguro: ZERO mudança em backend/DB/schema. PrintHeader (REGRA DE OURO) intacto. Conteúdo do relatório (cards, barras, % e desvio) inalterado — só a embalagem de impressão mudou. Tela (não impressão) idêntica. Reversível em 3 hunks + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1898 — Planejamento · Cronograma · Badge do RESPONSÁVEL movido para ABAIXO do nome + visível APENAS quando indicado.
  * User (16/05/2026, 2 screenshots — image_1778949567732.png modo edição, image_1778949579613.png modo leitura): "coloque a tag abaixo da atividade informando o responsavel pela atividade, quando for inficado [indicado] na atividade".
  * Contexto: Rev. 1896 colocou o badge INLINE (após o Input do nome) e mostrava sempre, inclusive como "FC" cinza quando não havia indicação. User quer dois ajustes:
