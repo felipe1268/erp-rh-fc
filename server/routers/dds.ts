@@ -8,6 +8,7 @@ import {
 import { eq, and, sql, desc, isNull, inArray, notInArray, gte, lte, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { invokeLLM } from "../_core/llm";
+import { TEMAS_BIBLIOTECA, buildRoteiroLib } from "../_shared/temasBiblioteca";
 
 function assertCompanyAccess(ctx: any, companyId: number) {
   if (ctx.user?.companyId && String(ctx.user.companyId) !== String(companyId)) {
@@ -984,6 +985,24 @@ export const ddsRouter = router({
           conteudoMd: getRoteiroPadrao(n.codigo), // Rev. 1740 — roteiro detalhado
           normaReferencia: n.norma,
           categoria: "NR",
+          duracaoMin: 15,
+          createdBy: (ctx.user as any)?.id ?? null,
+        } as any);
+        inseridos++;
+      }
+      // Rev. 1861 — Biblioteca expandida (172 temas adicionais cobrindo NRs
+      // restantes, atividades de obra, equipamentos, EPI específico, saúde
+      // física/mental, riscos, emergência, trânsito, documentação, cultura).
+      for (const t of TEMAS_BIBLIOTECA) {
+        if (codigosExistentes.has(t.codigo)) continue;
+        await db.insert(ddsTemas).values({
+          companyId: input.companyId,
+          codigo: t.codigo,
+          titulo: t.titulo,
+          descricao: t.descricao,
+          conteudoMd: buildRoteiroLib(t),
+          normaReferencia: t.norma,
+          categoria: t.categoria,
           duracaoMin: 15,
           createdBy: (ctx.user as any)?.id ?? null,
         } as any);
