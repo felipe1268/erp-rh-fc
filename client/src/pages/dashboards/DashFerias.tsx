@@ -6,7 +6,7 @@ import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import TabelaComparativaAnual, { type LinhaInd } from "@/components/TabelaComparativaAnual";
-import { Palmtree, CheckCircle2 as CheckIcon, Sun, AlertTriangle as AlertIcon, DollarSign as DollarIcon } from "lucide-react";
+import { CheckCircle2 as CheckIcon, AlertTriangle as AlertIcon, DollarSign as DollarIcon } from "lucide-react";
 
 const FERIAS_INDICADORES: LinhaInd[] = [
   { chave: "iniciadas", label: "Férias Iniciadas no mês", icone: Palmtree, cor: "green", lowerIsBetter: false,
