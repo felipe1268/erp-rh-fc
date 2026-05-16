@@ -2591,12 +2591,13 @@ async function getDashFerias(companyId: number, ano?: number, companyIds?: numbe
   ].filter(s => s.value > 0);
 
   // Timeline mensal: quantos colaboradores em férias por mês no ano
-  const timelineMensal: { mes: string; emFerias: number; iniciando: number; finalizando: number }[] = [];
+  // Rev. 1870: + concluidasMes (status='concluida' E dataFim no mês)
+  const timelineMensal: { mes: string; emFerias: number; iniciando: number; finalizando: number; concluidas: number }[] = [];
   for (let m = 1; m <= 12; m++) {
     const mesKey = `${anoRef}-${String(m).padStart(2, '0')}`;
     const mesInicio = new Date(anoRef, m - 1, 1);
     const mesFim = new Date(anoRef, m, 0);
-    let emFeriasMes = 0, iniciandoMes = 0, finalizandoMes = 0;
+    let emFeriasMes = 0, iniciandoMes = 0, finalizandoMes = 0, concluidasMes = 0;
     allPeriods.forEach(p => {
       if (!p.dataInicio || !p.dataFim) return;
       const di = new Date(p.dataInicio);
@@ -2604,8 +2605,9 @@ async function getDashFerias(companyId: number, ano?: number, companyIds?: numbe
       if (di <= mesFim && df >= mesInicio) emFeriasMes++;
       if (di >= mesInicio && di <= mesFim) iniciandoMes++;
       if (df >= mesInicio && df <= mesFim) finalizandoMes++;
+      if (p.status === 'concluida' && df >= mesInicio && df <= mesFim) concluidasMes++;
     });
-    timelineMensal.push({ mes: mesKey, emFerias: emFeriasMes, iniciando: iniciandoMes, finalizando: finalizandoMes });
+    timelineMensal.push({ mes: mesKey, emFerias: emFeriasMes, iniciando: iniciandoMes, finalizando: finalizandoMes, concluidas: concluidasMes });
   }
 
   // Top setores com férias vencidas

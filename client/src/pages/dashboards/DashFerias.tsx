@@ -147,13 +147,29 @@ export default function DashFerias() {
       const mesIdx = info.dataIndex;
       const mesInicio = new Date(ano, mesIdx, 1);
       const mesFim = new Date(ano, mesIdx + 1, 0);
-      items = data.feriasLista.filter((f: any) => {
-        if (!f.dataInicio || !f.dataFim) return false;
-        const di = new Date(f.dataInicio);
-        const df = new Date(f.dataFim);
-        return di <= mesFim && df >= mesInicio;
-      });
-      title = `Colaboradores em Férias — ${MESES[mesIdx]} ${ano}`;
+      // Rev. 1870: filtro depende da série clicada (datasetIndex 0=Em Férias, 1=Iniciando, 2=Finalizando, 3=Concluídas)
+      // Guard `!dataInicio || !dataFim` aplicado a TODAS as séries para parear com backend (dashboards.ts L2604-2611).
+      const dsIdx = info.datasetIndex;
+      const baseList = data.feriasLista.filter((f: any) => !!f.dataInicio && !!f.dataFim);
+      if (dsIdx === 1) {
+        items = baseList.filter((f: any) => { const d = new Date(f.dataInicio); return d >= mesInicio && d <= mesFim; });
+        title = `Férias iniciando em ${MESES[mesIdx]} ${ano}`;
+      } else if (dsIdx === 2) {
+        items = baseList.filter((f: any) => { const d = new Date(f.dataFim); return d >= mesInicio && d <= mesFim; });
+        title = `Férias finalizando em ${MESES[mesIdx]} ${ano}`;
+      } else if (dsIdx === 3) {
+        items = baseList.filter((f: any) => {
+          if (f.status !== "concluida") return false;
+          const d = new Date(f.dataFim); return d >= mesInicio && d <= mesFim;
+        });
+        title = `Férias concluídas em ${MESES[mesIdx]} ${ano}`;
+      } else {
+        items = baseList.filter((f: any) => {
+          const di = new Date(f.dataInicio), df = new Date(f.dataFim);
+          return di <= mesFim && df >= mesInicio;
+        });
+        title = `Colaboradores em Férias — ${MESES[mesIdx]} ${ano}`;
+      }
     } else if (chartType === "setorVencidas") {
       const setor = info.label;
       items = data.feriasLista.filter((f: any) => (f.status === "vencida" || f.vencida === 1) && (f.setor || "Não informado") === setor);
@@ -438,6 +454,7 @@ export default function DashFerias() {
               { label: "Em Férias", data: timelineMensal.map(t => t.emFerias), backgroundColor: CHART_PALETTE[0] },
               { label: "Iniciando", data: timelineMensal.map(t => t.iniciando), backgroundColor: CHART_PALETTE[1] },
               { label: "Finalizando", data: timelineMensal.map(t => t.finalizando), backgroundColor: CHART_PALETTE[2] },
+              { label: "Concluídas", data: timelineMensal.map(t => (t as any).concluidas ?? 0), backgroundColor: "#6B7280" },
             ]}
             height={300}
             onChartClick={(info) => drillByChart(info, "timeline")}

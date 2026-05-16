@@ -25,6 +25,27 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1870,
+    titulo: "DashFerias · Gráfico mensal ganha 4ª série 'Concluídas' + drill-down por série (regra de ouro fullscreen)",
+    descricao: "User (16/05/2026, screenshots do gráfico 'Colaboradores em Férias por Mês'): 'Coloca no gráficos em barras as férias concluídas e tbm, quero o gráfico responsivos e quando clicar quero ver as informações pertinentes, em tela conforme as regras de ouro de formatação'.\n\n" +
+      "Mudanças:\n" +
+      "  1) Backend (`server/routers/dashboards.ts` L2596-2613): `timelineMensal` agora retorna 4 campos por mês — `emFerias`, `iniciando`, `finalizando`, **`concluidas`** (novo). Critério Concluídas: `status === 'concluida'` AND `dataFim` dentro do mês. Tipo do array atualizado para incluir o campo.\n" +
+      "  2) Frontend chart (`DashFerias.tsx` L444): adicionada 4ª barra no `DashChart` com label 'Concluídas', cor `#6B7280` (mesma cinza usada no donut de status para Concluídas, mantendo coerência visual). Acesso defensivo `(t as any).concluidas ?? 0` para anos antigos cached.\n" +
+      "  3) Drill-down por série (`drillByChart` timeline L149-176): antes filtrava sempre por overlap (di<=mesFim && df>=mesInicio) independente da barra clicada. Agora respeita `info.datasetIndex`:\n" +
+      "     • 0 (Em Férias) → overlap (lista todos que estavam de férias no mês)\n" +
+      "     • 1 (Iniciando) → dataInicio no mês\n" +
+      "     • 2 (Finalizando) → dataFim no mês\n" +
+      "     • 3 (Concluídas) → status='concluida' E dataFim no mês\n" +
+      "     Título do modal muda dinamicamente ('Férias iniciando em Mar 2026', 'Férias concluídas em Mar 2026', etc).\n\n" +
+      "Responsividade: `DashChart` (wrapper que envolve Chart.js) já é totalmente responsivo via `responsive: true, maintainAspectRatio: false` + container `height={300}`. Em mobile/iPad o gráfico encolhe proporcionalmente, mantém legenda no topo.\n\n" +
+      "Regra de ouro: drill-down abre o modal fullscreen do drillDialog corrigido na Rev. 1869 (`resizable={false}` + `w-screen h-[100dvh]` em smartphone/iPad).\n\n" +
+      "Preservado: ZERO mudança em outros gráficos (status donut, custoMensal, custoSetor, setorVencidas, obra), KPIs, financeiro, lista de drill. Reversível em 3 hunks (1 backend + 2 frontend). R-001 OK.",
+    tipo: "feat",
+    modulos: "Férias/Dashboard",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 13:15:00",
+  },
+  {
     version: 1869,
     titulo: "DashFerias · Modal drill-down 'Colaboradores em Férias' agora abre fullscreen no iPad (regra de ouro)",
     descricao: "User (16/05/2026, screenshot do iPad portrait com modal de Colaboradores em Férias apertado no centro da tela): 'Arrume esta tela, conforme nossa regra de ouro' (= modal fullscreen em tablet, padrão Rev. 1731/1868).\n\n" +
