@@ -377,36 +377,43 @@ export default function DashAvisoPrevio() {
                       <p className="text-sm text-muted-foreground py-6 text-center">Nenhum funcionário ativo com salário e admissão informados.</p>
                     ) : (
                       <div className="overflow-x-auto max-h-[480px] overflow-y-auto rounded-md border">
-                        <table className="w-full text-xs">
-                          <thead className="bg-muted/50 sticky top-0 z-10">
-                            <tr className="border-b text-left">
-                              <th className="py-2 px-2 font-semibold text-muted-foreground">#</th>
-                              <th className="py-2 px-2 font-semibold text-muted-foreground cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('nomeCompleto')}>Funcionário<SortIcon k="nomeCompleto" /></th>
-                              <th className="py-2 px-2 font-semibold text-muted-foreground cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('funcao')}>Função<SortIcon k="funcao" /></th>
-                              <th className="py-2 px-2 font-semibold text-muted-foreground cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('obra')}>Obra<SortIcon k="obra" /></th>
-                              <th className="py-2 px-2 font-semibold text-muted-foreground text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('dataAdmissao')}>Admissão<SortIcon k="dataAdmissao" /></th>
-                              <th className="py-2 px-2 font-semibold text-muted-foreground text-center cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('anosServico')}>Anos<SortIcon k="anosServico" /></th>
-                              <th className="py-2 px-2 font-semibold text-muted-foreground text-center cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('diasAvisoTotal')} title="Dias de aviso prévio (Lei 12.506/2011)">Dias Aviso<SortIcon k="diasAvisoTotal" /></th>
-                              <th className="py-2 px-2 font-semibold text-muted-foreground text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('salarioBase')}>Salário<SortIcon k="salarioBase" /></th>
-                              <th className="py-2 px-2 font-semibold text-muted-foreground text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('avisoPrevioIndenizado')}>Aviso Indeniz.<SortIcon k="avisoPrevioIndenizado" /></th>
-                              <th className="py-2 px-2 font-semibold text-muted-foreground text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('multaFGTS')}>Multa 40%<SortIcon k="multaFGTS" /></th>
-                              <th className="py-2 px-2 font-semibold text-red-700 text-right cursor-pointer select-none hover:text-red-900" onClick={() => toggleCdmSort('total')}>Custo Total<SortIcon k="total" /></th>
+                        <table className="w-full text-xs border-separate border-spacing-0">
+                          {/* Rev. 1924 — sticky thead com fundo SÓLIDO (slate-100)
+                              aplicado em cada <th> + shadow-sm pra separar
+                              visualmente. bg em <thead>/<tr> não funciona com
+                              position:sticky em todos os browsers — só bg no
+                              próprio <th> evita transparência (causa do
+                              overlay reportado: linhas passando por trás
+                              do cabeçalho com bg-muted/50 ao rolar). */}
+                          <thead className="sticky top-0 z-20">
+                            <tr className="text-left">
+                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm">#</th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('nomeCompleto')}>Funcionário<SortIcon k="nomeCompleto" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('funcao')}>Função<SortIcon k="funcao" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('obra')}>Obra<SortIcon k="obra" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('dataAdmissao')}>Admissão<SortIcon k="dataAdmissao" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-center cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('anosServico')}>Anos<SortIcon k="anosServico" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-center cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('diasAvisoTotal')} title="Dias de aviso prévio (Lei 12.506/2011)">Dias Aviso<SortIcon k="diasAvisoTotal" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('salarioBase')}>Salário<SortIcon k="salarioBase" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('avisoPrevioIndenizado')}>Aviso Indeniz.<SortIcon k="avisoPrevioIndenizado" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('multaFGTS')}>Multa 40%<SortIcon k="multaFGTS" /></th>
+                              <th className="py-2 px-2 font-semibold text-red-700 bg-slate-100 border-b border-slate-300 shadow-sm text-right cursor-pointer select-none hover:text-red-900" onClick={() => toggleCdmSort('total')}>Custo Total<SortIcon k="total" /></th>
                             </tr>
                           </thead>
                           <tbody>
                             {cdmLinhasOrdenadas.map((l: any, idx: number) => (
-                              <tr key={l.id} className={`border-b border-border/50 hover:bg-muted/30 ${cdmSort.key === 'total' && cdmSort.dir === 'desc' && idx < 3 ? 'bg-red-50/40' : ''}`}>
-                                <td className="py-1.5 px-2 text-muted-foreground tabular-nums">{idx + 1}</td>
-                                <td className="py-1.5 px-2 font-medium truncate max-w-[200px]" title={l.nomeCompleto}>{l.nomeCompleto}</td>
-                                <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[140px]" title={l.funcao || l.cargo}>{l.funcao || l.cargo || '-'}</td>
-                                <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[160px]" title={l.obra}>{l.obra || <span className="italic text-muted-foreground/60">sem alocação</span>}</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums">{l.dataAdmissao ? new Date(l.dataAdmissao + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</td>
-                                <td className="py-1.5 px-2 text-center tabular-nums">{l.anosServico}</td>
-                                <td className="py-1.5 px-2 text-center tabular-nums">{l.diasAvisoTotal}</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums">{fmtBRL(l.salarioBase)}</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">{fmtBRL(l.avisoPrevioIndenizado)}</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">{fmtBRL(l.multaFGTS)}</td>
-                                <td className="py-1.5 px-2 text-right tabular-nums font-bold text-red-700">
+                              <tr key={l.id} className={`hover:bg-muted/30 ${cdmSort.key === 'total' && cdmSort.dir === 'desc' && idx < 3 ? 'bg-red-50/40' : 'bg-white'}`}>
+                                <td className="py-1.5 px-2 text-muted-foreground tabular-nums border-b border-border/50">{idx + 1}</td>
+                                <td className="py-1.5 px-2 font-medium truncate max-w-[200px] border-b border-border/50" title={l.nomeCompleto}>{l.nomeCompleto}</td>
+                                <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[140px] border-b border-border/50" title={l.funcao || l.cargo}>{l.funcao || l.cargo || '-'}</td>
+                                <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[160px] border-b border-border/50" title={l.obra}>{l.obra || <span className="italic text-muted-foreground/60">sem alocação</span>}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums border-b border-border/50">{l.dataAdmissao ? new Date(l.dataAdmissao + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</td>
+                                <td className="py-1.5 px-2 text-center tabular-nums border-b border-border/50">{l.anosServico}</td>
+                                <td className="py-1.5 px-2 text-center tabular-nums border-b border-border/50">{l.diasAvisoTotal}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums border-b border-border/50">{fmtBRL(l.salarioBase)}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground border-b border-border/50">{fmtBRL(l.avisoPrevioIndenizado)}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground border-b border-border/50">{fmtBRL(l.multaFGTS)}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums font-bold text-red-700 border-b border-border/50">
                                   {fmtBRL(l.total)}
                                   {l.totalComplementar > 0 && (
                                     <div className="text-[9px] font-normal text-violet-700 mt-0.5" title={`Oficial: ${fmtBRL(l.totalOficial)} + Complementar: ${fmtBRL(l.totalComplementar)}`}>
@@ -417,10 +424,11 @@ export default function DashAvisoPrevio() {
                               </tr>
                             ))}
                           </tbody>
-                          <tfoot className="bg-red-50 sticky bottom-0">
-                            <tr className="border-t-2 border-red-300">
-                              <td colSpan={10} className="py-2 px-2 text-right font-bold text-red-800 uppercase text-[11px]">TOTAL GERAL</td>
-                              <td className="py-2 px-2 text-right tabular-nums font-bold text-red-800">{fmtBRL(cdm.grandTotal)}</td>
+                          {/* Rev. 1924 — bg sólido per-cell (mesma razão do thead) + top-shadow */}
+                          <tfoot className="sticky bottom-0 z-20">
+                            <tr>
+                              <td colSpan={10} className="py-2 px-2 text-right font-bold text-red-800 uppercase text-[11px] bg-red-50 border-t-2 border-red-300 shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.08)]">TOTAL GERAL</td>
+                              <td className="py-2 px-2 text-right tabular-nums font-bold text-red-800 bg-red-50 border-t-2 border-red-300 shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.08)]">{fmtBRL(cdm.grandTotal)}</td>
                             </tr>
                           </tfoot>
                         </table>

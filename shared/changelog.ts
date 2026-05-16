@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1924 — RH · Dash Aviso Prévio · Tabela CDM · FIX cabeçalho sticky transparente sobrepondo linhas ao rolar.
+ * User (16/05/2026, screenshot tabela CDM row #4 WILLIANS FELIPE + #5 MARCO ANTONIO com cabeçalho semitransparente sobreposto, texto duplicado/embaralhado): "ESTA COM ERRO DE FORMATAÇÃO DE LAYOUT.. O TEXTO ESTA SOBREPOSTO AS INFORMAÇÕES NÃO DEVE ACONTECER...".
+ * Causa-raiz (em `DashAvisoPrevio.tsx` L381/L420): a tabela CDM tem `max-h-[480px] overflow-y-auto`. O `<thead>` usava `bg-muted/50 sticky top-0 z-10` — Tailwind `bg-muted/50` = 50% de opacidade. Adicional: backgrounds em `<thead>` e `<tr>` NÃO funcionam com `position:sticky` em vários browsers (especialmente Chromium) — só backgrounds em `<th>`/`<td>` individuais "seguram" o conteúdo durante o scroll. O `<tfoot>` sticky tinha o mesmo bug latente (bg em `<tr>` em vez das células).
+ * Mudança (`DashAvisoPrevio.tsx`):
+ *   (a) `<table>` ganha `border-separate border-spacing-0` — pré-requisito para que borders/sticky em células funcionem corretamente.
+ *   (b) `<thead>`: removido `bg-muted/50`; cada um dos 11 `<th>` ganha `bg-slate-100` (sólido) + `border-b border-slate-300` + `shadow-sm`. z-index subiu 10→20.
+ *   (c) `<tfoot>`: bg movido de `<tfoot>` para as 2 `<td>` da linha TOTAL GERAL — `bg-red-50` + `border-t-2 border-red-300` + shadow superior `shadow-[0_-2px_4px_-1px_rgba(0,0,0,0.08)]`. z-index 20.
+ *   (d) `<tbody>` rows: `border-b` movido de `<tr>` para cada `<td>` (border-separate exige border em células, não em rows). Adicionado `bg-white` default (com `bg-red-50/40` p/ top-3 quando ordenação=default) — garante linhas opacas, eliminando QUALQUER chance de bleed-through.
+ * version → 1924.
+ * Resultado: rolar a tabela = cabeçalho sólido cinza com sombra fica fixo no topo, linhas passam por trás (não sobrepostas); footer "TOTAL GERAL" fixo no rodapé com sombra superior. Sem texto fantasma, sem sobreposição.
+ * Preservado: lógica de sort Rev. 1909, top-3 highlight Rev. 1908, formatação de células, classes de cores, tooltip de complementar Rev. 1919, colSpan=10, ícones de sort. Zero backend/DB. Reversível em 3 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1923 — RH · Dash Aviso Prévio · Tabela CDM · Excluir RECLUSOS e AFASTADOS >15 dias da provisão de caixa de demissão em massa.
  * User (16/05/2026, screenshot CDM 103 ativos R$ 1.186.020,82): "TIRE DA LISTA OS AFASTADOS ACIMA DE 15 DIAS E OS RECLUSOS...".
  * Justificativa legal/contábil: Recluso = contrato SUSPENSO (auxílio-reclusão INSS, sem remuneração do empregador). Afastado >15 dias = INSS toma conta (auxílio-doença B91/B31, CLT Art. 60 §3º — ônus passa do empregador ao INSS a partir do 16º dia). Em ambos os casos: (a) demitir AGORA é juridicamente inviável (estabilidade enquanto durar o afastamento INSS / suspensão do contrato no caso de recluso); (b) não consome caixa do empregador no curto prazo (salário pago pelo INSS); (c) inflavam artificialmente a provisão "quanto custa demitir TODO o quadro hoje?" — que é exatamente para planejamento de caixa imediato.
