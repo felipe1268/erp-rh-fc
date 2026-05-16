@@ -2253,6 +2253,27 @@ async function getDashCustoDemissaoMassa(
     // idêntico ao usado em avisoPrevioFerias.ts L2291/2463/2486/2558 e em
     // dashboards.ts L94 (KPIs Visão Geral RH) — fonte de verdade do módulo.
     sql`(${employees.tipoContrato} IS NULL OR ${employees.tipoContrato} NOT IN ('PJ','Socio'))`,
+    // Rev. 1923 — Excluir RECLUSOS e AFASTADOS de longa duração (>15 dias).
+    // User (16/05/2026, screenshot CDM listando funcionários afastados de longa
+    // data): "TIRE DA LISTA OS AFASTADOS ACIMA DE 15 DIAS E OS RECLUSOS".
+    // Justificativa: Recluso = contrato suspenso (auxílio-reclusão INSS, sem
+    // remuneração do empregador). Afastado >15d = INSS toma conta (B91/B31,
+    // CLT Art. 60 §3º). Em ambos os casos, demitir AGORA seria juridicamente
+    // inviável (estabilidade) e contabilmente irrelevante (não consome caixa
+    // do empregador no curto prazo). Critério idêntico ao homeData.ts da
+    // Rev. 14716 (Central de Alertas): status='Afastado' há mais de 15 dias é
+    // proxy seguro para "fora da operação por longo prazo". Sem
+    // licencaDataInicio (legado), trata como longo prazo (status setado nunca
+    // por acaso). Atestados curtos ≤15d (ônus empregador) NÃO mudam status no
+    // sistema — ficam só no espelho de ponto.
+    sql`${employees.status} <> 'Recluso'`,
+    sql`NOT (
+      ${employees.status} = 'Afastado'
+      AND (
+        ${employees.licencaDataInicio} IS NULL
+        OR ${employees.licencaDataInicio} <= (${dataRef}::date - INTERVAL '15 days')
+      )
+    )`,
   );
 
   const rows = await db.select({

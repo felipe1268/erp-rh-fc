@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1923 — RH · Dash Aviso Prévio · Tabela CDM · Excluir RECLUSOS e AFASTADOS >15 dias da provisão de caixa de demissão em massa.
+ * User (16/05/2026, screenshot CDM 103 ativos R$ 1.186.020,82): "TIRE DA LISTA OS AFASTADOS ACIMA DE 15 DIAS E OS RECLUSOS...".
+ * Justificativa legal/contábil: Recluso = contrato SUSPENSO (auxílio-reclusão INSS, sem remuneração do empregador). Afastado >15 dias = INSS toma conta (auxílio-doença B91/B31, CLT Art. 60 §3º — ônus passa do empregador ao INSS a partir do 16º dia). Em ambos os casos: (a) demitir AGORA é juridicamente inviável (estabilidade enquanto durar o afastamento INSS / suspensão do contrato no caso de recluso); (b) não consome caixa do empregador no curto prazo (salário pago pelo INSS); (c) inflavam artificialmente a provisão "quanto custa demitir TODO o quadro hoje?" — que é exatamente para planejamento de caixa imediato.
+ * Por que >15 dias e não "qualquer Afastado": atestados curtos ≤15d (ônus do empregador) tipicamente NÃO mudam status no sistema — ficam só como ocorrência no espelho de ponto. Quando RH efetivamente troca status para 'Afastado' e preenche `licencaDataInicio` (campo Rev. 1731), o caso já é INSS/B91. Para legados sem `licencaDataInicio` mas com status='Afastado', tratamos como longo prazo (não faz sentido ter status setado sem ser longo).
+ * Mudança (`server/routers/dashboards.ts` `getDashCustoDemissaoMassa` activeWhere): 2 novas cláusulas AND:
+ *   (a) `status <> 'Recluso'` (sempre exclui).
+ *   (b) `NOT (status = 'Afastado' AND (licencaDataInicio IS NULL OR licencaDataInicio <= dataRef - 15 days))` — afastado curto (<15d com data registrada) continua na lista; afastado longo (>=15d) ou afastado sem data sai.
+ * Critério idêntico ao `homeData.ts` Rev. 14716 (Central de Alertas — corte de "Sem ASO" / "ASO Vencendo" / "Férias Alerta" / "Experiências" / "Avisos Prévios" para afastados de longa data). Fonte de verdade do módulo.
+ * version → 1923.
+ * Resultado: KPI "Funcionários Ativos" cai pelo número de reclusos + afastados longos; "Custo Total" cai proporcionalmente; "Folha+Nx" também. Disclaimer "+N ignorados" agora engloba também esses dois grupos.
+ * Preservado: filtro PJ/Socio Rev. 1915, query obra Rev. 1916, vacation_periods Rev. 1911, complementar Rev. 1919, seletor TIPO Rev. 1921, sort Rev. 1909, top-3, date picker. Zero ALTER/DROP/DELETE. Reversível em 1 hunk (8 linhas SQL + comentário). R-001/R-007/R-010 OK.
+ *
  * Rev. 1922 — Planejamento · PlanejamentoDetalhe · FIX/UX cascata grupo→descendentes — botão explícito "↓ Replicar" no input cyan + refactor.
  * User (16/05/2026, screenshots Mosaico isGrupo=true + 4 Ajudantes mesmo EAP 03.05 com checkboxes vazios — APÓS Rev. 1920): "NÃO ESTA ACONTECENDO NADA. CLICO NA ATIVIDADE PRINCIPAL DO GRUPO (ATIVIDADE PAI), MAS OS FILHOS NÃO ESTÃO SENDO AFETADAS.. PRECISO QUE TUDO SEJA.. ARRUME A LOGICA OU CRIE OUTRA FORMA DE RESOLVER ESTE PROBLEMA DE VEZ".
  * Causa-raiz Rev. 1920: a `marcarComoGrupo` SÓ rodava na TRANSIÇÃO false→true do checkbox isGrupo (`if (!checked) return out`). No screenshot do user, Mosaico já vinha do banco com `isGrupo=true` (caso comum pós-import MSP). Para forçar a cascata, o user teria que desmarcar o checkbox isGrupo + remarcar — fluxo nada óbvio, ninguém adivinha. Adicional: o handler do checkbox cyan `_respManual` na linha do grupo NÃO disparava cascata; o onBlur do input só disparava se o user EDITASSE o valor (digitar → blur).
