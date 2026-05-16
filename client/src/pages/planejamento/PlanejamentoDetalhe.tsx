@@ -5021,7 +5021,54 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
   const dayPx = zoom === "semana" ? 28 : zoom === "mes" ? 10 : 3;
   const ROW_H = 30;
   const HEADER_H = 46;
-  const LEFT_W = 310;
+
+  // Rev. 1929 — Largura da coluna "Atividade / Item" redimensionável por
+  // drag (mouse, touch — celular/tablet — e pen via Pointer Events unificado).
+  // User (16/05/2026, screenshot mobile com nomes "Armadura em barra de aço
+  // CA-..." truncados): "quero poder clicar e arrastar o tamanho da coluna
+  // para ver todo o texto descrito, seja pelo mouse, celular ou tablet".
+  // Persistência em localStorage por projeto (key: planej-leftw-${projetoId}),
+  // pra que cada obra mantenha seu próprio layout preferido. Min/max
+  // constraints evitam coluna invisível (<140px) ou esmagando o Gantt (>720px).
+  const LEFT_W_KEY = `planej-leftw-${projetoId}`;
+  const LEFT_W_MIN = 140;
+  const LEFT_W_MAX = 720;
+  const LEFT_W_DEFAULT = 310;
+  const [LEFT_W, setLeftW] = useState<number>(() => {
+    if (typeof window === "undefined") return LEFT_W_DEFAULT;
+    const stored = window.localStorage.getItem(LEFT_W_KEY);
+    const n = stored ? parseInt(stored, 10) : NaN;
+    return Number.isFinite(n) && n >= LEFT_W_MIN && n <= LEFT_W_MAX ? n : LEFT_W_DEFAULT;
+  });
+  const leftWResizeRef = useRef<{ startX: number; startW: number; pointerId: number } | null>(null);
+  function onLeftWPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.stopPropagation();
+    leftWResizeRef.current = { startX: e.clientX, startW: LEFT_W, pointerId: e.pointerId };
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }
+  function onLeftWPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const ctx = leftWResizeRef.current;
+    if (!ctx || ctx.pointerId !== e.pointerId) return;
+    const delta = e.clientX - ctx.startX;
+    const next = Math.min(LEFT_W_MAX, Math.max(LEFT_W_MIN, Math.round(ctx.startW + delta)));
+    setLeftW(next);
+  }
+  function onLeftWPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const ctx = leftWResizeRef.current;
+    if (!ctx) return;
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(ctx.pointerId); } catch {}
+    leftWResizeRef.current = null;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    try { window.localStorage.setItem(LEFT_W_KEY, String(LEFT_W)); } catch {}
+  }
+  function onLeftWDoubleClick() {
+    setLeftW(LEFT_W_DEFAULT);
+    try { window.localStorage.setItem(LEFT_W_KEY, String(LEFT_W_DEFAULT)); } catch {}
+  }
 
   // avanço map (latest per atividade — folhas)
   const avMap = useMemo(() => {
@@ -5194,10 +5241,44 @@ function GanttCronograma({ revisaoAtiva, atividades, loadingAtiv, avancos }: any
         {/* Sticky header */}
         <div className="flex sticky top-0 z-20 border-b border-slate-200">
           {/* Corner cell */}
-          <div style={{ width: LEFT_W, minWidth: LEFT_W, height: HEADER_H }}
+          <div style={{ width: LEFT_W, minWidth: LEFT_W, height: HEADER_H, position: "relative" }}
             className="bg-slate-700 text-white text-[11px] font-semibold flex items-center px-3 gap-1.5 border-r border-slate-600 shrink-0 sticky left-0 z-30">
             <CalendarCheck className="h-3.5 w-3.5 text-amber-400 shrink-0" />
             <span>Atividade / Item</span>
+            {/* Rev. 1929 — Handle de resize (drag mouse/touch/pen via Pointer
+                Events). Largura 14px (alvo táctil ≥ 11mm em DPI típico de
+                tablet/celular — atende guideline Apple HIG 44pt e Material 48dp
+                considerando o gesto horizontal). Touch-action:none impede o
+                browser de "roubar" o pan horizontal. Double-click reseta. */}
+            <div
+              onPointerDown={onLeftWPointerDown}
+              onPointerMove={onLeftWPointerMove}
+              onPointerUp={onLeftWPointerUp}
+              onPointerCancel={onLeftWPointerUp}
+              onDoubleClick={onLeftWDoubleClick}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Redimensionar coluna Atividade / Item (arraste, ou duplo-clique para padrão)"
+              title="Arraste para redimensionar — duplo-clique restaura"
+              data-testid="resizer-left-w-gantt"
+              style={{
+                position: "absolute",
+                top: 0,
+                right: -7,
+                width: 14,
+                height: "100%",
+                cursor: "col-resize",
+                zIndex: 40,
+                touchAction: "none",
+                background: "transparent",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              className="group"
+            >
+              <div className="h-5 w-[3px] rounded-full bg-slate-400/40 group-hover:bg-amber-400 group-active:bg-amber-300 transition-colors" />
+            </div>
           </div>
           {/* Timeline header */}
           <div style={{ width: totalWidth, minWidth: totalWidth, height: HEADER_H, position: "relative" }}

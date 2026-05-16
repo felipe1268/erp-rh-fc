@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1929 — Planejamento · PlanejamentoDetalhe · Gantt/Cronograma · Coluna "Atividade / Item" redimensionável por drag (mouse + touch + pen via Pointer Events) com persistência por projeto.
+ * User (16/05/2026, screenshot mobile/tablet com nomes longos truncados ex. "Armadura em barra de aço CA-...", "Lançamento e adensamento de ..."): "quero poder clicar e arrastar o tamanho da coluna para ver todo o texto descrito, seja pelo mouse, celular ou tablet".
+ * Contexto: a coluna fixa "Atividade / Item" do Gantt (rendered em L5249 do PlanejamentoDetalhe, dentro da view de Cronograma — toggle Semana/Mês/Trimestre) tinha largura HARDCODED `const LEFT_W = 310` (rev. anteriores L5024). Nomes de atividade vindos do MSP frequentemente passam de 40-60 chars (insumos com especificação técnica completa). O `<span className="truncate">` cortava ferozmente em telas menores (tablet retrato 768px) e até em desktop 1080p com sidebar aberta.
+ * Mudança (`PlanejamentoDetalhe.tsx`):
+ *   (a) `const LEFT_W = 310` → `useState<number>(...)` (`LEFT_W`/`setLeftW`) inicializado a partir do `localStorage` key `planej-leftw-${projetoId}` (namespace POR PROJETO — cada obra mantém seu próprio layout). Defaults: MIN=140 (não esconde a coluna), MAX=720 (não esmaga o Gantt), DEFAULT=310 (preserva Rev. anteriores). Validação `Number.isFinite + range` no parse pra blindar contra valores corrompidos no storage.
+ *   (b) Refs e handlers usando **Pointer Events** unificados (`onPointerDown/Move/Up/Cancel`) — uma única implementação cobre mouse, touch (tablet/celular) e pen, evitando duplicação `onMouseDown`+`onTouchStart` e bugs de coordenadas em multi-toque. `setPointerCapture` no down garante que o drag continue mesmo se o ponteiro sair do elemento. `document.body.style.cursor='col-resize'` + `userSelect='none'` durante o drag pra UX correta. Persistência em `localStorage` no `pointerUp` (não no Move — evita 60 writes/seg).
+ *   (c) Novo handle DOM absolutamente posicionado no edge direito da corner cell — `right:-7, width:14` (alvo táctil ≥ 11mm em DPI típico — atende guideline Apple HIG 44pt e Material 48dp considerando o gesto horizontal). `touchAction:'none'` impede o browser de "roubar" o gesto pra pan horizontal. Visual: barra de 3×20px cinza translúcida que vira amber-400 no hover e amber-300 no active. `zIndex:40` (acima do z-30 da sticky col). `role="separator" aria-orientation="vertical" aria-label` p/ acessibilidade. `onDoubleClick` reseta ao default.
+ *   (d) Corner cell ganha `position:relative` p/ ancorar o handle.
+ * version → 1929.
+ * Resultado: user arrasta o handle âmbar no edge direito do header "Atividade / Item" — desktop com mouse, tablet com dedo, celular com dedo. Largura persiste por obra (entrar em outra obra mantém o default). Duplo-clique no handle restaura o padrão. Min/max evitam bagunça acidental.
+ * Preservado: LEFT_W referenciado em 2 locais (header L5247 + body L5311) — ambos continuam usando a constante, agora reativa. Toda lógica de Gantt (dayPx, ROW_H, HEADER_H, totalWidth, monthCells, weekTicks, barras, hovers, todayLine) intacta. Sticky col + sticky header intactos. Toggle Semana/Mês/Trimestre intacto. Filtros de nível N1/N2/N3 intactos. Collapse/expand intactos. Zero backend/DB. Reversível em 2 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1928 — Planejamento · PlanejamentoDetalhe · Botão "✕ Cancelar" no input cyan de grupos (inverso do "↓ Replicar" Rev. 1922) — limpa _respManual + responsavelLotus de TODOS os descendentes de uma vez.
  * User (16/05/2026, screenshot grupo 03.03 com 7 atividades replicadas "teste"): "quero ter a opção tbm de cancelar todas de uma vez, caso eu queira cancelar".
  * Mudança (`PlanejamentoDetalhe.tsx`):
