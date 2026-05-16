@@ -3721,8 +3721,16 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
   // TODOS os descendentes do grupo, até o próximo grupo (ou fim).
   // User (16/05/2026): "quero ter a opção tbm de cancelar todas de uma vez,
   // caso eu queira cancelar". Pareado com o botão "↓ Replicar" (Rev. 1922).
-  // Não toca no grupo em si (responsavelLotus do grupo continua intacto —
-  // user pode digitar outro nome e replicar de novo).
+  //
+  // Rev. 1933 — IMPORTANTE: limpa TAMBÉM o `responsavelLotus` do PRÓPRIO
+  // GRUPO (g). Motivo: ao Salvar, `aplicarCascataResponsavelGrupos` (L3617)
+  // varre todos os grupos e RE-PROPAGA o `responsavelLotus` do grupo aos
+  // descendentes (mesma semântica do Rev. 1892). Se mantivéssemos o nome
+  // no grupo (intenção original Rev. 1928), o cancelamento seria DESFEITO
+  // no save — bug reportado: "cliquei em cancelar salvei mas ele ainda
+  // continua como se não houvesse cancelado". Agora: cancel = cancel total
+  // (grupo + filhos). Pra replicar de novo, basta digitar o nome no grupo
+  // e clicar "↓ Replicar" — fluxo idêntico ao primeiro uso.
   function clearRespFromDescendants(rows: any[], realIdx: number): { rows: any[]; count: number } {
     const out = rows.map(r => ({ ...r }));
     const g = out[realIdx];
@@ -3741,6 +3749,8 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
         responsavelLotus: "",
       };
     });
+    // Rev. 1933 — também limpa no grupo (evita re-propagação no save).
+    out[realIdx] = { ...out[realIdx], responsavelLotus: "" };
     return { rows: out, count: descIdxs.length };
   }
 
