@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1898 — Planejamento · Cronograma · Badge do RESPONSÁVEL movido para ABAIXO do nome + visível APENAS quando indicado.
+ * User (16/05/2026, 2 screenshots — image_1778949567732.png modo edição, image_1778949579613.png modo leitura): "coloque a tag abaixo da atividade informando o responsavel pela atividade, quando for inficado [indicado] na atividade".
+ * Contexto: Rev. 1896 colocou o badge INLINE (após o Input do nome) e mostrava sempre, inclusive como "FC" cinza quando não havia indicação. User quer dois ajustes:
+ *   (1) Posição: tag em LINHA PRÓPRIA, ABAIXO do nome — fluxo visual mais limpo e dá espaço pro nome completo da atividade.
+ *   (2) Visibilidade: SÓ aparece quando há responsável EXPLICITAMENTE indicado (manual / contrato_terceiro / externa). O padrão FC fica IMPLÍCITO (sem badge) — assume-se a construtora quando nada for marcado.
+ * Mudança (em client/src/pages/planejamento/PlanejamentoDetalhe.tsx L4031-4097):
+ *   • REMOVIDA renderização inline do badge dentro do flex container do Input nome.
+ *   • NOVA renderização em `<div className="mt-1">` LOGO APÓS o `</div>` do flex container, antes dos demais inputs (externaResponsavel âmbar Rev. 1641 e responsavelLotus ciano Rev. 1823).
+ *   • Early return `null` quando tipo='fc' OU `a.responsavel` ausente sem `responsavelLotus`/`externaResponsavel` local — não renderiza nada para o padrão construtora.
+ *   • Inclui externas: quando `a.isExterna` + tem `externaResponsavel`, mostra badge âmbar com o nome digitado (complementa o Input — o Input ÉDITA, a tag IDENTIFICA o TIPO de forma consistente).
+ *   • Mantida prioridade: `a.responsavel` resolvido pelo servidor (Rev. 1817/1891 hierarquia) > derivação local (externaResponsavel quando isExterna) > responsavelLotus digitado > não renderiza.
+ *   • Truncamento aumentado p/ 22 chars (era 18) e `max-w-[200px]` (era 140px) — em linha própria há mais espaço.
+ *   • version → 1898.
+ * Preservado/Seguro: ZERO mudança em backend/DB/schema. Inputs (externaResponsavel âmbar, responsavelLotus ciano), checkboxes de marca (externa/disabled/manual), cascata grupo (Rev. 1892), modal cascadeResp (Rev. 1860/1865): tudo intacto. Lista de atividades sem responsável indicado fica VAZIA (sem tag) — comportamento desejado. Reversível em 1 hunk + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1897 — Planejamento · Programação Semanal LOTUS · EXPORT EXCEL · Convenção 4-CÉLULAS-POR-DIA reforçada com guard defensivo final.
  * User (16/05/2026, 3 screenshots com zoom — image_1778949188587 (visão ampla), image_1778949407464 (coluna estreita), image_1778949436015 (zoom close-up cols J/K/L/M Seg-Qui)): "ainda naõ esta correto, vou te mostrar como deveria estar para vc aprender e corrigir o problema ok.. note que os dias da semana tem 4 ceculas, a primeira fica vazia, a segunda fica demarcado em azul como previsto, a terceira é preenchida se for executada/não executada/outro status conforme a legenda, e a 4 fica em branco.. este detalhe é importante ser respeitado.. ajuste isso perfeitamente".
  * Diagnóstico: a Rev. 1895 removeu o espelhamento (top→bottom) e em tese o init de fills (L1202-1207 zera as 4 linhas dos cols 10-16 antes da pintura) deveria garantir margens brancas em r0 e r0+3. Mas alguns templates trazem fills herdados em `pattern:"solid"` com `fgColor` definido que sobrevivem ao reset por `pattern:"none"` em certas builds do ExcelJS (comportamento conhecido — `pattern:"none"` esconde mas o `fgColor` persiste e em alguns viewers reaparece). User está vendo a convenção LOTUS violada e nos pediu para travar 100% das vezes.
