@@ -3715,6 +3715,55 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     return { rows: out, count: descIdxs.length, valor };
   }
 
+  // Rev. 1928 — Helper inverso do `cascadeRespToDescendants`: limpa
+  // `_respManual` (desmarca checkbox cyan) E zera `responsavelLotus` em
+  // TODOS os descendentes do grupo, até o próximo grupo (ou fim).
+  // User (16/05/2026): "quero ter a opção tbm de cancelar todas de uma vez,
+  // caso eu queira cancelar". Pareado com o botão "↓ Replicar" (Rev. 1922).
+  // Não toca no grupo em si (responsavelLotus do grupo continua intacto —
+  // user pode digitar outro nome e replicar de novo).
+  function clearRespFromDescendants(rows: any[], realIdx: number): { rows: any[]; count: number } {
+    const out = rows.map(r => ({ ...r }));
+    const g = out[realIdx];
+    if (!g) return { rows: out, count: 0 };
+    const descIdxs: number[] = [];
+    for (let j = realIdx + 1; j < out.length; j++) {
+      const l = out[j];
+      if (l.isGrupo) break;
+      if (l.disabled) continue;
+      descIdxs.push(j);
+    }
+    descIdxs.forEach(j => {
+      out[j] = {
+        ...out[j],
+        _respManual: false,
+        responsavelLotus: "",
+      };
+    });
+    return { rows: out, count: descIdxs.length };
+  }
+
+  // Helper público chamado pelo botão "✕ Cancelar" (Rev. 1928).
+  function cancelarRespAosDescendentes(idx: number) {
+    setLinhas(prev => {
+      let realIdx = idx;
+      if (prev[idx]?.id != null) {
+        const found = prev.findIndex(r => r.id === prev[idx].id);
+        if (found >= 0) realIdx = found;
+      }
+      const g = prev[realIdx];
+      if (!g) return prev;
+      const { rows, count } = clearRespFromDescendants(prev, realIdx);
+      const nomeGrupo = (g.nome ?? "").substring(0, 40);
+      if (count === 0) {
+        setTimeout(() => toast.info(`Grupo "${nomeGrupo}": nenhuma atividade abaixo para cancelar.`), 0);
+        return prev;
+      }
+      setTimeout(() => toast.success(`Grupo "${nomeGrupo}": responsável removido de ${count} descendente${count > 1 ? "s" : ""}.`), 0);
+      return rows;
+    });
+  }
+
   // Helper público chamado pelo botão "Replicar aos descendentes" Rev. 1922
   // E pelo onClick do isGrupo checkbox quando marca (true).
   function replicarRespAosDescendentes(idx: number) {
@@ -4631,21 +4680,44 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                               propagar o responsável (sem ter que desmarcar+
                               remarcar o checkbox isGrupo). */}
                           {a.isGrupo && (
-                            <UiTooltipProvider delayDuration={250}>
-                              <UiTooltip>
-                                <UiTooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    onClick={() => replicarRespAosDescendentes(idx)}
-                                    className="h-6 px-2 text-[10px] font-semibold rounded border border-cyan-400 bg-cyan-100 hover:bg-cyan-200 text-cyan-800 shrink-0 whitespace-nowrap"
-                                    data-testid={`btn-replicar-desc-${a.id ?? idx}`}
-                                  >↓ Replicar</button>
-                                </UiTooltipTrigger>
-                                <UiTooltipContent side="top" className="text-xs max-w-xs">
-                                  Replicar este responsável a TODAS as atividades abaixo deste grupo (até o próximo grupo). Ativa o "responsável manual" em cada uma e copia o nome digitado aqui.
-                                </UiTooltipContent>
-                              </UiTooltip>
-                            </UiTooltipProvider>
+                            <>
+                              <UiTooltipProvider delayDuration={250}>
+                                <UiTooltip>
+                                  <UiTooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      onClick={() => replicarRespAosDescendentes(idx)}
+                                      className="h-6 px-2 text-[10px] font-semibold rounded border border-cyan-400 bg-cyan-100 hover:bg-cyan-200 text-cyan-800 shrink-0 whitespace-nowrap"
+                                      data-testid={`btn-replicar-desc-${a.id ?? idx}`}
+                                    >↓ Replicar</button>
+                                  </UiTooltipTrigger>
+                                  <UiTooltipContent side="top" className="text-xs max-w-xs">
+                                    Replicar este responsável a TODAS as atividades abaixo deste grupo (até o próximo grupo). Ativa o "responsável manual" em cada uma e copia o nome digitado aqui.
+                                  </UiTooltipContent>
+                                </UiTooltip>
+                              </UiTooltipProvider>
+                              {/* Rev. 1928 — Botão inverso: cancela TODAS as
+                                  replicações de uma vez. User (16/05/2026):
+                                  "quero ter a opção tbm de cancelar todas de
+                                  uma vez". Desmarca _respManual + zera
+                                  responsavelLotus em todos os descendentes
+                                  (até o próximo grupo). Não toca no grupo. */}
+                              <UiTooltipProvider delayDuration={250}>
+                                <UiTooltip>
+                                  <UiTooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      onClick={() => cancelarRespAosDescendentes(idx)}
+                                      className="h-6 px-2 text-[10px] font-semibold rounded border border-red-400 bg-red-100 hover:bg-red-200 text-red-800 shrink-0 whitespace-nowrap"
+                                      data-testid={`btn-cancelar-desc-${a.id ?? idx}`}
+                                    >✕ Cancelar</button>
+                                  </UiTooltipTrigger>
+                                  <UiTooltipContent side="top" className="text-xs max-w-xs">
+                                    Cancelar a replicação em TODAS as atividades abaixo deste grupo (até o próximo grupo). Desmarca o "responsável manual" e apaga o nome propagado. O grupo em si fica intacto.
+                                  </UiTooltipContent>
+                                </UiTooltip>
+                              </UiTooltipProvider>
+                            </>
                           )}
                           </div>
                         )}

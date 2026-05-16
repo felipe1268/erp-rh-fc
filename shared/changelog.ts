@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1928 — Planejamento · PlanejamentoDetalhe · Botão "✕ Cancelar" no input cyan de grupos (inverso do "↓ Replicar" Rev. 1922) — limpa _respManual + responsavelLotus de TODOS os descendentes de uma vez.
+ * User (16/05/2026, screenshot grupo 03.03 com 7 atividades replicadas "teste"): "quero ter a opção tbm de cancelar todas de uma vez, caso eu queira cancelar".
+ * Mudança (`PlanejamentoDetalhe.tsx`):
+ *   (a) Nova função pura `clearRespFromDescendants(rows, realIdx)` espelha estrutura de `cascadeRespToDescendants` (Rev. 1922 L3696) — varre `realIdx+1` até `isGrupo` (break) ou fim, ignora `disabled` (continue), e em cada descendente seta `_respManual: false` + `responsavelLotus: ""`. NÃO toca no grupo (mantém `responsavelLotus` digitado p/ permitir re-replicar com mesmo nome).
+ *   (b) Novo helper público `cancelarRespAosDescendentes(idx)` (idêntico em estrutura a `replicarRespAosDescendentes`): resolve `realIdx` por id (blindagem displayAtiv), aplica `clearRespFromDescendants`, dispara toast contextual (`info` se count=0, `success` com contagem caso contrário).
+ *   (c) Botão novo "✕ Cancelar" (vermelho — `bg-red-100 border-red-400 text-red-800`) ao lado do "↓ Replicar" cyan, dentro do `{a.isGrupo && (...)}` (linhas de grupo só) — envolto em `<>...</>` fragment p/ permitir os 2 botões. Tooltip explicativo: "Cancelar a replicação em TODAS as atividades abaixo deste grupo (até o próximo grupo). Desmarca o 'responsável manual' e apaga o nome propagado. O grupo em si fica intacto." `data-testid="btn-cancelar-desc-${id}"`.
+ * version → 1928.
+ * Resultado: user marca grupo + replica com nome A → muda de ideia → clica "✕ Cancelar" → todos descendentes voltam a estado virgem (sem _respManual, sem nome). Pode digitar nome B no grupo e clicar "↓ Replicar" de novo. Ciclo completo replicar↔cancelar sem precisar mexer linha por linha.
+ * Preservado: cascadeRespToDescendants Rev. 1922, replicarRespAosDescendentes Rev. 1922, marcarComoGrupo Rev. 1920/1922, onBlur cascata Rev. 1860/1865/1892/1902, aplicarCascataResponsavelGrupos no save Rev. 1910, modal cascadeResp folhas não-grupo, 6 checkboxes, Input cyan. Zero backend/DB. Reversível em 2 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1927 — RH · Dash Aviso Prévio · Tabela CDM · FIX paridade ABSOLUTA com módulo oficial — `vrDiario` real (meal_benefit_configs) + `diasTrabalhadosMes` do mês da dataFimAviso (não mais da dataRef).
  * User (16/05/2026, screenshot CDM Anderson R$ 72.191,50 ainda divergente vs Aviso Prévio oficial): "OS VALORES AINDA NÃO ABATEM COM O MODULO AVISO PREVIO.. REFAÇA TODOS SEUS CALCULOS E GARANTA QUE NÃO VAI TER NEM UM CENTAVO DE DIFERENÇA".
  * Causas-raiz remanescentes (auditoria lado-a-lado CDM × `avisoPrevioFerias.ts L840-956` `comparativo` — fonte de verdade):
