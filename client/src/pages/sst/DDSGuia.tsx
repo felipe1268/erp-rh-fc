@@ -411,6 +411,17 @@ export default function DDSGuia() {
   const [bulkIA, setBulkIA] = useState<{ ativo: boolean; idx: number; total: number; falhas: number; cancelar: boolean }>({
     ativo: false, idx: 0, total: 0, falhas: 0, cancelar: false,
   });
+  // Rev. 1956 — sub-progresso animado entre itens (sem isso a barra parece travada 5-15s
+  // entre cada tema que termina). bulkStartedAt para média móvel; bulkItemStartedAt resetado
+  // a cada item; bulkTick força re-render a cada 250ms enquanto ativo.
+  const bulkStartedAt = useRef<number>(0);
+  const bulkItemStartedAt = useRef<number>(0);
+  const [bulkTick, setBulkTick] = useState(0);
+  useEffect(() => {
+    if (!bulkIA.ativo) return;
+    const t = setInterval(() => setBulkTick(x => (x + 1) % 1_000_000), 250);
+    return () => clearInterval(t);
+  }, [bulkIA.ativo]);
   const gerarTodosComIA = async (modo: "faltantes" | "todos") => {
     const lista = ((temasQ.data as any[]) ?? []);
     const alvos = lista.filter((t: any) =>
@@ -433,29 +444,49 @@ export default function DDSGuia() {
     });
     if (!okBulk) return;
     setBulkIA({ ativo: true, idx: 0, total: alvos.length, falhas: 0, cancelar: false });
+    bulkStartedAt.current = Date.now();          // Rev. 1956
+    bulkItemStartedAt.current = Date.now();      // Rev. 1956
+    // Rev. 1956.1 — worker pool com CONCORRÊNCIA = 4 (reduz ~5min p/ ~1min15s em 60 temas).
+    // Cada worker pega o próximo índice do cursor compartilhado; cancelamento checado em cada pull.
     let ok = 0; let fail = 0;
-    for (let i = 0; i < alvos.length; i++) {
-      // checa cancelamento via ref de state — usa setState callback pra ler valor atual
-      let cancelado = false;
-      setBulkIA(prev => { cancelado = prev.cancelar; return { ...prev, idx: i + 1 }; });
-      if (cancelado) break;
-      const t = alvos[i];
-      try {
-        const r = await gerarIAMut.mutateAsync({
-          companyId,
-          titulo: t.titulo,
-          descricao: t.descricao ?? undefined,
-          normaReferencia: t.normaReferencia ?? undefined,
-          categoria: t.categoria ?? undefined,
-        });
-        await atualizarTemaMut.mutateAsync({ companyId, id: t.id, conteudoMd: r.conteudoMd } as any);
-        ok++;
-      } catch (e: any) {
-        fail++;
-        setBulkIA(prev => ({ ...prev, falhas: prev.falhas + 1 }));
-        console.warn(`[BulkIA] Falhou no tema ${t.id} (${t.titulo}):`, e?.message);
-      }
+    let cursor = 0;
+    let cancelado = false;
+    const CONCURRENCY = 4;
+    const workers: Promise<void>[] = [];
+    for (let w = 0; w < Math.min(CONCURRENCY, alvos.length); w++) {
+      workers.push((async () => {
+        while (true) {
+          if (cancelado) return;
+          // checa cancel via setState callback (lê valor mais atual)
+          let snapshotCancel = false;
+          setBulkIA(prev => { snapshotCancel = prev.cancelar; return prev; });
+          if (snapshotCancel) { cancelado = true; return; }
+          const i = cursor++;
+          if (i >= alvos.length) return;
+          const t = alvos[i];
+          bulkItemStartedAt.current = Date.now(); // reset do "item em foco" p/ ETA
+          try {
+            const r = await gerarIAMut.mutateAsync({
+              companyId,
+              titulo: t.titulo,
+              descricao: t.descricao ?? undefined,
+              normaReferencia: t.normaReferencia ?? undefined,
+              categoria: t.categoria ?? undefined,
+            });
+            await atualizarTemaMut.mutateAsync({ companyId, id: t.id, conteudoMd: r.conteudoMd } as any);
+            ok++;
+          } catch (e: any) {
+            fail++;
+            setBulkIA(prev => ({ ...prev, falhas: prev.falhas + 1 }));
+            console.warn(`[BulkIA] Falhou no tema ${t.id} (${t.titulo}):`, e?.message);
+          } finally {
+            // idx = qtos COMPLETOS (ok+fail) para barra/ETA refletirem progresso real
+            setBulkIA(prev => ({ ...prev, idx: Math.min(prev.total, ok + fail) }));
+          }
+        }
+      })());
     }
+    await Promise.all(workers);
     setBulkIA({ ativo: false, idx: 0, total: 0, falhas: 0, cancelar: false });
     utils.dds.listTemas.invalidate();
     if (fail === 0) toast.success(`${ok} roteiro(s) gerado(s) com IA.`);
@@ -805,12 +836,26 @@ export default function DDSGuia() {
           )}
           {/* Barra de progresso da geração em massa */}
           {bulkIA.ativo && (() => {
-            const pct = Math.round((bulkIA.idx / Math.max(1, bulkIA.total)) * 100);
-            const restantes = Math.max(0, bulkIA.total - bulkIA.idx);
-            const segRestantes = restantes * 5; // ~5s por tema
+            // Rev. 1956 — sub-progresso animado entre itens (lê bulkTick implicitamente via re-render)
+            void bulkTick; // garante dependência do tick (eslint/dead-code safe)
+            const totalSafe = Math.max(1, bulkIA.total);
+            const completos = Math.max(0, bulkIA.idx - 1); // o item "idx" está em andamento
+            // ETA por item adaptativo: 5s default; após o 1º terminar, usa média real
+            const elapsedTotal = Date.now() - bulkStartedAt.current;
+            const etaPorItem = completos > 0 ? Math.max(2000, elapsedTotal / completos) : 5000;
+            const elapsedItem = Date.now() - bulkItemStartedAt.current;
+            const fracItem = Math.min(0.95, elapsedItem / etaPorItem); // trava em 95% do slot
+            const pctFloat = bulkIA.idx > 0
+              ? ((completos + fracItem) / totalSafe) * 100
+              : 0;
+            const pct = Math.min(99, Math.round(pctFloat));
+            const restantesItens = Math.max(0, bulkIA.total - bulkIA.idx);
+            // tempo restante baseado em ETA real + tempo que falta no item atual
+            const msRestSlot = Math.max(0, etaPorItem - elapsedItem);
+            const segRestantes = Math.round((restantesItens * etaPorItem + msRestSlot) / 1000);
             const min = Math.floor(segRestantes / 60);
             const seg = segRestantes % 60;
-            const eta = restantes === 0 ? "finalizando..." : (min > 0 ? `~${min}m ${seg}s restantes` : `~${seg}s restantes`);
+            const eta = restantesItens === 0 && msRestSlot < 500 ? "finalizando..." : (min > 0 ? `~${min}m ${seg}s restantes` : `~${seg}s restantes`);
             return (
               <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 min-w-[340px]">
                 <Loader2 className="h-5 w-5 animate-spin text-blue-700 shrink-0" />

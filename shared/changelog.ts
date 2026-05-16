@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1956 — SST · DDS Guia · "Gerar todos os roteiros com IA" · 2 melhorias combinadas:
+ *   (A) **Sub-progresso animado** entre itens (antes a barra ficava parada 5-15s entre cada tema que terminava — user reportou "Travou em 7%" com screenshot 4/60).
+ *   (B) **Paralelização worker pool concurrency=4** — reduz ~5min p/ ~1min15s em lote de 60 temas (user: "E faça ser mais rápido").
+ * Contexto: Rev. 1747 implementou o bulk com `for` sequencial chamando `gerarIAMut.mutateAsync` (Claude leva 5-15s/tema). UI mostrava pct=idx/total — só pulava quando 1 tema completo terminava. Em paralelo: o backend `gerarRoteiroComIA` é uma chamada Anthropic isolada, sem state compartilhado entre chamadas, portanto seguro rodar N em paralelo (limitação é rate limit Anthropic — 4 simultâneos está dentro do tier free/pago).
+ * Mudança (`client/src/pages/sst/DDSGuia.tsx`):
+ *   (1) Novos refs `bulkStartedAt`/`bulkItemStartedAt` (timestamps) + state `bulkTick` + useEffect com setInterval(250ms) que tica enquanto `bulkIA.ativo` p/ forçar re-render da barra.
+ *   (2) `gerarTodosComIA` refatorado: substitui `for(i)` por worker pool — `cursor` compartilhado, `cancelado` shared flag, 4 IIFEs async em `Promise.all`, cada worker faz `while(true) { pull cursor; if EOF return; mutateAsync; idx=ok+fail }`. `bulkItemStartedAt` resetado no início de cada item pulled (foco no item "em curso" mais recente, suficiente p/ animação visual). `idx` agora reflete COMPLETOS (não "em curso"), garantindo pct monotônico.
+ *   (3) Bloco JSX da barra recomputado em cada tick: `completos = idx - 1` (legado) trocado para usar idx direto; `etaPorItem` adaptativo = `Math.max(2000, elapsedTotal / completos)` após 1º completar (com concorrência 4 isso vira ~1.25s/slot); `fracItem = min(0.95, elapsedItem/etaPorItem)` interpola entre saltos discretos; pct cap em 99% até último worker terminar. `eta` (m+s restantes) calculado em `restantesItens * etaPorItem + msRestSlot`.
+ * version → 1956.
+ * Resultado:
+ *   - Visual: barra sobe continuamente (ticker 250ms) em vez de pular 7% → 8.3% → 10% após segundos.
+ *   - Performance: lote 60 temas × Claude ~5s/chamada: antes 60×5=300s; com 4 workers em paralelo ≈75s (4x speedup teórico, na prática ~3-3.5x por overhead de invalidate/atualizar).
+ *   - Cancelamento preservado: cada worker checa flag a cada pull do cursor.
+ *   - Falhas isoladas: worker que falha conta `fail++` e continua puxando próximos.
+ * Preservado: backend Rev. 1740 `gerarRoteiroComIA` INTACTO (chamada isolada por tema), backend `atualizarTema` intacto, modal de confirmação Rev. 1747, botões "faltantes"/"todos" Rev. 1747, sub-feature Rev. 1955 (barra modal gerar+mais temas). Zero backend/DB. Reversível em 3 hunks. R-001/R-007/R-010 OK.
+ * Observação técnica: concorrência=4 é conservadora. Anthropic Tier 1 permite 50 req/min — 4 paralelos × ~12s = 20 req/min, com folga. Se user tiver Tier 0 (5 req/min) ainda fica OK pq cada req dura ~5-15s. Subir p/ 8+ requer mensagem de rate-limit handling (não feito nesta rev).
+ *
  * Rev. 1955 — SST · DDS Guia · Modal "Gerar mais temas com IA" · Barra de PROGRESSO 0–100% (estimada pelo tempo decorrido vs ETA = qtd × 1,5s).
  * User (16/05/2026, screenshot do modal mid-loading "Gerando 30 temas..."): "Coloca % de 0 a 100%".
  * Contexto: a mutation `dds.gerarMaisTemasIA` (Rev. 1953) é uma única chamada HTTP sem streaming — não há sinal real do progresso do LLM. Aproximamos com um cronômetro client-side baseado no ETA conhecido (~1,5s por tema). UX vital: lote de 30 leva ~45s e o "Gerando temas..." sem feedback parecia travado.
