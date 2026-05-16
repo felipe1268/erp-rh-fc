@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Wrench, Plus, ArrowDownCircle, ArrowUpCircle, Camera, Trash2, X, Search,
   Building2, User, Phone, FileText, Eye, AlertTriangle, CheckCircle2, Package,
@@ -80,7 +81,10 @@ export default function FerramentasTerceiros() {
   const { selectedCompany } = useCompany();
   const companyId = selectedCompany?.id || 0;
 
-  const [filtroTipo, setFiltroTipo] = useState<string>("all");
+  // Rev. 1884 (UX) — fluxo de ENTRADA e SAÍDA agora ficam em ABAS distintas
+  // (pedido do usuário: "tela para entrada e outra para saída"). A aba ativa
+  // dita o filtro tipo + o CTA visível + os KPIs em destaque.
+  const [aba, setAba] = useState<"ENTRADA" | "SAIDA">("ENTRADA");
   const [filtroStatus, setFiltroStatus] = useState<string>("all");
   const [busca, setBusca] = useState("");
   const [openEntrada, setOpenEntrada] = useState(false);
@@ -90,7 +94,7 @@ export default function FerramentasTerceiros() {
   const kpis = trpc.ferramentasTerceiros.kpis.useQuery({ companyId }, { enabled: !!companyId });
   const registros = trpc.ferramentasTerceiros.listarRegistros.useQuery({
     companyId,
-    tipo: filtroTipo !== "all" ? (filtroTipo as any) : undefined,
+    tipo: aba,
     status: filtroStatus !== "all" ? filtroStatus : undefined,
     busca: busca || undefined,
     limit: 200,
@@ -114,130 +118,136 @@ export default function FerramentasTerceiros() {
   return (
     <DashboardLayout>
       <div className="p-4 md:p-6 space-y-4">
-        {/* Cabeçalho */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Wrench className="h-6 w-6 text-orange-600" />
-              Ferramentas de Terceiros
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Controle de entrada e saída de ferramentas trazidas por empresas terceirizadas, locadoras e autônomos.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={() => setOpenSaida(true)} variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50">
-              <ArrowUpCircle className="h-4 w-4 mr-1.5" /> Registrar Saída
-            </Button>
-            <Button onClick={() => setOpenEntrada(true)} className="bg-emerald-600 hover:bg-emerald-700">
-              <Plus className="h-4 w-4 mr-1.5" /> Nova Entrada
-            </Button>
-          </div>
+        {/* Cabeçalho — sem CTAs aqui (cada aba tem o seu) */}
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Wrench className="h-6 w-6 text-orange-600" />
+            Ferramentas de Terceiros
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Controle de entrada e saída de ferramentas trazidas por empresas terceirizadas, locadoras e autônomos.
+          </p>
         </div>
 
-        {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <KpiCard icon={<Package className="h-5 w-5" />} label="Itens NA OBRA" value={kpis.data?.itensNaObra ?? "—"} cor="amber" />
-          <KpiCard icon={<CheckCircle2 className="h-5 w-5" />} label="Itens Devolvidos" value={kpis.data?.itensDevolvidos ?? "—"} cor="emerald" />
-          <KpiCard icon={<AlertTriangle className="h-5 w-5" />} label="Problemas" value={kpis.data?.itensProblema ?? "—"} cor="red" />
-          <KpiCard icon={<ArrowDownCircle className="h-5 w-5" />} label="Entradas Hoje" value={kpis.data?.entradasHoje ?? "—"} cor="blue" />
-          <KpiCard icon={<ArrowUpCircle className="h-5 w-5" />} label="Saídas Hoje" value={kpis.data?.saidasHoje ?? "—"} cor="slate" />
-        </div>
+        {/* ABAS — ENTRADAS (verde) | SAÍDAS (azul) */}
+        <Tabs value={aba} onValueChange={(v) => { setAba(v as "ENTRADA" | "SAIDA"); setFiltroStatus("all"); }}>
+          <TabsList className="grid w-full grid-cols-2 h-auto p-1 bg-slate-100">
+            <TabsTrigger
+              value="ENTRADA"
+              className="group data-[state=active]:bg-emerald-600 data-[state=active]:text-white h-12 text-sm font-semibold gap-2"
+            >
+              <ArrowDownCircle className="h-5 w-5" />
+              ENTRADAS
+              {typeof kpis.data?.entradasHoje === "number" && kpis.data.entradasHoje > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="ml-1 border-0 bg-emerald-100 text-emerald-800 group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white"
+                >
+                  {kpis.data.entradasHoje} hoje
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger
+              value="SAIDA"
+              className="group data-[state=active]:bg-blue-600 data-[state=active]:text-white h-12 text-sm font-semibold gap-2"
+            >
+              <ArrowUpCircle className="h-5 w-5" />
+              SAÍDAS / DEVOLUÇÕES
+              {typeof kpis.data?.saidasHoje === "number" && kpis.data.saidasHoje > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="ml-1 border-0 bg-blue-100 text-blue-800 group-data-[state=active]:bg-white/25 group-data-[state=active]:text-white"
+                >
+                  {kpis.data.saidasHoje} hoje
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Filtros */}
-        <div className="flex flex-wrap items-center gap-2 bg-white border rounded-lg p-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar empresa ou responsável…" className="pl-8" />
-          </div>
-          <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-            <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os tipos</SelectItem>
-              <SelectItem value="ENTRADA">Entradas</SelectItem>
-              <SelectItem value="SAIDA">Saídas</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os status</SelectItem>
-              <SelectItem value="em_obra">Em Obra</SelectItem>
-              <SelectItem value="devolvido_parcial">Devolvido Parcial</SelectItem>
-              <SelectItem value="devolvido_total">Devolvido Total</SelectItem>
-              <SelectItem value="concluido">Concluído (Saídas)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Tabela */}
-        <div className="bg-white border rounded-lg overflow-hidden">
-          {registros.isLoading ? (
-            <div className="p-12 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /></div>
-          ) : !registros.data || registros.data.length === 0 ? (
-            <div className="p-12 text-center text-muted-foreground">
-              <Wrench className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="font-medium">Nenhum registro encontrado.</p>
-              <p className="text-sm mt-1">Clique em <strong>Nova Entrada</strong> para começar.</p>
+          {/* ───── ABA ENTRADAS ───── */}
+          <TabsContent value="ENTRADA" className="space-y-4 mt-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-emerald-50/50 border border-emerald-200 rounded-lg p-3">
+              <div className="flex items-start gap-2">
+                <ArrowDownCircle className="h-5 w-5 text-emerald-700 mt-0.5 shrink-0" />
+                <div>
+                  <div className="font-semibold text-emerald-900 text-sm">Recebimento de ferramentas na obra</div>
+                  <div className="text-xs text-emerald-800/80">Registre o que ENTROU na obra: empresa terceira, responsável, fotos das ferramentas.</div>
+                </div>
+              </div>
+              <Button onClick={() => setOpenEntrada(true)} className="bg-emerald-600 hover:bg-emerald-700 shrink-0">
+                <Plus className="h-4 w-4 mr-1.5" /> Nova Entrada
+              </Button>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b">
-                  <tr>
-                    <th className="text-left px-3 py-2 font-semibold text-xs uppercase">Data/Hora</th>
-                    <th className="text-left px-3 py-2 font-semibold text-xs uppercase">Tipo</th>
-                    <th className="text-left px-3 py-2 font-semibold text-xs uppercase">Empresa Terceira</th>
-                    <th className="text-left px-3 py-2 font-semibold text-xs uppercase">Responsável</th>
-                    <th className="text-left px-3 py-2 font-semibold text-xs uppercase">Itens</th>
-                    <th className="text-left px-3 py-2 font-semibold text-xs uppercase">Status</th>
-                    <th className="text-left px-3 py-2 font-semibold text-xs uppercase">Lançado por</th>
-                    <th className="text-right px-3 py-2 font-semibold text-xs uppercase">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(registros.data as any[]).map((r) => {
-                    const sbadge = STATUS_REG_BADGE[r.status] || { label: r.status, cls: "bg-gray-100 text-gray-700" };
-                    return (
-                      <tr key={r.id} className="border-b hover:bg-slate-50/60">
-                        <td className="px-3 py-2 text-xs whitespace-nowrap">
-                          {new Date(r.data_hora).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
-                        </td>
-                        <td className="px-3 py-2">
-                          {r.tipo === "ENTRADA" ? (
-                            <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300"><ArrowDownCircle className="h-3 w-3 mr-1" />Entrada</Badge>
-                          ) : (
-                            <Badge className="bg-blue-100 text-blue-800 border-blue-300"><ArrowUpCircle className="h-3 w-3 mr-1" />Saída</Badge>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 font-medium">{r.empresa_terceira}</td>
-                        <td className="px-3 py-2 text-xs">
-                          <div>{r.responsavel_nome}</div>
-                          {r.responsavel_cpf && <div className="text-muted-foreground">{r.responsavel_cpf}</div>}
-                        </td>
-                        <td className="px-3 py-2 text-xs">
-                          <span className="font-semibold">{r.qtd_itens}</span> item(s)
-                          {r.tipo === "ENTRADA" && r.qtd_na_obra > 0 && (
-                            <span className="text-amber-700 ml-1">· {r.qtd_na_obra} na obra</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2">
-                          <Badge className={`border ${sbadge.cls}`}>{sbadge.label}</Badge>
-                        </td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground">{r.lancado_por_nome || "—"}</td>
-                        <td className="px-3 py-2 text-right">
-                          <Button size="sm" variant="ghost" onClick={() => setVerRegistroId(r.id)} title="Ver detalhes">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+
+            {/* KPIs específicos da aba ENTRADAS */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KpiCard icon={<Package className="h-5 w-5" />} label="Itens NA OBRA" value={kpis.data?.itensNaObra ?? "—"} cor="amber" />
+              <KpiCard icon={<ArrowDownCircle className="h-5 w-5" />} label="Entradas Hoje" value={kpis.data?.entradasHoje ?? "—"} cor="emerald" />
+              <KpiCard icon={<AlertTriangle className="h-5 w-5" />} label="Problemas" value={kpis.data?.itensProblema ?? "—"} cor="red" />
+              <KpiCard icon={<CheckCircle2 className="h-5 w-5" />} label="Total Devolvido" value={kpis.data?.itensDevolvidos ?? "—"} cor="slate" />
             </div>
-          )}
-        </div>
+
+            <FiltrosBuscaStatus
+              busca={busca} setBusca={setBusca}
+              filtroStatus={filtroStatus} setFiltroStatus={setFiltroStatus}
+              statusOptions={[
+                { value: "all", label: "Todos os status" },
+                { value: "em_obra", label: "Em Obra" },
+                { value: "devolvido_parcial", label: "Devolvido Parcial" },
+                { value: "devolvido_total", label: "Devolvido Total" },
+              ]}
+            />
+
+            <TabelaRegistros
+              loading={registros.isLoading}
+              data={registros.data as any[] | undefined}
+              tipo="ENTRADA"
+              onAbrirCTA={() => setOpenEntrada(true)}
+              onVer={setVerRegistroId}
+            />
+          </TabsContent>
+
+          {/* ───── ABA SAÍDAS ───── */}
+          <TabsContent value="SAIDA" className="space-y-4 mt-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-blue-50/50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-start gap-2">
+                <ArrowUpCircle className="h-5 w-5 text-blue-700 mt-0.5 shrink-0" />
+                <div>
+                  <div className="font-semibold text-blue-900 text-sm">Devolução de ferramentas pela portaria</div>
+                  <div className="text-xs text-blue-800/80">Selecione a ENTRADA correspondente e marque o que está SAINDO da obra (devolvido / danificado / perda).</div>
+                </div>
+              </div>
+              <Button onClick={() => setOpenSaida(true)} className="bg-blue-600 hover:bg-blue-700 shrink-0">
+                <ArrowUpCircle className="h-4 w-4 mr-1.5" /> Registrar Saída
+              </Button>
+            </div>
+
+            {/* KPIs específicos da aba SAÍDAS */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KpiCard icon={<ArrowUpCircle className="h-5 w-5" />} label="Saídas Hoje" value={kpis.data?.saidasHoje ?? "—"} cor="blue" />
+              <KpiCard icon={<CheckCircle2 className="h-5 w-5" />} label="Itens Devolvidos" value={kpis.data?.itensDevolvidos ?? "—"} cor="emerald" />
+              <KpiCard icon={<AlertTriangle className="h-5 w-5" />} label="Problemas" value={kpis.data?.itensProblema ?? "—"} cor="red" />
+              <KpiCard icon={<Package className="h-5 w-5" />} label="Aguardando Devolução" value={kpis.data?.itensNaObra ?? "—"} cor="amber" />
+            </div>
+
+            <FiltrosBuscaStatus
+              busca={busca} setBusca={setBusca}
+              filtroStatus={filtroStatus} setFiltroStatus={setFiltroStatus}
+              statusOptions={[
+                { value: "all", label: "Todos os status" },
+                { value: "concluido", label: "Concluído" },
+              ]}
+            />
+
+            <TabelaRegistros
+              loading={registros.isLoading}
+              data={registros.data as any[] | undefined}
+              tipo="SAIDA"
+              onAbrirCTA={() => setOpenSaida(true)}
+              onVer={setVerRegistroId}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* MODAIS */}
@@ -263,6 +273,110 @@ export default function FerramentasTerceiros() {
         />
       )}
     </DashboardLayout>
+  );
+}
+
+// Rev. 1884 (UX) — filtros reutilizados nas duas abas (entrada e saída).
+function FiltrosBuscaStatus({ busca, setBusca, filtroStatus, setFiltroStatus, statusOptions }: {
+  busca: string; setBusca: (s: string) => void;
+  filtroStatus: string; setFiltroStatus: (s: string) => void;
+  statusOptions: { value: string; label: string }[];
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 bg-white border rounded-lg p-3">
+      <div className="relative flex-1 min-w-[200px]">
+        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar empresa ou responsável…" className="pl-8" />
+      </div>
+      <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+        <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {statusOptions.map((o) => (
+            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+// Rev. 1884 (UX) — tabela compartilhada pelas abas. O empty-state e o badge de
+// tipo são adaptados via prop `tipo`. Coluna "Tipo" foi removida (a aba já diz).
+function TabelaRegistros({ loading, data, tipo, onAbrirCTA, onVer }: {
+  loading: boolean;
+  data: any[] | undefined;
+  tipo: "ENTRADA" | "SAIDA";
+  onAbrirCTA: () => void;
+  onVer: (id: number) => void;
+}) {
+  const ctaLabel = tipo === "ENTRADA" ? "Nova Entrada" : "Registrar Saída";
+  const ctaCls = tipo === "ENTRADA" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700";
+  const emptyMsg = tipo === "ENTRADA"
+    ? "Nenhuma entrada registrada nesta empresa."
+    : "Nenhuma saída registrada nesta empresa.";
+
+  return (
+    <div className="bg-white border rounded-lg overflow-hidden">
+      {loading ? (
+        <div className="p-12 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" /></div>
+      ) : !data || data.length === 0 ? (
+        <div className="p-12 text-center text-muted-foreground">
+          <Wrench className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p className="font-medium">{emptyMsg}</p>
+          <Button className={`mt-4 ${ctaCls}`} onClick={onAbrirCTA}>
+            <Plus className="h-4 w-4 mr-1.5" /> {ctaLabel}
+          </Button>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b">
+              <tr>
+                <th className="text-left px-3 py-2 font-semibold text-xs uppercase">Data/Hora</th>
+                <th className="text-left px-3 py-2 font-semibold text-xs uppercase">Empresa Terceira</th>
+                <th className="text-left px-3 py-2 font-semibold text-xs uppercase">Responsável</th>
+                <th className="text-left px-3 py-2 font-semibold text-xs uppercase">Itens</th>
+                <th className="text-left px-3 py-2 font-semibold text-xs uppercase">Status</th>
+                <th className="text-left px-3 py-2 font-semibold text-xs uppercase">Lançado por</th>
+                <th className="text-right px-3 py-2 font-semibold text-xs uppercase">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((r) => {
+                const sbadge = STATUS_REG_BADGE[r.status] || { label: r.status, cls: "bg-gray-100 text-gray-700" };
+                return (
+                  <tr key={r.id} className="border-b hover:bg-slate-50/60">
+                    <td className="px-3 py-2 text-xs whitespace-nowrap">
+                      {new Date(r.data_hora).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                    </td>
+                    <td className="px-3 py-2 font-medium">{r.empresa_terceira}</td>
+                    <td className="px-3 py-2 text-xs">
+                      <div>{r.responsavel_nome}</div>
+                      {r.responsavel_cpf && <div className="text-muted-foreground">{r.responsavel_cpf}</div>}
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      <span className="font-semibold">{r.qtd_itens}</span> item(s)
+                      {r.tipo === "ENTRADA" && r.qtd_na_obra > 0 && (
+                        <span className="text-amber-700 ml-1">· {r.qtd_na_obra} na obra</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Badge className={`border ${sbadge.cls}`}>{sbadge.label}</Badge>
+                    </td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">{r.lancado_por_nome || "—"}</td>
+                    <td className="px-3 py-2 text-right">
+                      <Button size="sm" variant="ghost" onClick={() => onVer(r.id)} title="Ver detalhes">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
 
