@@ -736,6 +736,36 @@ export default function DDSGuia() {
   const temas = (temasQ.data as any[]) ?? [];
   const sessoes = (sessoesQ.data as any[]) ?? [];
 
+  // Rev. 1957 — uso de cada tema (count + última data) derivado das sessões existentes.
+  // Sem backend: agrupa sessoes por temaId (ignora sessões "livres" sem temaId) e calcula
+  // diasDesdeUltimoUso. Usado p/ badges na Biblioteca, ordenação e alerta no modal.
+  const usoPorTema = useMemo(() => {
+    const map = new Map<number, { count: number; ultimaData: string | null; diasAtras: number | null }>();
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    for (const s of sessoes) {
+      const tid = s.temaId ? Number(s.temaId) : null;
+      if (!tid) continue;
+      const prev = map.get(tid) ?? { count: 0, ultimaData: null, diasAtras: null };
+      prev.count += 1;
+      const d = s.data ?? null;
+      if (d && (!prev.ultimaData || d > prev.ultimaData)) prev.ultimaData = d;
+      map.set(tid, prev);
+    }
+    // calcula diasAtras a partir de ultimaData
+    for (const [, v] of map) {
+      if (v.ultimaData) {
+        const dt = new Date(v.ultimaData + "T12:00:00");
+        dt.setHours(0, 0, 0, 0);
+        v.diasAtras = Math.max(0, Math.round((hoje.getTime() - dt.getTime()) / 86_400_000));
+      }
+    }
+    return map;
+  }, [sessoes]);
+
+  // Rev. 1957 — filtros/ordenação da Biblioteca em relação ao uso
+  const [bibEsconderUsados, setBibEsconderUsados] = useState(false);
+  const [bibOrdenarPorUso, setBibOrdenarPorUso] = useState(true);  // não-usados primeiro
+
   return (
     <DashboardLayout>
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-4">
@@ -1047,12 +1077,65 @@ export default function DDSGuia() {
 
         {/* =================== BIBLIOTECA =================== */}
         <TabsContent value="biblioteca" className="mt-4">
-          <div className="flex justify-between items-center mb-3">
-            <p className="text-sm text-slate-600">{temas.length} tema(s) cadastrado(s).</p>
-            <Button size="sm" onClick={abrirNovoTema}><Plus className="h-4 w-4 mr-1" /> Novo tema</Button>
+          {/* Rev. 1957 — toolbar com filtros de uso (esconder já usados / ordenar por uso) */}
+          <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
+            <div className="flex items-center gap-3 flex-wrap">
+              <p className="text-sm text-slate-600">{temas.length} tema(s) cadastrado(s).</p>
+              {(() => {
+                const total = temas.length;
+                const usados = temas.filter((t: any) => (usoPorTema.get(t.id)?.count ?? 0) > 0).length;
+                const novos = total - usados;
+                return (
+                  <span className="text-xs text-slate-500">
+                    · <span className="text-emerald-700 font-semibold">{novos} novo(s)</span>
+                    {" / "}
+                    <span className="text-amber-700 font-semibold">{usados} já usado(s)</span>
+                  </span>
+                );
+              })()}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer select-none px-2 py-1 rounded border border-slate-200 hover:bg-slate-50">
+                <input
+                  type="checkbox"
+                  checked={bibEsconderUsados}
+                  onChange={e => setBibEsconderUsados(e.target.checked)}
+                  className="h-3.5 w-3.5"
+                />
+                Esconder já usados
+              </label>
+              <label className="flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer select-none px-2 py-1 rounded border border-slate-200 hover:bg-slate-50">
+                <input
+                  type="checkbox"
+                  checked={bibOrdenarPorUso}
+                  onChange={e => setBibOrdenarPorUso(e.target.checked)}
+                  className="h-3.5 w-3.5"
+                />
+                Novos primeiro
+              </label>
+              <Button size="sm" onClick={abrirNovoTema}><Plus className="h-4 w-4 mr-1" /> Novo tema</Button>
+            </div>
           </div>
           {["NR", "CAMPANHA", "VACINACAO", "LIVRE"].map(cat => {
-            const lista = temas.filter((t: any) => t.categoria === cat);
+            let lista = temas.filter((t: any) => t.categoria === cat);
+            // Rev. 1957 — esconder já usados
+            if (bibEsconderUsados) {
+              lista = lista.filter((t: any) => (usoPorTema.get(t.id)?.count ?? 0) === 0);
+            }
+            // Rev. 1957 — ordenar: novos primeiro → menos usados → uso mais antigo
+            if (bibOrdenarPorUso) {
+              lista = [...lista].sort((a: any, b: any) => {
+                const ua = usoPorTema.get(a.id);
+                const ub = usoPorTema.get(b.id);
+                const ca = ua?.count ?? 0;
+                const cb = ub?.count ?? 0;
+                if (ca !== cb) return ca - cb; // menos usado primeiro
+                // mesmo count: o que foi usado há mais tempo aparece primeiro
+                const da = ua?.diasAtras ?? Number.POSITIVE_INFINITY;
+                const db = ub?.diasAtras ?? Number.POSITIVE_INFINITY;
+                return db - da; // diasAtras maior = primeiro
+              });
+            }
             if (lista.length === 0) return null;
             return (
               <div key={cat} className="mb-6">
@@ -1095,6 +1178,30 @@ export default function DDSGuia() {
                         <h4 className={`font-semibold text-sm leading-tight ${cor.text}`}>{t.titulo}</h4>
                         {t.descricao && <p className="text-xs text-slate-600 mt-1 line-clamp-3">{t.descricao}</p>}
                         {t.normaReferencia && <p className="text-[10px] text-slate-500 italic mt-1">{t.normaReferencia}</p>}
+                        {/* Rev. 1957 — badge de uso (já usado N×, há Yd) ou "✨ Novo" */}
+                        {(() => {
+                          const uso = usoPorTema.get(t.id);
+                          if (!uso || uso.count === 0) {
+                            return (
+                              <span className="mt-1.5 inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                ✨ Tema novo
+                              </span>
+                            );
+                          }
+                          const recente = (uso.diasAtras ?? 999) < 30;
+                          return (
+                            <span
+                              className={`mt-1.5 inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                                recente
+                                  ? "bg-amber-100 text-amber-800 border-amber-200"
+                                  : "bg-slate-100 text-slate-700 border-slate-300"
+                              }`}
+                              title={uso.ultimaData ? `Última sessão: ${new Date(uso.ultimaData + "T12:00:00").toLocaleDateString("pt-BR")}` : ""}
+                            >
+                              ✓ Usado {uso.count}× {uso.diasAtras !== null && (uso.diasAtras === 0 ? "· hoje" : `· há ${uso.diasAtras}d`)}
+                            </span>
+                          );
+                        })()}
 
                         {/* Rev. 1740 — toggle de roteiro detalhado + ação de IA */}
                         <div className="mt-2 flex items-center gap-2 flex-wrap">
@@ -2025,22 +2132,73 @@ export default function DDSGuia() {
                       <SelectContent className="max-h-80">
                         <SelectItem value="_livre">📝 Tema livre (sem vínculo à biblioteca)</SelectItem>
                         {["VACINACAO", "CAMPANHA", "NR", "LIVRE"].flatMap(cat => {
-                          const lista = temas.filter((t: any) => t.categoria === cat);
+                          // Rev. 1957 — ordena por uso (novos primeiro) e anota "✓ Nx" nos já usados
+                          let lista = temas.filter((t: any) => t.categoria === cat);
+                          lista = [...lista].sort((a: any, b: any) => {
+                            const ca = usoPorTema.get(a.id)?.count ?? 0;
+                            const cb = usoPorTema.get(b.id)?.count ?? 0;
+                            return ca - cb;
+                          });
                           if (lista.length === 0) return [];
                           const labelCat = cat === "VACINACAO" ? "💉 VACINAÇÃO" : cat === "CAMPANHA" ? "📢 CAMPANHAS" : cat === "NR" ? "⚠️ NRs" : "📋 LIVRES";
                           return [
                             <div key={`h-${cat}`} className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50">
                               {labelCat}
                             </div>,
-                            ...lista.map((t: any) => (
-                              <SelectItem key={t.id} value={String(t.id)}>
-                                {t.codigo ? `[${t.codigo}] ` : ""}{t.titulo}
-                              </SelectItem>
-                            )),
+                            ...lista.map((t: any) => {
+                              const uso = usoPorTema.get(t.id);
+                              const marca = uso && uso.count > 0 ? ` · ✓${uso.count}x` : " · ✨ novo";
+                              return (
+                                <SelectItem key={t.id} value={String(t.id)}>
+                                  {t.codigo ? `[${t.codigo}] ` : ""}{t.titulo}{marca}
+                                </SelectItem>
+                              );
+                            }),
                           ];
                         })}
                       </SelectContent>
                     </Select>
+                    {/* Rev. 1957 — alerta quando tema escolhido já foi usado (sugere novo) */}
+                    {(() => {
+                      const tid = sessaoForm.temaId ? Number(sessaoForm.temaId) : null;
+                      if (!tid) return null;
+                      const uso = usoPorTema.get(tid);
+                      if (!uso || uso.count === 0) return null;
+                      // sugere 1 tema NOVO da mesma categoria
+                      const temaAtual = temas.find((t: any) => t.id === tid);
+                      const sugestao = temas.find((t: any) =>
+                        t.categoria === temaAtual?.categoria &&
+                        t.id !== tid &&
+                        (usoPorTema.get(t.id)?.count ?? 0) === 0
+                      );
+                      const dataFmt = uso.ultimaData ? new Date(uso.ultimaData + "T12:00:00").toLocaleDateString("pt-BR") : "—";
+                      return (
+                        <div className="mt-2 p-2.5 rounded-md bg-amber-50 border border-amber-200 text-xs">
+                          <div className="font-semibold text-amber-900 flex items-center gap-1">
+                            ⚠️ Tema já apresentado {uso.count}×
+                          </div>
+                          <div className="text-amber-800 mt-0.5">
+                            Última vez: <strong>{dataFmt}</strong>
+                            {uso.diasAtras !== null && (uso.diasAtras === 0 ? " (hoje)" : ` (há ${uso.diasAtras} dia${uso.diasAtras === 1 ? "" : "s"})`)}.
+                            Você pode repetir, mas variar amplia as orientações.
+                          </div>
+                          {sugestao && (
+                            <button
+                              type="button"
+                              onClick={() => setSessaoForm({
+                                ...sessaoForm,
+                                temaId: String(sugestao.id),
+                                tituloTema: sugestao.titulo,
+                                conteudoMd: sugestao.conteudoMd ?? sugestao.descricao ?? "",
+                              })}
+                              className="mt-1.5 inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700"
+                            >
+                              ✨ Trocar por "{sugestao.titulo.length > 50 ? sugestao.titulo.slice(0, 50) + "…" : sugestao.titulo}"
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* BLOCO 3 — TÍTULO + ROTEIRO COLAPSÁVEL */}

@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1957 — SST · DDS Guia · Biblioteca · Rastreio de USO + ordenação + alerta de repetição.
+ * User (16/05/2026): "Seria bom ter uma regra para que evitasse repetir o tema na obra sem querer, o ideal é ter temas variados... os temas já tratados na obra vai sumindo para o usuário usar todas as orientações pertinentes, poderia ter uma aba indicando qual já foi usada e caso o usuário quiser falar de novo ele pode, só ficaria o alerta, sugerindo um tema novo".
+ * Premissa: tudo CLIENT-SIDE (sem migração de schema/backend). A tabela `dds_sessoes` já tem `temaId` FK opcional desde o início — basta agregar no client a partir de `listSessoes`.
+ * Mudança (`client/src/pages/sst/DDSGuia.tsx`, único arquivo):
+ *   (1) Novo helper `usoPorTema` (`useMemo` sobre `sessoes`): Map<temaId, {count, ultimaData, diasAtras}>. Ignora sessões "livres" (temaId=null). `diasAtras` calculado contra meia-noite local.
+ *   (2) Novos states de UI da Biblioteca: `bibEsconderUsados` (toggle "Esconder já usados") + `bibOrdenarPorUso` (toggle "Novos primeiro", default ON).
+ *   (3) Toolbar da aba Biblioteca: contador "X novo(s) / Y já usado(s)" + 2 checkboxes responsivos.
+ *   (4) Aplicação na lista: dentro do `.map(["NR","CAMPANHA","VACINACAO","LIVRE"])`, filtro condicional pelos checkboxes e sort: menos usados primeiro → desempate por `diasAtras` desc (uso mais antigo aparece antes — assim os "envelhecidos" rotacionam).
+ *   (5) Badge no card: se uso=0 → tag emerald "✨ Tema novo"; se uso>0 e dias<30 → tag amber "✓ Usado N× · há Yd" (ou "hoje"); se uso>0 e dias≥30 → tag slate (cinza neutro) com mesmo texto. Tooltip mostra data formatada pt-BR da última sessão.
+ *   (6) Select de tema no modal "Nova Sessão DDS": dentro de cada grupo (VACINACAO/CAMPANHA/NR/LIVRE) ordena por count ASC e anexa marca "· ✓Nx" ou "· ✨ novo" no rótulo de cada SelectItem.
+ *   (7) Alerta amber abaixo do Select QUANDO `sessaoForm.temaId` aponta para tema com uso>0: mostra última data + diasAtras + botão "✨ Trocar por <titulo do 1º tema novo da mesma categoria>" (atalho que reescreve temaId/tituloTema/conteudoMd no form sem fechar o modal).
+ * version → 1957.
+ * Resultado:
+ *   - Visualmente: cards verdes "✨ Tema novo" e amber "✓ Usado Nx" — rotação fica óbvia.
+ *   - Aba Biblioteca tem toggle p/ ocultar usados (vê só os pendentes) ou ordenação por uso.
+ *   - Ao criar Nova Sessão e selecionar tema já apresentado: alerta amarelo aparece com botão 1-clique para trocar por um tema novo da mesma categoria.
+ *   - Nada bloqueia o usuário — repetir continua possível.
+ * Preservado: backend `listSessoes`/`ddsSessoes.temaId` INTACTO, schema INTACTO (Zero ALTER/DROP/DELETE), Rev. 1956 (paralelização + sub-progresso bulk IA), Rev. 1955 (barra modal gerar+mais), Rev. 1954 (80 temas seed extras), Rev. 1953 (gerar mais temas IA), Rev. 1747 (gerar todos roteiros), Rev. 1740 (gerar roteiro IA por tema), modal `cascadeResp`, badges existentes, ordenação anterior por categoria. Reversível em 4 hunks. R-001/R-007/R-010 OK.
+ * Limitações conhecidas (não bloqueantes — abrir REV futura se user pedir):
+ *   - Métrica é por COMPANY (não por OBRA). Se o user quiser "uso só na obra X", precisa novo state de filtro de obra + ajuste do useMemo a respeitar.
+ *   - Sessões deletadas e canceladas contam? Hoje agrega TODAS (qualquer status). Se quiser excluir 'cancelada', filtro 1 linha.
+ *   - Sugestão escolhe o 1º tema novo da mesma categoria — heurística simples. Poderia ser aleatória ou pesar normaReferencia.
+ *
  * Rev. 1956 — SST · DDS Guia · "Gerar todos os roteiros com IA" · 2 melhorias combinadas:
  *   (A) **Sub-progresso animado** entre itens (antes a barra ficava parada 5-15s entre cada tema que terminava — user reportou "Travou em 7%" com screenshot 4/60).
  *   (B) **Paralelização worker pool concurrency=4** — reduz ~5min p/ ~1min15s em lote de 60 temas (user: "E faça ser mais rápido").
