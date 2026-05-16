@@ -25,6 +25,26 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1868,
+    titulo: "DDS · Modal Novo/Editar Tema em fullscreen + layout 2 colunas (lançamento mais fluido em tablets)",
+    descricao: "User (16/05/2026, screenshot do modal apertado no centro da tela em iPad portrait): 'Ajuste a tela full screen e deixa mais fácil e fluido o lançamento'. O modal antigo (Rev. 1864) usava `max-w-3xl max-h-[92vh]` — em iPad portrait ficava espremido, com inputs pequenos e scroll vertical longo, dificultando lançamento.\n\n" +
+      "Solução (1 hunk em DDSGuia.tsx, ~190 linhas refatoradas):\n" +
+      "  • DialogContent agora fullscreen (mesmo padrão do modal de Sessão da Rev. 1731): `!max-w-none !w-screen !h-[100dvh] !top-0 !left-0 !translate-x-0 !translate-y-0 !rounded-none`. Usa `100dvh` (dynamic viewport) pra cobrir Safari iOS sem corte da barra de URL.\n" +
+      "  • Layout em 3 zonas: header sticky (gradiente indigo→violet, mesmo visual), área central scrollável (`flex-1 overflow-y-auto`), footer sticky (Cancelar / Criar tema).\n" +
+      "  • Área central com `grid-cols-1 lg:grid-cols-2 gap-4`: em telas <1024px (iPad portrait, smartphones) mantém 1 coluna empilhada. Em ≥1024px (iPad landscape, desktop) divide em 2 colunas:\n" +
+      "    - Esquerda: bloco IA + Título + Categoria/Código/Duração (grid responsivo 12 cols) + Descrição + Norma\n" +
+      "    - Direita: textarea de Conteúdo/Roteiro grande (`min-h-[300px] lg:min-h-[500px] resize-none flex-1`)\n" +
+      "  • Container interno limitado a `max-w-[1600px] mx-auto` para evitar campos esticados em monitores ultrawide.\n" +
+      "  • Inputs do bloco IA viram `flex-col sm:flex-row` (input + botão Gerar empilham em smartphone).\n" +
+      "  • Grid de Categoria/Código/Duração responsivo (`col-span-12 sm:col-span-5/4/3`) — em smartphone Categoria full-width, Código e Duração lado a lado.\n\n" +
+      "Resultado prático em iPad portrait (768px): modal cobre toda a tela, único scroll do form principal, textarea de roteiro grande e cômoda. Em iPad landscape/desktop (≥1024px): 2 colunas, todos os campos visíveis sem scroll, roteiro markdown bem maior — lançamento de 1 tema sem precisar rolar a tela.\n\n" +
+      "Preservado: ZERO mudança em backend (`gerarTemaIA`, `criarTema`, `atualizarTema`); estados (`temaForm`, `iaPrompt`, `editTema`); handlers; sugestões rápidas (6 chips); contador de chars; identidade visual (gradiente indigo→violet, ícones BookOpen/Wand2/Sparkles, cores violet pro IA, indigo pro Salvar). Reversível em 1 hunk. R-001 OK.",
+    tipo: "feat",
+    modulos: "SST/DDS/UI",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 12:30:00",
+  },
+  {
     version: 1867,
     titulo: "Menu · Dashboard DDS adicionado à seção Dashboards (sidebar SST)",
     descricao: "User (16/05/2026, screenshot da seção DASHBOARDS): 'Cadê a dash do DDS DIAOGO DUARIO DE OBRA'. A Rev. 1863 criou a página `/sst/dds-dashboard` mas só plugou um botão 'Dashboard' no header do DDSGuia — não inseriu a entrada no menu lateral, então quem navegava direto pela seção 'Dashboards' não via.\n\n" +
