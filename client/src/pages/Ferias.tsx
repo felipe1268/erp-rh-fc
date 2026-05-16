@@ -1620,6 +1620,19 @@ export default function Ferias() {
                           <div className="text-[10px] text-muted-foreground mt-0.5">
                             <p>Salário: {formatMoeda(m.totalSalarioBase)} | 1/3: {formatMoeda(m.totalTercoConstitucional)}</p>
                           </div>
+                          {/* Rev. 1879: chip Pago / A Pagar — visível só quando há diferenciação */}
+                          {(m.qtdPagos > 0 || parseFloat(m.totalPago || "0") > 0) && (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[10px]">
+                              <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0 font-semibold">
+                                ✓ Pago: {formatMoeda(m.totalPago)} <span className="font-normal opacity-80 ml-1">({m.qtdPagos})</span>
+                              </Badge>
+                              {parseFloat(m.totalAPagar || "0") > 0 && (
+                                <Badge className="bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0 font-semibold">
+                                  A pagar: {formatMoeda(m.totalAPagar)} <span className="font-normal opacity-80 ml-1">({m.qtdAPagar})</span>
+                                </Badge>
+                              )}
+                            </div>
+                          )}
                           {/* Breakdown por período */}
                           {(parseFloat(m.totalPrimeiroPeriodo || "0") > 0 || parseFloat(m.totalSegundoPeriodoMais || "0") > 0) && (
                             <div className="mt-1.5 space-y-0.5">
@@ -1641,11 +1654,16 @@ export default function Ferias() {
                       )}
                       <p className="text-xs text-muted-foreground mt-1">{m.totalFuncionarios} funcionário(s)</p>
                       {m.funcionarios?.slice(0, 3).map((f: any) => (
-                        <div key={f.id + "_" + f.numeroPeriodo} className="mt-1.5 text-xs border-t pt-1">
-                          <span className="font-medium">{f.nome}</span>
+                        <div key={f.id + "_" + f.numeroPeriodo} className={`mt-1.5 text-xs border-t pt-1 ${f.pago ? "opacity-70" : ""}`}>
+                          <span className={`font-medium ${f.pago ? "line-through decoration-emerald-500/60" : ""}`}>{f.nome}</span>
                           <span className="text-muted-foreground ml-1">{formatMoeda(f.valorEstimado)}</span>
                           <span className="text-[9px] ml-1 text-slate-400">{f.numeroPeriodo}º per.</span>
-                          {f.vencida && <Badge variant="destructive" className="ml-1 text-[9px]">VENCIDA</Badge>}
+                          {/* Rev. 1879: PAGO tem prioridade visual sobre VENCIDA */}
+                          {f.pago ? (
+                            <Badge className="ml-1 text-[9px] bg-emerald-600 text-white hover:bg-emerald-600">✓ PAGO</Badge>
+                          ) : f.vencida ? (
+                            <Badge variant="destructive" className="ml-1 text-[9px]">VENCIDA</Badge>
+                          ) : null}
                         </div>
                       ))}
                       <p className="text-[10px] text-muted-foreground mt-2 text-center opacity-60">Clique para detalhes</p>
@@ -1678,15 +1696,24 @@ export default function Ferias() {
                   {(() => {
                     const dados = fluxoCaixa as any[];
                     const maxVal = Math.max(...dados.map((m: any) => parseFloat(m.valorTotal || "0")), 1);
+                    // Rev. 1879: gráfico mensal agora é barra empilhada — verde (pago) + âmbar (a pagar).
                     return (
                       <div className="mt-6">
-                        <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
-                          <TrendingUp className="h-4 w-4" /> Visualização Mensal
+                        <h4 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center justify-between">
+                          <span className="flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Visualização Mensal — Pago vs A Pagar</span>
+                          <span className="flex items-center gap-3 text-[10px] font-normal">
+                            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm bg-emerald-500" />Pago</span>
+                            <span className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm bg-amber-400" />A pagar</span>
+                          </span>
                         </h4>
                         <div className="flex items-end gap-2 h-48 border-b border-gray-200 pb-1">
                           {dados.map((m: any) => {
                             const val = parseFloat(m.valorTotal || "0");
-                            const pct = maxVal > 0 ? (val / maxVal) * 100 : 0;
+                            const valPago = parseFloat(m.totalPago || "0");
+                            const valAPagar = parseFloat(m.totalAPagar || "0");
+                            const pctTotal = maxVal > 0 ? (val / maxVal) * 100 : 0;
+                            const pctPago = val > 0 ? (valPago / val) * 100 : 0;
+                            const pctAPagar = val > 0 ? (valAPagar / val) * 100 : 0;
                             const hasValue = val > 0;
                             return (
                               <div key={m.mes} className="flex-1 flex flex-col items-center gap-1 group relative cursor-pointer" onClick={() => { setFluxoMesSelecionado(m); setShowFluxoMesDialog(true); }}>
@@ -1696,14 +1723,29 @@ export default function Ferias() {
                                   </span>
                                 )}
                                 <div
-                                  className={`w-full rounded-t-md transition-all ${
-                                    hasValue
-                                      ? "bg-gradient-to-t from-green-500 to-green-400 group-hover:from-green-600 group-hover:to-green-500"
-                                      : "bg-gray-200"
-                                  }`}
-                                  style={{ height: `${Math.max(pct, 3)}%`, minHeight: "4px" }}
-                                  title={`${m.nomeMes}: ${formatMoeda(val)} - ${m.totalFuncionarios} func.`}
-                                />
+                                  className="w-full flex flex-col-reverse overflow-hidden rounded-t-md transition-all"
+                                  style={{ height: `${Math.max(pctTotal, 3)}%`, minHeight: "4px" }}
+                                  title={`${m.nomeMes}: ${formatMoeda(val)} — Pago: ${formatMoeda(valPago)} · A pagar: ${formatMoeda(valAPagar)}`}
+                                >
+                                  {hasValue ? (
+                                    <>
+                                      {valPago > 0 && (
+                                        <div
+                                          className="w-full bg-gradient-to-t from-emerald-600 to-emerald-500 group-hover:from-emerald-700 group-hover:to-emerald-600"
+                                          style={{ height: `${pctPago}%` }}
+                                        />
+                                      )}
+                                      {valAPagar > 0 && (
+                                        <div
+                                          className="w-full bg-gradient-to-t from-amber-500 to-amber-400 group-hover:from-amber-600 group-hover:to-amber-500"
+                                          style={{ height: `${pctAPagar}%` }}
+                                        />
+                                      )}
+                                    </>
+                                  ) : (
+                                    <div className="w-full h-full bg-gray-200" />
+                                  )}
+                                </div>
                                 <span className="text-[9px] text-muted-foreground font-medium">
                                   {(m.nomeMes || "").substring(0, 3)}
                                 </span>
@@ -1719,19 +1761,21 @@ export default function Ferias() {
                   {(() => {
                     const dados = fluxoCaixa as any[];
                     // Collect all employees across all months (unique by id)
-                    const allFuncs: Record<number, { id: number; nome: string; cargo: string; meses: { mes: number; valor: number; vencida: boolean; status: string }[] }> = {};
+                    // Rev. 1879: rastreamos `pago` por entrada p/ o Gantt diferenciar.
+                    const allFuncs: Record<number, { id: number; nome: string; cargo: string; meses: { mes: number; valor: number; vencida: boolean; status: string; pago: boolean }[] }> = {};
                     for (const m of dados) {
                       for (const f of (m.funcionarios || [])) {
                         if (!allFuncs[f.id]) {
                           allFuncs[f.id] = { id: f.id, nome: f.nome, cargo: f.cargo || "", meses: [] };
                         }
-                        allFuncs[f.id].meses.push({ mes: m.mes, valor: parseFloat(f.valorEstimado || "0"), vencida: f.vencida, status: f.status || (f.vencida ? 'vencida' : 'prevista') });
+                        allFuncs[f.id].meses.push({ mes: m.mes, valor: parseFloat(f.valorEstimado || "0"), vencida: f.vencida, status: f.status || (f.vencida ? 'vencida' : 'prevista'), pago: !!f.pago });
                       }
                     }
                     const funcList = Object.values(allFuncs).sort((a, b) => a.nome.localeCompare(b.nome));
                     if (funcList.length === 0) return null;
 
-                    // Status-based colors for the Gantt bars
+                    // Status-based colors for the Gantt bars. Rev. 1879: 'pago' tem prioridade
+                    // visual sobre status — verde escuro com ✓.
                     const STATUS_GANTT_COLORS: Record<string, string> = {
                       prevista: "bg-blue-400",
                       pendente: "bg-blue-400",
@@ -1769,16 +1813,25 @@ export default function Ferias() {
                                 {Array.from({ length: 12 }, (_, mesIdx) => {
                                   const mesNum = mesIdx + 1;
                                   const entry = func.meses.find(m => m.mes === mesNum);
-                                  const statusColor = STATUS_GANTT_COLORS[entry?.status || 'prevista'] || 'bg-blue-400';
-                                  const statusLabel = entry?.status === 'vencida' ? 'VENCIDA' : entry?.status === 'agendada' ? 'Agendada' : entry?.status === 'em_gozo' ? 'Em Gozo' : entry?.status === 'concluida' ? 'Concluída' : 'Prevista';
+                                  // Rev. 1879: barra "pago" tem cor própria (emerald-600) e ✓.
+                                  const baseColor = STATUS_GANTT_COLORS[entry?.status || 'prevista'] || 'bg-blue-400';
+                                  const statusColor = entry?.pago ? 'bg-emerald-600' : baseColor;
+                                  const statusLabel = entry?.pago ? 'PAGO'
+                                    : entry?.status === 'vencida' ? 'VENCIDA'
+                                    : entry?.status === 'agendada' ? 'Agendada'
+                                    : entry?.status === 'em_gozo' ? 'Em Gozo'
+                                    : entry?.status === 'concluida' ? 'Concluída' : 'Prevista';
                                   return (
                                     <div key={mesIdx} className="px-0.5 h-6 flex items-center">
                                       {entry ? (
                                         <div
-                                          className={`w-full h-4 rounded-sm ${statusColor} opacity-80 hover:opacity-100 transition-opacity cursor-pointer relative group`}
+                                          className={`w-full h-4 rounded-sm ${statusColor} opacity-80 hover:opacity-100 transition-opacity cursor-pointer relative group flex items-center justify-center`}
                                           title={`${func.nome} — ${dados[mesIdx]?.nomeMes}: ${formatMoeda(entry.valor)} (${statusLabel})`}
                                           onClick={() => setGanttEmployeeId(func.id)}
                                         >
+                                          {entry.pago && (
+                                            <span className="text-white text-[10px] font-bold leading-none">✓</span>
+                                          )}
                                           <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold text-white opacity-0 group-hover:opacity-100">
                                             {formatMoeda(entry.valor)}
                                           </span>
@@ -1793,6 +1846,10 @@ export default function Ferias() {
                             ))}
                             {/* Legend */}
                             <div className="flex flex-wrap items-center gap-4 mt-3 pt-2 border-t border-gray-200">
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-3 h-3 rounded-sm bg-emerald-600 flex items-center justify-center text-white text-[8px] font-bold">✓</div>
+                                <span className="text-[10px] text-muted-foreground font-semibold">Pagas</span>
+                              </div>
                               <div className="flex items-center gap-1.5">
                                 <div className="w-3 h-3 rounded-sm bg-blue-400" />
                                 <span className="text-[10px] text-muted-foreground">Previstas</span>
@@ -1861,6 +1918,26 @@ export default function Ferias() {
                   </div>
                 </div>
 
+                {/* Rev. 1879: cards Pago vs A Pagar — sempre visíveis quando há funcionários */}
+                {fluxoMesSelecionado.totalFuncionarios > 0 && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-300 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-emerald-700 font-semibold uppercase flex items-center gap-1">✓ Já Pago</p>
+                        <p className="text-2xl font-bold text-emerald-700 mt-0.5">{formatMoeda(fluxoMesSelecionado.totalPago || "0")}</p>
+                      </div>
+                      <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">{fluxoMesSelecionado.qtdPagos || 0} func.</Badge>
+                    </div>
+                    <div className="bg-amber-50 rounded-lg p-3 border border-amber-300 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-amber-700 font-semibold uppercase">A Pagar</p>
+                        <p className="text-2xl font-bold text-amber-700 mt-0.5">{formatMoeda(fluxoMesSelecionado.totalAPagar || "0")}</p>
+                      </div>
+                      <Badge className="bg-amber-500 text-white hover:bg-amber-500">{fluxoMesSelecionado.qtdAPagar || 0} func.</Badge>
+                    </div>
+                  </div>
+                )}
+
                 {/* Tabela detalhada agrupada por período */}
                 {fluxoMesSelecionado.funcionarios?.length > 0 ? (
                   <div className="overflow-x-auto">
@@ -1897,16 +1974,24 @@ export default function Ferias() {
                                 const terco = salario / 3;
                                 const total = parseFloat(f.valorEstimado || "0");
                                 return (
-                                  <tr key={f.id + "_" + f.numeroPeriodo} className="border-b hover:bg-muted/10">
+                                  <tr key={f.id + "_" + f.numeroPeriodo} className={`border-b hover:bg-muted/10 ${f.pago ? "bg-emerald-50/40" : ""}`}>
                                     <td className="py-1.5 px-3 text-muted-foreground text-xs">{i + 1}</td>
-                                    <td className="py-1.5 px-3 font-medium text-xs">{f.nome}</td>
+                                    <td className={`py-1.5 px-3 font-medium text-xs ${f.pago ? "line-through decoration-emerald-500/60 opacity-80" : ""}`}>{f.nome}</td>
                                     <td className="py-1.5 px-3 text-muted-foreground text-xs">{f.cargo || "-"}</td>
                                     <td className="py-1.5 px-3 text-right text-xs">{formatMoeda(salario)}</td>
                                     <td className="py-1.5 px-3 text-right text-xs">{formatMoeda(salario)}</td>
                                     <td className="py-1.5 px-3 text-right text-xs">{formatMoeda(terco)}</td>
-                                    <td className="py-1.5 px-3 text-right font-bold text-xs">{formatMoeda(total)}</td>
+                                    <td className={`py-1.5 px-3 text-right font-bold text-xs ${f.pago ? "text-emerald-700" : ""}`}>{formatMoeda(total)}</td>
                                     <td className="py-1.5 px-3 text-center">
-                                      {f.vencida ? (
+                                      {/* Rev. 1879: PAGO tem prioridade visual sobre VENCIDA */}
+                                      {f.pago ? (
+                                        <div className="flex flex-col items-center gap-0.5">
+                                          <Badge className="bg-emerald-600 text-white hover:bg-emerald-600 text-[9px]">✓ PAGO</Badge>
+                                          {f.dataPagamento && (
+                                            <span className="text-[9px] text-emerald-600">{new Date(f.dataPagamento + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                          )}
+                                        </div>
+                                      ) : f.vencida ? (
                                         <Badge variant="destructive" className="text-[9px]">VENCIDA</Badge>
                                       ) : (
                                         <Badge className="bg-green-100 text-green-700 text-[9px]">Prevista</Badge>

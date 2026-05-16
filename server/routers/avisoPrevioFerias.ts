@@ -2559,6 +2559,7 @@ export const avisoPrevioFeriasRouter = router({
         ));
         
         // Also fetch DB vacation periods to get actual status (agendada, em_gozo, etc.)
+        // Rev. 1879: também projetamos `dataPagamento` p/ marcar o que JÁ FOI PAGO.
         const dbPeriods = await db.select({
           employeeId: vacationPeriods.employeeId,
           periodoAquisitivoInicio: vacationPeriods.periodoAquisitivoInicio,
@@ -2566,19 +2567,21 @@ export const avisoPrevioFeriasRouter = router({
           status: vacationPeriods.status,
           dataInicio: vacationPeriods.dataInicio,
           dataFim: vacationPeriods.dataFim,
+          dataPagamento: vacationPeriods.dataPagamento,
         })
         .from(vacationPeriods)
         .where(and(
           companyFilter(vacationPeriods.companyId, input),
           isNull(vacationPeriods.deletedAt),
         ));
-        // Map: employeeId -> { periodoKey -> status }
-        const dbStatusMap: Record<number, Record<string, string>> = {};
+        // Map: employeeId -> { periodoKey -> { status, dataPagamento } }
+        const dbInfoMap: Record<number, Record<string, { status: string; dataPagamento: string | null }>> = {};
         for (const dp of dbPeriods) {
-          if (!dbStatusMap[dp.employeeId]) dbStatusMap[dp.employeeId] = {};
+          if (!dbInfoMap[dp.employeeId]) dbInfoMap[dp.employeeId] = {};
           const key = `${dp.periodoAquisitivoInicio}_${dp.periodoAquisitivoFim}`;
-          dbStatusMap[dp.employeeId][key] = dp.status;
+          dbInfoMap[dp.employeeId][key] = { status: dp.status, dataPagamento: dp.dataPagamento };
         }
+        const hojeStr = new Date().toISOString().split('T')[0];
 
         const meses: any[] = [];
         for (let mes = 0; mes < 12; mes++) {
@@ -2603,13 +2606,20 @@ export const avisoPrevioFeriasRouter = router({
                 totalMes += valorFerias;
                 // Determine status: check DB first, then fallback to calculated
                 const periodoKey = `${p.inicio}_${p.fim}`;
-                const dbStatus = dbStatusMap[func.id]?.[periodoKey];
+                const dbInfo = dbInfoMap[func.id]?.[periodoKey];
+                const dbStatus = dbInfo?.status;
+                const dataPagamento = dbInfo?.dataPagamento || null;
                 let fStatus = 'prevista';
                 if (dbStatus && dbStatus !== 'pendente') {
                   fStatus = dbStatus;
                 } else if (p.vencida) {
                   fStatus = 'vencida';
                 }
+                // Rev. 1879: PAGO = status concluído ou em_gozo (financeiro já saiu)
+                // OU dataPagamento gravada e <= hoje (agendada com pagto efetuado).
+                // Vencida/prevista/agendada s/ dataPag no passado = A PAGAR.
+                const pago = (fStatus === 'concluida' || fStatus === 'em_gozo')
+                  || !!(dataPagamento && dataPagamento <= hojeStr);
 
                 funcionariosNoMes.push({
                   id: func.id,
@@ -2622,6 +2632,8 @@ export const avisoPrevioFeriasRouter = router({
                   fimConcessivo: p.fimConcessivo,
                   vencida: p.vencida,
                   status: fStatus,
+                  pago,
+                  dataPagamento,
                   numeroPeriodo: pi + 1,       // 1 = 1º período, 2 = 2º período, etc.
                   inicioPeriodo: p.inicio,
                   fimPeriodo: p.fim,
@@ -2639,6 +2651,11 @@ export const avisoPrevioFeriasRouter = router({
 
           const totalSalarioBase = funcionariosNoMes.reduce((s, f) => s + parseFloat(f.salarioBase), 0);
           const totalTerco = funcionariosNoMes.reduce((s, f) => s + parseFloat(f.tercoConstitucional), 0);
+          // Rev. 1879: agregados de pago / a pagar por mês p/ a UI marcar e somar.
+          const funcPagos = funcionariosNoMes.filter(f => f.pago);
+          const funcAPagar = funcionariosNoMes.filter(f => !f.pago);
+          const totalPago = funcPagos.reduce((s, f) => s + parseFloat(f.valorEstimado), 0);
+          const totalAPagar = funcAPagar.reduce((s, f) => s + parseFloat(f.valorEstimado), 0);
           meses.push({
             mes: mes + 1,
             nomeMes: ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][mes],
@@ -2652,6 +2669,11 @@ export const avisoPrevioFeriasRouter = router({
             totalSegundoPeriodoMais: total2p.toFixed(2),
             qtdFuncionarios1p: func1p.length,
             qtdFuncionarios2p: func2p.length,
+            // Rev. 1879: já pago vs a pagar
+            totalPago: totalPago.toFixed(2),
+            totalAPagar: totalAPagar.toFixed(2),
+            qtdPagos: funcPagos.length,
+            qtdAPagar: funcAPagar.length,
           });
         }
         

@@ -1,7 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
- * Rev. 1874 — Colaborador · Isenção de Controle de Jornada (CLT Art. 62) com inciso I/II/III + validação legal + observação + histórico.
+ * Rev. 1879 — Férias · Fluxo de Caixa Prévio — DEMARCAR o que já foi PAGO (badge ✓ PAGO + barras empilhadas + cards Pago/A Pagar + Gantt diferenciado) p/ análise gerencial.
+ * User (16/05/2026, após Rev. 1878 — screenshot do Fluxo de Caixa 2026 mostrando 12 meses com vários "VENCIDA" mas sem distinguir o que já foi PAGO): "Demarque aqui o q já foi pago para facilitar a Análise".
+ * CAUSA: a aba `Fluxo de Caixa` (`client/src/pages/Ferias.tsx` ~L1586) mostrava só VENCIDA × Prevista; o backend `fluxoCaixa` (`server/routers/avisoPrevioFerias.ts` L2538) projetava só `status` no map (dbStatusMap), descartando `dataPagamento` que define se o financeiro já saiu. Status `concluida` (atribuído pelo lote "Já foi pago" L3000), `em_gozo` (funcionário em gozo — pago 2 dias antes) e `agendada` com `dataPagamento <= hoje` representam fluxo de caixa JÁ EXECUTADO e não deveriam aparecer iguais aos previstos para 2026.
+ * MUDANÇAS:
+ * (1) Backend `server/routers/avisoPrevioFerias.ts` L2562-2587: `dbStatusMap` virou `dbInfoMap` (Record<empId, Record<periodoKey, {status, dataPagamento}>>) — passa a projetar `dataPagamento` do `vacationPeriods`. Adicionado `hojeStr = new Date().toISOString().split('T')[0]` p/ comparação determinística (string YYYY-MM-DD bate com TEXT da coluna).
+ * (2) `avisoPrevioFerias.ts` L2612-2643: novo campo `pago: boolean` por funcionário no payload — calculado como `(fStatus === 'concluida' || fStatus === 'em_gozo') || !!(dataPagamento && dataPagamento <= hojeStr)`. Também emite `dataPagamento` para a UI exibir na tabela detalhada.
+ * (3) `avisoPrevioFerias.ts` L2657-2679: agregados por mês — `funcPagos`, `funcAPagar`, `totalPago`, `totalAPagar`, `qtdPagos`, `qtdAPagar` (toFixed(2) p/ consistência com totalSalarioBase/Terco). Permite a UI somar e comparar sem reprocessar o array no cliente.
+ * (4) Frontend `Ferias.tsx` ~L1626-1638 (card mensal): novo chip Pago/A Pagar (emerald-100 ✓ + amber-100) visível só quando `qtdPagos>0` — não polui meses 100% previstos. Mostra valor + qtde.
+ * (5) `Ferias.tsx` ~L1659-1671 (mini-lista de 3 funcs no card): badge `✓ PAGO` (emerald-600 sólido) com prioridade visual sobre VENCIDA + line-through+opacity-70 no nome — chama imediatamente a atenção do gestor pro que NÃO é mais responsabilidade financeira.
+ * (6) `Ferias.tsx` ~L1699-1761 (gráfico de barras "Visualização Mensal"): reescrito p/ barras EMPILHADAS — segmento emerald (pago, base) + amber (a pagar, topo), tooltip mostra split. Legenda inline no header. Quando o mês é 100% pago, barra é toda verde; quando misturado, mostra a proporção visualmente.
+ * (7) `Ferias.tsx` ~L1781-1847 (Gantt anual): cada célula `f.meses[]` ganha `pago: boolean`. `statusColor` sobreposto: `entry.pago ? 'bg-emerald-600' : baseColor` (pago vira verde escuro com ✓ branco centralizado, sobrepõe vencida/agendada). Legenda atualizada — primeiro item agora é "Pagas ✓" em destaque (font-semibold).
+ * (8) `Ferias.tsx` ~L1924-1942 (dialog fullscreen do mês — Regra de Ouro modal Resizable=false preservada): novos 2 cards Pago/A Pagar abaixo dos 4 cards de KPI atuais, com valor + Badge de quantidade de funcs. Sempre visível quando totalFuncionarios>0.
+ * (9) `Ferias.tsx` ~L1960-1982 (tabela detalhada por período no dialog): linha do funcionário pago ganha `bg-emerald-50/40`, nome com line-through+decoration emerald, total em emerald-700, e coluna Status mostra `✓ PAGO` + dataPagamento formatada pt-BR abaixo. VENCIDA segue como fallback quando não pago. Funciona pros 2 grupos (1º Período + 2º+ Período).
+ * REGRA DE NEGÓCIO: nenhum status novo no DB — derivação 100% a partir do que já existe (concluida/em_gozo/dataPagamento). Não há mutation nova nem migração. Reversível em ~9 hunks.
+ * PRESERVADO: separação 1º/2º+ período (Rev. 1819), modal fullscreen (Regra de Ouro), Gantt clicável → drawer do funcionário, confirmarVencidasLote ("Já foi pago"), totais gerais (salário base + 1/3), navegação por ano. Backend e schema intactos.
+ * SEGURANÇA/R-001: comparação `dataPagamento <= hojeStr` é string YYYY-MM-DD (determinística, sem fuso). 0 ALTER/INSERT/DELETE. R-007/R-010 OK.
+ *
+ * Rev. 1878 — Colaborador · Termo de Isenção de Controle de Jornada (Art. 62 CLT) — gerar PDF + imprimir + upload assinado + Raio-X.
  * User (16/05/2026, após publicação da Rev. 1873): "Crie a lógica conforme a lei, para definir como MARCAR o funcionário que é considerado de confiança o que não tem horário e hora extra".
  * Base legal: CLT Art. 62 — exclui do capítulo Duração do Trabalho (sem HE/banco de horas/adicional noturno padrão/inconsistência de ponto):
  *   • I — Atividade externa incompatível com controle de horário (exige anotação CTPS + ficha de registro).
