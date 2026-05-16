@@ -428,6 +428,12 @@ const menuSectionsAlmoxarifado: MenuSection[] = [
       { icon: Warehouse,      label: "Visão Geral",       path: "/almoxarifado" },
       { icon: ArrowLeftRight, label: "Movimentações",     path: "/almoxarifado/movimentacoes" },
       { icon: ClipboardList,  label: "Inventário Semanal",path: "/almoxarifado/inventario" },
+      // Rev. 1880 hot-patch — módulo "Ferramentas de Terceiros" (portaria
+      // de obra) já existe em shared/modules.ts L361 e em App.tsx L507,
+      // mas faltava entrada na sidebar (lista hardcoded). Sem isso, usuário
+      // só acessa via URL direta. Wrench icon mantém consistência com o
+      // módulo principal e com o atalho "🔧 Ferramentas" abaixo.
+      { icon: Wrench,         label: "Ferramentas de Terceiros", path: "/almoxarifado/ferramentas-terceiros" },
     ],
   },
   {
