@@ -1,5 +1,5 @@
 import { SEMANTIC_COLORS, CHART_PALETTE, CHART_FILL } from "@/lib/chartColors";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
@@ -130,6 +130,76 @@ export default function DashAvisoPrevio() {
   const [cdmSort, setCdmSort] = useState<{ key: CdmSortKey; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' });
   // Rev. 1935 — Raio-X do funcionário ao clicar no nome (mesma UX dos demais módulos RH).
   const [raioXEmployeeId, setRaioXEmployeeId] = useState<number | null>(null);
+  // Rev. 1937 — Larguras redimensionáveis das colunas de TEXTO da tabela CDM
+  // (Funcionário, Função, Obra) — persistidas em localStorage. User 16/05/2026:
+  // "quero pode clicar e aumentar a largura da tabela para ajustar o texto..".
+  // Demais colunas (numéricas/datas) já têm largura natural pelo conteúdo.
+  type CdmColKey = 'nome' | 'funcao' | 'obra';
+  const CDM_COL_LS_KEY = 'cdm-colw-v1';
+  const CDM_COL_DEFAULT: Record<CdmColKey, number> = { nome: 200, funcao: 140, obra: 160 };
+  const CDM_COL_MIN = 80;
+  const CDM_COL_MAX = 600;
+  const [cdmColW, setCdmColW] = useState<Record<CdmColKey, number>>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(CDM_COL_LS_KEY) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          nome: Math.min(CDM_COL_MAX, Math.max(CDM_COL_MIN, Number(parsed.nome) || CDM_COL_DEFAULT.nome)),
+          funcao: Math.min(CDM_COL_MAX, Math.max(CDM_COL_MIN, Number(parsed.funcao) || CDM_COL_DEFAULT.funcao)),
+          obra: Math.min(CDM_COL_MAX, Math.max(CDM_COL_MIN, Number(parsed.obra) || CDM_COL_DEFAULT.obra)),
+        };
+      }
+    } catch {}
+    return CDM_COL_DEFAULT;
+  });
+  const cdmDragRef = useRef<{ key: CdmColKey; startX: number; startW: number } | null>(null);
+  const onCdmColPointerDown = (key: CdmColKey) => (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    cdmDragRef.current = { key, startX: e.clientX, startW: cdmColW[key] };
+    document.body.style.cursor = 'col-resize';
+  };
+  const onCdmColPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = cdmDragRef.current;
+    if (!d) return;
+    const w = Math.min(CDM_COL_MAX, Math.max(CDM_COL_MIN, d.startW + (e.clientX - d.startX)));
+    setCdmColW(prev => prev[d.key] === w ? prev : { ...prev, [d.key]: w });
+  };
+  const onCdmColPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = cdmDragRef.current;
+    if (!d) return;
+    cdmDragRef.current = null;
+    document.body.style.cursor = '';
+    try { (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId); } catch {}
+    try { window.localStorage.setItem(CDM_COL_LS_KEY, JSON.stringify(cdmColW)); } catch {}
+  };
+  const resetCdmCol = (key: CdmColKey) => () => {
+    setCdmColW(prev => {
+      const next = { ...prev, [key]: CDM_COL_DEFAULT[key] };
+      try { window.localStorage.setItem(CDM_COL_LS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  // Handle visual reutilizável p/ cada th. role=separator pra a11y.
+  const CdmResizeHandle = ({ colKey, label }: { colKey: CdmColKey; label: string }) => (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Redimensionar coluna ${label}`}
+      onPointerDown={onCdmColPointerDown(colKey)}
+      onPointerMove={onCdmColPointerMove}
+      onPointerUp={onCdmColPointerUp}
+      onPointerCancel={onCdmColPointerUp}
+      onDoubleClick={resetCdmCol(colKey)}
+      title={`Arraste para redimensionar · duplo-clique restaura padrão (${CDM_COL_DEFAULT[colKey]}px)`}
+      style={{ touchAction: 'none' }}
+      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-amber-400/60 active:bg-amber-500 group"
+    >
+      <div className="absolute top-1/2 right-0.5 -translate-y-1/2 w-0.5 h-5 bg-slate-300 group-hover:bg-amber-600 rounded" />
+    </div>
+  );
   const toggleCdmSort = (key: CdmSortKey) => setCdmSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: (key === 'nomeCompleto' || key === 'cargo' || key === 'funcao' || key === 'obra' || key === 'dataAdmissao') ? 'asc' : 'desc' });
   const cdmLinhasOrdenadas = useMemo(() => {
     if (!cdm?.linhas) return [];
@@ -391,9 +461,12 @@ export default function DashAvisoPrevio() {
                           <thead className="sticky top-0 z-20">
                             <tr className="text-left">
                               <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm">#</th>
-                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('nomeCompleto')}>Funcionário<SortIcon k="nomeCompleto" /></th>
-                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('funcao')}>Função<SortIcon k="funcao" /></th>
-                              <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('obra')}>Obra<SortIcon k="obra" /></th>
+                              {/* Rev. 1937 — colunas de texto redimensionáveis (Funcionário/Função/Obra).
+                                  Handle âmbar na borda direita do th; drag p/ ajustar (mouse+touch+pen via Pointer Events);
+                                  duplo-clique restaura padrão; persistido em localStorage. */}
+                              <th style={{ width: cdmColW.nome, minWidth: cdmColW.nome, maxWidth: cdmColW.nome }} className="relative py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('nomeCompleto')}>Funcionário<SortIcon k="nomeCompleto" /><CdmResizeHandle colKey="nome" label="Funcionário" /></th>
+                              <th style={{ width: cdmColW.funcao, minWidth: cdmColW.funcao, maxWidth: cdmColW.funcao }} className="relative py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('funcao')}>Função<SortIcon k="funcao" /><CdmResizeHandle colKey="funcao" label="Função" /></th>
+                              <th style={{ width: cdmColW.obra, minWidth: cdmColW.obra, maxWidth: cdmColW.obra }} className="relative py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('obra')}>Obra<SortIcon k="obra" /><CdmResizeHandle colKey="obra" label="Obra" /></th>
                               <th className="py-2 px-2 font-semibold text-muted-foreground bg-slate-100 border-b border-slate-300 shadow-sm text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('dataAdmissao')}>Admissão<SortIcon k="dataAdmissao" /></th>
                               {/* Rev. 1931 — "Anos" renomeado p/ "Tempo de empresa" (mais claro p/ leigo) + nova coluna "Idade" (anos completos
                                   do funcionário até a data-base do dash). User 16/05/2026: "melhore o texto onde ta escrito idade, coloque
@@ -412,7 +485,7 @@ export default function DashAvisoPrevio() {
                               <tr key={l.id} className={`hover:bg-muted/30 ${cdmSort.key === 'total' && cdmSort.dir === 'desc' && idx < 3 ? 'bg-red-50/40' : 'bg-white'}`}>
                                 <td className="py-1.5 px-2 text-muted-foreground tabular-nums border-b border-border/50">{idx + 1}</td>
                                 {/* Rev. 1935 — Clicar no nome abre o Raio-X do funcionário (mesmo modal usado em Colaboradores/AvisoPrevio/Ferias/etc.). */}
-                                <td className="py-1.5 px-2 font-medium truncate max-w-[200px] border-b border-border/50">
+                                <td style={{ width: cdmColW.nome, minWidth: cdmColW.nome, maxWidth: cdmColW.nome }} className="py-1.5 px-2 font-medium truncate border-b border-border/50">
                                   <div className="flex items-center gap-1.5 min-w-0">
                                     <button
                                       type="button"
@@ -436,8 +509,8 @@ export default function DashAvisoPrevio() {
                                     )}
                                   </div>
                                 </td>
-                                <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[140px] border-b border-border/50" title={l.funcao || l.cargo}>{l.funcao || l.cargo || '-'}</td>
-                                <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[160px] border-b border-border/50" title={l.obra}>{l.obra || <span className="italic text-muted-foreground/60">sem alocação</span>}</td>
+                                <td style={{ width: cdmColW.funcao, minWidth: cdmColW.funcao, maxWidth: cdmColW.funcao }} className="py-1.5 px-2 text-muted-foreground truncate border-b border-border/50" title={l.funcao || l.cargo}>{l.funcao || l.cargo || '-'}</td>
+                                <td style={{ width: cdmColW.obra, minWidth: cdmColW.obra, maxWidth: cdmColW.obra }} className="py-1.5 px-2 text-muted-foreground truncate border-b border-border/50" title={l.obra}>{l.obra || <span className="italic text-muted-foreground/60">sem alocação</span>}</td>
                                 <td className="py-1.5 px-2 text-right tabular-nums border-b border-border/50">{l.dataAdmissao ? new Date(l.dataAdmissao + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</td>
                                 {/* Rev. 1934 — Tempo de empresa em anos/meses/dias (não só anos).
                                     User 16/05/2026: "quero anos, meses e dias..". Mostra o detalhe;
