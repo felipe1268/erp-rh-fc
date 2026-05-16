@@ -849,6 +849,12 @@ Regras:
           await db.execute(sql`ALTER TABLE dds_sessoes ADD COLUMN IF NOT EXISTS instrutor_codigo_interno VARCHAR(50)`);
           console.log(`[SyncSchema+] Rev. 1873: coluna instrutor_codigo_interno garantida em dds_sessoes.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.1873 instrutor_codigo_interno:`, e?.message || e); }
+        // Rev. 1874 — CLT Art. 62: inciso (I/II/III) + observação/justificativa em employees.
+        try {
+          await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS cargo_confianca_inciso VARCHAR(5)`);
+          await db.execute(sql`ALTER TABLE employees ADD COLUMN IF NOT EXISTS cargo_confianca_observacao TEXT`);
+          console.log(`[SyncSchema+] Rev. 1874: colunas cargo_confianca_inciso/observacao garantidas em employees.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.1874 cargo_confianca_inciso/observacao:`, e?.message || e); }
         console.log(`[SyncSchema+] Tabelas DDS (dds_temas/dds_sessoes/dds_sessao_funcionarios) garantidas.`);
 
         // Tabelas do Portal do Cliente (comentários cliente↔FC e avaliações NPS)

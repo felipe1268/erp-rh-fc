@@ -641,8 +641,9 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     "seguroVida", "contribuicaoSindical", "fgtsPercentual", "inssPercentual",
     "dissidioData", "dissidioPercentual", "convencaoColetiva", "convencaoVigencia",
     "ddsParticipacao",
-    // Cargo de Confiança
+    // Cargo de Confiança / Isenção Art. 62 CLT (Rev. 1874: + inciso + observação)
     "cargoConfianca", "cargoConfiancaDesde", "cargoConfiancaGratificacao",
+    "cargoConfiancaInciso", "cargoConfiancaObservacao",
   ]);
   // Campos booleanos armazenados como smallint (0/1) no banco
   const booleanFields = new Set(["listaNegra", "recebeComplemento", "acordoHoraExtra", "pensaoAlimenticia", "licencaMaternidade", "ddsParticipacao", "cargoConfianca"]);

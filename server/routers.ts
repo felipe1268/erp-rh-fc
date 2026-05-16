@@ -553,6 +553,38 @@ export const appRouter = router({
         }
       }
       
+      // === CARGO DE CONFIANÇA / ART. 62 CLT: VALIDAÇÃO LEGAL (Rev. 1874) ===
+      // Quando marcado isento de controle de jornada, exige inciso (I/II/III) e:
+      //   • Inciso II (gestão): gratificação de função ≥ 40% (Parágrafo único do Art. 62 da CLT).
+      //   • Inciso I (atividade externa): observação descrevendo a anotação na CTPS / ficha de registro.
+      //   • Inciso III (teletrabalho por produção/tarefa, Lei 14.442/2022): observação recomendada.
+      if (String(employeeData.cargoConfianca) === "1") {
+        const incisoRaw = String(employeeData.cargoConfiancaInciso ?? empAnterior?.cargoConfiancaInciso ?? "").trim().toUpperCase();
+        const inciso = ["I", "II", "III"].includes(incisoRaw) ? incisoRaw : "";
+        if (!inciso) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '⚠️ Cargo de Confiança / Art. 62 CLT\n\nSelecione o INCISO de enquadramento:\n• I — Atividade externa incompatível com controle de horário\n• II — Cargo de gestão / confiança (gerente, diretor)\n• III — Teletrabalho por produção ou tarefa' });
+        }
+        // Inciso II: gratificação mínima 40% (Parágrafo único do Art. 62 CLT)
+        if (inciso === "II") {
+          const gratRaw = String(employeeData.cargoConfiancaGratificacao ?? empAnterior?.cargoConfiancaGratificacao ?? "").replace(",", ".").replace(/[^0-9.]/g, "");
+          const gratNum = parseFloat(gratRaw);
+          if (!isFinite(gratNum) || gratNum < 40) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '⚠️ Cargo de Gestão (Art. 62, II CLT)\n\nA gratificação de função deve ser de NO MÍNIMO 40% sobre o salário efetivo (Parágrafo único do Art. 62 da CLT). Sem isso, o enquadramento pode ser descaracterizado em fiscalização ou ação trabalhista.' });
+          }
+        }
+        // Inciso I: observação obrigatória (deve constar anotação CTPS + ficha de registro — Art. 62, I CLT)
+        if (inciso === "I") {
+          const obs = String(employeeData.cargoConfiancaObservacao ?? empAnterior?.cargoConfiancaObservacao ?? "").trim();
+          if (obs.length < 10) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: '⚠️ Atividade Externa (Art. 62, I CLT)\n\nDescreva na OBSERVAÇÃO a justificativa do enquadramento — a lei exige que essa condição esteja anotada na CTPS e na ficha de registro do empregado. Mín. 10 caracteres.' });
+          }
+        }
+        employeeData.cargoConfiancaInciso = inciso;
+      } else if (employeeData.cargoConfianca !== undefined && String(employeeData.cargoConfianca) === "0") {
+        // Ao desmarcar, limpa inciso pra não ficar inconsistente (preserva data/grat/obs como histórico).
+        employeeData.cargoConfiancaInciso = null;
+      }
+
       await updateEmployee(input.id, input.companyId, employeeData, { name: ctx.user.name ?? 'Sistema', id: ctx.user.id });
       
       const changedFields: Record<string, { de: any; para: any }> = {};

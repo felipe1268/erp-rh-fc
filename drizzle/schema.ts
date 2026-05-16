@@ -1020,6 +1020,9 @@ export const employees = pgTable("employees", {
         cargoConfianca: smallint("cargo_confianca").default(0).notNull(),
         cargoConfiancaDesde: date("cargo_confianca_desde", { mode: "string" }),
         cargoConfiancaGratificacao: varchar("cargo_confianca_gratificacao", { length: 20 }),
+        // Rev. 1874 — CLT Art. 62: inciso (I=externo, II=gestão, III=teletrabalho produção) + observação/justificativa (obrigatória inciso I — anotação CTPS).
+        cargoConfiancaInciso: varchar("cargo_confianca_inciso", { length: 5 }),
+        cargoConfiancaObservacao: text("cargo_confianca_observacao"),
         ddsParticipacao: smallint().default(1),
         docRgUrl: text(),
         docCnhUrl: text(),

@@ -1,5 +1,24 @@
 /**
  * Changelog centralizado do ERP.
+ *
+ * Rev. 1874 — Colaborador · Isenção de Controle de Jornada (CLT Art. 62) com inciso I/II/III + validação legal + observação + histórico.
+ * User (16/05/2026, após publicação da Rev. 1873): "Crie a lógica conforme a lei, para definir como MARCAR o funcionário que é considerado de confiança o que não tem horário e hora extra".
+ * Base legal: CLT Art. 62 — exclui do capítulo Duração do Trabalho (sem HE/banco de horas/adicional noturno padrão/inconsistência de ponto):
+ *   • I — Atividade externa incompatível com controle de horário (exige anotação CTPS + ficha de registro).
+ *   • II — Cargo de gestão/confiança (gerente, diretor, chefe departamento/filial). Parágrafo único: gratificação ≥ 40% sobre salário efetivo.
+ *   • III — Teletrabalho por produção/tarefa (Lei 14.442/2022 — por jornada NÃO se aplica).
+ * O sistema JÁ TINHA cargoConfianca/Desde/Gratificacao implementados (toggle no UI L2118, badge "Art.62" L981, integração com fechamentoPonto L626+L1740 — não gera inconsistência sem_registro para isentos). Faltava: (a) inciso explícito; (b) observação/justificativa; (c) validação backend.
+ * MUDANÇAS:
+ * (1) Schema `drizzle/schema.ts` L1026-1028: novas colunas `cargo_confianca_inciso VARCHAR(5)` + `cargo_confianca_observacao TEXT` na tabela employees.
+ * (2) SyncSchema+ `server/_core/index.ts` L855-860: ALTER TABLE IF NOT EXISTS idempotente — colunas garantidas no startup. Log confirma "Rev. 1874: colunas cargo_confianca_inciso/observacao garantidas em employees."
+ * (3) Backend `server/routers.ts` L559-589 (employees.update, ANTES de updateEmployee): valida quando cargoConfianca=1 — exige inciso ∈ {I, II, III}; II → grat ≥ 40%; I → observação ≥ 10 chars (anotação CTPS). Throws TRPCError com mensagem amigável citando o artigo da CLT. Ao desmarcar (cargoConfianca=0), limpa inciso pra evitar par inconsistente (preserva data/grat/obs como histórico). Auditoria automática via employee_change_log já existente.
+ * (4) Frontend `client/src/pages/Colaboradores.tsx`:
+ *     - Bloco L2115-2192 reescrito: título trocado de "Cargo de Confiança" → "Isenção de Controle de Jornada (Art. 62 CLT)"; Select obrigatório de inciso (I/II/III) com descrições da lei no próprio dropdown; data de enquadramento mantida; campo gratificação % renderizado SÓ quando inciso=II (com mín. 40% no placeholder); textarea de observação com placeholder dinâmico por inciso (obrigatório p/ I); aviso amarelo destacando que TST exige prova de poderes reais e que enquadramento incorreto gera passivo retroativo até 5 anos.
+ *     - Badge da listagem L984: agora mostra "Art.62, II" (ou I/III) ao invés de só "Art.62" — feedback visual rápido do inciso.
+ *     - Print/Raio-X L630: linha "Isenção Art. 62 CLT" mostra inciso real (não mais hardcoded "II"), gratificação % e observação.
+ * PRESERVADO: ZERO mudança em fechamentoPonto (que já consome cargoConfianca via L626/L1740), folha, cálculo de HE, badge de tipo de contrato, Hist. Status (RaioXFuncionario), employee_change_log. Reversível em ~6 hunks. R-001/R-007/R-010 OK (apenas ADD COLUMN IF NOT EXISTS, nenhum dado apagado).
+ *
+
  * Rev. 246 — Modal "Nova SC" redesenhado: layout compacto (sem scroll), tema definitivamente claro
  *            (style inline branco), 3 colunas Setor/Data/Prioridade, itens com scroll interno;
  *            todos os DialogContent de Compras (Solicitacoes, Cotacoes, Ordens) forçam bg branco.

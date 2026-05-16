@@ -624,7 +624,7 @@ export default function Colaboradores() {
         ["Horas/Mês", safeDisplay(viewingEmployee.horasMensais)],
         ["Complemento Salarial", viewingEmployee.recebeComplemento ? `Sim — R$ ${viewingEmployee.valorComplemento || "0"}` : "Não"],
         ["Acordo HE", viewingEmployee.acordoHoraExtra ? `Sim — ${viewingEmployee.heNormal50 ?? globalHE.heDiasUteis}% / ${viewingEmployee.he100 ?? globalHE.heDomingosFeriados}% / ${viewingEmployee.heNoturna ?? globalHE.heAdicionalNoturno}%` : `Padrão Empresa (${globalHE.heDiasUteis}/${globalHE.heDomingosFeriados}/${globalHE.heAdicionalNoturno}%)`],
-        ["Cargo de Confiança", viewingEmployee.cargoConfianca ? `Sim — Art. 62, II CLT${viewingEmployee.cargoConfiancaGratificacao ? ` (${viewingEmployee.cargoConfiancaGratificacao}%)` : ''}` : "Não"],
+        ["Isenção Art. 62 CLT", viewingEmployee.cargoConfianca ? `Sim — Art. 62${(viewingEmployee as any).cargoConfiancaInciso ? `, ${(viewingEmployee as any).cargoConfiancaInciso}` : ' (inciso não informado)'} CLT${viewingEmployee.cargoConfiancaGratificacao ? ` (grat. ${viewingEmployee.cargoConfiancaGratificacao}%)` : ''}${(viewingEmployee as any).cargoConfiancaObservacao ? ` — ${(viewingEmployee as any).cargoConfiancaObservacao}` : ''}` : "Não"],
       ]},
       { title: "Documentos", fields: [
         ["CTPS", safeDisplay(viewingEmployee.ctps)],
@@ -978,7 +978,7 @@ export default function Colaboradores() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
                       <span>{emp.funcao ?? "-"}</span>
-                      {emp.cargoConfianca ? <span className="ml-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-semibold rounded-full">Art.62</span> : null}
+                      {emp.cargoConfianca ? <span className="ml-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-semibold rounded-full" title="Isento de controle de jornada — Art. 62 CLT">Art.62{(emp as any).cargoConfiancaInciso ? `, ${(emp as any).cargoConfiancaInciso}` : ''}</span> : null}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{emp.setor ?? "-"}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">
@@ -2109,38 +2109,78 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                 )}
               </div>
 
-              {/* Cargo de Confiança (CLT Art. 62, II) */}
+              {/* Isenção de Controle de Jornada — CLT Art. 62 (Rev. 1874: inciso I/II/III + observação) */}
               <div className="mt-6">
-                <div className="flex items-center gap-3 mb-3">
-                  <h4 className="text-sm font-semibold text-primary">Cargo de Confiança</h4>
+                <div className="flex items-center gap-3 mb-3 flex-wrap">
+                  <h4 className="text-sm font-semibold text-primary">Isenção de Controle de Jornada (Art. 62 CLT)</h4>
                   <div className="flex items-center gap-2">
                     <Checkbox
                       checked={String(form.cargoConfianca) === "1"}
-                      onCheckedChange={(checked) => set("cargoConfianca", checked ? "1" : "0")}
+                      onCheckedChange={(checked) => {
+                        set("cargoConfianca", checked ? "1" : "0");
+                        if (!checked) { set("cargoConfiancaInciso", ""); }
+                      }}
                     />
                     <Label className="text-xs text-muted-foreground cursor-pointer">
-                      Enquadrado no Art. 62, II da CLT (sem controle de jornada)
+                      Funcionário sem controle de jornada / horas extras (isento — Art. 62 CLT)
                     </Label>
                   </div>
                 </div>
                 {String(form.cargoConfianca) === "1" && (
                   <div className="border border-indigo-200 bg-indigo-50/50 rounded-lg p-4 space-y-3">
-                    <div className="flex items-center gap-2 text-xs text-indigo-700 bg-indigo-100 rounded-lg p-2">
-                      <Shield className="h-4 w-4 shrink-0" />
+                    <div className="flex items-start gap-2 text-xs text-indigo-700 bg-indigo-100 rounded-lg p-2">
+                      <Shield className="h-4 w-4 shrink-0 mt-0.5" />
                       <span>
-                        <strong>CLT Art. 62, II:</strong> Funcionários em cargo de confiança não estão sujeitos a controle de jornada. Não serão registradas faltas por ausência de ponto, horas extras ou atrasos.
+                        <strong>CLT Art. 62:</strong> Funcionário não sujeito a controle de jornada — sem horas extras, banco de horas, adicional noturno padrão, intervalo intrajornada indenizado nem inconsistências de ponto.
                       </span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="sm:col-span-2">
+                        <Label className="text-xs font-medium">Inciso de enquadramento <span className="text-red-500">*</span></Label>
+                        <Select value={form.cargoConfiancaInciso || ""} onValueChange={(v) => set("cargoConfiancaInciso", v)}>
+                          <SelectTrigger className="bg-white mt-1"><SelectValue placeholder="Selecione o inciso do Art. 62" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="I">I — Atividade externa incompatível com controle de horário (exige anotação CTPS)</SelectItem>
+                            <SelectItem value="II">II — Cargo de gestão / confiança (gerente, diretor) — grat. mín. 40%</SelectItem>
+                            <SelectItem value="III">III — Teletrabalho por produção ou tarefa (Lei 14.442/2022)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <div>
                         <Label className="text-xs">Data de enquadramento</Label>
-                        <Input type="date" value={form.cargoConfiancaDesde ?? ""} onChange={e => set("cargoConfiancaDesde", e.target.value)} className="bg-white" />
+                        <Input type="date" value={form.cargoConfiancaDesde ?? ""} onChange={e => set("cargoConfiancaDesde", e.target.value)} className="bg-white mt-1" />
                       </div>
-                      <div>
-                        <Label className="text-xs">Gratificação de função (%)</Label>
-                        <Input type="text" inputMode="numeric" value={form.cargoConfiancaGratificacao ?? "40"} onChange={e => set("cargoConfiancaGratificacao", e.target.value.replace(/[^0-9.,]/g, ''))} className="bg-white" placeholder="Mín. 40% (CLT)" />
-                        <span className="text-[10px] text-muted-foreground">Mínimo legal: 40% sobre o salário efetivo</span>
+                      {form.cargoConfiancaInciso === "II" && (
+                        <div>
+                          <Label className="text-xs">Gratificação de função (%) <span className="text-red-500">*</span></Label>
+                          <Input type="text" inputMode="numeric" value={form.cargoConfiancaGratificacao ?? "40"} onChange={e => set("cargoConfiancaGratificacao", e.target.value.replace(/[^0-9.,]/g, ''))} className="bg-white mt-1" placeholder="Mín. 40% (CLT)" />
+                          <span className="text-[10px] text-muted-foreground">Mínimo legal: 40% sobre o salário efetivo (Parágrafo único Art. 62)</span>
+                        </div>
+                      )}
+                      <div className="sm:col-span-2">
+                        <Label className="text-xs">
+                          Observação / Justificativa
+                          {form.cargoConfiancaInciso === "I" && <span className="text-red-500"> *</span>}
+                        </Label>
+                        <textarea
+                          value={form.cargoConfiancaObservacao ?? ""}
+                          onChange={e => set("cargoConfiancaObservacao", e.target.value)}
+                          rows={3}
+                          className="w-full bg-white mt-1 border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                          placeholder={
+                            form.cargoConfiancaInciso === "I"
+                              ? "Obrigatório — descreva: cargo, tipo de atividade externa, anotação na CTPS e ficha de registro."
+                              : form.cargoConfiancaInciso === "II"
+                              ? "Opcional — descreva os poderes de gestão (admitir, demitir, advertir, representar) que caracterizam o cargo."
+                              : form.cargoConfiancaInciso === "III"
+                              ? "Opcional — descreva o regime de produção/tarefa e a forma de remuneração."
+                              : "Descreva a justificativa do enquadramento."
+                          }
+                        />
                       </div>
+                    </div>
+                    <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                      ⚠️ <strong>Atenção legal:</strong> O TST exige PROVA de que o enquadramento é real (poderes efetivos de gestão p/ inciso II; condição anotada na CTPS p/ inciso I). Enquadramento incorreto pode gerar passivo trabalhista (horas extras retroativas até 5 anos).
                     </div>
                   </div>
                 )}
