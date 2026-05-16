@@ -14,6 +14,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, desc, count, asc, isNull, inArray } from "drizzle-orm";
 import { parseBRL } from "../utils/parseBRL";
+import { calcularRescisaoCompleta, calcularDiasAvisoTotal } from "../utils/rescisaoCalc";
 import { invokeLLM } from "../_core/llm";
 
 const DESLIGADO_STATUSES = ['Desligado', 'Lista_Negra'];
@@ -2212,6 +2213,106 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
 }
 
 // ============================================================
+// 8.B  CUSTO DE DEMISSÃO EM MASSA (Rev. 1908)
+// ------------------------------------------------------------
+// Lista TODOS os funcionários ATIVOS da empresa e estima o custo
+// de uma rescisão sem justa causa (tipo='empregador_indenizado',
+// pior caso para o caixa: paga tudo de uma vez, inclui aviso prévio
+// indenizado + multa 40% FGTS). Ordena do MAIS CARO ao mais barato.
+// dataReferencia é o último dia trabalhado (default = HOJE).
+// VR e descontos NÃO entram nesta estimativa rápida em massa —
+// é uma fotografia de "provisão de caixa" para a diretoria.
+// ============================================================
+async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: string, companyIds?: number[]) {
+  const db = await getDb();
+  if (!db) return null;
+  const dataRef = dataReferencia || new Date().toISOString().split('T')[0];
+
+  const baseWhere = and(
+    companyWhere(employees, companyId, companyIds),
+    sql`${employees.deletedAt} IS NULL`,
+  );
+  const activeWhere = and(
+    baseWhere,
+    sql`${employees.status} NOT IN ('Desligado', 'Lista_Negra')`,
+  );
+
+  const rows = await db.select({
+    id: employees.id,
+    nomeCompleto: employees.nomeCompleto,
+    cpf: employees.cpf,
+    cargo: employees.cargo,
+    funcao: employees.funcao,
+    setor: employees.setor,
+    dataAdmissao: employees.dataAdmissao,
+    salarioBase: employees.salarioBase,
+    status: employees.status,
+  }).from(employees).where(activeWhere);
+
+  const dtFimAviso = new Date(dataRef + 'T00:00:00');
+  const diasTrabMes = isNaN(dtFimAviso.getTime()) ? 30 : dtFimAviso.getDate();
+
+  const linhas = rows
+    .filter(r => !!r.dataAdmissao && parseBRL(r.salarioBase) > 0 && r.dataAdmissao! <= dataRef)
+    .map(r => {
+      const salario = parseBRL(r.salarioBase);
+      // Rev. 1909-fix (architect): projeta dataFimAviso = dataRef + diasAvisoTotal
+      // para que férias proporcional / 13º / multa FGTS contemplem o período
+      // de aviso indenizado (worst case real). Sem isso, todos os componentes
+      // tempo-dependentes ficavam subestimados.
+      const dtAdm = new Date(r.dataAdmissao! + 'T00:00:00');
+      const anosBase = !isNaN(dtAdm.getTime())
+        ? Math.max(0, Math.floor((dtFimAviso.getTime() - dtAdm.getTime()) / (1000 * 60 * 60 * 24 * 365.25)))
+        : 0;
+      const diasAvisoEstimado = calcularDiasAvisoTotal(anosBase);
+      const dtFimProjetada = new Date(dtFimAviso.getTime() + diasAvisoEstimado * 24 * 60 * 60 * 1000);
+      const dataFimProjetada = dtFimProjetada.toISOString().slice(0, 10);
+      const previsao = calcularRescisaoCompleta({
+        salarioBase: salario,
+        dataAdmissao: r.dataAdmissao!,
+        dataDesligamento: dataRef,
+        dataFimAviso: dataFimProjetada,
+        tipo: 'empregador_indenizado',
+        vrDiario: 0,
+        diasTrabalhadosMes: diasTrabMes,
+      });
+      return {
+        id: r.id,
+        nomeCompleto: r.nomeCompleto,
+        cpf: r.cpf,
+        cargo: r.cargo || r.funcao || '',
+        setor: r.setor || '',
+        dataAdmissao: r.dataAdmissao!,
+        salarioBase: salario,
+        anosServico: previsao.anosServico,
+        diasAvisoTotal: previsao.diasAvisoTotal,
+        saldoSalario: parseFloat(previsao.saldoSalario),
+        feriasProporcional: parseFloat(previsao.totalFerias),
+        feriasVencidas: parseFloat(previsao.feriasVencidas),
+        decimoTerceiro: parseFloat(previsao.decimoTerceiroProporcional),
+        avisoPrevioIndenizado: parseFloat(previsao.avisoPrevioIndenizado),
+        multaFGTS: parseFloat(previsao.multaFGTS),
+        fgtsEstimado: parseFloat(previsao.fgtsEstimado),
+        total: parseFloat(previsao.total),
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  const grandTotal = linhas.reduce((s, l) => s + l.total, 0);
+  const grandTotalFolha = linhas.reduce((s, l) => s + l.salarioBase, 0);
+
+  return {
+    dataReferencia: dataRef,
+    totalFuncionarios: linhas.length,
+    funcionariosIgnorados: rows.length - linhas.length,
+    grandTotal,
+    grandTotalFolha,
+    mediaPorFuncionario: linhas.length > 0 ? grandTotal / linhas.length : 0,
+    linhas,
+  };
+}
+
+// ============================================================
 // 8. DASHBOARD AVISO PRÉVIO
 // ============================================================
 async function getDashAvisoPrevio(companyId: number, ano?: number, companyIds?: number[]) {
@@ -3812,6 +3913,11 @@ export const dashboardsRouter = router({
   tributario: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashTributario(input.companyId, input.companyIds)),
   civil: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashCivil(input.companyId, input.companyIds)),
   avisoPrevio: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashAvisoPrevio(input.companyId, input.ano, input.companyIds)),
+  custoDemissaoMassa: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    dataReferencia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  })).query(({ input }) => getDashCustoDemissaoMassa(input.companyId, input.dataReferencia, input.companyIds)),
   ferias: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFerias(input.companyId, input.ano, input.companyIds)),
   perfilTempoCasa: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashPerfilTempoCasa(input.companyId, input.companyIds)),
   analiseIAPerfil: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).mutation(({ input }) => getAnaliseIAPerfil(input.companyId, input.companyIds)),

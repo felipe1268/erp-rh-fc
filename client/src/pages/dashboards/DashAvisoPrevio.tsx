@@ -29,11 +29,13 @@ const AP_INDICADORES: LinhaInd[] = [
     acoes: ["Garantir provisão financeira para o mês de pagamento.", "Cruzar com fluxo de caixa de 30/45 dias.", "Avaliar impacto na DRE (rescisões viram despesa não-recorrente)."] },
 ];
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   AlertTriangle, Clock, DollarSign, Users, CalendarDays,
   TrendingUp, Building2, Briefcase, Timer, ShieldAlert,
   CheckCircle2, XCircle, ArrowRight, Loader2, X, Ban,
-  Wallet, Receipt, BarChart3, ArrowLeft } from "lucide-react";
+  Wallet, Receipt, BarChart3, ArrowLeft, Flame, UserMinus2,
+  ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { Link } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -111,6 +113,38 @@ export default function DashAvisoPrevio() {
 
   const [drillDown, setDrillDown] = useState<{ type: string; label: string } | null>(null);
   const [reducaoFilter, setReducaoFilter] = useState<string>("todos");
+
+  // ===== Rev. 1908 — Custo de Demissão em Massa =====
+  const [cdmData, setCdmData] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const { data: cdm, isLoading: loadingCdm, isFetching: fetchingCdm } = trpc.dashboards.custoDemissaoMassa.useQuery(
+    { companyId: queryCompanyId, dataReferencia: cdmData, ...(isConstrutoras ? { companyIds } : {}) },
+    { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
+  );
+  // Rev. 1909 — ordenação clicável da tabela de custo de demissão em massa
+  type CdmSortKey = 'nomeCompleto' | 'cargo' | 'setor' | 'dataAdmissao' | 'anosServico' | 'diasAvisoTotal' | 'salarioBase' | 'avisoPrevioIndenizado' | 'multaFGTS' | 'total';
+  const [cdmSort, setCdmSort] = useState<{ key: CdmSortKey; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' });
+  const toggleCdmSort = (key: CdmSortKey) => setCdmSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: (key === 'nomeCompleto' || key === 'cargo' || key === 'setor' || key === 'dataAdmissao') ? 'asc' : 'desc' });
+  const cdmLinhasOrdenadas = useMemo(() => {
+    if (!cdm?.linhas) return [];
+    const arr = [...cdm.linhas];
+    const k = cdmSort.key;
+    const mul = cdmSort.dir === 'asc' ? 1 : -1;
+    arr.sort((a: any, b: any) => {
+      const va = a[k];
+      const vb = b[k];
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * mul;
+      const sa = String(va ?? '').toLowerCase();
+      const sb = String(vb ?? '').toLowerCase();
+      return sa.localeCompare(sb, 'pt-BR') * mul;
+    });
+    return arr;
+  }, [cdm, cdmSort]);
+  const SortIcon = ({ k }: { k: CdmSortKey }) => {
+    if (cdmSort.key !== k) return <ArrowUpDown className="inline h-3 w-3 ml-0.5 opacity-30" />;
+    return cdmSort.dir === 'asc'
+      ? <ArrowUp className="inline h-3 w-3 ml-0.5 text-blue-600" />
+      : <ArrowDown className="inline h-3 w-3 ml-0.5 text-blue-600" />;
+  };
 
   // Filtra avisos pelo drill-down selecionado
   const drillDownAvisos = useMemo(() => {
@@ -245,6 +279,133 @@ export default function DashAvisoPrevio() {
                     <p className="text-[10px] text-blue-400 mt-0.5">Custo médio de rescisão por funcionário</p>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* ===== SEÇÃO 2.B — CUSTO DE DEMISSÃO EM MASSA (Rev. 1908) ===== */}
+            <Card className="border-2 border-red-200">
+              <CardHeader className="pb-3">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div className="flex items-start gap-2">
+                    <div className="h-9 w-9 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+                      <Flame className="h-5 w-5 text-red-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                        Custo de Demissão em Massa — Provisão de Caixa
+                        {fetchingCdm && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+                      </CardTitle>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Estimativa de quanto custaria <strong>demitir TODOS os funcionários ativos hoje</strong> (sem justa causa — pior cenário: empregador indeniza tudo de uma vez, inclui aviso prévio indenizado + multa 40% FGTS). Use para dimensionar o caixa em momentos de crise.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Data-base:</label>
+                    <Input
+                      type="date"
+                      value={cdmData}
+                      onChange={(e) => setCdmData(e.target.value)}
+                      className="h-8 w-[160px] text-xs"
+                    />
+                    <button
+                      onClick={() => setCdmData(new Date().toISOString().slice(0, 10))}
+                      className="text-[11px] px-2 py-1 rounded-md border border-border bg-white hover:bg-muted/50 text-muted-foreground"
+                      title="Voltar para hoje"
+                    >Hoje</button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {loadingCdm && !cdm ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : !cdm ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">Selecione uma empresa.</p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                      <div className="rounded-xl border-2 border-red-200 bg-red-50/50 p-3 text-center">
+                        <DollarSign className="h-5 w-5 text-red-500 mx-auto mb-1" />
+                        <p className="text-base sm:text-lg md:text-2xl font-bold text-red-700 tabular-nums leading-tight">{fmtBRL(cdm.grandTotal)}</p>
+                        <p className="text-[10px] text-red-600 font-medium mt-0.5">Custo Total Estimado</p>
+                      </div>
+                      <div className="rounded-xl border-2 border-orange-200 bg-orange-50/50 p-3 text-center">
+                        <UserMinus2 className="h-5 w-5 text-orange-500 mx-auto mb-1" />
+                        <p className="text-base sm:text-lg md:text-2xl font-bold text-orange-700 tabular-nums leading-tight">{cdm.totalFuncionarios}</p>
+                        <p className="text-[10px] text-orange-600 font-medium mt-0.5">Funcionários Ativos</p>
+                        {cdm.funcionariosIgnorados > 0 && (
+                          <p className="text-[9px] text-amber-600 mt-0.5">+{cdm.funcionariosIgnorados} ignorados (sem salário/admissão)</p>
+                        )}
+                      </div>
+                      <div className="rounded-xl border-2 border-blue-200 bg-blue-50/50 p-3 text-center">
+                        <Receipt className="h-5 w-5 text-blue-500 mx-auto mb-1" />
+                        <p className="text-base sm:text-lg md:text-2xl font-bold text-blue-700 tabular-nums leading-tight">{fmtBRL(cdm.mediaPorFuncionario)}</p>
+                        <p className="text-[10px] text-blue-600 font-medium mt-0.5">Custo Médio por Funcionário</p>
+                      </div>
+                      <div className="rounded-xl border-2 border-purple-200 bg-purple-50/50 p-3 text-center">
+                        <Wallet className="h-5 w-5 text-purple-500 mx-auto mb-1" />
+                        <p className="text-base sm:text-lg md:text-2xl font-bold text-purple-700 tabular-nums leading-tight">{fmtBRL(cdm.grandTotalFolha)}</p>
+                        <p className="text-[10px] text-purple-600 font-medium mt-0.5">Folha Mensal Total</p>
+                        {cdm.grandTotalFolha > 0 && (
+                          <p className="text-[9px] text-purple-500 mt-0.5">{(cdm.grandTotal / cdm.grandTotalFolha).toFixed(1)}× a folha</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {cdm.linhas.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-6 text-center">Nenhum funcionário ativo com salário e admissão informados.</p>
+                    ) : (
+                      <div className="overflow-x-auto max-h-[480px] overflow-y-auto rounded-md border">
+                        <table className="w-full text-xs">
+                          <thead className="bg-muted/50 sticky top-0 z-10">
+                            <tr className="border-b text-left">
+                              <th className="py-2 px-2 font-semibold text-muted-foreground">#</th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('nomeCompleto')}>Funcionário<SortIcon k="nomeCompleto" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('cargo')}>Cargo<SortIcon k="cargo" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('setor')}>Setor<SortIcon k="setor" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('dataAdmissao')}>Admissão<SortIcon k="dataAdmissao" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground text-center cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('anosServico')}>Anos<SortIcon k="anosServico" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground text-center cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('diasAvisoTotal')} title="Dias de aviso prévio (Lei 12.506/2011)">Dias Aviso<SortIcon k="diasAvisoTotal" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('salarioBase')}>Salário<SortIcon k="salarioBase" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('avisoPrevioIndenizado')}>Aviso Indeniz.<SortIcon k="avisoPrevioIndenizado" /></th>
+                              <th className="py-2 px-2 font-semibold text-muted-foreground text-right cursor-pointer select-none hover:text-blue-700" onClick={() => toggleCdmSort('multaFGTS')}>Multa 40%<SortIcon k="multaFGTS" /></th>
+                              <th className="py-2 px-2 font-semibold text-red-700 text-right cursor-pointer select-none hover:text-red-900" onClick={() => toggleCdmSort('total')}>Custo Total<SortIcon k="total" /></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {cdmLinhasOrdenadas.map((l: any, idx: number) => (
+                              <tr key={l.id} className={`border-b border-border/50 hover:bg-muted/30 ${cdmSort.key === 'total' && cdmSort.dir === 'desc' && idx < 3 ? 'bg-red-50/40' : ''}`}>
+                                <td className="py-1.5 px-2 text-muted-foreground tabular-nums">{idx + 1}</td>
+                                <td className="py-1.5 px-2 font-medium truncate max-w-[200px]" title={l.nomeCompleto}>{l.nomeCompleto}</td>
+                                <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[140px]" title={l.cargo}>{l.cargo || '-'}</td>
+                                <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[140px]" title={l.setor}>{l.setor || '-'}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums">{l.dataAdmissao ? new Date(l.dataAdmissao + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</td>
+                                <td className="py-1.5 px-2 text-center tabular-nums">{l.anosServico}</td>
+                                <td className="py-1.5 px-2 text-center tabular-nums">{l.diasAvisoTotal}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums">{fmtBRL(l.salarioBase)}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">{fmtBRL(l.avisoPrevioIndenizado)}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums text-muted-foreground">{fmtBRL(l.multaFGTS)}</td>
+                                <td className="py-1.5 px-2 text-right tabular-nums font-bold text-red-700">{fmtBRL(l.total)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-red-50 sticky bottom-0">
+                            <tr className="border-t-2 border-red-300">
+                              <td colSpan={10} className="py-2 px-2 text-right font-bold text-red-800 uppercase text-[11px]">TOTAL GERAL</td>
+                              <td className="py-2 px-2 text-right tabular-nums font-bold text-red-800">{fmtBRL(cdm.grandTotal)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    )}
+
+                    <p className="text-[10px] text-muted-foreground mt-3 italic">
+                      <strong>Composição da estimativa:</strong> saldo de salário (dias trab. no mês) + férias proporcionais + 1/3 + férias vencidas + 13º proporcional + aviso prévio indenizado (Lei 12.506) + multa 40% sobre FGTS. <strong>Não inclui</strong> VR/VA, descontos (INSS/IRRF, adiantamentos, EPI), nem médias de adicionais — para o cálculo completo individual, abra o módulo Aviso Prévio.
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
 

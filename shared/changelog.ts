@@ -1,6 +1,46 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1909 — RH · Dash Aviso Prévio · Tabela "Custo de Demissão em Massa" agora com ordenação CLICÁVEL em todas as colunas (asc/desc toggle).
+ * User (16/05/2026, follow-up direto Rev. 1908): "seção nova no dash com date picker + tabela ordenada do mais caro ao mais barato. QUETO TER POSSIBILIDADE DE MUDAR ESSA ORDEM SE EU QUISER..".
+ * Mudança (em client/src/pages/dashboards/DashAvisoPrevio.tsx):
+ *   • L40-41 — ícones adicionados: ArrowUp, ArrowDown, ArrowUpDown.
+ *   • L126-150 — novo state `cdmSort: { key: CdmSortKey; dir: 'asc'|'desc' }` (default { key:'total', dir:'desc' }, mantém o comportamento Rev. 1908 como padrão "mais caro → mais barato"). Função `toggleCdmSort(key)`: se mesma coluna, inverte direção; se nova coluna, default 'asc' p/ texto/data e 'desc' p/ valores numéricos (UX intuitivo — texto começa A→Z, dinheiro começa do maior). `useMemo cdmLinhasOrdenadas`: clona cdm.linhas e ordena por tipo (Number subtract para números, String.localeCompare('pt-BR') para strings/datas — "2020-03-15" comparado como string já fica em ordem cronológica correta). Component `<SortIcon k=...>` renderiza ArrowUpDown opaco quando inativo + ArrowUp/ArrowDown azul quando ativo.
+ *   • L453-487 — 10 `<th>` da tabela convertidos para clicáveis (`cursor-pointer select-none hover:text-blue-700`, exceto coluna `#` que continua estática). Cada um chama `toggleCdmSort('chave')` e renderiza `<SortIcon k='chave' />` ao lado do label. Colunas sortáveis: Funcionário, Cargo, Setor, Admissão, Anos, Dias Aviso, Salário, Aviso Indeniz., Multa 40%, Custo Total.
+ *   • L488-498 — `tbody` agora itera `cdmLinhasOrdenadas` (não mais `cdm.linhas` direto). Destaque visual dos top-3 (bg-red-50/40) condicionado a `cdmSort.key === 'total' && cdmSort.dir === 'desc'` — só aparece quando ordenação é o default "mais caro primeiro"; se user ordenar por outra coluna (ex: alfabético por Funcionário), destaque some pra não confundir.
+ *   version → 1909.
+ * Resultado: user clica em qualquer header → tabela reordena. Click no mesmo header alterna asc↔desc. Ícones de seta indicam ordem ativa (azul) ou disponível (cinza). Default continua sendo "mais caro → mais barato" como pedido na Rev. 1908. Ordem "TOTAL GERAL" do tfoot inalterada (é soma, não depende de ordem).
+ * Preservado: query/endpoint server intactos (sort no client é puro JS, dataset pequeno); composição da estimativa, KPIs do topo, date picker, badges de top-3, disclaimer do rodapé — tudo intacto. Zero backend/DB/schema/tRPC. Reversível em 3 hunks + version bump. R-001/R-007/R-010 OK.
+ *
+ * Rev. 1908 — RH · Dash Aviso Prévio · Nova seção "Custo de Demissão em Massa — Provisão de Caixa" com tabela de TODOS os funcionários ativos ordenados do mais caro ao mais barato + date picker.
+ * User (16/05/2026, screenshot image_1778952096468.png — `/dashboards/aviso-previo` mostrando seção de avisos em andamento, tendência mês-a-mês, mas SEM nenhuma visão "se eu demitir todo mundo hoje, quanto custa?"): "NO DASH DE AVISO PREVIO, QUERO QUE CRIE UMA TABELA INFORMANDO DO MAIS CARO AO MAIS BARATO DE TODOS OS FUNCIONARIOS DA EMPRESA, QUAL SERIA O CUSTO PARA DAR O AVISO PREVIO APARTIR DA DATA DE HOJE, OU DE UMA DATA A SER DEFINIDA PELO USUÁRIO.. ISSO É IMPORTANTE SABER PARA TER UMA NOSSÃO DE QUANTO CUSTA PARA DEMITIR TODOS FUNCIONARIOS CASO SEJA NESCESSÁRIO É UM VALOR PRECISA ESTAR DISPONIVEL NO CAIXA..".
+ * Motivação: diretoria precisa de um número rápido de "provisão de caixa para cenário de emergência" — quanto sairia se a empresa precisasse encerrar todos os contratos de uma vez. Hoje o dash só mostra avisos JÁ ABERTOS (em andamento); não havia visão prospectiva sobre os ativos.
+ * Mudança server (em server/routers/dashboards.ts):
+ *   • L20 — novo import: `import { calcularRescisaoCompleta } from "../utils/rescisaoCalc"` (utilitário já existente, usado pelo módulo Aviso Prévio individual).
+ *   • L2218-2310 — nova função `getDashCustoDemissaoMassa(companyId, dataReferencia?, companyIds?)`:
+ *     – baseWhere = companyWhere + deletedAt IS NULL; activeWhere = baseWhere + status NOT IN ('Desligado','Lista_Negra') — mesmo critério das outras queries de ativos do dashboards.ts.
+ *     – Seleciona id, nomeCompleto, cpf, cargo, funcao, setor, dataAdmissao, salarioBase, status.
+ *     – Para cada funcionário válido (tem dataAdmissao + salarioBase > 0 + admitido ANTES da data-base), chama `calcularRescisaoCompleta` com tipo='empregador_indenizado' (pior cenário para o caixa: paga aviso indenizado + multa 40% FGTS), dataDesligamento = dataFimAviso = dataRef, vrDiario=0, diasTrabalhadosMes = dia do mês da dataRef.
+ *     – Retorna por funcionário: salarioBase, anosServico, diasAvisoTotal (Lei 12.506: 30 + 3/ano, máx 90), saldoSalario, feriasProporcional, feriasVencidas, decimoTerceiro, avisoPrevioIndenizado, multaFGTS, fgtsEstimado, total.
+ *     – Ordena `.sort((a,b) => b.total - a.total)` (mais caro → mais barato, conforme pedido do user).
+ *     – Retorna agregados: dataReferencia, totalFuncionarios, funcionariosIgnorados (sem salário/admissão), grandTotal, grandTotalFolha, mediaPorFuncionario, linhas.
+ *   • L3819-3823 — novo endpoint tRPC `dashboards.custoDemissaoMassa` (protectedProcedure) com input zod { companyId, companyIds?, dataReferencia? (YYYY-MM-DD) }, default = hoje.
+ * Mudança client (em client/src/pages/dashboards/DashAvisoPrevio.tsx):
+ *   • L35 — novo import `Input` do shadcn (date picker nativo via `<input type="date">`).
+ *   • L40 — novos ícones Flame, UserMinus2 de lucide-react.
+ *   • L119-124 — novo state `cdmData` (default = `new Date().toISOString().slice(0,10)`) + query `trpc.dashboards.custoDemissaoMassa.useQuery({ companyId, dataReferencia: cdmData, ...(isConstrutoras ? { companyIds } : {}) })` com enabled gates iguais aos outros queries do dash.
+ *   • L262-413 — nova SEÇÃO 2.B "Custo de Demissão em Massa — Provisão de Caixa" inserida entre a Previsão de Custo (avisos em andamento) e Seção 3 (Alertas):
+ *     – Card com borda vermelha + ícone Flame, indicando ação de risco/cenário crítico.
+ *     – Date picker `<Input type="date">` + botão "Hoje" para resetar.
+ *     – Loader2 spinner durante isFetching (substituições incrementais ao trocar data).
+ *     – 4 KPIs grandes em grid: Custo Total Estimado (vermelho), Funcionários Ativos (laranja), Custo Médio (azul), Folha Mensal Total (roxo, com "Nx a folha" = grandTotal/folha).
+ *     – Tabela sticky-header com 11 colunas: #, Funcionário, Cargo, Setor, Admissão, Anos, Dias Aviso, Salário, Aviso Indeniz., Multa 40%, Custo Total. Top-3 linhas (mais caras) destacadas com bg-red-50/40. tfoot sticky-bottom com TOTAL GERAL.
+ *     – Footer com disclaimer: estimativa não inclui VR/VA, descontos (INSS/IRRF/adiantamentos/EPI) nem médias de adicionais — para cálculo completo individual, abrir o módulo Aviso Prévio.
+ *   version → 1908.
+ * Resultado: diretoria abre `/dashboards/aviso-previo`, role até "Custo de Demissão em Massa", vê instantaneamente: (a) quanto custaria encerrar todo o quadro HOJE, (b) tabela rankeada com cada funcionário e a composição, (c) pode mudar a data-base para projeções (ex: "e em 31/12, com 1 ano a mais de tempo de casa?"). KPI "Nx a folha" dá a intuição de "esse encerramento consome 4× a folha mensal".
+ * Premissas/limitações explicitadas: tipo fixo em empregador_indenizado (worst case); vrDiario=0 (config de meal benefit varia por obra, fora de escopo do dash em massa); periodosVencidosOverride não informado → função usa fallback heurístico de calcularFeriasVencidas; sem descontos (adiantamentos, EPI, ponto) — esses são caso-a-caso e o dash deixa isso claro no rodapé. Para precisão 100%, o módulo Aviso Prévio individual continua sendo a fonte canônica.
+ * Preservado: todas as 10 seções existentes do DashAvisoPrevio (Resumo, Previsão dos em andamento, Alertas, Distribuição Tipo, Redução Jornada, Evolução Mensal, Setor, Função, Custo por Setor, Composição, Dias Aviso, Anos Serviço, Tabela detalhada) intactas; endpoint `dashboards.avisoPrevio` e `dashboards.avisoPrevioComparativo` inalterados; companyWhere helper reusado; calcularRescisaoCompleta NÃO modificado (reuso puro). Zero ALTER/DROP/DELETE no DB. Reversível em 4 hunks (1 import + 1 função + 1 endpoint server + 1 seção client) + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1907 — RH · Aviso Prévio · Documento impresso preserva o cabeçalho azul + logo + faixa amarela (force print-color-adjust:exact).
  * User (16/05/2026, screenshot image_1778951485772.png — preview do "Aviso Prévio do Empregador" do colaborador ALEX ALESSANDRO com header azul gradiente + box branco do logo + faixa amarela inferior + botão "Imprimir / Salvar PDF"): "GARANTA QUE A TELA AZUL COM O LOGO DA EMPRESA, SAIA NA IMPRESSÃO.. QUERO A TELA EXATAMENTE IGUAL..".
  * Causa-raiz (em client/src/pages/AvisoPrevio.tsx L583 e L673 — `@media print` dos templates HTML Trabalhado e Indenizado):
