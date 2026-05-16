@@ -25,6 +25,19 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1867,
+    titulo: "Menu · Dashboard DDS adicionado à seção Dashboards (sidebar SST)",
+    descricao: "User (16/05/2026, screenshot da seção DASHBOARDS): 'Cadê a dash do DDS DIAOGO DUARIO DE OBRA'. A Rev. 1863 criou a página `/sst/dds-dashboard` mas só plugou um botão 'Dashboard' no header do DDSGuia — não inseriu a entrada no menu lateral, então quem navegava direto pela seção 'Dashboards' não via.\n\n" +
+      "Fix (2 hunks de 1 linha):\n" +
+      "  • `client/src/components/DashboardLayout.tsx` L211: adicionado item após 'Atestados & Acidentes' — `{ icon: ClipboardCheck, label: 'DDS — Diálogo Diário', path: '/sst/dds-dashboard' }`. Mesmo ícone do item DDS na seção SST para manter associação visual.\n" +
+      "  • `shared/modules.ts` L218: adicionada feature `dashboard-dds` no módulo SST (controle de permissões via MenuConfig).\n\n" +
+      "Preservado: ZERO mudança em rota (já existia desde Rev. 1863), página DDSDashboard.tsx, RouteGuard, ou backend. O botão 'Dashboard' no header do DDSGuia continua funcionando. Reversível em 2 hunks. R-001 OK.",
+    tipo: "feat",
+    modulos: "Menu/SST",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 12:10:00",
+  },
+  {
     version: 1866,
     titulo: "UI · Sidebar visível em iPad portrait/tablets — breakpoint md → xs (768px → 480px)",
     descricao: "User (16/05/2026, screenshot DDS no iPad portrait): 'Mantenha a barra lateral visível nesta tela'. Screenshot mostra DDS Guia em iPad portrait sem nenhum vestígio da barra lateral — content full-bleed da borda esquerda.\n\n" +

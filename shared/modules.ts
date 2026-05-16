@@ -216,6 +216,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       // === Dashboards SST ===
       { key: "dashboard-epis", label: "Dashboard EPIs", route: "/dashboards/epis", icon: "HardHat" },
       { key: "dashboard-atestados-acidentes", label: "Atestados & Acidentes", route: "/sst/dashboard-atestados-acidentes", icon: "HeartPulse" },
+      { key: "dashboard-dds", label: "Dashboard DDS", route: "/sst/dds-dashboard", icon: "ClipboardCheck" },
     ],
   },
   {

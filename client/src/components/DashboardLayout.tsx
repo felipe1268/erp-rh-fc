@@ -209,6 +209,7 @@ const menuSectionsSST: MenuSection[] = [
     items: [
       { icon: HardHat, label: "EPIs", path: "/dashboards/epis" },
       { icon: HeartPulse, label: "Atestados & Acidentes", path: "/sst/dashboard-atestados-acidentes" },
+      { icon: ClipboardCheck, label: "DDS — Diálogo Diário", path: "/sst/dds-dashboard" },
     ],
   },
 ];
