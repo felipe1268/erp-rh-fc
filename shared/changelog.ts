@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1946 — RH · Dash Aviso Prévio · Tabela CDM · LEGENDA explicativa "Por que Trabalhado e Indenizado dão valores diferentes?" + correção de texto enganoso no header.
+ * User (16/05/2026, screenshots Indenizado R$ 1.440.152,25 vs Trabalhado R$ 1.165.025,64 — diferença 24%): "o valor não poderia ser diferente.. pq o calculo não é o mesmo?" → após explicação técnica (Lei 12.506 unificou DIAS mas natureza financeira difere por CLT Art. 487/488), user: "matenha como esta, so coloca uma legenda explicando isso ok..".
+ * Causa-raiz da confusão: header da seção CDM dizia "Valor total tende a ser similar — a diferença operacional é 'trabalha vs recebe sem trabalhar'", o que é FALSO. Em Trabalhado a "Aviso Indeniz." paga só os dias EXTRAS da Lei 12.506 (Anderson 10 anos = 30 dias extras, R$ 12.469); em Indenizado paga TODOS os dias (60, R$ 24.938). Diferença pode chegar a 24%+ no agregado da folha. Texto antigo levava usuário a desconfiar de bug onde só há aplicação correta da CLT.
+ * Mudança client (`DashAvisoPrevio.tsx`):
+ *   (a) Header da seção (L424→427): removida a sentença enganosa "Valor total tende a ser similar...". Mantida definição neutra de Trabalhado/Indenizado.
+ *   (b) Novo `<details>` collapsable inserido logo após o `(loadingCdm ? ... : cdm ? <>` (antes dos KPIs):
+ *     - Estilo: âmbar discreto (`border-amber-200 bg-amber-50/60`), ícone `<Info>`, summary clicável "Por que Trabalhado e Indenizado dão valores diferentes?" com chips coloridos azul/vermelho.
+ *     - Default: RECOLHIDO (não polui visual de quem já entende — só abre se usuário tiver dúvida).
+ *     - Conteúdo: (i) parágrafo intro explicando que DIAS são iguais (Rev. 1943) mas natureza financeira difere; (ii) grid 2 cols md+ com 2 cards lado-a-lado:
+ *         · "Trabalhado (CLT Art. 487 II + Art. 488)" azul — explica que empregado cumpre na empresa recebendo salário normal (entra em Saldo de Salário), só dias EXTRAS da Lei 12.506 viram indenização (CLT manda reduzir 2h/dia ou 7 corridos); fórmula da coluna: dias_extras × salário-dia.
+ *         · "Indenizado (CLT Art. 487 §1º)" vermelho — explica que empregado sai imediatamente, empresa paga TODOS os dias como verba indenizatória, projeta tempo de serviço (afeta 13º/férias proporcional); fórmula da coluna: total_dias × salário-dia + reflexos.
+ *     - (iii) Box destacado com exemplo concreto do Anderson (10 anos, R$ 5.821,20, 60 dias): Trab ≈ R$ 12.469 / Ind ≈ R$ 24.938; conclusão "A diferença não é bug — é o que a lei manda. Igualar os valores faria a empresa pagar 2× pelo mesmo período no Trabalhado.".
+ *   (c) Import `Info` adicionado ao bloco `lucide-react`.
+ * version → 1946.
+ * Resultado: usuário com dúvida clica e entende em 30s POR QUE os valores diferem com base legal (CLT 487/488 + Lei 12.506); quem já entende não tem mais ruído (recolhido por padrão). Texto-âncora "tende a ser similar" REMOVIDO para não induzir mais ao engano. Zero mudança de cálculo.
+ * Preservado: Rev. 1945 BLOCO 5 hierarchy, Rev. 1944 modal drill-down, Rev. 1943 Lei 12.506 unificada, Rev. 1937 redim. colunas CDM, Rev. 1936 tag CIPA, Rev. 1935 Raio-X, Rev. 1934 a/m/d, Rev. 1931 idade, toggle Trab/Ind Rev. 1921, filtros Rev. 1915/1923, queries Rev. 1927. Zero backend/DB. Reversível em 3 hunks (importar Info + remover details + restaurar texto antigo). R-001/R-007/R-010 OK.
+ *
  * Rev. 1945 — Planejamento · PlanejamentoDetalhe · REFIS · BLOCO 5B (drill-down EAP consolidado, Rev. 1890) ELIMINADO — hierarquia PAI→FILHO com expand/collapse INTEGRADA dentro de cada card NAVE do BLOCO 5.
  * User (16/05/2026, screenshots SERVIÇOS PRELIMINARES/NAVE NORTE/COMPLEMENTARES com 2 blocos — cards com bar charts em cima + lista drill-down embaixo): "nao quero esta atividade aqui em baixo separadas quero que fique na tela q te mandei, estruture para respeitar a estrutura de pais e filhos que tem no cronograma.. ajuste tudo para ficar mais facil, quero ter a opção de abrir e fechar os filhos se quiser.. quero ver no macro ou no destalhe se quiser..".
  * Motivação: 2 seções redundantes (BLOCO 5 = cards com bar chart de N2 + BLOCO 5B = lista pai→filho consolidada com tree recursivo) causavam scroll duplo, contexto perdido (NAVE em cima ≠ NAVE em baixo), e usuário tinha que ir e voltar para correlacionar macro vs detalhe. Em vez disso, cada card NAVE agora oferece AMBAS visões in-place: visão MACRO (bar chart horizontal N2) no topo + visão DETALHE (árvore N2→N3→N4... com expand/collapse por nó) no rodapé do mesmo card.

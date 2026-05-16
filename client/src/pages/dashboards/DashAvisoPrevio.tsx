@@ -35,7 +35,7 @@ import {
   TrendingUp, Building2, Briefcase, Timer, ShieldAlert,
   CheckCircle2, XCircle, ArrowRight, Loader2, X, Ban,
   Wallet, Receipt, BarChart3, ArrowLeft, Flame, UserMinus2,
-  ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+  ArrowUp, ArrowDown, ArrowUpDown, Info } from "lucide-react";
 import { Link } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -421,7 +421,7 @@ export default function DashAvisoPrevio() {
                         {fetchingCdm && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
                       </CardTitle>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Estimativa de quanto custaria <strong>demitir TODOS os funcionários ativos</strong> a partir da data-base, sem justa causa. Ambas modalidades aplicam <strong>+3 dias/ano de serviço</strong> (Lei 12.506/2011 — corrente majoritária TST, alinhado ao jurídico). <strong>Trabalhado</strong> = empregado cumpre o aviso (30+3·ano dias) na empresa. <strong>Indenizado</strong> = paga o aviso completo de uma vez sem trabalho. <em>Valor total tende a ser similar — a diferença operacional é "trabalha vs recebe sem trabalhar".</em>
+                        Estimativa de quanto custaria <strong>demitir TODOS os funcionários ativos</strong> a partir da data-base, sem justa causa. Ambas modalidades aplicam <strong>+3 dias/ano de serviço</strong> (Lei 12.506/2011 — corrente majoritária TST, alinhado ao jurídico). <strong>Trabalhado</strong> = empregado cumpre o aviso (30+3·ano dias) na empresa. <strong>Indenizado</strong> = paga o aviso completo de uma vez sem trabalho.
                       </p>
                     </div>
                   </div>
@@ -465,6 +465,35 @@ export default function DashAvisoPrevio() {
                   <p className="text-sm text-muted-foreground py-4 text-center">Selecione uma empresa.</p>
                 ) : (
                   <>
+                    {/* Rev. 1946 — Legenda explicativa: por que Trabalhado e Indenizado
+                        têm valores DIFERENTES mesmo com os mesmos DIAS de aviso. */}
+                    <details className="mb-4 rounded-lg border border-amber-200 bg-amber-50/60 text-[11px] text-amber-900 group">
+                      <summary className="cursor-pointer select-none px-3 py-2 flex items-center gap-2 font-semibold hover:bg-amber-100/60 rounded-lg">
+                        <Info className="h-3.5 w-3.5 shrink-0" />
+                        <span>Por que <span className="text-blue-700">Trabalhado</span> e <span className="text-red-700">Indenizado</span> dão valores diferentes? <span className="font-normal text-amber-700 italic ml-1 hidden sm:inline">— clique para ler</span></span>
+                      </summary>
+                      <div className="px-4 pb-3 pt-1 space-y-2 leading-relaxed border-t border-amber-200/70">
+                        <p>
+                          A <strong>quantidade de dias</strong> do aviso é igual nas duas modalidades (Lei 12.506: 30 + 3 dias por ano de serviço — Rev. 1943). O que muda é a <strong>natureza financeira</strong> do pagamento, por força de lei:
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <div className="rounded border border-blue-300 bg-white/70 p-2">
+                            <p className="font-bold text-blue-700 text-[11px] mb-1">Trabalhado (CLT Art. 487 II + Art. 488)</p>
+                            <p>O empregado <strong>cumpre</strong> o aviso na empresa recebendo <strong>salário normal</strong> pelos dias trabalhados (entra em "Saldo de Salário"). Só os dias <strong>extras da Lei 12.506</strong> (acima de 30) viram indenização, porque a CLT manda <em>reduzir</em> esses dias do trabalho (2h/dia ou 7 corridos).</p>
+                            <p className="mt-1 text-[10px] text-blue-600 italic">→ Coluna "Aviso Indeniz." mostra apenas os dias extras × salário-dia.</p>
+                          </div>
+                          <div className="rounded border border-red-300 bg-white/70 p-2">
+                            <p className="font-bold text-red-700 text-[11px] mb-1">Indenizado (CLT Art. 487 §1º)</p>
+                            <p>O empregado <strong>sai imediatamente</strong>. A empresa paga em dinheiro o equivalente a <strong>TODOS os dias</strong> do aviso (30 + Lei 12.506) como verba indenizatória, sem contraprestação de trabalho. Projeta também o tempo de serviço (afeta 13º/férias proporcional).</p>
+                            <p className="mt-1 text-[10px] text-red-600 italic">→ Coluna "Aviso Indeniz." mostra o total de dias × salário-dia + reflexos.</p>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-amber-800 bg-amber-100/70 rounded px-2 py-1 border border-amber-300">
+                          <strong>Exemplo Anderson (10 anos, salário R$ 5.821,20, 60 dias de aviso):</strong> em <span className="text-blue-700 font-semibold">Trabalhado</span> a "Aviso Indeniz." ≈ R$ 12.469 (só os 30 dias extras + reflexos); em <span className="text-red-700 font-semibold">Indenizado</span> ≈ R$ 24.938 (os 60 dias completos + reflexos). A diferença <strong>não é bug</strong> — é o que a lei manda. Igualar os valores faria a empresa pagar 2× pelo mesmo período no Trabalhado.
+                        </p>
+                      </div>
+                    </details>
+
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                       <div className="rounded-xl border-2 border-red-200 bg-red-50/50 p-3 text-center">
                         <DollarSign className="h-5 w-5 text-red-500 mx-auto mb-1" />
