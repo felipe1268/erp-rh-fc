@@ -3676,6 +3676,70 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
   // Espelha a detecção de descendentes do onBlur (L4424-4477) e do
   // aplicarCascataResponsavelGrupos (L3616-3658) — estrita prefix
   // dotted/flat + guard por nivel + fallback MSP denormalizado.
+  // Rev. 1922 — Função utilitária central de cascata grupo→descendentes.
+  // User (16/05/2026, screenshot Mosaico isGrupo=true + responsavelLotus
+  // preenchido + 4 Ajudantes sem _respManual): "NÃO ESTA ACONTECENDO NADA.
+  // CLICO NA ATIVIDADE PRINCIPAL DO GRUPO, MAS OS FILHOS NÃO ESTÃO SENDO
+  // AFETADAS.. ARRUME A LOGICA OU CRIE OUTRA FORMA DE RESOLVER ESTE
+  // PROBLEMA DE VEZ".
+  // Causa Rev. 1920: cascata só rodava quando user MARCAVA isGrupo (transição
+  // false→true). Se Mosaico já estava marcado como grupo no banco (caso comum
+  // pós-import MSP) e o user só queria propagar o responsável aos filhos,
+  // tinha que desmarcar+remarcar o checkbox — fluxo nada óbvio. Solução
+  // definitiva: extrair a lógica de cascata pra função pura `cascadeRespToDescendants`
+  // que pode ser chamada de QUALQUER ponto (checkbox isGrupo, botão explícito
+  // "Replicar aos descendentes" Rev. 1922, save Rev. 1910). Botão visível ao
+  // lado do input cyan elimina qualquer ambiguidade — basta o user clicar nele.
+  // Semântica: a partir de realIdx+1, todas as linhas até o PRÓXIMO isGrupo
+  // (ou fim) são descendentes. Cobre 100% dos casos (EAP hierárquico, flat,
+  // MSP denormalizado, sem EAP). Retorna { rows: linhas atualizadas, count }.
+  function cascadeRespToDescendants(rows: any[], realIdx: number): { rows: any[]; count: number; valor: string } {
+    const out = rows.map(r => ({ ...r }));
+    const g = out[realIdx];
+    if (!g) return { rows: out, count: 0, valor: "" };
+    const descIdxs: number[] = [];
+    for (let j = realIdx + 1; j < out.length; j++) {
+      const l = out[j];
+      if (l.isGrupo) break;
+      if (l.disabled) continue;
+      descIdxs.push(j);
+    }
+    const valor = (g.responsavelLotus ?? "").trim();
+    descIdxs.forEach(j => {
+      out[j] = {
+        ...out[j],
+        _respManual: true,
+        ...(valor ? { responsavelLotus: valor } : { responsavelLotus: out[j].responsavelLotus ?? "" }),
+      };
+    });
+    return { rows: out, count: descIdxs.length, valor };
+  }
+
+  // Helper público chamado pelo botão "Replicar aos descendentes" Rev. 1922
+  // E pelo onClick do isGrupo checkbox quando marca (true).
+  function replicarRespAosDescendentes(idx: number) {
+    setLinhas(prev => {
+      let realIdx = idx;
+      if (prev[idx]?.id != null) {
+        const found = prev.findIndex(r => r.id === prev[idx].id);
+        if (found >= 0) realIdx = found;
+      }
+      const g = prev[realIdx];
+      if (!g) return prev;
+      const { rows, count, valor } = cascadeRespToDescendants(prev, realIdx);
+      const nomeGrupo = (g.nome ?? "").substring(0, 40);
+      if (count === 0) {
+        setTimeout(() => toast.info(`Grupo "${nomeGrupo}": nenhuma atividade abaixo para replicar.`), 0);
+        return prev;
+      }
+      const msg = valor
+        ? `Grupo "${nomeGrupo}": responsável "${valor}" replicado a ${count} descendente${count > 1 ? "s" : ""}.`
+        : `Grupo "${nomeGrupo}": ${count} descendente${count > 1 ? "s" : ""} ativado${count > 1 ? "s" : ""} — digite o responsável no grupo para propagar o nome.`;
+      setTimeout(() => toast.success(msg), 0);
+      return rows;
+    });
+  }
+
   function marcarComoGrupo(idx: number, checked: boolean) {
     setLinhas(prev => {
       const out = prev.map(r => ({ ...r }));
@@ -3689,44 +3753,19 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
       }
       out[realIdx] = { ...out[realIdx], isGrupo: checked };
       if (!checked) return out; // desmarcar grupo não desfaz cascata
+      // Rev. 1922 — delega à função utilitária central.
       const g = out[realIdx];
-      // Rev. 1919-fix — Semântica DIRETA e ROBUSTA (user 16/05/2026,
-      // screenshot Mosaico marcado como grupo + 4 filhas "Ajudante de
-      // pedreiro" mesmo EAP 03.05 sem nenhum checkbox ativado): "CLIQUEI NA
-      // ATIVIDADE DE GRUPO E OS FILHOS NÃO FORAM CLICADOS AUTOMATICAMENTE".
-      // A lógica anterior (Rev. 1918) tentava primeiro a detecção por prefixo
-      // EAP — em MSP denormalizado (filhos com mesmo EAP do pai) o loop
-      // dava `continue` em todos e nunca caía no fallback. Agora aplicamos
-      // a SEMÂNTICA INTUITIVA direta: "todas as atividades abaixo do grupo,
-      // até o PRÓXIMO grupo (ou fim da lista), são descendentes lógicos".
-      // Cobre 100% dos casos: EAP hierárquico, EAP flat, MSP denormalizado,
-      // ou planilhas sem EAP. Espelha exatamente o fallback do onBlur
-      // (L4539-4546) — única diferença: aqui rodamos SEM exigir prefixo
-      // pq o user acabou de marcar a linha como grupo (intenção explícita).
-      const descIdxs: number[] = [];
-      for (let j = realIdx + 1; j < out.length; j++) {
-        const l = out[j];
-        if (l.isGrupo) break;       // próximo grupo = fim do escopo
-        if (l.disabled) continue;   // ignora desativadas
-        descIdxs.push(j);
-      }
-      if (descIdxs.length === 0) {
-        setTimeout(() => toast.info(`Grupo "${(g.nome ?? "").substring(0, 40)}" marcado — sem atividades abaixo para vincular.`), 0);
+      const { rows, count, valor } = cascadeRespToDescendants(out, realIdx);
+      const nomeGrupo = (g.nome ?? "").substring(0, 40);
+      if (count === 0) {
+        setTimeout(() => toast.info(`Grupo "${nomeGrupo}" marcado — sem atividades abaixo para vincular.`), 0);
         return out;
       }
-      const valor = (g.responsavelLotus ?? "").trim();
-      descIdxs.forEach(j => {
-        out[j] = {
-          ...out[j],
-          _respManual: true,
-          ...(valor ? { responsavelLotus: valor } : { responsavelLotus: out[j].responsavelLotus ?? "" }),
-        };
-      });
       const msg = valor
-        ? `Grupo "${(g.nome ?? "").substring(0, 40)}": ${descIdxs.length} atividade${descIdxs.length > 1 ? "s" : ""} ativada${descIdxs.length > 1 ? "s" : ""} com responsável "${valor}".`
-        : `Grupo "${(g.nome ?? "").substring(0, 40)}": ${descIdxs.length} atividade${descIdxs.length > 1 ? "s" : ""} ativada${descIdxs.length > 1 ? "s" : ""} — digite o responsável no grupo para propagar o nome.`;
+        ? `Grupo "${nomeGrupo}": ${count} atividade${count > 1 ? "s" : ""} ativada${count > 1 ? "s" : ""} com responsável "${valor}".`
+        : `Grupo "${nomeGrupo}": ${count} atividade${count > 1 ? "s" : ""} ativada${count > 1 ? "s" : ""} — digite o responsável no grupo para propagar o nome.`;
       setTimeout(() => toast.success(msg), 0);
-      return out;
+      return rows;
     });
   }
 
@@ -4485,6 +4524,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                         )}
                         {/* Rev. 1823 — Input do responsável manual; Rev. 1860 — cascata para descendentes */}
                         {(!!a._respManual || (a.responsavelLotus !== null && a.responsavelLotus !== undefined)) && !a.isExterna && (
+                          <div className={a.isGrupo ? "flex items-stretch gap-1 mt-1" : "contents"}>
                           <Input
                             value={a.responsavelLotus ?? ""}
                             onChange={e => updateLinha(idx, "responsavelLotus", e.target.value)}
@@ -4582,9 +4622,32 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                                 descIdxs, semValorIdxs, comValorIdxs,
                               });
                             }}
-                            className="h-6 text-[11px] w-full mt-1 bg-cyan-50 border-cyan-300 placeholder:text-cyan-500"
+                            className={a.isGrupo ? "h-6 text-[11px] flex-1 bg-cyan-50 border-cyan-300 placeholder:text-cyan-500 font-semibold" : "h-6 text-[11px] w-full mt-1 bg-cyan-50 border-cyan-300 placeholder:text-cyan-500"}
                             placeholder="Responsável manual (ex.: EMPRESA XYZ LTDA)"
                           />
+                          {/* Rev. 1922 — Botão explícito para forçar cascata
+                              grupo→descendentes. Resolve o caso em que isGrupo
+                              já vinha marcado do banco e o user só queria
+                              propagar o responsável (sem ter que desmarcar+
+                              remarcar o checkbox isGrupo). */}
+                          {a.isGrupo && (
+                            <UiTooltipProvider delayDuration={250}>
+                              <UiTooltip>
+                                <UiTooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    onClick={() => replicarRespAosDescendentes(idx)}
+                                    className="h-6 px-2 text-[10px] font-semibold rounded border border-cyan-400 bg-cyan-100 hover:bg-cyan-200 text-cyan-800 shrink-0 whitespace-nowrap"
+                                    data-testid={`btn-replicar-desc-${a.id ?? idx}`}
+                                  >↓ Replicar</button>
+                                </UiTooltipTrigger>
+                                <UiTooltipContent side="top" className="text-xs max-w-xs">
+                                  Replicar este responsável a TODAS as atividades abaixo deste grupo (até o próximo grupo). Ativa o "responsável manual" em cada uma e copia o nome digitado aqui.
+                                </UiTooltipContent>
+                              </UiTooltip>
+                            </UiTooltipProvider>
+                          )}
+                          </div>
                         )}
                       </td>
                       <td className="py-1 px-1">
