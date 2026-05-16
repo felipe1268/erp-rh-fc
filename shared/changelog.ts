@@ -25,6 +25,22 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1852,
+    titulo: "Programação Semanal LOTUS · Sáb/Dom à direita quando cutoff é sex",
+    descricao: "User (15/05/2026, screenshot LOTUS Sem.16 obra 'FC ENGENHARIA PROJETO QIU XIANQUAN', cutoff sex 15/05): 'Quando a cutoff for sexta quero que sábado e domingo fique a direita...'.\n\n" +
+      "Antes: cabeçalho mostrava sáb 09 | dom 10 | seg 11 | ter 12 | qua 13 | qui 14 | sex 15 (cronológico puro). User queria semana de trabalho começando seg, com fim de semana ao final: seg 11 | ter 12 | qua 13 | qui 14 | sex 15 | sáb 09 | dom 10 — convenção de calendário operacional.\n\n" +
+      "Fix (1 arquivo, 3 hunks em client/src/components/planejamento/ProgramacaoSemanalLotus.tsx):\n" +
+      "1. L264-283 novo memo `diasDisplay`: se último dia da semana for sex (getDay()===5), particiona em [úteis] + [sáb/dom] e concatena → seg→sex,sáb,dom. Caso contrário (cutoff em qui ou outro dia), retorna `dias` cronológico puro (não toca semanas com cutoff diferente).\n" +
+      "2. L1455 `<th>` do cabeçalho de dias: trocou `dias.map` por `diasDisplay.map`.\n" +
+      "3. L1635 `<td>` das células de faixa colorida: trocou `dias.map` por `diasDisplay.map` — alinha as barras com a nova ordem do header (faixasCelula recebe a Date, não índice posicional, então as cores continuam corretas).\n\n" +
+      "Preservado: `dias` cronológico INTACTO em todos os outros usos — semIniStr/semFimStr (filtros de range), periodoStr (texto 'PERÍODO: ...'), Excel export L1081 (template tem layout fixo sáb→sex), colSpan (mesmo length em ambos arrays). ZERO mudança em backend/contrato tRPC/schema/migration. Só afeta render visual da tela LOTUS.\n\n" +
+      "Reversível em 3 hunks. R-001 OK.",
+    tipo: 'melhoria',
+    modulos: 'Planejamento',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 22:30:00',
+  },
+  {
     version: 1851,
     titulo: "Programação Semanal LOTUS · Indiretas/LoE auto-progridem (PMBOK §6.4.2) — coluna Real e status corrigidos",
     descricao: "User (15/05/2026, screenshot LOTUS Semana 1 obra REVTE-CIVIL): 'As atividades indiretas foram medidas tbm, pq está apresentando que não teve atividade?'. Atividades 01.01-01.05 marcadas INDIRETA (LoE) — Equipe técnica, Refeições, Canteiro, Máquinas, ASO/EPI — apareciam com Prev. preenchido (0,01-0,04%) mas Real=0% e status 'Não exec.' (vermelho), distorcendo PPC do Last Planner.\n\n" +

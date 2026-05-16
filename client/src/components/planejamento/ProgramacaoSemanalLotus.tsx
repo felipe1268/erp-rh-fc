@@ -258,6 +258,26 @@ export default function ProgramacaoSemanalLotus(props: Props) {
     }
     return diasDaSemana(ini, semana.fim);
   }, [semana, projetoStart]);
+  // Rev. 1852 — Reordena os dias para EXIBIÇÃO quando o cutoff cai em sex
+  // (semana sáb→sex): move sáb/dom iniciais para o fim, ficando seg→sex,sáb,dom.
+  // Pedido do usuário (15/05/2026, screenshot LOTUS Sem.16): "Quando a cutoff
+  // for sexta quero que sábado e domingo fique a direita".
+  // Apenas display: `dias` original permanece cronológico para filtros (semIniStr/
+  // semFimStr) e para o export Excel (template tem layout fixo sáb→sex).
+  const diasDisplay = useMemo(() => {
+    if (dias.length === 0) return dias;
+    const ultimo = dias[dias.length - 1];
+    // Cutoff = último dia da semana. Só reordena se cutoff for sex (5).
+    if (ultimo.getDay() !== 5) return dias;
+    const semana: Date[] = [];
+    const fimDeSemana: Date[] = [];
+    for (const d of dias) {
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) fimDeSemana.push(d);
+      else semana.push(d);
+    }
+    return [...semana, ...fimDeSemana];
+  }, [dias]);
   const periodoStr = useMemo(() => {
     if (dias.length === 0) return "";
     const ini = dias[0];
@@ -1429,7 +1449,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                 <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-14 whitespace-nowrap" title="Meta planejada na semana (PV semanal × peso financeiro)">Prev.</th>
                 <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-14 whitespace-nowrap" title="Avanço efetivamente lançado na semana (peso × Σ% semanal / 100)">Real.</th>
                 <th className="border border-slate-300 px-1 py-1 text-center font-semibold w-14 whitespace-nowrap" title="Desvio em pontos percentuais: Real − Prev. Verde se ≥ 0 (em dia/adiantado), vermelho se &lt; 0 (atrasado).">Δ</th>
-                {dias.map((d, i) => (
+                {diasDisplay.map((d, i) => (
                   <th key={i} className="border border-slate-300 px-0.5 py-1 text-center font-semibold w-[60px]">
                     <div className="text-[9px]">{abrevDia(d)}</div>
                     <div className="text-[9px] text-slate-500">{fmtDiaMes(d)}</div>
@@ -1609,7 +1629,7 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                       // recálculo a cada um dos 7 dias (sugestão code review Rev 1664).
                       const temAvSem = !!m && m.somaSemanal > 0;
                       const acumAteSem = m?.acumPct ?? 0;
-                      return dias.map((d, idx) => {
+                      return diasDisplay.map((d, idx) => {
                         const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSem, acumAteSem, inicioSemanaCorrente);
                         return (
                           <td key={idx} className="border border-slate-300 p-0 h-6 align-middle" title={tip}>
