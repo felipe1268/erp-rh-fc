@@ -25,6 +25,25 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1858,
+    titulo: "Visão Geral · Histórico de REFIs — botão Excluir + ordenação por número (admin)",
+    descricao: "User (15/05/2026, screenshot Visão Geral QIU 2 - FASE 4): 'Apague estes refis pq vamos gerar novamente e deixa organizado pela numeração sempre'. Tabela 'Histórico de REFIs' antes ordenava por `semana DESC` (vinda do backend), gerando linhas fora de ordem (014, 002, 003, 011, 010...) quando os REFIs foram emitidos fora da sequência cronológica. Não havia caminho na UI para excluir um REFIS antigo direto da Visão Geral — só na aba REFIS interna.\n\n" +
+      "Causa-raiz: client/src/pages/planejamento/PlanejamentoDetalhe.tsx — componente VisaoGeral renderizava `refisLista.slice(0, 8)` cru (ordem do backend = `semana DESC`) e não tinha mutation/UI de delete. Como a operação de apagar dados de produção é R-001-sensível, optei por NÃO rodar SQL direto contra o banco e sim entregar a ação na própria UI com confirmação dupla.\n\n" +
+      "Fix (1 arquivo, 4 hunks em PlanejamentoDetalhe.tsx):\n" +
+      "  (1) L1865-1875: novo state `refisDelete`, helper `visaoUtils=trpc.useUtils()`, flag `isAdminVisao` (admin|admin_master) e mutation `deletarRefisVisaoMut` reusando o endpoint existente `planejamento.deletarRefis` (já protege consolidado: só admin); onSuccess invalida `listarRefis` e fecha o modal; onError → alert.\n" +
+      "  (2) L2257: nova coluna 'Ações' (admin-only) no header da tabela.\n" +
+      "  (3) L2261: trocado `refisLista.slice(0,8)` por `[...refisLista].sort((a,b) => (b.numero ?? 0) - (a.numero ?? 0)).slice(0,8)` — agora SEMPRE ordenado por nº DESC (014, 011, 010, 009...). Cópia defensiva (`[...]`) evita mutar o array do React Query.\n" +
+      "  (4) L2281-2293: nova célula com botão `Trash2` por linha (admin-only), `e.stopPropagation()` no botão E no `<td>` para não disparar `setRefisAberto` (modal de visualização). Title diferenciado quando consolidado.\n" +
+      "  (5) L2301-2326: novo bloco `AlertDialog` de confirmação — 'Esta ação NÃO pode ser desfeita', mostra Nº (zero-padded) + semana em fmtBR + status; Action vermelho (bg-red-600), Cancel/Action `disabled` durante a mutation; label do botão muda para 'Excluindo…' enquanto pending.\n\n" +
+      "Por que via UI e não SQL direto: a tabela exibida (14 REFIs do projeto QIU 2 - FASE 4) está em PRODUÇÃO; o banco de DEV deste workspace tem outro projeto com 5 REFIs apenas. Apagar dados de prod via script direto viola R-001/R-007/R-010 — entregar a UI permite ao próprio usuário (admin) executar a exclusão linha-a-linha com confirmação, gravando contexto/auth no log do tRPC.\n\n" +
+      "Hardening backend (architect review): server/routers/planejamento.ts L1974-1986 — `deletarRefis` agora exige admin para QUALQUER status (antes só para consolidado). Garante paridade com a UI gate `isAdminVisao` e bloqueia bypass via chamada tRPC direta por usuário não-admin.\n\n" +
+      "Preservado: ZERO mudança em schema; endpoint `deletarRefis` mantém assinatura/contrato (Z.input idêntico), apenas regra de role mais restrita; aba REFIS (componente Refis L11169+) tem seu próprio fluxo de delete intacto; ordem do backend permanece `semana DESC` (apenas o display da Visão Geral foi reordenado por nº). Não-admins continuam vendo a tabela exatamente como antes (sem coluna Ações). Reversível em 4 hunks. R-001/R-007 OK.",
+    tipo: 'feat',
+    modulos: 'Planejamento',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 23:25:00',
+  },
+  {
     version: 1857,
     titulo: "Planejamento · Histórico de REFIs — coluna Semana em padrão BR (dd/MM/aaaa)",
     descricao: "User (15/05/2026, screenshot Visão Geral do projeto QIU 2 - FASE 4, tabela 'Histórico de REFIs'): coluna Semana mostrava datas no formato ISO '2026-04-27', '2026-04-20', '2026-04-13' etc. Pedido: 'Arrumai a data no padrão brasileiro'.\n\n" +

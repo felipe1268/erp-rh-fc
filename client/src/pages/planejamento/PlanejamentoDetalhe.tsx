@@ -1859,6 +1859,17 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
   const { selectedCompany } = useCompany();
   const [refisAberto, setRefisAberto] = useState<any | null>(null);
   const [atrasosAberto, setAtrasosAberto] = useState(false);
+  // Rev. 1858 — exclusão de REFIS direto da tabela "Histórico de REFIs"
+  const [refisDelete, setRefisDelete] = useState<any | null>(null);
+  const visaoUtils = trpc.useUtils();
+  const isAdminVisao = (user as any)?.role === "admin" || (user as any)?.role === "admin_master";
+  const deletarRefisVisaoMut = trpc.planejamento.deletarRefis.useMutation({
+    onSuccess: () => {
+      visaoUtils.planejamento.listarRefis.invalidate();
+      setRefisDelete(null);
+    },
+    onError: (e) => alert(e.message),
+  });
   const totalAtiv   = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled).length;
   const concluidas  = atividades.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled).filter((a: any) => {
     const avMap: Record<number, number> = {};
@@ -2240,10 +2251,11 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
                 <th className="py-2 px-3 text-right">Real. %</th>
                 <th className="py-2 px-3 text-right">SPI</th>
                 <th className="py-2 px-3 text-left">Status</th>
+                {isAdminVisao && <th className="py-2 px-3 text-center w-12">Ações</th>}
               </tr>
             </thead>
             <tbody>
-              {refisLista.slice(0, 8).map((r: any, i: number) => (
+              {[...refisLista].sort((a: any, b: any) => (b.numero ?? 0) - (a.numero ?? 0)).slice(0, 8).map((r: any, i: number) => (
                 <tr
                   key={r.id}
                   className={`cursor-pointer transition-colors ${i % 2 === 0 ? "bg-white hover:bg-blue-50" : "bg-slate-50 hover:bg-blue-50"}`}
@@ -2263,12 +2275,52 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
                       {r.status}
                     </span>
                   </td>
+                  {isAdminVisao && (
+                    <td className="py-1.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setRefisDelete(r); }}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded p-1 transition-colors"
+                        title={r.status === "consolidado" ? "Excluir REFIS consolidado (admin)" : "Excluir REFIS"}
+                        aria-label={`Excluir REFIS nº ${String(r.numero ?? "").padStart(3, "0")}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* Rev. 1858 — Confirmação de exclusão de REFIS */}
+      <AlertDialog open={!!refisDelete} onOpenChange={(o) => { if (!o) setRefisDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir REFIS nº {String(refisDelete?.numero ?? "").padStart(3, "0")}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {refisDelete && (
+                <>
+                  Esta ação <strong>não pode ser desfeita</strong>. O relatório da semana de{" "}
+                  <strong>{fmtBR(refisDelete.semana)}</strong> ({refisDelete.status}) será removido permanentemente do histórico.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletarRefisVisaoMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deletarRefisVisaoMut.isPending}
+              onClick={() => { if (refisDelete) deletarRefisVisaoMut.mutate({ id: refisDelete.id }); }}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deletarRefisVisaoMut.isPending ? "Excluindo…" : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Modal de visualização rápida de REFIS ───────────────────────── */}
       <Dialog open={!!refisAberto} onOpenChange={(o) => { if (!o) setRefisAberto(null); }}>

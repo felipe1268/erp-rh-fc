@@ -1977,10 +1977,9 @@ export const planejamentoRouter = router({
       const db = await getDb();
       const [refis] = await db.select().from(planejamentoRefis).where(eq(planejamentoRefis.id, input.id));
       if (!refis) throw new TRPCError({ code: "NOT_FOUND", message: "REFIS não encontrado." });
-      if (refis.status === "consolidado") {
-        const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
-        if (!isAdmin) throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem cancelar um REFIS consolidado." });
-      }
+      // Rev. 1858 — exclusão de REFIS é sempre admin-only (paridade com UI)
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      if (!isAdmin) throw new TRPCError({ code: "FORBIDDEN", message: "Somente administradores podem excluir um REFIS." });
       await db.delete(planejamentoRefis).where(eq(planejamentoRefis.id, input.id));
       return { success: true };
     }),
