@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1938 — RH · Dash Aviso Prévio · Tabela CDM · FIX UX do redimensionamento (Rev. 1937) — handle invisível + click acionava sort.
+ * User (16/05/2026, screenshot pós-Rev. 1937 com colunas ainda truncadas "CARAMURU - HH - CA..."): "nao ficou bom para ajudar a largura da tela, considera que precisa clicar, segurar e arraastar para modificar a largura..".
+ * Causa-raiz Rev. 1937: (a) handle só 8px (w-2) com barra cinza interna 0.5×5 — visualmente quase invisível, usuário não percebia que existia algo pra arrastar. (b) `stopPropagation` no `pointerDown` NÃO impede o evento `click` sintético do React que dispara depois do pointer up (são eventos distintos no DOM) — então qualquer toque/clique no handle disparava `toggleCdmSort` no th pai, alternando ordenação em vez de redimensionar.
+ * Mudança (`DashAvisoPrevio.tsx` componente `CdmResizeHandle`):
+ *   (a) Largura do alvo de clique: w-2 (8px) → w-4 (16px), com `-right-2` (z-30) p/ ficar metade pra fora da célula — alvo táctil ≥ HIG 44pt/Material 48dp dificilmente bate, mas dobrou a área e ficou visível além da borda do th.
+ *   (b) Barra interna: cinza-300 (só no hover ficava âmbar) → âmbar-400 SEMPRE visível + hover âmbar-600 + active âmbar-700 — afordância óbvia "tem algo aqui pra arrastar".
+ *   (c) `onClick={(e) => e.stopPropagation()}` adicionado explicitamente — impede o click sintético de bubblar pro th e disparar sort.
+ *   (d) `onDoubleClick` também ganha `stopPropagation` (mesmo motivo) + chamada explícita ao `resetCdmCol(colKey)()`.
+ *   (e) `title` reescrito p/ instrução clara: "Clique, segure e arraste para redimensionar a coluna '...' · duplo-clique restaura padrão".
+ * version → 1938.
+ * Resultado: barra âmbar agora sempre visível na borda direita dos 3 headers (Funcionário/Função/Obra); clicar e arrastar funciona sem disparar sort; clique simples não muda nada (só drag conta). Comportamento de Pointer Events (mouse+touch+pen), persistência localStorage e duplo-clique reset preservados.
+ * Preservado: tudo de Rev. 1937 (state cdmColW, handlers Pointer, localStorage, defaults 200/140/160, MIN 80/MAX 600, sticky thead Rev. 1924, CIPA Rev. 1936, Raio-X Rev. 1935). Zero backend/DB. Reversível em 1 hunk. R-001/R-007/R-010 OK.
+ *
  * Rev. 1937 — RH · Dash Aviso Prévio · Tabela CDM · Colunas de TEXTO redimensionáveis por drag (Funcionário/Função/Obra).
  * User (16/05/2026, screenshot HOTEL DO PAPA - AMPLIAÇ... truncado): "quero pode clicar e aumentar a largura da tabela para ajustar o texto..".
  * Motivação: nomes longos de obra (HOTEL DO PAPA - AMPLIAÇÃO BLOCO C), funções compostas (AUXILIAR ADMINISTRATIVO) e nomes completos com sobrenomes ficavam truncados em "...". Imprimir/exportar pra Excel não resolve no fluxo de revisão visual rápida da provisão de demissão.

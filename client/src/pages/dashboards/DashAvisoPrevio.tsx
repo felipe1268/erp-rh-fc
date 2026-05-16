@@ -182,7 +182,10 @@ export default function DashAvisoPrevio() {
       return next;
     });
   };
-  // Handle visual reutilizável p/ cada th. role=separator pra a11y.
+  // Rev. 1938 — Handle visual MAIS LARGO e SEMPRE VISÍVEL (Rev. 1937 era 8px e quase
+  // invisível). Agora 16px com barra âmbar sempre visível + onClick stopPropagation
+  // (impede que o click pós-drag dispare o sort do th, que era o "não funciona bem"
+  // reportado). role=separator pra a11y.
   const CdmResizeHandle = ({ colKey, label }: { colKey: CdmColKey; label: string }) => (
     <div
       role="separator"
@@ -192,12 +195,13 @@ export default function DashAvisoPrevio() {
       onPointerMove={onCdmColPointerMove}
       onPointerUp={onCdmColPointerUp}
       onPointerCancel={onCdmColPointerUp}
-      onDoubleClick={resetCdmCol(colKey)}
-      title={`Arraste para redimensionar · duplo-clique restaura padrão (${CDM_COL_DEFAULT[colKey]}px)`}
+      onClick={(e) => { e.stopPropagation(); }}
+      onDoubleClick={(e) => { e.stopPropagation(); resetCdmCol(colKey)(); }}
+      title={`Clique, segure e arraste para redimensionar a coluna "${label}" · duplo-clique restaura padrão (${CDM_COL_DEFAULT[colKey]}px)`}
       style={{ touchAction: 'none' }}
-      className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-amber-400/60 active:bg-amber-500 group"
+      className="absolute top-0 -right-2 z-30 h-full w-4 cursor-col-resize flex items-center justify-center group"
     >
-      <div className="absolute top-1/2 right-0.5 -translate-y-1/2 w-0.5 h-5 bg-slate-300 group-hover:bg-amber-600 rounded" />
+      <div className="w-[3px] h-6 bg-amber-400 group-hover:bg-amber-600 group-active:bg-amber-700 rounded shadow-sm" />
     </div>
   );
   const toggleCdmSort = (key: CdmSortKey) => setCdmSort(s => s.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: (key === 'nomeCompleto' || key === 'cargo' || key === 'funcao' || key === 'obra' || key === 'dataAdmissao') ? 'asc' : 'desc' });
