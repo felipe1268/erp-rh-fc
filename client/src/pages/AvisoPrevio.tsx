@@ -2207,6 +2207,86 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                 <p className="text-xs text-amber-700 mt-1">Preencha os dados abaixo conforme CLT Art. 487-491 e Lei 12.506/2011</p>
               </div>
 
+              {/* Rev. 1925 — Base legal expandível (solicitação do usuário 16/05/2026:
+                  "QUAL LEI FALA SOBRE ISSO, QUERO QUE DEIXE REGISTRADO NO MODULO").
+                  Painel azul de referência sempre disponível no formulário —
+                  esclarece DEFINITIVAMENTE a diferença entre Trabalhado (30 dias
+                  fixos) e Indenizado (30 + 3/ano até 90, Lei 12.506/2011), com
+                  tabela de exemplos. Usa <details> nativo (sem dependência
+                  externa) — fechado por default p/ não poluir UX, abre com 1 clique. */}
+              <details className="border-b bg-blue-50/60 group" data-testid="aviso-base-legal">
+                <summary className="cursor-pointer select-none px-6 py-3 text-xs font-semibold text-blue-900 hover:bg-blue-100/60 transition-colors flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-blue-700" />
+                    📚 Base Legal — Por que Trabalhado é 30 dias e Indenizado pode chegar a 90 dias?
+                  </span>
+                  <span className="text-blue-700 text-[10px] group-open:hidden">▼ Expandir</span>
+                  <span className="text-blue-700 text-[10px] hidden group-open:inline">▲ Recolher</span>
+                </summary>
+                <div className="px-6 pb-4 pt-1 text-xs text-blue-950 space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="bg-white border border-blue-200 rounded p-3">
+                      <div className="font-bold text-blue-900 mb-1">🔵 Aviso Trabalhado — SEMPRE 30 dias</div>
+                      <div className="text-[11px] text-blue-800 mb-2">
+                        Base: <b>CLT Art. 487, II</b> (Decreto-Lei 5.452/1943)
+                      </div>
+                      <p className="text-[11px] leading-relaxed">
+                        O empregado cumpre 30 dias de aviso trabalhando normalmente, com
+                        direito a redução de <b>2 horas/dia</b> ou <b>7 dias corridos</b>{" "}
+                        ao final para procurar emprego (<b>CLT Art. 488</b>). Como ele
+                        está dando o aviso pessoalmente, a lei não exige indenização
+                        proporcional ao tempo de casa.
+                      </p>
+                    </div>
+                    <div className="bg-white border border-red-200 rounded p-3">
+                      <div className="font-bold text-red-900 mb-1">🔴 Aviso Indenizado — 30 + 3 dias por ano (máx. 90)</div>
+                      <div className="text-[11px] text-red-800 mb-2">
+                        Base: <b>Lei 12.506/2011</b> + <b>CLT Art. 487, §1º</b>
+                      </div>
+                      <p className="text-[11px] leading-relaxed">
+                        Empregado é dispensado de imediato e recebe o valor em dinheiro.
+                        Como perde a oportunidade de procurar emprego trabalhando, a Lei
+                        12.506/2011 criou a <b>proporcionalidade ao tempo de serviço</b>:
+                        30 dias base + 3 dias por ano completo, até o teto de <b>90 dias</b>.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="bg-white border border-blue-200 rounded overflow-hidden">
+                    <div className="bg-blue-100 px-3 py-1.5 text-[11px] font-bold text-blue-900">
+                      Tabela de Dias de Aviso (Lei 12.506/2011)
+                    </div>
+                    <table className="w-full text-[11px]">
+                      <thead className="bg-blue-50">
+                        <tr>
+                          <th className="text-left py-1.5 px-3 font-semibold text-blue-900">Tempo de Casa</th>
+                          <th className="text-center py-1.5 px-3 font-semibold text-blue-900">Trabalhado</th>
+                          <th className="text-center py-1.5 px-3 font-semibold text-red-900">Indenizado</th>
+                          <th className="text-left py-1.5 px-3 font-semibold text-blue-900">Cálculo</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-blue-100">
+                        <tr><td className="py-1 px-3">Até 1 ano</td><td className="text-center font-mono">30</td><td className="text-center font-mono text-red-700">30</td><td className="text-[10px] text-blue-700">base CLT 487</td></tr>
+                        <tr><td className="py-1 px-3">2 anos</td><td className="text-center font-mono">30</td><td className="text-center font-mono text-red-700">33</td><td className="text-[10px] text-blue-700">30 + (1×3)</td></tr>
+                        <tr><td className="py-1 px-3">5 anos</td><td className="text-center font-mono">30</td><td className="text-center font-mono text-red-700">42</td><td className="text-[10px] text-blue-700">30 + (4×3)</td></tr>
+                        <tr className="bg-yellow-50"><td className="py-1 px-3 font-semibold">10 anos</td><td className="text-center font-mono">30</td><td className="text-center font-mono text-red-700 font-bold">60</td><td className="text-[10px] text-blue-700">30 + (10×3)</td></tr>
+                        <tr><td className="py-1 px-3">15 anos</td><td className="text-center font-mono">30</td><td className="text-center font-mono text-red-700">75</td><td className="text-[10px] text-blue-700">30 + (15×3)</td></tr>
+                        <tr className="bg-red-50/40"><td className="py-1 px-3 font-semibold">20 anos ou mais</td><td className="text-center font-mono">30</td><td className="text-center font-mono text-red-700 font-bold">90 (teto)</td><td className="text-[10px] text-blue-700">limitado a 90 dias</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-300 rounded p-2.5 text-[11px] text-amber-900">
+                    <b>📌 Resumo rápido:</b> Quem trabalha o aviso recebe 30 dias fixos (independente do tempo de casa).
+                    Quem é indenizado recebe <b>proporcional</b> — quanto mais anos, mais dias. Por isso o "pior cenário de caixa"
+                    é sempre o Indenizado de funcionários antigos.
+                  </div>
+                  <div className="text-[10px] text-blue-700 italic pt-1 border-t border-blue-200">
+                    Fontes oficiais: <a href="https://www.planalto.gov.br/ccivil_03/decreto-lei/del5452.htm#art487" target="_blank" rel="noopener" className="underline hover:text-blue-900">CLT Art. 487-491</a>{" · "}
+                    <a href="https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2011/lei/l12506.htm" target="_blank" rel="noopener" className="underline hover:text-blue-900">Lei 12.506/2011</a>{" · "}
+                    <a href="https://www.planalto.gov.br/ccivil_03/decreto-lei/del5452.htm#art488" target="_blank" rel="noopener" className="underline hover:text-blue-900">CLT Art. 488 (redução 2h/7d)</a>
+                  </div>
+                </div>
+              </details>
+
               <div className="p-6 space-y-5">
                 {/* Seção 1: Colaborador */}
                 <div>

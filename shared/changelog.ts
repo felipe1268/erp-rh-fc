@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1925 — RH · Aviso Prévio · Base Legal expandível no formulário "Novo Aviso Prévio" (CLT Art. 487-491 + Lei 12.506/2011).
+ * User (16/05/2026, após explicação da diferença Trabalhado=30 fixos vs Indenizado=30+3/ano até 90): "QUAL LEI FALA SOBRE ISSO, QUERO QUE DEIXE REGISTRADO NO MODULO".
+ * Demanda: registrar in-app, sempre disponível e auditável, a fundamentação legal das regras de dias de aviso — pra que qualquer pessoa do RH/Diretoria que abrir o módulo entenda a diferença sem precisar perguntar ou consultar advogado.
+ * Mudança (`client/src/pages/AvisoPrevio.tsx` entre L2211-2213, header do diálogo Novo Aviso Prévio):
+ *   Novo painel `<details>` (acordeon nativo HTML, sem dependência) fundo azul claro, fechado por default — clique no summary "📚 Base Legal" expande conteúdo. Contém:
+ *   (a) 2 cards lado-a-lado (Trabalhado azul / Indenizado vermelho) com base legal específica de cada um (CLT Art. 487, II / Lei 12.506/2011 + CLT Art. 487, §1º) e parágrafo explicativo da lógica jurídica.
+ *   (b) Tabela de Dias de Aviso (6 linhas: até 1 ano, 2 anos, 5 anos, 10 anos [destacado amarelo — caso Anderson exemplo do user], 15 anos, 20+ [destacado vermelho — teto 90 dias]) com colunas Tempo de Casa / Trabalhado / Indenizado / Cálculo.
+ *   (c) Resumo rápido em card âmbar para leitura ao vivo.
+ *   (d) Links externos para fontes oficiais Planalto (CLT Art. 487-491, Lei 12.506/2011, CLT Art. 488 redução 2h/7d) — `target="_blank" rel="noopener"`.
+ * Posicionamento: entre o header do card "Dados do Aviso Prévio" e o body do formulário — visível em TODA criação/edição de aviso, escala bem (acordeon fechado = só 1 linha discreta).
+ * version → 1925.
+ * Resultado: a documentação legal vive DENTRO do módulo, não em e-mail/doc externo. Auditável (qualquer revisão futura mantém o painel). Bonus UX: 2 cards explicam de forma direta a diferença sem jargão jurídico.
+ * Preservado: header amber Rev. 1727, fonte legal já citada no texto do header L2210, seções 1 (Colaborador) e 2 (Tipo/Data) inalteradas, lógica de cálculo, templates de impressão Rev. 1907, combobox Rev. 1906. Zero backend/DB/schema/cálculo. Reversível em 1 hunk. R-001/R-007/R-010 OK.
+ *
  * Rev. 1924 — RH · Dash Aviso Prévio · Tabela CDM · FIX cabeçalho sticky transparente sobrepondo linhas ao rolar.
  * User (16/05/2026, screenshot tabela CDM row #4 WILLIANS FELIPE + #5 MARCO ANTONIO com cabeçalho semitransparente sobreposto, texto duplicado/embaralhado): "ESTA COM ERRO DE FORMATAÇÃO DE LAYOUT.. O TEXTO ESTA SOBREPOSTO AS INFORMAÇÕES NÃO DEVE ACONTECER...".
  * Causa-raiz (em `DashAvisoPrevio.tsx` L381/L420): a tabela CDM tem `max-h-[480px] overflow-y-auto`. O `<thead>` usava `bg-muted/50 sticky top-0 z-10` — Tailwind `bg-muted/50` = 50% de opacidade. Adicional: backgrounds em `<thead>` e `<tr>` NÃO funcionam com `position:sticky` em vários browsers (especialmente Chromium) — só backgrounds em `<th>`/`<td>` individuais "seguram" o conteúdo durante o scroll. O `<tfoot>` sticky tinha o mesmo bug latente (bg em `<tr>` em vez das células).
