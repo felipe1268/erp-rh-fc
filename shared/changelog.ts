@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1892 — Planejamento · Cronograma · UX · Quando o RESPONSÁVEL ciano é definido em uma linha marcada como GRUPO/RESUMO, a cascata para descendentes vira AUTOMÁTICA (sem modal).
+ * User (16/05/2026, após Rev. 1891, screenshot mostrando "NAVE NORTE" como grupo): "QUERO OUTRA MELHORIA, QUANDO EU CLICAR NO BOTÃO DE ATRIBUIR RESPONSAVEL NO ITEM QUE TBM FOI DEMARCADO COMO GRUPO, E DEFINIR O RESPONSAVEL NELE, TODAS ATIVIDADES ABAIXO DEVEM SER PREENCHIDAS AUTOMATICAMENTE POR ELES. CASO TENHA ALGUMA QUE O NÃO FAÇA PARTE O USUÁRIO MUDARA AUTOMATICAMENTE DEPOIS."
+ * Contexto: Rev. 1860/1865 introduziu modal de cascata com 3 opções (Cancelar / Só vazios / Sobrescrever todos) sempre que o usuário digitava um responsável em pai com descendentes. Para itens marcados explicitamente como GRUPO (a.isGrupo=true), esse extra-clique é fricção pura — marcar grupo já é declarar "isso aqui é resumo, tudo abaixo segue junto".
+ * Mudança (em client/src/pages/planejamento/PlanejamentoDetalhe.tsx, L4094-4119, dentro do onBlur do input ciano):
+ *   • Detecção de descendentes (Rev. 1865 dotted+flat) preservada idêntica.
+ *   • Cálculo de semValor/comValor preservado idêntico.
+ *   • NOVO ramo `if (a.isGrupo)`: aplica `responsavelLotus: valorAtual + _respManual: true` em TODOS descIdxs num único setLinhas (equivale ao "Sobrescrever todos" do modal). Toast informativo: `Grupo "<nome>": responsável aplicado a N descendentes (M sobrescritos)`. `return` imediato — modal não abre.
+ *   • NÃO-grupo: comportamento Rev. 1860/1865 INTOCADO (modal AlertDialog continua aparecendo nas folhas com sub-itens, p/ proteger mudanças acidentais).
+ *   • version → 1892.
+ * Preservado/Seguro: ZERO mudança em backend/DB/schema. Modal AlertDialog do cascadeResp permanece no JSX (caminho ativo p/ não-grupos). Detecção de descendentes (dotted/flat + nivel guard) preservada literalmente. Save mutation (Rev. 1891) propaga via UPDATE em massa do mesmo jeito — não há mudança no payload nem em ordem. respMap (Rev. 1817/1818/1891) consome responsavelLotus dos filhos exatamente como antes. Reversível em 1 hunk + version bump. R-001/R-007/R-010 OK (zero ALTER/DROP/DELETE).
+ *
  * Rev. 1891 — Planejamento · BUG-FIX CRÍTICO · RESPONSÁVEL digitado no Cronograma NÃO aparecia na Programação Semanal LOTUS (regressão silenciosa desde Rev. 1817).
  * User (16/05/2026): "estou indicando o responsavel pela atividade no cronograma, mas não esta aparecendo na programação semanal.. preciso que corrija este bug.. e garanta o link vai acontecer.. sem atrapalhar ou perder nada". User confirmou via questionário que (a) usa a caixinha CIANO "responsável manual" e digita no campo ciano (responsavelLotus), e (b) salva o cronograma antes de abrir PSEM.
  * Causa-raiz (server/routers/planejamento.ts): a tabela `planejamento_atividades` NÃO tem coluna `company_id` (apenas `revisao_id`, `projeto_id`). Mas 3 procedures liam `rows[0].companyId` esperando que existisse:

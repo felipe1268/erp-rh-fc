@@ -4089,6 +4089,25 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                                 else if (v !== valorAtual) comValorIdxs.push(i);
                               });
                               if (semValorIdxs.length === 0 && comValorIdxs.length === 0) return;
+                              // Rev. 1892 — Quando o pai é GRUPO/RESUMO, aplica
+                              // AUTOMATICAMENTE em todos os descendentes (sem
+                              // modal). User: "todas atividades abaixo devem ser
+                              // preenchidas automaticamente; se alguma não fizer
+                              // parte, mudo depois". Atalho prático: marcar grupo
+                              // = aceitar cascata total. Não-grupo continua com
+                              // o modal Rev. 1860/1865 (3 opções) p/ proteger
+                              // mudanças acidentais em folhas com sub-itens.
+                              if (a.isGrupo) {
+                                const alvos = new Set(descIdxs);
+                                setLinhas(prev => prev.map((l, i) => alvos.has(i)
+                                  ? { ...l, responsavelLotus: valorAtual, _respManual: true }
+                                  : l));
+                                const msgSobrescrito = comValorIdxs.length > 0
+                                  ? ` (${comValorIdxs.length} sobrescrito${comValorIdxs.length > 1 ? "s" : ""})`
+                                  : "";
+                                toast.success(`Grupo "${(a.nome ?? "").substring(0, 40)}": responsável aplicado a ${alvos.size} descendente${alvos.size > 1 ? "s" : ""}${msgSobrescrito}.`);
+                                return;
+                              }
                               setCascadeResp({
                                 parentIdx: idx,
                                 parentNome: a.nome ?? `(linha ${idx + 1})`,
