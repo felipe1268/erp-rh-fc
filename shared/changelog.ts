@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1950 — RH · Dash Aviso Prévio · CDM · Botão "Imprimir / PDF" no header do card (imprime SÓ esta tabela).
+ * User (16/05/2026, screenshot CDM ~R$ 1,16M / 98 funcionários ativos): "colcoa um botão para gear PDF e imprimir esta tabela somente, ela.. para uma analise gerencial..".
+ * Mudança (`DashAvisoPrevio.tsx`):
+ *   (a) Card CDM (L414) ganha `id="cdm-print-area"`.
+ *   (b) Novo botão `<button>` vermelho com ícone `<Printer>` no header, ao lado do botão "Hoje" (~L469-489), com title explicativo ("escolha 'Salvar como PDF' no diálogo do navegador").
+ *   (c) onClick: adiciona classe `.print-only` no Card → `window.print()` → remove a classe via `onafterprint` (fallback `setTimeout 5s` p/ navegadores que não disparam).
+ *   (d) Import `Printer` adicionado ao lucide-react.
+ *   (e) Reaproveita convenção GLOBAL já existente em `client/src/index.css` L323: `body:has(.print-only) *:not(.print-only):not(.print-only *):not(:has(.print-only)) { display:none }` — oculta TUDO menos o Card e seus ancestrais. Zero CSS novo.
+ * version → 1950.
+ * Resultado: clique no botão → diálogo de impressão do navegador abre mostrando APENAS o card CDM completo (header com tipo Trab/Ind + data-base, KPIs, tabela com 98 linhas, totais). Usuário escolhe "Salvar como PDF" se quiser PDF; ou imprime direto.
+ * Preservado: Rev. 1949 (fotoUrl no return), Rev. 1948 (PlanejamentoDetalhe), Rev. 1946 legenda Trab vs Ind, Rev. 1943 Lei 12.506, Rev. 1941 avatar+modal, Rev. 1937 colunas redimensionáveis, Rev. 1936 CIPA, Rev. 1935 Raio-X, todos cálculos R$ intactos. Zero backend/DB. Reversível em 4 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1949 — RH · Dash Aviso Prévio · CDM · FIX foto do funcionário não aparecia na tabela (avatar caía sempre no fallback cinza com inicial).
  * User (16/05/2026, screenshot página Colaboradores mostrando ~7 funcionários com avatares circulares populados — ACACIO/AGOSTINHO/ALEX ALESSANDRO/ALEX DA SILVA/ALEXANDRO/ANA BEATRIZ/ANDERSON): "veja que tem fotos no cadastro, é so vc copiar e colocar ali.. preciso disso resolvido agora..".
  * Causa-raiz: Rev. 1941 adicionou `fotoUrl: employees.fotoUrl` ao SELECT (`server/routers/dashboards.ts` L2290) e adicionou a renderização do avatar 28×28 no client (`DashAvisoPrevio.tsx` ~L588-604), MAS esqueceu de incluir `fotoUrl` no objeto literal que cada `.map(r => ({...}))` devolve (L2606+). Resultado: a query trazia a coluna do banco, mas o mapper criava um row novo sem o campo → tRPC serializava sem `fotoUrl` → client recebia `undefined` → fallback "bolinha cinza com inicial" ativava pra TODOS os funcionários (mesmo os que tinham foto cadastrada). Em Colaboradores funcionava porque aquela tela usa rota própria (`getEmployees`) que devolve o objeto employee inteiro.

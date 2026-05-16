@@ -35,7 +35,7 @@ import {
   TrendingUp, Building2, Briefcase, Timer, ShieldAlert,
   CheckCircle2, XCircle, ArrowRight, Loader2, X, Ban,
   Wallet, Receipt, BarChart3, ArrowLeft, Flame, UserMinus2,
-  ArrowUp, ArrowDown, ArrowUpDown, Info } from "lucide-react";
+  ArrowUp, ArrowDown, ArrowUpDown, Info, Printer } from "lucide-react";
 import { Link } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -408,7 +408,7 @@ export default function DashAvisoPrevio() {
             </Card>
 
             {/* ===== SEÇÃO 2.B — CUSTO DE DEMISSÃO EM MASSA (Rev. 1908) ===== */}
-            <Card className="border-2 border-red-200">
+            <Card id="cdm-print-area" className="border-2 border-red-200">
               <CardHeader className="pb-3">
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                   <div className="flex items-start gap-2">
@@ -453,6 +453,37 @@ export default function DashAvisoPrevio() {
                         title="Voltar para hoje"
                       >Hoje</button>
                     </div>
+                    {/* Rev. 1950 — Botão "Imprimir / PDF" da tabela CDM
+                        (user 16/05/2026, screenshot CDM ~R$ 1,16M / 98 funcionários:
+                        "colcoa um botão para gear PDF e imprimir esta tabela
+                        somente, ela.. para uma analise gerencial..").
+                        Estratégia: adiciona classe `print-only` ao Card antes de
+                        chamar `window.print()` — convenção já existente em
+                        `index.css` L323 (`body:has(.print-only) *:not(.print-only):not(.print-only *):not(:has(.print-only)) { display:none }`)
+                        que oculta TUDO menos o Card e seus ancestrais. Remove a
+                        classe via `onafterprint`. Para PDF: o usuário escolhe
+                        "Salvar como PDF" no diálogo nativo do navegador. */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById('cdm-print-area');
+                        if (!el) return;
+                        el.classList.add('print-only');
+                        const cleanup = () => {
+                          el.classList.remove('print-only');
+                          window.removeEventListener('afterprint', cleanup);
+                        };
+                        window.addEventListener('afterprint', cleanup);
+                        // Fallback (alguns navegadores não disparam afterprint)
+                        setTimeout(cleanup, 5000);
+                        window.print();
+                      }}
+                      className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md border border-red-300 bg-red-50 hover:bg-red-100 text-red-700 font-medium transition-colors"
+                      title="Imprime esta tabela em folha separada (escolha 'Salvar como PDF' no diálogo do navegador para gerar PDF)"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      Imprimir / PDF
+                    </button>
                   </div>
                 </div>
               </CardHeader>
