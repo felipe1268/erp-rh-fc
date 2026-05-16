@@ -1138,6 +1138,25 @@ export default function ProgramacaoSemanalLotus(props: Props) {
       const preencherAba = (ws: any, dados: DadosSemana) => {
         const { sem, dias, ats, mts } = dados;
 
+        // Rev. 1886 — Garante larguras mínimas das colunas para que nenhum
+        // texto fique cortado (problema visto no screenshot: TAREFA estourava
+        // e as datas mostravam "4/05/202" cortado). Só AUMENTA — preserva
+        // valores maiores que o template já tenha.
+        // D=TAREFA, E/F=Data Prev. Inicio/Fim, G/H=Data Real Inicio/Fim,
+        // I=Responsável, J..P=7 dias da semana.
+        const minWidths: Record<number, number> = {
+          4: 50,   // D — TAREFA
+          5: 10,   // E — Prev. Início (caber "22-abr")
+          6: 10,   // F — Prev. Fim
+          7: 10,   // G — Real Início
+          8: 10,   // H — Real Fim
+          9: 14,   // I — RESPONSÁVEL
+        };
+        for (const [colStr, minW] of Object.entries(minWidths)) {
+          const col = ws.getColumn(parseInt(colStr, 10));
+          if (!col.width || col.width < minW) col.width = minW;
+        }
+
         // 10a. Cabeçalho (D2 é a âncora do merge D2:K5) — mantém formatação do template
         const tituloCell = ws.getCell("D2");
         const periodo = `${fmtBRDate(sem.ini)} a ${fmtBRDate(sem.fim)}`;
@@ -1264,18 +1283,28 @@ export default function ProgramacaoSemanalLotus(props: Props) {
         }
 
         // 10e. Preenche cada linha (grupo ou atividade)
+        // Rev. 1886 — Helper de formato de data PARA EXPORT: bate 100% com o
+        // modelo do cliente (ex: "22-abr", "3-nov"). Antes usávamos fmtBR
+        // ("dd/mm/yyyy"), que estourava a largura das colunas de Data Prev/Real
+        // e ficava cortado ("4/05/202" no screenshot do user).
+        const fmtCurto = (s?: string | null): string => {
+          if (!s) return "";
+          const [y, m, d] = s.split("-");
+          if (!y || !m || !d) return "";
+          const di = parseInt(d, 10);
+          const mi = parseInt(m, 10);
+          if (isNaN(di) || isNaN(mi) || mi < 1 || mi > 12) return "";
+          return `${di}-${MESES_ABREV[mi - 1]}`;
+        };
         linhasExp.forEach((l, idx) => {
           const r0 = FIRST_TASK_ROW + idx * ROWS_PER_TASK;
           if (l.tipo === "grupo") {
             ws.getCell(r0, 2).value = l.eap;
             ws.getCell(r0, 4).value = l.nome.toUpperCase();
-            // Fundo cinza claro para destacar o grupo (mesmo cinza do tema E7E6E6)
-            for (let dr = 0; dr < ROWS_PER_TASK; dr++) {
-              for (let c = 2; c <= 16; c++) {
-                const cell = ws.getCell(r0 + dr, c);
-                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE7E6E6" } } as any;
-              }
-            }
+            // Rev. 1886 — Modelo do cliente NÃO tem fundo cinza nos grupos
+            // (apenas Sábado/Domingo são cinza, e isso já vem do template).
+            // Removido o preenchimento E7E6E6 que sobrescrevia o estilo do
+            // template — agora o grupo se diferencia só pelo negrito.
             // Fonte negrito no nome
             const fontDst = ws.getCell(r0, 4).font || {};
             ws.getCell(r0, 4).font = { ...fontDst, bold: true };
@@ -1283,10 +1312,10 @@ export default function ProgramacaoSemanalLotus(props: Props) {
             const a = l.ativ;
             ws.getCell(r0, 2).value = a.eapCodigo ?? "";
             ws.getCell(r0, 4).value = a.nome;
-            ws.getCell(r0, 5).value = a.dataInicio ? fmtBR(a.dataInicio) : "";
-            ws.getCell(r0, 6).value = a.dataFim ? fmtBR(a.dataFim) : "";
-            ws.getCell(r0, 7).value = a.dataInicioReal ? fmtBR(a.dataInicioReal) : "";
-            ws.getCell(r0, 8).value = a.dataFimReal ? fmtBR(a.dataFimReal) : "";
+            ws.getCell(r0, 5).value = fmtCurto(a.dataInicio);
+            ws.getCell(r0, 6).value = fmtCurto(a.dataFim);
+            ws.getCell(r0, 7).value = fmtCurto(a.dataInicioReal);
+            ws.getCell(r0, 8).value = fmtCurto(a.dataFimReal);
             // Rev. 1818 — Export Excel agora usa o RESPONSÁVEL RESOLVIDO
             // (mesma fonte da tela: contrato terceiro vinculado → FC, com
             // valor legado MSP já filtrado). Evita reexibir "CAIO AUGUSTO"
@@ -1307,8 +1336,21 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                 d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP,
                 m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSemX, acumAteSemX, inicioSemanaCorrente,
               );
-              const corTop = corClassToHex(f.top);
-              const corBot = corClassToHex(f.bottom);
+              // Rev. 1886 — PARA EXPORT: TOP sempre azul quando há previsto p/ o
+              // dia (= o cliente pediu "previsto sempre vem azul na célula
+              // superior"). O sinal de ATRASADO ("previsto que passou sem
+              // execução") migra do TOP para o BOTTOM em vermelho — assim a
+              // linha de baixo concentra todos os status de execução
+              // (verde/vermelho/laranja/amarelo) e a linha de cima sempre
+              // representa o PLANO (azul).
+              let topCls = f.top;
+              let botCls = f.bottom;
+              if (f.top === "bg-red-500" && !f.bottom) {
+                topCls = "bg-blue-800";
+                botCls = "bg-red-500";
+              }
+              const corTop = corClassToHex(topCls);
+              const corBot = corClassToHex(botCls);
               if (corTop) {
                 ws.getCell(r0 + 1, cIdx).fill = { type: "pattern", pattern: "solid", fgColor: { argb: corTop } } as any;
               }
