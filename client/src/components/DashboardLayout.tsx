@@ -37,7 +37,7 @@ import {
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2,
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft, Gauge,
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine, ChevronLeft,
-  Camera, Blocks, CheckSquare, FileCheck2, Milestone,
+  Camera, Blocks, CheckSquare, FileCheck2, Milestone, Fuel,
   UserMinus, Search, X, GraduationCap, Sparkles, HeartPulse,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
@@ -564,6 +564,11 @@ const menuSectionsFrotas: MenuSection[] = [
       { icon: LayoutDashboard, label: "Dashboard Frotas", path: "/frotas/painel" },
       { icon: BarChart3, label: "Analítico", path: "/frotas/analitico" },
       { icon: Wrench, label: "Dash Manutenção", path: "/frotas/manutencoes-dashboard" },
+      // Rev. 1881 hot-patch — sidebar precisa listar os 2 dashboards novos.
+      // Sem isso o usuário só vê "Dash Manutenção" embora rotas/permissões
+      // já existam (shared/modules.ts L512-513 + shared/modulePages.ts L676-677).
+      { icon: Fuel, label: "Dash Combustível", path: "/frotas/combustivel-dashboard" },
+      { icon: Receipt, label: "Dash Pedágios", path: "/frotas/pedagios-dashboard" },
     ],
   },
   {
