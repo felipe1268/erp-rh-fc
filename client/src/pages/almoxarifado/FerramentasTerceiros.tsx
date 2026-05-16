@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Wrench, Plus, ArrowDownCircle, ArrowUpCircle, Camera, Trash2, X, Search,
   Building2, User, Phone, FileText, Eye, AlertTriangle, CheckCircle2, Package,
-  ArrowLeftRight, Loader2, ImageOff, RotateCcw,
+  ArrowLeftRight, Loader2, ImageOff, RotateCcw, Sparkles,
 } from "lucide-react";
 
 // ─── Util: comprime imagem para JPEG ≤ ~800px, qualidade 0.78. Retorna base64 puro
@@ -50,15 +50,18 @@ function compressToBase64(file: File): Promise<{ base64: string; mime: string }>
   });
 }
 
+type FotoItem = { base64: string; mime: string; preview: string };
 type ItemEntrada = {
   descricao: string; marca: string; modelo: string; numeroSerie: string;
   quantidade: number; condicao: string; observacao: string;
-  fotoBase64: string; fotoMime: string; fotoPreview: string;
+  fotos: FotoItem[];           // Rev. 1884 — múltiplas fotos (capa = índice 0)
+  detectandoIA?: boolean;      // estado do botão "Detectar com IA"
 };
 const EMPTY_ITEM: ItemEntrada = {
   descricao: "", marca: "", modelo: "", numeroSerie: "", quantidade: 1,
-  condicao: "boa", observacao: "", fotoBase64: "", fotoMime: "", fotoPreview: "",
+  condicao: "boa", observacao: "", fotos: [],
 };
+const MAX_FOTOS_POR_ITEM = 8;
 
 const STATUS_REG_BADGE: Record<string, { label: string; cls: string }> = {
   em_obra:            { label: "Em Obra",           cls: "bg-amber-100 text-amber-800 border-amber-300" },
@@ -305,12 +308,56 @@ function ModalEntrada({ companyId, onClose, onSuccess }:
   const obraNome = obraId !== "none" ? (obras.data || []).find((o: any) => String(o.id) === obraId)?.nome : null;
 
   const criar = trpc.ferramentasTerceiros.criarEntrada.useMutation();
+  const detectarIA = trpc.ferramentasTerceiros.detectarProdutoPorFoto.useMutation();
 
-  async function handleFotoItem(idx: number, file: File) {
+  async function adicionarFotoItem(idx: number, file: File) {
     try {
       const { base64, mime } = await compressToBase64(file);
-      setItens(prev => prev.map((it, i) => i === idx ? { ...it, fotoBase64: base64, fotoMime: mime, fotoPreview: `data:${mime};base64,${base64}` } : it));
+      const nova: FotoItem = { base64, mime, preview: `data:${mime};base64,${base64}` };
+      setItens(prev => prev.map((it, i) => {
+        if (i !== idx) return it;
+        if (it.fotos.length >= MAX_FOTOS_POR_ITEM) {
+          toast.error(`Máximo ${MAX_FOTOS_POR_ITEM} fotos por item.`);
+          return it;
+        }
+        return { ...it, fotos: [...it.fotos, nova] };
+      }));
     } catch { toast.error("Falha ao processar foto."); }
+  }
+  function removerFotoItem(idx: number, fotoIdx: number) {
+    setItens(prev => prev.map((it, i) => i === idx
+      ? { ...it, fotos: it.fotos.filter((_, fi) => fi !== fotoIdx) }
+      : it));
+  }
+  async function detectarProdutoIA(idx: number) {
+    const it = itens[idx];
+    if (!it.fotos.length) { toast.error("Tire ao menos 1 foto antes."); return; }
+    setItens(prev => prev.map((p, i) => i === idx ? { ...p, detectandoIA: true } : p));
+    try {
+      const capa = it.fotos[0];
+      const res = await detectarIA.mutateAsync({ fotoBase64: capa.base64, fotoMime: capa.mime });
+      if (!res.ok) {
+        toast.warning(res.erro || "IA não conseguiu identificar.");
+      } else if (!res.descricao) {
+        toast.warning("IA não reconheceu a ferramenta. Preencha manualmente.");
+      } else {
+        setItens(prev => prev.map((p, i) => {
+          if (i !== idx) return p;
+          return {
+            ...p,
+            descricao: p.descricao.trim() ? p.descricao : res.descricao,
+            marca: p.marca.trim() ? p.marca : res.marca,
+            modelo: p.modelo.trim() ? p.modelo : res.modelo,
+          };
+        }));
+        const conf = res.confianca === "alta" ? "alta" : res.confianca === "media" ? "média" : "baixa";
+        toast.success(`IA preencheu (confiança ${conf}). Revise antes de salvar.`);
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Falha ao detectar com IA.");
+    } finally {
+      setItens(prev => prev.map((p, i) => i === idx ? { ...p, detectandoIA: false } : p));
+    }
   }
   async function handleFotoDoc(file: File) {
     try {
@@ -332,7 +379,7 @@ function ModalEntrada({ companyId, onClose, onSuccess }:
     if (itens.length === 0) { toast.error("Adicione pelo menos 1 ferramenta."); return; }
     for (let i = 0; i < itens.length; i++) {
       if (!itens[i].descricao.trim()) { toast.error(`Item #${i + 1}: descrição obrigatória.`); return; }
-      if (!itens[i].fotoBase64) { toast.error(`Item #${i + 1}: foto obrigatória.`); return; }
+      if (itens[i].fotos.length === 0) { toast.error(`Item #${i + 1}: ao menos 1 foto obrigatória.`); return; }
     }
     setEnviando(true);
     try {
@@ -356,8 +403,7 @@ function ModalEntrada({ companyId, onClose, onSuccess }:
           modelo: it.modelo.trim() || undefined,
           numeroSerie: it.numeroSerie.trim() || undefined,
           quantidade: it.quantidade,
-          fotoBase64: it.fotoBase64,
-          fotoMime: it.fotoMime,
+          fotos: it.fotos.map(f => ({ base64: f.base64, mime: f.mime })),
           condicao: it.condicao as any,
           observacao: it.observacao.trim() || undefined,
         })),
@@ -460,14 +506,26 @@ function ModalEntrada({ companyId, onClose, onSuccess }:
             </div>
             <div className="space-y-3">
               {itens.map((it, idx) => (
-                <div key={idx} className="border rounded-lg p-3 bg-slate-50 grid grid-cols-1 md:grid-cols-[120px_1fr_auto] gap-3">
-                  {/* Foto */}
+                <div key={idx} className="border rounded-lg p-3 bg-slate-50 grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-3">
+                  {/* Fotos (1..8) + botão Detectar com IA */}
                   <div>
-                    <ItemFotoInput
-                      preview={it.fotoPreview}
-                      onPick={(f) => handleFotoItem(idx, f)}
-                      onClear={() => atualizarItem(idx, "fotoPreview", "") || atualizarItem(idx, "fotoBase64", "") || atualizarItem(idx, "fotoMime", "")}
+                    <ItemFotosInput
+                      fotos={it.fotos}
+                      onAdd={(f) => adicionarFotoItem(idx, f)}
+                      onRemove={(fi) => removerFotoItem(idx, fi)}
+                      max={MAX_FOTOS_POR_ITEM}
                     />
+                    <Button
+                      type="button" variant="outline" size="sm"
+                      className="w-full mt-2 border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-800"
+                      disabled={!it.fotos.length || it.detectandoIA}
+                      onClick={() => detectarProdutoIA(idx)}
+                      title={!it.fotos.length ? "Tire uma foto primeiro" : "Sugerir descrição/marca/modelo pela 1ª foto"}
+                    >
+                      {it.detectandoIA
+                        ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Analisando…</>
+                        : <><Sparkles className="h-3.5 w-3.5 mr-1" />Detectar com IA</>}
+                    </Button>
                   </div>
                   {/* Campos */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -531,7 +589,7 @@ function ModalEntrada({ companyId, onClose, onSuccess }:
         <div className="border-t p-3 flex items-center justify-between shrink-0 bg-white">
           <p className="text-xs text-muted-foreground">
             <FileText className="h-3 w-3 inline mr-1" />
-            Todos os campos com * são obrigatórios. Foto por item é obrigatória.
+            Todos os campos com * são obrigatórios. Ao menos 1 foto por item (até {MAX_FOTOS_POR_ITEM}). Use <Sparkles className="h-3 w-3 inline text-violet-600" /> "Detectar com IA" para preencher pela foto.
           </p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose} disabled={enviando}>Cancelar</Button>
@@ -542,6 +600,48 @@ function ModalEntrada({ companyId, onClose, onSuccess }:
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Rev. 1884 — componente multi-foto. Mostra grid com thumbnails + botão "+ foto"
+// (até `max`). Primeira foto recebe badge "CAPA" (vai como `foto_url` no banco).
+// Mantém `capture="environment"` para abrir a câmera traseira no iPad.
+function ItemFotosInput({ fotos, onAdd, onRemove, max }: {
+  fotos: FotoItem[]; onAdd: (f: File) => void; onRemove: (idx: number) => void; max: number;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const cheio = fotos.length >= max;
+  return (
+    <div>
+      <input ref={ref} type="file" accept="image/*" capture="environment" className="hidden"
+        onChange={(e) => { if (e.target.files?.[0]) { onAdd(e.target.files[0]); e.target.value = ""; } }} />
+      <div className="grid grid-cols-2 gap-1.5">
+        {fotos.map((f, i) => (
+          <div key={i} className="relative">
+            <img src={f.preview} alt={`foto ${i + 1}`} className={`h-20 w-full object-cover rounded border-2 ${i === 0 ? "border-emerald-400" : "border-slate-200"}`} />
+            {i === 0 && (
+              <span className="absolute top-0 left-0 bg-emerald-600 text-white text-[8px] font-bold px-1 py-0.5 rounded-br">CAPA</span>
+            )}
+            {/* Rev. 1884 (hardening pós-review architect) — alvo de toque ≥24px (Apple HIG). */}
+            <button type="button" onClick={() => onRemove(i)} title="Remover esta foto" aria-label={`Remover foto ${i + 1}`}
+              className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 text-white rounded-full h-6 w-6 flex items-center justify-center shadow border-2 border-white">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+        {!cheio && (
+          <button type="button" onClick={() => ref.current?.click()}
+            className={`h-20 w-full rounded border-2 border-dashed flex flex-col items-center justify-center
+              ${fotos.length === 0 ? "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100" : "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
+            <Camera className="h-5 w-5" />
+            <span className="text-[9px] font-semibold mt-0.5">{fotos.length === 0 ? "FOTO *" : "+ FOTO"}</span>
+          </button>
+        )}
+      </div>
+      <div className="text-[10px] text-muted-foreground mt-1 text-center">
+        {fotos.length}/{max} foto{fotos.length === 1 ? "" : "s"}{cheio ? " (limite)" : ""}
+      </div>
+    </div>
   );
 }
 
@@ -876,12 +976,33 @@ function ModalDetalhes({ companyId, registroId, onClose }:
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {itens.map((it) => {
                     const sb = STATUS_ITEM_BADGE[it.status_item] || { label: it.status_item, cls: "bg-gray-100" };
+                    // Rev. 1884 — galeria de fotos. Usa `fotos_urls[]` quando presente
+                    // (items novos), fallback para `foto_url` (items legados).
+                    const galeria: string[] = Array.isArray(it.fotos_urls) && it.fotos_urls.length > 0
+                      ? it.fotos_urls
+                      : (it.foto_url ? [it.foto_url] : []);
                     return (
                       <div key={it.id} className="border rounded-lg p-3 bg-white flex gap-3">
-                        {it.foto_url ? (
-                          <a href={it.foto_url} target="_blank" rel="noreferrer" className="shrink-0">
-                            <img src={it.foto_url} className="h-24 w-24 object-cover rounded border" alt="" />
-                          </a>
+                        {galeria.length > 0 ? (
+                          <div className="shrink-0 flex flex-col gap-1">
+                            <a href={galeria[0]} target="_blank" rel="noreferrer">
+                              <img src={galeria[0]} className="h-24 w-24 object-cover rounded border" alt="" />
+                            </a>
+                            {galeria.length > 1 && (
+                              <div className="grid grid-cols-3 gap-0.5 w-24">
+                                {galeria.slice(1, 7).map((u, gi) => (
+                                  <a key={gi} href={u} target="_blank" rel="noreferrer">
+                                    <img src={u} className="h-7 w-full object-cover rounded border" alt={`extra ${gi + 2}`} />
+                                  </a>
+                                ))}
+                                {galeria.length > 7 && (
+                                  <div className="h-7 bg-slate-100 rounded border flex items-center justify-center text-[9px] font-semibold text-slate-600">
+                                    +{galeria.length - 7}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <div className="h-24 w-24 bg-slate-100 rounded flex items-center justify-center"><ImageOff className="h-6 w-6 text-slate-400" /></div>
                         )}

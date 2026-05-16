@@ -931,7 +931,11 @@ Regras:
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ft_reg_pai ON ferramentas_terceiros_registros (registro_pai_id) WHERE deleted_at IS NULL`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ft_item_reg ON ferramentas_terceiros_itens (registro_id)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ft_item_status ON ferramentas_terceiros_itens (status_item)`);
-          console.log(`[SyncSchema+] Rev. 1880: tabelas ferramentas_terceiros_registros/itens garantidas.`);
+          // Rev. 1884 — múltiplas fotos por item. `foto_url` continua sendo a capa
+          // (primeira foto) para retrocompat com queries antigas e fluxo de saída;
+          // `fotos_urls` carrega TODAS (capa inclusa) para exibição em galeria.
+          await db.execute(sql`ALTER TABLE ferramentas_terceiros_itens ADD COLUMN IF NOT EXISTS fotos_urls TEXT[]`);
+          console.log(`[SyncSchema+] Rev. 1880/1884: tabelas ferramentas_terceiros_registros/itens garantidas (+ fotos_urls).`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS cc_cliente ON cliente_comentarios (cliente_id)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS cc_obra ON cliente_comentarios (obra_id)`);
           await db.execute(sql`CREATE TABLE IF NOT EXISTS cliente_avaliacoes (
