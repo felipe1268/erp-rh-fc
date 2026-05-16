@@ -44,6 +44,31 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1875,
+    titulo: "Programação Semanal LOTUS · Fim de semana respeita calendário MSP por padrão + override granular por atividade (click em sáb/dom)",
+    descricao: "User (16/05/2026, screenshot iPad da Programação Semanal — Semana 2 08-14/mai/2026, várias atividades pintando barras automaticamente em sáb 09/mai e dom 10/mai): 'Não houve atividade no domingo, se houve será lançado manualmente. Então o ERP precisa deixar para o engenheiro preencher manualmente as atividades que foram feitas no sábado e domingo, caso contrário deve seguir o calendário do project'.\n\n" +
+      "CAUSA RAIZ: Em `client/src/components/planejamento/ProgramacaoSemanalLotus.tsx`, a função `faixasCelula` já respeitava `ehUtil` (calendário MSP via `parseCalendarioJson` + `ehDiaUtil`) para a faixa PREVISTO (top, L161 — `inPrev = ehUtil && ...`) e para os DOIS branches de auto-derivação do REAL a partir do avanço semanal (L180-182 — só dispara se `inPrev`; L183 — checa `ehUtil` explícito). MAS o cálculo `inReal` explícito a partir de `dataInicioReal`/`dataFimReal` (L162) era `!!(realIni && realFim && ds >= realIni && ds <= realFim)` — SEM gate de `ehUtil`. Resultado: qualquer atividade com janela real cobrindo um sáb/dom pintava esses dias automaticamente, contrariando a regra MSP.\n\n" +
+      "RESOLUÇÃO DECIDIDA COM USER (user_query): override deve ser GRANULAR (por atividade), não por projeto inteiro. Engenheiro clica no quadradinho de sáb/dom da LINHA da atividade para alternar 'trabalhado nesta atividade'. Mantém calendário MSP intocado.\n\n" +
+      "MUDANÇAS:\n" +
+      "(1) Schema (`drizzle/schema.ts` L5326-5332): nova coluna `planejamento_atividades.dias_trabalhados_extras TEXT` (JSON array de YYYY-MM-DD). Default null = respeita calendário MSP estritamente.\n" +
+      "(2) SyncSchema+ (`server/_core/index.ts` L520-522): `ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS dias_trabalhados_extras TEXT` (idempotente, padrão Rev. 1829/1874).\n" +
+      "(3) Backend (`server/routers/planejamento.ts` L947-994): novo mutation `planejamento.toggleDiaTrabalhadoExtra({atividadeId, companyId, data})`. Valida ownership multi-tenant (companyId via join com planejamento_projetos; admin/admin_master atravessam). Parse defensivo do JSON atual, sanitiza com regex `^\\d{4}-\\d{2}-\\d{2}$`, toggle por `indexOf`, ordena, limite defensivo de 366 datas/atividade. Persiste null quando lista vazia (não polui DB com `[]`).\n" +
+      "(4) `faixasCelula` (`ProgramacaoSemanalLotus.tsx` L134-238):\n" +
+      "    - Novo parâmetro opcional `diasExtras: Set<string> | null` (passado APÓS `inicioSemanaCorrente`, compatível com chamadas antigas).\n" +
+      "    - `ehUtilCal` = calendário MSP (ou fallback seg-sex); `ehUtil = ehUtilCal || diasExtras.has(ds)`. Daí pra frente `inPrev`/`inReal` herdam o `ehUtil` enriquecido.\n" +
+      "    - `inReal` explícito (L162→L173) AGORA também gateia por `ehUtil` (era o bug principal — atividade com Real cobrindo fds pintava sáb/dom sem motivo).\n" +
+      "(5) UI override granular (`ProgramacaoSemanalLotus.tsx`):\n" +
+      "    - Interface `Atividade` (L32-34): novo campo opcional `diasTrabalhadosExtras?: string | null` (vem do `return { ...r, ... }` do listarAtividades).\n" +
+      "    - L418-431: hook `toggleDiaExtra = trpc.planejamento.toggleDiaTrabalhadoExtra.useMutation` com `utils.planejamento.listarAtividades.invalidate({ revisaoId })` no onSuccess (refresh imediato da lista). onError loga + tenta `window.toast.error`.\n" +
+      "    - L433-448: `diasExtrasPorAtv = useMemo(...)` — Map<atvId, Set<YYYY-MM-DD>> parseado uma vez por mudança em `atividades` (JSON.parse defensivo, sanitiza com regex).\n" +
+      "    - Renderização das células (L1695-1729): para CADA dia da semana exibido, calcula `ehFds`, `calMarcaUtil` e `marcadoExtra`. Se `podeAlternar = ehFds && !calMarcaUtil`, célula vira clicável: `cursor-pointer`, `hover:bg-indigo-50` (apenas tela, não-print), tooltip dinâmico (＋ marcar ou ☑ desmarcar), `onClick` chama o toggle. Quando `marcadoExtra` o td ganha `bg-indigo-50/40` mesmo sem barra pintada (sinal visual do override).\n\n" +
+      "PRESERVADO: ZERO mudança em PV/EV/SPI, Curva S, KPIs Last Planner, export Excel, drill-down semanal, métricas semanais, snapshot MSP. Reversível em ~8 hunks. R-001/R-007/R-010 OK (apenas ADD COLUMN IF NOT EXISTS, nenhum dado apagado, override é opt-in e default-null).",
+    tipo: "feature",
+    modulos: "Planejamento/LOTUS/Calendário",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 15:30:00",
+  },
+  {
     version: 1873,
     titulo: "DDS · Nova Sessão · Substitui campo CPF do instrutor por Código Interno do funcionário (LGPD) + auto-fill",
     descricao: "User (16/05/2026, screenshot iPad modal Nova Sessão DDS — campo 'CPF (000.000.000-00)' visível ao lado de 'Felipe Costa Alves'): 'Quero que mude o campo CPF PARA CODIGO interno do funcionário, para garantir o lgpd, de forma automática ok'.\n\n" +

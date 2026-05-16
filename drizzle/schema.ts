@@ -5320,6 +5320,13 @@ export const planejamentoAtividades = pgTable("planejamento_atividades", {
   previstoMspPct:       numeric("previsto_msp_pct", { precision: 8, scale: 4 }),
   realizadoMspPct:      numeric("realizado_msp_pct", { precision: 8, scale: 4 }),
   disabled:             boolean("disabled").default(false),
+  // Rev. 1875 — Override granular de fim de semana trabalhado por atividade.
+  // JSON array de datas ISO "YYYY-MM-DD" que devem ser tratadas como DIA ÚTIL
+  // SÓ para esta atividade na Programação Semanal LOTUS, independente do
+  // calendário MSP do projeto. Default null/[] = respeita estritamente o
+  // `planejamento_projetos.calendario_json` (sem sáb/dom). O engenheiro
+  // habilita pontualmente clicando na célula de sáb/dom da linha (toggle).
+  diasTrabalhadosExtras: text("dias_trabalhados_extras"),
   criadoEm:             timestamp("criado_em").defaultNow(),
 });
 

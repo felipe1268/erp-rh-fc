@@ -941,6 +941,55 @@ export const planejamentoRouter = router({
   // restante do ERP (não cria espelho fantasma).
   // Rev. 1662.1 — Hardening contra IDOR: exige companyId e valida que a
   // atividade pertence a um projeto da MESMA empresa antes de gravar.
+  /**
+   * Rev. 1875 — Toggle granular de "fim de semana trabalhado" por atividade.
+   *
+   * O engenheiro clica num quadradinho de SÁB/DOM da linha da atividade na
+   * Programação Semanal LOTUS para marcar/desmarcar aquele dia como trabalhado
+   * SÓ para essa atividade (não muda o calendário do projeto). O campo
+   * `dias_trabalhados_extras` armazena um JSON array de datas ISO; toggle
+   * insere se ausente, remove se presente. Limite defensivo de 366 datas
+   * (1 ano de atividades em fds — improvável atingir).
+   *
+   * O `faixasCelula` no cliente trata essas datas como `ehUtil=true`, o que
+   * habilita pintura do PREVISTO/REAL naquele dia mesmo com o calendário MSP
+   * marcando-o como folga.
+   */
+  toggleDiaTrabalhadoExtra: protectedProcedure
+    .input(z.object({
+      atividadeId: z.number(),
+      companyId:   z.number(),
+      data:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data deve estar em formato YYYY-MM-DD"),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [row] = await db
+        .select({
+          projetoCompany: planejamentoProjetos.companyId,
+          atual:          planejamentoAtividades.diasTrabalhadosExtras,
+        })
+        .from(planejamentoAtividades)
+        .innerJoin(planejamentoProjetos, eq(planejamentoProjetos.id, planejamentoAtividades.projetoId))
+        .where(eq(planejamentoAtividades.id, input.atividadeId));
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Atividade não encontrada" });
+      const isAdmin = ctx.user.role === "admin" || ctx.user.role === "admin_master";
+      const userCompany = (ctx.user as any).companyId;
+      if (!isAdmin && String(row.projetoCompany) !== String(userCompany)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Atividade fora da sua empresa" });
+      }
+      let lista: string[] = [];
+      try { lista = row.atual ? JSON.parse(row.atual) : []; if (!Array.isArray(lista)) lista = []; } catch { lista = []; }
+      lista = lista.filter((s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s));
+      const idx = lista.indexOf(input.data);
+      if (idx >= 0) lista.splice(idx, 1);
+      else { if (lista.length >= 366) throw new TRPCError({ code: "BAD_REQUEST", message: "Limite de 366 dias extras por atividade" }); lista.push(input.data); }
+      lista.sort();
+      await db.update(planejamentoAtividades)
+        .set({ diasTrabalhadosExtras: lista.length > 0 ? JSON.stringify(lista) : null })
+        .where(eq(planejamentoAtividades.id, input.atividadeId));
+      return { ok: true, marcado: idx < 0, total: lista.length, datas: lista };
+    }),
+
   setRealDates: protectedProcedure
     .input(z.object({
       atividadeId:        z.number(),

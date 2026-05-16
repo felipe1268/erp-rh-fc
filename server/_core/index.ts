@@ -514,6 +514,9 @@ Regras:
           // contra regras MSP). Index composto (revisao_id, msp_uid) acelera o
           // lookup `uidToId` no salvarAtividades/importarAvancosDoArquivo.
           await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS msp_uid VARCHAR(20)`);
+          // Rev. 1875 — Override granular de sáb/dom trabalhado por atividade
+          // (JSON array de YYYY-MM-DD). Default null = respeita calendário MSP.
+          await db.execute(sql`ALTER TABLE planejamento_atividades ADD COLUMN IF NOT EXISTS dias_trabalhados_extras TEXT`);
           // Rev. 1829 — UNIQUE partial index (achado de code review): UID é
           // chave única de identidade dentro da revisão. Partial WHERE
           // msp_uid IS NOT NULL preserva legados (NULL) sem violação. Se já

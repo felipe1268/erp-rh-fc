@@ -26,6 +26,9 @@ interface Atividade {
   dataFim?: string | null;
   dataInicioReal?: string | null;
   dataFimReal?: string | null;
+  // Rev. 1875 — JSON string com array de datas YYYY-MM-DD em que o engenheiro
+  // marcou sáb/dom como TRABALHADO só para esta atividade (override granular).
+  diasTrabalhadosExtras?: string | null;
   pesoFinanceiro?: string | number | null;
   responsavelLotus?: string | null;
   // Rev. 1817 — Override bruto enviado pelo servidor.
@@ -155,9 +158,14 @@ function faixasCelula(
   // aberta). Antes era `dia <= hoje`, o que pintava ter/qua de vermelho
   // mesmo a semana ainda estando em curso (com cutoff na qui/sex).
   inicioSemanaCorrente: Date | null = null,
+  // Rev. 1875 — Override granular: datas em que esta atividade específica
+  // teve trabalho em sáb/dom (engenheiro marcou manualmente clicando na
+  // célula). Tratadas como `ehUtil=true` apenas para esta atividade.
+  diasExtras: Set<string> | null = null,
 ): { top: string | null; bottom: string | null } {
   const ds = dateStr(dia);
-  const ehUtil = cal ? ehDiaUtil(ds, cal) : (dia.getDay() !== 0 && dia.getDay() !== 6);
+  const ehUtilCal = cal ? ehDiaUtil(ds, cal) : (dia.getDay() !== 0 && dia.getDay() !== 6);
+  const ehUtil = ehUtilCal || (!!diasExtras && diasExtras.has(ds));
   const inPrev = ehUtil && !!(prevIni && prevFim && ds >= prevIni && ds <= prevFim);
   // Rev. 1875 — Respeitar calendário MSP TAMBÉM no REAL explícito. Antes,
   // se o engenheiro lançasse `dataInicioReal/dataFimReal` em uma janela que
@@ -403,6 +411,38 @@ export default function ProgramacaoSemanalLotus(props: Props) {
   const handleSetReal = (atividadeId: number, campo: "dataInicioReal" | "dataFimReal", valor: string) => {
     setRealDates.mutate({ atividadeId, companyId, [campo]: valor || null } as any);
   };
+
+  // Rev. 1875 — Toggle de "fim de semana trabalhado" por atividade. Clicar
+  // num quadradinho de SÁB/DOM marca/desmarca aquele dia como trabalhado
+  // SÓ para esta atividade (não muda o calendário do projeto). Optimistic
+  // update via invalidate da listarAtividades após a mutação.
+  // OBS: reusa o `utils` declarado mais acima no componente (L254).
+  const toggleDiaExtra = trpc.planejamento.toggleDiaTrabalhadoExtra.useMutation({
+    onSuccess: () => {
+      utils.planejamento.listarAtividades.invalidate({ revisaoId });
+    },
+    onError: (err) => {
+      console.error("[toggleDiaExtra] erro:", err);
+      try { (window as any).toast?.error?.(`Não foi possível alternar o dia trabalhado: ${err.message}`); } catch {}
+    },
+  });
+  // Parsing memoizado por atividade — JSON.parse só roda quando a lista muda.
+  const diasExtrasPorAtv = useMemo(() => {
+    const m = new Map<number, Set<string>>();
+    for (const a of atividades) {
+      const raw = (a as any).diasTrabalhadosExtras;
+      if (!raw) continue;
+      try {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          const s = new Set<string>();
+          for (const v of arr) if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) s.add(v);
+          if (s.size > 0) m.set(a.id, s);
+        }
+      } catch {}
+    }
+    return m;
+  }, [atividades]);
 
   // Rev. 1678 — Edit-on-click para datas Real Início/Fim. Antes mostrávamos
   // `<Input type="date">` direto, mas o iOS Safari/Chrome renderizam esse
@@ -1649,10 +1689,34 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                       // recálculo a cada um dos 7 dias (sugestão code review Rev 1664).
                       const temAvSem = !!m && m.somaSemanal > 0;
                       const acumAteSem = m?.acumPct ?? 0;
+                      const diasExtrasAtv = diasExtrasPorAtv.get(a.id) ?? null;
                       return diasDisplay.map((d, idx) => {
-                        const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSem, acumAteSem, inicioSemanaCorrente);
+                        const f = faixasCelula(d, a.dataInicio, a.dataFim, a.dataInicioReal, a.dataFimReal, hoje, calMSP, m?.aderenciaPct ?? null, m?.metaPct ?? 0, temAvSem, acumAteSem, inicioSemanaCorrente, diasExtrasAtv);
+                        // Rev. 1875 — Sáb/dom é clicável para alternar
+                        // "trabalhado nesta atividade". Dias úteis padrão
+                        // ficam não-clicáveis (cor/pintura é dirigida por
+                        // datas previstas/reais + avanços, como sempre).
+                        const dow = d.getDay();
+                        const dsIso = dateStr(d);
+                        const ehFds = dow === 0 || dow === 6;
+                        const calMarcaUtil = calMSP ? ehDiaUtil(dsIso, calMSP) : !ehFds;
+                        const marcadoExtra = !!diasExtrasAtv && diasExtrasAtv.has(dsIso);
+                        const podeAlternar = ehFds && !calMarcaUtil; // só sáb/dom não-úteis pelo calendário
+                        const tipoCel = marcadoExtra
+                          ? `${tip}\n\n☑ Sáb/Dom marcado como trabalhado nesta atividade. Clique para desmarcar.`
+                          : podeAlternar
+                            ? `${tip}\n\n＋ Clique para marcar este ${dow === 6 ? "sábado" : "domingo"} como trabalhado nesta atividade.`
+                            : tip;
                         return (
-                          <td key={idx} className="border border-slate-300 p-0 h-6 align-middle" title={tip}>
+                          <td
+                            key={idx}
+                            className={`border border-slate-300 p-0 h-6 align-middle ${podeAlternar ? "cursor-pointer hover:bg-indigo-50 print:hover:bg-transparent print:cursor-default" : ""} ${marcadoExtra ? "bg-indigo-50/40" : ""}`}
+                            title={tipoCel}
+                            onClick={podeAlternar ? () => {
+                              if (toggleDiaExtra.isPending) return;
+                              toggleDiaExtra.mutate({ atividadeId: a.id, companyId, data: dsIso });
+                            } : undefined}
+                          >
                             <div className="flex flex-col gap-[2px] mx-0.5 my-1">
                               <div className={`h-[6px] rounded-sm ${f.top ?? "bg-transparent"}`} />
                               <div className={`h-[6px] rounded-sm ${f.bottom ?? "bg-transparent"}`} />
