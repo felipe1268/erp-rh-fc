@@ -116,8 +116,12 @@ export default function DashAvisoPrevio() {
 
   // ===== Rev. 1908 — Custo de Demissão em Massa =====
   const [cdmData, setCdmData] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  // Rev. 1921 — seletor de tipo. Default 'empregador_trabalhado' p/ paridade
+  // direta com o módulo Aviso Prévio oficial (cenário mais comum). User pode
+  // alternar p/ 'empregador_indenizado' (pior cenário de caixa).
+  const [cdmTipo, setCdmTipo] = useState<'empregador_indenizado' | 'empregador_trabalhado'>('empregador_trabalhado');
   const { data: cdm, isLoading: loadingCdm, isFetching: fetchingCdm } = trpc.dashboards.custoDemissaoMassa.useQuery(
-    { companyId: queryCompanyId, dataReferencia: cdmData, ...(isConstrutoras ? { companyIds } : {}) },
+    { companyId: queryCompanyId, dataReferencia: cdmData, tipo: cdmTipo, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   // Rev. 1909 — ordenação clicável da tabela de custo de demissão em massa
@@ -296,23 +300,38 @@ export default function DashAvisoPrevio() {
                         {fetchingCdm && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
                       </CardTitle>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Estimativa de quanto custaria <strong>demitir TODOS os funcionários ativos hoje</strong> (sem justa causa — pior cenário: empregador indeniza tudo de uma vez, inclui aviso prévio indenizado + multa 40% FGTS). Use para dimensionar o caixa em momentos de crise.
+                        Estimativa de quanto custaria <strong>demitir TODOS os funcionários ativos</strong> a partir da data-base, sem justa causa. <strong>Trabalhado</strong> = aviso prévio cumprido (30 dias) — paridade direta com o módulo Aviso Prévio oficial. <strong>Indenizado</strong> = pior cenário de caixa (paga aviso prévio completo da Lei 12.506 de uma vez).
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Data-base:</label>
-                    <Input
-                      type="date"
-                      value={cdmData}
-                      onChange={(e) => setCdmData(e.target.value)}
-                      className="h-8 w-[160px] text-xs"
-                    />
-                    <button
-                      onClick={() => setCdmData(new Date().toISOString().slice(0, 10))}
-                      className="text-[11px] px-2 py-1 rounded-md border border-border bg-white hover:bg-muted/50 text-muted-foreground"
-                      title="Voltar para hoje"
-                    >Hoje</button>
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                    {/* Rev. 1921 — Tipo de Aviso (paridade com módulo oficial) */}
+                    <div className="inline-flex items-center rounded-md border border-border bg-white p-0.5 text-xs">
+                      <button
+                        onClick={() => setCdmTipo('empregador_trabalhado')}
+                        className={`px-2.5 py-1 rounded transition-colors ${cdmTipo === 'empregador_trabalhado' ? 'bg-blue-600 text-white font-semibold' : 'text-muted-foreground hover:text-foreground'}`}
+                        title="30 dias trabalhados (paridade com módulo Aviso Prévio oficial)"
+                      >Trabalhado</button>
+                      <button
+                        onClick={() => setCdmTipo('empregador_indenizado')}
+                        className={`px-2.5 py-1 rounded transition-colors ${cdmTipo === 'empregador_indenizado' ? 'bg-red-600 text-white font-semibold' : 'text-muted-foreground hover:text-foreground'}`}
+                        title="Aviso prévio indenizado completo Lei 12.506 (pior cenário de caixa)"
+                      >Indenizado</button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Data-base:</label>
+                      <Input
+                        type="date"
+                        value={cdmData}
+                        onChange={(e) => setCdmData(e.target.value)}
+                        className="h-8 w-[160px] text-xs"
+                      />
+                      <button
+                        onClick={() => setCdmData(new Date().toISOString().slice(0, 10))}
+                        className="text-[11px] px-2 py-1 rounded-md border border-border bg-white hover:bg-muted/50 text-muted-foreground"
+                        title="Voltar para hoje"
+                      >Hoje</button>
+                    </div>
                   </div>
                 </div>
               </CardHeader>

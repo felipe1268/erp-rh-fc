@@ -2223,10 +2223,20 @@ async function getDrillDown(companyId: number, filterType: string, filterValue: 
 // VR e descontos NÃO entram nesta estimativa rápida em massa —
 // é uma fotografia de "provisão de caixa" para a diretoria.
 // ============================================================
-async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: string, companyIds?: number[]) {
+async function getDashCustoDemissaoMassa(
+  companyId: number,
+  dataReferencia?: string,
+  companyIds?: number[],
+  tipoParam?: 'empregador_indenizado' | 'empregador_trabalhado',
+) {
   const db = await getDb();
   if (!db) return null;
   const dataRef = dataReferencia || new Date().toISOString().split('T')[0];
+  // Rev. 1921 — Seletor de TIPO (default 'empregador_trabalhado' p/ paridade
+  // direta com o módulo oficial Aviso Prévio, que é o cenário que o usuário
+  // simula com mais frequência). Mantém 'empregador_indenizado' como pior
+  // cenário (pago tudo de uma vez, inclui aviso prévio indenizado completo).
+  const tipo = tipoParam === 'empregador_indenizado' ? 'empregador_indenizado' : 'empregador_trabalhado';
 
   const baseWhere = and(
     companyWhere(employees, companyId, companyIds),
@@ -2259,7 +2269,16 @@ async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: str
     valorComplemento: employees.valorComplemento,
   }).from(employees).where(activeWhere);
 
-  const dtFimAviso = new Date(dataRef + 'T00:00:00');
+  // Rev. 1921 — Datas espelham EXATAMENTE o módulo Aviso Prévio oficial
+  // (`avisoPrevioFerias.ts` L915-956 — `prevTrab`/`prevInd`):
+  //   dataDesligamento = dataRef (último dia trabalhado informado pelo user)
+  //   dataInicioAviso  = dataRef + 1
+  //   dataFimAviso     = dataInicioAviso + N - 1
+  //     onde N = 30 (trabalhado) ou diasAvisoTotal (indenizado, por funcionário)
+  // Antes (Rev. 1909-fix): `dataFimAviso = dataRef + diasAvisoTotal` — off by
+  // one e usava sempre indenizado. Resultado: Anderson CDM 87k vs oficial 71k.
+  const dtRef = new Date(dataRef + 'T00:00:00');
+  const dtFimAviso = new Date(dtRef);
   const diasTrabMes = isNaN(dtFimAviso.getTime()) ? 30 : dtFimAviso.getDate();
 
   // Rev. 1911 — Carrega contagem REAL de períodos de férias vencidos por
@@ -2332,7 +2351,11 @@ async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: str
       const anosBase = !isNaN(dtAdm.getTime())
         ? Math.max(0, Math.floor((dtFimAviso.getTime() - dtAdm.getTime()) / (1000 * 60 * 60 * 24 * 365.25)))
         : 0;
-      const diasAvisoEstimado = calcularDiasAvisoTotal(anosBase);
+      // Rev. 1921 — espelha exatamente avisoPrevioFerias.ts L919-920/L945-946:
+      //   diasAviso = tipo==='empregador_trabalhado' ? 30 : calcularDiasAvisoTotal(anos)
+      //   dataInicioAviso = dataDesligamento(=dataRef) + 1
+      //   dataFimAviso    = dataInicioAviso + diasAviso - 1 = dataRef + diasAviso
+      const diasAvisoEstimado = tipo === 'empregador_trabalhado' ? 30 : calcularDiasAvisoTotal(anosBase);
       const dtFimProjetada = new Date(dtFimAviso.getTime() + diasAvisoEstimado * 24 * 60 * 60 * 1000);
       const dataFimProjetada = dtFimProjetada.toISOString().slice(0, 10);
       // Rev. 1911 — Passa override real (default 0 quando funcionário não tem
@@ -2344,7 +2367,7 @@ async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: str
         dataAdmissao: r.dataAdmissao!,
         dataDesligamento: dataRef,
         dataFimAviso: dataFimProjetada,
-        tipo: 'empregador_indenizado',
+        tipo,
         vrDiario: 0,
         diasTrabalhadosMes: diasTrabMes,
         periodosVencidosOverride: periodosVencidosReal,
@@ -2364,7 +2387,7 @@ async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: str
           dataAdmissao: r.dataAdmissao!,
           dataDesligamento: dataRef,
           dataFimAviso: dataFimProjetada,
-          tipo: 'empregador_indenizado',
+          tipo,
           diasTrabalhadosMes: diasTrabMes,
           periodosVencidosOverride: periodosVencidosReal,
         });
@@ -2405,6 +2428,7 @@ async function getDashCustoDemissaoMassa(companyId: number, dataReferencia?: str
 
   return {
     dataReferencia: dataRef,
+    tipo,
     totalFuncionarios: linhas.length,
     funcionariosIgnorados: rows.length - linhas.length,
     grandTotal,
@@ -4019,7 +4043,8 @@ export const dashboardsRouter = router({
     companyId: z.number(),
     companyIds: z.array(z.number()).optional(),
     dataReferencia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  })).query(({ input }) => getDashCustoDemissaoMassa(input.companyId, input.dataReferencia, input.companyIds)),
+    tipo: z.enum(['empregador_indenizado', 'empregador_trabalhado']).optional(),
+  })).query(({ input }) => getDashCustoDemissaoMassa(input.companyId, input.dataReferencia, input.companyIds, input.tipo)),
   ferias: protectedProcedure.input(z.object({ companyId: z.number(), ano: z.number().optional(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashFerias(input.companyId, input.ano, input.companyIds)),
   perfilTempoCasa: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).query(({ input }) => getDashPerfilTempoCasa(input.companyId, input.companyIds)),
   analiseIAPerfil: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() })).mutation(({ input }) => getAnaliseIAPerfil(input.companyId, input.companyIds)),
