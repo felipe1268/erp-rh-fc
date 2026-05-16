@@ -41,7 +41,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  ClipboardList, AlertTriangle, CheckCircle, Clock, BarChart3,
+  AlertTriangle, CheckCircle, Clock, BarChart3,
   Building2, TrendingUp, Users, Shield, Loader2
 } from "lucide-react";
 import { useState, useMemo } from "react";
