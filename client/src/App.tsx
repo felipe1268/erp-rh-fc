@@ -250,6 +250,7 @@ const AlmoxarifadoPage = lazy(() => import("./pages/almoxarifado/index"));
 const AlmoxarifadoCategorias = lazy(() => import("./pages/almoxarifado/Categorias"));
 const AlmoxarifadoMovimentacoes = lazy(() => import("./pages/almoxarifado/Movimentacoes"));
 const AlmoxarifadoInventario = lazy(() => import("./pages/almoxarifado/Inventario"));
+const FerramentasTerceiros = lazy(() => import("./pages/almoxarifado/FerramentasTerceiros"));
 const SolicitacaoMDO = lazy(() => import("./pages/SolicitacaoMDO"));
 const Solicitacoes = lazy(() => import("./pages/compras/Solicitacoes"));
 const Cotacoes = lazy(() => import("./pages/compras/Cotacoes"));
@@ -500,6 +501,7 @@ function Router() {
         <Route path="/almoxarifado/categorias"     component={() => <RouteGuard component={AlmoxarifadoCategorias} route="/almoxarifado" />} />
         <Route path="/almoxarifado/movimentacoes" component={() => <RouteGuard component={AlmoxarifadoMovimentacoes} route="/almoxarifado/movimentacoes" />} />
         <Route path="/almoxarifado/inventario"    component={() => <RouteGuard component={AlmoxarifadoInventario} route="/almoxarifado/inventario" />} />
+        <Route path="/almoxarifado/ferramentas-terceiros" component={() => <RouteGuard component={FerramentasTerceiros} route="/almoxarifado/ferramentas-terceiros" />} />
         <Route path="/almoxarifado"              component={() => <RouteGuard component={AlmoxarifadoPage} route="/almoxarifado" />} />
         <Route path="/compras/painel"            component={() => <RouteGuard component={PainelCompras} route="/compras/painel" />} />
         <Route path="/compras/fornecedores"      component={() => <RouteGuard component={Fornecedores} route="/compras/fornecedores" />} />

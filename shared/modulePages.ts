@@ -649,6 +649,7 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/almoxarifado":                  "estoque",
     "/almoxarifado/movimentacoes":    "movimentacoes",
     "/almoxarifado/inventario":       "inventario",
+    "/almoxarifado/ferramentas-terceiros": "ferramentas_terceiros",
     "/almoxarifado/categorias":       "categorias",
   },
   "operacional": {

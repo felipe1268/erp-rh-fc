@@ -355,6 +355,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "almoxarifado-painel",        label: "Painel",             route: "/almoxarifado",               icon: "LayoutDashboard" },
       { key: "almoxarifado-movimentacoes", label: "Movimentações",      route: "/almoxarifado/movimentacoes", icon: "ArrowLeftRight" },
       { key: "almoxarifado-inventario",    label: "Inventário Semanal", route: "/almoxarifado/inventario",    icon: "ClipboardList" },
+      { key: "almoxarifado-ferr-terceiros",label: "Ferramentas de Terceiros", route: "/almoxarifado/ferramentas-terceiros", icon: "Wrench" },
       { key: "almoxarifado-categorias",    label: "Categorias",         route: "/almoxarifado/categorias",    icon: "Layers" },
     ],
   },

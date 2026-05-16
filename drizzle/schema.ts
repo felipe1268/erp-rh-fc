@@ -8252,3 +8252,48 @@ export const ddsSessaoFuncionarios = pgTable("dds_sessao_funcionarios", {
   index("idx_dds_sf_sessao").on(t.sessaoId),
   index("idx_dds_sf_emp").on(t.employeeId),
 ]);
+
+// ============================================================================
+// Rev. 1880 — Controle de Ferramentas de Terceiros (portaria de obra)
+// ============================================================================
+export const ferramentasTerceirosRegistros = pgTable("ferramentas_terceiros_registros", {
+  id: serial().primaryKey(),
+  companyId: integer("company_id").notNull(),
+  obraId: integer("obra_id"),
+  obraNome: varchar("obra_nome", { length: 255 }),
+  tipo: varchar({ length: 10 }).notNull(),               // ENTRADA | SAIDA
+  dataHora: timestamp("data_hora", { mode: 'string' }).defaultNow().notNull(),
+  empresaTerceira: varchar("empresa_terceira", { length: 255 }).notNull(),
+  cnpj: varchar({ length: 20 }),
+  responsavelNome: varchar("responsavel_nome", { length: 255 }).notNull(),
+  responsavelCpf: varchar("responsavel_cpf", { length: 14 }),
+  responsavelTelefone: varchar("responsavel_telefone", { length: 20 }),
+  quemEntregou: varchar("quem_entregou", { length: 255 }),
+  quemRecebeu: varchar("quem_recebeu", { length: 255 }),
+  lancadoPorUserId: integer("lancado_por_user_id"),
+  lancadoPorNome: varchar("lancado_por_nome", { length: 255 }),
+  registroPaiId: integer("registro_pai_id"),             // se tipo=SAIDA → aponta p/ ENTRADA original
+  fotoDocumentoUrl: text("foto_documento_url"),          // RG/CNH do responsável
+  observacoes: text(),
+  status: varchar({ length: 20 }).default('em_obra').notNull(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at", { mode: 'string' }),
+});
+
+export const ferramentasTerceirosItens = pgTable("ferramentas_terceiros_itens", {
+  id: serial().primaryKey(),
+  registroId: integer("registro_id").notNull(),
+  companyId: integer("company_id").notNull(),
+  descricao: varchar({ length: 255 }).notNull(),
+  marca: varchar({ length: 100 }),
+  modelo: varchar({ length: 100 }),
+  numeroSerie: varchar("numero_serie", { length: 100 }),
+  quantidade: integer().default(1).notNull(),
+  fotoUrl: text("foto_url").notNull(),                   // obrigatória — sem foto não cadastra
+  condicao: varchar({ length: 20 }).default('boa').notNull(),
+  observacao: text(),
+  itemEntradaId: integer("item_entrada_id"),             // p/ saída parcial: aponta p/ item original
+  statusItem: varchar("status_item", { length: 20 }).default('na_obra').notNull(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});

@@ -882,6 +882,56 @@ Regras:
             criado_em TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
           )`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS cc_company ON cliente_comentarios (company_id)`);
+
+          // Rev. 1880 — Controle de Ferramentas de Terceiros (portaria de obra)
+          // Tabelas garantidas idempotentemente no startup. Sem isso, a tela quebra
+          // em ambientes onde o `drizzle migrate` não rodou (deploys diretos).
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS ferramentas_terceiros_registros (
+            id SERIAL PRIMARY KEY,
+            company_id INTEGER NOT NULL,
+            obra_id INTEGER,
+            obra_nome VARCHAR(255),
+            tipo VARCHAR(10) NOT NULL,
+            data_hora TIMESTAMP NOT NULL DEFAULT NOW(),
+            empresa_terceira VARCHAR(255) NOT NULL,
+            cnpj VARCHAR(20),
+            responsavel_nome VARCHAR(255) NOT NULL,
+            responsavel_cpf VARCHAR(14),
+            responsavel_telefone VARCHAR(20),
+            quem_entregou VARCHAR(255),
+            quem_recebeu VARCHAR(255),
+            lancado_por_user_id INTEGER,
+            lancado_por_nome VARCHAR(255),
+            registro_pai_id INTEGER,
+            foto_documento_url TEXT,
+            observacoes TEXT,
+            status VARCHAR(20) NOT NULL DEFAULT 'em_obra',
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            deleted_at TIMESTAMP
+          )`);
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS ferramentas_terceiros_itens (
+            id SERIAL PRIMARY KEY,
+            registro_id INTEGER NOT NULL,
+            company_id INTEGER NOT NULL,
+            descricao VARCHAR(255) NOT NULL,
+            marca VARCHAR(100),
+            modelo VARCHAR(100),
+            numero_serie VARCHAR(100),
+            quantidade INTEGER NOT NULL DEFAULT 1,
+            foto_url TEXT NOT NULL,
+            condicao VARCHAR(20) NOT NULL DEFAULT 'boa',
+            observacao TEXT,
+            item_entrada_id INTEGER,
+            status_item VARCHAR(20) NOT NULL DEFAULT 'na_obra',
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+          )`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ft_reg_company ON ferramentas_terceiros_registros (company_id) WHERE deleted_at IS NULL`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ft_reg_obra ON ferramentas_terceiros_registros (obra_id) WHERE deleted_at IS NULL`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ft_reg_pai ON ferramentas_terceiros_registros (registro_pai_id) WHERE deleted_at IS NULL`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ft_item_reg ON ferramentas_terceiros_itens (registro_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_ft_item_status ON ferramentas_terceiros_itens (status_item)`);
+          console.log(`[SyncSchema+] Rev. 1880: tabelas ferramentas_terceiros_registros/itens garantidas.`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS cc_cliente ON cliente_comentarios (cliente_id)`);
           await db.execute(sql`CREATE INDEX IF NOT EXISTS cc_obra ON cliente_comentarios (obra_id)`);
           await db.execute(sql`CREATE TABLE IF NOT EXISTS cliente_avaliacoes (
