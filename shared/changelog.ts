@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1962 — RH · Dashboard de Férias · Bar chart "Colaboradores em Férias por Mês" relabeled "Em Gozo" + breakpoints responsivos apertados (`lg:` → `md:`).
+ * User (16/05/2026, screenshot IMG_0813 às 20:06): "No grafico em coluna falta o indicador de em gozo, e quero todos os gráficos responsivos conforme a regra de ouro em todos os dash deste módulo".
+ * Diagnóstico:
+ *   (A) Bar chart timeline tinha série "Em Férias" (azul `CHART_PALETTE[0]` = #5B8DEF) — semanticamente é "Em Gozo" mas o label e a cor não batiam com o donut "Distribuição por Status" e a barra "Proporção Financeira" (onde Em Gozo virou turquesa #5CC5CF na Rev. 1961). Resultado: usuário olha o legend do bar e não acha o indicador "Em Gozo" — parece estar faltando.
+ *   (B) Grids dos blocos de gráfico só quebravam pra 2/3 colunas em `lg:` (1024px). Em tablets na faixa 768-1023px (iPad portrait, iPad split-view) ficavam empilhados desperdiçando espaço.
+ * Mudança (`client/src/pages/dashboards/DashFerias.tsx`, único arquivo):
+ *   (1) L455 (bar chart timeline): série "Em Férias" renomeada → "Em Gozo", cor `CHART_PALETTE[0]` → `#5CC5CF` (turquesa). Agora bate 1:1 com o donut e a Proporção Financeira — "Regra de Ouro" cromática unificada: Em Gozo=turquesa, Concluídas=verde, Iniciando=lavanda, Finalizando=pêssego.
+ *   (2) L150 (comentário drillByChart): "datasetIndex 0=Em Férias" → "0=Em Gozo" (consistência de naming).
+ *   (3) L171 (título do drill default da timeline): "Colaboradores em Férias —" → "Colaboradores em Gozo —".
+ *   (4) Breakpoints responsivos — 5 grids do dashboard:
+ *       - L340 KPIs: `grid-cols-2 sm:grid-cols-3 lg:grid-cols-7` → `+ md:grid-cols-4` (passo intermediário em tablets).
+ *       - L365 Cards financeiros: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4` → `lg:` → `md:` (4 cols já em 768px).
+ *       - L447 Linha 1 (timeline+donut): `lg:grid-cols-3` → `md:grid-cols-3` + `lg:col-span-2` → `md:col-span-2`.
+ *       - L475 Linha 2 (custo mensal+setor): `lg:grid-cols-2` → `md:grid-cols-2`.
+ *       - L505 Linha 3 (setores vencidas+obra): `lg:grid-cols-2` → `md:grid-cols-2`.
+ *       - L537 Linha 4 (donuts períodos): `lg:grid-cols-3` → `md:grid-cols-3`.
+ *   version → 1962.
+ * Resultado:
+ *   - Bar chart agora exibe "Em Gozo" em turquesa — usuário encontra o indicador imediatamente e a paleta é coerente entre os 3 visualizadores de status do dashboard.
+ *   - Tablets (iPad portrait 768-1023px) ganham layout 2-3 cols em vez de coluna única — mesmo aproveitamento que desktop apenas com gráficos um pouco menores.
+ *   - Mobile (≤640px) continua empilhado (responsabilidade `grid-cols-1`).
+ * Preservado: dados do backend (`timelineMensal.emFerias`) INTACTOS — é só relabel client-side; chave do payload mantida pra compat. Drill mapping datasetIndex 0..3 INTACTO. Rev. 1961 (cores donut/proportion), Rev. 1960/1959/1958/1957 — tudo intacto. Zero schema, zero backend, zero tRPC. Reversível em 9 hunks. R-001/R-007/R-010 OK.
+ *
  * Rev. 1961 — RH · Dashboard de Férias · Repaginação de cores (Concluídas = VERDE).
  * User (16/05/2026, screenshot IMG_0812): "Mude as cores da legenda quero os concluídos fiquem na cor verde o resto pode ajustar no que for melhor".
  * Motivação: estado "Concluída" é semanticamente POSITIVO (ciclo de férias fechado, passivo trabalhista zerado) mas estava em CINZA `#6B7280` em 2 lugares (donut Distribuição por Status + barra Colaboradores em Férias por Mês). Verde já estava sendo usado em "Em Gozo" no donut e em "Iniciando" no bar chart — conflitos.

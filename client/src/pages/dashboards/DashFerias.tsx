@@ -147,7 +147,7 @@ export default function DashFerias() {
       const mesIdx = info.dataIndex;
       const mesInicio = new Date(ano, mesIdx, 1);
       const mesFim = new Date(ano, mesIdx + 1, 0);
-      // Rev. 1870: filtro depende da série clicada (datasetIndex 0=Em Férias, 1=Iniciando, 2=Finalizando, 3=Concluídas)
+      // Rev. 1870/1962: filtro depende da série clicada (datasetIndex 0=Em Gozo, 1=Iniciando, 2=Finalizando, 3=Concluídas)
       // Guard `!dataInicio || !dataFim` aplicado a TODAS as séries para parear com backend (dashboards.ts L2604-2611).
       const dsIdx = info.datasetIndex;
       const baseList = data.feriasLista.filter((f: any) => !!f.dataInicio && !!f.dataFim);
@@ -168,7 +168,7 @@ export default function DashFerias() {
           const di = new Date(f.dataInicio), df = new Date(f.dataFim);
           return di <= mesFim && df >= mesInicio;
         });
-        title = `Colaboradores em Férias — ${MESES[mesIdx]} ${ano}`;
+        title = `Colaboradores em Gozo — ${MESES[mesIdx]} ${ano}`;
       }
     } else if (chartType === "setorVencidas") {
       const setor = info.label;
@@ -337,7 +337,7 @@ export default function DashFerias() {
       )}
 
       {/* KPIs - Status */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
         <div className="cursor-pointer" onClick={() => setDrillDialog({ title: "Todas as Férias", items: data.feriasLista })}>
           <DashKpi label="TOTAL" value={kpis.total} color="slate" icon={CalendarDays} />
         </div>
@@ -362,7 +362,7 @@ export default function DashFerias() {
       </div>
 
       {/* KPIs - Financeiro */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-l-4 border-l-[#5B8DEF] bg-white cursor-pointer hover:shadow-md hover:ring-2 hover:ring-blue-300 transition-all" onClick={() => drillByFinanceiro("provisao")}>
           <CardContent className="pt-4 pb-3 px-4">
             <p className="text-xs font-medium text-[#64748B] uppercase tracking-wide">Provisão Total</p>
@@ -444,15 +444,17 @@ export default function DashFerias() {
       )}
 
       {/* Gráficos - Linha 1: Timeline + Status Donut */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="md:col-span-2">
           <DashChart
             title={`Colaboradores em Férias por Mês — ${ano}`}
             type="bar"
             labels={MESES}
             datasets={[
-              // Rev. 1961 — Concluídas = VERDE (estado positivo). Iniciando vira lavanda pra evitar conflito com verde.
-              { label: "Em Férias", data: timelineMensal.map(t => t.emFerias), backgroundColor: CHART_PALETTE[0] },
+              // Rev. 1961/1962 — Paleta padrão "Regra de Ouro" do dashboard de Férias:
+              //   Em Gozo = turquesa #5CC5CF | Iniciando = lavanda #A78BDB | Finalizando = pêssego CHART_PALETTE[2] | Concluídas = verde #10B981
+              //   (renomeado "Em Férias" → "Em Gozo" pra unificar terminologia com donut + barra Proporção Financeira).
+              { label: "Em Gozo", data: timelineMensal.map(t => t.emFerias), backgroundColor: "#5CC5CF" },
               { label: "Iniciando", data: timelineMensal.map(t => t.iniciando), backgroundColor: "#A78BDB" },
               { label: "Finalizando", data: timelineMensal.map(t => t.finalizando), backgroundColor: CHART_PALETTE[2] },
               { label: "Concluídas", data: timelineMensal.map(t => (t as any).concluidas ?? 0), backgroundColor: "#10B981" },
@@ -472,7 +474,7 @@ export default function DashFerias() {
       </div>
 
       {/* Gráficos - Linha 2: Custo Mensal + Custo por Setor */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <DashChart
           title={`Custo Mensal Projetado — ${ano}`}
           type="bar"
@@ -502,7 +504,7 @@ export default function DashFerias() {
       </div>
 
       {/* Gráficos - Linha 3: Setores Vencidas + Férias por Obra */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {topSetoresVencidas.length > 0 && (
           <DashChart
             title="Setores com Mais Férias Vencidas"
@@ -534,7 +536,7 @@ export default function DashFerias() {
       </div>
 
       {/* Gráficos - Linha 4: Períodos + Fracionamento + RH Override */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         <DashChart
           title="1º Período vs 2º+ Período"
           type="doughnut"
