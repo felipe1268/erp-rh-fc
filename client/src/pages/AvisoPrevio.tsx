@@ -2240,7 +2240,23 @@ ${pdfData.aviso.observacoes ? '<div class="section"><div class="section-title">O
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start" sideOffset={4}>
-                      <Command>
+                      {/* Rev. 1906 — Filtro custom por SUBSTRING (case-insensitive +
+                          sem acentos). O `cmdk` (shadcn Command) usa por default
+                          um filtro FUZZY que casa qualquer char em ordem (ex:
+                          "ANA" casava com "ANDERSON", "ALEXANDRO" etc — qualquer
+                          nome com A...N...A em ordem). User (16/05/2026) pediu
+                          que o filtro mostre SÓ o que tem o texto digitado
+                          literalmente. Normalizamos os dois lados (value+search)
+                          via lowercase + NFD/strip-diacritics pra match estável
+                          em "joão" vs "JOAO" etc. */}
+                      <Command
+                        filter={(value, search) => {
+                          if (!search) return 1;
+                          const norm = (s: string) =>
+                            s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                          return norm(value).includes(norm(search)) ? 1 : 0;
+                        }}
+                      >
                         <CommandInput placeholder="Digite nome, CPF ou função..." />
                         <CommandList className="max-h-72">
                           <CommandEmpty className="py-6 text-center text-sm text-gray-400">

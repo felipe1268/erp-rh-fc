@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1906 — RH · Aviso Prévio · Filtro de pesquisa de colaborador agora faz match por SUBSTRING (case-insensitive + sem acentos), não fuzzy.
+ * User (16/05/2026, screenshot image_1778951170831.png — combobox "Colaborador" do form "Dados do Aviso Prévio" com search "ANA" mostrando ANA BEATRIZ + ANDERSON DOS ANJOS ALKMIN + ANDERSON DOS ANJOS ALKMIN JUNIOR + ANDRE FIGUEIREDO + ALEXANDRO GONCALVES, ou seja, TODOS que contém A...N...A em ordem fuzzy): "ARRUME TBM ESTE FILTRO DE PESQUISA QUANDO DIGITAR O NOME DO COLABORADOR ELE VAI FILTRANDO SOMENTE O TEXTO QUE FOR PERTINENTE.. HOJE FICA APARECENDO TUDO SEM NESCESSIDADE..".
+ * Causa-raiz (em client/src/pages/AvisoPrevio.tsx L2243 — `<Command>` do shadcn/cmdk):
+ *   • O componente `<Command>` da shadcn/ui é wrapper do `cmdk`. Sem `filter` prop custom, usa o filtro DEFAULT do cmdk que faz "command score" — uma forma de fuzzy matching que considera o item um match se TODOS os chars da search aparecem no value EM ORDEM (não precisam ser contíguos).
+ *   • Ex: search "ANA" casa com "A**N**DERSO**N** D**A** S**A**" porque tem A, depois N, depois A. Resultado: a busca não tem utilidade real, sempre mostra dezenas de "matches" irrelevantes.
+ *   • O `value` da CommandItem (L2254) já era estruturado corretamente (`nomeCompleto cpf funcao setor`), só o algoritmo estava errado.
+ * Mudança (em L2245-2262, prop `filter` da `<Command>`):
+ *   • Novo `filter={(value, search) => …}` retornando 1 (match) ou 0 (não-match).
+ *   • Normalização: `norm(s) = s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")` — lowercase + decomposição Unicode + strip de diacríticos. Garante match estável em "joão" vs "JOAO" vs "Joao", "GERSÃO" vs "gersao", etc (cruciais em base de funcionários BR).
+ *   • Match strict por `includes()` — substring contígua, não fuzzy. Search vazia retorna 1 (mostra tudo no estado inicial).
+ *   version → 1906.
+ * Resultado: digitar "ANA" no combobox mostra APENAS quem tem "ANA" como substring contígua no nome/cpf/função/setor (ex: "ANA BEATRIZ", "JOSIANE LOPES DA SILVANA", "GIOVANA"), não mais o universo inteiro de A-N-A fuzzy. Comportamento esperado pelo user e padrão da maioria dos sistemas de RH.
+ * Preservado: `value` da CommandItem intacto (multi-campo); `CommandInput` intacto; `CommandEmpty` intacto; visualização dos itens (avatar, nome, função, CPF, badges Rev. 1727/1806) 100% inalterada; lógica de seleção (`onSelect` → `setForm({...form, employeeId: e.id})`) intacta; pop-state Rev. 1794 intacto. Zero backend/DB/schema/tRPC. Reversível em 1 hunk + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1905 — Planejamento · Programação Semanal LOTUS · PREVISTO (top azul) renderiza em TODAS as semanas até o último dia do projeto · cutoff vira "snapshot só do realizado".
  * User (16/05/2026, screenshot image_1778951089413.png — UI Programação Semanal SEMANA 3 [15-21/05/2026] com header "Oficial (14/05/2026)" como cutoff oficial; grid de dias completamente em BRANCO apesar das atividades terem previsto 04/05-22/05): "O PREVISTO DEVE APARECER TODAS AS SEMANAS DO CRONOGRAMA, ATÉ O ULTIMO DIA DO PROJETO....".
  * Causa-raiz (em client/src/components/planejamento/ProgramacaoSemanalLotus.tsx L173-175 — função `faixasCelula`):
