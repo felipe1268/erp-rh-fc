@@ -11472,32 +11472,63 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       };
     }
 
-    // Rev. 1849 — "Todos os tópicos" no REFIS:
-    // A Rev. 1848 (filtro estrutural de raiz) ainda exibia só um grupo na obra 29
-    // porque o projeto tem UMA raiz EAP ('01' = ESGOTO) com vários sub-grupos
-    // ('01.01', '01.02', '01.07', '01.15' …). User pediu "todos os tópicos".
-    // Solução: pegar TODOS os grupos com eapCodigo (qualquer profundidade).
-    // O filtro final `g.nLeaves > 0` (linha abaixo do map) já remove containers
-    // sem folhas, evitando duplicação de bars vazios.
-    const g1 = atividades
-      .filter((a: any) => a.isGrupo && a.eapCodigo)
-      .sort((a: any, b: any) => String(a.eapCodigo ?? '').localeCompare(String(b.eapCodigo ?? '')));
+    // Rev. 1850 — REFIS organizado por CATEGORIA (5°/6° PAVIMENTO etc).
+    // Rev. 1849 mostrava todos os grupos com eapCodigo — explodia visualmente
+    // porque obra 29 tem mesmo sub-grupo ("02 ESGOTO") repetido sob cada
+    // pavimento, gerando bars duplicados sem contexto.
+    // Solução: usar a hierarquia REAL de MSP (`nivel` + `ordem`) e mostrar
+    // grupos de NÍVEL 1 (categorias raiz, ex.: pavimentos, indiretas).
+    // Pavimentos não têm eapCodigo populado, então o critério é `nivel===1`
+    // OR (legacy fallback) grupo sem nenhum ancestral grupo na ordem.
+    //
+    // Descendentes calculados via varredura sequencial por `ordem` (padrão MSP):
+    // descendentes de g = todas as linhas depois de g em ordem até a próxima
+    // linha com nivel <= g.nivel. Folhas/etapas extraídos desse range.
+    const ativOrdenadas = [...atividades].sort((a: any, b: any) => (a.ordem ?? 0) - (b.ordem ?? 0));
+    const idxById = new Map<number, number>();
+    ativOrdenadas.forEach((a: any, i: number) => idxById.set(a.id, i));
+
+    function descendentes(g: any): any[] {
+      const idx = idxById.get(g.id);
+      if (idx === undefined) return [];
+      const gNivel = g.nivel ?? 1;
+      const out: any[] = [];
+      for (let i = idx + 1; i < ativOrdenadas.length; i++) {
+        const x = ativOrdenadas[i];
+        if ((x.nivel ?? 1) <= gNivel) break;
+        out.push(x);
+      }
+      return out;
+    }
+
+    let g1 = ativOrdenadas
+      .filter((a: any) => a.isGrupo && (a.nivel ?? 1) === 1);
+
+    // Fallback Rev. 1850 — datasets legados (pré-Rev. 1829) podem ter `nivel`
+    // ausente/inconsistente. Se nenhuma categoria raiz nivel===1 for encontrada
+    // mas houver grupos com eapCodigo, cai pra detecção estrutural por EAP
+    // (grupo é raiz se nenhum outro grupo é seu ancestral EAP).
+    if (g1.length === 0) {
+      const gruposComEap = ativOrdenadas.filter((a: any) => a.isGrupo && a.eapCodigo);
+      const eapsSet = new Set<string>(gruposComEap.map((a: any) => String(a.eapCodigo)));
+      g1 = gruposComEap.filter((a: any) => {
+        const partes = String(a.eapCodigo).split('.');
+        for (let i = partes.length - 1; i >= 1; i--) {
+          if (eapsSet.has(partes.slice(0, i).join('.'))) return false;
+        }
+        return true;
+      });
+    }
 
     return g1.map((g: any) => {
-      const gEap   = String(g.eapCodigo ?? '');
-      const gDepth = gEap.split('.').length;
-      const gLeaves = folhas.filter((a: any) => String(a.eapCodigo ?? '').startsWith(gEap + '.'));
-
-      const etapas = atividades
-        .filter((a: any) =>
-          a.isGrupo && a.eapCodigo &&
-          String(a.eapCodigo).startsWith(gEap + '.') &&
-          String(a.eapCodigo).split('.').length === gDepth + 1
-        )
-        .sort((a: any, b: any) => String(a.eapCodigo ?? '').localeCompare(String(b.eapCodigo ?? '')))
+      const gNivel = g.nivel ?? 1;
+      const desc = descendentes(g);
+      const gLeaves = desc.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
+      const etapas = desc
+        .filter((a: any) => a.isGrupo && (a.nivel ?? 1) === gNivel + 1)
         .map((e: any) => {
-          const eEap   = String(e.eapCodigo ?? '');
-          const eLeaves = folhas.filter((a: any) => String(a.eapCodigo ?? '').startsWith(eEap + '.'));
+          const eDesc = descendentes(e);
+          const eLeaves = eDesc.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
           return { ...e, ...calc(eLeaves), nLeaves: eLeaves.length };
         });
 

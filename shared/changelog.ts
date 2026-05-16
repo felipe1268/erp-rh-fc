@@ -25,6 +25,23 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1850,
+    titulo: "Planejamento · REFIS Análise Detalhada — gráfico organizado por CATEGORIA (5°/6° PAVIMENTO etc) usando hierarquia MSP nivel/ordem",
+    descricao: "User (15/05/2026, screenshot da Rev. 1849 mostrando ESGOTO/INFRA ESTRUTURA E TUBULAÇÃO/VENTILAÇÃO repetidos 4-5x cada): 'Faça o ajuste de REFIS, quero ver por grupo de categoria, 5 pavimento, 6 pavimento. Etc... melhora nesta estrutura'.\n\n" +
+      "Causa: Rev. 1849 mostrava TODOS os grupos com eapCodigo (qualquer profundidade). Na obra 29 a estrutura MSP é Pavimento (nivel=1, sem eapCodigo) → 02 ESGOTO (nivel=2, eap='02') → 02.01.01 INFRA (nivel=3, eap='02.01.01') → folhas. O eapCodigo se REPETE entre pavimentos ('02 ESGOTO' aparece sob 5°, 6°, 7° PAVIMENTO etc), gerando bars duplicados sem contexto. Os pavimentos (categorias raiz pedidas pelo user) ficavam ESCONDIDOS pois meu filtro `&& a.eapCodigo` os excluía.\n\n" +
+      "Fix (1 arquivo, 1 hunk em client/src/pages/planejamento/PlanejamentoDetalhe.tsx L11475-11528): refatorado memo `grupos` para usar a hierarquia REAL do MSP (`nivel` + `ordem`) ao invés de prefixos EAP.\n" +
+      "  1. `ativOrdenadas` = todas as atividades sorted por `ordem` (padrão MSP); `idxById` indexa id→posição.\n" +
+      "  2. Helper `descendentes(g)`: varredura sequencial a partir do índice de g, acumula linhas até encontrar a próxima com `nivel <= g.nivel` (algoritmo padrão MSP outline).\n" +
+      "  3. `g1 = ativOrdenadas.filter(a => a.isGrupo && (a.nivel ?? 1) === 1)` — categorias raiz, sem exigir eapCodigo (pavimentos passam).\n" +
+      "  4. Por categoria: `gLeaves = descendentes(g).filter(!isGrupo && !isIndireta && !disabled)`; `etapas` = sub-grupos de nivel = g.nivel + 1, cada um com seus próprios descendentes para cálculo. Filtro final `g.nLeaves > 0` mantido.\n\n" +
+      "Esperado obra 29: gráfico 'Avanço Físico por Grupo' lista 5° PAVIMENTO, 6° PAVIMENTO, 7° PAVIMENTO etc (uma barra cada), e Bloco 5 mostra etapas (ESGOTO, HIDRÁULICA, ELÉTRICA…) DENTRO de cada pavimento como sub-cards.\n\n" +
+      "Preservado: ZERO mudança em backend/contrato tRPC/schema/migration/DELETE; calc()/prevInd() intactos; render blocos 4/5 não tocado; outros usos de `nivel===1`/`eapCodigo` (Gantt L3120-3130, Cronograma L4030-4046) NÃO alterados (escopo distinto). Ordem cronológica preservada (`ordem ?? 0`). Reversível em 1 hunk. R-001 OK.",
+    tipo: 'bugfix',
+    modulos: 'Planejamento',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 21:30:00',
+  },
+  {
     version: 1849,
     titulo: "Planejamento · REFIS gráfico mostra TODOS os grupos (qualquer profundidade) + iOS Safari date fix em Equipe",
     descricao: "User (15/05/2026, após Rev. 1848 não resolver): \"No\" (REFIS ainda só ESGOTO) + \"No\" (erro 'The string did not match the expected pattern' começou após Rev. 1848 no iPhone, tela LOTUS REVTE-CIVIL).\n\n" +
