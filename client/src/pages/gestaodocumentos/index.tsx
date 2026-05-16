@@ -78,6 +78,9 @@ import {
   Loader2,
   ArrowUp,
   ArrowDown,
+  ExternalLink,
+  PenTool,
+  X as XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PdfViewer } from "@/components/PdfViewer";
@@ -254,6 +257,12 @@ export default function GestaoDocumentos() {
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [selectedDocIds, setSelectedDocIds] = useState<Set<number>>(new Set());
   const [previewDoc, setPreviewDoc] = useState<any>(null);
+  // Rev. 1884 (preview) — modo MARCAÇÃO usa o PdfViewer (react-pdf) com caneta/
+  // marca-texto. Modo padrão usa <iframe> nativo do Safari/iPad (mais rápido,
+  // sem CORS/worker, com pinch/zoom já do sistema). Volta a "padrão" sempre
+  // que o doc muda para evitar travar em viewer pesado por acidente.
+  const [pdfModoMarcacao, setPdfModoMarcacao] = useState(false);
+  useEffect(() => { if (!previewDoc) setPdfModoMarcacao(false); }, [previewDoc]);
   const [downloading, setDownloading] = useState(false);
 
   const [showUploadConfirm, setShowUploadConfirm] = useState(false);
@@ -3121,51 +3130,94 @@ export default function GestaoDocumentos() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal — Visualização Rápida de Arquivo */}
+      {/* Modal — Visualização Rápida de Arquivo
+          Rev. 1884 (preview): fullscreen (Regra de Ouro iPad) + iframe nativo
+          como padrão (Safari/iPad rendem PDF perfeitamente sem worker/CORS) +
+          toggle p/ ativar PdfViewer rico (marcações) quando precisar. */}
       <Dialog open={!!previewDoc} onOpenChange={(open) => { if (!open) setPreviewDoc(null); }}>
-        <DialogContent resizable={false} className="w-[98vw] max-w-[98vw] h-[95vh] bg-white border-gray-200 text-gray-900 overflow-hidden flex flex-col p-0">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-            <div className="flex items-center gap-2 min-w-0">
+        <DialogContent
+          resizable={false}
+          className="!fixed !inset-0 !w-screen !h-screen !max-w-none !translate-x-0 !translate-y-0 !top-0 !left-0 !rounded-none bg-white border-0 text-gray-900 overflow-hidden flex flex-col p-0"
+        >
+          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-200 bg-white shrink-0">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
               <Eye className="w-5 h-5 text-blue-600 shrink-0" />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-gray-900 truncate">{previewDoc?.titulo}</p>
-                <p className="text-[11px] text-gray-500">{previewDoc?.arquivoNome}</p>
+                <p className="text-[11px] text-gray-500 truncate">{previewDoc?.arquivoNome}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 shrink-0">
+              {previewDoc?.arquivoUrl && /\.pdf$/i.test(previewDoc.arquivoNome || "") && (
+                <Button
+                  size="sm"
+                  variant={pdfModoMarcacao ? "default" : "outline"}
+                  className={`h-8 text-xs ${pdfModoMarcacao ? "bg-amber-500 hover:bg-amber-600" : ""}`}
+                  onClick={() => setPdfModoMarcacao(v => !v)}
+                  title={pdfModoMarcacao ? "Voltar p/ visualização simples" : "Ativar caneta / marca-texto"}
+                >
+                  <PenTool className="w-3.5 h-3.5 mr-1" />
+                  {pdfModoMarcacao ? "Sair de marcação" : "Marcar"}
+                </Button>
+              )}
               {previewDoc?.arquivoUrl && (
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => {
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => window.open(previewDoc.arquivoUrl, "_blank", "noopener,noreferrer")}>
+                  <ExternalLink className="w-3.5 h-3.5 mr-1" />
+                  <span className="hidden sm:inline">Nova aba</span>
+                </Button>
+              )}
+              {previewDoc?.arquivoUrl && (
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => {
                   const a = document.createElement("a");
                   a.href = previewDoc.arquivoUrl;
                   a.download = previewDoc.arquivoNome || "arquivo";
                   a.click();
                 }}>
-                  <Download className="w-3 h-3 mr-1" /> Baixar
+                  <Download className="w-3.5 h-3.5 mr-1" /> Baixar
                 </Button>
               )}
+              <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setPreviewDoc(null)} title="Fechar" aria-label="Fechar">
+                <XIcon className="w-4 h-4" />
+              </Button>
             </div>
           </div>
           <div className="flex-1 overflow-hidden bg-gray-100">
             {previewDoc?.arquivoUrl && /\.pdf$/i.test(previewDoc.arquivoNome || "") && (
-              // Rev. 1814 — Visualizador PDF nativo (react-pdf/PDF.js) com
-              // navegação rica (zoom, rotação, miniaturas), suporte a touch
-              // (pinch/pan via react-zoom-pan-pinch), atalhos de teclado e
-              // ferramentas de marcação (caneta, marca-texto, borracha).
-              // Marcações são salvas em localStorage por documento.
-              <PdfViewer
-                url={previewDoc.arquivoUrl}
-                fileName={previewDoc.arquivoNome}
-                docId={previewDoc.id}
-                onClose={() => setPreviewDoc(null)}
-              />
+              pdfModoMarcacao ? (
+                // PdfViewer rico (react-pdf) — só sob demanda. Tem ferramentas
+                // de caneta/marca-texto/borracha salvas em localStorage.
+                <PdfViewer
+                  url={previewDoc.arquivoUrl}
+                  fileName={previewDoc.arquivoNome}
+                  docId={previewDoc.id}
+                  onClose={() => setPreviewDoc(null)}
+                />
+              ) : (
+                // Iframe nativo — Safari/Chrome/iPad renderiza PDF direto,
+                // zero dependências, sem worker, sem problema de CORS no fetch
+                // do PDF (o navegador trata como navegação direta).
+                <iframe
+                  key={previewDoc.id /* força reload quando troca de doc */}
+                  src={previewDoc.arquivoUrl}
+                  title={previewDoc.titulo || previewDoc.arquivoNome}
+                  className="w-full h-full border-0 bg-white"
+                />
+              )
             )}
             {previewDoc?.arquivoUrl && /\.(png|jpg|jpeg|gif|webp)$/i.test(previewDoc.arquivoNome || "") && (
-              <div className="flex items-center justify-center h-full min-h-[70vh] p-4">
+              <div className="flex items-center justify-center w-full h-full p-4 overflow-auto">
                 <img
                   src={previewDoc.arquivoUrl}
                   alt={previewDoc.titulo}
-                  className="max-w-full max-h-[80vh] object-contain rounded shadow-lg"
+                  className="max-w-full max-h-full object-contain rounded shadow-lg"
                 />
+              </div>
+            )}
+            {previewDoc?.arquivoUrl && !/\.(pdf|png|jpg|jpeg|gif|webp)$/i.test(previewDoc.arquivoNome || "") && (
+              <div className="flex flex-col items-center justify-center h-full p-8 text-center gap-3">
+                <FileText className="w-16 h-16 text-gray-300" />
+                <p className="text-sm font-medium text-gray-700">Pré-visualização não disponível para este tipo de arquivo.</p>
+                <p className="text-xs text-gray-500">Clique em <strong>Baixar</strong> ou <strong>Nova aba</strong> para abrir.</p>
               </div>
             )}
           </div>
