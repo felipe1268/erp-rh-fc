@@ -12267,16 +12267,20 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
   // `expandedEtapas` = nós cujos filhos estão visíveis (qualquer nível).
   // Default: tudo recolhido — usuário abre manualmente para identificar gargalos.
   const [expandedEtapas, setExpandedEtapas] = useState<Set<string | number>>(new Set());
-  // Rev. 1947 — cards (NAVE) cujo bloco "Detalhamento Pai→Filho" está visível.
-  // Default = fechado (só bar chart). Toggle único por card abre/fecha a tabela.
-  const [cardsDetalheAberto, setCardsDetalheAberto] = useState<Set<string | number>>(new Set());
+  // Rev. 1948 — cards (NAVE) cujo bloco "Detalhamento Pai→Filho" está OCULTO.
+  // Semântica invertida vs Rev. 1947: default = TODOS abertos (filhos visíveis).
+  // Usuário fecha individualmente se quiser; quando fechado, entra no Set.
+  // (User 16/05/2026: "quero que apareça aqui os filhos e dependentes desta
+  // atividade.. com possibilidade de expandir ou fechar.. arrume isso para todos".)
+  const [cardsDetalheFechado, setCardsDetalheFechado] = useState<Set<string | number>>(new Set());
   const toggleCardDetalhe = (gid: string | number) => {
-    setCardsDetalheAberto((prev) => {
+    setCardsDetalheFechado((prev) => {
       const n = new Set(prev);
       if (n.has(gid)) n.delete(gid); else n.add(gid);
       return n;
     });
   };
+  const isCardDetalheAberto = (gid: string | number) => !cardsDetalheFechado.has(gid);
 
   function toggleEtapa(id: string | number) {
     setExpandedEtapas(prev => {
@@ -14383,13 +14387,13 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                   type="button"
                   onClick={(ev) => { ev.stopPropagation(); toggleCardDetalhe(g.id); }}
                   className="w-full px-3 py-1.5 text-[11px] font-semibold uppercase text-slate-600 bg-slate-50 hover:bg-slate-100 transition-colors flex items-center justify-center gap-1.5 select-none"
-                  title={cardsDetalheAberto.has(g.id) ? "Ocultar tabela detalhada desta NAVE" : "Mostrar tabela detalhada desta NAVE (pai → filho)"}
+                  title={isCardDetalheAberto(g.id) ? "Ocultar tabela detalhada desta NAVE" : "Mostrar tabela detalhada desta NAVE (pai → filho)"}
                 >
-                  {cardsDetalheAberto.has(g.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                  {isCardDetalheAberto(g.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                   <ListTree className="h-3 w-3 text-slate-400" />
-                  <span>{cardsDetalheAberto.has(g.id) ? "Ocultar detalhamento" : "Mostrar detalhamento (Pai → Filho)"}</span>
+                  <span>{isCardDetalheAberto(g.id) ? "Ocultar detalhamento" : "Mostrar detalhamento (Pai → Filho)"}</span>
                 </button>
-                {cardsDetalheAberto.has(g.id) && (
+                {isCardDetalheAberto(g.id) && (
                   <div className="border-t border-slate-200">
                     {hasAnyChildren && (
                       <div className="px-3 py-1 bg-slate-50/60 border-b border-slate-100 flex items-center justify-end gap-1.5">

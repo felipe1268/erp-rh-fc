@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1948 — Planejamento · PlanejamentoDetalhe · REFIS · BLOCO 5 · Detalhamento Pai→Filho agora abre POR DEFAULT em TODOS os cards (semântica invertida vs Rev. 1947).
+ * User (16/05/2026, screenshot card mostrando só bar "DEMOLIÇÕES E REMOÇÕES 2.3%" sem filhos visíveis): "quero que apareça aqui os filhos e dependentes desta atividade.. com possibilidade de expandir ou fechar.. arrume isso para todos".
+ * Causa: Rev. 1947 fechou tudo por default — exigia 1 click por card pra ver os filhos. User quer ver os filhos imediatamente em TODAS as NAVEs, mas mantendo opção de fechar.
+ * Mudança (`PlanejamentoDetalhe.tsx`):
+ *   (a) State renomeado `cardsDetalheAberto` → `cardsDetalheFechado: Set<string|number>` (~L12278) — agora guarda os cards que o usuário FECHOU manualmente, não os abertos. Default vazio = TODOS abertos.
+ *   (b) Novo helper `isCardDetalheAberto(gid) = !cardsDetalheFechado.has(gid)` centraliza a checagem (~L12286).
+ *   (c) Toggle `toggleCardDetalhe` atualiza o mesmo Set (add quando user fecha, delete quando reabre).
+ *   (d) BLOCO 5 (~L14389-14399): 3 usos de `cardsDetalheAberto.has(g.id)` substituídos por `isCardDetalheAberto(g.id)` (button title + chevron + texto + condicional render).
+ *   (e) Comportamento dos chevrons preservado: ChevronDown = aberto, ChevronRight = fechado.
+ *   (f) Textos do botão preservados ("Ocultar detalhamento" / "Mostrar detalhamento (Pai → Filho)") — só o estado inicial mudou.
+ * version → 1948.
+ * Resultado: ao abrir REFIS, TODAS as NAVEs já mostram o detalhamento expandido com a tabela renderRow Rev. 1945 (filhos clicáveis pra abrir netos/bisnetos via `expandedEtapas`). User pode fechar qualquer card individualmente clicando no botão cinza. O state lembra só os fechados, então cards novos (após carregamento) sempre abrem default.
+ * Preservado: renderRow Rev. 1945 (tree recursivo com chevrons por nível), `expandedEtapas` para sub-níveis (default fechado — só os filhos diretos do grupo aparecem; user expande pra ver netos), botões "Expandir/Recolher tudo" Rev. 1947 quando aberto, Rev. 1946 legenda CDM, bar chart macro Rev. 1945, collapsedGrupos (collapse do card pelo header escuro), modo máscara, print. Zero backend/DB. Reversível em 2 hunks (renomear state de volta + inverter check). R-001/R-007/R-010 OK.
+ *
  * Rev. 1947 — Planejamento · PlanejamentoDetalhe · REFIS · BLOCO 5 · Tabela "Detalhamento Pai→Filho" agora é OPCIONAL (toggle único por card, default = fechado).
  * User (16/05/2026, screenshots NAVE NORTE com bar chart só + tabela 01.01.01 expandida): "quero que a tabela abaixo fique abaixo da barras laterais, com opção de fazer a expanção ou não, é facil vc entender isso.. não tem o pq de reinventar a roda..".
  * Causa: Rev. 1945 integrou a tabela detalhada (renderRow) dentro de cada card mas SEMPRE visível, com header "pesado" (Expandir tudo + Recolher tudo + legenda de 4 cores + sub-título explicativo). User queria simples: bar chart sempre + 1 botão para mostrar/ocultar a tabela quando quiser ver detalhe. "Não reinventar a roda" = reaproveitar o mesmo renderRow Rev. 1945, só envolver em toggle.
