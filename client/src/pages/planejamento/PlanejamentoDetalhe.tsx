@@ -3604,6 +3604,60 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     return result;
   }
 
+  // Rev. 1910 — Cascata SINCRONA de responsável (grupo → descendentes) no SAVE.
+  // Motivação (user 16/05/2026): ao marcar uma linha como GRUPO e digitar o
+  // responsável (ex.: "FELIPE"), o onBlur do input (L4358) dispara `setLinhas`,
+  // que é ASSÍNCRONO. Se o usuário clica em "Salvar" logo em seguida, o React
+  // executa onBlur (queue setLinhas) + onClick (lê `linhas`) no MESMO tick —
+  // o mutate captura o `linhas` ANTIGO, sem a cascata aplicada. Resultado:
+  // descendentes salvos sem responsável + nenhum badge aparece após reload.
+  // Esta função reaplica a cascata sincronamente antes de mandar pra API,
+  // espelhando a lógica do onBlur (Rev. 1860/1865/1902/1892).
+  function aplicarCascataResponsavelGrupos(rows: any[]): any[] {
+    const out = rows.map(r => ({ ...r }));
+    for (let i = 0; i < out.length; i++) {
+      const g = out[i];
+      if (!g.isGrupo) continue;
+      const valor = (g.responsavelLotus ?? "").trim();
+      if (!valor) continue;
+      const parentEap = (g.eapCodigo ?? "").trim();
+      const parentNivel = g.nivel ?? 1;
+      // 1) Detecção estrita (dotted/flat prefix + nivel) — Rev. 1865.
+      const descIdxs: number[] = [];
+      for (let j = i + 1; j < out.length; j++) {
+        const l = out[j];
+        const ceap = (l.eapCodigo ?? "").trim();
+        const cnivel = l.nivel;
+        if (typeof cnivel === "number" && typeof g.nivel === "number" && cnivel <= parentNivel) break;
+        if (parentEap && ceap) {
+          if (ceap === parentEap) continue;
+          if (!ceap.startsWith(parentEap)) break;
+          const next = ceap.charAt(parentEap.length);
+          if (next === "." || (next >= "0" && next <= "9")) descIdxs.push(j);
+          else break;
+        } else {
+          if ((l.nivel ?? 1) <= parentNivel) break;
+          descIdxs.push(j);
+        }
+      }
+      // 2) Fallback Rev. 1902 — MSP denormalizado: pai e filhos compartilham
+      // o mesmo EAP. Aplica em todas linhas até o PRÓXIMO grupo.
+      if (descIdxs.length === 0) {
+        for (let j = i + 1; j < out.length; j++) {
+          const l = out[j];
+          if (l.isGrupo) break;
+          if (l.disabled) continue;
+          descIdxs.push(j);
+        }
+      }
+      // Semantica Rev. 1892: grupo = cascata TOTAL (sobrescreve).
+      descIdxs.forEach(j => {
+        out[j] = { ...out[j], responsavelLotus: valor, _respManual: true };
+      });
+    }
+    return out;
+  }
+
   function adicionarLinha() {
     setLinhas(l => [...l, {
       id: undefined, eapCodigo: "", nome: "", nivel: 1,
@@ -3812,7 +3866,15 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
               </Button>
               <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-700 relative overflow-hidden min-w-[100px]"
                 disabled={salvarMutation.isPending}
-                onClick={() => salvarMutation.mutate({ revisaoId: revisaoAtiva.id, projetoId, atividades: linhas })}>
+                onClick={() => {
+                  // Rev. 1910 — aplica cascata grupo→descendentes ANTES do save
+                  // p/ evitar race com onBlur (setLinhas async vs onClick sync).
+                  const atividades = aplicarCascataResponsavelGrupos(linhas);
+                  // Sincroniza state local também, p/ que badges apareçam mesmo
+                  // antes do refetch (evita "sumiço visual" pós-save).
+                  setLinhas(atividades);
+                  salvarMutation.mutate({ revisaoId: revisaoAtiva.id, projetoId, atividades });
+                }}>
                 {salvarMutation.isPending && (
                   <div className="absolute bottom-0 left-0 h-1 bg-blue-300 animate-pulse" style={{ width: "100%" }}>
                     <div className="h-full bg-white/60 animate-[progress_2s_ease-in-out_infinite]"

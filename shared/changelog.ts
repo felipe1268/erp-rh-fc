@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1910 — Planejamento · Cronograma · FIX: cascata de responsável de GRUPO → descendentes não persistia no save (race onBlur×onClick) + badge sumia após salvar.
+ * User (16/05/2026, screenshots image_1778952256406 [view] + image_1778952277110 [edit Mosaico com FELIPE digitado]): "FIZ A DEMARCAÇÃO MAS AS ATIVIDADES ABAIXO DO GRUPO NÃO ESTÃO RECEBENDO O NOME QUE SERÁ DO RESPONSAVEL QUE FOI INDICADO DO GRUPO, E NÃO FICA NENHUM CARD VISIVEL QUANDO SALVAMOS O CRONOGRAMA.. ARRUME A LOGICA PARA NÃO TER MAIS ERROS.".
+ * Cenário reproduzido: linha "Mosaico (considerar 4 ajudantes por 3 meses)" marcada como GRUPO + checkbox "responsável manual" + digita "FELIPE" no input cyan → clica em "Salvar".
+ * Causa-raiz (em `PlanejamentoDetalhe.tsx` L3815 + L4358-L4443):
+ *   • A cascata de responsável grupo→descendentes (Revs. 1860/1865/1892/1902) só rodava no `onBlur` do input manual (L4358).
+ *   • `onBlur` chama `setLinhas(prev => prev.map(...))` — atualização de state React é ASSÍNCRONA (batched).
+ *   • Quando o user clica em "Salvar" logo após digitar, React processa no MESMO tick:
+ *     1. blur → enqueue setLinhas (cascata)
+ *     2. click → onClick lê `linhas` do closure (valor ANTIGO, antes da cascata commitar)
+ *     3. `salvarMutation.mutate({ atividades: linhas })` envia descendentes SEM `responsavelLotus`
+ *     4. setLinhas commita → state local agora correto, mas backend já persistiu sem
+ *     5. invalidate query refaz GET → server retorna descendentes sem responsável → badge some
+ *   • Sintoma exato relatado pelo user: "não ficam recebendo o nome" + "nenhum card visível após salvar".
+ * Mudança (em `PlanejamentoDetalhe.tsx`):
+ *   • L3607-3662 — nova função `aplicarCascataResponsavelGrupos(rows)`: espelha a lógica do onBlur (1) detecção estrita por prefixo EAP dotted/flat + guard de nivel — Rev. 1865; (2) fallback MSP denormalizado quando pai/filhos compartilham EAP — Rev. 1902; (3) semântica Rev. 1892 = grupo sobrescreve cascata total. Roda 100% sincronamente sobre uma cópia do array, sem tocar state. Itera TODOS os grupos (não só o que perdeu foco), garantindo idempotência mesmo em planilhas com múltiplos grupos.
+ *   • L3815-3826 — onClick do botão "Salvar" reescrito: chama `aplicarCascataResponsavelGrupos(linhas)`, então `setLinhas(atividades)` para sincronizar a UI ANTES do refetch (evita o "sumiço visual" — badges aparecem imediatamente porque o state local já tem a cascata aplicada), e SÓ ENTÃO `salvarMutation.mutate({ atividades })`. Como o objeto `atividades` é passado por referência ao mutate (não depende de re-render), backend recebe a versão correta independente da ordem de commit do React.
+ *   version → 1910.
+ * Resultado: marcar grupo + digitar FELIPE + Salvar = backend persiste responsavelLotus="FELIPE" em TODOS os descendentes (folhas Ajudante de pedreiro 03.05.05.01 a 04). Badge cyan "FELIPE" aparece em cada linha logo após o salvamento (sem precisar reload). Funciona tanto p/ EAP dotted hierárquico (`03.05.05` → `03.05.05.01`) quanto p/ MSP denormalizado (todos compartilhando `03.05`).
+ * Preservado: lógica de onBlur (L4358) intacta — continua útil pra UX em edição contínua (cascata em tempo real). Modal `cascadeResp` (folhas com sub-itens) intacto. Detecção dotted/flat/nivel/MSP denorm Rev. 1865/1902 reusada (mesma assinatura). Zero backend/DB/schema/tRPC — `salvarAtividades` já aceita `responsavelLotus` (z.string().nullish() L1148). Reversível em 2 hunks + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1909 — RH · Dash Aviso Prévio · Tabela "Custo de Demissão em Massa" agora com ordenação CLICÁVEL em todas as colunas (asc/desc toggle).
  * User (16/05/2026, follow-up direto Rev. 1908): "seção nova no dash com date picker + tabela ordenada do mais caro ao mais barato. QUETO TER POSSIBILIDADE DE MUDAR ESSA ORDEM SE EU QUISER..".
  * Mudança (em client/src/pages/dashboards/DashAvisoPrevio.tsx):
