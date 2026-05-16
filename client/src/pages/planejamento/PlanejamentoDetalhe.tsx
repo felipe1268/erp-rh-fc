@@ -3658,6 +3658,75 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
     return out;
   }
 
+  // Rev. 1918 — Cascata automática ao MARCAR isGrupo.
+  // Motivação (user 16/05/2026, screenshot 03.03 grupo marcado mas filhos
+  // 03.03 sem _respManual / sem nome): "Quando marcar a tarefa que é a
+  // tarefa de grupo, todas atividades abaixo dela devem ser ATIVADAS
+  // automaticamente e seguir o mesmo NOME que estiver na atividade grupo".
+  // Antes desta rev., a cascata só acontecia no onBlur do input de
+  // responsável (Rev. 1860/1865/1892/1902) — se o usuário PRIMEIRO digitava
+  // o nome e DEPOIS marcava isGrupo, ou se marcava isGrupo numa linha que
+  // ainda nem tinha responsável, os filhos ficavam sem _respManual e
+  // sem nome. Esta função roda no onChange do checkbox isGrupo:
+  //   • Ativa _respManual=true em todos descendentes (faz o input cyan
+  //     aparecer e a UI mostrar a tag de responsável).
+  //   • Se o grupo já tiver responsavelLotus preenchido, copia o valor
+  //     também (mesma semântica do onBlur Rev. 1892 — grupo = cascata
+  //     total/sobrescreve).
+  // Espelha a detecção de descendentes do onBlur (L4424-4477) e do
+  // aplicarCascataResponsavelGrupos (L3616-3658) — estrita prefix
+  // dotted/flat + guard por nivel + fallback MSP denormalizado.
+  function marcarComoGrupo(idx: number, checked: boolean) {
+    setLinhas(prev => {
+      const out = prev.map(r => ({ ...r }));
+      out[idx] = { ...out[idx], isGrupo: checked };
+      if (!checked) return out; // desmarcar grupo não desfaz cascata (preserva trabalho do usuário)
+      const g = out[idx];
+      const parentEap = (g.eapCodigo ?? "").trim();
+      const parentNivel = g.nivel ?? 1;
+      const descIdxs: number[] = [];
+      for (let j = idx + 1; j < out.length; j++) {
+        const l = out[j];
+        const ceap = (l.eapCodigo ?? "").trim();
+        const cnivel = l.nivel;
+        if (typeof cnivel === "number" && typeof g.nivel === "number" && cnivel <= parentNivel) break;
+        if (parentEap && ceap) {
+          if (ceap === parentEap) continue;
+          if (!ceap.startsWith(parentEap)) break;
+          const next = ceap.charAt(parentEap.length);
+          if (next === "." || (next >= "0" && next <= "9")) descIdxs.push(j);
+          else break;
+        } else {
+          if ((l.nivel ?? 1) <= parentNivel) break;
+          descIdxs.push(j);
+        }
+      }
+      // Fallback Rev. 1902 — MSP denormalizado (filhos com mesmo EAP).
+      if (descIdxs.length === 0) {
+        for (let j = idx + 1; j < out.length; j++) {
+          const l = out[j];
+          if (l.isGrupo) break;
+          if (l.disabled) continue;
+          descIdxs.push(j);
+        }
+      }
+      if (descIdxs.length === 0) return out;
+      const valor = (g.responsavelLotus ?? "").trim();
+      descIdxs.forEach(j => {
+        out[j] = {
+          ...out[j],
+          _respManual: true,
+          ...(valor ? { responsavelLotus: valor } : {}),
+        };
+      });
+      const msg = valor
+        ? `Grupo "${(g.nome ?? "").substring(0, 40)}": ${descIdxs.length} descendente${descIdxs.length > 1 ? "s" : ""} ativado${descIdxs.length > 1 ? "s" : ""} com responsável "${valor}".`
+        : `Grupo "${(g.nome ?? "").substring(0, 40)}": ${descIdxs.length} descendente${descIdxs.length > 1 ? "s" : ""} ativado${descIdxs.length > 1 ? "s" : ""} — digite o responsável aqui para propagar o nome.`;
+      setTimeout(() => toast.success(msg), 0);
+      return out;
+    });
+  }
+
   function adicionarLinha() {
     setLinhas(l => [...l, {
       id: undefined, eapCodigo: "", nome: "", nivel: 1,
@@ -4260,7 +4329,7 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                           <UiTooltipProvider delayDuration={300}>
                             <UiTooltip>
                               <UiTooltipTrigger asChild>
-                                <input type="checkbox" checked={!!a.isGrupo} onChange={e => updateLinha(idx, "isGrupo", e.target.checked)}
+                                <input type="checkbox" checked={!!a.isGrupo} onChange={e => marcarComoGrupo(idx, e.target.checked)}
                                   className="h-3.5 w-3.5 shrink-0 accent-amber-500 cursor-pointer" />
                               </UiTooltipTrigger>
                               <UiTooltipContent side="top" className="text-xs">Marcar como grupo/resumo</UiTooltipContent>

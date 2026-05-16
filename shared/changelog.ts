@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1918 — Planejamento · PlanejamentoDetalhe · Cascata automática ao MARCAR isGrupo (ativa _respManual + replica responsavelLotus nos descendentes).
+ * User (16/05/2026, screenshot grupo 03.03 marcado, filhas 03.03 sem responsável, com input "Responsável manual (ex.: EMPRESA XYZ LTDA)" só na linha do grupo): "QUANDO MARCAR A TAREFA QUE É A TAREFA DE GRUPO, TODAS ATIVIDADES ABAIXO DELA DEVE SER ATIVADAS AUTOMATICAMENTE E SEGUIR O MESMO NOME QUE ESTIVER NA ATIVIDADE GRUPO". Antes desta rev., a cascata Rev. 1860/1865/1892/1902 só rodava no onBlur do input de responsável — se o usuário marcava isGrupo DEPOIS de digitar o responsável, ou marcava o grupo numa linha vazia esperando digitar depois, as filhas ficavam sem _respManual=true (o input cyan não ficava ativado) e sem o nome.
+ * Mudança (em `client/src/pages/planejamento/PlanejamentoDetalhe.tsx`):
+ *   • Nova função `marcarComoGrupo(idx, checked)` (L3661+): roda no onChange do checkbox isGrupo. Setar isGrupo na linha → detectar descendentes (mesma lógica do onBlur L4424-4477 e `aplicarCascataResponsavelGrupos` L3616-3658: prefix dotted/flat com guard por nivel + fallback MSP denormalizado pra grupos com filhos de mesmo EAP) → em cada descendente setar `_respManual: true` (ativa o input/tag de responsável) e, se o grupo já tiver `responsavelLotus` preenchido, copiar o valor (semântica Rev. 1892 — grupo = cascata total sobrescreve). Desmarcar isGrupo NÃO desfaz a cascata (preserva trabalho do usuário caso ele tenha mudado de ideia).
+ *   • Toast feedback diferenciado: se grupo já tem responsável → "{N} descendentes ativados com responsável X"; senão → "{N} descendentes ativados — digite o responsável aqui para propagar o nome".
+ *   • onChange do checkbox isGrupo (L4263): `updateLinha(idx, "isGrupo", checked)` → `marcarComoGrupo(idx, checked)`.
+ *   version → 1918.
+ * Resultado: agora o fluxo intuitivo funciona em qualquer ordem — marcar grupo PRIMEIRO + digitar responsável depois (onBlur cascata pelo trabalho da Rev. 1892), OU digitar responsável PRIMEIRO + marcar grupo depois (esta rev. cascata). Caso anterior (filhas órfãs sem _respManual) resolvido. `aplicarCascataResponsavelGrupos` Rev. 1910 continua intacto pra garantir cascata final no Salvar (defesa em profundidade contra qualquer race condition).
+ * Preservado: onBlur cascada Rev. 1860/1865/1892/1902, modal `cascadeResp` p/ folhas com sub-itens (não-grupo), `aplicarCascataResponsavelGrupos` Rev. 1910 no salvar, todos demais 4 checkboxes da linha (isMarco/isIndireta/isExterna/disabled/_respManual) intactos. Zero backend/DB/schema. Reversível em 2 hunks + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1917 — RH · Dash Aviso Prévio · Tabela CDM · Remover coluna SETOR.
  * User (16/05/2026, logo após Rev. 1916): "Pode tirar a coluna setor". Setor era redundante com Obra (escritório central / obras de campo já fica claro pelo nome da obra). Mudança SOMENTE no client (`client/src/pages/dashboards/DashAvisoPrevio.tsx`):
  *   • `CdmSortKey` perde `'setor'`; `toggleCdmSort` deixa de listar `setor` no conjunto de chaves text-default-asc.
