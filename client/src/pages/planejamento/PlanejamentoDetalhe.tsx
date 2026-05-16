@@ -13484,122 +13484,9 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                 </ResponsiveContainer>
               </div>
 
-              {/* Rev. 1887 — Drill-down PAI → FILHO (igual estrutura do cronograma) */}
-              <div className="border-t border-slate-100 px-4 py-2 flex items-center justify-between gap-3 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => toggleDrilldown(g.id)}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-blue-700 transition-colors"
-                  title="Abre todos os níveis da EAP (igual ao cronograma) para identificar gargalos em qualquer profundidade."
-                >
-                  {drilldownAbertos.has(g.id)
-                    ? <ChevronDown className="h-3.5 w-3.5" />
-                    : <ChevronRight className="h-3.5 w-3.5" />}
-                  {drilldownAbertos.has(g.id) ? "Recolher detalhamento" : "Detalhar Pais e Filhos (drill-down EAP)"}
-                </button>
-                <span className="text-[10px] text-slate-400 italic">
-                  abre todos os níveis igual à estrutura do cronograma
-                </span>
-              </div>
-              {drilldownAbertos.has(g.id) && (
-                <div className="border-t border-slate-200">
-                  {(() => {
-                    const renderRow = (e: any, depth: number): React.ReactNode => {
-                      const hasChildren = (e.children?.length ?? 0) > 0;
-                      const isOpen = expandedEtapas.has(e.id);
-                      const desv = e.realizado - e.previsto;
-                      const corReal = e.realizado >= e.previsto ? "#059669" : desv < -10 ? "#dc2626" : "#d97706";
-                      const corBarReal = e.realizado >= e.previsto ? "#34d399" : desv < -10 ? "#f87171" : "#fbbf24";
-                      return (
-                        <React.Fragment key={e.id}>
-                          <div
-                            className="flex items-center gap-2 px-3 py-1.5 border-b border-slate-100 hover:bg-blue-50/50"
-                            style={{ paddingLeft: 12 + depth * 18 }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => hasChildren && toggleEtapa(e.id)}
-                              className={`w-4 h-4 shrink-0 flex items-center justify-center rounded ${hasChildren ? "text-slate-500 hover:text-blue-600 hover:bg-blue-100" : "cursor-default"}`}
-                              aria-label={hasChildren ? (isOpen ? "Recolher" : "Expandir") : undefined}
-                            >
-                              {hasChildren
-                                ? (isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />)
-                                : <span className="h-3 w-3" />}
-                            </button>
-                            {e.eapCodigo && (
-                              <span className="text-[10px] font-mono text-slate-400 w-14 shrink-0 truncate">
-                                {e.eapCodigo}
-                              </span>
-                            )}
-                            <span
-                              className={`text-xs flex-1 truncate ${hasChildren ? "font-semibold text-slate-700" : "text-slate-600"}`}
-                              title={e.nome}
-                            >
-                              {e.nome}
-                            </span>
-                            <div className="hidden md:flex items-center gap-2 shrink-0 w-56">
-                              <div className="relative flex-1 h-3.5 bg-slate-100 rounded overflow-hidden">
-                                <div
-                                  className="absolute inset-y-0 left-0 bg-blue-400/60"
-                                  style={{ width: `${Math.min(100, Math.max(0, e.previsto))}%` }}
-                                  title={`Previsto: ${fPct_(e.previsto)}`}
-                                />
-                                <div
-                                  className="absolute inset-y-0 left-0 opacity-90"
-                                  style={{ width: `${Math.min(100, Math.max(0, e.realizado))}%`, backgroundColor: corBarReal }}
-                                  title={`Realizado: ${fPct_(e.realizado)}`}
-                                />
-                              </div>
-                            </div>
-                            <span className="text-[10px] tabular-nums text-blue-700 w-12 text-right shrink-0" title="Previsto">
-                              {fPct_(e.previsto)}
-                            </span>
-                            <span
-                              className="text-[10px] tabular-nums w-12 text-right shrink-0 font-medium"
-                              style={{ color: corReal }}
-                              title="Realizado"
-                            >
-                              {fPct_(e.realizado)}
-                            </span>
-                            <span
-                              className="text-[10px] tabular-nums w-14 text-right shrink-0 font-bold"
-                              style={{ color: corReal }}
-                              title="Desvio (Realizado − Previsto)"
-                            >
-                              {desv >= 0 ? "+" : ""}{fPct_(desv)}
-                            </span>
-                          </div>
-                          {hasChildren && isOpen && e.children.map((c: any) => renderRow(c, depth + 1))}
-                        </React.Fragment>
-                      );
-                    };
-                    return (
-                      <>
-                        <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-200 bg-slate-100 flex items-center justify-between">
-                          <span>Detalhamento Pai → Filho</span>
-                          <span className="hidden sm:flex items-center gap-3 normal-case font-normal text-slate-400 text-[10px]">
-                            <span className="inline-flex items-center gap-1">
-                              <span className="w-2.5 h-2.5 rounded-sm bg-blue-400/60"></span>Previsto
-                            </span>
-                            <span className="inline-flex items-center gap-1">
-                              <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400"></span>Realizado ≥ Previsto
-                            </span>
-                            <span className="inline-flex items-center gap-1">
-                              <span className="w-2.5 h-2.5 rounded-sm bg-amber-400"></span>Atraso ≤10pp
-                            </span>
-                            <span className="inline-flex items-center gap-1">
-                              <span className="w-2.5 h-2.5 rounded-sm bg-red-400"></span>Atraso &gt;10pp
-                            </span>
-                          </span>
-                        </div>
-                        <div className="bg-slate-50/30">
-                          {g.etapas.map((e: any) => renderRow(e, 0))}
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
+              {/* Rev. 1890 — Drill-down PAI→FILHO MIGROU PARA UM ÚNICO BLOCO
+                  CONSOLIDADO LOGO ABAIXO DESTE bloco (depois de TODAS as
+                  NAVEs), em vez de aparecer repetido dentro de cada card. */}
 
               {/* Mini legenda desvios */}
               {g.etapas.some((e: any) => e.previsto - e.realizado > 5) && (
@@ -13621,6 +13508,208 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
         </div>
         );
       })}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          BLOCO 5B — DRILL-DOWN EAP CONSOLIDADO (Rev. 1890)
+          UM ÚNICO bloco logo abaixo de todas as NAVEs/Pavimentos. Lista
+          recolhida por padrão (não polui visual). Cabeçalho com ações
+          "Expandir tudo" / "Recolher tudo" + legenda de cores. Cada NAVE
+          (raiz) é uma linha clicável que abre a árvore recursiva.
+      ══════════════════════════════════════════════════════════════════════ */}
+      {grupos.filter((g: any) => g.etapas?.length > 0).length > 0 && (() => {
+        const allRoots = grupos.filter((g: any) => g.etapas?.length > 0);
+        const collectIds = (lista: any[]): (string | number)[] => {
+          const out: (string | number)[] = [];
+          for (const e of lista) {
+            if ((e.children?.length ?? 0) > 0) {
+              out.push(e.id);
+              out.push(...collectIds(e.children));
+            }
+          }
+          return out;
+        };
+        const todosFilhosIds = allRoots.flatMap((g: any) => collectIds(g.etapas));
+        const todosRaizIds = allRoots.map((g: any) => g.id);
+        const todosAbertos = todosRaizIds.every((id) => drilldownAbertos.has(id))
+          && todosFilhosIds.every((id) => expandedEtapas.has(id));
+        const expandirTudo = () => {
+          setDrilldownAbertos(new Set(todosRaizIds));
+          setExpandedEtapas(new Set(todosFilhosIds));
+        };
+        const recolherTudo = () => {
+          setDrilldownAbertos(new Set());
+          setExpandedEtapas(new Set());
+        };
+        const renderRow = (e: any, depth: number): React.ReactNode => {
+          const hasChildren = (e.children?.length ?? 0) > 0;
+          const isOpen = expandedEtapas.has(e.id);
+          const desv = e.realizado - e.previsto;
+          const corReal = e.realizado >= e.previsto ? "#059669" : desv < -10 ? "#dc2626" : "#d97706";
+          const corBarReal = e.realizado >= e.previsto ? "#34d399" : desv < -10 ? "#f87171" : "#fbbf24";
+          return (
+            <React.Fragment key={e.id}>
+              <div
+                className="flex items-center gap-2 px-3 py-1.5 border-b border-slate-100 hover:bg-blue-50/40"
+                style={{ paddingLeft: 12 + depth * 18 }}
+              >
+                <button
+                  type="button"
+                  onClick={() => hasChildren && toggleEtapa(e.id)}
+                  className={`w-4 h-4 shrink-0 flex items-center justify-center rounded ${hasChildren ? "text-slate-500 hover:text-blue-600 hover:bg-blue-100" : "cursor-default"}`}
+                  aria-label={hasChildren ? (isOpen ? "Recolher" : "Expandir") : undefined}
+                >
+                  {hasChildren
+                    ? (isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />)
+                    : <span className="h-3 w-3" />}
+                </button>
+                {e.eapCodigo && (
+                  <span className="text-[10px] font-mono text-slate-400 w-16 shrink-0 truncate">
+                    {e.eapCodigo}
+                  </span>
+                )}
+                <span
+                  className={`text-xs flex-1 truncate ${hasChildren ? "font-semibold text-slate-700" : "text-slate-600"}`}
+                  title={e.nome}
+                >
+                  {e.nome}
+                </span>
+                <div className="hidden md:flex items-center gap-2 shrink-0 w-56">
+                  <div className="relative flex-1 h-3.5 bg-slate-100 rounded overflow-hidden">
+                    <div
+                      className="absolute inset-y-0 left-0 bg-blue-400/60"
+                      style={{ width: `${Math.min(100, Math.max(0, e.previsto))}%` }}
+                      title={`Previsto: ${fPct_(e.previsto)}`}
+                    />
+                    <div
+                      className="absolute inset-y-0 left-0 opacity-90"
+                      style={{ width: `${Math.min(100, Math.max(0, e.realizado))}%`, backgroundColor: corBarReal }}
+                      title={`Realizado: ${fPct_(e.realizado)}`}
+                    />
+                  </div>
+                </div>
+                <span className="text-[10px] tabular-nums text-blue-700 w-12 text-right shrink-0" title="Previsto">
+                  {fPct_(e.previsto)}
+                </span>
+                <span
+                  className="text-[10px] tabular-nums w-12 text-right shrink-0 font-medium"
+                  style={{ color: corReal }}
+                  title="Realizado"
+                >
+                  {fPct_(e.realizado)}
+                </span>
+                <span
+                  className="text-[10px] tabular-nums w-14 text-right shrink-0 font-bold"
+                  style={{ color: corReal }}
+                  title="Desvio (Realizado − Previsto)"
+                >
+                  {desv >= 0 ? "+" : ""}{fPct_(desv)}
+                </span>
+              </div>
+              {hasChildren && isOpen && e.children.map((c: any) => renderRow(c, depth + 1))}
+            </React.Fragment>
+          );
+        };
+        return (
+          <div className="refis-block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            {/* Header do bloco consolidado */}
+            <div className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white px-5 py-2.5 flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <ChevronRight className="h-4 w-4 opacity-80 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold uppercase tracking-wide">Drill-down EAP — Detalhamento Pai → Filho</p>
+                  <p className="text-[10px] text-blue-100/80 hidden sm:block">
+                    Abra qualquer pavimento e desça pelos níveis para identificar onde está o atraso.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={expandirTudo}
+                  disabled={todosAbertos}
+                  className="text-[11px] font-semibold bg-white/15 hover:bg-white/25 disabled:opacity-40 disabled:cursor-not-allowed rounded px-2.5 py-1 transition-colors"
+                  title="Abrir todos os pavimentos e sub-níveis"
+                >
+                  Expandir tudo
+                </button>
+                <button
+                  type="button"
+                  onClick={recolherTudo}
+                  disabled={drilldownAbertos.size === 0 && expandedEtapas.size === 0}
+                  className="text-[11px] font-semibold bg-white/15 hover:bg-white/25 disabled:opacity-40 disabled:cursor-not-allowed rounded px-2.5 py-1 transition-colors"
+                >
+                  Recolher tudo
+                </button>
+              </div>
+            </div>
+
+            {/* Legenda de cores (sticky topo da listagem) */}
+            <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-200 bg-slate-50 flex items-center justify-between flex-wrap gap-2">
+              <span>Pavimento · Etapa · Sub-etapa</span>
+              <span className="flex items-center gap-3 normal-case font-normal text-slate-400 text-[10px] flex-wrap">
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-blue-400/60"></span>Previsto
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400"></span>Realizado ≥ Previsto
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-amber-400"></span>Atraso ≤10pp
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-red-400"></span>Atraso &gt;10pp
+                </span>
+              </span>
+            </div>
+
+            {/* Listagem de NAVEs com drill-down */}
+            <div>
+              {allRoots.map((g: any) => {
+                const isOpen = drilldownAbertos.has(g.id);
+                const desv = (g.realizado ?? 0) - (g.previsto ?? 0);
+                const corReal = (g.realizado ?? 0) >= (g.previsto ?? 0) ? "#059669" : desv < -10 ? "#dc2626" : "#d97706";
+                return (
+                  <React.Fragment key={`dd-${g.id}`}>
+                    {/* Linha NAVE/raiz — destacada e clicável */}
+                    <button
+                      type="button"
+                      onClick={() => toggleDrilldown(g.id)}
+                      className={`w-full text-left flex items-center gap-2 px-3 py-2 border-b border-slate-200 transition-colors ${isOpen ? "bg-indigo-50/70 hover:bg-indigo-50" : "bg-white hover:bg-slate-50"}`}
+                    >
+                      {isOpen
+                        ? <ChevronDown className="h-4 w-4 text-indigo-600 shrink-0" />
+                        : <ChevronRight className="h-4 w-4 text-slate-500 shrink-0" />}
+                      {g.eapCodigo && (
+                        <span className="text-[11px] font-mono bg-slate-200 text-slate-700 rounded px-1.5 py-0.5 shrink-0">
+                          {g.eapCodigo}
+                        </span>
+                      )}
+                      <span className="text-sm font-bold uppercase tracking-wide text-slate-800 flex-1 truncate" title={g.nome}>
+                        {g.nome}
+                      </span>
+                      <span className="hidden sm:inline text-[11px] tabular-nums text-blue-700 shrink-0">
+                        Prev: <span className="font-semibold">{fPct_(g.previsto ?? 0)}</span>
+                      </span>
+                      <span className="hidden sm:inline text-[11px] tabular-nums shrink-0 font-medium" style={{ color: corReal }}>
+                        Real: <span className="font-bold">{fPct_(g.realizado ?? 0)}</span>
+                      </span>
+                      <span className="text-[11px] tabular-nums shrink-0 font-bold" style={{ color: corReal }} title="Desvio">
+                        {desv >= 0 ? "+" : ""}{fPct_(desv)}
+                      </span>
+                    </button>
+                    {/* Árvore recursiva — só renderiza se NAVE aberta */}
+                    {isOpen && (
+                      <div className="bg-slate-50/40">
+                        {g.etapas.map((e: any) => renderRow(e, 0))}
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ══════════════════════════════════════════════════════════════════════
           BLOCO 6 — FATURAMENTO PREVISTO / REALIZADO + Observações
