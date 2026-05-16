@@ -2541,7 +2541,12 @@ async function getDashCustoDemissaoMassa(
         dataAdmissao: r.dataAdmissao!,
         salarioBase: salario,
         anosServico: previsao.anosServico,
-        diasAvisoTotal: previsao.diasAvisoTotal,
+        // Rev. 1930 — Devolve `diasAvisoEstimado` (que respeita o `tipo` —
+        // 30 fixos no Trabalhado / 30+3·ano no Indenizado conforme L2476),
+        // não `previsao.diasAvisoTotal` (que SEMPRE retorna o cálculo legal
+        // total da Lei 12.506, ignora o tipo — fonte do bug: tabela mostrava
+        // 60/66/45 com toggle "Trabalhado" selecionado).
+        diasAvisoTotal: diasAvisoEstimado,
         saldoSalario: parseFloat(previsao.saldoSalario),
         feriasProporcional: parseFloat(previsao.totalFerias),
         feriasVencidas: parseFloat(previsao.feriasVencidas),
