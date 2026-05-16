@@ -57,6 +57,29 @@ function defaultFim() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Rev. 1968 — Tooltip customizado pt-BR para gráficos combo (bar+line).
+// Mostra mês em negrito + lista de séries com dot colorido + valor formatado.
+// Esconde séries com valor 0 pra reduzir ruído nos meses futuros vazios.
+function TooltipPtBR({ active, payload, label, hideZeros = false, valueSuffix }: any) {
+  if (!active || !payload || payload.length === 0) return null;
+  const items = hideZeros ? payload.filter((p: any) => (p.value ?? 0) !== 0) : payload;
+  if (items.length === 0) return null;
+  return (
+    <div className="bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2 text-xs">
+      <p className="font-bold text-gray-900 mb-1">{label}</p>
+      <div className="space-y-0.5">
+        {items.map((p: any, i: number) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: p.color || p.fill || p.stroke }} />
+            <span className="text-gray-700">{p.name}:</span>
+            <span className="font-semibold tabular-nums text-gray-900">{fmtNum(p.value ?? 0)}{valueSuffix?.[p.dataKey] ?? ""}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function KPI({
   icon: Icon, label, value, sub, color = "text-blue-600", bg = "bg-blue-50", border = "border-blue-200",
 }: {
@@ -249,7 +272,7 @@ export default function DashboardAtestadosAcidentes() {
         <Card>
           <CardContent className="p-4 space-y-4">
             {/* Linha 1: Período personalizado (datas) + atalhos */}
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end">
               <div className="min-w-0">
                 <Label className="text-xs text-gray-600">Data Início</Label>
                 <Input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="w-full" />
@@ -290,7 +313,7 @@ export default function DashboardAtestadosAcidentes() {
             </div>
 
             {/* Linha 3: Trimestre / Semestre / Mês — grid para evitar sobreposição */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs text-gray-500 mr-1 whitespace-nowrap">Trimestre:</span>
                 {([1, 2, 3, 4] as const).map((q) => (
@@ -413,17 +436,21 @@ export default function DashboardAtestadosAcidentes() {
                 ]}
                 renderChart={(h) => (
                   <ResponsiveContainer width="100%" height={h}>
-                    <ComposedChart data={evolucaoData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                      <XAxis dataKey="mesLabel" tick={{ fontSize: 12 }} />
-                      <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
-                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
-                      <Tooltip />
-                      <Legend />
-                      <Bar yAxisId="left" dataKey="atestados" name="Atestados" fill="#10b981" radius={[4, 4, 0, 0]} />
-                      <Bar yAxisId="left" dataKey="acidentes" name="Acidentes" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                      <Line yAxisId="right" type="monotone" dataKey="diasAtestado" name="Dias Atestado" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
-                      <Line yAxisId="right" type="monotone" dataKey="diasAcidente" name="Dias Acidente" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
+                    {/* Rev. 1968 — margens ajustadas pra acomodar Y-axis labels (left=24, right=24).
+                        Custom TooltipPtBR esconde séries zeradas (meses futuros) e mostra valor formatado pt-BR. */}
+                    <ComposedChart data={evolucaoData} margin={{ top: 10, right: 24, left: 24, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                      <XAxis dataKey="mesLabel" tick={{ fontSize: 12 }} tickMargin={6} />
+                      <YAxis yAxisId="left" tick={{ fontSize: 11 }} allowDecimals={false}
+                        label={{ value: "Quantidade", angle: -90, position: "insideLeft", style: { fontSize: 11, fill: "#6b7280" }, offset: -2 }} />
+                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false}
+                        label={{ value: "Dias", angle: 90, position: "insideRight", style: { fontSize: 11, fill: "#6b7280" }, offset: -2 }} />
+                      <Tooltip cursor={{ fill: "rgba(59,130,246,0.05)" }} content={<TooltipPtBR hideZeros valueSuffix={{ diasAtestado: " d", diasAcidente: " d" }} />} />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                      <Bar yAxisId="left" dataKey="atestados" name="Atestados" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={48} />
+                      <Bar yAxisId="left" dataKey="acidentes" name="Acidentes" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={48} />
+                      <Line yAxisId="right" type="monotone" dataKey="diasAtestado" name="Dias Atestado" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 3, strokeWidth: 2 }} activeDot={{ r: 5 }} />
+                      <Line yAxisId="right" type="monotone" dataKey="diasAcidente" name="Dias Acidente" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3, strokeWidth: 2 }} activeDot={{ r: 5 }} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 )}
@@ -436,20 +463,23 @@ export default function DashboardAtestadosAcidentes() {
                   <CardContent className="p-0">
                     <div className="divide-y">
                       {d.ultimosAtestados.length === 0 && <p className="p-4 text-sm text-gray-500">Nenhum atestado no período.</p>}
+                      {/* Rev. 1968 — Linhas agora clicáveis: abrem o raio-x do colaborador (EmployeeDetailDialog). */}
                       {d.ultimosAtestados.map((a) => (
-                        <div key={a.id} className="p-3 hover:bg-gray-50 flex items-start gap-3">
+                        <button key={a.id} type="button" onClick={() => (a as any).employeeId && setSelectedEmployeeId((a as any).employeeId)}
+                          className="w-full text-left p-3 hover:bg-emerald-50/50 transition-colors flex items-start gap-3 cursor-pointer"
+                          title="Clique para abrir o detalhe do colaborador">
                           <div className="bg-emerald-100 text-emerald-700 rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0">
                             <Stethoscope className="h-4 w-4" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{a.nome}</p>
+                            <p className="text-sm font-medium truncate text-blue-700 hover:underline">{a.nome}</p>
                             <p className="text-xs text-gray-500 truncate">{a.funcao || "—"} · {a.tipo}{a.cid ? ` · CID ${a.cid}` : ""}</p>
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <p className="text-xs font-semibold text-blue-600">{a.dias} dia(s)</p>
-                            <p className="text-[10px] text-gray-500">{a.data}</p>
+                            <p className="text-xs font-semibold text-blue-600 tabular-nums">{a.dias} dia(s)</p>
+                            <p className="text-[10px] text-gray-500 tabular-nums">{a.data}</p>
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </CardContent>
@@ -459,25 +489,28 @@ export default function DashboardAtestadosAcidentes() {
                   <CardContent className="p-0">
                     <div className="divide-y">
                       {d.ultimosAcidentes.length === 0 && <p className="p-4 text-sm text-gray-500">Nenhum acidente no período.</p>}
+                      {/* Rev. 1968 — Linhas clicáveis idem Últimos Atestados. */}
                       {d.ultimosAcidentes.map((a) => (
-                        <div key={a.id} className="p-3 hover:bg-gray-50 flex items-start gap-3">
+                        <button key={a.id} type="button" onClick={() => (a as any).employeeId && setSelectedEmployeeId((a as any).employeeId)}
+                          className="w-full text-left p-3 hover:bg-red-50/50 transition-colors flex items-start gap-3 cursor-pointer"
+                          title="Clique para abrir o detalhe do colaborador">
                           <div className="bg-red-100 text-red-700 rounded-full h-8 w-8 flex items-center justify-center flex-shrink-0">
                             <AlertTriangle className="h-4 w-4" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{a.nome}</p>
+                            <p className="text-sm font-medium truncate text-blue-700 hover:underline">{a.nome}</p>
                             <p className="text-xs text-gray-500 truncate">
                               {a.funcao || "—"} · {a.tipo} · <span style={{ color: GRAV_COLORS[a.gravidade] || "#6b7280" }}>{a.gravidade}</span>
                               {a.parteCorpo ? ` · ${a.parteCorpo}` : ""}
                             </p>
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <p className="text-xs font-semibold text-red-600">{a.dias} dia(s)</p>
-                            <p className="text-[10px] text-gray-500">{a.data}{a.hora ? ` ${a.hora}` : ""}</p>
+                            <p className="text-xs font-semibold text-red-600 tabular-nums">{a.dias} dia(s)</p>
+                            <p className="text-[10px] text-gray-500 tabular-nums">{a.data}{a.hora ? ` ${a.hora}` : ""}</p>
                             {a.catNumero ? <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 mt-0.5">CAT {a.catNumero}</Badge> :
                               <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 mt-0.5 border-amber-300 text-amber-700">s/ CAT</Badge>}
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </CardContent>
