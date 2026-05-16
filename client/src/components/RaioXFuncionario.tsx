@@ -963,6 +963,63 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
                 </div>
               </div>
 
+              {/* Rev. 1878 — Isenção de Controle de Jornada (CLT Art. 62)
+                  Card índigo com inciso + data + observação + link p/ termo assinado.
+                  Visível apenas quando o colaborador tem cargoConfianca=1. */}
+              {Number(emp.cargoConfianca) === 1 && (
+                <div className="mt-4 bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 text-indigo-800 font-bold text-sm">
+                      <Lock className="h-4 w-4" /> Isenção de Controle de Jornada — Art. 62 CLT
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-600 text-white">
+                      Inciso {emp.cargoConfiancaInciso || "—"}
+                    </span>
+                    {emp.cargoConfiancaDesde && (
+                      <span className="text-xs text-indigo-700">
+                        desde <strong>{formatDate(emp.cargoConfiancaDesde)}</strong>
+                      </span>
+                    )}
+                    {emp.cargoConfiancaInciso === "II" && emp.cargoConfiancaGratificacao && (
+                      <span className="text-xs text-indigo-700">
+                        · gratificação <strong>{emp.cargoConfiancaGratificacao}%</strong>
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-indigo-700 mt-2">
+                    {emp.cargoConfiancaInciso === "I"
+                      ? "Atividade externa incompatível com controle de horário (exige anotação CTPS)."
+                      : emp.cargoConfiancaInciso === "II"
+                        ? "Cargo de gestão/confiança — gratificação ≥ 40% (Parágrafo único do Art. 62)."
+                        : emp.cargoConfiancaInciso === "III"
+                          ? "Teletrabalho por produção ou tarefa (Lei 14.442/2022)."
+                          : "Funcionário não sujeito a controle de jornada, horas extras, banco de horas ou adicional noturno padrão."}
+                  </p>
+                  {emp.cargoConfiancaObservacao && (
+                    <div className="mt-2 text-xs text-indigo-900 bg-white/60 rounded p-2 whitespace-pre-line border border-indigo-100">
+                      <strong>Observação:</strong> {emp.cargoConfiancaObservacao}
+                    </div>
+                  )}
+                  {emp.cargoConfiancaTermoUrl ? (
+                    <div className="mt-3 flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-md px-2.5 py-1.5 text-xs">
+                      <FileText className="h-4 w-4 text-emerald-700 shrink-0" />
+                      <a href={emp.cargoConfiancaTermoUrl} target="_blank" rel="noreferrer" className="text-emerald-800 font-medium hover:underline truncate flex-1">
+                        Ver Termo Assinado{emp.cargoConfiancaTermoNomeArquivo ? ` (${emp.cargoConfiancaTermoNomeArquivo})` : ""}
+                      </a>
+                      {emp.cargoConfiancaTermoAssinadoEm && (
+                        <span className="text-[10px] text-emerald-700 whitespace-nowrap">
+                          anexado em {new Date(emp.cargoConfiancaTermoAssinadoEm).toLocaleDateString("pt-BR")}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-amber-700 italic mt-3">
+                      ⚠ Sem termo de ciência assinado anexado — recomenda-se gerar e arquivar pelo cadastro do colaborador para ter prova documental em fiscalização do TST/MPT.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* DESCRIÇÃO DA FUNÇÃO */}
               {funcaoDetalhes?.descricao && (
                 <div className="mt-4 bg-white/70 rounded-lg p-4 border border-blue-100">

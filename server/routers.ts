@@ -742,6 +742,97 @@ export const appRouter = router({
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "colaboradores", entityType: "employee", entityId: input.employeeId, details: `Foto 3x4 removida` });
       return { success: true };
     }),
+
+    // === Rev. 1878 — TERMO DE ISENÇÃO DE CONTROLE DE JORNADA (CLT Art. 62) ===
+    // Upload do termo assinado pelo colaborador (PDF/JPG/PNG, máx 10MB). O termo
+    // é gerado pelo frontend (window.print → Salvar como PDF) e devolvido aqui
+    // para arquivamento formal. Sem termo assinado, a isenção é apenas um flag
+    // interno; com termo, há prova documental em caso de fiscalização/TST.
+    uploadTermoArt62: protectedProcedure.input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+      fileBase64: z.string(),
+      mimeType: z.enum(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png']),
+      fileName: z.string().max(200),
+    })).mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      // 1) Verifica que o colaborador existe E pertence à companyId informada
+      //    ANTES de decodificar/persistir o arquivo (evita orphan objects no
+      //    storage em chamadas tRPC diretas que burlam o frontend).
+      const empCheck = await db.execute(sql`
+        SELECT id FROM employees
+        WHERE id = ${input.employeeId} AND "companyId" = ${input.companyId} AND "deletedAt" IS NULL
+        LIMIT 1
+      `);
+      if (!(empCheck.rows && empCheck.rows.length > 0)) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Colaborador não encontrado nesta empresa.' });
+      }
+      // 2) Decodifica e valida o tamanho do binário no servidor (≤10MB). O limite
+      //    de 10MB no frontend é UX; aqui é a defesa real contra abuso.
+      let buffer: Buffer;
+      try {
+        if (!input.fileBase64 || input.fileBase64.length === 0) {
+          throw new Error('payload vazio');
+        }
+        buffer = Buffer.from(input.fileBase64, 'base64');
+      } catch (e: any) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Arquivo inválido (base64 corrompido).' });
+      }
+      if (buffer.length === 0) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Arquivo vazio.' });
+      }
+      const MAX_BYTES = 10 * 1024 * 1024;
+      if (buffer.length > MAX_BYTES) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: `Arquivo muito grande (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Limite: 10MB.` });
+      }
+      // 3) Sobe ao storage e persiste a URL. O UPDATE também filtra por
+      //    companyId (defense-in-depth) — se 0 linhas afetadas, cleanup do
+      //    objeto e erro.
+      const ext = input.mimeType === 'application/pdf' ? 'pdf'
+        : input.mimeType === 'image/png' ? 'png' : 'jpg';
+      const suffix = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      const fileKey = `art62-termos/${input.companyId}/${input.employeeId}/termo-art62-${suffix}.${ext}`;
+      const { url } = await storagePut(fileKey, buffer, input.mimeType);
+      const updRes = await db.execute(sql`
+        UPDATE employees SET
+          cargo_confianca_termo_url = ${url},
+          cargo_confianca_termo_nome_arquivo = ${input.fileName},
+          cargo_confianca_termo_assinado_em = NOW(),
+          "updatedAt" = NOW()
+        WHERE id = ${input.employeeId} AND "companyId" = ${input.companyId}
+        RETURNING id
+      `);
+      if (!(updRes.rows && updRes.rows.length > 0)) {
+        // Defensivo: o pre-check passou mas o UPDATE não afetou nada (race ou
+        // deletedAt entre as duas queries). Loga o orphan para limpeza futura.
+        console.error('[uploadTermoArt62] UPDATE 0 linhas — possível orphan:', fileKey);
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Colaborador não encontrado ao gravar termo.' });
+      }
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPLOAD_TERMO_ART62', module: 'colaboradores', entityType: 'employee', entityId: input.employeeId, details: `Termo de Isenção de Controle de Jornada (Art. 62 CLT) anexado — arquivo: ${input.fileName}` });
+      memCache.invalidatePrefix('emp:');
+      return { success: true, url };
+    }),
+    removerTermoArt62: protectedProcedure.input(z.object({
+      employeeId: z.number(),
+      companyId: z.number(),
+    })).mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const updRes = await db.execute(sql`
+        UPDATE employees SET
+          cargo_confianca_termo_url = NULL,
+          cargo_confianca_termo_nome_arquivo = NULL,
+          cargo_confianca_termo_assinado_em = NULL,
+          "updatedAt" = NOW()
+        WHERE id = ${input.employeeId} AND "companyId" = ${input.companyId}
+        RETURNING id
+      `);
+      if (!(updRes.rows && updRes.rows.length > 0)) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Colaborador não encontrado nesta empresa.' });
+      }
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'REMOVE_TERMO_ART62', module: 'colaboradores', entityType: 'employee', entityId: input.employeeId, details: `Termo de Isenção de Controle de Jornada (Art. 62 CLT) removido` });
+      memCache.invalidatePrefix('emp:');
+      return { success: true };
+    }),
     // === CONTRATO DE EXPERIÊNCIA ===
     prorrogarExperiencia: protectedProcedure.input(z.object({
       employeeId: z.number(),

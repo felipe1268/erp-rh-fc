@@ -366,6 +366,186 @@ export default function Colaboradores() {
     onError: (e: any) => toast.error("Erro ao remover foto: " + e.message),
   });
 
+  // Rev. 1878 — Termo de Isenção de Controle de Jornada (Art. 62 CLT).
+  // Permite anexar PDF/imagem do termo assinado pelo colaborador (prova
+  // documental do enquadramento — exigido pelo TST em fiscalizações).
+  const [uploadingTermoArt62, setUploadingTermoArt62] = useState(false);
+  const uploadTermoArt62Mut = trpc.employees.uploadTermoArt62.useMutation({
+    onSuccess: (data: any) => {
+      setUploadingTermoArt62(false);
+      utils.employees.list.invalidate();
+      if (editingId) utils.employees.getById.invalidate();
+      set("cargoConfiancaTermoUrl", data.url);
+      set("cargoConfiancaTermoAssinadoEm", new Date().toISOString());
+      toast.success("Termo de Isenção (Art. 62) anexado!");
+    },
+    onError: (e: any) => { setUploadingTermoArt62(false); toast.error("Erro ao enviar termo: " + e.message); },
+  });
+  const removerTermoArt62Mut = trpc.employees.removerTermoArt62.useMutation({
+    onSuccess: () => {
+      utils.employees.list.invalidate();
+      if (editingId) utils.employees.getById.invalidate();
+      set("cargoConfiancaTermoUrl", "");
+      set("cargoConfiancaTermoNomeArquivo", "");
+      set("cargoConfiancaTermoAssinadoEm", "");
+      toast.success("Termo removido.");
+    },
+    onError: (e: any) => toast.error("Erro ao remover termo: " + e.message),
+  });
+  const handleTermoArt62Upload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingId) { toast.error("Salve o colaborador antes de anexar o termo."); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error("Arquivo muito grande. Máximo 10MB."); return; }
+    const okTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!okTypes.includes(file.type)) { toast.error("Formato inválido. Aceita PDF, JPG ou PNG."); return; }
+    const cId = parseInt(String(form.companyId || selectedCompany || ""), 10);
+    if (!cId) { toast.error("Selecione a empresa do colaborador."); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(",")[1];
+      setUploadingTermoArt62(true);
+      uploadTermoArt62Mut.mutate({
+        employeeId: editingId,
+        companyId: cId,
+        fileBase64: base64,
+        mimeType: file.type as any,
+        fileName: file.name,
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+  // Gera o Termo de Isenção (Art. 62 CLT) em nova aba, pronto p/ impressão/PDF.
+  // O texto se adapta ao inciso selecionado (I/II/III) — cada um tem fundamentação
+  // legal diferente e o termo deve refletir isso para ter validade probatória.
+  const imprimirTermoArt62 = () => {
+    const comp = companies?.find(c => String(c.id) === (form.companyId || selectedCompanyId || ""));
+    const inciso = String(form.cargoConfiancaInciso || "").toUpperCase();
+    if (!inciso) { toast.error("Selecione o inciso de enquadramento antes de gerar o termo."); return; }
+    // Escape HTML em TODOS os campos dinâmicos — nome/função/endereço/razão
+    // social vêm de input livre e seriam vetores de XSS ao serem injetados via
+    // document.write na nova aba. Centralizado num helper local.
+    const esc = (v: any) => String(v ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    const empNome = esc(form.nomeCompleto || "________________________________");
+    const empCpfRaw = form.cpf || "";
+    const empCpf = esc(formatCPF(empCpfRaw) || "___.___.___-__");
+    const empRg = esc(form.rg || "____________");
+    const empCtps = esc(form.ctps || "____________");
+    const empFuncao = esc(form.funcao || "________________");
+    const empSalario = esc(form.salarioBase || "______");
+    const empEnderecoRaw = form.endereco || form.logradouro || "";
+    const empCidade = esc(form.cidade || "________");
+    const empEstado = esc(form.estado || "__");
+    const empEnderecoFmt = empEnderecoRaw
+      ? `${esc(empEnderecoRaw)}, ${empCidade}/${empEstado}`
+      : "________________________________";
+    const grat = esc(form.cargoConfiancaGratificacao || "");
+    const desde = form.cargoConfiancaDesde || "";
+    const obs = form.cargoConfiancaObservacao || "";
+    const compRazao = esc(comp?.razaoSocial || "________________________________");
+    const compRazaoOrEmpresa = esc(comp?.razaoSocial || "Empresa");
+    const compCnpj = esc(comp?.cnpj || "___.___.___/____-__");
+    const compCnpjPlain = esc(comp?.cnpj || "___");
+    const compEndereco = esc(comp?.endereco || "________________");
+    const compCidade = esc(comp?.cidade || "________");
+    const compEstado = esc(comp?.estado || "__");
+    const fmt = (d: string) => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR") : "___/___/______";
+    const hoje = new Date().toLocaleDateString("pt-BR");
+    const tituloInciso = inciso === "I"
+      ? "Inciso I — Atividade Externa Incompatível com Fixação de Horário"
+      : inciso === "II"
+        ? "Inciso II — Cargo de Gestão / Confiança"
+        : "Inciso III — Teletrabalho em Regime de Produção ou Tarefa";
+    const fundamentoInciso = inciso === "I"
+      ? "exerce atividade externa incompatível com a fixação de horário de trabalho, devendo tal condição estar anotada na Carteira de Trabalho e Previdência Social (CTPS) e no respectivo registro de empregados, nos termos do inciso I do Art. 62 da CLT"
+      : inciso === "II"
+        ? `ocupa cargo de gestão, equiparado a cargo de confiança (gerente/diretor), com poderes de mando e gestão, percebendo gratificação de função não inferior a 40% (quarenta por cento) sobre o salário efetivo do cargo, conforme parágrafo único do Art. 62 da CLT${grat ? ` (gratificação fixada em ${grat}%)` : ""}` // grat já escapado
+        : "presta serviços em regime de teletrabalho por produção ou tarefa, sem controle de jornada, nos termos do inciso III do Art. 62 da CLT, incluído pela Lei nº 14.442/2022";
+    const w = window.open("", "_blank");
+    if (!w) { toast.error("Popup bloqueado — libere e tente novamente."); return; }
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Termo de Isenção de Controle de Jornada - ${empNome}</title>
+<style>
+@page{size:A4;margin:2cm}
+body{font-family:'Times New Roman',serif;font-size:12pt;line-height:1.6;color:#000;max-width:21cm;margin:0 auto;padding:2cm}
+h1{text-align:center;font-size:15pt;margin-bottom:4px;text-transform:uppercase}
+h2{text-align:center;font-size:12pt;margin-top:0;margin-bottom:24px;font-weight:normal;font-style:italic}
+.clausula{margin-top:14px;text-align:justify}
+.clausula-title{font-weight:bold;text-transform:uppercase;margin-bottom:4px;font-size:11pt}
+.assinaturas{margin-top:60px;display:flex;justify-content:space-between;gap:40px}
+.assinatura{text-align:center;flex:1}
+.assinatura .linha{border-top:1px solid #000;padding-top:4px;margin-top:60px;font-size:10pt}
+.header-info{text-align:center;margin-bottom:20px;font-size:10pt;color:#333}
+.destaque{font-weight:bold}
+.box{border:1px solid #999;padding:10px;margin-top:12px;background:#f6f6f6;font-size:10pt}
+@media print{body{padding:0}}
+</style></head><body>
+<h1>Termo de Ciência e Anuência</h1>
+<h2>Isenção de Controle de Jornada — Art. 62 da CLT — ${esc(tituloInciso)}</h2>
+<div class="header-info">${compRazaoOrEmpresa} — CNPJ: ${compCnpjPlain}</div>
+
+<div class="clausula">
+<p><span class="destaque">EMPREGADOR:</span> ${compRazao}, inscrita no CNPJ sob nº ${compCnpj}, com sede em ${compEndereco}, ${compCidade}/${compEstado}, doravante denominada simplesmente <strong>EMPREGADOR</strong>.</p>
+</div>
+
+<div class="clausula">
+<p><span class="destaque">EMPREGADO(A):</span> ${empNome}, portador(a) do CPF nº ${empCpf}, RG nº ${empRg}, CTPS nº ${empCtps}, ocupante do cargo/função de <strong>${empFuncao}</strong>, residente em ${empEnderecoFmt}, doravante denominado(a) simplesmente <strong>EMPREGADO(A)</strong>.</p>
+</div>
+
+<p>As partes acima qualificadas, no exercício pleno de sua autonomia da vontade, declaram e ajustam o que se segue:</p>
+
+<div class="clausula">
+<p class="clausula-title">Cláusula 1ª — Do Enquadramento Legal</p>
+<p>O(A) EMPREGADO(A) declara estar ciente e de pleno acordo que, a partir de <strong>${esc(fmt(desde))}</strong>, ${esc(fundamentoInciso)}, razão pela qual <strong>NÃO está sujeito(a) ao controle de jornada de trabalho</strong> previsto no Capítulo II do Título II da CLT.</p>
+</div>
+
+<div class="clausula">
+<p class="clausula-title">Cláusula 2ª — Dos Efeitos da Isenção</p>
+<p>Em decorrência do enquadramento descrito na cláusula anterior, o(a) EMPREGADO(A) declara estar ciente de que <strong>NÃO faz jus</strong>, durante a vigência da presente condição, às seguintes parcelas/garantias relacionadas à jornada:</p>
+<p style="margin-left:1cm">a) horas extras (Art. 59 da CLT) e respectivos reflexos;<br>
+b) banco de horas e compensações de jornada;<br>
+c) adicional noturno padrão (Art. 73 da CLT) decorrente do mero cumprimento de horário noturno;<br>
+d) indenização do intervalo intrajornada suprimido (Art. 71, §4º da CLT);<br>
+e) registro/marcação de ponto eletrônico ou manual (Art. 74 da CLT), salvo por liberalidade do EMPREGADOR para fins meramente gerenciais.</p>
+</div>
+
+<div class="clausula">
+<p class="clausula-title">Cláusula 3ª — Da Remuneração</p>
+<p>O(A) EMPREGADO(A) perceberá a remuneração mensal de <strong>R$ ${empSalario}</strong>${inciso === "II" && grat ? `, acrescida da gratificação de função de <strong>${grat}%</strong> do salário efetivo, em estrita observância ao parágrafo único do Art. 62 da CLT` : ""}.</p>
+</div>
+
+<div class="clausula">
+<p class="clausula-title">Cláusula 4ª — Da Reversibilidade</p>
+<p>Cessada a condição que ensejou o enquadramento no Art. 62 da CLT (transferência para função distinta, perda dos poderes de gestão, retorno ao controle de horário, etc.), o(a) EMPREGADO(A) voltará automaticamente ao regime ordinário de controle de jornada, com todos os direitos correlatos, mediante simples comunicação por escrito do EMPREGADOR e respectiva anotação na CTPS, quando cabível.</p>
+</div>
+
+<div class="clausula">
+<p class="clausula-title">Cláusula 5ª — Da Boa-Fé e Ciência Plena</p>
+<p>O(A) EMPREGADO(A) declara que <strong>leu, compreendeu e está de pleno acordo</strong> com os termos do presente instrumento, que lhe foi devidamente explicado, tendo ciência dos efeitos jurídicos da isenção do controle de jornada, ora pactuada de forma livre e consciente.</p>
+</div>
+
+${obs ? `<div class="box"><strong>Observações / Justificativa do Enquadramento:</strong><br>${esc(obs).replace(/\n/g, "<br>")}</div>` : ""}
+
+<p style="margin-top:18px">E por estarem assim justos e acordados, firmam o presente <strong>Termo de Ciência e Anuência</strong> em 2 (duas) vias de igual teor e forma, na presença das testemunhas abaixo qualificadas.</p>
+
+<p style="text-align:center;margin-top:24px">${compCidade}/${compEstado}, ${esc(hoje)}.</p>
+
+<div class="assinaturas">
+<div class="assinatura"><div class="linha">${compRazao}<br><small>CNPJ: ${compCnpj}</small></div></div>
+<div class="assinatura"><div class="linha">${empNome}<br><small>CPF: ${empCpf}</small></div></div>
+</div>
+
+<div class="assinaturas" style="margin-top:30px">
+<div class="assinatura"><div class="linha">Testemunha 1<br><small>Nome: _________________ CPF: _______________</small></div></div>
+<div class="assinatura"><div class="linha">Testemunha 2<br><small>Nome: _________________ CPF: _______________</small></div></div>
+</div>
+
+</body></html>`);
+    w.document.close();
+    setTimeout(() => w.print(), 500);
+  };
+
   const handleFotoUpload = (file: File) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) { toast.error("Selecione uma imagem válida."); return; }
@@ -2191,6 +2371,62 @@ h2{text-align:center;font-size:13pt;margin-top:0;margin-bottom:24px;font-weight:
                     </div>
                     <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
                       ⚠️ <strong>Atenção legal:</strong> O TST exige PROVA de que o enquadramento é real (poderes efetivos de gestão p/ inciso II; condição anotada na CTPS p/ inciso I). Enquadramento incorreto pode gerar passivo trabalhista (horas extras retroativas até 5 anos).
+                    </div>
+
+                    {/* Rev. 1878 — Termo formal de Isenção (Art. 62 CLT).
+                        Permite GERAR PDF/imprimir (texto adaptado ao inciso) e
+                        UPLOAD do termo assinado p/ arquivamento. A prova documental
+                        é a defesa primária em fiscalização do TST/MPT. */}
+                    <div className="bg-white border border-indigo-200 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-indigo-800">
+                        <FileText className="h-4 w-4" /> Termo formal de Ciência e Anuência
+                      </div>
+                      <p className="text-[11px] text-indigo-700/80">
+                        Gere o termo (com o texto correto para o inciso {form.cargoConfiancaInciso || "I/II/III"}), imprima ou salve como PDF, colha a assinatura do colaborador e faça o upload abaixo para deixar registrado no prontuário.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button type="button" variant="outline" size="sm"
+                          onClick={imprimirTermoArt62}
+                          disabled={!form.cargoConfiancaInciso}
+                          className="border-indigo-300 text-indigo-700 hover:bg-indigo-50">
+                          <Printer className="h-4 w-4 mr-1.5" /> Gerar / Imprimir Termo
+                        </Button>
+                        <label className={`inline-flex items-center gap-1.5 px-3 h-9 text-sm rounded-md border cursor-pointer transition-colors ${editingId ? "border-indigo-300 text-indigo-700 hover:bg-indigo-50" : "border-slate-200 text-slate-400 cursor-not-allowed"}`}>
+                          <Upload className="h-4 w-4" /> {uploadingTermoArt62 ? "Enviando…" : "Upload do Termo Assinado"}
+                          <input type="file" accept="application/pdf,image/jpeg,image/png" className="hidden" onChange={handleTermoArt62Upload} disabled={!editingId || uploadingTermoArt62} />
+                        </label>
+                        {!editingId && (
+                          <span className="text-[10px] text-amber-700">Salve o cadastro antes de anexar o termo.</span>
+                        )}
+                      </div>
+                      {form.cargoConfiancaTermoUrl ? (
+                        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-md px-2.5 py-1.5 text-xs">
+                          <FileText className="h-4 w-4 text-emerald-700 shrink-0" />
+                          <a href={form.cargoConfiancaTermoUrl} target="_blank" rel="noreferrer" className="text-emerald-800 font-medium hover:underline truncate flex-1">
+                            {form.cargoConfiancaTermoNomeArquivo || "Termo assinado anexado"}
+                          </a>
+                          {form.cargoConfiancaTermoAssinadoEm && (
+                            <span className="text-[10px] text-emerald-700">
+                              em {new Date(String(form.cargoConfiancaTermoAssinadoEm)).toLocaleDateString("pt-BR")}
+                            </span>
+                          )}
+                          <button type="button"
+                            onClick={() => {
+                              if (!editingId) return;
+                              const cId = parseInt(String(form.companyId || selectedCompany || ""), 10);
+                              if (!cId) return;
+                              if (!confirm("Remover o termo anexado?")) return;
+                              removerTermoArt62Mut.mutate({ employeeId: editingId, companyId: cId });
+                            }}
+                            className="p-1 rounded hover:bg-emerald-100 text-emerald-700"
+                            title="Remover anexo"
+                          >
+                            <XIcon className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-slate-500 italic">Nenhum termo assinado anexado.</p>
+                      )}
                     </div>
                   </div>
                 )}

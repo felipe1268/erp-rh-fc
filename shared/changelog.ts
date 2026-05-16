@@ -44,6 +44,41 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1878,
+    titulo: "Colaborador · Termo de Isenção de Controle de Jornada (Art. 62 CLT) — gerar PDF + imprimir + upload do termo assinado + visualização no Raio-X",
+    descricao: "User (16/05/2026, após Rev. 1877): pediu botão para GERAR TERMO em PDF (Art. 62), permitir IMPRIMIR, fazer UPLOAD do termo assinado pelo colaborador e mostrar no RAIO-X do funcionário.\n\n" +
+      "CONTEXTO: A Rev. 1874 introduziu o enquadramento legal (inciso I/II/III + observação + validações CLT) e a Rev. 1877 ajustou o Espelho de Ponto para refletir a isenção. Faltava a peça documental: o TERMO formal de ciência e anuência assinado pelo colaborador — única defesa probatória aceita pelo TST/MPT em fiscalização (sem termo, a isenção é apenas um flag interno e o passivo trabalhista retroativo de até 5 anos volta).\n\n" +
+      "MUDANÇAS:\n" +
+      "(1) Schema (`drizzle/schema.ts` L1029-1032): 3 novas colunas em `employees`:\n" +
+      "    - `cargo_confianca_termo_url TEXT` — URL pública do arquivo no Object Storage.\n" +
+      "    - `cargo_confianca_termo_nome_arquivo TEXT` — nome original do arquivo (auditoria).\n" +
+      "    - `cargo_confianca_termo_assinado_em TIMESTAMP` — data do upload (marco de quando o termo foi formalizado).\n" +
+      "(2) SyncSchema+ (`server/_core/index.ts` L864-867): 3 `ALTER TABLE employees ADD COLUMN IF NOT EXISTS` idempotentes, no mesmo try/catch da Rev. 1874. Log atualizado p/ confirmar criação das colunas termo_*.\n" +
+      "(3) Backend (`server/routers.ts` L749-797): 2 novas mutations em `employees`:\n" +
+      "    - `uploadTermoArt62({employeeId, companyId, fileBase64, mimeType, fileName})` — zod valida mimeType ∈ {application/pdf, image/jpeg, image/png}; key no storage = `art62-termos/{companyId}/{employeeId}/termo-art62-{ts}{rnd}.{ext}` (segmentação por tenant+colaborador, sem colisão); UPDATE direto via SQL (atualiza url+nome+timestamp+updatedAt); audit log `UPLOAD_TERMO_ART62`; invalida cache `emp:`.\n" +
+      "    - `removerTermoArt62({employeeId, companyId})` — UPDATE setando os 3 campos pra NULL; audit log `REMOVE_TERMO_ART62`.\n" +
+      "    - Ambos validam multi-tenant via `WHERE id=? AND companyId=?` no UPDATE — impossível remover/atualizar termo de outra empresa mesmo passando companyId arbitrário.\n" +
+      "(4) Frontend Colaboradores (`client/src/pages/Colaboradores.tsx`):\n" +
+      "    - State + mutations (L372-397): `uploadingTermoArt62`, `uploadTermoArt62Mut`, `removerTermoArt62Mut`. onSuccess sincroniza `form.cargoConfiancaTermoUrl/NomeArquivo/AssinadoEm` (UI atualiza sem refresh).\n" +
+      "    - `handleTermoArt62Upload` (L398-420): valida tamanho ≤10MB, mimeType, exige editingId e companyId. Lê arquivo via FileReader como dataURL, extrai base64 puro (split(\",\")[1]) e dispara mutation. Reset do `input.value` permite re-upload do mesmo arquivo.\n" +
+      "    - `imprimirTermoArt62` (L424-547): gera HTML completo em nova aba (`window.open` + `document.write` + `print()`) — padrão idêntico ao Contrato de Experiência (L1697). Texto adaptativo:\n" +
+      "        · Subtítulo: 'Inciso I — Atividade Externa...' / 'Inciso II — Cargo de Gestão...' / 'Inciso III — Teletrabalho...'.\n" +
+      "        · Cláusula 1ª (fundamento legal): texto varia por inciso (anotação CTPS p/ I; cargo de gestão+grat ≥ 40% p/ II citando o valor da grat se preenchida; teletrabalho Lei 14.442/2022 p/ III).\n" +
+      "        · Cláusula 2ª (efeitos): NÃO faz jus a HE/banco horas/adic noturno padrão/indenização intervalo/ponto eletrônico — lista taxativa com artigos da CLT.\n" +
+      "        · Cláusula 3ª (remuneração): mostra salário base + (se inciso II) gratificação% citando parágrafo único.\n" +
+      "        · Cláusula 4ª (reversibilidade): retorno automático ao regime ordinário se cessar a condição.\n" +
+      "        · Cláusula 5ª (boa-fé): ciência plena.\n" +
+      "        · Box destacado com Observação/Justificativa do enquadramento (escapado contra XSS via replace de <).\n" +
+      "        · Dados completos: razão social+CNPJ+endereço do empregador (de `companies.find`), nome+CPF+RG+CTPS+função+endereço do empregado, data de enquadramento, data de hoje, 2 linhas de assinatura (empregador+empregado) e 2 de testemunhas.\n" +
+      "    - UI no bloco Art. 62 (L2362-2415): card branco com header 'Termo formal de Ciência e Anuência' contendo: botão 'Gerar / Imprimir Termo' (desabilitado se inciso não selecionado), input file disfarçado de Label (aceita pdf/jpg/png — desabilitado até salvar o cadastro com aviso 'Salve o cadastro antes de anexar'), e quando há termo: linha verde com nome do arquivo + link 'Ver termo' + data + botão X para remover (com confirm). Quando não há: 'Nenhum termo assinado anexado.'.\n" +
+      "(5) Frontend RaioXFuncionario (`client/src/components/RaioXFuncionario.tsx` L965-1019): novo card índigo 'Isenção de Controle de Jornada — Art. 62 CLT' renderizado quando `emp.cargoConfianca === 1`, posicionado entre o card de Identificação e 'Descrição da Função'. Mostra: badge índigo do inciso, data 'desde X', gratificação% (só se inciso II), descrição curta da regra do inciso, observação CTPS (whitespace-pre-line) e — se termo existe — linha verde com 'Ver Termo Assinado' + nome do arquivo + data de upload; caso contrário, aviso âmbar recomendando gerar/arquivar pelo cadastro. `db.select().from(employees)` em `controleDocumentos.ts` L1305 já devolve TODAS as colunas, então as 3 novas colunas chegam automaticamente no `emp` sem mudança no backend do RaioX.\n\n" +
+      "PRESERVADO: ZERO mudança em fechamentoPonto, folha, cálculo de HE, Espelho de Ponto (Rev. 1877 intacta), badges, audit log existente. `updateEmployee` helper continua governando edições do form principal (o termo é gravado por endpoints dedicados pra isolar o fluxo upload e ter audit específico). Colaboradores SEM cargoConfianca não veem nada novo. Reversível em ~6 hunks (1 schema + 1 SyncSchema+ + 1 backend + 2 frontend + 1 RaioX). R-001/R-007/R-010 OK (apenas ADD COLUMN IF NOT EXISTS, nenhum DELETE/DROP).",
+    tipo: "feature",
+    modulos: "RH/DP · Colaboradores · Compliance Trabalhista",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 18:30:00",
+  },
+  {
     version: 1877,
     titulo: "Espelho de Ponto · Cargo de Confiança (CLT Art. 62) — banner legal + cards 'Isento' + linhas 'Sem obrigação de bater ponto'",
     descricao: "User (16/05/2026, 2 screenshots: ANDERSON DOS ANJOS ALKMIN — MESTRE DE OBRAS — período 01/01-31/05/2026 mostrando '32 FALTAS · dias sem registro' MESMO ele estando marcado como Isenção Art. 62 II): 'se o funcionário é de cargo de confiança o cartão de ponto não precisa ser considerado, ele deve ser preenchido automaticamente com uma mensagem que ele é de cargo de confiança conforme a lei'.\n\n" +
