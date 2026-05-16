@@ -25,6 +25,28 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1865,
+    titulo: "Cronograma · Cascata Responsável Manual — fix detecção de descendentes em EAP 'flat' (ex.: 02.0 → 02.01)",
+    descricao: "User (16/05/2026, screenshot pós Rev. 1862): 'Não está propagando o responsável para os filhos abaixo DA ATIVIDADE PAI'. Cenário do screenshot: linha 'INFRA ESTRUTURA E TUBULAÇÃO' (eap 02.0) com 'Xxxx' digitado, e os Tubos de PVC abaixo (eap 02.01, 02.02...) NÃO recebem cascata.\n\n" +
+      "Causa raiz: Rev. 1862 só detectava descendentes com EAP dotted (`child.startsWith(parent + '.')`), formato `02.0 → 02.0.1`. O cliente usa EAP **flat** (sem ponto entre níveis): `02.0 → 02.01`, `02.0 → 02.02`. Nesse caso `'02.01'.startsWith('02.0.')` retorna `false` e o `descIdxs.length === 0` faz o cascade abortar silenciosamente sem abrir o AlertDialog.\n\n" +
+      "Fix (PlanejamentoDetalhe.tsx, 1 hunk L4046-4080): substituí o `linhas.forEach` por walk forward sequencial a partir de `idx+1`, com prefix-check permissivo:\n" +
+      "  • Se parent.eap existe e child.eap existe:\n" +
+      "    - Se `child.eap.startsWith(parent.eap)` E o próximo char é '.' (dotted) OU dígito 0-9 (flat) → descendente.\n" +
+      "    - Caso contrário (sibling/uncle, ex.: parent '02.0' e sibling '03') → BREAK (saiu do subárvore).\n" +
+      "  • Se algum EAP está vazio → fallback por `nivel > parentNivel` com break ao primeiro sibling.\n" +
+      "Walk para no 1º não-descendente (assume EAPs sorted, mesma premissa do fallback original).\n\n" +
+      "Cobre TODOS os formatos comuns de EAP em construção civil:\n" +
+      "  • Dotted clássico: 02 → 02.01 → 02.01.0001 (NBR 12721)\n" +
+      "  • Flat hierárquico: 02.0 → 02.01 → 02.02 (formato MSP padrão)\n" +
+      "  • Misto com fallback nivel quando EAP ausente\n\n" +
+      "AlertDialog 3-ações (Cancelar / Só os N vazios / Sobrescrever todos os N) preservado intacto. Particionamento semValor/comValor preservado. Aplicação `setLinhas + responsavelLotus + _respManual=true` preservada.\n\n" +
+      "Preservado: ZERO backend; outras lógicas com `nivel` (Gantt, render, indent) não tocadas; `hasChildren` em L3902 não tocado (usa só dotted, não impacta cascata). Reversível em 1 hunk. R-001 OK.",
+    tipo: "fix",
+    modulos: "Planejamento/Cronograma",
+    criadoPor: "main_agent",
+    dataPublicacao: "2026-05-16 11:30:00",
+  },
+  {
     version: 1864,
     titulo: "DDS · Modal Novo Tema redesenhado + IA gera tema completo a partir de prompt curto",
     descricao: "User (16/05/2026, screenshot do modal antigo): 'Faça o Layout novo e fácil lançamento e com ia para gerar novos temas altomaticos'.\n\n" +

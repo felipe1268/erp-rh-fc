@@ -4045,24 +4045,37 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                               const valorAtual = (e.target.value ?? "").trim();
                               const original = (respOriginalRef.current[idx] ?? "").trim();
                               if (!valorAtual || valorAtual === original) return;
-                              // Rev. 1862 — Detecta descendentes via PREFIXO DE EAP (mesma
-                              // lógica do resto do arquivo, ex.: L3902 hasChildren). Fallback
-                              // por `nivel` quando EAP ausente. `nivel` cru NÃO é confiável
-                              // (vem undefined em muitos imports MSP), por isso EAP primeiro.
+                              // Rev. 1865 — Detecção robusta de descendentes:
+                              // walk forward por idx+1 enquanto a linha pertencer ao subárvore
+                              // do pai. Aceita 2 formatos de EAP:
+                              //   • dotted: pai "02.0"  → filhos "02.0.1", "02.0.2"   (separator ".")
+                              //   • flat  : pai "02.0"  → filhos "02.01", "02.02"      (sufixo dígito)
+                              // Para no 1º não-descendente. Cobre Rev. 1862 (que só pegava dotted)
+                              // e Rev. 1860 (que só usava `nivel`, undefined em imports MSP).
                               const parentEap = (a.eapCodigo ?? "").trim();
                               const parentNivel = a.nivel ?? 1;
                               const descIdxs: number[] = [];
-                              if (parentEap) {
-                                // Modo EAP: pega TODA linha cujo eapCodigo começa com `parentEap + "."`
-                                linhas.forEach((l: any, i: number) => {
-                                  if (i === idx) return;
-                                  const eap = (l.eapCodigo ?? "").trim();
-                                  if (eap && eap.startsWith(parentEap + ".")) descIdxs.push(i);
-                                });
-                              } else {
-                                // Fallback por nivel + ordem sequencial
-                                for (let i = idx + 1; i < linhas.length; i++) {
-                                  const l = linhas[i];
+                              for (let i = idx + 1; i < linhas.length; i++) {
+                                const l = linhas[i];
+                                const ceap = (l.eapCodigo ?? "").trim();
+                                const cnivel = l.nivel;
+                                // Guard por nivel quando disponível em AMBOS pai e filho —
+                                // resolve ambiguidade do prefix flat (ex.: pai "02.0" e sibling "02.05",
+                                // mesmo nivel = não é descendente, mesmo que prefixo bata).
+                                if (typeof cnivel === "number" && typeof a.nivel === "number" && cnivel <= parentNivel) break;
+                                if (parentEap && ceap) {
+                                  if (ceap === parentEap) continue; // duplicata exata (raro) — pula
+                                  if (!ceap.startsWith(parentEap)) break; // saiu do subárvore do pai
+                                  const next = ceap.charAt(parentEap.length);
+                                  // Próximo char tem que ser '.' (dotted) OU dígito (flat).
+                                  // Qualquer outra coisa = sibling/uncle (ex.: pai "02.0", outro "02.0X" não-numérico).
+                                  if (next === "." || (next >= "0" && next <= "9")) {
+                                    descIdxs.push(i);
+                                  } else {
+                                    break;
+                                  }
+                                } else {
+                                  // Fallback por nivel quando algum EAP está vazio
                                   if ((l.nivel ?? 1) <= parentNivel) break;
                                   descIdxs.push(i);
                                 }
