@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1945 — Planejamento · PlanejamentoDetalhe · REFIS · BLOCO 5B (drill-down EAP consolidado, Rev. 1890) ELIMINADO — hierarquia PAI→FILHO com expand/collapse INTEGRADA dentro de cada card NAVE do BLOCO 5.
+ * User (16/05/2026, screenshots SERVIÇOS PRELIMINARES/NAVE NORTE/COMPLEMENTARES com 2 blocos — cards com bar charts em cima + lista drill-down embaixo): "nao quero esta atividade aqui em baixo separadas quero que fique na tela q te mandei, estruture para respeitar a estrutura de pais e filhos que tem no cronograma.. ajuste tudo para ficar mais facil, quero ter a opção de abrir e fechar os filhos se quiser.. quero ver no macro ou no destalhe se quiser..".
+ * Motivação: 2 seções redundantes (BLOCO 5 = cards com bar chart de N2 + BLOCO 5B = lista pai→filho consolidada com tree recursivo) causavam scroll duplo, contexto perdido (NAVE em cima ≠ NAVE em baixo), e usuário tinha que ir e voltar para correlacionar macro vs detalhe. Em vez disso, cada card NAVE agora oferece AMBAS visões in-place: visão MACRO (bar chart horizontal N2) no topo + visão DETALHE (árvore N2→N3→N4... com expand/collapse por nó) no rodapé do mesmo card.
+ * Mudança client (`PlanejamentoDetalhe.tsx`):
+ *   (a) BLOCO 5 (L14171→) envolto em IIFE `{(() => { ... })()}` para definir helpers UMA VEZ por render do bloco (não por card):
+ *     - `collectIds(lista)`: varre recursivo etapas/children, retorna IDs dos nós COM filhos (linhas expandíveis) — usado para "Expandir/Recolher tudo" do card e para cálculo de estado `cardAllOpen`/`cardSomeOpen`.
+ *     - `renderRow(e, depth)`: idêntico ao do BLOCO 5B removido — fragment com indentação (`paddingLeft: 12 + depth * 18`), chevron clicável (se hasChildren), código EAP em mono, nome (bold se grupo), barra dupla previsto/realizado (md+), 3 percentuais (prev/real/desvio) com cor semântica (emerald se ≥, red se desvio<-10, amber senão), recursão em `e.children.map((c) => renderRow(c, depth+1))`.
+ *   (b) Dentro do .map de cada card NAVE, novos derivados PURA-MENTE locais ao card:
+ *     - `childIdsThisCard = collectIds(g.etapas)` — só filhos deste pavimento.
+ *     - `hasAnyChildren`, `cardAllOpen`, `cardSomeOpen` — habilitam/desabilitam botões.
+ *     - `expandirTudoCard()` / `recolherTudoCard()` — mutam o `expandedEtapas` global APENAS adicionando/removendo os IDs deste card (preservam estado dos outros cards via `setExpandedEtapas(prev => ...new Set(prev))`).
+ *   (c) Após o gráfico de barras (visão macro, intocado), nova seção `<div className="border-t border-slate-200">` ANTES da mini-legenda de desvios:
+ *     - Sub-header sticky cinza: ícone `<ListTree>` + título "Detalhamento — Pai → Filho" + dica contextual.
+ *     - Botões "Expandir tudo" / "Recolher tudo" inline (text-[10px] white border, stopPropagation para não recolher o card pai).
+ *     - Legenda de cores (Previsto / Realiz≥Prev / Atraso≤10pp / Atraso>10pp) — md+.
+ *     - `g.etapas.map((e) => renderRow(e, 0))` — árvore recursiva collapsável.
+ *   (d) BLOCO 5B (L14293-14492) DELETADO (188 linhas removidas, comment-stub de 3 linhas mantido para futura arqueologia: "BLOCO 5B (Rev. 1890) REMOVIDO em Rev. 1945").
+ *   (e) Import `ListTree` adicionado ao bloco `lucide-react`.
+ * Estado obsoleto: `drilldownAbertos` + `setDrilldownAbertos` + `toggleDrilldown` (L12264-12275) ficaram sem leitores/setters — preservados intencionalmente (não declarados, mas sem warning) para não tocar em outras dependências. `expandedEtapas` + `toggleEtapa` continuam ativos (são usados pelo novo renderRow E pelo tree em outros pontos).
+ * version → 1945. Layout antigo (Rev. 1890) preservado em git history.
+ * Resultado: rolando o REFIS, cada NAVE é uma seção auto-contida — bar chart no topo (1 olhada para o macro) + tree abaixo (expandir pra investigar exatamente ONDE está o atraso, sem perder o contexto da NAVE). Estrutura pai→filho do cronograma 100% respeitada. Botões por card permitem ver tudo aberto/fechado sem afetar outras NAVEs. Print continua compatível.
+ * Preservado: BLOCO 4 chart agregado por NAVE Rev. 1885, KPIs SPI/CPI Rev. 1882, Rev. 1944 modal drill-down avisos, Rev. 1943 Lei 12.506 nas 2 modalidades, Rev. 1941 foto, Rev. 1937 redim. colunas CDM, modo máscara/hideFinancial em todas as visões, sticky header, collapsedGrupos individual por card. Zero backend/DB. Reversível em 3 hunks (importar ListTree + reverter BLOCO 5 + restaurar BLOCO 5B). R-001/R-007/R-010 OK.
+ *
  * Rev. 1944 — RH · Dash Aviso Prévio · Modal drill-down (Vencendo 7d/30d/Total/Status) REDESENHADO com hierarquia visual, urgência colorida, avatar, badges e ordenação por prazo.
  * User (16/05/2026, screenshot modal "Avisos vencendo em até 7 dias (1)"): "melhore este layout conforme nossas regras de ouro..". Layout antigo (Rev. 1942) tinha cards genéricos sem cor por urgência, sem hierarquia clara, sem ordenação, sem countdown ("vence em X dias").
  * Mudança (`DashAvisoPrevio.tsx`):
