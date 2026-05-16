@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1949 — RH · Dash Aviso Prévio · CDM · FIX foto do funcionário não aparecia na tabela (avatar caía sempre no fallback cinza com inicial).
+ * User (16/05/2026, screenshot página Colaboradores mostrando ~7 funcionários com avatares circulares populados — ACACIO/AGOSTINHO/ALEX ALESSANDRO/ALEX DA SILVA/ALEXANDRO/ANA BEATRIZ/ANDERSON): "veja que tem fotos no cadastro, é so vc copiar e colocar ali.. preciso disso resolvido agora..".
+ * Causa-raiz: Rev. 1941 adicionou `fotoUrl: employees.fotoUrl` ao SELECT (`server/routers/dashboards.ts` L2290) e adicionou a renderização do avatar 28×28 no client (`DashAvisoPrevio.tsx` ~L588-604), MAS esqueceu de incluir `fotoUrl` no objeto literal que cada `.map(r => ({...}))` devolve (L2606+). Resultado: a query trazia a coluna do banco, mas o mapper criava um row novo sem o campo → tRPC serializava sem `fotoUrl` → client recebia `undefined` → fallback "bolinha cinza com inicial" ativava pra TODOS os funcionários (mesmo os que tinham foto cadastrada). Em Colaboradores funcionava porque aquela tela usa rota própria (`getEmployees`) que devolve o objeto employee inteiro.
+ * Mudança (`server/routers/dashboards.ts` getDashCustoDemissaoMassa ~L2620):
+ *   (a) Adicionada 1 linha `fotoUrl: r.fotoUrl ?? null` no objeto retornado, entre `idade` e `salarioBase` (mesma ordem do contrato esperado pelo client).
+ *   (b) Comentário extenso explicando a regressão (SELECT presente + return ausente = silenciosa) pra evitar repetir o erro em futuros campos.
+ *   (c) Zero mudança no client — `DashAvisoPrevio.tsx` Rev. 1941 já estava correto, lê `l.fotoUrl` e mostra `<img src={l.fotoUrl}>` quando truthy; também já tinha o modal de ampliação ao click.
+ * version → 1949.
+ * Resultado: ao abrir RH → Dash Aviso Prévio → CDM, funcionários com `employees.fotoUrl` populado mostram avatar real 28×28 round à esquerda do nome; clique amplia em modal `bg-black/80` (comportamento Rev. 1941 preservado). Quem não tem foto continua com fallback inicial cinza.
+ * Preservado: Rev. 1948 (detalhamento Pai→Filho default aberto), Rev. 1946 (legenda CDM Trab vs Ind), Rev. 1943 (Lei 12.506 nas 2 modalidades), Rev. 1941 (avatar + modal client-side), Rev. 1936 (tag CIPA), Rev. 1935 (Raio-X click), Rev. 1934 (tempo a/m/d), Rev. 1931 (idade), Rev. 1930 (diasAvisoEstimado respeita tipo), Rev. 1927 (vrDiario/diasTrabMes), Rev. 1919 (complementar), Rev. 1916 (obra batch), Rev. 1911 (períodos vencidos reais). Zero ALTER/DROP/DELETE, zero mudança em cálculo de R$. Reversível em 1 hunk (1 linha). R-001/R-007/R-010 OK.
+ *
  * Rev. 1948 — Planejamento · PlanejamentoDetalhe · REFIS · BLOCO 5 · Detalhamento Pai→Filho agora abre POR DEFAULT em TODOS os cards (semântica invertida vs Rev. 1947).
  * User (16/05/2026, screenshot card mostrando só bar "DEMOLIÇÕES E REMOÇÕES 2.3%" sem filhos visíveis): "quero que apareça aqui os filhos e dependentes desta atividade.. com possibilidade de expandir ou fechar.. arrume isso para todos".
  * Causa: Rev. 1947 fechou tudo por default — exigia 1 click por card pra ver os filhos. User quer ver os filhos imediatamente em TODAS as NAVEs, mas mantendo opção de fechar.

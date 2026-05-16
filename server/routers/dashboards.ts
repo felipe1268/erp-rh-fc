@@ -2614,6 +2614,15 @@ async function getDashCustoDemissaoMassa(
         dataAdmissao: r.dataAdmissao!,
         dataNascimento: r.dataNascimento,
         idade,
+        // Rev. 1949 — FIX: fotoUrl era SELECTed (L2290 desde Rev. 1941) mas
+        // NÃO era devolvido no objeto da linha, então o client sempre recebia
+        // undefined e caía no fallback de inicial cinza. Em Colaboradores as
+        // fotos apareciam normalmente (mesma coluna employees.fotoUrl), só
+        // aqui no CDM faltava propagar. User (16/05/2026, screenshot Colab
+        // com avatares circulares ACACIO/AGOSTINHO/ALEX/etc.): "veja que tem
+        // fotos no cadastro, é so vc copiar e colocar ali.. preciso disso
+        // resolvido agora..".
+        fotoUrl: r.fotoUrl ?? null,
         salarioBase: salario,
         anosServico: previsao.anosServico,
         tempoAnos,
