@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1902 — Planejamento · Cronograma · BUG FIX cascata de responsável em GRUPO com filhos denormalizados (EAP idêntico).
+ * User (16/05/2026, screenshot image_1778950759938.png — pai "03.05 Mosaico (considerar 4 ajudantes por 3 meses)" marcado como grupo + Input "JULIO FERRAZ" + 4 linhas "Ajudante de pedreiro" também com EAP "03.05" logo abaixo): "estou clicando na atividade MARCADA COM GRUPO, E AS ATIVIDADES ABAIXO DELA NÃO ESTÃO SENDO PREENCHIDAS COM O MESMO RESPONSAVEL QUE INDIQUEI NO GRUPO. VEJA QUE QANDO EU SALDO NÃO ACONTECE NADA.. ARRUME ISSO..".
+ * Causa-raiz: detecção de descendentes em PlanejamentoDetalhe.tsx L4296-4322 (cascata no `onBlur` do Input ciano `responsavelLotus`) era estrita demais pra suportar o padrão MSP "denormalizado":
+ *   • L4306 (guard de nivel): `if (typeof cnivel === "number" && typeof a.nivel === "number" && cnivel <= parentNivel) break;` — em imports MSP os filhos sob um grupo frequentemente herdam o mesmo `nivel` do pai (denormalização do Project), quebrando o loop NA PRIMEIRA linha.
+ *   • L4308 (guard de EAP idêntico): `if (ceap === parentEap) continue;` — projetos importados frequentemente atribuem o MESMO `eapCodigo` do grupo aos filhos diretos (padrão "row-flattened"). Aqui pulava CADA filho e nunca empilhava em `descIdxs`.
+ *   Resultado: `descIdxs.length === 0` → `return` no L4321 → setLinhas nunca dispara → save persiste só a mudança do pai. User vê: digitou JULIO FERRAZ no grupo, salvou, e os 4 ajudantes continuam sem responsável.
+ * Mudança (em client/src/pages/planejamento/PlanejamentoDetalhe.tsx L4324-4344):
+ *   • NOVO bloco fallback ANTES do `if (descIdxs.length === 0) return;`: quando `a.isGrupo === true && descIdxs.length === 0`, faz scan relaxado pra frente a partir de `idx + 1`, empilhando TODAS as linhas até encontrar OUTRA linha com `isGrupo === true` (próximo grupo = fim do escopo) OU fim da lista. Pula linhas com `disabled === true`.
+ *   • Semântica do fallback é exatamente o que o usuário espera ao indicar responsável num grupo: "todas as linhas abaixo deste grupo, até o próximo grupo, são meus filhos lógicos — propaga".
+ *   • Comportamento intacto pro caso comum (EAP hierárquico bem-formado: pai "02.0" + filhos "02.0.1"/"02.0.2"): o loop principal preenche `descIdxs` normalmente e o fallback nem executa (`descIdxs.length === 0` é falso).
+ *   • Fallback é específico pra GRUPO — folhas com sub-itens (não-grupo) continuam usando só a detecção estrita + modal Rev. 1860/1865 (3 opções), protegendo mudanças acidentais.
+ *   • Depois do fallback, segue exatamente o mesmo fluxo Rev. 1892: como `a.isGrupo` é true, aplica AUTOMATICAMENTE em todos os descIdxs via setLinhas + toast com contagem, sem modal.
+ *   • version → 1902.
+ * Preservado/Seguro: detecção estrita Rev. 1865 intacta (cobre dotted "02.0"→"02.0.1" e flat "02.0"→"02.01"); modal cascadeResp Rev. 1860/1865 intacto pra não-grupos; cascata grupo Rev. 1892 (auto-aplica sem modal) intacta; Input ciano Rev. 1823 e Input âmbar externa Rev. 1641 intactos; badge Rev. 1898/1900 intacto. Zero backend/DB/schema/tRPC — só lógica de detecção front-end no `onBlur` do Input. Reversível em 1 hunk + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1901 — Planejamento · Atividades em Atraso · Impressão DENSIFICADA (eliminar espaços em branco).
  * User (16/05/2026, screenshot image_1778950324630.png do preview de impressão Chrome — pág. 1/4 com apenas 6 cards visíveis e enorme área branca à direita das barras): "esta bagunçado muito espaço branco.. ajuste a tela para que tenha o minimo de espaços brancos.. quero a organização extremamemnte profissional".
  * Causa: o CSS de impressão entregue na Rev. 1899 era conservador — em retrato usava grid 1-col (cada card ocupava largura inteira da A4 vertical, sobrando espaço branco enorme entre a barra de % preenchida e o box DESVIO à direita); padding generoso (8-12px) herdado da tela; box DESVIO `min-w-[100px] px-5 py-3` ocupando ~150-180px com "DESVIO -3.5 pp" em fonte 24px; altura de barras 16px; espaço entre barras 12px (`space-y-3`); margens de página 12-14mm. Resultado: 4 páginas pra 10 cards (= 2.5 cards/página). Estética nada profissional pra um relatório executivo.

@@ -4318,6 +4318,25 @@ function Cronograma({ projetoId, revisaoAtiva, atividades, loadingAtiv, avancos,
                                   descIdxs.push(i);
                                 }
                               }
+                              // Rev. 1902 — FALLBACK PRA GRUPO/RESUMO quando a detecção
+                              // estrita acima retornou ZERO descendentes. Acontece em
+                              // imports MSP "denormalizados" onde filhos compartilham
+                              // o MESMO eapCodigo do grupo pai (ex.: pai "03.05" com 4
+                              // "Ajudante de pedreiro" também com EAP "03.05") e o
+                              // mesmo nivel — caso em que L4303 quebra na 1ª e L4305
+                              // pula todas as restantes via `continue`. Para esse caso,
+                              // se o pai é grupo, aplicamos a semântica intuitiva: "todas
+                              // as linhas abaixo até o PRÓXIMO grupo (ou fim da lista) são
+                              // descendentes lógicos deste grupo". É exatamente o que o
+                              // usuário espera ao indicar responsável no grupo.
+                              if (a.isGrupo && descIdxs.length === 0) {
+                                for (let i = idx + 1; i < linhas.length; i++) {
+                                  const l = linhas[i];
+                                  if (l.isGrupo) break; // próximo grupo = fim do escopo
+                                  if (l.disabled) continue; // ignora desativadas
+                                  descIdxs.push(i);
+                                }
+                              }
                               if (descIdxs.length === 0) return; // não é pai — segue o jogo
                               const semValorIdxs: number[] = [];
                               const comValorIdxs: number[] = [];
