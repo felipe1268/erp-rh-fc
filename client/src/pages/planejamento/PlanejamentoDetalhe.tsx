@@ -11479,6 +11479,28 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
     });
   }
 
+  // Rev. 1887 — Drill-down REFIS pais/filhos (igual estrutura do cronograma).
+  // `drilldownAbertos` = grupos (nivel 1) cujo painel de drill-down está aberto.
+  // `expandedEtapas` = sub-grupos (nivel >= 2) cujos filhos estão visíveis.
+  // Default: tudo recolhido — usuário abre manualmente para identificar gargalos.
+  const [drilldownAbertos, setDrilldownAbertos] = useState<Set<string | number>>(new Set());
+  const [expandedEtapas, setExpandedEtapas] = useState<Set<string | number>>(new Set());
+
+  function toggleDrilldown(id: string | number) {
+    setDrilldownAbertos(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+  function toggleEtapa(id: string | number) {
+    setExpandedEtapas(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
   // Navegação a partir do popup da Visão Geral: pré-selecionar a semana
   useEffect(() => {
     if (initialSemana) {
@@ -11910,17 +11932,35 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
       });
     }
 
+    // Rev. 1887 — sub-grupos RECURSIVOS para drill-down pai/filho.
+    // Cada etapa ganha `.children: [...]` (mesma forma), permitindo abrir
+    // todos os níveis da EAP (igual estrutura do cronograma).
+    function buildSubgrupos(parent: any): any[] {
+      const pNivel = parent.nivel ?? 1;
+      const pDesc = descendentes(parent);
+      return pDesc
+        .filter((a: any) => a.isGrupo && (a.nivel ?? 1) === pNivel + 1)
+        .map((e: any) => {
+          const eDesc = descendentes(e);
+          const eLeaves = eDesc.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
+          const eInis = eLeaves.filter((a: any) => a.dataInicio).map((a: any) => a.dataInicio as string).sort();
+          const eFins = eLeaves.filter((a: any) => a.dataFim).map((a: any) => a.dataFim as string).sort();
+          return {
+            ...e,
+            ...calc(eLeaves),
+            nLeaves: eLeaves.length,
+            dataInicio: eInis[0] ?? null,
+            dataFim:   eFins[eFins.length - 1] ?? null,
+            children:  buildSubgrupos(e),
+          };
+        });
+    }
+
     return g1.map((g: any) => {
       const gNivel = g.nivel ?? 1;
       const desc = descendentes(g);
       const gLeaves = desc.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
-      const etapas = desc
-        .filter((a: any) => a.isGrupo && (a.nivel ?? 1) === gNivel + 1)
-        .map((e: any) => {
-          const eDesc = descendentes(e);
-          const eLeaves = eDesc.filter((a: any) => !a.isGrupo && !a.isIndireta && !a.disabled);
-          return { ...e, ...calc(eLeaves), nLeaves: eLeaves.length };
-        });
+      const etapas = buildSubgrupos(g);
 
       const gInis = gLeaves.filter((a: any) => a.dataInicio).map((a: any) => a.dataInicio as string).sort();
       const gFins = gLeaves.filter((a: any) => a.dataFim).map((a: any) => a.dataFim as string).sort();
@@ -13443,6 +13483,123 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+
+              {/* Rev. 1887 — Drill-down PAI → FILHO (igual estrutura do cronograma) */}
+              <div className="border-t border-slate-100 px-4 py-2 flex items-center justify-between gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => toggleDrilldown(g.id)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-blue-700 transition-colors"
+                  title="Abre todos os níveis da EAP (igual ao cronograma) para identificar gargalos em qualquer profundidade."
+                >
+                  {drilldownAbertos.has(g.id)
+                    ? <ChevronDown className="h-3.5 w-3.5" />
+                    : <ChevronRight className="h-3.5 w-3.5" />}
+                  {drilldownAbertos.has(g.id) ? "Recolher detalhamento" : "Detalhar Pais e Filhos (drill-down EAP)"}
+                </button>
+                <span className="text-[10px] text-slate-400 italic">
+                  abre todos os níveis igual à estrutura do cronograma
+                </span>
+              </div>
+              {drilldownAbertos.has(g.id) && (
+                <div className="border-t border-slate-200">
+                  {(() => {
+                    const renderRow = (e: any, depth: number): React.ReactNode => {
+                      const hasChildren = (e.children?.length ?? 0) > 0;
+                      const isOpen = expandedEtapas.has(e.id);
+                      const desv = e.realizado - e.previsto;
+                      const corReal = e.realizado >= e.previsto ? "#059669" : desv < -10 ? "#dc2626" : "#d97706";
+                      const corBarReal = e.realizado >= e.previsto ? "#34d399" : desv < -10 ? "#f87171" : "#fbbf24";
+                      return (
+                        <React.Fragment key={e.id}>
+                          <div
+                            className="flex items-center gap-2 px-3 py-1.5 border-b border-slate-100 hover:bg-blue-50/50"
+                            style={{ paddingLeft: 12 + depth * 18 }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => hasChildren && toggleEtapa(e.id)}
+                              className={`w-4 h-4 shrink-0 flex items-center justify-center rounded ${hasChildren ? "text-slate-500 hover:text-blue-600 hover:bg-blue-100" : "cursor-default"}`}
+                              aria-label={hasChildren ? (isOpen ? "Recolher" : "Expandir") : undefined}
+                            >
+                              {hasChildren
+                                ? (isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />)
+                                : <span className="h-3 w-3" />}
+                            </button>
+                            {e.eapCodigo && (
+                              <span className="text-[10px] font-mono text-slate-400 w-14 shrink-0 truncate">
+                                {e.eapCodigo}
+                              </span>
+                            )}
+                            <span
+                              className={`text-xs flex-1 truncate ${hasChildren ? "font-semibold text-slate-700" : "text-slate-600"}`}
+                              title={e.nome}
+                            >
+                              {e.nome}
+                            </span>
+                            <div className="hidden md:flex items-center gap-2 shrink-0 w-56">
+                              <div className="relative flex-1 h-3.5 bg-slate-100 rounded overflow-hidden">
+                                <div
+                                  className="absolute inset-y-0 left-0 bg-blue-400/60"
+                                  style={{ width: `${Math.min(100, Math.max(0, e.previsto))}%` }}
+                                  title={`Previsto: ${fPct_(e.previsto)}`}
+                                />
+                                <div
+                                  className="absolute inset-y-0 left-0 opacity-90"
+                                  style={{ width: `${Math.min(100, Math.max(0, e.realizado))}%`, backgroundColor: corBarReal }}
+                                  title={`Realizado: ${fPct_(e.realizado)}`}
+                                />
+                              </div>
+                            </div>
+                            <span className="text-[10px] tabular-nums text-blue-700 w-12 text-right shrink-0" title="Previsto">
+                              {fPct_(e.previsto)}
+                            </span>
+                            <span
+                              className="text-[10px] tabular-nums w-12 text-right shrink-0 font-medium"
+                              style={{ color: corReal }}
+                              title="Realizado"
+                            >
+                              {fPct_(e.realizado)}
+                            </span>
+                            <span
+                              className="text-[10px] tabular-nums w-14 text-right shrink-0 font-bold"
+                              style={{ color: corReal }}
+                              title="Desvio (Realizado − Previsto)"
+                            >
+                              {desv >= 0 ? "+" : ""}{fPct_(desv)}
+                            </span>
+                          </div>
+                          {hasChildren && isOpen && e.children.map((c: any) => renderRow(c, depth + 1))}
+                        </React.Fragment>
+                      );
+                    };
+                    return (
+                      <>
+                        <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-200 bg-slate-100 flex items-center justify-between">
+                          <span>Detalhamento Pai → Filho</span>
+                          <span className="hidden sm:flex items-center gap-3 normal-case font-normal text-slate-400 text-[10px]">
+                            <span className="inline-flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-sm bg-blue-400/60"></span>Previsto
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400"></span>Realizado ≥ Previsto
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-sm bg-amber-400"></span>Atraso ≤10pp
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <span className="w-2.5 h-2.5 rounded-sm bg-red-400"></span>Atraso &gt;10pp
+                            </span>
+                          </span>
+                        </div>
+                        <div className="bg-slate-50/30">
+                          {g.etapas.map((e: any) => renderRow(e, 0))}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Mini legenda desvios */}
               {g.etapas.some((e: any) => e.previsto - e.realizado > 5) && (
