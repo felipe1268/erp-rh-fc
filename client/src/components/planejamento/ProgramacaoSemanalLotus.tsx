@@ -1598,21 +1598,33 @@ export default function ProgramacaoSemanalLotus(props: Props) {
                         placeholder={a.responsavel?.labelCurto || "FC"}
                         onBlur={(e) => {
                           const novo = e.target.value.trim();
-                          const padraoEng = (engenheiroResponsavel || "").trim();
-                          // Rev. 1818 — "default" abrange 4 caminhos pra reverter à
-                          // resolução automática: (a) labelCurto do contrato terceiro,
-                          // (b) engenheiroResponsavel da FC (legado MSP),
-                          // (c) "FC" / "FC ENGENHARIA",
-                          // (d) vazio.
+                          // Rev. 1853 — REMOVIDO o caminho `novo === padraoEng`
+                          // (engenheiroResponsavel da FC). Bug crítico: quando o
+                          // engenheiro do obra é uma empresa terceira (ex.: Rohr),
+                          // digitar "Rohr" como Responsável Manual era tratado
+                          // como reset → save mandava NULL → resolver caía em FC →
+                          // loop infinito (user reclamava: "coloquei a info no
+                          // campo mas o link não foi feito"). Agora "default"
+                          // abrange 3 caminhos: vazio, "FC"/"FC ENGENHARIA"
+                          // (literais triviais), ou label idêntico ao resolvido
+                          // pelo contrato terceiro (sem necessidade de override
+                          // manual). O cleanup one-shot da Rev. 1846 já purgou
+                          // o legado MSP, então o caminho `padraoEng` ficou
+                          // obsoleto E ativamente nocivo.
                           const padraoResolvido = (a.responsavel?.labelCurto || "").trim();
+                          const padraoResolvidoTipo = a.responsavel?.tipo;
                           const atual = (a.responsavelLotus || "").trim();
                           if (novo === atual) return;
                           const ehDefault =
                             novo === "" ||
-                            novo === padraoEng ||
-                            novo === padraoResolvido ||
                             novo.toLowerCase() === "fc" ||
-                            novo.toLowerCase() === "fc engenharia";
+                            novo.toLowerCase() === "fc engenharia" ||
+                            // Só trata como reset se o resolvido vem de fonte
+                            // automática (contrato terceiro/externa/FC) — se já
+                            // é manual, digitar o mesmo valor mantém manual.
+                            (padraoResolvido !== "" &&
+                              novo === padraoResolvido &&
+                              padraoResolvidoTipo !== "manual");
                           const valor = ehDefault ? null : novo;
                           setRealDates.mutate({
                             atividadeId: a.id,

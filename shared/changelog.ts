@@ -25,6 +25,22 @@ export type RevisionEntry = {
 
 export const CHANGELOG: RevisionEntry[] = [
   {
+    version: 1853,
+    titulo: "Programação Semanal LOTUS · Responsável Manual aceita nome do engenheiro (terceira ≡ engenheiro do obra)",
+    descricao: "User (15/05/2026, 2 screenshots: cronograma com 'Rohr' digitado em inputs cyan + LOTUS Sem.2 REVTE-CIVIL mostrando 'Montagem do andaime - Rohr' com RESPONSÁVEL=FC): 'Ainda está aparecendo como reeposanvel a FC, não a ROHR, eu coloquei a informação no campo mas o link não foi feito corretamente'.\n\n" +
+      "Causa-raiz: client/src/components/planejamento/ProgramacaoSemanalLotus.tsx L1601 — o handler `onBlur` da inline edit do Responsável tinha 5 caminhos para `ehDefault` (= reverter à resolução automática salvando NULL): vazio | padraoEng | padraoResolvido | 'fc' | 'fc engenharia'. O caminho `novo === padraoEng` (engenheiroResponsavel do obra) era um vestígio do legado MSP — fazia sentido quando 'engenheiro' SEMPRE significava funcionário FC. Mas no caso do user, o campo `obras.responsavel` foi preenchido com 'Rohr' (uma empresa terceira que executa o gradil/andaime), não com nome de funcionário FC. Ao digitar 'Rohr' no LOTUS, `novo === padraoEng` matchava → ehDefault=true → save mandava NULL → resolverResponsaveisBatch caía em FC → tela mostrava FC → user re-digitava → loop infinito. Mesmo após Rev. 1846 (cleanup one-shot do legado MSP em massa), esse caminho client-side continuava ativo e silenciosamente descartava overrides legítimos.\n\n" +
+      "Fix (1 arquivo, 1 hunk em ProgramacaoSemanalLotus.tsx L1602-1631):\n" +
+      "1. REMOVIDO o caminho `novo === padraoEng` — input do user é SAGRADO mesmo coincidindo com o engenheiro do obra (paridade com o que Rev. 1846 fez no backend).\n" +
+      "2. ENDURECIDO o caminho `padraoResolvido`: só trata como reset se o resolvido vem de fonte AUTOMÁTICA (`tipo !== 'manual'`). Antes, digitar o mesmo valor já manual disparava reset desnecessariamente. Agora se já é manual, digitar de novo é idempotente — mantém manual.\n" +
+      "3. Mantidos: vazio, 'fc', 'fc engenharia' (literais triviais reais).\n\n" +
+      "Esperado: user digita 'Rohr' (qualquer empresa, mesmo coincidindo com o engenheiro registrado em obras.responsavel) → save persiste 'Rohr' em planejamento_atividades.responsavel_lotus → resolverResponsaveisBatch retorna {tipo:'manual', label:'Rohr'} → LOTUS exibe Rohr.\n\n" +
+      "Preservado: ZERO mudança em backend/contrato tRPC/schema/migration; outros caminhos do `ehDefault` intactos; engenheiroResponsavel ainda é mostrado no rodapé do LOTUS (L1721-1723) como referência informativa, só não filtra mais override. Reversível em 1 hunk. R-001/R-007 OK.",
+    tipo: 'bugfix',
+    modulos: 'Planejamento',
+    criadoPor: 'agent',
+    dataPublicacao: '2026-05-15 22:50:00',
+  },
+  {
     version: 1852,
     titulo: "Programação Semanal LOTUS · Sáb/Dom à direita quando cutoff é sex",
     descricao: "User (15/05/2026, screenshot LOTUS Sem.16 obra 'FC ENGENHARIA PROJETO QIU XIANQUAN', cutoff sex 15/05): 'Quando a cutoff for sexta quero que sábado e domingo fique a direita...'.\n\n" +
