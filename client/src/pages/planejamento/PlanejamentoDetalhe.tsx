@@ -1939,8 +1939,11 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
   const [refisAberto, setRefisAberto] = useState<any | null>(null);
   const [atrasosAberto, setAtrasosAberto] = useState(false);
   // Rev. 1899 — orientação escolhida pelo usuário p/ imprimir o Relatório de
-  // Atividades em Atraso. Default portrait (compatível com formato A4 vertical).
-  const [atrasosOrient, setAtrasosOrient] = useState<"portrait" | "landscape">("portrait");
+  // Atividades em Atraso.
+  // Rev. 1901 — Default agora é LANDSCAPE: com 2 colunas + densificação
+  // agressiva, paisagem comporta 4-6 cards por página (vs 2 em retrato), o
+  // que é o formato profissional esperado pra relatório executivo.
+  const [atrasosOrient, setAtrasosOrient] = useState<"portrait" | "landscape">("landscape");
   // Rev. 1858 — exclusão de REFIS direto da tabela "Histórico de REFIs"
   const [refisDelete, setRefisDelete] = useState<any | null>(null);
   // Rev. 1859 — seleção múltipla para exclusão em lote
@@ -2121,9 +2124,16 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
                 // o usuário clicar 2x rápido, o style antigo é removido
                 // antes de appendar o novo (evita duplicação).
                 const dispararImpressao = () => {
-                  const margins = atrasosOrient === "landscape" ? "10mm 10mm 12mm 10mm" : "12mm 10mm 14mm 10mm";
-                  const gridCols = atrasosOrient === "landscape" ? "repeat(2, minmax(0, 1fr))" : "1fr";
-                  const cardFs = atrasosOrient === "landscape" ? "10.5px" : "11.5px";
+                  // Rev. 1901 — densificação AGRESSIVA pra eliminar espaço
+                  // em branco. Sempre 2 colunas (mesmo em retrato), padding
+                  // mínimo, fonte compacta, DESVIO box reduzido, header em
+                  // 1 linha. Margens A4 enxutas.
+                  const margins = atrasosOrient === "landscape" ? "8mm 8mm 10mm 8mm" : "10mm 8mm 12mm 8mm";
+                  // 2 cols SEMPRE no print — em retrato dá ~2 cards por página
+                  // de altura, em paisagem dá 4-6. Em portrait usa 2-cols mais
+                  // estreitas mas com a densificação geral cabe legível.
+                  const gridCols = "repeat(2, minmax(0, 1fr))";
+                  const cardFs = atrasosOrient === "landscape" ? "9px" : "9.5px";
                   // Dedupe defensivo (architect hint Rev. 1899)
                   document.getElementById("__atrasos_print__")?.remove();
                   const style = document.createElement("style");
@@ -2141,38 +2151,71 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
                         padding: 0 !important; margin: 0 !important;
                         background: white !important;
                         font-size: ${cardFs} !important;
+                        line-height: 1.25 !important;
                       }
-                      /* Word-break defensivo (architect hint Rev. 1899): nomes
-                         de atividade ou códigos EAP muito longos sem espaço
-                         podem estourar a célula em landscape 2-cols. */
+                      /* Word-break defensivo (architect hint Rev. 1899). */
                       #atrasos-print-area, #atrasos-print-area * {
                         overflow-wrap: anywhere !important;
                         word-break: break-word !important;
                       }
+                      /* Grid de cards: 2-cols + gap mínimo */
                       #atrasos-print-area .grid {
                         display: grid !important;
                         grid-template-columns: ${gridCols} !important;
-                        gap: 8px !important;
+                        gap: 4px !important;
                       }
                       #atrasos-print-area .grid > div {
                         break-inside: avoid !important;
                         page-break-inside: avoid !important;
                         box-shadow: none !important;
+                        border-radius: 4px !important;
                       }
-                      /* Cards: bordas e padding compactos pra caber bem */
-                      #atrasos-print-area .grid > div > div { padding: 8px 12px !important; }
-                      /* Barras: altura levemente menor pra economizar espaço */
-                      #atrasos-print-area .h-5 { height: 16px !important; }
-                      /* Header de impressão sem quebra */
+                      /* CARD HEADER (px-5 py-3) → super compacto */
+                      #atrasos-print-area .grid > div > div:first-child {
+                        padding: 3px 6px !important;
+                      }
+                      /* CARD BODY (px-5 py-4 + grid 1fr_auto + gap-4) → enxuto */
+                      #atrasos-print-area .grid > div > div:last-child {
+                        padding: 4px 6px !important;
+                        gap: 6px !important;
+                        grid-template-columns: 1fr auto !important;
+                      }
+                      /* Espaçamento entre barras (space-y-3 = 12px → 3px) */
+                      #atrasos-print-area .space-y-3 > * + * { margin-top: 3px !important; }
+                      /* Linha de datas (mb-1 + gap-6) → bem fina */
+                      #atrasos-print-area .gap-6 { gap: 10px !important; }
+                      /* Barras: altura 20px → 9px (compactas mas legíveis) */
+                      #atrasos-print-area .h-5 { height: 9px !important; }
+                      /* DESVIO box: min-w-[100px] px-5 py-3 → bem menor */
+                      #atrasos-print-area .min-w-\\[100px\\] {
+                        min-width: 56px !important;
+                        padding: 3px 6px !important;
+                        border-radius: 4px !important;
+                      }
+                      /* DESVIO número: text-2xl → text-base */
+                      #atrasos-print-area .text-2xl { font-size: 14px !important; }
+                      /* Labels e textos: tudo encolhe pra economizar espaço */
+                      #atrasos-print-area .text-sm { font-size: 9.5px !important; }
+                      #atrasos-print-area .text-xs { font-size: 8.5px !important; }
+                      #atrasos-print-area .text-\\[11px\\] { font-size: 8px !important; }
+                      #atrasos-print-area .text-\\[10px\\] { font-size: 7.5px !important; }
+                      #atrasos-print-area .text-\\[9px\\] { font-size: 7px !important; }
+                      /* Badges do header (dias atraso, EAP, #N) compactos */
+                      #atrasos-print-area .px-2\\.5 { padding-left: 4px !important; padding-right: 4px !important; }
+                      #atrasos-print-area .py-1 { padding-top: 1px !important; padding-bottom: 1px !important; }
+                      #atrasos-print-area .py-0\\.5 { padding-top: 0 !important; padding-bottom: 0 !important; }
+                      /* Header de impressão (PrintHeader) compacto */
                       #atrasos-print-area > div:first-child {
                         break-inside: avoid !important;
                         page-break-inside: avoid !important;
-                        margin-bottom: 8px !important;
+                        margin-bottom: 4px !important;
                       }
                       /* Rodapé não fica órfão */
                       #atrasos-print-area .print\\:block:last-child {
                         break-before: avoid !important;
                         page-break-before: avoid !important;
+                        margin-top: 6px !important;
+                        padding-top: 3px !important;
                       }
                       /* Mata margens trailing que geram página em branco */
                       #atrasos-print-area > *:last-child {

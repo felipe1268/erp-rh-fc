@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 1901 — Planejamento · Atividades em Atraso · Impressão DENSIFICADA (eliminar espaços em branco).
+ * User (16/05/2026, screenshot image_1778950324630.png do preview de impressão Chrome — pág. 1/4 com apenas 6 cards visíveis e enorme área branca à direita das barras): "esta bagunçado muito espaço branco.. ajuste a tela para que tenha o minimo de espaços brancos.. quero a organização extremamemnte profissional".
+ * Causa: o CSS de impressão entregue na Rev. 1899 era conservador — em retrato usava grid 1-col (cada card ocupava largura inteira da A4 vertical, sobrando espaço branco enorme entre a barra de % preenchida e o box DESVIO à direita); padding generoso (8-12px) herdado da tela; box DESVIO `min-w-[100px] px-5 py-3` ocupando ~150-180px com "DESVIO -3.5 pp" em fonte 24px; altura de barras 16px; espaço entre barras 12px (`space-y-3`); margens de página 12-14mm. Resultado: 4 páginas pra 10 cards (= 2.5 cards/página). Estética nada profissional pra um relatório executivo.
+ * Mudança (em client/src/pages/planejamento/PlanejamentoDetalhe.tsx):
+ *   • L1949 — Default `atrasosOrient` mudado de `"portrait"` → `"landscape"` (formato profissional + 2 cols caem perfeitamente em 297mm).
+ *   • L2129-2238 — Rotina `dispararImpressao` REESCRITA com densificação agressiva:
+ *     - Grid 2-cols SEMPRE (retrato + paisagem). Em retrato as colunas ficam mais estreitas mas com fonte 9.5px ainda lê bem; em paisagem fica espaçoso e profissional.
+ *     - Margens A4: 8mm (landscape) / 10mm (portrait), antes 10-14mm.
+ *     - `font-size` base do print-area: 9px landscape / 9.5px portrait (era 10.5/11.5px); `line-height: 1.25` (compactação vertical).
+ *     - `gap` entre cards: 4px (era 8px).
+ *     - CARD HEADER (`px-5 py-3` na tela): padding reduzido para `3px 6px` no print.
+ *     - CARD BODY (`px-5 py-4 grid 1fr_auto gap-4`): padding `4px 6px`, gap `6px`.
+ *     - Espaçamento entre barras (`space-y-3` = 12px na tela): 3px no print.
+ *     - Altura das barras (`h-5` = 20px na tela): 9px no print.
+ *     - Box DESVIO (`min-w-[100px] px-5 py-3`): `min-w: 56px`, padding `3px 6px`; número `text-2xl` (24px) → 14px.
+ *     - Linha de datas (`gap-6` = 24px): 10px.
+ *     - Cascata de fonts pra hierarquia preservada mesmo encolhida: text-sm→9.5px, text-xs→8.5px, text-[11px]→8px, text-[10px]→7.5px, text-[9px]→7px.
+ *     - Badges de header (#N, EAP, "Xd atraso") com padding horizontal/vertical reduzido (`px-2.5`→4px lateral, `py-1`→1px, `py-0.5`→0).
+ *     - Margem do PrintHeader reduzida (8px→4px); rodapé não-órfão com margem/padding superior compactos.
+ *   • version → 1901.
+ * Resultado esperado: 4-6 cards por página em paisagem (~2x mais densidade), 4 cards por página em retrato — relatório de 10 cards passa de 4 páginas para 2 (paisagem) ou 3 (retrato).
+ * Preservado: PrintHeader (REGRA DE OURO) intacto; conteúdo do relatório (datas, barras, % e desvio) inalterado — só visual no print; tela (não-impressão) idêntica (todas regras estão dentro de `@media print`); isolamento `visibility:hidden` global Rev. 1899 intacto; cleanup `afterprint` + safety 60s; refactor pós-architect Rev. 1899 (`dispararImpressao` função local + dedupe defensivo + word-break) preservados. Zero backend/DB/schema/tRPC. Reversível em 2 hunks + version bump. R-001/R-007/R-010 OK.
+ *
  * Rev. 1900 — Planejamento · Cronograma · Badge do RESPONSÁVEL replicado na VISUALIZAÇÃO (modo leitura).
  * User (16/05/2026, screenshot image_1778950143099.png — linha "Andaime disponível para trabalho- FC Engenharia" + outras): "ainda não apareceu aqui no cronograma que a atividade é de responsabilidade de outra empresa. como indicado.. coloca um card aqui..".
  * Causa: a Rev. 1898 colocou o badge do responsável APENAS na renderização do modo EDIÇÃO (ramo `editando ? <> ... </> : <> ... </>` em PlanejamentoDetalhe.tsx). O ramo de VISUALIZAÇÃO (`!editando`, renderização tabular tradicional em L4356+) nunca recebeu o badge — então em modo leitura (que é o que o usuário vê 99% do tempo) só apareciam os chips legados Marco/Indireta/EXTERNA, sem identificação do responsável quando manual ou contrato_terceiro.
